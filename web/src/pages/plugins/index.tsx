@@ -17,13 +17,15 @@ import { PluginDetailsModal, UploadPluginModal } from "./plugin-documentation-mo
 import "./plugins.css";
 
 const categoryLabels: Record<string, string> = {
-    "asset-source": "素材来源",
+    provider: "模型渠道",
     "canvas-node": "画布节点",
     workflow: "工作流",
+    transform: "媒体转换",
+    "asset-source": "素材来源",
     "ai-capability": "AI 能力",
-    "import-export": "导入导出",
+    "usage-observer": "用量观察",
     agent: "智能体",
-    protocol: "请求协议",
+    "import-export": "导入导出",
 };
 
 const surfaceLabels: Record<string, string> = {
@@ -121,13 +123,14 @@ export default function PluginsPage() {
             const isSystemPlugin = plugin.source !== "uploaded";
             if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && isSystemPlugin) return false;
             const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
-            const enabled = plugin.manifest.kind === "protocol" ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
+            const enabled = backendPluginById.get(plugin.manifest.id)?.status === "enabled" || Boolean(installation?.enabled);
             const manifest = plugin.manifest;
-            const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, categoryLabels[manifest.category]].filter(Boolean).join(" ").toLocaleLowerCase();
+            const contributionKinds = contributionKindsFor(manifest);
+            const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, ...contributionKinds.map((kind) => categoryLabels[kind] || kind)].filter(Boolean).join(" ").toLocaleLowerCase();
             if (normalizedSearch && !searchableText.includes(normalizedSearch)) return false;
             if (categoryFilter !== "all") {
-                const matchesCapability = manifest.kind === "protocol" && manifest.protocol?.categories.includes(categoryFilter as "text" | "image" | "video" | "audio");
-                const matchesApp = categoryFilter === "other" && manifest.kind !== "protocol";
+                const matchesCapability = providerCapabilitiesFor(manifest).includes(categoryFilter as "text" | "image" | "video" | "audio");
+                const matchesApp = categoryFilter === "other" && contributionKinds.length > 0 && !matchesCapability;
                 if (!matchesCapability && !matchesApp) return false;
             }
             if (trustFilter === "trusted" && !manifest.trusted) return false;
@@ -139,8 +142,8 @@ export default function PluginsPage() {
 
     const pluginSections = useMemo(
         () => [
-            ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind === "protocol" && plugin.manifest.protocol?.categories.includes(section.key)) })),
-            { key: "other", label: "应用插件", description: "画布、素材与工作流扩展", icon: PlugZap, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind !== "protocol") },
+            ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => providerCapabilitiesFor(plugin.manifest).includes(section.key)) })),
+            { key: "other", label: "应用插件", description: "画布、素材与工作流扩展", icon: PlugZap, plugins: filteredPlugins.filter((plugin) => !providerCapabilitiesFor(plugin.manifest).length) },
         ],
         [filteredPlugins],
     );
@@ -149,11 +152,9 @@ export default function PluginsPage() {
         const visiblePlugins = registeredPlugins.filter((plugin) => user?.role === "admin" || features.systemPluginsVisibleToUsers || plugin.source === "uploaded");
         const counts: Record<string, number> = { all: visiblePlugins.length, text: 0, image: 0, video: 0, audio: 0, other: 0 };
         for (const plugin of visiblePlugins) {
-            if (plugin.manifest.kind !== "protocol") {
-                counts.other += 1;
-                continue;
-            }
-            for (const capability of plugin.manifest.protocol?.categories || []) {
+            const capabilities = providerCapabilitiesFor(plugin.manifest);
+            if (!capabilities.length) counts.other += 1;
+            for (const capability of capabilities) {
                 counts[capability] = (counts[capability] || 0) + 1;
             }
         }
@@ -162,23 +163,23 @@ export default function PluginsPage() {
 
     const settingsPlugin = settingsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === settingsPluginId) : undefined;
     const settingsInstallation = settingsPlugin ? installations.find((item) => item.manifest.id === settingsPlugin.manifest.id) : undefined;
-    const settingsEnabled = settingsPlugin?.manifest.kind === "protocol" ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" : Boolean(settingsInstallation?.enabled);
+    const settingsEnabled = settingsPlugin ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" || Boolean(settingsInstallation?.enabled) : false;
     const detailsPlugin = detailsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === detailsPluginId) : undefined;
 
-    const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields.length);
+    const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields?.length);
     const canConfigurePlugin = (plugin: RegisteredPlugin) => hasPluginConfiguration(plugin) && user?.role === "admin";
 
     const isPluginEnabled = (plugin: RegisteredPlugin, installation = installations.find((item) => item.manifest.id === plugin.manifest.id)) =>
-        plugin.manifest.kind === "protocol" ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
+        backendPluginById.get(plugin.manifest.id)?.status === "enabled" || Boolean(installation?.enabled);
 
     const togglePlugin = async (plugin: RegisteredPlugin, enabled: boolean) => {
-        if (plugin.manifest.kind !== "protocol") {
-            setEnabled(plugin.manifest.id, enabled);
-            return;
-        }
         try {
-            const next = await setPluginEnabled(plugin.manifest.id, enabled);
-            setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
+            if (backendPluginById.has(plugin.manifest.id)) {
+                const next = await setPluginEnabled(plugin.manifest.id, enabled);
+                setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
+            } else {
+                setEnabled(plugin.manifest.id, enabled);
+            }
             message.success(`${plugin.manifest.name}${enabled ? "已启用" : "已停用"}`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新插件状态失败");
@@ -228,7 +229,7 @@ export default function PluginsPage() {
                         <div className="plugins-sidebar-heading">
                             <span className="plugins-sidebar-kicker">PLUGIN CENTER</span>
                             <h1>插件中心</h1>
-                            <p>统一管理能力插件与模型请求协议。</p>
+                            <p>统一管理 provider、工作流、画布节点和其他扩展能力。</p>
                         </div>
                         <nav className="plugins-sidebar-nav">
                             <button type="button" className={`plugins-sidebar-item${categoryFilter === "all" ? " is-active" : ""}`} aria-current={categoryFilter === "all" ? "page" : undefined} onClick={() => setCategoryFilter("all")}>
@@ -368,7 +369,7 @@ export default function PluginsPage() {
                                                                                     可信插件
                                                                                 </span>
                                                                             ) : null}
-                                                                            <span className="plugin-category-label">{categoryLabels[plugin.manifest.category] ?? plugin.manifest.category}</span>
+                                                                            <span className="plugin-category-label">{contributionKindsFor(plugin.manifest).map((kind) => categoryLabels[kind] ?? kind).join(" · ")}</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -387,13 +388,13 @@ export default function PluginsPage() {
                                                                 </div>
 
                                                                 <div className="plugin-card-tags">
-                                                                    {plugin.manifest.surfaces.map((surface) => (
+                                                                    {(plugin.manifest.surfaces || []).map((surface) => (
                                                                         <span key={surface}>{surfaceLabels[surface] ?? surface}</span>
                                                                     ))}
-                                                                    {plugin.manifest.protocol?.categories.map((capability) => (
+                                                                    {providerCapabilitiesFor(plugin.manifest).map((capability) => (
                                                                         <span key={capability}>{capabilityLabel(capability)}</span>
                                                                     ))}
-                                                                    {plugin.manifest.protocol?.poll ? <span>异步轮询</span> : null}
+                                                                    {plugin.manifest.contributes.providers?.some((provider) => provider.poll) ? <span>异步轮询</span> : null}
                                                                     <span>{plugin.manifest.permissions.length} 项能力</span>
                                                                 </div>
                                                             </button>
@@ -530,16 +531,14 @@ export default function PluginsPage() {
                                         </div>
                                     ) : (
                                         <div className="plugin-settings-empty">
-                                            {settingsPlugin.manifest.kind === "protocol"
-                                                ? `协议能力：${settingsPlugin.manifest.protocol?.categories.map(capabilityLabel).join("、") || "未声明"}；可用场景：${settingsPlugin.manifest.protocol?.scopes.join("、") || "未声明"}。`
-                                                : "该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。"}
+                                            {`贡献能力：${contributionKindsFor(settingsPlugin.manifest).map((kind) => categoryLabels[kind] || kind).join("、") || "未声明"}。当前接入位置和权限会根据插件清单自动生效。`}
                                         </div>
                                     )}
 
                                     <div className="plugin-permissions">
                                         <div>
                                             <span>接入位置</span>
-                                            {settingsPlugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join("、")}
+                                            {(settingsPlugin.manifest.surfaces || []).map((surface) => surfaceLabels[surface] ?? surface).join("、") || "由贡献点决定"}
                                         </div>
                                         <div>
                                             <span>插件能力</span>
@@ -564,23 +563,26 @@ function formatPluginDate(value?: string) {
 }
 
 function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
-    const manifest: PluginManifest = {
-        id: plugin.manifest.id,
-        name: plugin.manifest.name,
-        version: plugin.manifest.version,
-        publishedAt: plugin.installedAt,
-        updatedAt: plugin.updatedAt,
-        apiVersion: plugin.manifest.apiVersion,
-        category: "protocol",
-        description: plugin.manifest.description || "模型请求协议适配插件",
-        author: plugin.manifest.author,
-        surfaces: ["hybrid"],
-        permissions: ["generation.run"],
-        trusted: plugin.manifest.trusted,
-        kind: "protocol",
-        protocol: plugin.manifest.protocol,
-    };
-    return { manifest, source: plugin.source };
+    return { manifest: plugin.manifest, source: plugin.source };
+}
+
+function contributionKindsFor(manifest: PluginManifest): string[] {
+    const contributions = manifest.contributes;
+    const kinds: string[] = [];
+    if (contributions.providers?.length) kinds.push("provider");
+    if (contributions.workflows?.length) kinds.push("workflow");
+    if (contributions.canvasNodes?.length) kinds.push("canvas-node");
+    if (contributions.transforms?.length) kinds.push("transform");
+    if (contributions.assetSources?.length) kinds.push("asset-source");
+    if (contributions.aiCapabilities?.length) kinds.push("ai-capability");
+    if (contributions.usageObservers?.length) kinds.push("usage-observer");
+    if (contributions.agents?.length) kinds.push("agent");
+    if (contributions.importExport?.length) kinds.push("import-export");
+    return kinds;
+}
+
+function providerCapabilitiesFor(manifest: PluginManifest) {
+    return [...new Set((manifest.contributes.providers || []).flatMap((provider) => provider.capabilities))];
 }
 
 function capabilityLabel(value: string) {

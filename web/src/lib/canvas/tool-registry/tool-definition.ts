@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 
 import type { CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
+import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 /** 工具栏标识——每个工具栏有独立的注册表与偏好 */
 export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
@@ -43,7 +43,7 @@ export type ToolbarHandlers = {
      * 不给每种扩展节点单开一个 onAddXxx —— 那会让 ToolbarHandlers 随节点数线性膨胀，
      * 而它们的创建逻辑完全一致（都只是 createNode(type)）。
      */
-    onAddExtensionNode: (type: CanvasNodeType) => void;
+    onAddExtensionNode: (type: CanvasNodeTypeId) => void;
     onChooseStyle: () => void;
     onOpenDirector: () => void;
     // 主工具栏——资源
@@ -102,7 +102,7 @@ export type ToolbarHandlers = {
 /** 工具运行时可见的上下文。工具定义通过纯函数读取状态 */
 export type ToolContext = {
     selectedCount: number;
-    selectedNodeTypes: Set<CanvasNodeType>;
+    selectedNodeTypes: Set<CanvasNodeTypeId>;
     selectedVideoCount: number;
     canvasTool: CanvasToolMode;
     workspaceMode: CanvasWorkspaceMode;

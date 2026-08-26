@@ -1,0 +1,150 @@
+{
+  "apiVersion": "yingce.plugin/v1",
+  "id": "autodl-comfyui",
+  "name": "AutoDL ComfyUI 视频",
+  "version": "1.0.0",
+  "author": "影策社区",
+  "description": "通过 AutoDL.Art ComfyUI 工作流 API 接入异步视频生成。",
+  "documentation": "# AutoDL ComfyUI 视频\n\n## 接口\n\n创建任务：`POST /api/v1/comfyui/comfyui_workflow/{workflow_id}`。清单把渠道中的模型字段作为 `workflow_id`，因此每个 ComfyUI 工作流都可以通过工作流贡献加入，不需要修改宿主代码。\n\n查询任务：`GET /api/v1/comfyui/comfyui_workflow/result/{task_id}`。\n\n## 工作流\n\n示例 `minimax_h3_lightx2v_no_pic` 作为 MiniMax H3 文生视频入口，默认时长为 5 秒、分辨率为 `768p竖`。支持 `480p竖`、`768p竖`、`480p横`、`768p横`。上传后可以在渠道中直接选择该工作流；新增工作流只需扩展本清单。\n\n## 请求与鉴权\n\n创建请求为 JSON，发送 `prompt`、`duration`、`resolution`，并按存在的参考图片发送 `ref_image_0` 至 `ref_image_8`。分辨率字段由插件在发送前统一转换为小写。参考图片由宿主转换为短期签名公网 URL。AutoDL Token 在渠道密钥字段中配置，宿主以后端出站请求发送 `Authorization: Bearer <token>`；清单不包含密钥。\n\n## 状态与结果\n\n`QUEUED` 和 `RUNNING` 映射为统一任务的排队与处理中，`SUCCESS` 和 `completed` 映射为成功，`FAILED` 映射为失败。错误响应的 `code` 和 `msg` 会保留为任务错误。成功结果从 `data.results[].url` 读取为视频地址。AutoDL 地址是短期地址，清单标记为临时结果，宿主会在完成时下载并保存到影策资源存储。\n\n官方文档：[AutoDL ComfyUI API](https://autodl.art/docs/comfyui_api/)。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "AutoDL Token",
+        "required": true,
+        "description": "填写 AutoDL Token；仅保存到渠道密钥配置。"
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "autodl-comfyui",
+        "label": "AutoDL ComfyUI 视频",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "https://autodl.art",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey",
+          "header": "Authorization"
+        },
+        "parameters": [
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频生成提示词。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "mapping": "duration",
+            "description": "视频时长，单位由工作流决定。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "mapping": "resolution",
+            "description": "工作流支持的分辨率档位。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/v1/comfyui/comfyui_workflow/{{model}}",
+          "contentType": "application/json",
+          "fields": {
+            "prompt": "request.prompt",
+            "duration": "request.duration",
+            "resolution": "request.resolution|lower",
+            "ref_image_0": "request.images.0.url",
+            "ref_image_1": "request.images.1.url",
+            "ref_image_2": "request.images.2.url",
+            "ref_image_3": "request.images.3.url",
+            "ref_image_4": "request.images.4.url",
+            "ref_image_5": "request.images.5.url",
+            "ref_image_6": "request.images.6.url",
+            "ref_image_7": "request.images.7.url",
+            "ref_image_8": "request.images.8.url"
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/v1/comfyui/comfyui_workflow/result/{{taskId}}"
+        },
+        "response": {
+          "taskIdPaths": [
+            "data.task_id"
+          ],
+          "statusPaths": [
+            "data.status"
+          ],
+          "errorPaths": [
+            "code"
+          ],
+          "messagePaths": [
+            "data.message",
+            "msg"
+          ],
+          "resultPaths": [
+            "data.results"
+          ],
+          "resultKind": "video",
+          "resultEphemeral": true
+        }
+      }
+    ],
+    "workflows": [
+      {
+        "id": "minimax_h3_lightx2v_no_pic",
+        "label": "MiniMax H3 文生视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "mapping": "duration",
+            "description": "视频时长。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "mapping": "resolution",
+            "values": [
+              "480p竖",
+              "768p竖",
+              "480p横",
+              "768p横"
+            ],
+            "description": "输出分辨率档位。"
+          }
+        ],
+        "defaults": {
+          "duration": 5,
+          "resolution": "768p竖"
+        }
+      }
+    ]
+  }
+}

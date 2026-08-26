@@ -59,13 +59,13 @@ const manifest: PluginManifest = {
     id: PROMPT_OPTIMIZER_PLUGIN_ID,
     name: "AI 提示词优化器",
     version: "0.3.0",
-    apiVersion: "1",
-    category: "ai-capability",
+    apiVersion: "yingce.plugin/v1",
     description: "把模糊的生图想法整理成可执行、可比较、适配当前模型的提示词。",
     author: "影策团队",
-    surfaces: ["hybrid"],
     permissions: ["canvas.read", "canvas.write", "ai.text"],
     trusted: true,
+    runtime: { web: "trusted-backend" },
+    contributes: { aiCapabilities: ["prompt-optimizer"] },
 };
 
 const systemPrompt = [

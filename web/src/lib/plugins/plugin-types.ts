@@ -1,20 +1,90 @@
 import type { Asset } from "@/stores/use-asset-store";
 
-export const PLUGIN_API_VERSION = "1" as const;
+export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
 
-export type PluginCategory = "asset-source" | "canvas-node" | "workflow" | "ai-capability" | "import-export" | "agent" | "protocol";
-export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source";
+export type PluginContributionKind = "provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export";
+export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings";
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
 export type ProtocolScope = "admin.system-channel" | "user.custom-channel" | "canvas" | "creation" | "agent" | string;
-export type ProtocolPluginInfo = {
-    categories: ProtocolCapability[];
-    scopes: ProtocolScope[];
-    create?: string;
-    poll?: string;
-    cancel?: string;
+export type PluginRuntime = "declarative" | "sandbox" | "worker" | "trusted-backend";
+export type PluginField = {
+    name: string;
+    type: "string" | "number" | "boolean" | "secret" | "url" | "select" | "json";
+    label?: string;
+    required?: boolean;
+    default?: string | number | boolean;
+    description?: string;
+    values?: string[];
+};
+export type PluginParameter = {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+    values?: string[];
+    mapping?: string;
+};
+export type PluginProviderOperation = {
+    method: "GET" | "POST" | "PUT" | "DELETE";
+    path: string;
     contentType?: string;
-    documentation?: string;
-    parameters?: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>;
+    fields?: Record<string, string>;
+};
+export type PluginProviderContribution = {
+    id: string;
+    label: string;
+    capabilities: ProtocolCapability[];
+    scopes: ProtocolScope[];
+    baseUrl?: string;
+    auth?: { type: "bearer" | "api-key" | "custom"; field: string; header?: string };
+    parameters?: PluginParameter[];
+    create: PluginProviderOperation;
+    poll?: PluginProviderOperation;
+    cancel?: PluginProviderOperation;
+    response: {
+        taskIdPaths?: string[];
+        statusPaths?: string[];
+        messagePaths?: string[];
+        textPaths?: string[];
+        reasoningPaths?: string[];
+        resultPaths?: string[];
+        resultKind?: "image" | "video" | "audio";
+        resultEphemeral?: boolean;
+    };
+};
+export type PluginWorkflowContribution = {
+    id: string;
+    label: string;
+    providerId: string;
+    capability: ProtocolCapability;
+    parameters: PluginParameter[];
+    defaults?: Record<string, string | number | boolean>;
+};
+export type PluginCanvasNodeContribution = {
+    id: string;
+    label: string;
+    defaultTitle: string;
+    defaultSize: { width: number; height: number };
+    schema: Record<string, unknown>;
+    renderer: "declarative" | "sandbox";
+};
+export type PluginTransformContribution = {
+    id: string;
+    input: "media" | "generation";
+    output: "provider-request" | "media";
+    runtime: PluginRuntime;
+};
+export type PluginContributions = {
+    providers?: PluginProviderContribution[];
+    workflows?: PluginWorkflowContribution[];
+    canvasNodes?: PluginCanvasNodeContribution[];
+    transforms?: PluginTransformContribution[];
+    commands?: Array<{ id: string; label: string }>;
+    assetSources?: string[];
+    usageObservers?: string[];
+    aiCapabilities?: string[];
+    agents?: string[];
+    importExport?: string[];
 };
 export type PluginPermission =
     | "canvas.read"
@@ -25,28 +95,27 @@ export type PluginPermission =
     | "asset.upload"
     | "generation.run"
     | "ai.text"
+    | "media.read"
+    | "usage.read"
     | "external.open";
 
 export type PluginManifest = {
+    apiVersion: typeof PLUGIN_API_VERSION;
     id: string;
     name: string;
     version: string;
     publishedAt?: string;
     updatedAt?: string;
-    apiVersion: string;
-    category: PluginCategory;
     description: string;
     documentation?: string;
     author?: string;
     entry?: string;
-    surfaces: PluginSurface[];
+    surfaces?: PluginSurface[];
     permissions: PluginPermission[];
     trusted?: boolean;
-    kind?: "ui" | "protocol";
-    configuration?: {
-        fields: string[];
-    };
-    protocol?: ProtocolPluginInfo;
+    configuration?: { fields: PluginField[] };
+    runtime?: { backend?: PluginRuntime; web?: PluginRuntime };
+    contributes: PluginContributions;
 };
 
 export type PluginStorage = {
@@ -102,6 +171,12 @@ export type PluginAiTextService = {
 export type PluginHostServices = {
     ai?: {
         text?: PluginAiTextService;
+    };
+    media?: {
+        resolve: (reference: { url?: string; dataUrl?: string; kind?: string }, signal?: AbortSignal) => Promise<{ dataUrl: string; mimeType: string }>;
+    };
+    usage?: {
+        list: (scope?: string) => Promise<ReadonlyArray<Record<string, unknown>>>;
     };
 };
 

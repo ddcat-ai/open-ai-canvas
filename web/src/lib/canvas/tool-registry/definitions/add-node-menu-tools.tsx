@@ -2,7 +2,7 @@ import { Clapperboard, Folder, FolderOpen, Image as ImageIcon, Layers3, Music2, 
 
 import { getNodeIcon, getNodeLabel } from "@/lib/canvas/node-registry";
 import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
-import { CanvasNodeType } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeTypeId } from "@/types/canvas";
 
 /** 真正创建节点的命令，文案与图标统一取自节点注册表。 */
 function nodeCommand(type: CanvasNodeType, rest: Omit<AddNodeMenuCommand, "id" | "label" | "icon" | "section">): AddNodeMenuCommand {
@@ -13,7 +13,7 @@ function nodeCommand(type: CanvasNodeType, rest: Omit<AddNodeMenuCommand, "id" |
  * 扩展节点命令：落在独立的「展示与加工」分区，不挤占上方调好的四列创作网格。
  * 创建逻辑一律是 createNode(type)，所以统一走 onAddExtensionNode 而不是各开一个 handler。
  */
-function extensionCommand(type: CanvasNodeType, defaultOrder: number): AddNodeMenuCommand {
+function extensionCommand(type: CanvasNodeTypeId, defaultOrder: number): AddNodeMenuCommand {
     return { id: type, label: getNodeLabel(type), icon: getNodeIcon(type), section: "extension", defaultOrder, run: (ctx) => ctx.handlers.onAddExtensionNode(type) };
 }
 

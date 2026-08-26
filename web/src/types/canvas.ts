@@ -24,8 +24,6 @@ export enum CanvasNodeType {
     Video = "video",
     Audio = "audio",
     Frame = "frame",
-    // 扩展节点：展示与加工。新增一个成员后，编译器会逐个点出还缺哪张表
-    // （NODE_DEFAULT_SIZE / NODE_SPECS / 节点注册表定义 / nodeContentRenderers）。
     Markdown = "markdown",
     Svg = "svg",
     Html = "html",
@@ -33,6 +31,14 @@ export enum CanvasNodeType {
     Compare = "compare",
     Chart = "chart",
     ColorGrade = "colorgrade",
+}
+
+/** Runtime IDs contributed by plugins share the persisted node type field. */
+export type PluginCanvasNodeType = string & { readonly __pluginCanvasNodeType?: unique symbol };
+export type CanvasNodeTypeId = CanvasNodeType | PluginCanvasNodeType;
+
+export function isBuiltinCanvasNodeType(type: CanvasNodeTypeId): type is CanvasNodeType {
+    return Object.values(CanvasNodeType).includes(type as CanvasNodeType);
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
@@ -163,6 +169,10 @@ export type CanvasSkillSnapshot = {
 };
 
 export type CanvasNodeMetadata = {
+    /** Namespaced extension ownership for nodes contributed by a unified plugin. */
+    pluginId?: string;
+    pluginNodeId?: string;
+    pluginData?: Record<string, unknown>;
     importSource?:
         | {
               provider: "libtv";
@@ -386,7 +396,7 @@ export type CanvasNodeMetadata = {
 
 export type CanvasNodeData = {
     id: string;
-    type: CanvasNodeType;
+    type: CanvasNodeTypeId;
     title: string;
     position: Position;
     width: number;
@@ -415,7 +425,7 @@ export type CanvasDisplayConnection = {
 
 export type CanvasAssistantReference = {
     id: string;
-    type: CanvasNodeType;
+    type: CanvasNodeTypeId;
     title: string;
     dataUrl?: string;
     storageKey?: string;

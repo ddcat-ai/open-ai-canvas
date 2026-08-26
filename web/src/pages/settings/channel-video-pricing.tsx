@@ -7,7 +7,7 @@ import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
-import { fetchProtocolCatalog } from "@/services/api/protocols";
+import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { modelOptionName, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
@@ -18,7 +18,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     const [activeModel, setActiveModel] = useState<string | null>(null);
     const [availableProtocols, setAvailableProtocols] = useState<import("@/lib/model-protocols").ModelProtocolDefinition[]>([]);
     useEffect(() => {
-        void fetchProtocolCatalog("user.custom-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
+        void fetchPluginProviderCatalog("user.custom-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
     }, []);
     if (!channel.models.length) return null;
 

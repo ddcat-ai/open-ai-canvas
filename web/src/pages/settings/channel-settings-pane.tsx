@@ -1,12 +1,15 @@
 import { App, Button, Form, Input, Popconfirm, Segmented, Select, Switch, Tooltip } from "antd";
 import { ChevronDown, ChevronUp, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
 import { desktopLocalChannelFormState, desktopLocalChannelPayloadValue, DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL } from "@/lib/desktop-local-channel";
 import { fetchChannelModels } from "@/services/api/image";
+import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
+import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
+import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import {
     createModelChannel,
     defaultBaseUrlForApiFormat,
@@ -26,9 +29,14 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
     const [collapsedChannelIds, setCollapsedChannelIds] = useState<Set<string>>(new Set());
+    const [providerCatalog, setProviderCatalog] = useState<ModelProtocolDefinition[]>([]);
     const desktopLocalChannelsEnabled = useUserStore((state) => state.features.desktopLocalChannelsEnabled);
     const desktopLocalChannelHostname = typeof window === "undefined" ? "" : window.location.hostname;
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
+
+    useEffect(() => {
+        void fetchPluginProviderCatalog("user.custom-channel").then(setProviderCatalog).catch(() => setProviderCatalog([]));
+    }, []);
 
     const updateChannels = (channels: ModelChannel[], baseConfig = config) => {
         replaceConfig(withChannels(baseConfig, channels));
@@ -53,6 +61,33 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
         const baseUrl = isKnownDefaultBaseUrl(channel.baseUrl) ? defaultBaseUrl : channel.baseUrl;
         // 渠道只负责连接类型；具体模型能力和请求协议由下方共享能力卡片维护。
         updateChannel(channel.id, { apiFormat, interfaceType: undefined, baseUrl });
+    };
+
+    const updateChannelProvider = (channel: ModelChannel, providerId: string) => {
+        const provider = providerCatalog.find((item) => item.value === providerId);
+        if (!provider) return;
+        const workflows = provider.workflows || [];
+        const models = workflows.length ? workflows.map((workflow) => workflow.id) : channel.models;
+        const modelCosts = workflows.length
+            ? workflows.map((workflow) => ({
+                  model: workflow.id,
+                  displayName: workflow.label,
+                  capability: workflow.capability,
+                  protocol: provider.value,
+                  billingMode: "fixed_request" as const,
+                  unitPriceMicrocredits: 0,
+                  capabilityConfig: workflow.capability === "image" || workflow.capability === "video" ? defaultModelCapabilityConfig(provider.value, workflow.id) : undefined,
+                  defaultOptions: workflow.defaults,
+              }))
+            : channel.modelCosts;
+        updateChannel(channel.id, {
+            interfaceType: provider.value,
+            apiFormat: provider.value.startsWith("gemini") ? "gemini" : "openai",
+            baseUrl: provider.baseUrl || channel.baseUrl,
+            models,
+            modelCosts,
+        });
+        message.success(workflows.length ? `已载入 ${workflows.length} 个工作流` : `${provider.label} 已应用到当前渠道`);
     };
 
     const addChannel = () => {
@@ -211,7 +246,10 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
                                     <div className="grid gap-x-3 gap-y-2 lg:grid-cols-12">
                                         <div className="settings-field-group-label lg:col-span-12">连接信息</div>
                                         <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 lg:col-span-3"><Input id={`channel-${channel.id}-name`} value={channel.name} placeholder="例如：我的 NewAPI" onChange={(event) => updateChannel(channel.id, { name: event.target.value })} onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || "未命名渠道" })} /></Form.Item>
-                                        <Form.Item label="渠道连接类型" className="mb-0 lg:col-span-3" extra="仅用于拉取模型目录；模型能力和请求协议在下方统一配置。"><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI 兼容", value: "openai" }, { label: "Gemini 原生", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
+                                        <Form.Item label="插件 Provider" className="mb-0 lg:col-span-4" extra="Provider 会带入 Base URL、鉴权和工作流；无需手工选择请求协议。">
+                                            <Select showSearch optionFilterProp="label" value={channel.interfaceType || undefined} placeholder="选择已安装插件 Provider" options={providerCatalog.map((provider) => ({ value: provider.value, label: `${provider.label} · ${provider.capability}` }))} onChange={(value) => updateChannelProvider(channel, value)} />
+                                        </Form.Item>
+                                        <Form.Item label="目录连接类型" className="mb-0 lg:col-span-2" extra="仅影响模型目录拉取。"><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI", value: "openai" }, { label: "Gemini", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
                                         <UserLocalChannelFields
                                             channel={channel}
                                             visible={userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).visible}

@@ -8,12 +8,9 @@ import (
 
 func TestManifestAgentMapsRequestAndResponse(t *testing.T) {
 	manifest := []byte(`{
-		"apiVersion":"v1",
-		"metadata":{"id":"agent-test","version":"1.0.0","name":"Agent Test","vendor":"Test","categories":["text"],"scopes":["agent"],"documentation":"# Agent Test"},
-		"create":{"method":"POST","path":"/create"},
-		"agent":{"method":"POST","path":"/messages","fields":{"model":"request.model","messages":"request.extra.agent.chatCompletion.messages","tools":"request.extra.agent.chatCompletion.tools","tool_choice":"request.extra.agent.chatCompletion.tool_choice"}},
-		"agentResponse":{"textPaths":["choices.0.message.content"],"toolCallsPath":"choices.0.message.tool_calls","toolCallIdPaths":["id"],"toolCallNamePaths":["function.name"],"toolCallArgumentsPaths":["function.arguments"]},
-		"response":{}
+		"apiVersion":"yingce.plugin/v1",
+		"id":"agent-test","version":"1.0.0","name":"Agent Test","author":"Test","documentation":"# Agent Test",
+		"contributes":{"providers":[{"id":"agent-test","label":"Agent Test","capabilities":["text"],"scopes":["agent"],"create":{"method":"POST","path":"/create"},"agent":{"method":"POST","path":"/messages","fields":{"model":"request.model","messages":"request.extra.agent.chatCompletion.messages","tools":"request.extra.agent.chatCompletion.tools","tool_choice":"request.extra.agent.chatCompletion.tool_choice"}},"agentResponse":{"textPaths":["choices.0.message.content"],"toolCallsPath":"choices.0.message.tool_calls","toolCallIdPaths":["id"],"toolCallNamePaths":["function.name"],"toolCallArgumentsPaths":["function.arguments"]},"response":{}}]}
 	}`)
 	adapter, err := LoadManifest(manifest)
 	if err != nil {
@@ -64,10 +61,9 @@ func TestManifestAgentMapsRequestAndResponse(t *testing.T) {
 
 func TestManifestMapsSynchronousTextResponse(t *testing.T) {
 	manifest := []byte(`{
-		"apiVersion":"v1",
-		"metadata":{"id":"text-test","version":"1.0.0","name":"Text Test","vendor":"Test","categories":["text"],"scopes":["canvas"],"documentation":"# Text Test"},
-		"create":{"method":"POST","path":"/chat","fields":{"prompt":"request.prompt"}},
-		"response":{"textPaths":["choices.0.message.content"],"reasoningPaths":["choices.0.message.reasoning_content"]}
+		"apiVersion":"yingce.plugin/v1",
+		"id":"text-test","version":"1.0.0","name":"Text Test","author":"Test","documentation":"# Text Test",
+		"contributes":{"providers":[{"id":"text-test","label":"Text Test","capabilities":["text"],"scopes":["canvas"],"create":{"method":"POST","path":"/chat","fields":{"prompt":"request.prompt"}},"response":{"textPaths":["choices.0.message.content"],"reasoningPaths":["choices.0.message.reasoning_content"]}}]}
 	}`)
 	adapter, err := LoadManifest(manifest)
 	if err != nil {
@@ -83,5 +79,21 @@ func TestManifestMapsSynchronousTextResponse(t *testing.T) {
 	}
 	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "answer" || result.Result.Reasoning != "thinking" {
 		t.Fatalf("text result = %#v", result)
+	}
+}
+
+func TestManifestUsesOnlyUnifiedTopLevelContract(t *testing.T) {
+	legacy := []byte(`{"apiVersion":"v1","metadata":{"id":"legacy","version":"1","name":"Legacy"},"create":{"method":"POST","path":"/tasks"},"response":{}}`)
+	if _, err := LoadManifest(legacy); err == nil {
+		t.Fatal("legacy protocol manifest was accepted")
+	}
+	canvasOnly := []byte(`{"apiVersion":"yingce.plugin/v1","id":"canvas-extension","name":"Canvas Extension","version":"1.0.0","contributes":{"canvasNodes":[{"id":"canvas-extension/node","label":"Node","defaultTitle":"Node","defaultSize":{"width":320,"height":200},"schema":{},"renderer":"declarative"}]}}`)
+	if _, err := LoadManifest(canvasOnly); err != nil {
+		t.Fatalf("providerless unified plugin was rejected: %v", err)
+	}
+	multi := []byte(`{"apiVersion":"yingce.plugin/v1","id":"multi-provider","name":"Multi Provider","version":"1.0.0","contributes":{"providers":[{"id":"multi-text","label":"Text","capabilities":["text"],"scopes":["canvas"],"create":{"method":"POST","path":"/text"},"response":{}},{"id":"multi-image","label":"Image","capabilities":["image"],"scopes":["canvas"],"create":{"method":"POST","path":"/image"},"response":{}}]}}`)
+	adapters, err := LoadInstalledProviders(multi, nil)
+	if err != nil || len(adapters) != 2 || adapters[0].Metadata().ID != "multi-text" || adapters[1].Metadata().ID != "multi-image" {
+		t.Fatalf("multi-provider load = %#v, %v", adapters, err)
 	}
 }

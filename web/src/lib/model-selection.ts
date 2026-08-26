@@ -250,7 +250,11 @@ export function resolveModelGenerationDefaults(
     const channel = resolveModelChannel(config, model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
     const isManagedModel = Boolean(cost?.logicalModelId || cost?.logicalCapabilitySpec);
-    const source = (key: keyof ModelGenerationDefaults) => explicit[key] ?? (isManagedModel ? undefined : fallback[key]);
+    // A channel model capability profile is an explicit per-model contract too.
+    // The persisted global values are legacy defaults and must not override a
+    // model's configured duration, ratio, or resolution on a new canvas node.
+    const hasModelCapabilityProfile = Boolean(cost?.capabilityConfig);
+    const source = (key: keyof ModelGenerationDefaults) => explicit[key] ?? (isManagedModel || hasModelCapabilityProfile ? undefined : fallback[key]);
     const profile = modelCapabilityConfigFor(config, model);
 
     if (capability === "image" && profile.image) {

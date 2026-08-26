@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,15 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"plugins": plugins})
 	})
+	pluginRoutes.GET("/catalog", func(c *gin.Context) {
+		if _, err := currentUser(c, svc); err != nil {
+			failService(c, err)
+			return
+		}
+		scope := strings.TrimSpace(c.DefaultQuery("scope", "user.custom-channel"))
+		capability := strings.TrimSpace(c.Query("capability"))
+		ok(c, gin.H{"providers": svc.PluginProviderCatalog(scope, capability, false)})
+	})
 	pluginRoutes.POST("", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -40,29 +50,48 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 512<<10)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, protocol.PluginPackageMaxBytes)
 		var data []byte
+		fileName := ""
 		if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
-			file, _, fileErr := c.Request.FormFile("file")
+			file, header, fileErr := c.Request.FormFile("file")
 			if fileErr != nil {
 				fail(c, http.StatusBadRequest, fileErr)
 				return
 			}
 			defer file.Close()
-			data, err = io.ReadAll(io.LimitReader(file, 512<<10+1))
+			fileName = header.Filename
+			data, err = io.ReadAll(io.LimitReader(file, protocol.PluginPackageMaxBytes+1))
 		} else {
-			data, err = io.ReadAll(io.LimitReader(c.Request.Body, 512<<10+1))
+			data, err = io.ReadAll(io.LimitReader(c.Request.Body, protocol.PluginPackageMaxBytes+1))
 		}
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		plugin, err := svc.InstallPlugin(data)
+		plugin, err := svc.InstallPlugin(data, fileName)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"plugin": plugin})
+	})
+	pluginRoutes.GET("/:id/package", func(c *gin.Context) {
+		if _, err := currentUser(c, svc); err != nil {
+			failService(c, err)
+			return
+		}
+		data, fileName, err := svc.PluginPackage(c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if fileName == "" {
+			fileName = c.Param("id") + ".yingce-plugin"
+		}
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Content-Disposition", "attachment; filename=\""+strings.ReplaceAll(fileName, "\"", "")+"\"")
+		c.Data(http.StatusOK, "application/zip", data)
 	})
 	pluginRoutes.POST("/:id/enable", pluginToggle(svc, true))
 	pluginRoutes.POST("/:id/disable", pluginToggle(svc, false))

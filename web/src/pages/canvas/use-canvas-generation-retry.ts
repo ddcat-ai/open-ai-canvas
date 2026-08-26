@@ -32,7 +32,7 @@ import type { GenerationTask } from "@/services/api/task-center";
 import { resolveImageUrl } from "@/services/image-storage";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
 type UseCanvasGenerationRetryOptions = {
     projectId: string;
@@ -387,7 +387,7 @@ export function useCanvasGenerationRetry({
 }
 
 // 生成类型必须由明确的节点契约决定，未知节点不能降级成图片任务。
-function retryModeForNode(type: CanvasNodeType): CanvasNodeGenerationMode | null {
+function retryModeForNode(type: CanvasNodeTypeId): CanvasNodeGenerationMode | null {
     if (type === CanvasNodeType.Text) return "text";
     if (type === CanvasNodeType.Image) return "image";
     if (type === CanvasNodeType.Video) return "video";

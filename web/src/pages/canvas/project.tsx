@@ -926,6 +926,7 @@ function InfiniteCanvasPage() {
         setContextMenu(null);
         setHoveredNodeId(null);
         setToolbarNodeId(null);
+        setDialogNodeId(null);
     }, []);
 
     const { alignmentGuides, cancelSelectionBox, deselectCanvas, dragPreview, frameDropTargetId, handleCanvasMouseDown, handleNodeMouseDown, isNodeDragging, nodeDraggingRef, selectionBoundsElementRef, selectionBox } = useCanvasSelectionController({

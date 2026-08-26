@@ -1,6 +1,6 @@
 import { getDataUrlByteSize } from "@/lib/image-utils";
 import type { Asset, AssetCategory, NewAsset } from "@/stores/use-asset-store";
-import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
 export type CanvasAssetSource = "canvas-generation" | "canvas-upload" | "canvas-manual";
 
@@ -124,7 +124,7 @@ export function canvasNodeAssetCategory(node: CanvasNodeData): AssetCategory {
     return "other";
 }
 
-function canvasAssetFallbackTitle(type: CanvasNodeType) {
+function canvasAssetFallbackTitle(type: CanvasNodeTypeId) {
     if (type === CanvasNodeType.Image) return "画布图片";
     if (type === CanvasNodeType.Video) return "画布视频";
     if (type === CanvasNodeType.Audio) return "画布音频";

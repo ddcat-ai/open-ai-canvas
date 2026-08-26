@@ -96,15 +96,21 @@ export const eagleAssetPlugin: RegisteredPlugin = {
         version: "0.3.0",
         publishedAt: "2026-08-21",
         updatedAt: "2026-08-22",
-        apiVersion: "1",
-        category: "asset-source",
+        apiVersion: "yingce.plugin/v1",
         description: "把 Eagle 作为影策的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
         documentation: eaglePluginDocumentation,
         author: "影策社区",
-        surfaces: ["asset-source"],
         permissions: ["asset.read", "asset.search", "asset.upload", "external.open"],
         trusted: true,
-        configuration: { fields: ["baseUrl", "autoUploadGenerated", "generatedFolderId"] },
+        configuration: {
+            fields: [
+                { name: "baseUrl", type: "url", label: "Eagle Base URL", required: true, default: EAGLE_DEFAULT_BASE_URL },
+                { name: "autoUploadGenerated", type: "boolean", label: "自动上传生成结果", default: true },
+                { name: "generatedFolderId", type: "string", label: "生成结果文件夹" },
+            ],
+        },
+        runtime: { web: "trusted-backend" },
+        contributes: { assetSources: ["eagle"] },
     },
     createAssetSource: ({ config }: PluginHostContext) => {
         const configuredBaseUrl = config.baseUrl;

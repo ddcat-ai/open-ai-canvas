@@ -100,7 +100,6 @@ func main() {
 	handler.RegisterUserDataRoutes(api, svc)
 	handler.RegisterDiagnosticsRoutes(api, svc)
 	handler.RegisterPluginRoutes(api, svc)
-	handler.RegisterProtocolRoutes(api, svc)
 	projectAPI := api.Group("")
 	projectAPI.Use(handler.RequireFeature(svc, service.FeatureShortDrama))
 	handler.RegisterProjectRoutes(projectAPI, svc)

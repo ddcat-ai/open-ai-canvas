@@ -15,6 +15,7 @@ import { resourceIdFromStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
 import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
@@ -61,11 +62,34 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onOpenTaskDetails={props.onOpenTaskDetails} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onReloadResource={props.onReloadResource} />;
 
+    const pluginDefinition = getNodeDefinition(props.node.type)?.plugin;
+    if (pluginDefinition) return <PluginCanvasNodeContent {...props} renderer={pluginDefinition.renderer} schema={pluginDefinition.schema} />;
     const Renderer = nodeContentRenderers[props.node.type];
     return Renderer ? <Renderer {...props} /> : <UnknownNodeContent theme={props.theme} />;
 }
 
-const nodeContentRenderers = {
+function PluginCanvasNodeContent({ node, theme, renderer, schema }: CanvasNodeContentProps & { renderer: "declarative" | "sandbox"; schema: Record<string, unknown> }) {
+    if (renderer === "sandbox") {
+        return <div className="flex h-full w-full items-center justify-center p-4 text-center text-xs" style={{ color: theme.node.placeholder }}>
+            插件节点等待隔离运行时
+        </div>;
+    }
+    const data = node.metadata?.pluginData || {};
+    const fields = Object.keys(schema.properties && typeof schema.properties === "object" ? schema.properties as Record<string, unknown> : schema);
+    return <div className="flex h-full w-full flex-col gap-3 overflow-auto p-4 pt-10 text-xs" style={{ color: theme.node.text }}>
+        {fields.length ? fields.map((field) => <div key={field} className="flex flex-col gap-1">
+            <span className="font-medium opacity-60">{field}</span>
+            <span className="whitespace-pre-wrap break-words opacity-90">{formatPluginValue(data[field] ?? (field === "content" ? node.metadata?.content : undefined))}</span>
+        </div>) : <span className="whitespace-pre-wrap break-words">{node.metadata?.content || "插件节点"}</span>}
+    </div>;
+}
+
+function formatPluginValue(value: unknown) {
+    if (value === undefined || value === null || value === "") return "未设置";
+    return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+const nodeContentRenderers: Partial<Record<string, (props: CanvasNodeContentProps) => ReactNode>> = {
     [CanvasNodeType.Text]: TextContent,
     [CanvasNodeType.Script]: UnknownNodeContent,
     [CanvasNodeType.Skill]: SkillContent,
@@ -82,7 +106,7 @@ const nodeContentRenderers = {
     [CanvasNodeType.Compare]: CompareNodeContent,
     [CanvasNodeType.Chart]: ChartNodeContent,
     [CanvasNodeType.ColorGrade]: ColorGradeNodeContent,
-} satisfies Record<CanvasNodeType, (props: CanvasNodeContentProps) => ReactNode>;
+};
 
 function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProps) {
     const shapeCount = node.metadata?.drawingShapeCount || 0;

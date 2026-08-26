@@ -315,6 +315,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	}
 	if resumedProviderRequestID(ctx) == "" {
 		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) || input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo)
+		if adapter, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+			requirePublicURL = requirePublicURL || adapter.Metadata().RequiresPublicMediaURLs
+		}
 		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
 			return nil, err
 		}
@@ -4097,7 +4100,7 @@ func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.C
 	return apiURLWithDefaultPrefix(baseURL, path, defaultPrefix)
 }
 
-var channelAPIPrefixes = []string{"/api/plan/v3", "/api/v3", "/v1beta", "/v1", "/v2", "/v3"}
+var channelAPIPrefixes = []string{"/api/plan/v3", "/api/v3", "/api/v1", "/v1beta", "/v1", "/v2", "/v3"}
 
 func apiURLWithDefaultPrefix(baseURL string, path string, defaultPrefix string) string {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")

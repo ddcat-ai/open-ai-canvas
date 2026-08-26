@@ -1,32 +1,11 @@
 import { apiClient, request } from "@/services/api/request";
-import type { PluginManifest, ProtocolCapability, ProtocolScope } from "@/lib/plugins/plugin-types";
+import type { PluginManifest } from "@/lib/plugins/plugin-types";
 
 export type BackendPlugin = {
-    manifest: {
-        id: string;
-        name: string;
-        version: string;
-        apiVersion: string;
-        category: "protocol";
-        description?: string;
-        author?: string;
-        surfaces: string[];
-        permissions: string[];
-        trusted: boolean;
-        kind: "protocol";
-        protocol: {
-            categories: ProtocolCapability[];
-            scopes: ProtocolScope[];
-            create?: string;
-            poll?: string;
-            cancel?: string;
-            contentType?: string;
-            documentation?: string;
-            parameters?: NonNullable<PluginManifest["protocol"]>["parameters"];
-        };
-    };
+    manifest: PluginManifest;
     source: "bundled" | "uploaded" | string;
     fileName: string;
+    package: string;
     sha256: string;
     installedAt: string;
     updatedAt: string;

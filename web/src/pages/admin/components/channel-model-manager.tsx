@@ -9,7 +9,7 @@ import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
-import { fetchProtocolCatalog } from "@/services/api/protocols";
+import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { AdminPageFrame } from "./admin-shell";
@@ -81,7 +81,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     useEffect(() => {
         void reload();
-        void fetchProtocolCatalog("admin.system-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
+        void fetchPluginProviderCatalog("admin.system-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
         setEditing(null);
         setEditorOpen(false);
         setKeyword("");

@@ -13,7 +13,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveAddNodeMenuCommands, resolveToolbarEntries, type AddNodeMenuCommand, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasNodeType, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
+import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
     selectedCount,
@@ -65,7 +65,7 @@ export function CanvasToolbar({
     onAddFrame: () => void;
     onAddFolder: () => void;
     onAddDrawing: () => void;
-    onAddExtensionNode: (type: CanvasNodeType) => void;
+    onAddExtensionNode: (type: CanvasNodeTypeId) => void;
     onOpenDirector: () => void;
     onUndo: () => void;
     onRedo: () => void;

@@ -1,5 +1,5 @@
 import { CanvasNodeContextMenu } from "@/components/canvas/canvas-context-menu";
-import { CanvasNodeType, type CanvasNodeData, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -13,7 +13,7 @@ type CanvasProjectContextMenuProps = {
     canPaste: boolean;
     screenToCanvas: (clientX: number, clientY: number) => Position;
     onClose: () => void;
-    onAddNode: (type: CanvasNodeType, position: Position) => void;
+    onAddNode: (type: CanvasNodeTypeId, position: Position) => void;
     onAddFolder: (position: Position) => void;
     onChooseStyle: () => void;
     onOpenDirector: (position?: Position) => void;
