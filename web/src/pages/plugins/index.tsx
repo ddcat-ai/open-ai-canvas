@@ -1,6 +1,6 @@
 import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
 import { AudioLines, CalendarDays, CheckCircle2, Clock3, CloudUpload, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
@@ -75,6 +75,7 @@ export default function PluginsPage() {
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("all");
+    const [scrollTarget, setScrollTarget] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "disabled">("all");
     const [trustFilter, setTrustFilter] = useState<"all" | "trusted">("all");
     const [eagleBaseUrl, setEagleBaseUrl] = useState("http://localhost:41595");
@@ -83,6 +84,7 @@ export default function PluginsPage() {
     const [eagleFolders, setEagleFolders] = useState<EagleFolder[]>([]);
     const [eagleFoldersLoading, setEagleFoldersLoading] = useState(false);
     const [eagleFoldersError, setEagleFoldersError] = useState("");
+    const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
     useEffect(() => {
         for (const plugin of builtinPlugins) ensurePlugin(plugin.manifest);
@@ -131,8 +133,9 @@ export default function PluginsPage() {
             const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, ...contributionKinds.map((kind) => categoryLabels[kind] || kind)].filter(Boolean).join(" ").toLocaleLowerCase();
             if (normalizedSearch && !searchableText.includes(normalizedSearch)) return false;
             if (categoryFilter !== "all") {
-                const matchesCapability = providerCapabilitiesFor(manifest).includes(categoryFilter as "text" | "image" | "video" | "audio");
-                const matchesApp = categoryFilter === "other" && contributionKinds.length > 0 && !matchesCapability;
+                const providerCapabilities = providerCapabilitiesFor(manifest);
+                const matchesCapability = providerCapabilities.includes(categoryFilter as "text" | "image" | "video" | "audio");
+                const matchesApp = categoryFilter === "other" && contributionKinds.length > 0 && providerCapabilities.length === 0;
                 if (!matchesCapability && !matchesApp) return false;
             }
             if (trustFilter === "trusted" && !manifest.trusted) return false;
@@ -149,6 +152,24 @@ export default function PluginsPage() {
         ],
         [filteredPlugins],
     );
+
+    const selectCategory = (key: string) => {
+        setCategoryFilter(key);
+        setScrollTarget(key === "all" ? null : key);
+    };
+
+    useEffect(() => {
+        if (!scrollTarget) return;
+        const section = sectionRefs.current[scrollTarget];
+        if (!section) return;
+
+        const frame = window.requestAnimationFrame(() => {
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            section.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+            setScrollTarget(null);
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [pluginSections, scrollTarget]);
 
     const categoryCounts = useMemo(() => {
         const visiblePlugins = registeredPlugins.filter((plugin) => user?.role === "admin" || features.systemPluginsVisibleToUsers || plugin.source === "uploaded");
@@ -234,7 +255,7 @@ export default function PluginsPage() {
                             <p>统一管理 provider、工作流、画布节点和其他扩展能力。</p>
                         </div>
                         <nav className="plugins-sidebar-nav">
-                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "all" ? " is-active" : ""}`} aria-current={categoryFilter === "all" ? "page" : undefined} onClick={() => setCategoryFilter("all")}>
+                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "all" ? " is-active" : ""}`} aria-current={categoryFilter === "all" ? "page" : undefined} onClick={() => selectCategory("all")}>
                                 <span className="plugins-sidebar-item-label">
                                     <PlugZap className="size-4" />
                                     全部插件
@@ -249,7 +270,7 @@ export default function PluginsPage() {
                                         type="button"
                                         className={`plugins-sidebar-item${categoryFilter === section.key ? " is-active" : ""}`}
                                         aria-current={categoryFilter === section.key ? "page" : undefined}
-                                        onClick={() => setCategoryFilter(section.key)}
+                                        onClick={() => selectCategory(section.key)}
                                     >
                                         <span className="plugins-sidebar-item-label">
                                             <SectionIcon className="size-4" />
@@ -259,7 +280,7 @@ export default function PluginsPage() {
                                     </button>
                                 );
                             })}
-                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "other" ? " is-active" : ""}`} aria-current={categoryFilter === "other" ? "page" : undefined} onClick={() => setCategoryFilter("other")}>
+                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "other" ? " is-active" : ""}`} aria-current={categoryFilter === "other" ? "page" : undefined} onClick={() => selectCategory("other")}>
                                 <span className="plugins-sidebar-item-label">
                                     <PlugZap className="size-4" />
                                     应用插件
@@ -320,7 +341,14 @@ export default function PluginsPage() {
                                     if (!section.plugins.length) return null;
                                     const SectionIcon = section.icon;
                                     return (
-                                        <section key={section.key} className="plugin-section">
+                                        <section
+                                            key={section.key}
+                                            id={`plugin-section-${section.key}`}
+                                            ref={(element) => {
+                                                sectionRefs.current[section.key] = element;
+                                            }}
+                                            className="plugin-section"
+                                        >
                                             <header className="plugin-section-heading">
                                                 <span className="plugin-section-icon">
                                                     <SectionIcon className="size-4" />
