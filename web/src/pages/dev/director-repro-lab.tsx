@@ -65,16 +65,30 @@ export default function DirectorReproLab() {
         <div className="min-h-dvh overflow-y-auto p-5" style={{ background: "var(--bg)", color: "var(--fg)" }}>
             <header className="mb-4 flex flex-wrap items-center gap-3">
                 <h1 className="text-lg font-semibold">导演台 P0 复现台</h1>
-                <Tag color={directorReproSceneIsOffline(scene) ? "green" : "red"} data-testid="offline-tag">{directorReproSceneIsOffline(scene) ? "fixture 无网络资产" : "已注入模型资产"}</Tag>
-                <span className="text-[var(--fs-tiny)] opacity-70" data-testid="object-count">对象数 {scene.objects.length}</span>
+                <Tag color={directorReproSceneIsOffline(scene) ? "green" : "red"} data-testid="offline-tag">
+                    {directorReproSceneIsOffline(scene) ? "fixture 无网络资产" : "已注入模型资产"}
+                </Tag>
+                <span className="text-[var(--fs-tiny)] opacity-70" data-testid="object-count">
+                    对象数 {scene.objects.length}
+                </span>
                 <span className="ml-auto flex flex-wrap items-center gap-2">
-                    <Button size="small" data-testid="inject-local-model" onClick={() => injectModel("local")}>注入本地模型</Button>
-                    <Button size="small" data-testid="inject-missing-model" onClick={() => injectModel("missing")}>注入缺失模型</Button>
+                    <Button size="small" data-testid="inject-local-model" onClick={() => injectModel("local")}>
+                        注入本地模型
+                    </Button>
+                    <Button size="small" data-testid="inject-missing-model" onClick={() => injectModel("missing")}>
+                        注入缺失模型
+                    </Button>
                     <span className="text-[var(--fs-tiny)] opacity-70">强制保存失败</span>
                     <Switch checked={forceSaveFailure} onChange={setForceSaveFailure} data-testid="force-save-failure" />
-                    <Button size="small" data-testid="toggle-workbench" onClick={() => setWorkbenchOpen((open) => !open)}>{workbenchOpen ? "关闭导演台" : "打开导演台"}</Button>
-                    <Button size="small" data-testid="refresh-events" onClick={refreshEvents}>刷新事件</Button>
-                    <Button size="small" data-testid="reset-lab" onClick={reset}>重置</Button>
+                    <Button size="small" data-testid="toggle-workbench" onClick={() => setWorkbenchOpen((open) => !open)}>
+                        {workbenchOpen ? "关闭导演台" : "打开导演台"}
+                    </Button>
+                    <Button size="small" data-testid="refresh-events" onClick={refreshEvents}>
+                        刷新事件
+                    </Button>
+                    <Button size="small" data-testid="reset-lab" onClick={reset}>
+                        重置
+                    </Button>
                 </span>
             </header>
 
@@ -82,18 +96,7 @@ export default function DirectorReproLab() {
             <DiagnosticEventList events={events} />
             <ReproMatrix />
 
-            {workbenchOpen ? (
-                <CanvasDirectorWorkbench
-                    open
-                    scene={scene}
-                    imageNodes={[]}
-                    onClose={() => setWorkbenchOpen(false)}
-                    onChange={onChange}
-                    onApply={onApply}
-                    onDeleteImageNode={() => undefined}
-                    onFlush={onFlush}
-                />
-            ) : null}
+            {workbenchOpen ? <CanvasDirectorWorkbench open scene={scene} imageNodes={[]} onClose={() => setWorkbenchOpen(false)} onChange={onChange} onApply={onApply} onDeleteImageNode={() => undefined} onFlush={onFlush} /> : null}
         </div>
     );
 }
@@ -143,7 +146,9 @@ function EnvironmentSnapshot({ snapshot, appliedCount, flushCount, sceneRevision
                 {rows.map(([label, value]) => (
                     <div key={label} className="flex min-w-0 gap-2 text-[var(--fs-tiny)]">
                         <span className="shrink-0 opacity-55">{label}</span>
-                        <span className="min-w-0 flex-1 truncate font-mono" title={value}>{value}</span>
+                        <span className="min-w-0 flex-1 truncate font-mono" title={value}>
+                            {value}
+                        </span>
                     </div>
                 ))}
             </div>

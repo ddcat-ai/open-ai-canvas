@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { DIRECTOR_PLACEMENT_MARGIN, directorObjectFootprint, emptyDirectorPlacementIntent, finiteDirectorGroundPoint, resolveDirectorPlacement, resolveDirectorPlacementAnchor, type DirectorGroundPoint } from "../src/lib/canvas/director/director-placement";
+import {
+    DIRECTOR_PLACEMENT_MARGIN,
+    directorObjectFootprint,
+    emptyDirectorPlacementIntent,
+    finiteDirectorGroundPoint,
+    resolveDirectorPlacement,
+    resolveDirectorPlacementAnchor,
+    type DirectorGroundPoint,
+} from "../src/lib/canvas/director/director-placement";
 import { createDirectorActor, createDirectorBillboard, createDirectorModel, createDirectorObject } from "../src/lib/canvas/director/director-scene";
 import type { DirectorObject, DirectorVec3 } from "../src/types/director";
 
@@ -187,46 +195,58 @@ describe("放置来源优先级", () => {
             { x: Number.NaN, z: Number.NaN },
         ];
         for (const pointer of cases) {
-            expect(resolveDirectorPlacementAnchor({
-                intent: { pointer, orbitTarget: { x: -2.5, z: 6 } },
-                fallback: [0, 0.5, 0],
-            })).toEqual([-2.5, 0.5, 6]);
+            expect(
+                resolveDirectorPlacementAnchor({
+                    intent: { pointer, orbitTarget: { x: -2.5, z: 6 } },
+                    fallback: [0, 0.5, 0],
+                }),
+            ).toEqual([-2.5, 0.5, 6]);
         }
     });
 
     test("非法 pointer + 非法 orbit 时回退到合法 fallback XZ", () => {
-        expect(resolveDirectorPlacementAnchor({
-            intent: { pointer: { x: Number.NaN, z: Number.NaN }, orbitTarget: { x: Number.POSITIVE_INFINITY, z: 3 } },
-            fallback: [7, 0.5, -8],
-        })).toEqual([7, 0.5, -8]);
+        expect(
+            resolveDirectorPlacementAnchor({
+                intent: { pointer: { x: Number.NaN, z: Number.NaN }, orbitTarget: { x: Number.POSITIVE_INFINITY, z: 3 } },
+                fallback: [7, 0.5, -8],
+            }),
+        ).toEqual([7, 0.5, -8]);
     });
 
     test("三个来源全非法时归零且仍保留构造器 Y", () => {
-        expect(resolveDirectorPlacementAnchor({
-            intent: { pointer: { x: Number.NaN, z: 0 }, orbitTarget: { x: Number.NaN, z: 0 } },
-            fallback: [Number.NaN, 1.1, Number.POSITIVE_INFINITY],
-        })).toEqual([0, 1.1, 0]);
+        expect(
+            resolveDirectorPlacementAnchor({
+                intent: { pointer: { x: Number.NaN, z: 0 }, orbitTarget: { x: Number.NaN, z: 0 } },
+                fallback: [Number.NaN, 1.1, Number.POSITIVE_INFINITY],
+            }),
+        ).toEqual([0, 1.1, 0]);
     });
 
     test("合法 pointer 含 0 不被误判为缺失", () => {
-        expect(resolveDirectorPlacementAnchor({
-            intent: { pointer: { x: 0, z: 0 }, orbitTarget: { x: 9, z: 9 } },
-            fallback: [7, 0.5, -8],
-        })).toEqual([0, 0.5, 0]);
+        expect(
+            resolveDirectorPlacementAnchor({
+                intent: { pointer: { x: 0, z: 0 }, orbitTarget: { x: 9, z: 9 } },
+                fallback: [7, 0.5, -8],
+            }),
+        ).toEqual([0, 0.5, 0]);
     });
 
     test("非法 orbit 不影响合法 pointer", () => {
-        expect(resolveDirectorPlacementAnchor({
-            intent: { pointer: { x: 3, z: -4 }, orbitTarget: { x: Number.NaN, z: Number.NaN } },
-            fallback: [0, 0.5, 0],
-        })).toEqual([3, 0.5, -4]);
+        expect(
+            resolveDirectorPlacementAnchor({
+                intent: { pointer: { x: 3, z: -4 }, orbitTarget: { x: Number.NaN, z: Number.NaN } },
+                fallback: [0, 0.5, 0],
+            }),
+        ).toEqual([3, 0.5, -4]);
     });
 
     test("非有限 fallback Y 归零，XZ 来源仍生效", () => {
-        expect(resolveDirectorPlacementAnchor({
-            intent: { pointer: { x: 2, z: 2 }, orbitTarget: null },
-            fallback: [0, Number.NaN, 0],
-        })).toEqual([2, 0, 2]);
+        expect(
+            resolveDirectorPlacementAnchor({
+                intent: { pointer: { x: 2, z: 2 }, orbitTarget: null },
+                fallback: [0, Number.NaN, 0],
+            }),
+        ).toEqual([2, 0, 2]);
     });
 });
 

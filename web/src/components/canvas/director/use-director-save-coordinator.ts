@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-    createDirectorSaveCoordinator,
-    type DirectorCloseDecision,
-    type DirectorDraftEnvelope,
-    type DirectorSaveCoordinator,
-} from "@/lib/canvas/director/director-save";
-import {
-    directorSaveProgress,
-    idleDirectorSaveProgress,
-    resolveDirectorDraftStorage,
-    type DirectorSaveProgress,
-} from "@/lib/canvas/director/director-save-wiring";
+import { createDirectorSaveCoordinator, type DirectorCloseDecision, type DirectorDraftEnvelope, type DirectorSaveCoordinator } from "@/lib/canvas/director/director-save";
+import { directorSaveProgress, idleDirectorSaveProgress, resolveDirectorDraftStorage, type DirectorSaveProgress } from "@/lib/canvas/director/director-save-wiring";
 import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { useUserStore } from "@/stores/use-user-store";
 import type { DirectorScene } from "@/types/director";
@@ -32,12 +22,7 @@ export type DirectorSaveController = {
  * 按 scene.id 持有唯一 coordinator：切换场景或卸载时 dispose。
  * persistScene 必须把 request.scene 落到项目状态，flushPersistence 负责真正落盘。
  */
-export function useDirectorSaveCoordinator(input: {
-    sceneId: string | null;
-    initialScene: DirectorScene | null;
-    persistScene: (scene: DirectorScene) => void;
-    flushPersistence: () => void | Promise<void>;
-}): DirectorSaveController {
+export function useDirectorSaveCoordinator(input: { sceneId: string | null; initialScene: DirectorScene | null; persistScene: (scene: DirectorScene) => void; flushPersistence: () => void | Promise<void> }): DirectorSaveController {
     const { sceneId, initialScene, persistScene, flushPersistence } = input;
 
     const coordinatorRef = useRef<DirectorSaveCoordinator | null>(null);

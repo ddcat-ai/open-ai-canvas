@@ -1,11 +1,6 @@
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
-import {
-    formatDirectorDiagnosticCode,
-    projectDirectorDiagnostic,
-    type DirectorDiagnosticCode,
-    type DirectorDiagnosticFields,
-} from "@/lib/canvas/director/director-diagnostics";
+import { formatDirectorDiagnosticCode, projectDirectorDiagnostic, type DirectorDiagnosticCode, type DirectorDiagnosticFields } from "@/lib/canvas/director/director-diagnostics";
 
 /**
  * 导演台故障事件的唯一记录入口。

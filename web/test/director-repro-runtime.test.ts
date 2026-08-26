@@ -1,19 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-    projectDirectorWebgl,
-    readDirectorReproRuntime,
-    releaseProbeContext,
-    safeReproText,
-} from "../src/lib/canvas/director/director-repro-runtime";
-import {
-    DIRECTOR_REPRO_LOCAL_MODEL_URL,
-    DIRECTOR_REPRO_MATRIX,
-    DIRECTOR_REPRO_MISSING_MODEL_URL,
-    createDirectorReproScene,
-    directorReproSceneIsOffline,
-    injectDirectorReproModel,
-} from "../src/lib/canvas/director/director-repro-fixture";
+import { projectDirectorWebgl, readDirectorReproRuntime, releaseProbeContext, safeReproText } from "../src/lib/canvas/director/director-repro-runtime";
+import { DIRECTOR_REPRO_LOCAL_MODEL_URL, DIRECTOR_REPRO_MATRIX, DIRECTOR_REPRO_MISSING_MODEL_URL, createDirectorReproScene, directorReproSceneIsOffline, injectDirectorReproModel } from "../src/lib/canvas/director/director-repro-fixture";
 import { DIRECTOR_PLACEMENT_MARGIN, directorObjectFootprint } from "../src/lib/canvas/director/director-placement";
 import type { DirectorObject } from "../src/types/director";
 
@@ -237,7 +225,14 @@ describe("WebGL 投影", () => {
     test("探测后归还上下文：支持扩展时调用 loseContext", () => {
         let losed = 0;
         releaseProbeContext({
-            getExtension: (name: string) => (name === "WEBGL_lose_context" ? { loseContext: () => { losed += 1; } } : null),
+            getExtension: (name: string) =>
+                name === "WEBGL_lose_context"
+                    ? {
+                          loseContext: () => {
+                              losed += 1;
+                          },
+                      }
+                    : null,
         });
         expect(losed).toBe(1);
     });
@@ -245,8 +240,22 @@ describe("WebGL 投影", () => {
     test("扩展不可用或抛错时归还是无操作，不外泄异常", () => {
         expect(() => releaseProbeContext({ getExtension: () => null })).not.toThrow();
         expect(() => releaseProbeContext({ getExtension: () => ({}) })).not.toThrow();
-        expect(() => releaseProbeContext({ getExtension: () => { throw new Error("no extension"); } })).not.toThrow();
-        expect(() => releaseProbeContext({ getExtension: () => ({ loseContext: () => { throw new Error("lose failed"); } }) })).not.toThrow();
+        expect(() =>
+            releaseProbeContext({
+                getExtension: () => {
+                    throw new Error("no extension");
+                },
+            }),
+        ).not.toThrow();
+        expect(() =>
+            releaseProbeContext({
+                getExtension: () => ({
+                    loseContext: () => {
+                        throw new Error("lose failed");
+                    },
+                }),
+            }),
+        ).not.toThrow();
         for (const bad of [null, undefined, 42, {}, "gl"]) {
             expect(() => releaseProbeContext(bad)).not.toThrow();
         }
@@ -355,7 +364,10 @@ describe("模型注入", () => {
     });
 
     test("两个变体都是 model kind 且 id 稳定", () => {
-        for (const [variant, id] of [["local", "repro-model-local"], ["missing", "repro-model-missing"]] as const) {
+        for (const [variant, id] of [
+            ["local", "repro-model-local"],
+            ["missing", "repro-model-missing"],
+        ] as const) {
             const scene = injectDirectorReproModel(createDirectorReproScene(), variant);
             const model = scene.objects.find((object) => object.id === id);
             expect(model).toBeDefined();

@@ -25,10 +25,7 @@ const CHROME_CANDIDATES = [
 ].filter(Boolean);
 
 /** 唯一允许出现的浏览器噪声：精确匹配，其他一律判失败。 */
-const ALLOWED_NOISE = [
-    "Warning: [antd: InputNumber] `addonAfter` is deprecated. Please use `Space.Compact` instead.",
-    "Warning: [antd: InputNumber] `addonBefore` is deprecated. Please use `Space.Compact` instead.",
-];
+const ALLOWED_NOISE = ["Warning: [antd: InputNumber] `addonAfter` is deprecated. Please use `Space.Compact` instead.", "Warning: [antd: InputNumber] `addonBefore` is deprecated. Please use `Space.Compact` instead."];
 
 /**
  * 网络与资源失败绝不放行：复现台必须是真正的同源本地确定性场景。
@@ -59,10 +56,7 @@ function resolveChrome() {
     for (const candidate of CHROME_CANDIDATES) {
         if (candidate && existsSync(candidate)) return candidate;
     }
-    throw new Error(
-        "No Chrome binary found. Set CHROME_BIN or install google-chrome/chromium. Tried:\n  " +
-            CHROME_CANDIDATES.join("\n  "),
-    );
+    throw new Error("No Chrome binary found. Set CHROME_BIN or install google-chrome/chromium. Tried:\n  " + CHROME_CANDIDATES.join("\n  "));
 }
 
 function freePort() {
@@ -85,8 +79,12 @@ async function launchVite(port) {
         stdio: ["ignore", "pipe", "pipe"],
     });
     let log = "";
-    child.stdout.on("data", (d) => { log += d.toString(); });
-    child.stderr.on("data", (d) => { log += d.toString(); });
+    child.stdout.on("data", (d) => {
+        log += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+        log += d.toString();
+    });
 
     const deadline = Date.now() + 120000;
     while (Date.now() < deadline) {
@@ -120,8 +118,12 @@ async function launchChrome(chromePath, cdpPort, profileDir) {
 
     const child = spawn(chromePath, args, { stdio: ["ignore", "pipe", "pipe"] });
     let log = "";
-    child.stdout.on("data", (d) => { log += d.toString(); });
-    child.stderr.on("data", (d) => { log += d.toString(); });
+    child.stdout.on("data", (d) => {
+        log += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+        log += d.toString();
+    });
 
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
@@ -149,8 +151,22 @@ async function connectCdp(cdpPort) {
     const ws = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error("CDP websocket open timeout")), 20000);
-        ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-        ws.addEventListener("error", (e) => { clearTimeout(timer); reject(new Error("CDP websocket error: " + String(e?.message || e))); }, { once: true });
+        ws.addEventListener(
+            "open",
+            () => {
+                clearTimeout(timer);
+                resolve();
+            },
+            { once: true },
+        );
+        ws.addEventListener(
+            "error",
+            (e) => {
+                clearTimeout(timer);
+                reject(new Error("CDP websocket error: " + String(e?.message || e)));
+            },
+            { once: true },
+        );
     });
 
     const pending = new Map();
@@ -165,7 +181,11 @@ async function connectCdp(cdpPort) {
 
     ws.addEventListener("message", (ev) => {
         let msg;
-        try { msg = JSON.parse(ev.data); } catch { return; }
+        try {
+            msg = JSON.parse(ev.data);
+        } catch {
+            return;
+        }
 
         if (msg.id && pending.has(msg.id)) {
             const { resolve, reject } = pending.get(msg.id);
@@ -205,7 +225,10 @@ async function connectCdp(cdpPort) {
             pending.set(id, { resolve, reject });
             ws.send(JSON.stringify({ id, method, params }));
             setTimeout(() => {
-                if (pending.has(id)) { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }
+                if (pending.has(id)) {
+                    pending.delete(id);
+                    reject(new Error(`CDP timeout: ${method}`));
+                }
             }, 30000);
         });
     };
@@ -262,11 +285,7 @@ async function connectCdp(cdpPort) {
 
     const click = (selector) => clickPoint(`document.querySelector(${JSON.stringify(selector)})`, selector);
 
-    const clickText = (text, tag = "button") =>
-        clickPoint(
-            `[...document.querySelectorAll(${JSON.stringify(tag)})].find((b) => (b.textContent || "").includes(${JSON.stringify(text)}) && b.getClientRects().length > 0)`,
-            `${tag}:contains(${text})`,
-        );
+    const clickText = (text, tag = "button") => clickPoint(`[...document.querySelectorAll(${JSON.stringify(tag)})].find((b) => (b.textContent || "").includes(${JSON.stringify(text)}) && b.getClientRects().length > 0)`, `${tag}:contains(${text})`);
 
     /** 每个场景都从干净页面开始：诊断缓冲区与 store 都重置。 */
     const navigateFresh = async (url) => {
@@ -292,12 +311,20 @@ async function stopExact(child, name) {
     const stopped = () => child.exitCode !== null || child.signalCode !== null;
     if (stopped()) return;
 
-    try { child.kill("SIGTERM"); } catch { /* already gone */ }
+    try {
+        child.kill("SIGTERM");
+    } catch {
+        /* already gone */
+    }
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline && !stopped()) await sleep(200);
 
     if (!stopped()) {
-        try { child.kill("SIGKILL"); } catch { /* already gone */ }
+        try {
+            child.kill("SIGKILL");
+        } catch {
+            /* already gone */
+        }
         const hard = Date.now() + 4000;
         while (Date.now() < hard && !stopped()) await sleep(200);
     }
@@ -654,7 +681,11 @@ async function main() {
             }
         }
     } finally {
-        try { cdp?.close(); } catch { /* socket already closed */ }
+        try {
+            cdp?.close();
+        } catch {
+            /* socket already closed */
+        }
         // 三个清理步骤互不阻塞：任一失败都记为断言失败（最终 exit 1），但不吞掉其余清理。
         try {
             await stopExact(chrome, "chrome");

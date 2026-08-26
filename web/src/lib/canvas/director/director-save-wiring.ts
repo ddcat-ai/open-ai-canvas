@@ -1,10 +1,5 @@
 import type { DirectorScene } from "@/types/director";
-import type {
-    DirectorCloseDecision,
-    DirectorDraftEnvelope,
-    DirectorSaveSnapshot,
-    StorageLike,
-} from "@/lib/canvas/director/director-save";
+import type { DirectorCloseDecision, DirectorDraftEnvelope, DirectorSaveSnapshot, StorageLike } from "@/lib/canvas/director/director-save";
 
 /**
  * UI 只需要保存进度，不需要场景本体。
@@ -63,10 +58,7 @@ export function describeDirectorSaveStatus(progress: DirectorSaveProgress): Dire
  * scene.updatedAt 是 canonical 保存时间，candidate.baseUpdatedAt 是草稿写入时的基线；
  * 基线落后于权威说明远端已保存过更新的内容，这份草稿是陈旧残留。
  */
-export function shouldOfferDirectorDraftRecovery(input: {
-    candidate: DirectorDraftEnvelope | null;
-    authoritativeScene: DirectorScene | null;
-}): boolean {
+export function shouldOfferDirectorDraftRecovery(input: { candidate: DirectorDraftEnvelope | null; authoritativeScene: DirectorScene | null }): boolean {
     const { candidate, authoritativeScene } = input;
     if (!candidate || !authoritativeScene) return false;
     if (candidate.sceneId !== authoritativeScene.id) return false;
@@ -75,10 +67,7 @@ export function shouldOfferDirectorDraftRecovery(input: {
 }
 
 /** 关闭决策的用户可见后果，组件按此分支决定退出/二次确认/留下。 */
-export type DirectorCloseOutcome =
-    | { kind: "close" }
-    | { kind: "confirm-draft-exit"; message: string }
-    | { kind: "blocked"; message: string };
+export type DirectorCloseOutcome = { kind: "close" } | { kind: "confirm-draft-exit"; message: string } | { kind: "blocked"; message: string };
 
 export function resolveDirectorCloseOutcome(decision: DirectorCloseDecision): DirectorCloseOutcome {
     if (decision === "close") return { kind: "close" };

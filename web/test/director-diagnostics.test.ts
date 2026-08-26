@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-    DIRECTOR_DIAGNOSTIC_CODES,
-    directorDiagnosticObjectKind,
-    formatDirectorDiagnosticCode,
-    isDirectorDiagnosticCode,
-    projectDirectorDiagnostic,
-} from "../src/lib/canvas/director/director-diagnostics";
+import { DIRECTOR_DIAGNOSTIC_CODES, directorDiagnosticObjectKind, formatDirectorDiagnosticCode, isDirectorDiagnosticCode, projectDirectorDiagnostic } from "../src/lib/canvas/director/director-diagnostics";
 
 /** 任何一个都不允许出现在投影输出里。 */
 const LEAK_PROBES = [
