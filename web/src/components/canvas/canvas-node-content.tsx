@@ -414,6 +414,7 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
 function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContentProps) {
     const playWhenReadyRef = useRef(false);
     const playerBoxRef = useRef<HTMLDivElement>(null);
+    const { updateMetadata } = useCanvasNodeActions();
     const { url, loading, load } = useNodeResourceUrl(node, false);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
@@ -425,7 +426,11 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContent
         const video = box?.querySelector("video");
         if (!video) return;
         const handleLoadedMetadata = () => {
-            if (video.videoWidth > 0 && video.videoHeight > 0) setVideoSize({ width: video.videoWidth, height: video.videoHeight });
+            if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+            setVideoSize({ width: video.videoWidth, height: video.videoHeight });
+            if (node.metadata?.naturalWidth !== video.videoWidth || node.metadata?.naturalHeight !== video.videoHeight) {
+                updateMetadata?.(node.id, { naturalWidth: video.videoWidth, naturalHeight: video.videoHeight });
+            }
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
         handleLoadedMetadata();
@@ -436,7 +441,7 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContent
             video.removeEventListener("timeupdate", handleTimeUpdate);
             video.removeEventListener("loadedmetadata", handleLoadedMetadata);
         };
-    }, [subtitleEntries.length, url]);
+    }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMetadata, url]);
 
     if (!node.metadata?.content) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
     if (!url) return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存视频" : "加载并缓存视频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;

@@ -401,7 +401,9 @@ export function generationWorkflowMetadata(config: AiConfig): Pick<CanvasNodeMet
 
 export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefined, mode: CanvasNodeGenerationMode, requirements?: ModelRequirements): AiConfig {
     // 只有独立 Config 节点读取工作流元数据；普通图片/视频/音频节点始终按基础模型生成。
-    const workflowProvider = mode !== "text" && node?.type === CanvasNodeType.Config ? resolveCanvasWorkflowProvider(node.metadata) : "model";
+    const workflowProvider = mode !== "text" && node?.type === CanvasNodeType.Config
+        ? resolveCanvasWorkflowProvider(node.metadata) === "comfyui" ? "comfyui" : "runninghub"
+        : "model";
     const defaultModel = mode === "image" ? config.imageModel : mode === "video" ? config.videoModel : mode === "audio" ? config.audioModel : config.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = resolveCanvasGenerationModel(config, node?.metadata?.model, mode);
@@ -542,12 +544,13 @@ export function supportsVideoReferenceAudio(config: AiConfig) {
 }
 
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
+    const configWidth = NODE_DEFAULT_SIZE[CanvasNodeType.Config].width;
     const configHeight = NODE_DEFAULT_SIZE[CanvasNodeType.Config].height;
     return nodes.map((node) => {
         const mediaNode = ensureMediaNodeMinimumSize(node);
         const resizedNode =
-            mediaNode.type === CanvasNodeType.Config && mediaNode.height < configHeight
-                ? { ...mediaNode, height: configHeight }
+            mediaNode.type === CanvasNodeType.Config && (mediaNode.width < configWidth || mediaNode.height < configHeight)
+                ? { ...mediaNode, width: Math.max(mediaNode.width, configWidth), height: Math.max(mediaNode.height, configHeight) }
                 : mediaNode.type === CanvasNodeType.Script && mediaNode.height < NODE_DEFAULT_SIZE[CanvasNodeType.Script].height
                   ? { ...mediaNode, height: NODE_DEFAULT_SIZE[CanvasNodeType.Script].height }
                   : mediaNode;

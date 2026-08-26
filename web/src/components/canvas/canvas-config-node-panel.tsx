@@ -1,21 +1,15 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, Dice5, Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings2, Sparkles, Video, Workflow as WorkflowIcon } from "lucide-react";
+import { ChevronDown, Dice5, Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Sparkles, Video, Workflow as WorkflowIcon } from "lucide-react";
 import { Button, Input, InputNumber, Segmented, Select, Slider, Switch, Tooltip } from "antd";
 
-import { ModelPicker } from "@/components/model-picker";
 import { configuredModelMatchesCapability, defaultConfig, modelOptionName, normalizeRunningHubCapability, resolveModelChannel, useEffectiveConfig, type AiConfig, type RunningHubCapability, type RunningHubWorkflow, type RunningHubWorkflowKind } from "@/stores/use-config-store";
-import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { defaultModelCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, workflowFieldChoiceValues, workflowFieldCurrentValue, workflowFieldKey, workflowFieldNumberBounds, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowFieldValueError, workflowImageCapabilityConfig, workflowOutputSizeValue, workflowParameterFields, workflowVideoCapabilityConfig, workflowVideoFieldsFromJson, type WorkflowVideoFieldLike } from "@/lib/model-capabilities";
 import { defaultImageParamsForModel, modelCompatibilityError, modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
-import { navigateToSettings } from "@/lib/settings-navigation";
+import type { CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { useUserStore } from "@/stores/use-user-store";
-import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
-import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
-import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasVideoEditOperation, CanvasWorkspaceMode } from "@/types/canvas";
 
 type CanvasConfigNodePanelProps = {
@@ -65,10 +59,10 @@ function runningHubWorkflowEntryKey(workflow: RunningHubWorkflow): string {
 export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle, workspaceMode = "professional" }: CanvasConfigNodePanelProps) {
     const globalConfig = useEffectiveConfig();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const mode = node.metadata?.generationMode || "image";
+    const mode = node.metadata?.generationMode === "video" || node.metadata?.generationMode === "audio" ? node.metadata.generationMode : "image";
     const simpleMode = workspaceMode === "simple";
-    const workflowProvider = mode === "text" ? "model" : resolveCanvasWorkflowProvider(node.metadata);
+    const resolvedProvider = resolveCanvasWorkflowProvider(node.metadata);
+    const workflowProvider = resolvedProvider === "comfyui" ? "comfyui" : "runninghub";
     const workflowCapability: RunningHubCapability = mode === "video" ? "video" : mode === "audio" ? "audio" : "image";
     const requirements: ModelRequirements = {
         capability: mode,
@@ -104,7 +98,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             : [];
     const dynamicWorkflowFields = workflowParameterFields(selectedWorkflowFields);
     useEffect(() => {
-        if (mode === "text") return;
         if (workflowProvider === "runninghub" && !node.metadata?.runningHubWorkflowId?.trim()) {
             const capability = normalizeRunningHubCapability(globalConfig.runningHub.capability);
             // 模式切换后优先按当前能力选择工作流，不能沿用全局默认的视频工作流，
@@ -150,36 +143,27 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         .filter((item) => item.capability === workflowCapability || item.workflowId.trim() === node.metadata?.comfyBridgeWorkflowId?.trim())
         .map((item) => ({ label: item.title || item.workflowId, value: item.workflowId, kind: "workflow" as const, title: `${item.title || item.workflowId} · ${capabilityLabel(item.capability)}` }));
     const comfyBridgeOptions: WorkflowSelectOption[] = comfyBridgeEntries.length ? [{ label: <WorkflowOptionGroupLabel label="工作流" count={comfyBridgeEntries.length} />, options: comfyBridgeEntries }] : [];
-    const videoProfile = mode === "video" ? (workflowProvider === "model" ? modelCapabilityConfigFor(config, config.model).video! : undefined) : undefined;
-    const operationOptions = videoProfile ? videoOperationOptions.filter((item) => videoProfile.operations.includes(item.value) || item.value === "concat") : videoOperationOptions;
-    const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const textCountValue = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.textCount) || 1))));
-    const priceChannel = resolveModelChannel(config, config.model);
-    const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? count : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
-    const hasPrice = workflowProvider === "model" && creditsEnabled && credits !== null;
-    const chipStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
+    const chipStyle = { background: theme.node.fill, color: theme.node.text };
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount || inputSummary.characterCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
-    const workflowParameterError = workflowProvider === "model" ? "" : firstWorkflowParameterError(dynamicWorkflowFields, node.metadata?.workflowParameters || {});
+    const workflowParameterError = firstWorkflowParameterError(dynamicWorkflowFields, node.metadata?.workflowParameters || {});
     const capabilityError = workflowParameterError || (workflowProvider === "runninghub"
         ? (!globalConfig.runningHub.enabled ? "请先在设置中启用 RunningHub" : !node.metadata?.runningHubWorkflowId ? `请选择${capabilityLabel(workflowCapability)}工作流或 App` : !selectedRunningHubWorkflow ? "当前画布引用的 RunningHub 条目已不存在，请重新选择" : selectedRunningHubCapability !== workflowCapability ? `当前条目用途为${capabilityLabel(selectedRunningHubCapability || "image")}，请切换画布模式或重新选择条目` : undefined)
         : workflowProvider === "comfyui"
             ? (!globalConfig.comfyBridge.enabled ? "请先在设置中启用 ComfyUI Bridge" : !globalConfig.comfyBridge.bridgeId ? "请选择在线 Bridge" : !node.metadata?.comfyBridgeWorkflowId ? `请选择${capabilityLabel(workflowCapability)}工作流` : !selectedComfyBridgeWorkflow ? "当前画布引用的 ComfyUI 条目已不存在，请重新选择" : selectedComfyBridgeWorkflow.capability !== workflowCapability ? `当前条目用途为${capabilityLabel(selectedComfyBridgeWorkflow.capability)}，请切换画布模式或重新选择条目` : undefined)
-            : modelCompatibilityError(config, config.model, requirements));
+            : undefined);
     const canGenerate = (hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput)) && !capabilityError;
 
     return (
-        <div className={workflowProvider === "model" ? "flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" : "thin-scrollbar flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto px-3 pb-3 pt-7 text-sm"} style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
-            <div className={workflowProvider === "model" ? "mb-2 flex items-center justify-between gap-3" : "flex min-h-8 items-center justify-between gap-3"}>
-                <div className="shrink-0 text-sm font-semibold">{simpleMode ? "快速生成" : workflowProvider === "model" ? "生成配置" : "工作流生成"}</div>
+        <div className="canvas-config-node-panel thin-scrollbar flex h-full w-full cursor-move flex-col gap-3.5 overflow-y-auto px-4 pb-4 pt-8 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+            <div className="flex min-h-9 items-center justify-between gap-3">
+                <div className="shrink-0 text-sm font-semibold">{simpleMode ? "快速生成" : "工作流生成"}</div>
                 {simpleMode ? <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
                         className="canvas-config-mode !rounded-md !p-0.5"
                         value={mode}
-                        onChange={(value) => onConfigChange(node.id, workflowProvider === "model"
-                            ? { generationMode: value as CanvasGenerationMode }
-                            : { generationMode: value as CanvasGenerationMode, runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, comfyBridgeWorkflowId: undefined, workflowParameters: {} })}
+                        onChange={(value) => onConfigChange(node.id, { generationMode: value as CanvasGenerationMode, runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, comfyBridgeWorkflowId: undefined, workflowParameters: {} })}
                         options={[
                             {
                                 value: "image",
@@ -187,15 +171,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                                     <span className="inline-flex items-center gap-1">
                                         <ImageIcon className="size-3.5" />
                                         生图
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "text",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <MessageSquare className="size-3.5" />
-                                        文本
                                     </span>
                                 ),
                             },
@@ -222,70 +197,58 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 </div>}
             </div>
 
-            <div className={workflowProvider === "model" ? "mb-2 flex flex-wrap gap-1.5" : "flex min-w-0 flex-wrap items-center gap-2"}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <InputChip label="提示词" value={`${inputSummary.textCount} 个`} style={chipStyle} />
                 <InputChip label="参考图" value={`${inputSummary.imageCount} 张`} style={chipStyle} />
                 <InputChip label="参考视频" value={`${inputSummary.videoCount} 个`} style={chipStyle} />
                 <InputChip label="参考音频" value={`${inputSummary.audioCount} 个`} style={chipStyle} />
                 {inputSummary.characterCount ? <InputChip label="角色卡" value={`${inputSummary.characterCount} 个`} style={chipStyle} /> : null}
-                <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[var(--fs-label)]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
-                    {simpleMode ? <MessageSquare className="size-3.5" /> : <Settings2 className="size-3.5" />}
-                    {simpleMode ? "编辑生成内容" : "组装提示词"}
-                </button>
             </div>
 
+            <button type="button" className="canvas-config-prompt-button group flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left" style={{ background: theme.node.fill, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
+                <span className="grid size-7 shrink-0 place-items-center rounded-md" style={{ background: theme.node.panel }}>
+                    {simpleMode ? <MessageSquare className="size-3.5" /> : <Sparkles className="size-3.5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[var(--fs-label)] font-semibold">{simpleMode ? "编辑生成内容" : "组装提示词"}</span>
+                    <span className="block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{hasComposerContent ? "已填写，可继续编辑或引用素材" : "输入提示词，或用 @ 引用连接素材"}</span>
+                </span>
+                <ChevronDown className="size-3.5 -rotate-90 opacity-45 transition-transform group-hover:translate-x-0.5" />
+            </button>
+
             {mode === "video" && !simpleMode ? (
-                <div className={workflowProvider === "model" ? "mb-2 cursor-default" : "cursor-default pt-1"} data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                    {workflowProvider === "model" ? (
-                        <Select
-                            size="small"
-                            className="canvas-compact-control canvas-control-select !h-9 !w-full"
-                            value={node.metadata?.videoEditOperation || defaultVideoOperation(inputSummary)}
-                            options={operationOptions}
-                            placement="bottomLeft"
-                            popupMatchSelectWidth={false}
-                            styles={{ popup: { root: { minWidth: 180, maxWidth: 260 } } }}
-                            popupRender={(menu) => (
-                                <div data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                                    {menu}
-                                </div>
-                            )}
-                            onChange={(value) => onConfigChange(node.id, { videoEditOperation: value })}
-                        />
-                    ) : (
-                        <div className="flex h-9 min-w-0 items-center gap-2 rounded-lg border px-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }} title="已连接的图片、视频和音频会按当前工作流字段映射自动传入">
-                            <ImageIcon className="size-3.5 shrink-0 opacity-75" />
-                            <span className="shrink-0 font-medium">全能参考</span>
-                            <span className="min-w-0 truncate opacity-60">已连接媒体自动映射</span>
-                        </div>
-                    )}
+                <div className="cursor-default" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                    <div className="flex h-9 min-w-0 items-center gap-2 rounded-lg border px-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }} title="已连接的图片、视频和音频会按当前工作流字段映射自动传入">
+                        <ImageIcon className="size-3.5 shrink-0 opacity-75" />
+                        <span className="shrink-0 font-medium">全能参考</span>
+                        <span className="min-w-0 truncate opacity-60">已连接媒体自动映射</span>
+                    </div>
                 </div>
             ) : null}
 
             {simpleMode ? (
-                <div className={workflowProvider === "model" ? "mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" : "rounded-lg px-2 py-2 text-[var(--fs-label)]"} style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
+                <div className="rounded-lg px-3 py-2.5 text-[var(--fs-label)]" style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
             ) : (
-                <div className={workflowProvider === "model" ? "mb-2" : "flex min-w-0 flex-col gap-3"}>
-                    {mode !== "text" ? <div data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                <div className="flex min-w-0 flex-col gap-3">
+                    <div className="flex items-center gap-3" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                        <span className="shrink-0 text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>工作流来源</span>
                         <Segmented
                             block
                             size="small"
-                            className="canvas-config-provider"
+                            className="canvas-config-provider min-w-0 flex-1"
                             value={workflowProvider}
-                            options={[{ label: "基础模型", value: "model" }, { label: "RunningHub", value: "runninghub" }, { label: "ComfyUI", value: "comfyui" }]}
+                            options={[{ label: "RunningHub", value: "runninghub" }, { label: "ComfyUI", value: "comfyui" }]}
                             onChange={(value) => {
-                                const nextProvider = value as "model" | "runninghub" | "comfyui";
-                                if (nextProvider === "model") {
-                                    onConfigChange(node.id, { workflowProvider: "model", workflowTitle: undefined, runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, comfyBridgeWorkflowId: undefined, workflowParameters: {} });
-                                } else if (nextProvider === "runninghub") {
+                                const nextProvider = value as "runninghub" | "comfyui";
+                                if (nextProvider === "runninghub") {
                                     onConfigChange(node.id, { workflowProvider: "runninghub", workflowTitle: "RunningHub 工作流", comfyBridgeWorkflowId: undefined, workflowParameters: {} });
                                 } else {
                                     onConfigChange(node.id, { workflowProvider: "comfyui", workflowTitle: "ComfyUI Bridge", runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, workflowParameters: {} });
                                 }
                             }}
                         />
-                    </div> : null}
-                    <div data-canvas-no-zoom className={workflowProvider === "model" ? "grid min-w-0 cursor-default grid-cols-[minmax(0,1fr)_148px] items-center gap-2" : "grid min-w-0 cursor-default items-center gap-3"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                    </div>
+                    <div data-canvas-no-zoom className="grid min-w-0 cursor-default items-center gap-3" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     {workflowProvider === "runninghub" ? (
                         <Select<string, WorkflowSelectOption>
                             className="canvas-compact-control !h-9 w-full"
@@ -336,28 +299,14 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                             }}
                             onChange={(value) => onConfigChange(node.id, { comfyBridgeWorkflowId: value, workflowParameters: {} })}
                         />
-                    ) : (
-                        <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })} capability={mode} requirements={requirements} onMissingConfig={() => navigateToSettings({ continueCreation: true })} fullWidth showSelectedPrice={creditsEnabled} />
-                    )}
-                    {workflowProvider === "model" && mode === "text" ? (
-                        <div className="flex h-10 min-w-0 cursor-default items-center justify-between gap-2 rounded-lg border px-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
-                            <span className="inline-flex items-center gap-1 text-[var(--fs-tiny)] font-semibold" style={{ color: theme.node.muted }}><MessageSquare className="size-3.5" />文本份数</span>
-                            <InputNumber size="small" min={1} max={15} value={textCountValue} onChange={(value) => onConfigChange(node.id, { textCount: Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 1))) })} aria-label="文本生成份数" />
-                        </div>
-                    ) : workflowProvider === "model" && mode === "video" ? (
-                        <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
-                    ) : workflowProvider === "model" && mode === "image" ? (
-                        <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
-                    ) : workflowProvider === "model" && mode === "audio" ? (
-                        <CanvasAudioSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                     ) : null}
                     </div>
                 </div>
             )}
 
-            {workflowProvider !== "model" && dynamicWorkflowFields.length ? <WorkflowParameterControls fields={dynamicWorkflowFields} node={node} theme={theme} onConfigChange={onConfigChange} /> : null}
+            {dynamicWorkflowFields.length ? <WorkflowParameterControls fields={dynamicWorkflowFields} node={node} theme={theme} onConfigChange={onConfigChange} /> : null}
 
-            {capabilityError ? <div className={workflowProvider === "model" ? "mb-2 rounded-md px-2 py-1.5 text-[var(--fs-tiny)]" : "rounded-md px-2 py-1.5 text-[var(--fs-tiny)]"} style={{ background: theme.accent.danger + "18", color: theme.accent.danger }}>{capabilityError}</div> : null}
+            {capabilityError ? <div className="rounded-lg px-3 py-2 text-[var(--fs-tiny)]" style={{ background: theme.accent.danger + "18", color: theme.accent.danger }}>{capabilityError}</div> : null}
 
             <Button
                 type="primary"
@@ -374,18 +323,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                         </>
                     ) : (
                         <>
-                            {!creditsEnabled || workflowProvider !== "model" ? (
-                                <span>生成</span>
-                            ) : hasPrice ? (
-                                <span className="inline-flex items-center gap-1">
-                                    <CreditSymbol />
-                                    {credits.toLocaleString()}
-                                </span>
-                            ) : (
-                                <span className="text-xs" title="当前渠道没有模型价格数据">
-                                    无价格
-                                </span>
-                            )}
+                            <span>生成</span>
                             <Play className="size-4" />
                             <span>开始生成</span>
                         </>
@@ -509,7 +447,7 @@ function workflowParameterOptionLabel(value: unknown) {
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
     return (
-        <div className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[var(--fs-label)]" style={style}>
+        <div className="inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[var(--fs-label)]" style={style}>
             <span>{label}</span>
             <span className="font-medium">{value}</span>
         </div>

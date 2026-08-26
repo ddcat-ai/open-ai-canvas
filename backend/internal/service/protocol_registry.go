@@ -70,17 +70,26 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 				continue
 			}
 			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
-			item.Create = operationSummary(provider.Create)
-			if provider.Poll != nil {
-				item.Poll = operationSummary(*provider.Poll)
+			item.Create, item.Poll, item.ContentType = operationSummary(provider.Create), operationSummaryPtr(provider.Poll), provider.Create.ContentType
+			// The registry metadata is the canonical provider projection. This keeps
+			// host-backed dispatch paths out of every user-facing catalog consumer.
+			if adapter, ok := canonicalProviderAdapter(s.protocolRegistry(), provider.ID); ok {
+				metadata := adapter.Metadata()
+				item.Create, item.Poll, item.ContentType = metadata.Create, metadata.Poll, metadata.ContentType
 			}
-			item.ContentType = provider.Create.ContentType
 			if includeUnavailable || item.Enabled {
 				items = append(items, item)
 			}
 		}
 	}
 	return items
+}
+
+func canonicalProviderAdapter(registry *protocol.Registry, id string) (protocol.Adapter, bool) {
+	if adapter, ok := protocol.Builtins().Resolve(id); ok {
+		return adapter, true
+	}
+	return registry.Resolve(id)
 }
 
 func containsPluginSurface(items []protocol.Surface, want protocol.Surface) bool {
@@ -112,6 +121,13 @@ func operationSummary(operation protocol.ManifestOperation) string {
 	path := strings.ReplaceAll(operation.Path, "{{model}}", "{model}")
 	path = strings.ReplaceAll(path, "{{taskId}}", "{task_id}")
 	return strings.ToUpper(operation.Method) + " " + path
+}
+
+func operationSummaryPtr(operation *protocol.ManifestOperation) string {
+	if operation == nil {
+		return ""
+	}
+	return operationSummary(*operation)
 }
 
 func (s *Service) protocolRegistry() *protocol.Registry {

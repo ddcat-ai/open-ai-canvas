@@ -10374,22 +10374,22 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-secondary-drawer,
 .admin-modal-root,
 .admin-channel-modal-root {
-    --admin-layer-0: #eef1f4;
-    --admin-layer-1: #ffffff;
-    --admin-layer-2: #f5f7f9;
-    --admin-sidebar: #e9ebef;
-    --admin-text-primary: #1f2328;
-    --admin-text-secondary: #3f4854;
-    --admin-text-muted: #5d6878;
-    --admin-text-placeholder: #6f7b8b;
-    --admin-control-border: color-mix(in srgb, var(--foreground) 27%, transparent);
-    --admin-divider: color-mix(in srgb, var(--foreground) 16%, transparent);
-    --admin-card-border: color-mix(in srgb, var(--foreground) 15%, transparent);
-    --admin-card-shadow: 0 12px 30px color-mix(in srgb, #1f2937 8%, transparent);
+    --admin-layer-0: var(--workspace-content);
+    --admin-layer-1: var(--workspace-surface);
+    --admin-layer-2: color-mix(in srgb, var(--foreground) 4%, var(--workspace-content));
+    --admin-sidebar: var(--workspace-navigation);
+    --admin-text-primary: var(--foreground);
+    --admin-text-secondary: color-mix(in srgb, var(--foreground) 72%, transparent);
+    --admin-text-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
+    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
+    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
+    --admin-divider: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-border: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-shadow: none;
     --admin-status-success: oklch(0.52 0.14 155);
     --admin-status-warning: oklch(0.62 0.14 78);
     --admin-status-error: var(--destructive);
-    --admin-status-info: oklch(0.54 0.13 250);
+    --admin-status-info: var(--foreground);
     --admin-chart-primary: var(--workspace-accent);
     --admin-chart-secondary: oklch(0.55 0.11 180);
     --admin-chart-warning: oklch(0.64 0.14 78);
@@ -10400,21 +10400,21 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .dark .admin-secondary-drawer,
 .dark .admin-modal-root,
 .dark .admin-channel-modal-root {
-    --admin-layer-0: #0b0d10;
-    --admin-layer-1: #14171b;
-    --admin-layer-2: #1b1f25;
-    --admin-sidebar: #0f1216;
-    --admin-text-primary: #f2f4f7;
-    --admin-text-secondary: #c3c8d0;
-    --admin-text-muted: #99a2ae;
-    --admin-text-placeholder: #858f9d;
-    --admin-control-border: color-mix(in srgb, var(--foreground) 24%, transparent);
-    --admin-divider: color-mix(in srgb, var(--foreground) 16%, transparent);
-    --admin-card-border: color-mix(in srgb, var(--foreground) 13%, transparent);
-    --admin-card-shadow: 0 16px 34px rgb(0 0 0 / 0.2);
+    --admin-layer-0: var(--workspace-content);
+    --admin-layer-1: var(--workspace-surface);
+    --admin-layer-2: color-mix(in srgb, var(--foreground) 5%, var(--workspace-content));
+    --admin-sidebar: var(--workspace-navigation);
+    --admin-text-primary: var(--foreground);
+    --admin-text-secondary: color-mix(in srgb, var(--foreground) 74%, transparent);
+    --admin-text-muted: color-mix(in srgb, var(--foreground) 54%, transparent);
+    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 43%, transparent);
+    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
+    --admin-divider: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-border: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-shadow: none;
     --admin-status-success: oklch(0.72 0.14 155);
     --admin-status-warning: oklch(0.78 0.14 78);
-    --admin-status-info: oklch(0.76 0.13 250);
+    --admin-status-info: var(--foreground);
     --admin-chart-secondary: oklch(0.72 0.11 180);
     --admin-chart-warning: oklch(0.78 0.14 78);
 }
@@ -10428,7 +10428,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     color: color-mix(in srgb, var(--admin-text-secondary) 84%, transparent) !important;
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     line-height: 18px;
 }
 
@@ -10453,14 +10453,14 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-shell .app-workspace-nav-link.is-active {
-    background: color-mix(in srgb, var(--admin-status-info) 11%, var(--admin-layer-2));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-info) 16%, transparent);
+    background: var(--workspace-nav-active-bg);
+    box-shadow: none;
     color: var(--admin-text-primary);
     font-weight: 600;
 }
 
 .admin-shell .app-workspace-nav-link.is-active::before {
-    display: none;
+    display: block;
 }
 
 .admin-shell .app-workspace-nav-link:hover:not(.is-active) {
@@ -10476,7 +10476,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-shell .app-workspace-nav-link.is-active > svg {
-    color: var(--admin-status-info);
+    color: var(--admin-text-primary);
 }
 
 .admin-shell .app-workspace-nav-link:focus-visible,
@@ -10490,14 +10490,14 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-shell .admin-sidebar {
     background: var(--admin-sidebar);
     border-radius: 0 !important;
-    border-right: 1px solid var(--admin-divider);
+    border-right: 0;
     box-shadow: none;
 }
 
 /* 管理后台侧栏不复用通用 Tailwind 宽度：通用 sidebar 规则在后面会覆盖 w-*，导致视觉收缩但布局仍占展开宽度。 */
 .admin-shell .admin-sidebar {
-    width: 224px;
-    flex-basis: 224px;
+    width: var(--workspace-sidebar-width);
+    flex-basis: var(--workspace-sidebar-width);
 }
 
 .admin-shell .admin-sidebar.is-collapsed {
@@ -10507,8 +10507,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-shell .admin-sidebar-header {
     height: 68px;
-    border-bottom: 1px solid var(--admin-divider);
-    background: linear-gradient(160deg, color-mix(in srgb, var(--foreground) 3%, var(--admin-sidebar)), var(--admin-sidebar));
+    border-bottom: 0;
+    background: var(--admin-sidebar);
 }
 
 .admin-shell .admin-sidebar-brand-mark {
@@ -10528,7 +10528,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     margin-top: 1px;
     color: var(--admin-text-muted);
     font-size: 10px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0;
     line-height: 15px;
 }
 
@@ -10566,8 +10566,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-shell .admin-sidebar-footer {
-    border-top: 1px solid var(--admin-divider);
-    background: linear-gradient(0deg, color-mix(in srgb, var(--foreground) 2%, var(--admin-sidebar)), var(--admin-sidebar));
+    border-top: 0;
+    background: var(--admin-sidebar);
     padding: 9px 10px 10px;
 }
 
@@ -10634,14 +10634,14 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-page-header {
     min-height: 58px;
-    border-bottom: 1px solid var(--admin-divider);
-    padding-bottom: 14px;
+    border-bottom: 0;
+    padding-bottom: 10px;
 }
 
 .admin-page-title {
     color: var(--admin-text-primary);
     font-size: 20px;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     line-height: 1.35;
 }
 
@@ -11100,8 +11100,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-settings-section {
     width: 100%;
     overflow: hidden;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--r-lg);
     background: var(--admin-layer-1);
     box-shadow: var(--admin-card-shadow);
 }
@@ -11111,16 +11111,16 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-settings-section-summary {
-    background: linear-gradient(145deg, color-mix(in srgb, var(--foreground) 4%, var(--admin-layer-1)), var(--admin-layer-1) 72%);
+    background: var(--admin-layer-1);
 }
 
 .admin-settings-section-content {
-    background: color-mix(in srgb, var(--admin-layer-1) 96%, var(--admin-layer-2));
+    background: var(--admin-layer-1);
 }
 
 .admin-settings-section-footer {
-    border-top: 1px solid var(--admin-divider);
-    background: color-mix(in srgb, var(--admin-layer-2) 56%, var(--admin-layer-1));
+    border-top: 0;
+    background: var(--admin-layer-2);
 }
 
 .admin-operation-card {
@@ -11239,6 +11239,11 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     grid-template-columns: minmax(140px, 176px) minmax(0, 1fr);
     gap: 24px;
     padding: 20px 22px;
+}
+
+.admin-model-editor-section-stacked {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
 }
 
 .admin-model-editor-section-heading,
@@ -11880,17 +11885,32 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
     .admin-page-frame-scrollable > :not(.admin-page-header) {
         width: 100%;
-        max-width: 1120px;
-        margin-inline: auto;
+        max-width: none;
+        margin-inline: 0;
     }
 
     .admin-settings-section:not(.is-stacked) .admin-settings-section-content {
-        border-left: 1px solid var(--admin-divider);
+        border-left: 0;
     }
 
     .admin-settings-section.is-stacked .admin-settings-section-summary {
-        border-bottom: 1px solid var(--admin-divider);
+        border-bottom: 0;
     }
+}
+
+.canvas-config-prompt-button {
+    border: 0;
+    transition: background-color var(--motion-instant) ease-out, transform var(--motion-instant) ease-out;
+}
+
+.canvas-config-prompt-button:hover {
+    filter: brightness(1.04);
+}
+
+.canvas-config-prompt-button:focus-visible,
+.canvas-config-composer-editor:focus-within {
+    outline: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+    outline-offset: 1px;
 }
 
 .admin-shell .admin-monospace {

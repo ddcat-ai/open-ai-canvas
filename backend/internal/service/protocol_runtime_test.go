@@ -35,6 +35,24 @@ func TestPluginViewIncludesDocumentationForEveryBundledProtocol(t *testing.T) {
 	}
 }
 
+func TestBundledProviderCatalogExposesUpstreamOperation(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := (&Service{pluginRuntime: center}).PluginProviderCatalog(string(protocol.SurfaceAdminSystemChannel), string(protocol.CapabilityVideo), false)
+	for _, item := range catalog {
+		if item.ID != "xai-video" {
+			continue
+		}
+		if item.Create != "POST /v1/videos/generations" || strings.Contains(item.Create, "__host__") {
+			t.Fatalf("xAI catalog create operation = %q", item.Create)
+		}
+		return
+	}
+	t.Fatal("xAI bundled provider missing from administrator catalog")
+}
+
 func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 	dataDir := t.TempDir()
 	center, err := newPluginRuntime(dataDir)

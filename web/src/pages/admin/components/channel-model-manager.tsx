@@ -510,7 +510,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     ) : null}
 
                     {modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? (
-                        <section className="admin-form-section admin-model-editor-section admin-model-editor-references">
+                        <section className="admin-form-section admin-model-editor-section admin-model-editor-section-stacked admin-model-editor-references">
                             <SectionHeading title="引用与限制" description="按媒体类型纵向配置数量、大小、时长及通用约束。" />
                             <div className="admin-model-editor-section-content">
                                 <ModelCapabilityEditor
@@ -526,7 +526,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     ) : null}
 
                     {modelCapability === "image" || modelCapability === "video" ? (
-                        <section className="admin-form-section admin-model-editor-section admin-model-editor-parameters">
+                        <section className="admin-form-section admin-model-editor-section admin-model-editor-section-stacked admin-model-editor-parameters">
                             <SectionHeading title="协议参数" description="配置可发送参数、支持值与默认值；仅影响当前模型。" />
                             <div className="admin-model-editor-section-content">
                                 <ModelCapabilityEditor

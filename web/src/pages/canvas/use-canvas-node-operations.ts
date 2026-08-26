@@ -131,13 +131,13 @@ export function useCanvasNodeOperations({
             return;
         }
         const selectedWorkflowProvider = type === CanvasNodeType.Config
-            ? workflowProvider || "model"
+            ? workflowProvider || "runninghub"
             : undefined;
         const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : type === CanvasNodeType.Config && selectedWorkflowProvider === "comfyui" ? "ComfyUI Bridge" : undefined;
         const metadata: CanvasNodeMetadata | undefined = type === CanvasNodeType.Drawing
             ? { drawingEngine: defaultDrawingEngine }
             : type === CanvasNodeType.Config
-                ? { generationMode: "image", workflowProvider: selectedWorkflowProvider || "model" }
+                ? { generationMode: "image", workflowProvider: selectedWorkflowProvider }
                 : type === PORTRAIT_CLEARANCE_NODE_TYPE
                     ? { portraitClearance: createDefaultPortraitClearanceState() }
                     : undefined;

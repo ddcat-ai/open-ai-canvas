@@ -113,6 +113,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
+    const mediaDimensionLabel = formatMediaDimensionLabel(data, hasImageContent || hasVideoContent);
     const isComposerNode = data.type === CanvasNodeType.Config;
     const hasMediaContent = hasImageContent || hasVideoContent || hasAudioContent;
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
@@ -280,6 +281,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             <NodeExternalHeader
                 node={data}
                 scale={scale}
+                dimensionLabel={mediaDimensionLabel}
                 active={hovered || isSelected || isFocusRelated}
                 editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
                 editing={isEditingTitle}
@@ -601,9 +603,17 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
 
 const NODE_EXTERNAL_HEADER_MIN_SCALE = 0.35;
 
-function NodeExternalHeader({ node, scale, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
+function formatMediaDimensionLabel(node: CanvasNodeData, hasVisualMediaContent: boolean) {
+    const width = node.metadata?.naturalWidth;
+    const height = node.metadata?.naturalHeight;
+    if (!hasVisualMediaContent || !Number.isFinite(width) || !Number.isFinite(height) || !width || !height || width <= 0 || height <= 0) return null;
+    return `${Math.round(width)}*${Math.round(height)}`;
+}
+
+function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
     node: CanvasNodeData;
     scale: number;
+    dimensionLabel: string | null;
     active: boolean;
     editable: boolean;
     editing: boolean;
@@ -619,12 +629,14 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
     const inverseScale = 1 / Math.max(scale, 0.05);
     const Icon = nodeTypeIcon(node.type);
     const maxHeaderWidth = Math.min(240, node.width * scale);
+    const externalHeaderWidth = node.width * scale;
 
     return (
         <div
             className="canvas-node-external-header absolute bottom-full left-0 z-[var(--node-z-overlay)] flex h-6 items-center gap-1 overflow-hidden"
             style={{
-                maxWidth: maxHeaderWidth,
+                width: dimensionLabel ? externalHeaderWidth : undefined,
+                maxWidth: dimensionLabel ? undefined : maxHeaderWidth,
                 borderRadius: "var(--r-sm)",
                 background: "transparent",
                 paddingInline: "var(--space-1-half)",
@@ -635,30 +647,33 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <Icon className="size-3 shrink-0" strokeWidth={1.8} />
-            {editing ? (
-                <input
-                    autoFocus
-                    value={draft}
-                    className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
-                    style={{ background: "transparent", color: theme.node.text }}
-                    onChange={(event) => onDraftChange(event.target.value)}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onBlur={onCommit}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter") event.currentTarget.blur();
-                        if (event.key === "Escape") onCancel();
-                    }}
-                    aria-label="节点名称"
-                />
-            ) : editable ? (
-                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1" style={{ opacity: active ? 1 : 0.78, outlineColor: theme.node.muted }} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
-                    <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
-                    <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
-                </button>
-            ) : (
-                <span className="min-w-0 flex-1 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
-            )}
+            <div className="flex min-w-0 items-center gap-1" style={{ maxWidth: maxHeaderWidth }}>
+                <Icon className="size-3 shrink-0" strokeWidth={1.8} />
+                {editing ? (
+                    <input
+                        autoFocus
+                        value={draft}
+                        className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
+                        style={{ background: "transparent", color: theme.node.text }}
+                        onChange={(event) => onDraftChange(event.target.value)}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onBlur={onCommit}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") event.currentTarget.blur();
+                            if (event.key === "Escape") onCancel();
+                        }}
+                        aria-label="节点名称"
+                    />
+                ) : editable ? (
+                    <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1" style={{ opacity: active ? 1 : 0.78, outlineColor: theme.node.muted }} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                        <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
+                        <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
+                    </button>
+                ) : (
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+                )}
+            </div>
+            {dimensionLabel ? <span className="ml-auto shrink-0 whitespace-nowrap text-[var(--fs-micro)] font-medium leading-none tabular-nums" style={{ color: theme.node.muted }}>{dimensionLabel}</span> : null}
         </div>
     );
 }

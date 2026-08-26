@@ -185,7 +185,7 @@ export type AddNodeMenuCommand = {
     icon: ReactNode;
     badge?: string;
     // extension：展示与加工类扩展节点。单独一区，避免挤散 node 区调好的四列网格。
-    section: "node" | "extension" | "workflow" | "project" | "resource";
+    section: "node" | "workflow" | "project" | "resource";
     defaultOrder: number;
     applicable?: (ctx: AddNodeMenuContext) => boolean;
     run: (ctx: AddNodeMenuContext) => void;

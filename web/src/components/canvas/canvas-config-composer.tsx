@@ -161,13 +161,13 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
     return (
         <div
             data-canvas-no-zoom
-            className="aceternity-floating-panel rounded-lg border p-3 backdrop-blur-2xl"
-            style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+            className="canvas-config-composer aceternity-floating-panel rounded-xl p-4 backdrop-blur-2xl"
+            style={{ background: theme.spatial.elevated, color: theme.node.text }}
             onMouseDown={stopCanvasInteraction}
             onPointerDown={stopCanvasInteraction}
             onWheel={(event) => event.stopPropagation()}
         >
-            <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-baseline gap-2">
                     <div className="shrink-0 text-xs font-semibold">{simpleMode ? "快速生成" : "组装提示词"}</div>
                     <div className="truncate text-[var(--fs-label)] opacity-55">{simpleMode ? "已连接素材会自动带入" : workflowVideoReferenceMode ? "已连接媒体会按工作流字段顺序自动带入" : "@ 引用已连接素材或已激活技能，发送前自动组装"}</div>
@@ -178,7 +178,7 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
                 </div>
             </div>
             {generationMode === "video" && onMetadataChange && !simpleMode ? (
-                <div className="mb-2 border-y px-1 py-1.5" style={{ borderColor: theme.node.stroke }}>
+                <div className="mb-3 rounded-lg px-2 py-2" style={{ background: theme.node.fill }}>
                     <CanvasVideoPromptTools
                         metadata={metadata}
                         frameOptions={videoFrameOptions}
@@ -192,13 +192,13 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
                     />
                 </div>
             ) : null}
-            <div className="relative rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                {!value.trim() ? <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用连接素材或技能</div> : null}
+            <div className="canvas-config-composer-editor relative rounded-lg" style={{ background: theme.node.fill }}>
+                {!value.trim() ? <div className="pointer-events-none absolute left-4 top-3 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用连接素材或技能</div> : null}
                 <div
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
-                    className="thin-scrollbar min-h-28 max-h-[min(42vh,360px)] w-full overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-7 outline-none"
+                    className="thin-scrollbar min-h-32 max-h-[min(42vh,360px)] w-full overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 text-sm leading-7 outline-none"
                     style={{ color: theme.node.text }}
                     onInput={() => {
                         if (!composingRef.current) syncFromEditor();

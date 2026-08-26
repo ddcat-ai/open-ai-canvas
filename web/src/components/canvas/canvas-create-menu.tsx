@@ -11,7 +11,7 @@ export type CanvasCreateCommand = {
     label: string;
     icon: ReactNode;
     badge?: string;
-    section: "node" | "extension" | "workflow" | "project" | "resource";
+    section: "node" | "workflow" | "project" | "resource";
     onClick: () => void;
 };
 
@@ -19,7 +19,6 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const projectCommands = commands.filter((command) => command.section === "project");
     const nodeCommands = commands.filter((command) => command.section === "node");
-    const extensionCommands = commands.filter((command) => command.section === "extension");
     const workflowCommands = commands.filter((command) => command.section === "workflow");
     const resourceCommands = commands.filter((command) => command.section === "resource");
 
@@ -46,12 +45,6 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
             <MenuSection title="创作节点" color={theme.node.muted} />
             <CanvasCreateCommandGrid commands={nodeCommands} variant="node" />
 
-            {extensionCommands.length ? (
-                <>
-                    <MenuSection title="展示与加工" color={theme.node.muted} spaced />
-                    <CanvasCreateCommandGrid commands={extensionCommands} variant="node" />
-                </>
-            ) : null}
             {workflowCommands.length ? (
                 <>
                     <MenuSection title="工作流" color={theme.node.muted} spaced />
@@ -70,7 +63,7 @@ function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreate
     const reducedMotion = useReducedMotion();
 
     return (
-        <div className={cn("grid gap-1", variant === "node" ? "grid-cols-4" : variant === "workflow" ? "grid-cols-1" : "grid-cols-2")}>
+        <div className={cn("grid gap-1", variant === "node" ? "grid-cols-5" : variant === "workflow" ? "grid-cols-1" : "grid-cols-2")}>
             {commands.map((command) => (
                 <motion.button
                     key={command.id}
