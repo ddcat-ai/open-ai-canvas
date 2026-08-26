@@ -97,26 +97,26 @@ export function AdminShell() {
         <ConfigProvider theme={getAdminAntThemeConfig(dark)}>
             <main className="admin-shell app-user-workspace flex h-full min-h-0 overflow-hidden text-foreground">
                 <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
-                    <div className={cn("flex h-13 shrink-0 items-center", collapsed ? "justify-center" : "gap-2 px-3")}>
+                    <div className={cn("admin-sidebar-header flex shrink-0 items-center", collapsed ? "justify-center" : "gap-2 px-3")}>
                         {!collapsed ? (
                             <Link to="/" className="app-workspace-brand-link flex min-w-0 flex-1 items-center gap-2" title="影策">
-                                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-foreground text-background">
+                                <span className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background">
                                     <InfinityIcon className="size-4" />
                                 </span>
-                                <span className="min-w-0">
-                                    <span className="block truncate text-[var(--fs-body)] font-semibold">影策</span>
-                                    <span className="block truncate text-[var(--fs-micro)] text-foreground/42">管理后台</span>
+                                <span className="admin-sidebar-brand-copy min-w-0">
+                                    <span className="block truncate font-semibold">影策</span>
+                                    <span className="block truncate">管理后台</span>
                                 </span>
                             </Link>
                         ) : null}
                         <Tooltip mouseEnterDelay={0.1} title={collapsed ? "展开侧栏" : "折叠侧栏"} placement="right">
-                            <button type="button" className="app-workspace-icon-button shrink-0" onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
+                            <button type="button" className="app-workspace-icon-button admin-sidebar-toggle shrink-0" onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
                                 {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
                             </button>
                         </Tooltip>
                     </div>
                     <AdminNavigation collapsed={collapsed} />
-                    <div className="shrink-0 border-t border-border/70 p-2">
+                    <div className="admin-sidebar-footer shrink-0">
                         <Tooltip mouseEnterDelay={0.1} title={collapsed ? "更新日志" : undefined} placement="right">
                             <AppChangelogButton
                                 className={cn("flex h-8 w-full items-center rounded text-[var(--fs-label)] text-foreground/52 transition-colors hover:bg-surface-hover hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2 px-2")}
@@ -140,11 +140,11 @@ export function AdminShell() {
     );
 }
 
-export function AdminPageFrame({ title, actions, back, scroll = false, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; scroll?: boolean; children: ReactNode }) {
+export function AdminPageFrame({ title, description, actions, back, scroll = false, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; scroll?: boolean; children: ReactNode }) {
     return (
         <WorkspacePage scroll={scroll} fluid className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
             <div className={cn("admin-page-frame", scroll && "admin-page-frame-scrollable")}>
-                <header className="admin-page-header flex min-h-12 shrink-0 flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <header className="admin-page-header flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                         {back ? (
                             <Tooltip title={back.label}>
@@ -153,7 +153,10 @@ export function AdminPageFrame({ title, actions, back, scroll = false, children 
                                 </button>
                             </Tooltip>
                         ) : null}
-                        <h1 className="truncate text-base font-semibold leading-6">{title}</h1>
+                        <div className="admin-page-title-block min-w-0">
+                            <h1 className="admin-page-title truncate font-semibold">{title}</h1>
+                            {description ? <p className="admin-page-description">{description}</p> : null}
+                        </div>
                     </div>
                     {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
                 </header>
@@ -191,19 +194,19 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
     const features = useUserStore((state) => state.features);
 
     return (
-        <nav className="thin-scrollbar flex-1 overflow-y-auto px-2 py-2" aria-label="管理后台菜单">
+        <nav className="admin-sidebar-nav thin-scrollbar flex-1 overflow-y-auto" aria-label="管理后台菜单">
             {adminNavigation.map((group) => {
                 const visibleItems = group.items.filter((item) => !item.requireFeature || features[item.requireFeature]);
                 if (visibleItems.length === 0) return null;
 
                 return (
-                    <div key={group.label} className="mb-3">
+                    <div key={group.label} className="admin-nav-group">
                         {!collapsed ? (
                             <div className="admin-nav-group-label mb-1 px-2.5 text-[var(--fs-tiny)] font-medium text-foreground/38">
                                 <span>{group.label}</span>
                             </div>
                         ) : (
-                            <div className="mx-auto mb-1.5 h-px w-7 bg-border/80" />
+                            <div className="admin-nav-collapsed-separator" />
                         )}
                         <div className="space-y-0.5">
                             {visibleItems.map((item) => (

@@ -30,7 +30,25 @@ export function PageHeader({ title, description, meta, actions }: { title: strin
     );
 }
 
-export function ListToolbar({ children, filters, activeFilters, trailing, active, onReset, className }: { children: ReactNode; filters?: ReactNode; activeFilters?: ReactNode; trailing?: ReactNode; active?: boolean; onReset?: () => void; className?: string }) {
+export function ListToolbar({
+    children,
+    filters,
+    filtersAlwaysVisible = false,
+    activeFilters,
+    trailing,
+    active,
+    onReset,
+    className,
+}: {
+    children: ReactNode;
+    filters?: ReactNode;
+    filtersAlwaysVisible?: boolean;
+    activeFilters?: ReactNode;
+    trailing?: ReactNode;
+    active?: boolean;
+    onReset?: () => void;
+    className?: string;
+}) {
     const [filtersOpen, setFiltersOpen] = useState(false);
 
     useEffect(() => {
@@ -43,16 +61,22 @@ export function ListToolbar({ children, filters, activeFilters, trailing, active
                 {children}
                 {filters ? (
                     <>
-                        <Button type="default" className="admin-filter-toggle" aria-expanded={filtersOpen} icon={<ListFilter className="size-3.5" />} onClick={() => setFiltersOpen((open) => !open)}>
-                            筛选{active ? <span className="admin-filter-active-dot" aria-label="有已应用筛选" /> : null}
-                        </Button>
-                        <div className={cn("admin-list-toolbar-filters flex flex-wrap items-center gap-2", filtersOpen && "is-open")}>{filters}</div>
+                        {!filtersAlwaysVisible ? (
+                            <Button type="default" className="admin-filter-toggle" aria-expanded={filtersOpen} icon={<ListFilter className="size-3.5" />} onClick={() => setFiltersOpen((open) => !open)}>
+                                筛选{active ? <span className="admin-filter-active-dot" aria-label="有已应用筛选" /> : null}
+                            </Button>
+                        ) : null}
+                        <div className={cn("admin-list-toolbar-filters flex flex-wrap items-center gap-2", (filtersAlwaysVisible || filtersOpen) && "is-open")}>{filters}</div>
                     </>
                 ) : null}
                 {activeFilters ? <div className="admin-list-toolbar-chips">{activeFilters}</div> : null}
             </div>
             <div className="admin-list-toolbar-actions flex shrink-0 flex-wrap items-center gap-2">
-                {active && onReset ? <Button type="text" icon={<RotateCcw className="size-3.5" />} onClick={onReset}>重置</Button> : null}
+                {active && onReset ? (
+                    <Button type="text" icon={<RotateCcw className="size-3.5" />} onClick={onReset}>
+                        重置
+                    </Button>
+                ) : null}
                 {trailing}
             </div>
         </div>
@@ -75,7 +99,21 @@ function pageItems(current: number, pages: number): (number | "…")[] {
     return [1, "…", current - 1, current, current + 1, "…", pages];
 }
 
-export function PaginationBar({ current, pageSize, total, onChange, pageSizeOptions = [20, 50, 100], alwaysShow = false }: { current: number; pageSize: number; total: number; onChange: (page: number, pageSize: number) => void; pageSizeOptions?: number[]; alwaysShow?: boolean }) {
+export function PaginationBar({
+    current,
+    pageSize,
+    total,
+    onChange,
+    pageSizeOptions = [20, 50, 100],
+    alwaysShow = false,
+}: {
+    current: number;
+    pageSize: number;
+    total: number;
+    onChange: (page: number, pageSize: number) => void;
+    pageSizeOptions?: number[];
+    alwaysShow?: boolean;
+}) {
     if (!alwaysShow && total <= pageSize && current === 1) return null;
     const pages = Math.max(1, Math.ceil(total / pageSize));
     const start = total === 0 ? 0 : (current - 1) * pageSize + 1;
@@ -84,21 +122,25 @@ export function PaginationBar({ current, pageSize, total, onChange, pageSizeOpti
     return (
         <div className="app-pagination-bar admin-pagination-bar mt-4 flex min-h-10 min-w-0 items-center justify-end gap-2 px-2 py-1.5">
             <span className="admin-pagination-total">{total === 0 ? "共 0 条" : `${start}-${end} / 共 ${total} 条`}</span>
-            <Select
-                size="small"
-                value={pageSize}
-                className="app-pagination-size"
-                options={pageSizeOptions.map((size) => ({ value: size, label: `${size} 条/页` }))}
-                onChange={(value) => onChange(1, Number(value))}
-            />
+            <Select size="small" value={pageSize} className="app-pagination-size" options={pageSizeOptions.map((size) => ({ value: size, label: `${size} 条/页` }))} onChange={(value) => onChange(1, Number(value))} />
             <div className="app-pagination-pages" role="navigation" aria-label="分页">
-                <button type="button" className="app-pagination-btn app-pagination-prev" disabled={current <= 1} aria-label="上一页" onClick={() => onChange(current - 1, pageSize)}><ChevronLeft className="size-4" /></button>
-                {items.map((item) => item === "…" ? (
-                    <span key={`ellipsis-${items.indexOf(item)}`} className="app-pagination-ellipsis">…</span>
-                ) : (
-                    <button key={item} type="button" className={`app-pagination-btn${item === current ? " is-active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => onChange(item, pageSize)}>{item}</button>
-                ))}
-                <button type="button" className="app-pagination-btn app-pagination-next" disabled={current >= pages} aria-label="下一页" onClick={() => onChange(current + 1, pageSize)}><ChevronRight className="size-4" /></button>
+                <button type="button" className="app-pagination-btn app-pagination-prev" disabled={current <= 1} aria-label="上一页" onClick={() => onChange(current - 1, pageSize)}>
+                    <ChevronLeft className="size-4" />
+                </button>
+                {items.map((item) =>
+                    item === "…" ? (
+                        <span key={`ellipsis-${items.indexOf(item)}`} className="app-pagination-ellipsis">
+                            …
+                        </span>
+                    ) : (
+                        <button key={item} type="button" className={`app-pagination-btn${item === current ? " is-active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => onChange(item, pageSize)}>
+                            {item}
+                        </button>
+                    ),
+                )}
+                <button type="button" className="app-pagination-btn app-pagination-next" disabled={current >= pages} aria-label="下一页" onClick={() => onChange(current + 1, pageSize)}>
+                    <ChevronRight className="size-4" />
+                </button>
             </div>
         </div>
     );
