@@ -9,7 +9,9 @@ export const PLUGIN_STORE_KEY = "infinite-canvas:plugin-store";
 type PluginStore = {
     hydrated: boolean;
     installations: PluginInstallation[];
+    runtimeStatuses: Record<string, string>;
     ensurePlugin: (manifest: PluginManifest) => void;
+    setRuntimeStatuses: (statuses: Record<string, string>) => void;
     setEnabled: (pluginId: string, enabled: boolean) => void;
     updateConfig: (pluginId: string, config: Record<string, string | number | boolean>) => void;
     setError: (pluginId: string, error?: string) => void;
@@ -25,6 +27,7 @@ export const usePluginStore = create<PluginStore>()(
         (set) => ({
             hydrated: false,
             installations: [],
+            runtimeStatuses: {},
             ensurePlugin: (manifest) =>
                 set((state) => {
                     const current = state.installations.find((item) => item.manifest.id === manifest.id);
@@ -39,6 +42,7 @@ export const usePluginStore = create<PluginStore>()(
                 set((state) => ({
                     installations: state.installations.map((item) => item.manifest.id === pluginId ? { ...item, enabled, updatedAt: now(), lastError: undefined } : item),
                 })),
+            setRuntimeStatuses: (runtimeStatuses) => set({ runtimeStatuses }),
             updateConfig: (pluginId, config) =>
                 set((state) => ({
                     installations: state.installations.map((item) => item.manifest.id === pluginId ? { ...item, config: { ...item.config, ...config }, updatedAt: now() } : item),

@@ -295,6 +295,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	input.Config = config
 	ctx = withProviderOutboundPolicy(ctx, input.Config)
 	if isWorkflowProviderInterface(input.Config.InterfaceType) {
+		if err := s.RequireWorkflowPluginForInterface(input.Config.InterfaceType); err != nil {
+			return nil, err
+		}
 		if err := validateWorkflowProviderConfig(input.Mode, input.Config); err != nil {
 			return nil, err
 		}

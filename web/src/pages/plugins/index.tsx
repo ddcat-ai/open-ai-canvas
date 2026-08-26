@@ -65,6 +65,8 @@ export default function PluginsPage() {
     const installations = usePluginStore((state) => state.installations);
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setEnabled = usePluginStore((state) => state.setEnabled);
+    const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const updateConfig = usePluginStore((state) => state.updateConfig);
     const builtinPlugins = useMemo(() => listRegisteredPlugins(), []);
     const [backendPlugins, setBackendPlugins] = useState<BackendPlugin[]>([]);
@@ -93,7 +95,8 @@ export default function PluginsPage() {
     const reloadBackendPlugins = async () => {
         setBackendPluginsLoading(true);
         try {
-            setBackendPlugins(await fetchPlugins());
+            const plugins = await fetchPlugins();
+            setBackendPlugins(plugins);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件中心失败");
             setBackendPlugins([]);
@@ -107,7 +110,11 @@ export default function PluginsPage() {
     }, []);
 
     const remotePlugins = useMemo(() => backendPlugins.map(toRegisteredPlugin), [backendPlugins]);
-    const registeredPlugins = useMemo(() => [...builtinPlugins, ...remotePlugins], [builtinPlugins, remotePlugins]);
+    const registeredPlugins = useMemo(() => {
+        const byId = new Map(builtinPlugins.map((plugin) => [plugin.manifest.id, plugin]));
+        for (const plugin of remotePlugins) byId.set(plugin.manifest.id, plugin);
+        return [...byId.values()];
+    }, [builtinPlugins, remotePlugins]);
     const backendPluginById = useMemo(() => new Map(backendPlugins.map((plugin) => [plugin.manifest.id, plugin])), [backendPlugins]);
 
     const eagle = installations.find((item) => item.manifest.id === EAGLE_PLUGIN_ID);
@@ -127,7 +134,8 @@ export default function PluginsPage() {
             const isSystemPlugin = plugin.source !== "uploaded";
             if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && isSystemPlugin) return false;
             const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
-            const enabled = backendPluginById.get(plugin.manifest.id)?.status === "enabled" || Boolean(installation?.enabled);
+            const remote = backendPluginById.get(plugin.manifest.id);
+            const enabled = remote ? remote.status === "enabled" : Boolean(installation?.enabled);
             const manifest = plugin.manifest;
             const contributionKinds = contributionKindsFor(manifest);
             const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, ...contributionKinds.map((kind) => categoryLabels[kind] || kind)].filter(Boolean).join(" ").toLocaleLowerCase();
@@ -186,20 +194,21 @@ export default function PluginsPage() {
 
     const settingsPlugin = settingsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === settingsPluginId) : undefined;
     const settingsInstallation = settingsPlugin ? installations.find((item) => item.manifest.id === settingsPlugin.manifest.id) : undefined;
-    const settingsEnabled = settingsPlugin ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" || Boolean(settingsInstallation?.enabled) : false;
+    const settingsEnabled = settingsPlugin ? (backendPluginById.has(settingsPlugin.manifest.id) ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" : Boolean(settingsInstallation?.enabled)) : false;
     const detailsPlugin = detailsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === detailsPluginId) : undefined;
 
     const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields?.length);
     const canConfigurePlugin = (plugin: RegisteredPlugin) => hasPluginConfiguration(plugin) && user?.role === "admin";
 
     const isPluginEnabled = (plugin: RegisteredPlugin, installation = installations.find((item) => item.manifest.id === plugin.manifest.id)) =>
-        backendPluginById.get(plugin.manifest.id)?.status === "enabled" || Boolean(installation?.enabled);
+        backendPluginById.has(plugin.manifest.id) ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
 
     const togglePlugin = async (plugin: RegisteredPlugin, enabled: boolean) => {
         try {
             if (backendPluginById.has(plugin.manifest.id)) {
                 const next = await setPluginEnabled(plugin.manifest.id, enabled);
                 setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
+                setRuntimeStatuses({ ...runtimeStatuses, [next.manifest.id]: next.status });
             } else {
                 setEnabled(plugin.manifest.id, enabled);
             }

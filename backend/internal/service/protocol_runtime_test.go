@@ -21,8 +21,8 @@ func TestPluginViewIncludesDocumentationForEveryBundledProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	plugins := center.list()
-	if len(plugins) != len(protocol.Builtins().List("", "", true)) {
-		t.Fatalf("plugin views = %d, builtins = %d", len(plugins), len(protocol.Builtins().List("", "", true)))
+	if len(plugins) != len(protocol.Builtins().List("", "", true))+2 {
+		t.Fatalf("plugin views = %d, builtins plus workflow plugins = %d", len(plugins), len(protocol.Builtins().List("", "", true))+2)
 	}
 	for _, plugin := range plugins {
 		if plugin.Source != "bundled" {
@@ -32,6 +32,32 @@ func TestPluginViewIncludesDocumentationForEveryBundledProtocol(t *testing.T) {
 		if document == "" || !strings.Contains(document, "## 影策运行时合同") {
 			t.Errorf("bundled plugin %q has no complete documentation in PluginView", plugin.Manifest.ID)
 		}
+	}
+}
+
+func TestBundledWorkflowPluginsControlAvailability(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{pluginRuntime: center}
+	if err := svc.RequireWorkflowPluginForInterface("runninghub-workflow-image"); err == nil {
+		t.Fatal("bundled RunningHub plugin was enabled by default")
+	}
+	if _, err := center.setEnabled(WorkflowPluginRunningHub, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequireWorkflowPluginForInterface("runninghub-workflow-image"); err != nil {
+		t.Fatalf("enabled RunningHub plugin rejected: %v", err)
+	}
+	if _, err := center.setEnabled(WorkflowPluginRunningHub, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequireWorkflowPluginForInterface("runninghub-workflow-video"); err == nil {
+		t.Fatal("disabled RunningHub plugin remained available")
+	}
+	if got := svc.WorkflowPluginStatuses()[WorkflowPluginRunningHub]; got != "disabled" {
+		t.Fatalf("RunningHub status = %q, want disabled", got)
 	}
 }
 

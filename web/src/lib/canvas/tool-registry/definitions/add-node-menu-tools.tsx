@@ -10,7 +10,7 @@ function nodeCommand(type: CanvasNodeType, rest: Omit<AddNodeMenuCommand, "id" |
 }
 
 export const addNodeMenuCommands: AddNodeMenuCommand[] = [
-    // 项目级动作不占用节点网格，保证 8 个节点稳定保持四列两行。
+    // 项目级动作不占用节点网格，创作节点保持统一排列。
     { id: "style", label: "项目画风", icon: <Palette />, section: "project", defaultOrder: 10, applicable: (ctx) => !ctx.isProjectLinked, run: (ctx) => ctx.handlers.onChooseStyle() },
     // 创作节点
     nodeCommand(CanvasNodeType.Text, { defaultOrder: 10, run: (ctx) => ctx.handlers.onAddText() }),

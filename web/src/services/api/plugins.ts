@@ -13,9 +13,16 @@ export type BackendPlugin = {
     error?: string;
 };
 
+export type WorkflowPluginStatus = "enabled" | "disabled" | "invalid" | string;
+
 export async function fetchPlugins() {
     const result = await request<{ plugins: BackendPlugin[] }>(apiClient.get("/plugins"));
     return result.plugins;
+}
+
+export async function fetchWorkflowPluginStatuses() {
+    const result = await request<{ statuses: Record<string, WorkflowPluginStatus> }>(apiClient.get("/plugins/status"));
+    return result.statuses;
 }
 
 export async function uploadPlugin(file: File) {

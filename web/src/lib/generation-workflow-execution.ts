@@ -1,4 +1,6 @@
 import { normalizeRunningHubCapability, type AiConfig, type RunningHubCapability, type RunningHubWorkflowKind, type WorkflowFieldMapping } from "@/stores/use-config-store";
+import { workflowProviderPluginEnabled } from "@/lib/plugins/builtin/workflows";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 export type GenerationWorkflowMode = "text" | "image" | "video" | "audio";
 
@@ -23,6 +25,7 @@ export function resolveGenerationWorkflowExecution(config: AiConfig, mode: Gener
     if (workflowProvider === "model") return null;
 
     if (workflowProvider === "runninghub") {
+        if (!workflowProviderPluginEnabled(usePluginStore.getState().runtimeStatuses, "runninghub")) throw new Error("RunningHub 工作流插件未启用");
         const runningHub = config.runningHub;
         const workflowId = runningHub.workflowId.trim();
         const kind = runningHub.selectedKind === "app" ? "app" : "workflow";
@@ -53,6 +56,7 @@ export function resolveGenerationWorkflowExecution(config: AiConfig, mode: Gener
         };
     }
 
+    if (!workflowProviderPluginEnabled(usePluginStore.getState().runtimeStatuses, "comfyui")) throw new Error("ComfyUI Bridge 工作流插件未启用");
     const comfyBridge = config.comfyBridge;
     const workflowId = comfyBridge.workflowId.trim();
     if (!comfyBridge.enabled || !comfyBridge.bridgeId.trim() || !workflowId) {

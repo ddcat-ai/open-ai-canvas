@@ -4,6 +4,16 @@ import { PLUGIN_API_VERSION, type PluginManifest, type RegisteredPlugin } from "
 export const RUNNINGHUB_PLUGIN_ID = "runninghub-workflow-provider";
 export const COMFYUI_PLUGIN_ID = "comfyui-workflow-provider";
 
+export type WorkflowProvider = "runninghub" | "comfyui";
+
+export function workflowPluginId(provider: WorkflowProvider) {
+    return provider === "runninghub" ? RUNNINGHUB_PLUGIN_ID : COMFYUI_PLUGIN_ID;
+}
+
+export function workflowProviderPluginEnabled(statuses: Record<string, string>, provider: WorkflowProvider) {
+    return statuses[workflowPluginId(provider)] === "enabled";
+}
+
 function workflowContributions(providerId: string, label: string) {
     return (["image", "video", "audio"] as const).map((capability) => ({
         id: `${providerId}-${capability}`,

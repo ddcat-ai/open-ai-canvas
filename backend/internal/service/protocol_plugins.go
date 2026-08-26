@@ -113,7 +113,7 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 		byID[record.ID] = record
 	}
 	items := protocol.Builtins().List("", "", true)
-	bundledIDs := make(map[string]struct{}, len(items))
+	bundledIDs := make(map[string]struct{}, len(items)+2)
 	for _, metadata := range items {
 		bundledIDs[metadata.ID] = struct{}{}
 		protocol.AttachDocumentation(&metadata)
@@ -167,6 +167,34 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 		}
 		record.ID, record.Raw, record.Source, record.PackagePath = metadata.ID, data, "bundled", ""
 		byID[metadata.ID] = record
+	}
+	for _, workflow := range bundledWorkflowPluginManifests() {
+		bundledIDs[workflow.Metadata.ID] = struct{}{}
+		data, err := json.Marshal(workflow)
+		if err != nil {
+			return fmt.Errorf("encode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+		}
+		record := byID[workflow.Metadata.ID]
+		if len(record.Raw) > 0 {
+			var installed protocol.Manifest
+			if err := json.Unmarshal(record.Raw, &installed); err != nil {
+				return fmt.Errorf("decode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+			}
+			workflow.Metadata.Enabled = installed.Metadata.Enabled
+			data, err = json.Marshal(workflow)
+			if err != nil {
+				return fmt.Errorf("encode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+			}
+		}
+		if !bytes.Equal(record.Raw, data) {
+			now := time.Now().UTC()
+			if record.InstalledAt.IsZero() {
+				record.InstalledAt = now
+			}
+			record.UpdatedAt = now
+		}
+		record.ID, record.Raw, record.Source, record.PackagePath = workflow.Metadata.ID, data, "bundled", ""
+		byID[workflow.Metadata.ID] = record
 	}
 	result := make([]pluginRegistryRecord, 0, len(byID))
 	for _, record := range byID {

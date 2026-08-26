@@ -11,15 +11,37 @@ import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import { usePluginStore } from "@/stores/use-plugin-store";
+import { fetchWorkflowPluginStatuses } from "@/services/api/plugins";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function AppProviders({ children }: { children: ReactNode }) {
     const theme = useThemeStore((state) => state.theme);
     const dark = theme === "dark";
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
+    const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
+    const userId = useUserStore((state) => state.user?.id);
 
     useEffect(() => {
         for (const plugin of listRegisteredPlugins()) ensurePlugin(plugin.manifest);
     }, [ensurePlugin]);
+
+    useEffect(() => {
+        if (!userId) {
+            setRuntimeStatuses({});
+            return;
+        }
+        let cancelled = false;
+        void fetchWorkflowPluginStatuses()
+            .then((statuses) => {
+                if (!cancelled) setRuntimeStatuses(statuses);
+            })
+            .catch(() => {
+                if (!cancelled) setRuntimeStatuses({});
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [setRuntimeStatuses, userId]);
 
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);

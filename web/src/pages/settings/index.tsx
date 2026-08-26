@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, InputNumber, Select } from "antd";
 import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, MonitorUp, RadioTower, SlidersHorizontal, SquareTerminal, Workflow } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
@@ -16,6 +16,8 @@ import { LocalCliSettings } from "./local-cli-settings";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 import DiagnosticsPanel from "./diagnostics-panel";
 import { RunningHubSettingsPane } from "./runninghub-settings-pane";
+import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 type ConfigSectionKey = "local-cli" | "channels" | "models" | "runninghub" | "comfyui" | "preferences" | "prompts" | "storage" | "diagnostics";
 
@@ -41,7 +43,13 @@ export default function SettingsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
-    const initialSection = isConfigSection(requestedSection) ? requestedSection : customChannelsEnabled ? "channels" : "models";
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
+    const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
+    const comfyUIPluginEnabled = runtimeStatuses[COMFYUI_PLUGIN_ID] === "enabled";
+    const requestedSectionEnabled = requestedSection !== "runninghub" && requestedSection !== "comfyui"
+        || requestedSection === "runninghub" && runningHubPluginEnabled
+        || requestedSection === "comfyui" && comfyUIPluginEnabled;
+    const initialSection = isConfigSection(requestedSection) && requestedSectionEnabled ? requestedSection : customChannelsEnabled ? "channels" : "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection === "channels" && !customChannelsEnabled ? "models" : initialSection);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
@@ -49,15 +57,19 @@ export default function SettingsPage() {
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
-    const visibleConfigSections = customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels");
+    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
+        .filter((section) => section.key !== "comfyui" || comfyUIPluginEnabled), [comfyUIPluginEnabled, customChannelsEnabled, runningHubPluginEnabled]);
+
+    const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
 
     useEffect(() => {
-        if (isConfigSection(requestedSection) && (requestedSection !== "channels" || customChannelsEnabled)) {
+        if (isVisibleConfigSection(requestedSection)) {
             setActiveTab(requestedSection);
             return;
         }
-        if (!customChannelsEnabled) setActiveTab((current) => (current === "channels" ? "models" : current));
-    }, [customChannelsEnabled, requestedSection]);
+        setActiveTab((current) => visibleConfigSections.some((section) => section.key === current) ? current : customChannelsEnabled ? "channels" : "models");
+    }, [customChannelsEnabled, requestedSection, visibleConfigSections]);
 
     useEffect(() => {
         if (!userId) return;
@@ -71,6 +83,7 @@ export default function SettingsPage() {
     }, [message, userId]);
 
     const selectSection = (section: ConfigSectionKey) => {
+        if ((section === "runninghub" && !runningHubPluginEnabled) || (section === "comfyui" && !comfyUIPluginEnabled)) return;
         setActiveTab(section);
         const next = new URLSearchParams(searchParams);
         next.set("section", section);
@@ -87,8 +100,8 @@ export default function SettingsPage() {
         }
         const hasReadyLocalRuntime = effectiveConfig.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false && Boolean(channel.localModels?.length));
         const workflowReady = Boolean(
-            (config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim())
-            || (config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim()),
+            (runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim())
+            || (comfyUIPluginEnabled && config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim()),
         );
         if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
@@ -101,7 +114,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         "local-cli": <SettingsPane><LocalCliSettings /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={() => selectSection("runninghub")} onOpenComfyUI={() => selectSection("comfyui")} /></SettingsPane>,
+        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} onOpenComfyUI={comfyUIPluginEnabled ? () => selectSection("comfyui") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">

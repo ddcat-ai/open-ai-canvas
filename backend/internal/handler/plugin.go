@@ -14,6 +14,14 @@ import (
 )
 
 func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
+	statusRoutes := r.Group("/plugins")
+	statusRoutes.GET("/status", func(c *gin.Context) {
+		if _, err := currentUser(c, svc); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"statuses": svc.WorkflowPluginStatuses()})
+	})
 	pluginRoutes := r.Group("/plugins")
 	pluginRoutes.Use(requirePluginCenterAccess(svc))
 	// The frontend plugin center is the single management surface. Protocol

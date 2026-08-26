@@ -15,6 +15,10 @@ func RegisterRunningHubRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if err := svc.RequireWorkflowPluginForInterface("runninghub-workflow-image"); err != nil {
+			failService(c, err)
+			return
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
 		var req service.RunningHubWorkflowFetchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {

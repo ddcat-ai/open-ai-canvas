@@ -38,6 +38,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
+			failService(c, err)
+			return
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
 		var req service.CreateComfyBridgeRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,6 +61,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
+			failService(c, err)
+			return
+		}
 		bridges, err := svc.ComfyBridges(user.ID)
 		if err != nil {
 			fail(c, http.StatusInternalServerError, err)
@@ -67,6 +75,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	revoke := func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -82,6 +94,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/comfy-bridge/poll", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -103,6 +119,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/comfy-bridge/result", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -140,6 +160,10 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/comfy-bridge/heartbeat", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}

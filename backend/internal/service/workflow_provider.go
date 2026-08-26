@@ -297,27 +297,17 @@ func workflowFieldRawBool(raw map[string]json.RawMessage, fallback bool, keys ..
 }
 
 func isRunningHubInterface(value string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "runninghub-workflow-")
+	pluginID, ok := workflowPluginIDForInterface(strings.ToLower(strings.TrimSpace(value)))
+	return ok && pluginID == WorkflowPluginRunningHub
 }
 
 func isComfyBridgeInterface(value string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "comfyui-bridge-")
+	pluginID, ok := workflowPluginIDForInterface(strings.ToLower(strings.TrimSpace(value)))
+	return ok && pluginID == WorkflowPluginComfyUI
 }
 
 func isWorkflowProviderInterface(value string) bool {
 	return isRunningHubInterface(value) || isComfyBridgeInterface(value)
-}
-
-func normalizeWorkflowInterface(value string, modelName string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if isWorkflowProviderInterface(value) {
-		return value
-	}
-	// 仅在调用方没有明确协议时用于 Bridge 的安全默认值；普通模型不会走这里。
-	if strings.TrimSpace(modelName) != "" {
-		return string(model.ChannelInterfaceComfyBridgeImage)
-	}
-	return value
 }
 
 func validateWorkflowProviderConfig(mode string, config providerConfig) error {

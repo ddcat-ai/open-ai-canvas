@@ -30,7 +30,12 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	logicalModelID := strings.TrimSpace(req.LogicalModelID)
 	workflowProviderTask := taskInputUsesWorkflowProvider(normalizedInput)
 	frontendEnabled := false
-	if !workflowProviderTask {
+	if workflowProviderTask {
+		config, _ := normalizedInput["config"].(map[string]any)
+		if err := s.RequireWorkflowPluginForInterface(strings.TrimSpace(fmt.Sprint(config["interfaceType"]))); err != nil {
+			return nil, err
+		}
+	} else {
 		// 工作流是独立执行器；普通模型仍严格使用主线的目录和路由校验。
 		frontendEnabled, err = s.FeatureEnabled(FeatureFrontendModels)
 		if err != nil {
