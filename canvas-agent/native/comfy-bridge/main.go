@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -21,11 +22,11 @@ import (
 type jsonMap map[string]any
 
 type bridgeOptions struct {
-	Server      string
-	Token       string
-	Comfy       string
-	WorkflowDir string
-	PollSeconds int
+	Server      string `json:"server"`
+	Token       string `json:"token"`
+	Comfy       string `json:"comfy"`
+	WorkflowDir string `json:"workflowDir"`
+	PollSeconds int    `json:"pollSeconds"`
 }
 
 type bridgeRequest struct {
@@ -72,23 +73,34 @@ func parseOptions(args []string) (bridgeOptions, error) {
 		}
 		return ""
 	}
-	options := bridgeOptions{
-		Server:      strings.TrimRight(value("--server"), "/"),
-		Token:       value("--token"),
-		Comfy:       strings.TrimRight(value("--comfy"), "/"),
-		WorkflowDir: value("--workflow-dir"),
-		PollSeconds: 20,
+	options := bridgeOptions{PollSeconds: 20}
+	if persisted, err := loadBridgeOptions(); err != nil {
+		return options, err
+	} else if persisted != nil {
+		options = *persisted
 	}
-	if options.Comfy == "" {
-		options.Comfy = "http://127.0.0.1:8188"
+	if raw := value("--server"); raw != "" {
+		options.Server = strings.TrimRight(raw, "/")
+	}
+	if raw := value("--token"); raw != "" {
+		options.Token = raw
+	}
+	if raw := value("--comfy"); raw != "" {
+		options.Comfy = strings.TrimRight(raw, "/")
+	}
+	if raw := value("--workflow-dir"); raw != "" {
+		options.WorkflowDir = raw
 	}
 	if raw := value("--poll-seconds"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil {
 			options.PollSeconds = parsed
 		}
 	}
+	if options.Comfy == "" {
+		options.Comfy = "http://127.0.0.1:8188"
+	}
 	if options.Server == "" || options.Token == "" {
-		return options, errors.New("需要 --server 和 --token")
+		return options, errors.New("需要 --server 和 --token；首次启动请使用网页生成的启动命令")
 	}
 	if options.PollSeconds < 0 {
 		options.PollSeconds = 0
@@ -102,7 +114,71 @@ func parseOptions(args []string) (bridgeOptions, error) {
 	if err := validateHTTPURL(options.Server, "--server"); err != nil {
 		return options, err
 	}
+	if err := saveBridgeOptions(options); err != nil {
+		return options, fmt.Errorf("保存 Bridge 本机配置失败：%w", err)
+	}
 	return options, nil
+}
+
+func bridgeOptionsPath() (string, error) {
+	if runtime.GOOS == "windows" {
+		base := strings.TrimSpace(os.Getenv("LOCALAPPDATA"))
+		if base == "" {
+			return "", errors.New("LOCALAPPDATA 未设置，无法保存 Bridge 本机配置")
+		}
+		return filepath.Join(base, "OpenAICanvas", "comfy-bridge.json"), nil
+	}
+	base := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("无法确定用户配置目录：%w", err)
+		}
+		base = filepath.Join(home, ".config")
+	}
+	return filepath.Join(base, "open-ai-canvas", "comfy-bridge.json"), nil
+}
+
+func loadBridgeOptions() (*bridgeOptions, error) {
+	path, err := bridgeOptionsPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("读取 Bridge 本机配置失败：%w", err)
+	}
+	var options bridgeOptions
+	if err := json.Unmarshal(data, &options); err != nil {
+		return nil, fmt.Errorf("Bridge 本机配置格式无效：%w", err)
+	}
+	return &options, nil
+}
+
+func saveBridgeOptions(options bridgeOptions) error {
+	path, err := bridgeOptionsPath()
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(options, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return err
+	}
+	return nil
 }
 
 func validateHTTPURL(value, label string) error {
@@ -163,6 +239,7 @@ func runComfyRequest(options bridgeOptions, payload jsonMap) (jsonMap, error) {
 		return nil, err
 	}
 	applyPromptFallback(workflow, stringValue(payload["prompt"]), fields)
+	stripCanvasAnnotationNodes(workflow)
 	promptID, err := submitPrompt(options.Comfy, workflow)
 	if err != nil {
 		return nil, err
@@ -361,6 +438,7 @@ func submitPrompt(comfy string, workflow jsonMap) (string, error) {
 
 func waitForHistory(comfy, promptID string) (jsonMap, error) {
 	deadline := time.Now().Add(30 * time.Minute)
+	emptyOutputPolls := 0
 	for time.Now().Before(deadline) {
 		var payload jsonMap
 		if err := requestComfyJSON(http.MethodGet, comfy+"/history/"+url.PathEscape(promptID), nil, &payload); err == nil {
@@ -372,11 +450,27 @@ func waitForHistory(comfy, promptID string) (jsonMap, error) {
 				if completed {
 					return history, nil
 				}
+				if historyCompletedWithoutOutputs(history) {
+					emptyOutputPolls++
+					if emptyOutputPolls >= 10 {
+						return nil, errors.New("ComfyUI 工作流已完成，但没有返回可下载产物；请检查启用的输出节点")
+					}
+				} else {
+					emptyOutputPolls = 0
+				}
 			}
 		}
 		time.Sleep(1500 * time.Millisecond)
 	}
 	return nil, errors.New("ComfyUI 任务超时")
+}
+
+func historyCompletedWithoutOutputs(history jsonMap) bool {
+	status, _ := mapValue(history["status"])
+	statusText := strings.ToLower(firstNonEmpty(stringValue(status["status_str"]), stringValue(status["status"])))
+	completed := boolValue(status["completed"]) || statusText == "success"
+	outputs, _ := mapValue(history["outputs"])
+	return completed && statusText == "success" && len(outputs) == 0
 }
 
 func completedHistory(history jsonMap) (bool, error) {
@@ -393,8 +487,10 @@ func completedHistory(history jsonMap) (bool, error) {
 	if statusText == "error" || statusText == "failed" {
 		return false, fmt.Errorf("ComfyUI 工作流执行失败：%.500s", stringValue(firstValue(status["messages"], statusText)))
 	}
+	// ComfyUI can publish status=success before persisting the output map.
+	// Keep polling so a transient empty output is not reported as a failed task.
 	if len(outputs) == 0 {
-		return false, errors.New("ComfyUI 任务已完成但没有返回产物")
+		return false, nil
 	}
 	return true, nil
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { ChevronDown, ChevronUp, Clock3, Coins, ListTodo, LoaderCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock3, Coins, ListTodo, LoaderCircle, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { formatCredits } from "@/constant/credits";
@@ -11,7 +11,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 // 顶栏是绝对定位浮层，面板必须按调用方传入的 topInset 避让；专注模式隐藏顶栏时传小间距。
-export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(--canvas-topbar-offset)" }: { tasks: GenerationTask[]; align?: "left" | "right"; topInset?: string }) {
+export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(--canvas-topbar-offset)", onCancelTask }: { tasks: GenerationTask[]; align?: "left" | "right"; topInset?: string; onCancelTask?: (task: GenerationTask) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const reducedMotion = useReducedMotion();
@@ -96,6 +96,7 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                             theme={theme}
                                             expanded={expandedTaskId === task.id}
                                             onToggle={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
+                                            onCancelTask={onCancelTask}
                                             reducedMotion={Boolean(reducedMotion)}
                                             creditsEnabled={creditsEnabled}
                                         />
@@ -116,6 +117,7 @@ function ActiveTaskCard({
     theme,
     expanded,
     onToggle,
+    onCancelTask,
     reducedMotion,
     creditsEnabled,
 }: {
@@ -124,6 +126,7 @@ function ActiveTaskCard({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     expanded: boolean;
     onToggle: () => void;
+    onCancelTask?: (task: GenerationTask) => void;
     reducedMotion: boolean;
     creditsEnabled: boolean;
 }) {
@@ -221,6 +224,21 @@ function ActiveTaskCard({
                                 {generationTaskStageLabel(task)}
                             </span>
                         </div>
+                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                            <button
+                                type="button"
+                                className="mt-3 inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors"
+                                style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onCancelTask(task);
+                                }}
+                                onMouseDown={(event) => event.stopPropagation()}
+                            >
+                                <XCircle className="size-3" />
+                                取消任务
+                            </button>
+                        ) : null}
                     </motion.div>
                 ) : null}
             </AnimatePresence>

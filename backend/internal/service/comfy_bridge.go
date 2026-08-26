@@ -14,15 +14,25 @@ import (
 )
 
 const (
-	// 能力中包含本机工作流的轻量拓扑预览；保持硬上限，避免异常工作流撑大心跳请求。
-	comfyBridgeCapabilitiesLimit = 512 << 10
+	// 心跳会携带本机工作流字段和拓扑；允许大型 ComfyUI 工作流，但保留硬上限。
+	comfyBridgeCapabilitiesLimit = 4 << 20
 	// 请求主要是工作流和参考素材描述，保持较小上限控制排队内存；结果可能含 base64 视频，单独放宽但仍有硬上限。
 	comfyBridgeRequestPayloadLimit = 16 << 20
 	comfyBridgeResultPayloadLimit  = 64 << 20
 	comfyBridgeMaxPending          = 32
 	comfyBridgeRequestTTL          = 2 * time.Hour
+	comfyBridgeDiscoveryRequestTTL = 45 * time.Second
 	comfyBridgeFinishedTTL         = 10 * time.Minute
 	comfyBridgePollMaxWait         = 60 * time.Second
+)
+
+const (
+	// ComfyBridgeRequestKindGenerate 是现有生成任务的请求类型。空 Kind 会在入队时归一化为该值，
+	// 这样可以继续兼容已有调用方。
+	ComfyBridgeRequestKindGenerate = "generate"
+	// ComfyBridgeRequestKindWorkflowList 和 ComfyBridgeRequestKindWorkflowGet 只用于管理页按需发现。
+	ComfyBridgeRequestKindWorkflowList = "workflow.list"
+	ComfyBridgeRequestKindWorkflowGet  = "workflow.get"
 )
 
 // CreateComfyBridgeRequest 是用户注册本地 Bridge 时提交的公开信息。
@@ -49,11 +59,12 @@ type ComfyBridgeRegistration struct {
 	Token string `json:"token"`
 }
 
-// ComfyBridgeRequest 是云端后端交给本地 Bridge 的一次工作流请求。
-// Payload 的协议由 ComfyUI provider 负责解释，Bridge 只做透明转发。
+// ComfyBridgeRequest 是云端后端交给本地 Bridge 的一次请求。
+// Payload 的协议由 Bridge 按 Kind 解释；生成请求和管理页发现请求共用同一条长轮询通道。
 type ComfyBridgeRequest struct {
 	ID        string         `json:"id"`
-	TaskID    string         `json:"taskId"`
+	Kind      string         `json:"kind"`
+	TaskID    string         `json:"taskId,omitempty"`
 	BridgeID  string         `json:"bridgeId"`
 	Payload   map[string]any `json:"payload"`
 	CreatedAt time.Time      `json:"createdAt"`
@@ -116,7 +127,7 @@ func (s *Service) CreateComfyBridge(userID string, req CreateComfyBridgeRequest)
 			return nil, BadAuthRequest("Bridge 能力信息格式无效")
 		}
 		if len(encoded) > comfyBridgeCapabilitiesLimit {
-			return nil, BadAuthRequest("Bridge 能力信息不能超过 64KB")
+			return nil, BadAuthRequest("Bridge 能力信息不能超过 4MB")
 		}
 		capabilitiesJSON = string(encoded)
 	}
@@ -192,7 +203,7 @@ func (s *Service) TouchComfyBridgeHeartbeat(bridgeID string, capabilities map[st
 	if capabilities != nil {
 		encoded, err := json.Marshal(capabilities)
 		if err != nil || len(encoded) > comfyBridgeCapabilitiesLimit {
-			return BadAuthRequest("Bridge 能力信息格式无效或超过 64KB")
+			return BadAuthRequest("Bridge 能力信息格式无效或超过 4MB")
 		}
 		capabilitiesJSON = string(encoded)
 	}

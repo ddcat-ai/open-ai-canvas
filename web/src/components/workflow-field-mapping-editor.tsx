@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { Button, Collapse, Empty, Input, InputNumber, Select, Switch, Tag, Tooltip } from "antd";
-import { ListPlus } from "lucide-react";
+import { ListFilter, ListPlus, Power, PowerOff } from "lucide-react";
 
 import type { WorkflowFieldMapping } from "@/stores/use-config-store";
 import { workflowFieldChoiceValues, workflowFieldConfigurationError, workflowFieldNumberBounds, workflowFieldPresetOptions } from "@/lib/model-capabilities";
@@ -47,8 +48,16 @@ type WorkflowFieldMappingEditorProps = {
 };
 
 export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false }: WorkflowFieldMappingEditorProps) {
+    const [showOnlyEnabled, setShowOnlyEnabled] = useState(false);
+    const enabledCount = useMemo(() => fields.filter((field) => field.enabled !== false).length, [fields]);
+    const controllableFields = useMemo(() => fields.filter((field) => field.safeToOverride !== false), [fields]);
+    const enabledControllableCount = useMemo(() => controllableFields.filter((field) => field.enabled !== false).length, [controllableFields]);
+    const visibleFields = useMemo(() => fields.flatMap((field, index) => (showOnlyEnabled && field.enabled === false ? [] : [{ field, index }])), [fields, showOnlyEnabled]);
     const updateField = (index: number, patch: Partial<WorkflowFieldMapping>) => {
-        onChange(fields.map((field, fieldIndex) => fieldIndex === index ? { ...field, ...patch } : field));
+        onChange(fields.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)));
+    };
+    const updateAllFields = (enabled: boolean) => {
+        onChange(fields.map((field) => (field.safeToOverride === false ? field : { ...field, enabled })));
     };
 
     if (!fields.length) {
@@ -57,12 +66,25 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
 
     return (
         <div className="workflow-field-mapping-editor space-y-3">
-            <p className="text-xs text-foreground/60">
-                共 {fields.length} 个字段。画布连线顺序对应参考素材槽位；字段调整会立即保存到当前工作流。
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-foreground/60">
+                    共 {fields.length} 个字段，已开启 {enabledCount} 个。字段调整会立即保存到当前工作流。
+                </p>
+                <div className="flex flex-wrap items-center gap-1">
+                    <Button type="text" size="small" icon={<Power className="size-3.5" />} disabled={disabled || enabledControllableCount === controllableFields.length} onClick={() => updateAllFields(true)}>
+                        开启全部
+                    </Button>
+                    <Button type="text" size="small" danger icon={<PowerOff className="size-3.5" />} disabled={disabled || enabledControllableCount === 0} onClick={() => updateAllFields(false)}>
+                        关闭全部
+                    </Button>
+                    <Button type={showOnlyEnabled ? "default" : "text"} size="small" icon={<ListFilter className="size-3.5" />} aria-pressed={showOnlyEnabled} onClick={() => setShowOnlyEnabled((current) => !current)}>
+                        {showOnlyEnabled ? "显示全部" : "仅显示已开启"}
+                    </Button>
+                </div>
+            </div>
             <Collapse
                 size="small"
-                items={fields.map((field, index) => {
+                items={visibleFields.map(({ field, index }) => {
                     const source = String(field.source || "");
                     const sourceLabel = sourceOptions.find((item) => item.value === source)?.label || source || "保留工作流默认值";
                     const enabled = field.enabled !== false;
@@ -80,53 +102,34 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                             <div className="flex min-w-0 items-center gap-2">
                                 <span className="truncate font-medium">{field.label || field.fieldName}</span>
                                 <Tooltip title={`${field.nodeId}.${field.fieldName}`}>
-                                    <span className="truncate text-xs text-foreground/50">{field.nodeId}.{field.fieldName}</span>
+                                    <span className="truncate text-xs text-foreground/50">
+                                        {field.nodeId}.{field.fieldName}
+                                    </span>
                                 </Tooltip>
                                 <Tag className="ml-auto shrink-0">{sourceLabel}</Tag>
-                                <Tag color={safeToOverride ? undefined : "error"} className="shrink-0">{safeToOverride ? roleLabel : "禁止覆盖"}</Tag>
+                                <Tag color={safeToOverride ? undefined : "error"} className="shrink-0">
+                                    {safeToOverride ? roleLabel : "禁止覆盖"}
+                                </Tag>
                             </div>
                         ),
                         extra: (
                             <span onClick={(event) => event.stopPropagation()}>
-                                <Switch
-                                    size="small"
-                                    checked={enabled}
-                                    disabled={disabled || !safeToOverride}
-                                    aria-label={`启用字段 ${field.label || field.fieldName}`}
-                                    onChange={(checked) => updateField(index, { enabled: checked })}
-                                />
+                                <Switch size="small" checked={enabled} disabled={disabled || !safeToOverride} aria-label={`启用字段 ${field.label || field.fieldName}`} onChange={(checked) => updateField(index, { enabled: checked })} />
                             </span>
                         ),
                         children: (
                             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                                 <label className="grid gap-1 text-xs text-foreground/60">
                                     显示名称
-                                    <Input
-                                        value={field.label || ""}
-                                        disabled={fieldDisabled}
-                                        placeholder={field.fieldName}
-                                        onChange={(event) => updateField(index, { label: event.target.value })}
-                                    />
+                                    <Input value={field.label || ""} disabled={fieldDisabled} placeholder={field.fieldName} onChange={(event) => updateField(index, { label: event.target.value })} />
                                 </label>
                                 <label className="grid gap-1 text-xs text-foreground/60">
                                     参数类型
-                                    <Select
-                                        value={fieldType}
-                                        disabled={fieldDisabled}
-                                        options={fieldTypeOptions.map((item) => ({ ...item }))}
-                                        onChange={(value) => updateField(index, { fieldType: value })}
-                                    />
+                                    <Select value={fieldType} disabled={fieldDisabled} options={fieldTypeOptions.map((item) => ({ ...item }))} onChange={(value) => updateField(index, { fieldType: value })} />
                                 </label>
                                 <label className="grid gap-1 text-xs text-foreground/60">
                                     输入来源
-                                    <Select
-                                        showSearch
-                                        value={source}
-                                        disabled={fieldDisabled}
-                                        options={sourceOptions.map((item) => ({ ...item }))}
-                                        optionFilterProp="label"
-                                        onChange={(value) => updateField(index, sourcePatch(field, value))}
-                                    />
+                                    <Select showSearch value={source} disabled={fieldDisabled} options={sourceOptions.map((item) => ({ ...item }))} optionFilterProp="label" onChange={(value) => updateField(index, sourcePatch(field, value))} />
                                 </label>
                                 {fieldType === "SELECT" || choices.length || presetOptions.length ? (
                                     <label className="grid gap-1 text-xs text-foreground/60 md:col-span-2 lg:col-span-3">
@@ -185,20 +188,12 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                                 ) : null}
                                 <label className="flex items-center justify-between gap-3 text-xs text-foreground/60">
                                     缺失时阻止生成
-                                    <Switch
-                                        checked={field.required === true}
-                                        disabled={fieldDisabled || !source}
-                                        onChange={(required) => updateField(index, { required })}
-                                    />
+                                    <Switch checked={field.required === true} disabled={fieldDisabled || !source} onChange={(required) => updateField(index, { required })} />
                                 </label>
                                 {fieldType === "NUMBER" ? (
                                     <label className="flex items-center justify-between gap-3 text-xs text-foreground/60">
                                         每次随机数字
-                                        <Switch
-                                            checked={field.randomEnabled === true}
-                                            disabled={fieldDisabled || Boolean(source)}
-                                            onChange={(randomEnabled) => updateField(index, { randomEnabled })}
-                                        />
+                                        <Switch checked={field.randomEnabled === true} disabled={fieldDisabled || Boolean(source)} onChange={(randomEnabled) => updateField(index, { randomEnabled })} />
                                     </label>
                                 ) : null}
                                 {!source ? (
@@ -212,6 +207,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                     };
                 })}
             />
+            {showOnlyEnabled && !visibleFields.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已开启字段" /> : null}
         </div>
     );
 }
@@ -222,7 +218,17 @@ function DefaultValueInput({ field, disabled, onChange }: { field: WorkflowField
     const bounds = workflowFieldNumberBounds(field);
     const choices = workflowFieldChoiceValues(field);
     if (fieldType === "BOOLEAN" || typeof value === "boolean") {
-        return <Select value={Boolean(value)} disabled={disabled} options={[{ label: "true", value: true }, { label: "false", value: false }]} onChange={onChange} />;
+        return (
+            <Select
+                value={Boolean(value)}
+                disabled={disabled}
+                options={[
+                    { label: "true", value: true },
+                    { label: "false", value: false },
+                ]}
+                onChange={onChange}
+            />
+        );
     }
     if (choices.length) {
         return <Select showSearch value={value} disabled={disabled} options={choices.map((option) => ({ label: workflowOptionText(option), value: workflowOptionValue(option) }))} onChange={onChange} />;
@@ -244,7 +250,9 @@ function sourceUsesIndex(source: string) {
 }
 
 function workflowEditorFieldType(field: WorkflowFieldMapping) {
-    const configured = String(field.fieldType || "").trim().toUpperCase();
+    const configured = String(field.fieldType || "")
+        .trim()
+        .toUpperCase();
     if (["FLOAT", "INT", "INTEGER"].includes(configured)) return "NUMBER";
     if (fieldTypeOptions.some((item) => item.value === configured)) return configured;
     const value = field.fieldValue ?? field.value ?? field.default;
@@ -254,7 +262,10 @@ function workflowEditorFieldType(field: WorkflowFieldMapping) {
 }
 
 function parseWorkflowOptions(value: string) {
-    return value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+    return value
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 function workflowOptionValue(value: unknown): string | number {

@@ -5,6 +5,8 @@
 .spec-workflow
 .vscode
 docs
+!backend/internal/protocol/docs/
+!backend/internal/protocol/docs/*.md
 docs2
 data
 backend/data

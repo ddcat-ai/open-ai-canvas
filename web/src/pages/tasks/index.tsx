@@ -1,5 +1,5 @@
 import { App, Button, Drawer, Form, Input, Modal, Select, Switch, Tooltip, Typography } from "antd";
-import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -10,7 +10,7 @@ import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerat
 import { formatTaskKind, isGenerationTaskSubmissionUncertain, operationOptions, statusLabel } from "@/lib/generation-task-display";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
-import { createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import { cancelGenerationTask, createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -169,6 +169,7 @@ export default function TasksPage() {
             actingId={actingId}
             onOpen={() => void openTaskDetail(task)}
             onRetry={() => void runAction(task.id)}
+            onCancel={() => cancelTask(task)}
             onPreview={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: task.prompt || formatTaskKind(task) })}
         />
     );
@@ -180,6 +181,7 @@ export default function TasksPage() {
             actingId={actingId}
             onOpen={() => void openTaskDetail(task)}
             onRetry={() => void runAction(task.id)}
+            onCancel={() => cancelTask(task)}
         />
     );
 
@@ -307,6 +309,35 @@ export default function TasksPage() {
         } finally {
             setActingId("");
         }
+    };
+
+    const cancelTask = (task: GenerationTask) => {
+        if (task.provider === "dreamina-cli") {
+            message.warning("官方即梦 CLI 当前不支持可靠取消，请等待官方状态同步");
+            return;
+        }
+        if (task.status !== "queued" && task.status !== "running") return;
+        Modal.confirm({
+            title: "取消生成任务？",
+            content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和积分状态。",
+            okText: "取消任务",
+            okButtonProps: { danger: true },
+            cancelText: "继续等待",
+            onOk: async () => {
+                setActingId(task.id);
+                try {
+                    const next = await cancelGenerationTask(task.id);
+                    setTasks((items) => items.map((item) => (item.id === task.id ? { ...item, ...next } : item)));
+                    setDetailTask((current) => (current?.id === task.id ? { ...current, ...next } : current));
+                    void loadTasks(false);
+                    message.success("任务已取消");
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "取消任务失败");
+                } finally {
+                    setActingId("");
+                }
+            },
+        });
     };
 
     const deleteLocalTask = (task: GenerationTask) => {
@@ -527,6 +558,11 @@ export default function TasksPage() {
                         </div>
                         {detailTask.provider === "dreamina-cli" ? <p className="text-xs leading-5 text-foreground/60">官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。</p> : null}
                         <div className="flex flex-wrap justify-end gap-2">
+                            {detailTask.provider !== "dreamina-cli" && (detailTask.status === "queued" || detailTask.status === "running") ? (
+                                <Button danger icon={<XCircle className="size-4" />} loading={actingId === detailTask.id} onClick={() => cancelTask(detailTask)}>
+                                    取消任务
+                                </Button>
+                            ) : null}
                             {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? (
                                 <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>
                                     更新官方状态

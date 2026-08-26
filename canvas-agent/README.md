@@ -59,6 +59,8 @@ chmod +x "$bridge_dir/OpenAICanvas-ComfyBridge-linux-amd64"
 
 Bridge Token 只用于主动轮询和回传结果，不要提交到 Git 或写入公开日志。Bridge 执行长任务时每 30 秒发送心跳；远程参考素材只允许解析到公网地址，`127.0.0.1`、localhost、私网和链路本地地址会被拒绝。当前队列和结果等待状态保存在后端进程内存中；后端或 Bridge 重启会丢失未完成的 Bridge 请求。工作流请求 JSON 上限为 16MB，结果 JSON（含 base64 媒体）上限为 64MB，超大视频建议改为资源上传链路。
 
+Bridge 首次使用网页生成的命令启动后，会把服务器地址、Token、ComfyUI 地址和工作流目录保存到本机用户配置目录（权限为仅当前用户可读）。之后重启或断线恢复可以直接再次启动 Bridge 程序，不需要重新填写这些参数；如需更换连接目标，再使用带参数的启动命令覆盖旧配置。
+
 Codex app 插件会读取启动输出里的 Local URL 和 Connect token，并直接打开画布网页地址；Canvas Agent 不负责生成画布打开 URL。
 
 Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接后，Canvas Agent 会记录该网页 Origin；之后其他 Origin 不能复用这个本地 Agent，除非用户清理 `~/.infinite-canvas/canvas-agent.json` 里的 `origins`。

@@ -786,12 +786,39 @@ export function workflowFieldCurrentValue(field: WorkflowVideoFieldLike | undefi
     for (const key of [workflowFieldKey(field), ...workflowFieldLegacyKeys(field)]) {
         if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
     }
+    // 旧画布和新工作流 schema 可能分别使用 aspectRatio / aspect_ratio，
+    // 字段语义相同但存储键不同。读取时按节点号和规范化字段名兼容，
+    // 避免找不到用户已选值后回退到工作流或全局默认比例。
+    const nodeKey = normalizeWorkflowParameterPart(field.nodeId);
+    const fieldKeys = [field.fieldName, field.source, field.label]
+        .map((value) => normalizeWorkflowParameterPart(value))
+        .filter(Boolean);
+    if (nodeKey && fieldKeys.length) {
+        for (const [key, value] of Object.entries(values)) {
+            const match = key.match(/^field:([^:]+):(.+)$/i);
+            if (!match) continue;
+            if (normalizeWorkflowParameterPart(match[1]) === nodeKey && fieldKeys.includes(normalizeWorkflowParameterPart(match[2]))) return value;
+        }
+    }
     return field.fieldValue ?? field.defaultValue ?? field.value ?? field.default;
 }
 
 export function workflowFieldHasStoredValue(field: WorkflowVideoFieldLike | undefined, values: Readonly<Record<string, unknown>>) {
     if (!field) return false;
-    return [workflowFieldKey(field), ...workflowFieldLegacyKeys(field)].some((key) => Object.prototype.hasOwnProperty.call(values, key));
+    if ([workflowFieldKey(field), ...workflowFieldLegacyKeys(field)].some((key) => Object.prototype.hasOwnProperty.call(values, key))) return true;
+    const nodeKey = normalizeWorkflowParameterPart(field.nodeId);
+    const fieldKeys = [field.fieldName, field.source, field.label]
+        .map((value) => normalizeWorkflowParameterPart(value))
+        .filter(Boolean);
+    if (!nodeKey || !fieldKeys.length) return false;
+    return Object.keys(values).some((key) => {
+        const match = key.match(/^field:([^:]+):(.+)$/i);
+        return Boolean(match && normalizeWorkflowParameterPart(match[1]) === nodeKey && fieldKeys.includes(normalizeWorkflowParameterPart(match[2])));
+    });
+}
+
+function normalizeWorkflowParameterPart(value: unknown) {
+    return String(value ?? "").trim().toLowerCase().replace(/[\s_-]/g, "");
 }
 
 function workflowFieldLegacyKeys(field: WorkflowVideoFieldLike) {

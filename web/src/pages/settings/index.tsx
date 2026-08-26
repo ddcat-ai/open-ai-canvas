@@ -21,10 +21,10 @@ type ConfigSectionKey = "local-cli" | "channels" | "models" | "runninghub" | "co
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "local-cli", label: "本机工具", description: "连接 Runtime 与官方 CLI", icon: <SquareTerminal className="size-4" /> },
-    { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
+    { key: "channels", label: "个人渠道", description: "模型服务与个人工作流", icon: <RadioTower className="size-4" /> },
+    { key: "runninghub", label: "RunningHub 工作流", description: "个人渠道的云端工作流配置", icon: <Workflow className="size-4" /> },
+    { key: "comfyui", label: "ComfyUI Bridge", description: "个人渠道的 Bridge 工作流配置", icon: <MonitorUp className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
-    { key: "runninghub", label: "RunningHub 工作流", description: "独立的云端工作流配置", icon: <Workflow className="size-4" /> },
-    { key: "comfyui", label: "ComfyUI Bridge", description: "连接本机、局域网或远程 ComfyUI", icon: <MonitorUp className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
     { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
     { key: "storage", label: "我的对象存储", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
@@ -101,7 +101,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         "local-cli": <SettingsPane><LocalCliSettings /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} /></SettingsPane>,
+        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={() => selectSection("runninghub")} onOpenComfyUI={() => selectSection("comfyui")} /></SettingsPane>,
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">

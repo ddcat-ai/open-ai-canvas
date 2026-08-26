@@ -130,7 +130,7 @@ export function useCanvasNodeOperations({
             return;
         }
         const selectedWorkflowProvider = type === CanvasNodeType.Config
-            ? workflowProvider || (effectiveConfig.runningHub.enabled && effectiveConfig.runningHub.workflows.length ? "runninghub" : effectiveConfig.comfyBridge.enabled && effectiveConfig.comfyBridge.workflows.length ? "comfyui" : "runninghub")
+            ? workflowProvider || "model"
             : undefined;
         const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : type === CanvasNodeType.Config && selectedWorkflowProvider === "comfyui" ? "ComfyUI Bridge" : undefined;
         const metadata: CanvasNodeMetadata | undefined = type === CanvasNodeType.Drawing

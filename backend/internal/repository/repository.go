@@ -503,7 +503,7 @@ func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model
 	result := r.db.Model(&model.Task{}).
 		Where("id = ? AND user_id = ? AND status = ?", id, userID, expected).
 		Updates(map[string]any{
-			"status": model.TaskStatusCancelled, "stage": "任务已取消", "completed_at": &now,
+			"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
 			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
 		})
 	return result.RowsAffected == 1, result.Error

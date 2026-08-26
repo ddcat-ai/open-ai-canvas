@@ -38,6 +38,9 @@ func discoverWorkflowFields(workflow jsonMap, capability string) []any {
 			title = stringValue(meta["title"])
 		}
 		classType := stringValue(node["class_type"])
+		if isCanvasAnnotationNode(classType) {
+			continue
+		}
 		fieldNames := make([]string, 0, len(inputs))
 		for fieldName := range inputs {
 			fieldNames = append(fieldNames, fieldName)
@@ -169,7 +172,9 @@ func convertComfyCanvasWorkflow(workflow jsonMap) jsonMap {
 		}
 		nodeID := strings.TrimSpace(stringValue(node["id"]))
 		classType := strings.TrimSpace(firstNonEmpty(stringValue(node["type"]), stringValue(node["class_type"])))
-		if nodeID == "" || classType == "" {
+		// 画布备注只用于编辑器展示，不是可执行节点。若将其转换进 /prompt，
+		// ComfyUI 会按自定义节点校验，缺少 MarkdownNote 时直接让整个任务失败。
+		if nodeID == "" || classType == "" || isCanvasAnnotationNode(classType) {
 			continue
 		}
 		inputs := make(jsonMap)
@@ -222,6 +227,30 @@ func convertComfyCanvasWorkflow(workflow jsonMap) jsonMap {
 		return nil
 	}
 	return converted
+}
+
+func isCanvasAnnotationNode(classType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(classType))
+	return normalized == "note" ||
+		strings.HasPrefix(normalized, "note:") ||
+		normalized == "markdownnote" ||
+		strings.HasPrefix(normalized, "markdownnote:") ||
+		// rgthree labels are canvas-only headings and must not be sent to /prompt.
+		normalized == "label (rgthree)" ||
+		normalized == "label" ||
+		normalized == "addlabel" ||
+		normalized == "fast groups bypasser (rgthree)" ||
+		normalized == "fast groups bypasser"
+}
+
+func stripCanvasAnnotationNodes(workflow jsonMap) {
+	for nodeID, raw := range workflow {
+		node, ok := mapValue(raw)
+		if !ok || !isCanvasAnnotationNode(firstNonEmpty(stringValue(node["class_type"]), stringValue(node["type"]))) {
+			continue
+		}
+		delete(workflow, nodeID)
+	}
 }
 
 func nodeTitle(node jsonMap) string {
@@ -656,7 +685,7 @@ func resolveSource(source string, field, payload jsonMap, files map[string]strin
 		}
 		return params["size"]
 	case stringIn(normalized, "aspectratio", "ratio", "imageaspectratio", "imageratio", "videoaspectratio", "videoratio"):
-		return aspectRatio(stringValue(params["size"]))
+		return aspectRatioValue(field, params["size"])
 	case stringIn(normalized, "sizewidth", "width", "imagewidth", "videowidth"):
 		return dimensionPart(stringValue(payload["mode"]), stringValue(params["size"]), stringValue(params["vquality"]), 0)
 	case stringIn(normalized, "sizeheight", "height", "imageheight", "videoheight"):
@@ -806,7 +835,16 @@ func pixelDimensions(value string) ([2]int, bool) {
 }
 
 func aspectRatio(value string) any {
-	normalized := regexp.MustCompile(`-(1k|2k|4k)$`).ReplaceAllString(strings.ToLower(strings.TrimSpace(value)), "")
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if match := regexp.MustCompile(`^(\d+)\s*:\s*(\d+)`).FindStringSubmatch(normalized); len(match) == 3 {
+		width, widthErr := strconv.Atoi(match[1])
+		height, heightErr := strconv.Atoi(match[2])
+		if widthErr == nil && heightErr == nil && width > 0 && height > 0 {
+			divisor := gcd(width, height)
+			return fmt.Sprintf("%d:%d", width/divisor, height/divisor)
+		}
+	}
+	normalized = regexp.MustCompile(`-(1k|2k|4k)$`).ReplaceAllString(normalized, "")
 	if parts, ok := ratioParts(normalized); ok {
 		divisor := gcd(parts[0], parts[1])
 		return fmt.Sprintf("%d:%d", parts[0]/divisor, parts[1]/divisor)
@@ -830,6 +868,32 @@ func aspectRatio(value string) any {
 	}
 	divisor := gcd(dimensions[0], dimensions[1])
 	return fmt.Sprintf("%d:%d", dimensions[0]/divisor, dimensions[1]/divisor)
+}
+
+// aspectRatioValue keeps the canonical canvas ratio while restoring the exact
+// enum value expected by ComfyUI nodes such as ResolutionSelector.
+func aspectRatioValue(field jsonMap, value any) any {
+	canonical, _ := aspectRatio(stringValue(value)).(string)
+	if canonical == "" {
+		return value
+	}
+	candidates := sliceValue(field["options"])
+	for _, candidate := range []any{field["value"], field["fieldValue"], field["default"]} {
+		if !emptyWorkflowValue(candidate) {
+			candidates = append(candidates, candidate)
+		}
+	}
+	for _, candidate := range candidates {
+		option := optionString(candidate)
+		if option == "" {
+			continue
+		}
+		optionCanonical, _ := aspectRatio(option).(string)
+		if optionCanonical == canonical {
+			return option
+		}
+	}
+	return canonical
 }
 
 func ratioParts(value string) ([2]int, bool) {

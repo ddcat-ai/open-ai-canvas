@@ -404,6 +404,17 @@ export function retryGenerationTask(id: string) {
     return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/retry`));
 }
 
+export function cancelGenerationTask(id: string) {
+    if (isLocalDreaminaTaskId(id)) {
+        return Promise.reject(new Error("官方即梦 CLI 当前不支持可靠取消"));
+    }
+    return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/cancel`)).then((task) => {
+        window.dispatchEvent(new CustomEvent("canvas:task-cancelled", { detail: { task } }));
+        window.dispatchEvent(new CustomEvent("wallet:updated"));
+        return task;
+    });
+}
+
 export function queryFailedVideoProviderTask(id: string) {
     return request<ProviderTaskQueryResult>(api.post(`/tasks/${encodeURIComponent(id)}/query-provider`));
 }

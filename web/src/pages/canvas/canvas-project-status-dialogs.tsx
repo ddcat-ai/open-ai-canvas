@@ -1,4 +1,5 @@
 import { Button, Image, Modal } from "antd";
+import { XCircle } from "lucide-react";
 
 import { TaskDetailItem } from "./canvas-project-feedback";
 import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
@@ -13,6 +14,7 @@ type CanvasProjectStatusDialogsProps = {
     taskLogs: TaskLog[];
     taskLoading: boolean;
     onCloseTask: () => void;
+    onCancelTask?: (task: GenerationTask) => void;
     superResolveNode: CanvasNodeData | null;
     onCloseSuperResolve: () => void;
     previewNode: CanvasNodeData | null;
@@ -22,7 +24,7 @@ type CanvasProjectStatusDialogsProps = {
     onConfirmClear: () => void;
 };
 
-export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading, superResolveNode, previewNode, clearConfirmOpen, onCloseTask, onCloseSuperResolve, onClosePreview, onCancelClear, onConfirmClear }: CanvasProjectStatusDialogsProps) {
+export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading, superResolveNode, previewNode, clearConfirmOpen, onCloseTask, onCancelTask, onCloseSuperResolve, onClosePreview, onCancelClear, onConfirmClear }: CanvasProjectStatusDialogsProps) {
     const config = useEffectiveConfig();
     return (
         <>
@@ -48,6 +50,13 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                             </div>
                         </div>
                         <TaskGenerationParameters inputJson={task.inputJson} theme={theme} />
+                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                            <div className="flex justify-end">
+                                <Button danger icon={<XCircle className="size-4" />} onClick={() => onCancelTask(task)}>
+                                    取消任务
+                                </Button>
+                            </div>
+                        ) : null}
                         <div>
                             <div className="mb-2 text-xs font-semibold" style={{ color: theme.node.muted }}>
                                 任务日志

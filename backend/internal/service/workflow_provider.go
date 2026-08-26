@@ -57,6 +57,7 @@ type WorkflowField struct {
 	// 仅在本次反序列化期间保留，用于区分旧数据缺字段与用户明确选择“保留默认值”。
 	sourceConfigured bool
 }
+
 // UnmarshalJSON 兼容来源项目的字段配置格式。来源项目使用 node/input/default/
 // bind_prompt，而画布内部使用 nodeId/fieldName/fieldValue/source；在入口统一归一化，
 // 后续 RunningHub 和 Bridge 不需要各自维护一套别名解析。
@@ -961,6 +962,16 @@ func resolveWorkflowFieldValue(field WorkflowField, files map[string]string, inp
 	// 画布参数按 nodeId + fieldName 独立保存时 source 可能为空；枚举字段仍必须
 	// 使用工作流原始 options 的完整值，不能把用户界面上的比例简称直接发给 ComfyUI。
 	if source == "" && strings.EqualFold(strings.TrimSpace(field.FieldName), "aspect_ratio") {
+		// 旧版前端只把比例写入 Config.Size，没有同步改写字段映射。此时不能
+		// 直接使用工作流保存的默认值，否则用户选择 9:16 会在提交前静默回到 1:1。
+		// 仅对非 1:1 的显式比例做回填，避免没有动态参数时覆盖工作流自己的 1:1 默认值。
+		requested := strings.TrimSpace(input.Config.Size)
+		if requested != "" && !strings.EqualFold(workflowAspectRatio(requested), "1:1") {
+			value := workflowAspectRatioValue(field, requested)
+			if strings.TrimSpace(fmt.Sprint(value)) != "" {
+				return value, true, nil
+			}
+		}
 		raw := strings.TrimSpace(workflowOptionString(firstNonNilWorkflowValue(field.FieldValue, field.Value)))
 		if raw != "" {
 			value := workflowAspectRatioValue(field, raw)
@@ -1155,6 +1166,11 @@ func workflowPixelDimensions(value string) ([2]int, bool) {
 
 func workflowAspectRatio(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
+	// RunningHub 的 ResolutionSelector 选项带有展示文案（例如
+	// "9:16 (Portrait Widescreen)"），协议比较只需要比例前缀。
+	if cut := strings.IndexAny(normalized, " ("); cut >= 0 {
+		normalized = strings.TrimSpace(normalized[:cut])
+	}
 	for _, suffix := range []string{"-1k", "-2k", "-4k"} {
 		if strings.HasSuffix(normalized, suffix) {
 			normalized = strings.TrimSuffix(normalized, suffix)

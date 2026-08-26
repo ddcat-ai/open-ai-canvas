@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestCancelTaskRejectsRunningTask(t *testing.T) {
+func TestCancelTaskCancelsRunningTask(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -33,20 +33,24 @@ func TestCancelTaskRejectsRunningTask(t *testing.T) {
 	}
 
 	svc := &Service{repo: repository.New(db)}
-	if _, err := svc.CancelTask(context.Background(), task.UserID, task.ID); err == nil || err.Error() != "任务已发起，无法取消，请等待任务完成" {
+	cancelled, err := svc.CancelTask(context.Background(), task.UserID, task.ID)
+	if err != nil {
 		t.Fatalf("CancelTask() error = %v", err)
+	}
+	if cancelled.Status != model.TaskStatusCancelled {
+		t.Fatalf("CancelTask() status = %s, want cancelled", cancelled.Status)
 	}
 
 	stored, err := svc.repo.TaskForUser(task.UserID, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Status != model.TaskStatusRunning || stored.CompletedAt != nil {
-		t.Fatalf("running task changed after cancellation attempt: status=%s completedAt=%v", stored.Status, stored.CompletedAt)
+	if stored.Status != model.TaskStatusCancelled || stored.CompletedAt == nil {
+		t.Fatalf("running task was not cancelled: status=%s completedAt=%v", stored.Status, stored.CompletedAt)
 	}
 }
 
-func TestCancelTaskRejectsQueuedTaskWithoutChangingBillingState(t *testing.T) {
+func TestCancelTaskCancelsQueuedTask(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -60,16 +64,20 @@ func TestCancelTaskRejectsQueuedTaskWithoutChangingBillingState(t *testing.T) {
 	}
 
 	svc := &Service{repo: repository.New(db)}
-	if _, err := svc.CancelTask(context.Background(), task.UserID, task.ID); err == nil || err.Error() != "任务已发起，无法取消，请等待任务完成" {
+	cancelled, err := svc.CancelTask(context.Background(), task.UserID, task.ID)
+	if err != nil {
 		t.Fatalf("CancelTask() error = %v", err)
+	}
+	if cancelled.Status != model.TaskStatusCancelled {
+		t.Fatalf("CancelTask() status = %s, want cancelled", cancelled.Status)
 	}
 
 	storedTask, err := svc.repo.TaskForUser(task.UserID, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if storedTask.Status != model.TaskStatusQueued || storedTask.CompletedAt != nil {
-		t.Fatalf("queued task changed after cancellation attempt: status=%s completedAt=%v", storedTask.Status, storedTask.CompletedAt)
+	if storedTask.Status != model.TaskStatusCancelled || storedTask.CompletedAt == nil {
+		t.Fatalf("queued task was not cancelled: status=%s completedAt=%v", storedTask.Status, storedTask.CompletedAt)
 	}
 }
 
@@ -92,7 +100,7 @@ func TestCancelTaskRejectsTaskWithProviderRequestID(t *testing.T) {
 	}
 
 	svc := &Service{repo: repository.New(db)}
-	if _, err := svc.CancelTask(context.Background(), task.UserID, task.ID); err == nil || err.Error() != "任务已发起，无法取消，请等待任务完成" {
+	if _, err := svc.CancelTask(context.Background(), task.UserID, task.ID); err == nil || err.Error() != "任务当前状态为 failed，无法取消" {
 		t.Fatalf("CancelTask() error = %v", err)
 	}
 

@@ -110,6 +110,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 	defer close(leaseDone)
 	s.registerActiveTask(task.ID, cancel)
 	defer s.unregisterActiveTask(task.ID)
+	// 取消请求可能在任务领取和注册 worker context 之间到达；再次读取终态
+	// 可以避免这种极窄窗口仍然向上游发起调用。
+	if latest, latestErr := s.repo.Task(task.ID); latestErr == nil && latest.Status == model.TaskStatusCancelled {
+		return terminal.handleAlreadyCancelled(*latest)
+	}
 
 	task.Stage = "调用生成模型"
 	task.Progress = 35

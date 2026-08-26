@@ -94,15 +94,22 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
         });
     }, [canvasWidth]);
 
-    useEffect(() => () => {
-        abortRef.current?.abort();
-        Object.values(filesRef.current).flat().forEach((item) => URL.revokeObjectURL(item.url));
-    }, []);
+    useEffect(
+        () => () => {
+            abortRef.current?.abort();
+            Object.values(filesRef.current)
+                .flat()
+                .forEach((item) => URL.revokeObjectURL(item.url));
+        },
+        [],
+    );
 
     const replaceFiles = (kind: MediaKind, selected: FileList | null) => {
         if (!selected?.length) return;
         const limit = Math.max(1, slots[kind]);
-        const next = Array.from(selected).slice(0, limit).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
+        const next = Array.from(selected)
+            .slice(0, limit)
+            .map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
         setFiles((current) => {
             current[kind].forEach((item) => URL.revokeObjectURL(item.url));
             return { ...current, [kind]: next };
@@ -110,7 +117,9 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
     };
 
     const resetTest = () => {
-        Object.values(files).flat().forEach((item) => URL.revokeObjectURL(item.url));
+        Object.values(files)
+            .flat()
+            .forEach((item) => URL.revokeObjectURL(item.url));
         setFiles({ image: [], video: [], audio: [] });
         setPrompt("");
         setFieldValues(initialFieldValues(fields, config));
@@ -180,20 +189,34 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
             <div className="workflow-test-toolbar">
                 <div className="min-w-0">
                     <strong>{title || workflowId || "未选择工作流"}</strong>
-                    <span>{provider === "runninghub" ? "RunningHub" : "ComfyUI Bridge"} · {capabilityName(capability)}工作流 · 测试值不会覆盖保存配置</span>
+                    <span>
+                        {provider === "runninghub" ? "RunningHub" : "ComfyUI Bridge"} · {capabilityName(capability)}工作流 · 测试值不会覆盖保存配置
+                    </span>
                 </div>
                 <div className="workflow-test-toolbar-actions">
-                    <Button icon={<RotateCcw className="size-4" />} disabled={running} onClick={resetTest}>重置测试</Button>
-                    {running ? <Button danger icon={<Square className="size-4" />} onClick={stopTest}>停止等待</Button> : <Button type="primary" icon={<Play className="size-4" />} disabled={disabled} onClick={() => void runTest()}>运行测试</Button>}
+                    <Button icon={<RotateCcw className="size-4" />} disabled={running} onClick={resetTest}>
+                        重置测试
+                    </Button>
+                    {running ? (
+                        <Button danger icon={<Square className="size-4" />} onClick={stopTest}>
+                            停止等待
+                        </Button>
+                    ) : (
+                        <Button type="primary" icon={<Play className="size-4" />} disabled={disabled} onClick={() => void runTest()}>
+                            运行测试
+                        </Button>
+                    )}
                 </div>
             </div>
             {disabled && disabledReason ? <div className="workflow-test-notice">{disabledReason}</div> : null}
             <div className="workflow-test-canvas-scroll">
                 <div ref={canvasRef} className="workflow-test-canvas" data-canvas-no-zoom>
                     <svg className="workflow-test-lines" aria-hidden="true" viewBox={`0 0 ${canvasWidth} 760`} preserveAspectRatio="none">
-                    <WorkflowLine from={positions.prompt} to={positions.workflow} fromWidth={284} toOffsetY={74} />
-                    {visibleMediaKinds.map((kind, index) => <WorkflowLine key={kind} from={positions[kind]} to={positions.workflow} fromWidth={284} fromOffsetY={64} toOffsetY={112 + index * 26} />)}
-                    <WorkflowLine from={positions.workflow} to={positions.output} fromWidth={324} fromOffsetY={84} toOffsetY={70} />
+                        <WorkflowLine from={positions.prompt} to={positions.workflow} fromWidth={284} toOffsetY={74} />
+                        {visibleMediaKinds.map((kind, index) => (
+                            <WorkflowLine key={kind} from={positions[kind]} to={positions.workflow} fromWidth={284} fromOffsetY={64} toOffsetY={112 + index * 26} />
+                        ))}
+                        <WorkflowLine from={positions.workflow} to={positions.output} fromWidth={324} fromOffsetY={84} toOffsetY={70} />
                     </svg>
 
                     <WorkflowNode id="prompt" title="提示词" icon={<WandSparkles />} position={positions.prompt} onMove={(point) => setPositions((current) => ({ ...current, prompt: point }))}>
@@ -201,24 +224,39 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
                     </WorkflowNode>
 
                     {visibleMediaKinds.map((kind) => (
-                        <WorkflowNode key={kind} id={kind} title={`${kind === "image" && maskEnabled ? "图片 / 蒙版" : mediaName(kind)}素材 · ${slots[kind]} 个槽位`} icon={mediaIcon(kind)} position={positions[kind]} onMove={(point) => setPositions((current) => ({ ...current, [kind]: point }))}>
+                        <WorkflowNode
+                            key={kind}
+                            id={kind}
+                            title={`${kind === "image" && maskEnabled ? "图片 / 蒙版" : mediaName(kind)}素材 · ${slots[kind]} 个槽位`}
+                            icon={mediaIcon(kind)}
+                            position={positions[kind]}
+                            onMove={(point) => setPositions((current) => ({ ...current, [kind]: point }))}
+                        >
                             <MediaPicker kind={kind} limit={slots[kind]} files={files[kind]} maskIndex={kind === "image" && maskEnabled ? imageReferenceCount : undefined} onChange={(selected) => replaceFiles(kind, selected)} />
                         </WorkflowNode>
                     ))}
 
                     <WorkflowNode id="workflow" title={title || "工作流动态参数"} icon={<Grip />} position={positions.workflow} wide onMove={(point) => setPositions((current) => ({ ...current, workflow: point }))}>
                         <div className="workflow-test-parameters">
-                            {parameterFields.length ? parameterFields.map((field) => {
-                                const key = testFieldKey(field);
-                                return <WorkflowParameter key={key} field={field} value={fieldValues[key]} onChange={(value) => setFieldValues((current) => ({ ...current, [key]: value }))} />;
-                            }) : <span className="workflow-test-empty-text">此工作流没有额外动态参数</span>}
+                            {parameterFields.length ? (
+                                parameterFields.map((field) => {
+                                    const key = testFieldKey(field);
+                                    return <WorkflowParameter key={key} field={field} value={fieldValues[key]} onChange={(value) => setFieldValues((current) => ({ ...current, [key]: value }))} />;
+                                })
+                            ) : (
+                                <span className="workflow-test-empty-text">此工作流没有额外动态参数</span>
+                            )}
                         </div>
                     </WorkflowNode>
 
-                    <WorkflowNode id="output" title={`${capabilityName(capability)}输出`} icon={capability === "image" ? <FileImage /> : capability === "video" ? <Film /> : <FileAudio />} position={positions.output} onMove={(point) => setPositions((current) => ({ ...current, output: point }))}>
-                        <div className="workflow-test-output">
-                            {resultUrls.length ? <ResultPreview capability={capability} urls={resultUrls} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error || stage} />}
-                        </div>
+                    <WorkflowNode
+                        id="output"
+                        title={`${capabilityName(capability)}输出`}
+                        icon={capability === "image" ? <FileImage /> : capability === "video" ? <Film /> : <FileAudio />}
+                        position={positions.output}
+                        onMove={(point) => setPositions((current) => ({ ...current, output: point }))}
+                    >
+                        <div className="workflow-test-output">{resultUrls.length ? <ResultPreview capability={capability} urls={resultUrls} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error || stage} />}</div>
                         <Progress percent={progress} size="small" status={error ? "exception" : running ? "active" : undefined} showInfo={running || progress > 0} />
                     </WorkflowNode>
                 </div>
@@ -251,13 +289,18 @@ function WorkflowNode({ id, title, icon, position, onMove, wide = false, childre
         dragRef.current = null;
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
-    return <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id}>
-        <div className="workflow-test-node-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
-            <span>{icon}</span><strong title={title}>{title}</strong><Grip className="workflow-test-node-grip" />
-        </div>
-        <div className="workflow-test-node-body">{children}</div>
-        <i className="workflow-test-port is-input" /><i className="workflow-test-port is-output" />
-    </section>;
+    return (
+        <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id}>
+            <div className="workflow-test-node-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
+                <span>{icon}</span>
+                <strong title={title}>{title}</strong>
+                <Grip className="workflow-test-node-grip" />
+            </div>
+            <div className="workflow-test-node-body">{children}</div>
+            <i className="workflow-test-port is-input" />
+            <i className="workflow-test-port is-output" />
+        </section>
+    );
 }
 
 function WorkflowLine({ from, to, fromWidth, fromOffsetY = 54, toOffsetY }: { from: Point; to: Point; fromWidth: number; fromOffsetY?: number; toOffsetY: number }) {
@@ -270,40 +313,104 @@ function WorkflowLine({ from, to, fromWidth, fromOffsetY = 54, toOffsetY }: { fr
 }
 
 function MediaPicker({ kind, limit, files, maskIndex, onChange }: { kind: MediaKind; limit: number; files: TestFile[]; maskIndex?: number; onChange: (files: FileList | null) => void }) {
-    return <label className="workflow-test-upload">
-        <input type="file" hidden multiple={limit > 1} accept={kind === "image" ? "image/*" : kind === "video" ? "video/*" : "audio/*"} onChange={(event) => { onChange(event.target.files); event.currentTarget.value = ""; }} />
-        {files.length ? <div className="workflow-test-file-list">{files.map((item, index) => <span key={item.id} title={item.file.name}>{kind === "image" ? <img src={item.url} alt="" /> : mediaIcon(kind)}<b>{maskIndex === index ? "蒙版" : index + 1}</b><em>{item.file.name}</em></span>)}</div> : <span><Upload />选择{mediaName(kind)}（最多 {limit} 个）</span>}
-    </label>;
+    return (
+        <label className="workflow-test-upload">
+            <input
+                type="file"
+                hidden
+                multiple={limit > 1}
+                accept={kind === "image" ? "image/*" : kind === "video" ? "video/*" : "audio/*"}
+                onChange={(event) => {
+                    onChange(event.target.files);
+                    event.currentTarget.value = "";
+                }}
+            />
+            {files.length ? (
+                <div className="workflow-test-file-list">
+                    {files.map((item, index) => (
+                        <span key={item.id} title={item.file.name}>
+                            {kind === "image" ? <img src={item.url} alt="" /> : mediaIcon(kind)}
+                            <b>{maskIndex === index ? "蒙版" : index + 1}</b>
+                            <em>{item.file.name}</em>
+                        </span>
+                    ))}
+                </div>
+            ) : (
+                <span>
+                    <Upload />
+                    选择{mediaName(kind)}（最多 {limit} 个）
+                </span>
+            )}
+        </label>
+    );
 }
 
 function WorkflowParameter({ field, value, onChange }: { field: WorkflowFieldMapping; value: unknown; onChange: (value: unknown) => void }) {
     const label = field.label || field.fieldName;
     const type = String(field.fieldType || "").toUpperCase();
-    if (field.randomEnabled && !field.source) return <label><span title={`${field.nodeId}.${field.fieldName}`}>{label}<small>{field.nodeId}.{field.fieldName}</small></span><Input value="每次运行随机生成" disabled /></label>;
-    return <label><span title={`${field.nodeId}.${field.fieldName}`}>{label}<small>{field.nodeId}.{field.fieldName}</small></span>{Array.isArray(field.options) && field.options.length
-        ? <Select showSearch value={value} options={field.options.map((option) => ({ label: String(option), value: option }))} onChange={onChange} />
-        : type === "BOOLEAN" || typeof value === "boolean"
-            ? <Switch checked={value === true || value === "true"} onChange={onChange} />
-            : type === "NUMBER" || typeof value === "number"
-                ? <InputNumber className="w-full" value={numberValue(value)} min={numberValue(field.min)} max={numberValue(field.max)} step={numberValue(field.step)} onChange={onChange} />
-                : <Input value={displayValue(value)} onChange={(event) => onChange(event.target.value)} />}</label>;
+    if (field.randomEnabled && !field.source)
+        return (
+            <label>
+                <span title={`${field.nodeId}.${field.fieldName}`}>
+                    {label}
+                    <small>
+                        {field.nodeId}.{field.fieldName}
+                    </small>
+                </span>
+                <Input value="每次运行随机生成" disabled />
+            </label>
+        );
+    return (
+        <label>
+            <span title={`${field.nodeId}.${field.fieldName}`}>
+                {label}
+                <small>
+                    {field.nodeId}.{field.fieldName}
+                </small>
+            </span>
+            {Array.isArray(field.options) && field.options.length ? (
+                <Select showSearch value={value} options={field.options.map((option) => ({ label: String(option), value: option }))} onChange={onChange} />
+            ) : type === "BOOLEAN" || typeof value === "boolean" ? (
+                <Switch checked={value === true || value === "true"} onChange={onChange} />
+            ) : type === "NUMBER" || typeof value === "number" ? (
+                <InputNumber className="w-full" value={numberValue(value)} min={numberValue(field.min)} max={numberValue(field.max)} step={numberValue(field.step)} onChange={onChange} />
+            ) : (
+                <Input value={displayValue(value)} onChange={(event) => onChange(event.target.value)} />
+            )}
+        </label>
+    );
 }
 
 function ResultPreview({ capability, urls }: { capability: RunningHubCapability; urls: string[] }) {
     if (capability === "video") return <video src={urls[0]} controls playsInline />;
     if (capability === "audio") return <audio src={urls[0]} controls />;
-    return <div className="workflow-test-image-results">{urls.map((url) => <img key={url} src={url} alt="工作流测试输出" />)}</div>;
+    return (
+        <div className="workflow-test-image-results">
+            {urls.map((url) => (
+                <img key={url} src={url} alt="工作流测试输出" />
+            ))}
+        </div>
+    );
 }
 
 // 测试参数只写入本次任务配置副本，正式工作流仍由设置页的显式保存动作维护。
 function buildTestConfig(config: AiConfig, provider: WorkflowProvider, workflowId: string, workflowKind: "workflow" | "app", fields: WorkflowFieldMapping[], values: Record<string, unknown>): AiConfig {
-    const patchedFields = fields.map((field) => ({ ...field, ...(!field.source ? { fieldValue: values[testFieldKey(field)] } : {}) }));
+    const patchedFields = fields.map((field) => {
+        const value = values[testFieldKey(field)];
+        return value === undefined ? { ...field } : { ...field, fieldValue: value };
+    });
     const next: AiConfig = { ...config, taskWorkflowProvider: provider };
     applySourceValues(next, fields, values);
     if (provider === "runninghub") {
-        next.runningHub = { ...config.runningHub, enabled: true, workflowId, selectedKind: workflowKind, workflows: config.runningHub.workflows.map((item) => item.workflowId.trim() === workflowId.trim() && (item.kind === "app" ? "app" : "workflow") === workflowKind ? { ...item, fields: patchedFields } : item) };
+        next.runningHub = {
+            ...config.runningHub,
+            enabled: true,
+            workflowId,
+            selectedKind: workflowKind,
+            workflows: config.runningHub.workflows.map((item) => (item.workflowId.trim() === workflowId.trim() && (item.kind === "app" ? "app" : "workflow") === workflowKind ? { ...item, fields: patchedFields } : item)),
+        };
     } else {
-        next.comfyBridge = { ...config.comfyBridge, enabled: true, workflowId, workflows: config.comfyBridge.workflows.map((item) => item.workflowId.trim() === workflowId.trim() ? { ...item, fields: patchedFields } : item) };
+        next.comfyBridge = { ...config.comfyBridge, enabled: true, workflowId, workflows: config.comfyBridge.workflows.map((item) => (item.workflowId.trim() === workflowId.trim() ? { ...item, fields: patchedFields } : item)) };
     }
     return next;
 }
@@ -331,8 +438,9 @@ function initialFieldValues(fields: WorkflowFieldMapping[], config: AiConfig) {
     fields.forEach((field) => {
         if (isPromptOrMediaSource(String(field.source || ""))) return;
         const source = String(field.source || "");
+        const workflowValue = field.fieldValue ?? field.value ?? field.defaultValue ?? field.default;
         const configValue = source === "aspectRatio" ? config.size : source === "width" ? dimensionFromSize(config.size, 0) : source === "height" ? dimensionFromSize(config.size, 1) : (config as unknown as Record<string, unknown>)[source];
-        values[testFieldKey(field)] = configValue !== undefined && configValue !== "" ? configValue : field.fieldValue ?? field.value ?? field.default ?? "";
+        values[testFieldKey(field)] = workflowValue !== undefined && workflowValue !== "" ? workflowValue : configValue !== undefined && configValue !== "" ? configValue : "";
     });
     return values;
 }
@@ -388,7 +496,7 @@ function missingRequiredInput(fields: WorkflowFieldMapping[], prompt: string, fi
 }
 
 function referenceImageSlotCount(fields: WorkflowFieldMapping[]) {
-    return fields.reduce((count, field) => field.source === "referenceImage" ? Math.max(count, Number(field.imageOrder) || Number(field.sourceIndex) + 1 || 1) : count, 0);
+    return fields.reduce((count, field) => (field.source === "referenceImage" ? Math.max(count, Number(field.imageOrder) || Number(field.sourceIndex) + 1 || 1) : count), 0);
 }
 
 function isPromptOrMediaSource(source: string) {
@@ -397,31 +505,65 @@ function isPromptOrMediaSource(source: string) {
 
 function generationResultUrls(result: BackendGenerationResult | null, capability: RunningHubCapability) {
     const media = capability === "image" ? result?.images || [] : capability === "video" ? (result?.video ? [result.video] : []) : result?.audio ? [result.audio] : [];
-    return media.map((item) => {
-        const resourceId = resourceIdFromStorageKey(item.storageKey);
-        return resourceId ? resourceFileUrl(resourceId) : item.dataUrl || "";
-    }).filter(Boolean);
+    return media
+        .map((item) => {
+            const resourceId = resourceIdFromStorageKey(item.storageKey);
+            return resourceId ? resourceFileUrl(resourceId) : item.dataUrl || "";
+        })
+        .filter(Boolean);
 }
 
-function toReferenceImage(item: TestFile): ReferenceImage { return { id: item.id, name: item.file.name, type: item.file.type, dataUrl: item.url, bytes: item.file.size }; }
-function toReferenceVideo(item: TestFile): ReferenceVideo { return { id: item.id, name: item.file.name, type: item.file.type, url: item.url, bytes: item.file.size }; }
-function toReferenceAudio(item: TestFile): ReferenceAudio { return { id: item.id, name: item.file.name, type: item.file.type, url: item.url, bytes: item.file.size }; }
+function toReferenceImage(item: TestFile): ReferenceImage {
+    return { id: item.id, name: item.file.name, type: item.file.type, dataUrl: item.url, bytes: item.file.size };
+}
+function toReferenceVideo(item: TestFile): ReferenceVideo {
+    return { id: item.id, name: item.file.name, type: item.file.type, url: item.url, bytes: item.file.size };
+}
+function toReferenceAudio(item: TestFile): ReferenceAudio {
+    return { id: item.id, name: item.file.name, type: item.file.type, url: item.url, bytes: item.file.size };
+}
 function dimensionFromSize(size: string, index: number) {
     const normalized = size.toLowerCase().trim();
     const pixels = normalized.split("x");
     if (pixels.length === 2 && pixels.every((item) => Number(item.trim()) > 0)) return pixels[index]?.trim() || "";
-    const ratio = normalized.replace(/-(1k|2k|4k)$/, "").split(":").map(Number);
+    const ratio = normalized
+        .replace(/-(1k|2k|4k)$/, "")
+        .split(":")
+        .map(Number);
     if (ratio.length !== 2 || ratio.some((item) => !Number.isFinite(item) || item <= 0)) return "";
     const longEdgeTier = normalized.endsWith("-4k") ? 3840 : normalized.endsWith("-2k") ? 2048 : 0;
-    const dimensions = longEdgeTier > 0
-        ? ratio[0] >= ratio[1] ? [longEdgeTier, Math.round(longEdgeTier * ratio[1] / ratio[0])] : [Math.round(longEdgeTier * ratio[0] / ratio[1]), longEdgeTier]
-        : ratio[0] >= ratio[1] ? [Math.round(1024 * ratio[0] / ratio[1]), 1024] : [1024, Math.round(1024 * ratio[1] / ratio[0])];
+    const dimensions =
+        longEdgeTier > 0
+            ? ratio[0] >= ratio[1]
+                ? [longEdgeTier, Math.round((longEdgeTier * ratio[1]) / ratio[0])]
+                : [Math.round((longEdgeTier * ratio[0]) / ratio[1]), longEdgeTier]
+            : ratio[0] >= ratio[1]
+              ? [Math.round((1024 * ratio[0]) / ratio[1]), 1024]
+              : [1024, Math.round((1024 * ratio[1]) / ratio[0])];
     return String(dimensions[index]);
 }
-function isEmptyTestValue(value: unknown) { return value === undefined || value === null || (typeof value === "string" && !value.trim()); }
-function numberValue(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined; }
-function displayValue(value: unknown) { return value === undefined || value === null ? "" : typeof value === "string" ? value : JSON.stringify(value); }
-function capabilityName(value: RunningHubCapability) { return value === "video" ? "视频" : value === "audio" ? "音频" : "图片"; }
-function mediaName(value: MediaKind) { return value === "video" ? "视频" : value === "audio" ? "音频" : "图片"; }
-function mediaIcon(value: MediaKind) { return value === "video" ? <Film /> : value === "audio" ? <FileAudio /> : <FileImage />; }
-function taskStageLabel(status: string, stage?: string) { if (status === "queued") return "任务已排队"; if (status === "succeeded") return "正在读取结果"; if (status === "failed") return "任务失败"; return stage ? `运行中 · ${stage}` : "工作流运行中"; }
+function isEmptyTestValue(value: unknown) {
+    return value === undefined || value === null || (typeof value === "string" && !value.trim());
+}
+function numberValue(value: unknown) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+function displayValue(value: unknown) {
+    return value === undefined || value === null ? "" : typeof value === "string" ? value : JSON.stringify(value);
+}
+function capabilityName(value: RunningHubCapability) {
+    return value === "video" ? "视频" : value === "audio" ? "音频" : "图片";
+}
+function mediaName(value: MediaKind) {
+    return value === "video" ? "视频" : value === "audio" ? "音频" : "图片";
+}
+function mediaIcon(value: MediaKind) {
+    return value === "video" ? <Film /> : value === "audio" ? <FileAudio /> : <FileImage />;
+}
+function taskStageLabel(status: string, stage?: string) {
+    if (status === "queued") return "任务已排队";
+    if (status === "succeeded") return "正在读取结果";
+    if (status === "failed") return "任务失败";
+    return stage ? `运行中 · ${stage}` : "工作流运行中";
+}

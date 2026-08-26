@@ -1,10 +1,4 @@
-import {
-    normalizeRunningHubCapability,
-    type AiConfig,
-    type RunningHubCapability,
-    type RunningHubWorkflowKind,
-    type WorkflowFieldMapping,
-} from "@/stores/use-config-store";
+import { normalizeRunningHubCapability, type AiConfig, type RunningHubCapability, type RunningHubWorkflowKind, type WorkflowFieldMapping } from "@/stores/use-config-store";
 
 export type GenerationWorkflowMode = "text" | "image" | "video" | "audio";
 
@@ -100,5 +94,7 @@ function workflowCapabilityName(value: GenerationWorkflowMode) {
 }
 
 function workflowTaskModel(prefix: string, name: string) {
-    return `${prefix}${Array.from(name).slice(0, Math.max(0, 120 - prefix.length)).join("")}`;
+    return `${prefix}${Array.from(name)
+        .slice(0, Math.max(0, 120 - prefix.length))
+        .join("")}`;
 }

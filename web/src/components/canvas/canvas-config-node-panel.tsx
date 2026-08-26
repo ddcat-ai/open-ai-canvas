@@ -107,9 +107,14 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         if (mode === "text") return;
         if (workflowProvider === "runninghub" && !node.metadata?.runningHubWorkflowId?.trim()) {
             const capability = normalizeRunningHubCapability(globalConfig.runningHub.capability);
-            const workflow = globalConfig.runningHub.workflows.find((item) => item.workflowId.trim() === globalConfig.runningHub.workflowId.trim() && runningHubWorkflowKind(item) === globalConfig.runningHub.selectedKind)
-                || globalConfig.runningHub.workflows.find((item) => normalizeRunningHubCapability(item.capability, capability) === capability)
-                || globalConfig.runningHub.workflows[0];
+            // 模式切换后优先按当前能力选择工作流，不能沿用全局默认的视频工作流，
+            // 否则点击“生图”会在下一次渲染时被自动改回“视频”。
+            const workflow = globalConfig.runningHub.workflows.find((item) => (
+                normalizeRunningHubCapability(item.capability, capability) === workflowCapability
+                && item.workflowId.trim() === globalConfig.runningHub.workflowId.trim()
+                && runningHubWorkflowKind(item) === globalConfig.runningHub.selectedKind
+            ))
+                || globalConfig.runningHub.workflows.find((item) => normalizeRunningHubCapability(item.capability, capability) === workflowCapability);
             if (workflow) {
                 const workflowMode = normalizeRunningHubCapability(workflow.capability, capability);
                 onConfigChange(node.id, { generationMode: workflowMode, runningHubWorkflowId: workflow.workflowId, runningHubWorkflowKind: runningHubWorkflowKind(workflow), workflowParameters: {} });
@@ -117,7 +122,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             return;
         }
         if (workflowProvider === "comfyui" && !node.metadata?.comfyBridgeWorkflowId?.trim()) {
-            const workflow = globalConfig.comfyBridge.workflows.find((item) => item.capability === workflowCapability) || globalConfig.comfyBridge.workflows[0];
+            const workflow = globalConfig.comfyBridge.workflows.find((item) => item.capability === workflowCapability);
             if (workflow) onConfigChange(node.id, { generationMode: workflow.capability, comfyBridgeWorkflowId: workflow.workflowId, workflowParameters: {} });
         }
     }, [globalConfig.comfyBridge.workflows, globalConfig.comfyBridge.workflowId, globalConfig.runningHub.capability, globalConfig.runningHub.selectedKind, globalConfig.runningHub.workflowId, globalConfig.runningHub.workflows, mode, node.id, node.metadata?.comfyBridgeWorkflowId, node.metadata?.runningHubWorkflowId, onConfigChange, workflowCapability, workflowProvider]);
@@ -167,7 +172,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         <div className={workflowProvider === "model" ? "flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" : "thin-scrollbar flex h-full w-full cursor-move flex-col gap-3 overflow-y-auto px-3 pb-3 pt-7 text-sm"} style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
             <div className={workflowProvider === "model" ? "mb-2 flex items-center justify-between gap-3" : "flex min-h-8 items-center justify-between gap-3"}>
                 <div className="shrink-0 text-sm font-semibold">{simpleMode ? "快速生成" : workflowProvider === "model" ? "生成配置" : "工作流生成"}</div>
-                {simpleMode ? <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
+                {simpleMode ? <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
                         className="canvas-config-mode !rounded-md !p-0.5"
@@ -261,21 +266,25 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 <div className={workflowProvider === "model" ? "mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" : "rounded-lg px-2 py-2 text-[var(--fs-label)]"} style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
             ) : (
                 <div className={workflowProvider === "model" ? "mb-2" : "flex min-w-0 flex-col gap-3"}>
-                    {workflowProvider !== "model" && mode !== "text" ? <Segmented
-                        block
-                        size="small"
-                        className="canvas-config-provider"
-                        value={workflowProvider}
-                        options={[{ label: "RunningHub", value: "runninghub" }, { label: "ComfyUI", value: "comfyui" }]}
-                        onChange={(value) => {
-                            const nextProvider = value as "runninghub" | "comfyui";
-                            if (nextProvider === "runninghub") {
-                                onConfigChange(node.id, { workflowProvider: "runninghub", workflowTitle: "RunningHub 工作流", comfyBridgeWorkflowId: undefined, workflowParameters: {} });
-                            } else {
-                                onConfigChange(node.id, { workflowProvider: "comfyui", workflowTitle: "ComfyUI Bridge", runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, workflowParameters: {} });
-                            }
-                        }}
-                    /> : null}
+                    {mode !== "text" ? <div data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                        <Segmented
+                            block
+                            size="small"
+                            className="canvas-config-provider"
+                            value={workflowProvider}
+                            options={[{ label: "基础模型", value: "model" }, { label: "RunningHub", value: "runninghub" }, { label: "ComfyUI", value: "comfyui" }]}
+                            onChange={(value) => {
+                                const nextProvider = value as "model" | "runninghub" | "comfyui";
+                                if (nextProvider === "model") {
+                                    onConfigChange(node.id, { workflowProvider: "model", workflowTitle: undefined, runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, comfyBridgeWorkflowId: undefined, workflowParameters: {} });
+                                } else if (nextProvider === "runninghub") {
+                                    onConfigChange(node.id, { workflowProvider: "runninghub", workflowTitle: "RunningHub 工作流", comfyBridgeWorkflowId: undefined, workflowParameters: {} });
+                                } else {
+                                    onConfigChange(node.id, { workflowProvider: "comfyui", workflowTitle: "ComfyUI Bridge", runningHubWorkflowId: undefined, runningHubWorkflowKind: undefined, workflowParameters: {} });
+                                }
+                            }}
+                        />
+                    </div> : null}
                     <div data-canvas-no-zoom className={workflowProvider === "model" ? "grid min-w-0 cursor-default grid-cols-[minmax(0,1fr)_148px] items-center gap-2" : "grid min-w-0 cursor-default items-center gap-3"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     {workflowProvider === "runninghub" ? (
                         <Select<string, WorkflowSelectOption>

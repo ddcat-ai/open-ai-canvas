@@ -23,6 +23,7 @@ type RunningHubWorkflowFetchRequest struct {
 	Title        string `json:"title,omitempty"`
 	Capability   string `json:"capability,omitempty"`
 }
+
 func (s *Service) FetchRunningHubWorkflowInfo(ctx context.Context, req RunningHubWorkflowFetchRequest) (map[string]any, error) {
 	workflowID := strings.TrimSpace(req.WorkflowID)
 	if workflowID == "" {

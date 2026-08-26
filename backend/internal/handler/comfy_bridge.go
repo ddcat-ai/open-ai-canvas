@@ -18,6 +18,9 @@ import (
 // Bridge 结果通常包含 base64 媒体；保持和 service 层相同的硬上限，避免请求体无限增长。
 const maxComfyBridgeRequestBytes int64 = 64 << 20
 
+// Bridge 心跳会携带本机工作流字段和拓扑，允许与 service 层一致的 4MB 上限。
+const maxComfyBridgeCapabilitiesBytes int64 = 4 << 20
+
 type comfyBridgeResultRequest struct {
 	RequestID string         `json:"requestId"`
 	ID        string         `json:"id,omitempty"`
@@ -25,6 +28,7 @@ type comfyBridgeResultRequest struct {
 	Result    map[string]any `json:"result,omitempty"`
 	Error     string         `json:"error,omitempty"`
 }
+
 // RegisterComfyBridgeRoutes 同时注册用户管理接口和 Bridge 专用轮询接口。
 // 两套接口使用不同认证方式：用户接口依赖登录 Cookie，Bridge 接口只接受专用 Header Token。
 func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
@@ -142,7 +146,7 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 		var req struct {
 			Capabilities map[string]any `json:"capabilities,omitempty"`
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxComfyBridgeCapabilitiesBytes)
 		if c.Request.ContentLength != 0 {
 			if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
 				fail(c, http.StatusBadRequest, err)
