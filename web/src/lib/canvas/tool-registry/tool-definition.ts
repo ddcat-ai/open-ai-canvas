@@ -132,6 +132,8 @@ export type ToolContext = {
 export type AddNodeMenuContext = {
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;
+    /** 内置应用插件的启用状态；未声明时视为未提供 gating 信息。 */
+    enabledPluginIds?: ReadonlySet<string>;
     handlers: Pick<ToolbarHandlers,
         | "onAddText"
         | "onAddImage"

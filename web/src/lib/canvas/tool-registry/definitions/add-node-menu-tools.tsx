@@ -2,6 +2,8 @@ import { Clapperboard, Folder, FolderOpen, Image as ImageIcon, Layers3, Music2, 
 
 import { getNodeIcon, getNodeLabel } from "@/lib/canvas/node-registry";
 import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
+import { PortraitClearanceIcon } from "@/components/canvas/portrait-clearance/portrait-clearance-icon";
+import { PORTRAIT_CLEARANCE_NODE_TYPE, PORTRAIT_CLEARANCE_PLUGIN_ID } from "@/lib/portrait-clearance/contracts";
 import { CanvasNodeType, type CanvasNodeTypeId } from "@/types/canvas";
 
 /** 真正创建节点的命令，文案与图标统一取自节点注册表。 */
@@ -41,6 +43,15 @@ export const addNodeMenuCommands: AddNodeMenuCommand[] = [
     extensionCommand(CanvasNodeType.ColorGrade, 70),
     // 云端和本地工作流共用独立配置节点，不进入基础模型节点的渠道选择。
     { id: "workflow", label: "工作流", icon: <Workflow />, section: "workflow", defaultOrder: 10, applicable: (ctx) => ctx.workspaceMode !== "simple", run: (ctx) => ctx.handlers.onAddWorkflow() },
+    {
+        id: PORTRAIT_CLEARANCE_NODE_TYPE,
+        label: getNodeLabel(PORTRAIT_CLEARANCE_NODE_TYPE),
+        icon: <PortraitClearanceIcon />,
+        section: "extension",
+        defaultOrder: 80,
+        applicable: (ctx) => Boolean(ctx.enabledPluginIds?.has(PORTRAIT_CLEARANCE_PLUGIN_ID)),
+        run: (ctx) => ctx.handlers.onAddExtensionNode(PORTRAIT_CLEARANCE_NODE_TYPE),
+    },
     // 导入资源
     { id: "upload", label: "上传文件", icon: <UploadCloud />, section: "resource", defaultOrder: 10, run: (ctx) => ctx.handlers.onUpload() },
     { id: "project-character", label: "添加角色卡", icon: <UserRound />, section: "resource", defaultOrder: 20, applicable: (ctx) => ctx.isProjectLinked, run: (ctx) => ctx.handlers.onOpenProjectCharacters() },

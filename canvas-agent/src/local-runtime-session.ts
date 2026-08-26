@@ -14,7 +14,7 @@ const REQUEST_CLOCK_SKEW_MS = 30_000;
 const MAX_SESSION_NONCES = 2_048;
 const MAX_PENDING_CHALLENGES = 64;
 
-const DEFAULT_SCOPES: readonly LocalRuntimeScope[] = [
+export const LOCAL_RUNTIME_DEFAULT_SCOPES: readonly LocalRuntimeScope[] = [
     "runtime:status",
     "runtime:revoke",
     "canvas:connect",
@@ -122,7 +122,7 @@ export class LocalRuntimeSessionManager {
         this.registrations = options.registrations;
         this.persistRegistrations = options.persistRegistrations ?? (() => undefined);
         this.now = options.now ?? Date.now;
-        this.scopes = options.scopes ?? DEFAULT_SCOPES;
+        this.scopes = options.scopes ?? LOCAL_RUNTIME_DEFAULT_SCOPES;
         this.onSessionRevoked = options.onSessionRevoked;
         this.timers = options.timers ?? {
             setTimeout(callback, delayMs) {

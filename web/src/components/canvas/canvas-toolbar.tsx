@@ -13,6 +13,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveAddNodeMenuCommands, resolveToolbarEntries, type AddNodeMenuCommand, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { usePluginStore } from "@/stores/use-plugin-store";
 import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
@@ -83,6 +84,7 @@ export function CanvasToolbar({
     const rootRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useThemeStore((state) => state.theme);
+    const installations = usePluginStore((state) => state.installations);
     const setTheme = useThemeStore((state) => state.setTheme);
     const theme = canvasThemes[colorTheme];
     const [addOpen, setAddOpen] = useState(false);
@@ -171,10 +173,12 @@ export function CanvasToolbar({
         handlers,
     };
 
+    const enabledPluginIds = new Set(installations.filter((item) => item.enabled).map((item) => item.manifest.id));
+
     const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
 
     // 解析添加节点菜单命令——onClick 绑定到 runAddAction 以在执行后关闭面板
-    const addNodeCommands = resolveAddNodeMenuCommands(ctx);
+    const addNodeCommands = resolveAddNodeMenuCommands({ ...ctx, enabledPluginIds });
     const toCommand = (cmd: AddNodeMenuCommand): CanvasCreateCommand => ({
         id: cmd.id,
         label: cmd.label,

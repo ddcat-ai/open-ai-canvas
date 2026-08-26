@@ -41,6 +41,8 @@ export type CanvasNodeDefinition = {
     resourceKind?: (node: CanvasNodeData) => CanvasResourceKind | null;
     /** 作为生成节点时的生成模式；不设表示该类型不产生生成行为 */
     generationMode?: (node: CanvasNodeData) => CanvasGenerationMode | null;
+    /** 是否显示右侧输出连接点；缺省为 true，消费型终点节点可关闭。 */
+    showOutputConnection?: boolean;
     /**
      * 作为上游输入被参考素材容量校验计数时的类别；
      * 不设表示不参与计数（生成配置、背板）。与 resourceKind 不同，计数不看内容。

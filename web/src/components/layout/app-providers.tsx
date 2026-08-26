@@ -9,10 +9,17 @@ import { ClientRootInit } from "@/components/layout/client-root-init";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 export function AppProviders({ children }: { children: ReactNode }) {
     const theme = useThemeStore((state) => state.theme);
     const dark = theme === "dark";
+    const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
+
+    useEffect(() => {
+        for (const plugin of listRegisteredPlugins()) ensurePlugin(plugin.manifest);
+    }, [ensurePlugin]);
 
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);

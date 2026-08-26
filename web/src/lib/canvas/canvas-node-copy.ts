@@ -78,5 +78,14 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
         visibleColumns: [...node.metadata.storyboard.visibleColumns],
         referenceNodeIds: remapReferenceIds(node.metadata.storyboard.referenceNodeIds, idMap) || [],
     } : undefined;
+    if (node.type === "portrait-clearance" && metadata.portraitClearance) {
+        metadata.portraitClearance = {
+            ...metadata.portraitClearance,
+            inputBindings: metadata.portraitClearance.inputBindings.map((binding) => ({ ...binding, nodeId: idMap.get(binding.nodeId) || binding.nodeId })),
+            activeTaskId: undefined,
+            task: undefined,
+            lastResult: undefined,
+        };
+    }
     return metadata;
 }

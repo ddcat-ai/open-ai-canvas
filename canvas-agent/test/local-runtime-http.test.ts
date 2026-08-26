@@ -77,6 +77,25 @@ test("runtime info has exact Host and route-scoped CORS/PNA without exposing mod
     });
 });
 
+test("route-scoped CORS keeps every method registered on the same path", async () => {
+    await withRuntime(async ({ server }) => {
+        const preflight = await request(server, {
+            method: "OPTIONS",
+            path: "/dreamina/tasks",
+            headers: {
+                Host: authority,
+                Origin: origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,x-framefield-runtime-session,x-framefield-runtime-timestamp,x-framefield-runtime-nonce,x-framefield-runtime-proof",
+            },
+        });
+        assert.equal(preflight.status, 204);
+        assert.equal(preflight.headers["access-control-allow-methods"], "GET,POST");
+        assert.equal(preflight.headers["access-control-allow-origin"], origin);
+        assert.equal(preflight.headers["access-control-allow-headers"], "x-framefield-runtime-session,x-framefield-runtime-timestamp,x-framefield-runtime-nonce,x-framefield-runtime-proof,content-type");
+    });
+});
+
 test("only an exact trusted Origin can silently establish a signed browser session", async () => {
     await withRuntime(async ({ server }) => {
         const key = browserKey();
@@ -479,6 +498,18 @@ async function withRuntime(
                     onDreaminaStatus?.();
                     res.json({ ok: true });
                 },
+            },
+            {
+                method: "GET",
+                path: "/dreamina/tasks",
+                scope: "dreamina:status",
+                handler: (_req, res) => res.json({ ok: true }),
+            },
+            {
+                method: "POST",
+                path: "/dreamina/tasks",
+                scope: "dreamina:generate",
+                handler: (_req, res) => res.json({ ok: true }),
             },
             {
                 method: "POST",

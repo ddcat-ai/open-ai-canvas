@@ -70,6 +70,12 @@ Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接
 - 外部程序直接切换 Dreamina CLI 账号无法被本应用实时观测；只能在下一次 CLI 状态或命令边界重新校验，因此本机任务运行期间请不要在其他程序中换号。
 - 官方 CLI 的 argv 可能被同一 OS 用户通过进程列表看到，其中可能包含 prompt、receipt 或本地路径；这是官方 CLI 的进程边界，本应用不承诺对同机用户隐藏这些参数。
 
+## 肖像可识别性本机引擎
+
+Canvas Agent 内置 `portrait-clearance` Local Runtime 模块。它只接收签名的画布请求，不读取项目 API Key；图片、embedding、候选和报告保存在 Agent 的配置目录，不进入画布 JSON。
+
+本机模型不会随 npm 包发布。用户必须在肖像排查工作台中显式安装并校验 `buffalo_l` 所需的 `det_10g.onnx` 与 `w600k_r50.onnx`，安装过程保留现有可用模型并拒绝校验失败的临时文件。缺少模型时，模块返回 `portrait_model_missing`，不会伪造低风险结果。
+
 ## 发布
 
 `canvas-agent` 使用自己的 `package.json` 版本号，不跟仓库根目录 `VERSION` 绑定。发布包名为 `@ddcat666/open-ai-canvas-agent`。
