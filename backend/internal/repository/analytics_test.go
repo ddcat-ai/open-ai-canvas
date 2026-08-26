@@ -6,13 +6,43 @@ import (
 	"testing"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
+
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 type sqlCaptureLogger struct {
 	statements []string
+}
+
+func TestAPICallDurationsByTaskIDsUsesLargestDurationPerOwnedTask(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:api-call-durations?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	logs := []model.ApiCallLog{
+		{ID: "log-1", UserID: "user-1", TaskID: "task-1", DurationMs: 1200},
+		{ID: "log-2", UserID: "user-1", TaskID: "task-1", DurationMs: 1800},
+		{ID: "log-3", UserID: "user-1", TaskID: "task-2", DurationMs: 900},
+		{ID: "log-4", UserID: "user-2", TaskID: "task-1", DurationMs: 9999},
+	}
+	if err := db.Create(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	durations, err := New(db).APICallDurationsByTaskIDs("user-1", []string{"task-1", "task-2", "missing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if durations["task-1"] != 1800 || durations["task-2"] != 900 || durations["missing"] != 0 {
+		t.Fatalf("durations = %#v", durations)
+	}
 }
 
 func (l *sqlCaptureLogger) LogMode(logger.LogLevel) logger.Interface { return l }

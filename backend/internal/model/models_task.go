@@ -42,6 +42,7 @@ type Task struct {
 	Attempts                  int                  `json:"attempts"`
 	StartedAt                 *time.Time           `json:"startedAt"`
 	CompletedAt               *time.Time           `json:"completedAt"`
+	APIDurationMs             int64                `json:"apiDurationMs,omitempty" gorm:"-"`
 	CreatedAt                 time.Time            `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3"`
 	UpdatedAt                 time.Time            `json:"updatedAt"`
 }

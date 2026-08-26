@@ -149,6 +149,9 @@ func (s *Service) SessionDetail(userID string, id string) (*SessionDetail, error
 	if err != nil {
 		return nil, err
 	}
+	if err := s.hydrateTaskAPIDurations(userID, tasks); err != nil {
+		return nil, err
+	}
 	taskSummaries := taskSummariesForOutput(tasks)
 	results, err := s.repo.SessionResults(userID, id)
 	if err != nil {
@@ -166,6 +169,9 @@ func (s *Service) TasksWithOptions(userID string, options TaskListOptions) ([]Ta
 	if err != nil {
 		return nil, err
 	}
+	if err := s.hydrateTaskAPIDurations(userID, tasks); err != nil {
+		return nil, err
+	}
 	orders, err := s.repo.BillingOrdersByTaskIDs(userID, taskBillingTaskIDs(tasks))
 	if err != nil {
 		return nil, err
@@ -179,7 +185,29 @@ func (s *Service) Task(userID string, id string) (*model.Task, error) {
 		return nil, err
 	}
 	s.hydrateTaskProviderRequestID(task)
+	if durations, durationErr := s.repo.APICallDurationsByTaskIDs(userID, []string{task.ID}); durationErr != nil {
+		return nil, durationErr
+	} else {
+		task.APIDurationMs = durations[task.ID]
+	}
 	return taskForOutput(*task), nil
+}
+
+func (s *Service) hydrateTaskAPIDurations(userID string, tasks []model.Task) error {
+	ids := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		if task.ID != "" {
+			ids = append(ids, task.ID)
+		}
+	}
+	durations, err := s.repo.APICallDurationsByTaskIDs(userID, ids)
+	if err != nil {
+		return err
+	}
+	for index := range tasks {
+		tasks[index].APIDurationMs = durations[tasks[index].ID]
+	}
+	return nil
 }
 
 func (s *Service) hydrateTaskProviderRequestID(task *model.Task) {

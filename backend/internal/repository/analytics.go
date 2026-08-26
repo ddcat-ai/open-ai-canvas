@@ -28,6 +28,32 @@ type APICallLogFilter struct {
 	Limit   int
 }
 
+func (r *Repository) APICallDurationsByTaskIDs(userID string, taskIDs []string) (map[string]int64, error) {
+	result := make(map[string]int64)
+	if strings.TrimSpace(userID) == "" || len(taskIDs) == 0 {
+		return result, nil
+	}
+	type durationRow struct {
+		TaskID     string
+		DurationMs int64
+	}
+	var rows []durationRow
+	err := r.db.Model(&model.ApiCallLog{}).
+		Select("task_id, MAX(duration_ms) AS duration_ms").
+		Where("user_id = ? AND task_id IN ? AND duration_ms > 0", userID, taskIDs).
+		Group("task_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.TaskID != "" && row.DurationMs > 0 {
+			result[row.TaskID] = row.DurationMs
+		}
+	}
+	return result, nil
+}
+
 func (r *Repository) RecordUserActivity(userID string, event string, count int, now time.Time) error {
 	if userID == "" {
 		return nil

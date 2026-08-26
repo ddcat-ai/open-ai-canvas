@@ -34,6 +34,7 @@ type TaskSummary struct {
 	Attempts                  int                        `json:"attempts"`
 	StartedAt                 *time.Time                 `json:"startedAt"`
 	CompletedAt               *time.Time                 `json:"completedAt"`
+	APIDurationMs             int64                      `json:"apiDurationMs,omitempty"`
 	CreatedAt                 time.Time                  `json:"createdAt"`
 	UpdatedAt                 time.Time                  `json:"updatedAt"`
 	Billing                   *TaskBillingSummary        `json:"billing,omitempty"`
@@ -117,6 +118,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		Attempts:                  task.Attempts,
 		StartedAt:                 task.StartedAt,
 		CompletedAt:               task.CompletedAt,
+		APIDurationMs:             task.APIDurationMs,
 		CreatedAt:                 task.CreatedAt,
 		UpdatedAt:                 task.UpdatedAt,
 		ClientContext:             taskClientContext(task.InputJSON),

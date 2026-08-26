@@ -19,6 +19,7 @@ type ProviderTaskQueryResult struct {
 	ProviderStatus string      `json:"providerStatus"`
 	Recovered      bool        `json:"recovered"`
 	BillingSettled bool        `json:"billingSettled"`
+	RefundRetained bool        `json:"refundRetained"`
 }
 
 func (s *Service) QueryFailedVideoTask(ctx context.Context, userID string, taskID string) (*ProviderTaskQueryResult, error) {
@@ -79,6 +80,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if providerRequestID == "" {
 		return nil, BadAuthRequest("该任务没有可恢复的上游任务 ID")
 	}
+	billingAlreadyRefunded := false
 	if task.BillingOrderID != "" {
 		order, err := s.repo.BillingOrder(task.BillingOrderID)
 		if err != nil {
@@ -88,7 +90,13 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 			return nil, BadAuthRequest("任务与计费订单归属不一致")
 		}
 		if order.Status == model.BillingStatusRefunded {
-			return nil, BadAuthRequest("该任务已退款，不能恢复并重新扣费")
+			// A completed upstream task can still fail locally while downloading or
+			// persisting its media. Allow that narrowly-scoped recovery without
+			// silently charging a refund back to the user.
+			if !refundedProviderResultRecoveryAllowed(task.Error) {
+				return nil, BadAuthRequest("该任务已退款，不能恢复并重新扣费")
+			}
+			billingAlreadyRefunded = true
 		}
 	}
 
@@ -164,7 +172,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但项目产物登记失败", err.Error())
 	}
 	billingSettled := true
-	if err := billing.SettleBilling(task.BillingOrderID, providerRequestID); err != nil {
+	if billingAlreadyRefunded {
+		_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复；本地结果处理失败产生的退款予以保留", providerStatus)
+	} else if err := billing.SettleBilling(task.BillingOrderID, providerRequestID); err != nil {
 		billingSettled = false
 		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+err.Error())
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但积分结算失败，已进入待核对", err.Error())
@@ -174,5 +184,12 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	} else {
 		_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复并完成结算", providerStatus)
 	}
-	return &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: providerStatus, Recovered: true, BillingSettled: billingSettled}, nil
+	return &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: providerStatus, Recovered: true, BillingSettled: billingSettled, RefundRetained: billingAlreadyRefunded}, nil
+}
+
+func refundedProviderResultRecoveryAllowed(errorText string) bool {
+	message := strings.TrimSpace(errorText)
+	return strings.HasPrefix(message, "声明式协议媒体结果下载失败：") ||
+		strings.HasPrefix(message, "声明式协议已完成但没有返回") ||
+		strings.Contains(message, "结果保存失败")
 }

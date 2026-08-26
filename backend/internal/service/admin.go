@@ -703,6 +703,7 @@ func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
 	if log.ProviderRequestID != "" {
 		root.ProviderRequestID = log.ProviderRequestID
 	}
+	providerWasTerminal := terminalProviderStatus(root.ProviderStatus)
 	if log.ProviderStatus != "" {
 		root.ProviderStatus = log.ProviderStatus
 	}
@@ -711,7 +712,12 @@ func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
 		startedAt = root.CreatedAt.Add(-time.Duration(root.DurationMs) * time.Millisecond)
 		root.StartedAt = startedAt
 	}
-	root.DurationMs = max(root.DurationMs, log.CreatedAt.Sub(startedAt).Milliseconds())
+	// Keep the upstream generation duration. Once the provider has reported a
+	// terminal state, later downloads or recovery queries must not turn this
+	// into the task's total wall-clock lifetime.
+	if !providerWasTerminal {
+		root.DurationMs = max(root.DurationMs, log.CreatedAt.Sub(startedAt).Milliseconds())
+	}
 	root.StatusCode = log.StatusCode
 	root.ConcurrencyLimit = log.ConcurrencyLimit
 	if log.Status == model.ApiCallStatusFailed {
@@ -730,6 +736,15 @@ func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
 		root.CachedTokens = log.CachedTokens
 	}
 	return true, s.repo.Save(root)
+}
+
+func terminalProviderStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "succeeded", "success", "done", "failed", "cancelled", "canceled", "expired":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) APICallLogs(actor *model.User, limit int) ([]model.ApiCallLog, error) {
