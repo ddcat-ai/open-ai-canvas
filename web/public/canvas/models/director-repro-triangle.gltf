@@ -1,0 +1,54 @@
+{
+    "asset": { "version": "2.0", "generator": "director-repro-fixture (hand-authored, offline)" },
+    "scene": 0,
+    "scenes": [{ "name": "ReproTriangleScene", "nodes": [0] }],
+    "nodes": [{ "name": "ReproTriangle", "mesh": 0 }],
+    "meshes": [
+        {
+            "name": "ReproTriangleMesh",
+            "primitives": [{ "attributes": { "POSITION": 0 }, "indices": 1, "material": 0, "mode": 4 }]
+        }
+    ],
+    "materials": [
+        {
+            "name": "ReproTriangleMaterial",
+            "doubleSided": true,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [0.42, 0.58, 0.72, 1.0],
+                "metallicFactor": 0.0,
+                "roughnessFactor": 0.85
+            }
+        }
+    ],
+    "accessors": [
+        {
+            "name": "positions",
+            "bufferView": 0,
+            "byteOffset": 0,
+            "componentType": 5126,
+            "count": 3,
+            "type": "VEC3",
+            "min": [0.0, 0.0, 0.0],
+            "max": [1.0, 1.0, 0.0]
+        },
+        {
+            "name": "indices",
+            "bufferView": 1,
+            "byteOffset": 0,
+            "componentType": 5123,
+            "count": 3,
+            "type": "SCALAR"
+        }
+    ],
+    "bufferViews": [
+        { "name": "positionView", "buffer": 0, "byteOffset": 0, "byteLength": 36, "target": 34962 },
+        { "name": "indexView", "buffer": 0, "byteOffset": 36, "byteLength": 6, "target": 34963 }
+    ],
+    "buffers": [
+        {
+            "name": "embeddedBuffer",
+            "byteLength": 44,
+            "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAABAAIAAAA="
+        }
+    ]
+}

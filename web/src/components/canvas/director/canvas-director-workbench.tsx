@@ -1,6 +1,6 @@
 import { App, Button, ColorPicker, Dropdown, Input, InputNumber, Select, Slider, Switch } from "antd";
 import type { MenuProps } from "antd";
-import { Box, BoxSelect, Camera, Circle, Cuboid, FileUp, Focus, Image as ImageIcon, LampDesk, Lightbulb, Plus, Redo2, Save, Trash2, Undo2, UserRound, Video, X } from "lucide-react";
+import { Box, BoxSelect, Camera, Circle, Cuboid, FileUp, Focus, Image as ImageIcon, LampDesk, Lightbulb, Plus, Redo2, RotateCcw, Save, Trash2, Undo2, UserRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { nanoid } from "nanoid";
 import { Euler, Quaternion } from "three";
@@ -11,7 +11,14 @@ import { DirectorViewportDock } from "@/components/canvas/director/director-view
 import { DirectorSequencer } from "@/components/canvas/director/director-sequencer";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { compileDirectorPrompt } from "@/lib/canvas/director/director-prompt-compiler";
-import { createDirectorActor, createDirectorBillboard, createDirectorCamera, createDirectorLight, createDirectorModel, createDirectorObject, DIRECTOR_ACTOR_COLORS, directorBoneLabel, directorPoseLabel, touchDirectorScene, upsertDirectorBoneKeyframe, upsertDirectorKeyframe } from "@/lib/canvas/director/director-scene";
+import { resolveDirectorKeyframeRecord, resolveDirectorObjectTransformEdit, snapDirectorTime } from "@/lib/canvas/director/director-animation-semantics";
+import { createDirectorTransaction, installDirectorTerminalListeners, type DirectorTransaction } from "@/lib/canvas/director/director-gesture-transaction";
+import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
+import { resolveDirectorPlacement, resolveDirectorPlacementAnchor } from "@/lib/canvas/director/director-placement";
+import { shouldReinitializeDirectorSession } from "@/lib/canvas/director/director-session";
+import { createDirectorActor, createDirectorBillboard, createDirectorCamera, createDirectorLight, createDirectorModel, createDirectorObject, DIRECTOR_ACTOR_COLORS, directorBoneLabel, directorPoseLabel, interpolateDirectorTransform, touchDirectorScene, upsertDirectorBoneKeyframe } from "@/lib/canvas/director/director-scene";
+import { describeDirectorSaveStatus, resolveDirectorCloseOutcome, shouldBlockDirectorUnload, shouldOfferDirectorDraftRecovery } from "@/lib/canvas/director/director-save-wiring";
+import { useDirectorSaveCoordinator } from "@/components/canvas/director/use-director-save-coordinator";
 import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
 import { useDirectorWorkbenchStore } from "@/stores/canvas/use-director-workbench-store";
@@ -19,8 +26,8 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { DirectorCamera, DirectorCameraMove, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorPose, DirectorQuat, DirectorRig, DirectorScene, DirectorSceneOutput, DirectorShot, DirectorShotSize, DirectorTransform, DirectorVec3 } from "@/types/director";
 
-export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onChange, onApply, onDeleteImageNode }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void>; onDeleteImageNode: (nodeId: string) => void }) {
-    const { message } = App.useApp();
+export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onChange, onApply, onDeleteImageNode, onFlush }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void>; onDeleteImageNode: (nodeId: string) => void; onFlush?: () => void | Promise<void> }) {
+    const { message, modal } = App.useApp();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const viewportRef = useRef<DirectorViewportHandle>(null);
     const modelInputRef = useRef<HTMLInputElement>(null);
@@ -54,20 +61,132 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     const addAsset = useAssetStore((state) => state.addAsset);
     const modelAssets = useMemo(() => assets.filter((asset): asset is ModelAsset => asset.kind === "model"), [assets]);
 
+    const draftRef = useRef<DirectorScene | null>(null);
+    const stagedRef = useRef<DirectorTransaction | null>(null);
+    const initializedSceneIdRef = useRef<string | null>(null);
+    const onChangeRef = useRef(onChange);
+    const onFlushRef = useRef(onFlush);
+    useEffect(() => { onChangeRef.current = onChange; onFlushRef.current = onFlush; }, [onChange, onFlush]);
+
+    const closingRef = useRef(false);
+    const recoveryPromptedRef = useRef<string | null>(null);
+    const [retrying, setRetrying] = useState(false);
+
+    // 按 scene.id 持有唯一 coordinator：flush 先把 request.scene 写回项目，再等持久化完成。
+    const saveController = useDirectorSaveCoordinator({
+        sceneId: scene?.id ?? null,
+        initialScene: scene,
+        persistScene: (next) => onChangeRef.current(next),
+        flushPersistence: () => onFlushRef.current?.(),
+    });
+    const saveControllerRef = useRef(saveController);
+    saveControllerRef.current = saveController;
+    const saveIndicator = describeDirectorSaveStatus(saveController.progress);
+
+    const retrySave = async () => {
+        setRetrying(true);
+        try {
+            if (await saveController.retry()) {
+                recordDirectorDiagnostic("DIRECTOR_SAVE_RETRY_RECOVERED", { sceneId: draftRef.current?.id, revision: saveController.progress.revision, userInitiated: true });
+                message.success("已保存到项目");
+                return;
+            }
+            // 只有真的存在合法本地候选才敢说草稿已保留。
+            const draftStored = Boolean(saveController.restoreCandidate());
+            recordDirectorDiagnostic("DIRECTOR_SAVE_RETRY_FAILED", { sceneId: draftRef.current?.id, revision: saveController.progress.revision, draftStored, userInitiated: true });
+            if (!draftStored) recordDirectorDiagnostic("DIRECTOR_SAVE_DRAFT_UNAVAILABLE", { sceneId: draftRef.current?.id, revision: saveController.progress.revision });
+            if (draftStored) message.error("远端保存失败，本地草稿已保留，可稍后重试");
+            else message.error("远端和本地都未保存，请不要关闭导演台并继续重试");
+        } finally {
+            setRetrying(false);
+        }
+    };
+
+    const writeDraft = useCallback((next: DirectorScene | null) => {
+        draftRef.current = next;
+        setDraft(next);
+    }, []);
+
+    /**
+     * 仅镜像当前 draft 到项目 directorScenes，不产生 canonical 提交。
+     * 用于取消预览、idle pagehide、卸载兜底 —— 这些都不是新的用户改动。
+     */
+    const mirrorDraft = useCallback(() => {
+        const current = draftRef.current;
+        if (!current || initializedSceneIdRef.current !== current.id) return;
+        onChangeRef.current(current);
+    }, []);
+
+    /** 真实 canonical 提交：先交给 coordinator（本地草稿 + 远端保存），再镜像到项目。 */
+    const commitDraft = useCallback(() => {
+        const current = draftRef.current;
+        if (!current || initializedSceneIdRef.current !== current.id) return;
+        saveControllerRef.current?.commitScene(current);
+        onChangeRef.current(current);
+    }, []);
+
+    const writeAndPublish = useCallback((next: DirectorScene) => {
+        writeDraft(next);
+        saveControllerRef.current?.commitScene(next);
+        onChangeRef.current(next);
+    }, [writeDraft]);
+
+    // 会话初始化只认 scene id：同 id 的父级镜像回流不得重建会话。
     useEffect(() => {
         if (!open || !scene) return;
+        if (!shouldReinitializeDirectorSession({ initializedSceneId: initializedSceneIdRef.current, nextSceneId: scene.id })) return;
         const next = structuredClone(scene);
         next.shots = next.shots.map((shot) => ({ ...shot, fps: shot.fps || 24 }));
-        setDraft(next);
+        stagedRef.current?.end("cancel");
+        initializedSceneIdRef.current = scene.id;
+        writeDraft(next);
         setHistory([]);
         setFuture([]);
         resetWorkbench();
-    }, [open, resetWorkbench, scene]);
+    }, [open, resetWorkbench, scene, writeDraft]);
+
+    // 打开会话时检查合法本地恢复候选：同一场景只提示一次，恢复/放弃都必须有明确结果。
+    useEffect(() => {
+        if (!open || !scene) return;
+        if (recoveryPromptedRef.current === scene.id) return;
+        recoveryPromptedRef.current = scene.id;
+
+        const controller = saveControllerRef.current;
+        const candidate = controller?.restoreCandidate() ?? null;
+        if (!controller || !candidate) return;
+        if (!shouldOfferDirectorDraftRecovery({ candidate, authoritativeScene: scene })) return;
+
+        modal.confirm({
+            title: "发现未保存的本地草稿",
+            content: `这个镜头存在一份比项目更新的本地草稿（修订 ${candidate.revision}）。恢复后会立即写回项目并保存。`,
+            okText: "恢复草稿",
+            cancelText: "放弃草稿",
+            closable: false,
+            mask: { closable: false },
+            keyboard: false,
+            onOk: () => {
+                if (!controller.restoreDraft(candidate)) {
+                    message.error("草稿恢复失败，已保留当前场景");
+                    return;
+                }
+                writeDraft(candidate.scene);
+                message.success("已恢复本地草稿并写回项目");
+            },
+            onCancel: () => {
+                if (controller.discardDraft()) message.success("已放弃本地草稿");
+                else message.error("草稿删除失败，下次打开可能仍会提示");
+            },
+        });
+    }, [message, modal, open, scene, writeDraft]);
 
     const activeShot = draft?.shots?.find((item) => item.id === draft.activeShotId) || draft?.shots?.[0] || null;
     const activeCamera = draft?.cameras?.find((item) => item.id === activeShot?.cameraId) || draft?.cameras?.[0] || null;
     const selectedObject = draft?.objects?.find((item) => item.id === selectedObjectId) || null;
     const selectedLight = draft?.lights?.find((item) => item.id === selectedLightId) || null;
+    // 写入关键帧的目的时间用吸附值；取值/显示/手势起点一律用 raw playhead，
+    // 否则处在两个帧格之间时 AutoKey OFF 的增量会从错误起点计算而产生漂移。
+    const snappedPlayhead = snapDirectorTime(playhead, activeShot?.fps || 24);
+    const selectedObjectRendered = selectedObject ? interpolateDirectorTransform(selectedObject.transform, selectedObject.keyframes, playhead) : null;
 
     useEffect(() => {
         if (!playing || !activeShot) return;
@@ -85,30 +204,142 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     }, [activeShot, playing, setPlayhead]);
 
     const commit = useCallback((updater: (current: DirectorScene) => DirectorScene) => {
-        setDraft((current) => {
-            if (!current) return current;
-            const next = touchDirectorScene(updater(current));
-            setHistory((items) => [...items.slice(-49), structuredClone(current)]);
-            setFuture([]);
-            return next;
-        });
-    }, []);
+        // 普通提交前先终结暂存手势，避免新动作消费旧 base。
+        stagedRef.current?.end("commit");
+        const current = draftRef.current;
+        if (!current) return;
+        setHistory((items) => [...items.slice(-49), structuredClone(current)]);
+        setFuture([]);
+        writeAndPublish(touchDirectorScene(updater(current)));
+    }, [writeAndPublish]);
 
-    const replaceWithoutHistory = useCallback((updater: (current: DirectorScene) => DirectorScene) => setDraft((current) => (current ? touchDirectorScene(updater(current)) : current)), []);
+    /** 暂存型手势（数值滑杆）：实时预览写草稿但不产生历史，也不镜像到项目。 */
+    const stagedTransaction = useMemo(() => createDirectorTransaction<DirectorScene>({
+        read: () => draftRef.current,
+        // 取消：恢复快照且绝不发布被取消的值。
+        restore: (snapshot) => writeDraft(snapshot),
+        commit: (from) => {
+            setHistory((items) => [...items.slice(-49), from]);
+            setFuture([]);
+            // 手势成功终态是真实 canonical 提交。
+            commitDraft();
+        },
+        setActive: () => undefined,
+    }), [commitDraft, writeDraft]);
+    stagedRef.current = stagedTransaction;
+
+    const stageGesture = useCallback((updater: (current: DirectorScene) => DirectorScene) => {
+        const current = draftRef.current;
+        if (!current) return;
+        stagedTransaction.begin();
+        writeDraft(touchDirectorScene(updater(current)));
+    }, [stagedTransaction, writeDraft]);
+
+    /** 无历史但持久的变化（标题、rig/motionClips 等）同样要镜像。 */
+    const replaceWithoutHistory = useCallback((updater: (current: DirectorScene) => DirectorScene) => {
+        const current = draftRef.current;
+        if (current) writeAndPublish(touchDirectorScene(updater(current)));
+    }, [writeAndPublish]);
+
+    // 暂存手势的终止生命周期：常驻安装，非活跃时 end 为空操作。
+    useEffect(() => installDirectorTerminalListeners(stagedTransaction, {
+        window,
+        document,
+        isHidden: () => document.visibilityState === "hidden",
+    }), [stagedTransaction]);
+
+    // 切换选择/骨骼、关闭或卸载前必须先终止旧手势，不能让新选择消费旧 base。
+    useEffect(() => () => stagedTransaction.end("cancel"), [open, selectedBone, selectedObjectId, stagedTransaction]);
+
+    // 离开页面：active 预览由 end("commit") 完成真实提交，idle 只镜像；落盘统一交给 controller。
+    useEffect(() => {
+        const onPageHide = () => {
+            if (stagedTransaction.active()) stagedTransaction.end("commit");
+            else mirrorDraft();
+            // 只调用 handlePageHide：dirty 时它自己会 persist + flush，组件再叠一次就是重复落盘。
+            void saveControllerRef.current?.handlePageHide();
+        };
+        // 异步 flush 不可能阻塞卸载：这里只同步声明「仍有未确认改动」，让浏览器自己弹保护。
+        const onBeforeUnload = (event: BeforeUnloadEvent) => {
+            const controller = saveControllerRef.current;
+            if (!controller || !shouldBlockDirectorUnload(controller.progress)) return;
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        window.addEventListener("pagehide", onPageHide);
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => {
+            window.removeEventListener("pagehide", onPageHide);
+            window.removeEventListener("beforeunload", onBeforeUnload);
+        };
+    }, [mirrorDraft, stagedTransaction]);
+
+    // 卸载兜底：只把最新 draft 镜像回项目，不制造新的 canonical revision。
+    useEffect(() => () => {
+        stagedRef.current?.end("cancel");
+        mirrorDraft();
+    }, [mirrorDraft]);
 
     const undo = () => {
         const previous = history.at(-1);
         if (!previous || !draft) return;
         setHistory((items) => items.slice(0, -1));
         setFuture((items) => [structuredClone(draft), ...items].slice(0, 50));
-        setDraft(previous);
+        writeAndPublish(previous);
     };
     const redo = () => {
         const next = future[0];
         if (!next || !draft) return;
         setFuture((items) => items.slice(1));
         setHistory((items) => [...items, structuredClone(draft)].slice(-50));
-        setDraft(next);
+        writeAndPublish(next);
+    };
+
+    /**
+     * 关闭统一入口：取消未结束的预览、镜像当前 draft，再按 prepareClose 决策是否真的退出。
+     * 这里只镜像不提交：取消预览不是新的 canonical 变化。
+     */
+    const closeWorkbench = () => {
+        if (closingRef.current) return;
+        closingRef.current = true;
+        stagedTransaction.end("cancel");
+        mirrorDraft();
+        void (async () => {
+            let decision;
+            try {
+                decision = resolveDirectorCloseOutcome(await saveController.prepareClose());
+            } catch {
+                message.error("关闭前的保存检查失败，已留在导演台");
+                closingRef.current = false;
+                return;
+            }
+
+            if (decision.kind === "close") {
+                onClose();
+                return;
+            }
+            if (decision.kind === "blocked") {
+                recordDirectorDiagnostic("DIRECTOR_CLOSE_BLOCKED", { sceneId: draftRef.current?.id, saveOutcome: "stay", revision: saveController.progress.revision, draftStored: saveController.progress.draftStored });
+                message.error(decision.message);
+                closingRef.current = false;
+                return;
+            }
+
+            // 确认框存续期间保持上锁，否则重复点击会叠出多个弹窗。
+            modal.confirm({
+                title: "远端保存失败",
+                content: decision.message,
+                okText: "仍然离开",
+                cancelText: "留在导演台",
+                closable: false,
+                mask: { closable: false },
+                keyboard: false,
+                onOk: () => onClose(),
+                onCancel: () => {
+                    closingRef.current = false;
+                },
+            });
+        })();
     };
 
     const updateObject = (id: string, patch: Partial<DirectorObject>) => commit((current) => ({ ...current, objects: current.objects.map((item) => (item.id === id ? { ...item, ...patch } : item)) }));
@@ -139,24 +370,32 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
         }));
     };
 
-    const addPrimitive = (primitive: DirectorObject["primitive"], name: string) => {
-        const object = createDirectorObject(primitive, name);
-        commit((current) => ({ ...current, objects: [...current.objects, object] }));
+    /**
+     * 所有「新增到场景」的唯一入口。
+     * 在 commit 内读取一次 placement intent：因此模型上传等异步路径拿到的是
+     * 「点击添加完成那一刻」的意图，而不是发起上传时捕获的过时坐标。
+     * 锚点只提供 XZ，Y 严格保留构造器给定值，再交给 resolveDirectorPlacement 做碰撞避让。
+     */
+    const addObject = (object: DirectorObject) => {
+        commit((current) => {
+            const anchored = resolveDirectorPlacementAnchor({
+                intent: viewportRef.current?.readPlacementIntent() ?? null,
+                fallback: object.transform.position,
+            });
+            const position = resolveDirectorPlacement({ object: { ...object, transform: { ...object.transform, position: anchored } }, existing: current.objects });
+            return { ...current, objects: [...current.objects, { ...object, transform: { ...object.transform, position } }] };
+        });
         setSelectedObjectId(object.id);
     };
+
+    const addPrimitive = (primitive: DirectorObject["primitive"], name: string) => addObject(createDirectorObject(primitive, name));
 
     const addActor = () => {
         const actorCount = draft?.objects.filter((item) => item.kind === "actor").length || 0;
-        const actor = createDirectorActor(`演员 ${actorCount + 1}`, [actorCount * 0.8, 0, 0], DIRECTOR_ACTOR_COLORS[actorCount % DIRECTOR_ACTOR_COLORS.length]);
-        commit((current) => ({ ...current, objects: [...current.objects, actor] }));
-        setSelectedObjectId(actor.id);
+        addObject(createDirectorActor(`演员 ${actorCount + 1}`, [0, 0, 0], DIRECTOR_ACTOR_COLORS[actorCount % DIRECTOR_ACTOR_COLORS.length]));
     };
 
-    const addModelAsset = (asset: ModelAsset) => {
-        const object = createDirectorModel({ name: asset.title, assetId: asset.id, storageKey: asset.data.storageKey, url: asset.data.url, mimeType: asset.data.mimeType });
-        commit((current) => ({ ...current, objects: [...current.objects, object] }));
-        setSelectedObjectId(object.id);
-    };
+    const addModelAsset = (asset: ModelAsset) => addObject(createDirectorModel({ name: asset.title, assetId: asset.id, storageKey: asset.data.storageKey, url: asset.data.url, mimeType: asset.data.mimeType }));
 
     const uploadModel = async (file?: File) => {
         if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
@@ -169,9 +408,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
 
     const addBillboard = (node: CanvasNodeData) => {
         if (!node.metadata?.content) return;
-        const object = createDirectorBillboard(node.title, node.metadata.content, node.metadata.storageKey, node.id);
-        commit((current) => ({ ...current, objects: [...current.objects, object] }));
-        setSelectedObjectId(object.id);
+        addObject(createDirectorBillboard(node.title, node.metadata.content, node.metadata.storageKey, node.id));
     };
 
     const addCamera = () => {
@@ -212,41 +449,57 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
 
     const addObjectKeyframe = () => {
         if (!selectedObject) return;
-        updateObject(selectedObject.id, { keyframes: upsertDirectorKeyframe(selectedObject.keyframes, playhead, selectedObject.transform) });
+        // 取值用 raw playhead（视口真正渲染的时间），写入用 snapped 目的时间。
+        const record = resolveDirectorKeyframeRecord({ base: selectedObject.transform, keyframes: selectedObject.keyframes, rawTime: playhead, snappedTime: snappedPlayhead });
+        updateObject(selectedObject.id, { keyframes: record.keyframes });
     };
 
     const addCameraKeyframe = () => {
         if (!activeCamera) return;
-        commit((current) => ({ ...current, cameras: current.cameras.map((item) => item.id === activeCamera.id ? { ...item, keyframes: upsertDirectorKeyframe(item.keyframes, playhead, item.transform) } : item) }));
+        commit((current) => ({
+            ...current,
+            cameras: current.cameras.map((item) => item.id === activeCamera.id
+                ? { ...item, keyframes: resolveDirectorKeyframeRecord({ base: item.transform, keyframes: item.keyframes, rawTime: playhead, snappedTime: snappedPlayhead }).keyframes }
+                : item),
+        }));
     };
 
     const recordSelectedKeyframe = () => {
         if (selectedObject && selectedBone) {
             const rotation = selectedObject.boneOverrides?.[selectedBone as DirectorHumanoidBone] || [0, 0, 0, 1] as DirectorQuat;
-            updateObject(selectedObject.id, { boneTracks: upsertDirectorBoneKeyframe(selectedObject.boneTracks || [], selectedBone as DirectorHumanoidBone, playhead, rotation) });
+            updateObject(selectedObject.id, { boneTracks: upsertDirectorBoneKeyframe(selectedObject.boneTracks || [], selectedBone as DirectorHumanoidBone, snappedPlayhead, rotation) });
             return;
         }
         if (selectedObject) addObjectKeyframe();
         else addCameraKeyframe();
     };
 
-    const handleObjectTransform = useCallback((id: string, transform: DirectorTransform) => {
+    /** 对象 transform 编辑的唯一入口：gizmo 与检查器共用同一套静态/动画语义。 */
+    const handleObjectTransform = useCallback((id: string, from: DirectorTransform, to: DirectorTransform) => {
         commit((current) => ({
             ...current,
-            objects: current.objects.map((item) => item.id === id ? { ...item, transform, keyframes: autoKey ? upsertDirectorKeyframe(item.keyframes, playhead, transform) : item.keyframes } : item),
+            objects: current.objects.map((item) => {
+                if (item.id !== id) return item;
+                const edit = resolveDirectorObjectTransformEdit({ base: item.transform, keyframes: item.keyframes, rendered: from, edited: to, autoKey, time: snappedPlayhead });
+                return { ...item, transform: edit.transform, keyframes: edit.keyframes };
+            }),
         }));
-    }, [autoKey, commit, playhead]);
+    }, [autoKey, commit, snappedPlayhead]);
 
-    const handleBoneTransform = useCallback((id: string, bone: string, rotation: DirectorQuat) => {
-        commit((current) => ({
+    /** 骨骼写入语义：静态覆盖 + autoKey 时在吸附播放头补关键帧。gizmo 与数值编辑器共用。 */
+    const writeBoneRotation = useCallback((id: string, bone: string, rotation: DirectorQuat, mode: "stage" | "commit") => {
+        const write = mode === "stage" ? stageGesture : commit;
+        write((current) => ({
             ...current,
             objects: current.objects.map((item) => item.id === id ? {
                 ...item,
                 boneOverrides: { ...item.boneOverrides, [bone]: rotation },
-                boneTracks: autoKey ? upsertDirectorBoneKeyframe(item.boneTracks || [], bone as DirectorHumanoidBone, playhead, rotation) : item.boneTracks,
+                boneTracks: autoKey ? upsertDirectorBoneKeyframe(item.boneTracks || [], bone as DirectorHumanoidBone, snappedPlayhead, rotation) : item.boneTracks,
             } : item),
         }));
-    }, [autoKey, commit, playhead]);
+    }, [autoKey, commit, snappedPlayhead, stageGesture]);
+
+    const handleBoneTransform = useCallback((id: string, bone: string, rotation: DirectorQuat) => writeBoneRotation(id, bone, rotation, "commit"), [writeBoneRotation]);
 
     const handleActorRigReady = useCallback((id: string, rig: DirectorRig, animations: AnimationClip[]) => {
         replaceWithoutHistory((current) => ({
@@ -277,14 +530,16 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     };
 
     const applyToCanvas = async () => {
-        if (!draft || !activeShot || !viewportRef.current) return;
+        stagedTransaction.end("commit");
+        const current = draftRef.current;
+        if (!current || !activeShot || !viewportRef.current) return;
         setSaving(true);
         try {
             const beauty = await viewportRef.current.capture("beauty");
-            const prompt = compileDirectorPrompt(draft, activeShot);
-            const next = touchDirectorScene(draft);
-            setDraft(next);
-            onChange(next);
+            const prompt = compileDirectorPrompt(current, activeShot);
+            // 先镜像最新 scene，再做 canvas 输出；失败时 draft 保留可继续重试。
+            const next = touchDirectorScene(current);
+            writeAndPublish(next);
             await onApply({ scene: next, shot: activeShot, prompt, beauty });
             message.success("导演台构图已回写画布");
         } catch (error) {
@@ -295,7 +550,9 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     };
 
     const exportClayVideo = async () => {
-        if (!draft || !activeShot || !viewportRef.current || recording) return;
+        stagedTransaction.end("commit");
+        const current = draftRef.current;
+        if (!current || !activeShot || !viewportRef.current || recording) return;
         setRecording(true);
         const wasPlaying = playing;
         const previousPlayhead = playhead;
@@ -304,8 +561,8 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
         try {
             await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
             const clayVideo = await viewportRef.current.recordVideo(activeShot.duration, activeShot.fps);
-            const next = touchDirectorScene(draft);
-            onChange(next);
+            const next = touchDirectorScene(draftRef.current || current);
+            writeAndPublish(next);
             await onApply({ scene: next, shot: activeShot, prompt: compileDirectorPrompt(next, activeShot), beauty: await viewportRef.current.capture("beauty"), clayVideo, clayVideoMimeType: clayVideo.type });
             message.success("白膜视频已回写画布");
         } catch (error) {
@@ -322,12 +579,22 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     return (
         <div data-canvas-no-zoom className="fixed inset-0 z-[var(--z-toast)] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
-                <IconButton label="关闭导演台" onClick={onClose}><X className="size-4" /></IconButton>
+                <IconButton label="关闭导演台" onClick={closeWorkbench}><X className="size-4" /></IconButton>
                 <Input variant="borderless" value={draft.title} className="max-w-56 font-medium" onChange={(event) => replaceWithoutHistory((current) => ({ ...current, title: event.target.value }))} />
                 <span className="h-5 w-px" style={{ background: theme.toolbar.border }} />
                 <IconButton label="撤销" disabled={!history.length} onClick={undo}><Undo2 className="size-4" /></IconButton>
                 <IconButton label="重做" disabled={!future.length} onClick={redo}><Redo2 className="size-4" /></IconButton>
-                <div className="ml-auto flex items-center gap-1">
+                <div className="ml-auto flex items-center gap-2">
+                    <span
+                        aria-live="polite"
+                        className="text-[var(--fs-tiny)]"
+                        style={{ color: saveIndicator.tone === "danger" ? "var(--status-error)" : undefined, opacity: saveIndicator.tone === "idle" ? 0.55 : 1 }}
+                    >
+                        {saveIndicator.label}
+                    </span>
+                    {saveIndicator.retryable ? <Button size="small" icon={<RotateCcw className="size-3.5" />} loading={retrying || saveIndicator.busy} onClick={() => void retrySave()}>重试保存</Button> : null}
+                </div>
+                <div className="flex items-center gap-1">
                     <Select size="small" value={renderMode} className="w-24" options={[{ label: "预览", value: "beauty" }, { label: "彩色白膜", value: "clay" }, { label: "骨骼", value: "pose" }, { label: "深度", value: "depth" }, { label: "法线", value: "normal" }]} onChange={setRenderMode} />
                     <Button size="small" icon={<Video className="size-3.5" />} loading={recording} onClick={() => void exportClayVideo()}>导出白膜</Button>
                     <Button size="small" type="primary" icon={<Save className="size-3.5" />} loading={saving} onClick={() => void applyToCanvas()}>应用到镜头</Button>
@@ -359,13 +626,13 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
                 </aside>
 
                 <main className="relative min-h-0 overflow-hidden bg-neutral-900">
-                    <DirectorViewport ref={viewportRef} scene={draft} selectedObjectId={selectedObjectId} selectedBone={selectedBone} transformMode={transformMode} renderMode={renderMode} playhead={playhead} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onObjectTransform={handleObjectTransform} onBoneTransform={handleBoneTransform} onActorRigReady={handleActorRigReady} />
+                    <DirectorViewport ref={viewportRef} scene={draft} selectedObjectId={selectedObjectId} selectedBone={selectedBone} transformMode={transformMode} renderMode={renderMode} playhead={playhead} playing={playing} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onObjectTransform={handleObjectTransform} onBoneTransform={handleBoneTransform} onActorRigReady={handleActorRigReady} />
                     <div className="pointer-events-none absolute left-3 top-3 text-[var(--fs-tiny)] font-medium text-white/70">{activeShot.name} · {activeCamera?.name || "无摄影机"} · {activeShot.duration}s</div>
                     <DirectorViewportDock transformMode={transformMode} renderMode={renderMode} onTransformModeChange={setTransformMode} onRenderModeChange={setRenderMode} onAddActor={addActor} onAddBox={() => addPrimitive("box", "立方体")} onAddLight={addLight} onAddCamera={addCamera} onAlignCamera={alignCameraToView} />
                 </main>
 
                 <aside className="thin-scrollbar min-h-0 overflow-y-auto border-l max-lg:hidden" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
-                    {selectedObject ? <ObjectInspector object={selectedObject} playhead={playhead} selectedBone={selectedBone} autoKey={autoKey} onSelectBone={setSelectedBone} onUpdate={(patch) => updateObject(selectedObject.id, patch)} onAddKeyframe={recordSelectedKeyframe} onDelete={() => removeObject(selectedObject.id)} /> : selectedLight ? <LightInspector light={selectedLight} onUpdate={(patch) => updateLight(selectedLight.id, patch)} onDelete={() => removeLight(selectedLight.id)} /> : <ShotInspector shot={activeShot} camera={activeCamera} cameras={draft.cameras} onUpdateShot={(patch) => updateShot(activeShot.id, patch)} onUpdateCamera={(patch) => activeCamera && commit((current) => ({ ...current, cameras: current.cameras.map((item) => item.id === activeCamera.id ? { ...item, ...patch } : item) }))} onAddCameraKeyframe={addCameraKeyframe} onApplyCameraMove={applyCameraMove} onAlignCameraToView={alignCameraToView} onExportClay={exportClayVideo} recording={recording} />}
+                    {selectedObject ? <ObjectInspector object={selectedObject} rendered={selectedObjectRendered || selectedObject.transform} playhead={snappedPlayhead} selectedBone={selectedBone} onSelectBone={setSelectedBone} onUpdate={(patch) => updateObject(selectedObject.id, patch)} onTransformEdit={(edited) => handleObjectTransform(selectedObject.id, selectedObjectRendered || selectedObject.transform, edited)} onBoneRotationStage={(rotation) => selectedBone && writeBoneRotation(selectedObject.id, selectedBone, rotation, "stage")} onBoneRotationCommit={() => stagedTransaction.end("commit")} onAddKeyframe={recordSelectedKeyframe} onDelete={() => removeObject(selectedObject.id)} /> : selectedLight ? <LightInspector light={selectedLight} onUpdate={(patch) => updateLight(selectedLight.id, patch)} onDelete={() => removeLight(selectedLight.id)} /> : <ShotInspector shot={activeShot} camera={activeCamera} cameras={draft.cameras} onUpdateShot={(patch) => updateShot(activeShot.id, patch)} onUpdateCamera={(patch) => activeCamera && commit((current) => ({ ...current, cameras: current.cameras.map((item) => item.id === activeCamera.id ? { ...item, ...patch } : item) }))} onAddCameraKeyframe={addCameraKeyframe} onApplyCameraMove={applyCameraMove} onAlignCameraToView={alignCameraToView} onExportClay={() => void exportClayVideo()} recording={recording} />}
                 </aside>
             </div>
 
@@ -374,22 +641,16 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     );
 }
 
-function ObjectInspector({ object, playhead, selectedBone, autoKey, onSelectBone, onUpdate, onAddKeyframe, onDelete }: { object: DirectorObject; playhead: number; selectedBone: string | null; autoKey: boolean; onSelectBone: (bone: string | null) => void; onUpdate: (patch: Partial<DirectorObject>) => void; onAddKeyframe: () => void; onDelete: () => void }) {
+function ObjectInspector({ object, rendered, playhead, selectedBone, onSelectBone, onUpdate, onTransformEdit, onBoneRotationStage, onBoneRotationCommit, onAddKeyframe, onDelete }: { object: DirectorObject; rendered: DirectorTransform; playhead: number; selectedBone: string | null; onSelectBone: (bone: string | null) => void; onUpdate: (patch: Partial<DirectorObject>) => void; onTransformEdit: (transform: DirectorTransform) => void; onBoneRotationStage: (rotation: DirectorQuat) => void; onBoneRotationCommit: () => void; onAddKeyframe: () => void; onDelete: () => void }) {
     const motionClips = object.motionClips || [];
     const activeMotionClip = motionClips.find((clip) => clip.id === object.activeMotionClipId);
     const mappedBones = Object.keys(object.rig?.boneMap || {}) as DirectorHumanoidBone[];
     const selectedBoneId = selectedBone as DirectorHumanoidBone | null;
     const selectedBoneRotation = selectedBoneId ? object.boneOverrides?.[selectedBoneId] || [0, 0, 0, 1] as DirectorQuat : null;
     const updateActiveMotion = (patch: Partial<NonNullable<DirectorObject["motionClips"]>[number]>) => activeMotionClip && onUpdate({ motionClips: motionClips.map((clip) => clip.id === activeMotionClip.id ? { ...clip, ...patch } : clip) });
-    const updateSelectedBoneRotation = (rotation: DirectorQuat) => {
-        if (!selectedBoneId) return;
-        const patch: Partial<DirectorObject> = { boneOverrides: { ...object.boneOverrides, [selectedBoneId]: rotation } };
-        if (autoKey) patch.boneTracks = upsertDirectorBoneKeyframe(object.boneTracks || [], selectedBoneId, playhead, rotation);
-        onUpdate(patch);
-    };
     const applyPose = (pose: DirectorPose) => onUpdate({ pose, activeMotionClipId: undefined, boneOverrides: {} });
     return <Inspector title={object.name} onTitleChange={(name) => onUpdate({ name })} onDelete={onDelete}>
-        <TransformFields transform={object.transform} onChange={(transform) => onUpdate({ transform })} />
+        <TransformFields transform={rendered} onChange={onTransformEdit} />
         {object.kind === "actor" || object.primitive === "character"
             ? <Field label="角色颜色"><div className="director-actor-colors">{DIRECTOR_ACTOR_COLORS.map((color) => <button key={color} type="button" className={`director-actor-color ${object.color.toLowerCase() === color ? "is-active" : ""}`} style={{ background: color }} aria-label={`设置颜色 ${color}`} onClick={() => onUpdate({ color })} />)}<ColorPicker value={object.color} size="small" onChange={(_, color) => onUpdate({ color })} /></div></Field>
             : <Field label="颜色"><ColorPicker value={object.color} onChange={(_, color) => onUpdate({ color })} /></Field>}
@@ -401,7 +662,7 @@ function ObjectInspector({ object, playhead, selectedBone, autoKey, onSelectBone
             <div className="flex items-center justify-between border-y py-2 text-[var(--fs-label)]"><span>角色绑定</span><span className="opacity-55">{object.rig?.status === "ready" ? `${mappedBones.length} 根骨骼` : "等待模型"}</span></div>
             {motionClips.length ? <><Field label="动作片段"><Select className="w-full" value={object.activeMotionClipId || ""} options={[{ label: "静态姿势", value: "" }, ...motionClips.map((clip) => ({ label: clip.name, value: clip.id }))]} onChange={(activeMotionClipId) => onUpdate({ activeMotionClipId: activeMotionClipId || undefined })} /></Field>{activeMotionClip ? <div className="grid grid-cols-2 gap-2"><Field label="播放速度"><InputNumber className="w-full" min={0.1} max={4} step={0.1} value={activeMotionClip.playbackRate} onChange={(playbackRate) => updateActiveMotion({ playbackRate: playbackRate || 1 })} /></Field><Field label="循环"><Switch checked={activeMotionClip.loop} onChange={(loop) => updateActiveMotion({ loop })} /></Field></div> : null}</> : <div className="text-[var(--fs-tiny)] opacity-50">模型加载后会显示可用动作 Clip</div>}
             {mappedBones.length ? <Field label="骨骼控制"><Select className="w-full" allowClear value={selectedBone || undefined} options={mappedBones.map((bone) => ({ label: directorBoneLabel(bone), value: bone }))} onChange={(bone) => onSelectBone(bone || null)} /></Field> : null}
-            {selectedBoneId && selectedBoneRotation ? <BoneRotationFields rotation={selectedBoneRotation} onChange={updateSelectedBoneRotation} /> : null}
+            {selectedBoneId && selectedBoneRotation ? <BoneRotationFields rotation={selectedBoneRotation} onChange={onBoneRotationStage} onChangeComplete={onBoneRotationCommit} /> : null}
         </> : null}
         <Field label="可见"><Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} /></Field>
         <Field label="投射阴影"><Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} /></Field>
@@ -433,7 +694,7 @@ function TransformFields({ transform, onChange }: { transform: DirectorTransform
     return <><Vec3Field label="位置" value={transform.position} onChange={(position) => onChange({ ...transform, position })} /><Vec3Field label="旋转" value={transform.rotation} step={0.05} onChange={(rotation) => onChange({ ...transform, rotation })} /><Vec3Field label="缩放" value={transform.scale} step={0.1} onChange={(scale) => onChange({ ...transform, scale })} /></>;
 }
 
-function BoneRotationFields({ rotation, onChange }: { rotation: DirectorQuat; onChange: (rotation: DirectorQuat) => void }) {
+function BoneRotationFields({ rotation, onChange, onChangeComplete }: { rotation: DirectorQuat; onChange: (rotation: DirectorQuat) => void; onChangeComplete: () => void }) {
     const initialDegrees = useMemo(() => {
         const euler = new Euler().setFromQuaternion(new Quaternion(...rotation), "XYZ");
         return [euler.x, euler.y, euler.z].map((value) => Number(((value * 180) / Math.PI).toFixed(1))) as DirectorVec3;
@@ -458,7 +719,7 @@ function BoneRotationFields({ rotation, onChange }: { rotation: DirectorQuat; on
     return <Field label="骨骼旋转（局部角度 °）"><div className="space-y-1.5">
         {degrees.map((value, index) => <div key={index} className="grid grid-cols-[18px_minmax(0,1fr)_48px] items-center gap-2">
             <span className="text-[var(--fs-tiny)] font-medium opacity-65">{["X", "Y", "Z"][index]}</span>
-            <Slider className="m-0" min={-180} max={180} step={1} value={value} onChange={(next) => updateAxis(index, Array.isArray(next) ? next[0] ?? 0 : next)} />
+            <Slider className="m-0" min={-180} max={180} step={1} value={value} onChange={(next) => updateAxis(index, Array.isArray(next) ? next[0] ?? 0 : next)} onChangeComplete={onChangeComplete} />
             <span className="text-right text-[var(--fs-tiny)] tabular-nums opacity-65">{value.toFixed(1)}°</span>
         </div>)}
     </div></Field>;

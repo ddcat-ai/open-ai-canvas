@@ -76,3 +76,9 @@ jobs:
         run: bun run typecheck
       - name: Run tests
         run: bun run test
+      # ubuntu-latest 预装 google-chrome；脚本的解析顺序已覆盖该路径，
+      # 因此不引入第三方 setup action，也不需要任何 secret。
+      - name: Director P0 Chrome E2E
+        run: |
+          google-chrome --version || chromium --version
+          bun run test:director:e2e

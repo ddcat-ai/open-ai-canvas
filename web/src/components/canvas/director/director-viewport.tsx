@@ -1,18 +1,29 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
-import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { AnimationClip, AnimationMixer, Box3, Bone, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Quaternion, Scene, SkeletonHelper, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
+import { Component, forwardRef, memo, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { AnimationClip, AnimationMixer, Box3, Bone, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Plane, Quaternion, Raycaster, Scene, SkeletonHelper, Texture, TextureLoader, Vector2, Vector3, WebGLRenderer } from "three";
 import type { Material } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
-import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, interpolateDirectorBoneRotation, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { directorCameraSyncKey, resolveDirectorBoneRotation } from "@/lib/canvas/director/director-animation-semantics";
+import { createDirectorTransaction, installDirectorTerminalListeners } from "@/lib/canvas/director/director-gesture-transaction";
+import { emptyDirectorPlacementIntent, finiteDirectorGroundPoint, type DirectorGroundPoint, type DirectorPlacementIntent } from "@/lib/canvas/director/director-placement";
+import { directorDiagnosticObjectKind } from "@/lib/canvas/director/director-diagnostics";
+import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
+import { directorCaptureInitial, directorCaptureUsable, directorLoadIdentity, directorLoadInitial, installDirectorContextListeners, reduceDirectorCapture, reduceDirectorLoad, releaseDirectorCapture, resolveDirectorDisplay, restoreDirectorCapture, upsertDirectorFailedLoad, type DirectorFailedLoads, type DirectorLoadSignal } from "@/lib/canvas/director/director-recovery";
+import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorMaterials, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "@/lib/canvas/director/director-resources";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
 import { resolveMediaUrl } from "@/services/file-storage";
 import type { DirectorCamera, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
+
+export type DirectorOrbitControls = ComponentRef<typeof OrbitControls>;
 
 export type DirectorViewportHandle = {
     capture: (mode: DirectorRenderMode) => Promise<Blob>;
     recordVideo: (duration: number, fps: number) => Promise<Blob>;
     readCameraTransform: () => DirectorTransform | null;
+    /** 只读放置意图。上下文不可用或从未产生合法点时返回空意图，绝不抛异常。 */
+    readPlacementIntent: () => DirectorPlacementIntent;
 };
 
 type DirectorViewportProps = {
@@ -22,45 +33,246 @@ type DirectorViewportProps = {
     transformMode: "translate" | "rotate" | "scale";
     renderMode: DirectorRenderMode;
     playhead: number;
+    playing: boolean;
     onSelectObject: (id: string | null) => void;
     onSelectBone: (bone: string | null) => void;
-    onObjectTransform: (id: string, transform: DirectorTransform) => void;
+    onObjectTransform: (id: string, from: DirectorTransform, to: DirectorTransform) => void;
     onBoneTransform: (id: string, bone: string, rotation: DirectorQuat) => void;
     onActorRigReady: (id: string, rig: DirectorRig, animations: AnimationClip[]) => void;
 };
 
 type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; suspendDisplayMaterialOverride: () => () => void };
 
+// 稳定空值：identity 不匹配时返回同一引用，避免下游 effect 依赖每次 render 都变化。
+const emptyAnimations: AnimationClip[] = [];
+const emptyRestRotations: Partial<Record<DirectorHumanoidBone, DirectorQuat>> = {};
+
+// Canvas 配置必须是稳定引用：inline literal 每次父级 render 都是新对象，
+// context lost 的 dispatch 触发重渲染后 R3F 会 configure 并在失效 context 上
+// 重建 WebGLRenderer，抛 getMaxPrecision / autoReset。稳定后 lost 只显示 notice。
+const directorCanvasGl = { antialias: true, preserveDrawingBuffer: true, alpha: false } as const;
+const directorCanvasCamera = { position: [4.8, 2.7, 6.8] as [number, number, number], fov: 50, near: 0.05, far: 500 } as const;
+const directorCanvasDpr: [number, number] = [1, 1.5];
+
 export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewportProps>(function DirectorViewport(props, ref) {
     const captureContext = useRef<CaptureContext | null>(null);
-    const onCaptureContext = useCallback((context: CaptureContext) => { captureContext.current = context; }, []);
+    // 地面点连同 owner canvas 一起记录：owner 不是当前 renderer 的 canvas 就是陈旧值。
+    const groundRef = useRef<{ owner: HTMLCanvasElement; point: DirectorGroundPoint } | null>(null);
+    const orbitControlsRef = useRef<DirectorOrbitControls | null>(null);
+    /** pointermove 高频路径只写 ref，不触发 render；清空只允许由该点的 owner 发起。 */
+    const onGroundPoint = useCallback((owner: HTMLCanvasElement, point: DirectorGroundPoint | null) => {
+        if (point) {
+            groundRef.current = { owner, point };
+            return;
+        }
+        if (groundRef.current?.owner === owner) groundRef.current = null;
+    }, []);
+    const onOrbitControls = useCallback((controls: DirectorOrbitControls | null) => {
+        orbitControlsRef.current = controls;
+    }, []);
+    // retryKey 变化会真正重建 Canvas 与 ErrorBoundary，而不是只换文案。
+    const [retryKey, setRetryKey] = useState(0);
+    // capture 可用性：上下文丢失期间不得再使用失效 renderer；恢复后需重新登记。
+    const [capture, dispatchCapture] = useReducer(reduceDirectorCapture, directorCaptureInitial);
+    const captureRef = useRef(capture);
+    captureRef.current = capture;
+    // 加载失败的对象 id -> 该对象自己的 retry；Canvas 内部无法呈现可操作提示，统一提到 DOM 层。
+    const [failedLoads, setFailedLoads] = useState<DirectorFailedLoads>({});
+    const onCaptureContext = useCallback((context: CaptureContext) => {
+        captureContext.current = context;
+        dispatchCapture("register");
+    }, []);
+    /** 子树卸载 / boundary 捕获：清掉指向已销毁 renderer 的引用并打回不可用。 */
+    const releaseCapture = useCallback(() => {
+        releaseDirectorCapture({
+            clearContext: () => {
+                captureContext.current = null;
+            },
+            onAvailability: dispatchCapture,
+        });
+        // 地面点与 controls 都属于已销毁的 renderer，必须一并作废。
+        groundRef.current = null;
+        orbitControlsRef.current = null;
+    }, []);
+    const retry = useCallback(() => {
+        releaseCapture();
+        setFailedLoads({});
+        setRetryKey((value) => value + 1);
+    }, [releaseCapture]);
+    const onLoadStateChange = useCallback((id: string, signal: DirectorLoadSignal, retryLoad: () => void) => {
+        setFailedLoads((current) => upsertDirectorFailedLoad(current, id, signal, retryLoad));
+    }, []);
+    // 稳定引用：否则新的监听 effect 会在每次父级 render 时摘除重装。
+    const onContextLost = useCallback(() => {
+        // 上下文丢失后相机与射线结果都不可信，旧地面点必须作废，恢复后需重新移动 pointer。
+        groundRef.current = null;
+        recordDirectorDiagnostic("DIRECTOR_VIEWPORT_CONTEXT_LOST");
+        dispatchCapture("lost");
+    }, []);
+    const onContextRestored = useCallback(() => {
+        recordDirectorDiagnostic("DIRECTOR_VIEWPORT_CONTEXT_RESTORED");
+        dispatchCapture("restored");
+    }, []);
+    const failedIds = Object.keys(failedLoads);
+    // 上下文失效时 renderer 不可用：capture/record/readCamera 必须明确失败而不是画出脏帧。
+    const usableContext = () => {
+        if (!directorCaptureUsable(captureRef.current)) return null;
+        return captureContext.current;
+    };
     useImperativeHandle(ref, () => ({
-        capture: (mode) => captureFrame(captureContext.current, mode),
-        recordVideo: (duration, fps) => recordCanvas(captureContext.current, duration, fps),
+        capture: (mode) => captureFrame(usableContext(), mode),
+        recordVideo: (duration, fps) => recordCanvas(usableContext(), duration, fps),
         readCameraTransform: () => {
-            const camera = captureContext.current?.camera;
+            const camera = usableContext()?.camera;
             return camera ? { position: camera.position.toArray() as DirectorTransform["position"], rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z], scale: [1, 1, 1] } : null;
         },
+        readPlacementIntent: () => {
+            const context = usableContext();
+            if (!context) return emptyDirectorPlacementIntent;
+            // owner 校验：上下文重建后，旧 renderer canvas 记录的点一律不采用。
+            const tracked = groundRef.current;
+            const pointer = tracked && tracked.owner === context.gl.domElement ? tracked.point : null;
+            // 读实例当前 target，而不是 activeCamera.target prop；投影到 y=0 即取 x/z。
+            const target = orbitControlsRef.current?.target;
+            return { pointer, orbitTarget: finiteDirectorGroundPoint(target?.x, target?.z) };
+        },
     }), []);
+
+    return (
+        // data-renderer-ready 直接来自 directorCaptureUsable：capture context 已登记且未 lost。
+        // 这是真实就绪信号，供 E2E 在触发 context loss 前确定监听器已安装。
+        <div className="director-viewport-shell" data-renderer-ready={directorCaptureUsable(capture) ? "true" : "false"}>
+            <DirectorViewportErrorBoundary key={`boundary-${retryKey}`} onRelease={releaseCapture} onRetry={retry}>
+                <DirectorCanvasSurface
+                    key={`canvas-${retryKey}`}
+                    {...props}
+                    onCaptureContext={onCaptureContext}
+                    onRelease={releaseCapture}
+                    onContextLost={onContextLost}
+                    onContextRestored={onContextRestored}
+                    onLoadStateChange={onLoadStateChange}
+                    onGroundPoint={onGroundPoint}
+                    onOrbitControls={onOrbitControls}
+                />
+            </DirectorViewportErrorBoundary>
+            {capture.contextLost ? (
+                <DirectorViewportNotice
+                    title="3D 显示上下文已丢失"
+                    description="浏览器回收了 WebGL 上下文。等待自动恢复，或立即重建视口。"
+                    actionLabel="重建 3D 视口"
+                    onAction={retry}
+                />
+            ) : null}
+            {!capture.contextLost && failedIds.length ? (
+                <DirectorViewportNotice
+                    variant="corner"
+                    title={`${failedIds.length} 个 3D 模型加载失败`}
+                    description="已用占位人偶继续显示场景。可能是网络或模型地址不可用，重试将重新加载。"
+                    actionLabel="重试加载"
+                    onAction={() => {
+                        // 重试触发新的 load generation，旧的晚到回调会被忽略并释放资源。
+                        Object.values(failedLoads).forEach((retryLoad) => retryLoad());
+                        setFailedLoads({});
+                    }}
+                />
+            ) : null}
+        </div>
+    );
+});
+
+type DirectorCanvasSurfaceProps = DirectorViewportProps & {
+    onCaptureContext: (context: CaptureContext) => void;
+    onRelease: () => void;
+    onContextLost: () => void;
+    onContextRestored: () => void;
+    onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void;
+    onGroundPoint: (owner: HTMLCanvasElement, point: DirectorGroundPoint | null) => void;
+    onOrbitControls: (controls: DirectorOrbitControls | null) => void;
+};
+
+/**
+ * Canvas 表面独立 memo。
+ *
+ * R3F 本地 CanvasImpl 的 layout effect 没有依赖数组，父级每次 rerender 都会 configure。
+ * context lost 时 DirectorViewport 会 dispatchCapture 触发 rerender，若 Canvas 跟着重渲染，
+ * configure 就会在已失效的 canvas 上重建 WebGLRenderer 并抛 getMaxPrecision / autoReset。
+ * 隔离在 memo 子组件后，contextLost / failedLoads 这类外层状态变化不再穿透到 Canvas；
+ * 只有 props 真的变化才重渲染，retryKey 变化仍由外层 key 触发真正 remount。
+ */
+const DirectorCanvasSurface = memo(function DirectorCanvasSurface(props: DirectorCanvasSurfaceProps) {
+    const { onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls, ...sceneProps } = props;
+    const onSelectObject = sceneProps.onSelectObject;
+    const onPointerMissed = useCallback(() => onSelectObject(null), [onSelectObject]);
 
     return (
         <Canvas
             shadows
             frameloop="demand"
-            dpr={[1, 1.5]}
-            camera={{ position: [4.8, 2.7, 6.8], fov: 50, near: 0.05, far: 500 }}
-            gl={{ antialias: true, preserveDrawingBuffer: true, alpha: false }}
-            onPointerMissed={() => props.onSelectObject(null)}
+            dpr={directorCanvasDpr}
+            camera={directorCanvasCamera}
+            gl={directorCanvasGl}
+            onPointerMissed={onPointerMissed}
         >
             <Suspense fallback={null}>
-                <DirectorSceneContent {...props} onCaptureContext={onCaptureContext} />
+                <DirectorSceneContent
+                    {...sceneProps}
+                    onCaptureContext={onCaptureContext}
+                    onRelease={onRelease}
+                    onContextLost={onContextLost}
+                    onContextRestored={onContextRestored}
+                    onLoadStateChange={onLoadStateChange}
+                    onGroundPoint={onGroundPoint}
+                    onOrbitControls={onOrbitControls}
+                />
             </Suspense>
         </Canvas>
     );
 });
 
-function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext }: DirectorViewportProps & { onCaptureContext: (context: CaptureContext) => void }) {
+/** 本地失败隔离：3D 视口异常只替换视口本身，不影响画布/项目其余部分。 */
+class DirectorViewportErrorBoundary extends Component<{ children: ReactNode; onRelease: () => void; onRetry: () => void }, { failed: boolean }> {
+    state = { failed: false };
+
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+
+    componentDidCatch() {
+        // 只记录稳定错误码：原始 error / componentStack 可能带素材 URL 或正文，不落日志。
+        recordDirectorDiagnostic("DIRECTOR_VIEWPORT_RENDER_FAILED");
+        // 子树已被 React 卸载，capture context 指向已销毁的 renderer，必须同步释放。
+        this.props.onRelease();
+    }
+
+    render() {
+        if (!this.state.failed) return this.props.children;
+        return (
+            <DirectorViewportNotice
+                title="3D 视口渲染失败"
+                description="导演台其余面板仍可使用。可重试重建视口；若持续失败请检查显卡驱动或浏览器 WebGL 支持。"
+                actionLabel="重试 3D 视口"
+                onAction={() => {
+                    this.setState({ failed: false });
+                    this.props.onRetry();
+                }}
+            />
+        );
+    }
+}
+
+function DirectorViewportNotice({ title, description, actionLabel, onAction, variant = "cover" }: { title: string; description: string; actionLabel: string; onAction: () => void; variant?: "cover" | "corner" }) {
+    return (
+        <div className={`director-viewport-notice ${variant === "corner" ? "is-corner" : "is-cover"}`} role="alert">
+            <div className="director-viewport-notice-title">{title}</div>
+            <p className="director-viewport-notice-text">{description}</p>
+            <button type="button" className="director-viewport-notice-action" onClick={onAction}>{actionLabel}</button>
+        </div>
+    );
+}
+
+function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorViewportProps & { onCaptureContext: (context: CaptureContext) => void; onRelease: () => void; onContextLost: () => void; onContextRestored: () => void; onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void; onGroundPoint: (owner: HTMLCanvasElement, point: DirectorGroundPoint | null) => void; onOrbitControls: (controls: DirectorOrbitControls | null) => void }) {
     const { gl, camera, scene: threeScene, invalidate } = useThree();
+    const orbitRef = useRef<DirectorOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
     const displayClayRestoreRef = useRef<(() => void) | null>(null);
     const shot = scene.shots.find((item) => item.id === scene.activeShotId) || scene.shots[0];
@@ -74,9 +286,68 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
         };
     }, [threeScene]);
 
+    const readCaptureContext = useCallback((): CaptureContext => ({ gl, camera: camera as PerspectiveCamera, scene: threeScene, suspendDisplayMaterialOverride }), [camera, gl, suspendDisplayMaterialOverride, threeScene]);
+
     useEffect(() => {
-        onCaptureContext({ gl, camera: camera as PerspectiveCamera, scene: threeScene, suspendDisplayMaterialOverride });
-    }, [camera, gl, onCaptureContext, suspendDisplayMaterialOverride, threeScene]);
+        onCaptureContext(readCaptureContext());
+    }, [onCaptureContext, readCaptureContext]);
+
+    // 子树卸载（重试重建、boundary 捕获后 React 卸载）时同步释放：
+    // 此后 captureContext 指向已销毁的 renderer，必须清空并打回不可用。
+    // 单独 effect 且只依赖稳定的 onRelease，不会被 readCaptureContext 变化连带触发。
+    useEffect(() => () => onRelease(), [onRelease]);
+
+    // 上下文丢失/恢复监听绑定在 renderer 自己的 canvas 上，随 renderer 与重试精确摘除。
+    useEffect(() => installDirectorContextListeners(gl.domElement, {
+        onLost: onContextLost,
+        // 恢复后 registered 会被置回 false，必须用当前 renderer 重新登记，
+        // 否则 capture/record/readCameraTransform 会一直不可用。走与测试共用的序列 helper。
+        onRestored: () => restoreDirectorCapture({
+            readContext: readCaptureContext,
+            onAvailability: onContextRestored,
+            onRegister: onCaptureContext,
+            invalidate,
+        }),
+    }), [gl, invalidate, onCaptureContext, onContextLost, onContextRestored, readCaptureContext]);
+
+    /**
+     * 地面拾取：renderer 自己的 canvas 上做 pointer 监听，再用真实 Raycaster 与
+     * 世界 y=0 Plane 求交。不走 mesh onPointerMove（会被物体 stopPropagation 截断），
+     * 也不做 DOM 像素伪换算；因此 pointer 悬停在物体上方时射线仍与地面相交。
+     * 高频路径只写 ref，绝不 setState。
+     */
+    useEffect(() => {
+        const canvasElement = gl.domElement;
+        const raycaster = new Raycaster();
+        const groundPlane = new Plane(new Vector3(0, 1, 0), 0);
+        const hit = new Vector3();
+        const ndc = new Vector2();
+
+        const onPointerMove = (event: PointerEvent) => {
+            const bounds = canvasElement.getBoundingClientRect();
+            if (bounds.width <= 0 || bounds.height <= 0) return;
+            ndc.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
+            raycaster.setFromCamera(ndc, camera);
+            // 射线与地面平行或背离时 intersectPlane 返回 null：保留上一个合法点，不写非法值。
+            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return;
+            const point = finiteDirectorGroundPoint(hit.x, hit.z);
+            if (point) onGroundPoint(canvasElement, point);
+        };
+
+        canvasElement.addEventListener("pointermove", onPointerMove, { passive: true });
+        return () => {
+            canvasElement.removeEventListener("pointermove", onPointerMove);
+            // 这个 renderer 的 canvas 卸载后，它记录的地面点不得再被读到。
+            onGroundPoint(canvasElement, null);
+        };
+    }, [camera, gl, onGroundPoint]);
+
+    // OrbitControls 的真实 target 只能从实例读；activeCamera.target 只是初始 prop。
+    // 挂载期登记一次即可：drei 重建实例会连带重跑本 effect。
+    useEffect(() => {
+        onOrbitControls(orbitRef.current);
+        return () => onOrbitControls(null);
+    }, [onOrbitControls]);
 
     useEffect(() => {
         threeScene.background = new Color(scene.background);
@@ -98,7 +369,7 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
 
     return (
         <>
-            <CameraSync camera={activeCamera} playhead={playhead} />
+            <CameraSync camera={activeCamera} playhead={playhead} playing={playing} />
             <ambientLight intensity={scene.environmentIntensity * 0.35} />
             {scene.lights.map((light) => <DirectorLightView key={light.id} light={light} />)}
             {scene.gridVisible ? <Grid position={[0, 0, 0]} infiniteGrid fadeDistance={40} fadeStrength={5} cellSize={0.5} sectionSize={5} cellColor="#8f99a3" sectionColor="#626d77" /> : null}
@@ -117,21 +388,24 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
                     onSelect={() => onSelectObject(object.id)}
                     onSelectBone={(bone) => { onSelectObject(object.id); onSelectBone(bone); }}
                     onTransforming={setTransforming}
-                    onTransform={(transform) => onObjectTransform(object.id, transform)}
+                    onTransform={(from, to) => onObjectTransform(object.id, from, to)}
                     onBoneTransform={(bone, rotation) => onBoneTransform(object.id, bone, rotation)}
                     onActorRigReady={(rig, animations) => onActorRigReady(object.id, rig, animations)}
+                    onLoadStateChange={onLoadStateChange}
                 />
             ))}
-            <OrbitControls makeDefault enabled={!transforming} target={activeCamera?.target || [0, 1, 0]} minDistance={0.6} maxDistance={80} />
+            <OrbitControls ref={orbitRef} makeDefault enabled={!transforming} target={activeCamera?.target || [0, 1, 0]} minDistance={0.6} maxDistance={80} />
         </>
     );
 }
 
-function CameraSync({ camera, playhead }: { camera?: DirectorCamera; playhead: number }) {
+function CameraSync({ camera, playhead, playing }: { camera?: DirectorCamera; playhead: number; playing: boolean }) {
     const threeCamera = useThree((state) => state.camera as PerspectiveCamera);
     const invalidate = useThree((state) => state.invalidate);
+    // 只有相机真正被关键帧/播放驱动时才写入，暂停时用户 Orbit 不会被拉回。
+    const syncKey = directorCameraSyncKey({ camera, playhead, playing });
     useEffect(() => {
-        if (!camera) return;
+        if (!camera || !syncKey) return;
         const transform = interpolateDirectorTransform(camera.transform, camera.keyframes, playhead);
         threeCamera.position.set(...transform.position);
         threeCamera.rotation.set(...transform.rotation);
@@ -141,47 +415,111 @@ function CameraSync({ camera, playhead }: { camera?: DirectorCamera; playhead: n
         threeCamera.lookAt(...camera.target);
         threeCamera.updateProjectionMatrix();
         invalidate();
-    }, [camera, invalidate, playhead, threeCamera]);
+        // camera/playhead 只通过 syncKey 参与依赖，避免草稿对象身份变化触发无谓回写。
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [invalidate, syncKey, threeCamera]);
     return null;
 }
 
-function DirectorObjectView({ object, selected, selectedBone, transformMode, playhead, onSelect, onSelectBone, onTransforming, onTransform, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; transformMode: DirectorViewportProps["transformMode"]; playhead: number; onSelect: () => void; onSelectBone: (bone: string | null) => void; onTransforming: (value: boolean) => void; onTransform: (transform: DirectorTransform) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
-    const groupRef = useRef<Group>(null);
-    const transform = interpolateDirectorTransform(object.transform, object.keyframes, playhead);
-    const content = (
-        <group
-            ref={groupRef}
-            position={transform.position}
-            rotation={transform.rotation}
-            scale={transform.scale}
-            onPointerDown={(event) => {
-                event.stopPropagation();
-                onSelect();
-            }}
-        >
-            <DirectorObjectVisual object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />
-        </group>
-    );
-    if (!selected) return content;
+function DirectorObjectView({ object, selected, selectedBone, transformMode, playhead, onSelect, onSelectBone, onTransforming, onTransform, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: DirectorObject; selected: boolean; selectedBone: string | null; transformMode: DirectorViewportProps["transformMode"]; playhead: number; onSelect: () => void; onSelectBone: (bone: string | null) => void; onTransforming: (value: boolean) => void; onTransform: (from: DirectorTransform, to: DirectorTransform) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void }) {
+    const [target, setTarget] = useState<Group | null>(null);
+    const resolved = interpolateDirectorTransform(object.transform, object.keyframes, playhead);
+    // 手势进行中冻结声明式 transform，交由 gizmo 直接改写 Object3D；终态后再由场景状态接管。
+    const [frozen, setFrozen] = useState<DirectorTransform | null>(null);
+    const transform = frozen || resolved;
     return (
-        <TransformControls
-            mode={transformMode}
-            size={0.8}
-            onMouseDown={() => onTransforming(true)}
-            onMouseUp={() => {
-                onTransforming(false);
-                const target = groupRef.current;
-                if (!target) return;
-                onTransform({ position: target.position.toArray() as DirectorTransform["position"], rotation: [target.rotation.x, target.rotation.y, target.rotation.z], scale: target.scale.toArray() as DirectorTransform["scale"] });
-            }}
-        >
-            {content}
-        </TransformControls>
+        <>
+            <group
+                ref={setTarget}
+                position={transform.position}
+                rotation={transform.rotation}
+                scale={transform.scale}
+                onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onSelect();
+                }}
+            >
+                <DirectorObjectVisual object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} onLoadStateChange={onLoadStateChange} />
+            </group>
+            {selected && target ? (
+                <DirectorObjectGizmo
+                    target={target}
+                    transformMode={transformMode}
+                    onFreeze={setFrozen}
+                    onTransforming={onTransforming}
+                    onTransform={onTransform}
+                />
+            ) : null}
+        </>
     );
 }
 
-function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
-    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />;
+function DirectorObjectGizmo({ target, transformMode, onFreeze, onTransforming, onTransform }: { target: Group; transformMode: DirectorViewportProps["transformMode"]; onFreeze: (transform: DirectorTransform | null) => void; onTransforming: (value: boolean) => void; onTransform: (from: DirectorTransform, to: DirectorTransform) => void }) {
+    const transaction = useDirectorGizmoTransaction<DirectorTransform>({
+        read: () => readObject3DTransform(target),
+        restore: (snapshot) => applyObject3DTransform(target, snapshot),
+        commit: onTransform,
+        onActive: (active, snapshot) => {
+            onFreeze(active ? snapshot : null);
+            onTransforming(active);
+        },
+    });
+    return (
+        <TransformControls
+            object={target}
+            mode={transformMode}
+            size={0.8}
+            onMouseDown={() => transaction.begin()}
+            onMouseUp={() => transaction.end("commit")}
+        />
+    );
+}
+
+/**
+ * gizmo 事务的统一接线：对象与骨骼共用，避免两套实现产生偏差。
+ * 监听在挂载期间常驻安装（不以「当前是否有手势」为安装条件），
+ * 非活跃时 end 自身是空操作。
+ */
+function useDirectorGizmoTransaction<TSnapshot>({ read, restore, commit, onActive }: { read: () => TSnapshot | null; restore: (snapshot: TSnapshot) => void; commit: (from: TSnapshot, to: TSnapshot) => void; onActive: (active: boolean, snapshot: TSnapshot | null) => void }) {
+    const hooksRef = useRef({ read, restore, commit, onActive });
+    useEffect(() => { hooksRef.current = { read, restore, commit, onActive }; }, [commit, onActive, read, restore]);
+
+    const transaction = useMemo(() => createDirectorTransaction<TSnapshot>({
+        read: () => hooksRef.current.read(),
+        restore: (snapshot) => hooksRef.current.restore(snapshot),
+        commit: (from, to) => hooksRef.current.commit(from, to),
+        setActive: (active) => hooksRef.current.onActive(active, active ? hooksRef.current.read() : null),
+        // stdlib 在 domElement.ownerDocument 上注册 pointerup，其 pointerUp({button:0})
+        // 会 dispatch mouseUp 后清 dragging=false / axis=null。因此用真实事件走它自己的
+        // 收尾通道，而不是写它的私有字段（.d.ts 中 dragging/axis 均为 private）。
+        terminateDrag: () => document.dispatchEvent(new PointerEvent("pointerup", { button: 0, bubbles: true })),
+    }), []);
+
+    useEffect(() => installDirectorTerminalListeners(transaction, {
+        window,
+        document,
+        isHidden: () => document.visibilityState === "hidden",
+    }), [transaction]);
+
+    // 取消选中、删除对象、切换模型或卸载都必须回到快照并释放 transforming。
+    useEffect(() => () => transaction.end("cancel"), [transaction]);
+
+    return transaction;
+}
+
+function readObject3DTransform(target: Object3D): DirectorTransform {
+    return { position: target.position.toArray() as DirectorVec3, rotation: [target.rotation.x, target.rotation.y, target.rotation.z], scale: target.scale.toArray() as DirectorVec3 };
+}
+
+function applyObject3DTransform(target: Object3D, transform: DirectorTransform) {
+    target.position.set(...transform.position);
+    target.rotation.set(...transform.rotation);
+    target.scale.set(...transform.scale);
+    target.updateMatrixWorld(true);
+}
+
+function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void }) {
+    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} onLoadStateChange={onLoadStateChange} />;
     if (object.kind === "billboard" && object.url) return <DirectorBillboard object={object} selected={selected} />;
     const material = <meshStandardMaterial color={selected ? "#2f8cff" : object.color} roughness={0.68} metalness={0.05} />;
     return (
@@ -192,19 +530,56 @@ function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSele
     );
 }
 
-function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
-    const [model, setModel] = useState<Object3D | null>(null);
-    const [animations, setAnimations] = useState<AnimationClip[]>([]);
-    const [rig, setRig] = useState<DirectorRig | null>(null);
-    const [restRotations, setRestRotations] = useState<Partial<Record<DirectorHumanoidBone, DirectorQuat>>>({});
+function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void }) {
+    const [load, dispatchLoad] = useReducer(reduceDirectorLoad, directorLoadInitial);
+    const loadRef = useRef(load);
+    loadRef.current = load;
+    const loadGeneration = load.generation;
+    const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
+    // 展示身份 = generation + 解析输入。render 阶段用它屏蔽旧资源，
+    // 因此 prop/retry 变化的第一次 render 就已卸下上一代 model，随后 cleanup 才 dispose。
+    const identity = directorLoadIdentity({ generation: loadGeneration, url: modelUrl, storageKey: object.storageKey, kind: object.kind });
+    type LoadedModel = { model: Object3D; rig: DirectorRig; animations: AnimationClip[]; restRotations: Partial<Record<DirectorHumanoidBone, DirectorQuat>> };
+    const [loaded, setLoaded] = useState<{ identity: string; value: LoadedModel } | null>(null);
+    const display = resolveDirectorDisplay(loaded, identity);
+    const model = display?.model ?? null;
+    const rig = display?.rig ?? null;
+    const animations = display?.animations ?? emptyAnimations;
+    const restRotations = display?.restRotations ?? emptyRestRotations;
+    const setLoadPhase = useCallback((phase: "loading" | "ready" | "error") => {
+        if (phase === "loading") dispatchLoad({ type: "start" });
+        else dispatchLoad({ type: phase === "ready" ? "loaded" : "failed", generation: loadRef.current.generation });
+    }, []);
     const mixerRef = useRef<AnimationMixer | null>(null);
+    const ownedRef = useRef<{ model: Object3D | null; mixer: AnimationMixer | null }>({ model: null, mixer: null });
     const onActorRigReadyRef = useRef(onActorRigReady);
     const invalidate = useThree((state) => state.invalidate);
+    // helper 只跟随「当前 identity 下真正要展示的 model」，不会挂在已卸下的旧 model 上。
     const helper = useMemo(() => model ? new SkeletonHelper(model) : null, [model]);
+    useEffect(() => () => disposeDirectorHelper(helper), [helper]);
+
+    // 把 loading/error/ready 报到 DOM 层，Canvas 内部无法呈现可操作提示。
+    // 依赖必须收敛到稳定原始值：object 每次场景编辑都是新引用，
+    // 若挂在 [object] 上会让下面的注销 effect 每次编辑都误报 unmounted，
+    // 失败模型的重试入口会随之消失。
+    const objectId = object.id;
+    const objectKind = directorDiagnosticObjectKind(object);
+    const retryLoad = useCallback(() => {
+        recordDirectorDiagnostic("DIRECTOR_MODEL_LOAD_RETRY", { objectId, objectKind, attempt: loadRef.current.generation, userInitiated: true });
+        dispatchLoad({ type: "retry" });
+    }, [objectId, objectKind]);
+    const onLoadStateChangeRef = useRef(onLoadStateChange);
+    useEffect(() => { onLoadStateChangeRef.current = onLoadStateChange; }, [onLoadStateChange]);
+    useEffect(() => {
+        onLoadStateChangeRef.current(object.id, load.phase, retryLoad);
+    }, [load.phase, object.id, retryLoad]);
+
+    // 卸载（删除、隐藏分支、换 URL/kind、Canvas 重建）必须注销自己，避免通知残留陈旧条目。
+    // 单独 effect 且只依赖 id：phase 变化不会反复注销重登。
+    useEffect(() => () => onLoadStateChangeRef.current(object.id, "unmounted", retryLoad), [object.id, retryLoad]);
     const selectedBoneObject = selectedBone && rig?.boneMap[selectedBone as DirectorHumanoidBone] ? model?.getObjectByName(rig.boneMap[selectedBone as DirectorHumanoidBone]!) : null;
     const motion = object.motionClips?.find((item) => item.id === object.activeMotionClipId);
     const activeAnimation = motion ? animations.find((item) => item.name === motion.sourceAnimation) : undefined;
-    const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
     const handleModelPointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
         if (!selected || !rig) return;
         let nearestBone: string | null = null;
@@ -228,27 +603,83 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
 
     useEffect(() => {
+        const generation = loadRef.current.generation;
         let active = true;
+        // render 阶段已由 identity 屏蔽旧资源；这里再清一次作为防御，不作为安全性依据。
+        setLoaded(null);
+        setLoadPhase("loading");
+        const failLoad = () => {
+            if (!active || generation !== loadRef.current.generation) return;
+            // 只记录稳定码与安全枚举：URL / storageKey / 原始 error 都不落日志。
+            recordDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: object.id, objectKind: directorDiagnosticObjectKind(object), attempt: generation });
+            setLoadPhase("error");
+        };
         const loader = new GLTFLoader();
-        void resolveMediaUrl(object.storageKey, modelUrl).then((url) => loader.load(url, (gltf) => {
-            if (!active) return;
-            const next = SkeletonUtils.clone(gltf.scene);
-            normalizeModel(next, object.castShadow, object.receiveShadow);
-            const nextRig = inferDirectorRig(next, gltf.animations.map((clip) => clip.name));
-            if (object.kind === "actor" || object.primitive === "character") applyActorReferenceMaterial(next, object.color);
-            mixerRef.current = new AnimationMixer(next);
-            setRig(nextRig);
-            setRestRotations(readRigRestRotations(next, nextRig));
-            setAnimations(gltf.animations);
-            setModel(next);
-            onActorRigReadyRef.current(nextRig, gltf.animations);
-        }, undefined, () => active && setModel(null)));
+        void resolveMediaUrl(object.storageKey, modelUrl)
+            .then((url) => {
+                // 解析完成时已失效：不再发起无意义的网络加载。
+                if (!active || generation !== loadRef.current.generation) return;
+                loader.load(
+                    url,
+                    (gltf) => {
+                        const ownership = resolveDirectorLoadOwnership({ active, generation, currentGeneration: loadRef.current.generation });
+                        if (!ownership.adopt) {
+                            // 未被采纳的晚到 source 必须释放，否则孤儿泄漏。
+                            if (ownership.disposeSource) disposeDirectorObject3D(gltf.scene);
+                            return;
+                        }
+                        // 采纳流程整体包裹：clone / normalize / rig 推断 / 材质替换 / mixer /
+                        // setLoaded / onActorRigReady 任一步抛错都不得逃出，也不得留下半采纳资源。
+                        let clone: Object3D | null = null;
+                        let mixer: AnimationMixer | null = null;
+                        try {
+                            // clone 与 source 共享 geometry/material/texture。
+                            // 采纳后 source 的 Object3D 层级可被 GC，共享 GPU 资源由 owned clone 持有，
+                            // 最终只在 clone 的 cleanup 里释放一次；这里绝不 dispose source。
+                            clone = SkeletonUtils.clone(gltf.scene);
+                            normalizeModel(clone, object.castShadow, object.receiveShadow);
+                            const nextRig = inferDirectorRig(
+                                clone,
+                                gltf.animations.map((clip) => clip.name),
+                            );
+                            if (object.kind === "actor" || object.primitive === "character") applyActorReferenceMaterial(clone, object.color);
+                            mixer = new AnimationMixer(clone);
+                            mixerRef.current = mixer;
+                            ownedRef.current = { model: clone, mixer };
+                            // 一次性写入带 identity 的展示记录，避免 model/rig/animations 之间出现中间态。
+                            setLoaded({
+                                identity,
+                                value: { model: clone, rig: nextRig, animations: gltf.animations, restRotations: readRigRestRotations(clone, nextRig) },
+                            });
+                            setLoadPhase("ready");
+                            onActorRigReadyRef.current(nextRig, gltf.animations);
+                        } catch {
+                            // 只记录稳定错误码：原始 error / URL / 素材正文都不落日志。
+                            recordDirectorDiagnostic("DIRECTOR_MODEL_ADOPT_FAILED", { objectId: object.id, objectKind: directorDiagnosticObjectKind(object) });
+                            // 先摘掉 owned 记录，避免 effect cleanup 二次释放同一批资源。
+                            ownedRef.current = { model: null, mixer: null };
+                            mixerRef.current = null;
+                            setLoaded(null);
+                            disposeDirectorAdoptionFailure({ clone, mixer, source: gltf.scene });
+                            // 回到既有 error/retry/占位人偶路径。
+                            failLoad();
+                        }
+                    },
+                    undefined,
+                    failLoad,
+                );
+            })
+            // 地址解析失败与 GLTFLoader onError 走同一条 error/retry 通道。
+            .catch(failLoad);
         return () => {
             active = false;
-            mixerRef.current?.stopAllAction();
+            // 替换/重试/卸载：释放本 generation 拥有的 clone 与 mixer（共享资源随之恰好释放一次）。
+            const owned = ownedRef.current;
+            ownedRef.current = { model: null, mixer: null };
             mixerRef.current = null;
+            disposeDirectorModelResources({ model: owned.model, mixer: owned.mixer });
         };
-    }, [modelUrl, object.kind, object.storageKey]);
+    }, [identity, modelUrl, object.storageKey]);
 
     useEffect(() => {
         if (!model) return;
@@ -303,8 +734,22 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
             const selectedFingerGroup = directorFingerGroup(selectedBone);
             return <BoneController key={bone} bone={model.getObjectByName(name!)} selected={selectedBone === bone} dimmed={Boolean(fingerGroup && selectedFingerGroup && fingerGroup !== selectedFingerGroup)} onSelect={() => onSelectBone(bone)} />;
         }) : null}
-        {selected && selectedBoneObject ? <TransformControls object={selectedBoneObject} mode="rotate" size={0.55} onMouseUp={() => onBoneTransform(selectedBone!, selectedBoneObject.quaternion.toArray() as DirectorQuat)} /> : null}
+        {selected && selectedBoneObject && selectedBone ? <DirectorBoneGizmo bone={selectedBoneObject} onCommit={(rotation) => onBoneTransform(selectedBone, rotation)} /> : null}
     </group>;
+}
+
+/** 骨骼 gizmo 与对象 gizmo 共用事务接线，取消时恢复骨骼 quaternion。 */
+function DirectorBoneGizmo({ bone, onCommit }: { bone: Object3D; onCommit: (rotation: DirectorQuat) => void }) {
+    const transaction = useDirectorGizmoTransaction<DirectorQuat>({
+        read: () => bone.quaternion.toArray() as DirectorQuat,
+        restore: (snapshot) => {
+            bone.quaternion.fromArray(snapshot);
+            bone.updateMatrixWorld(true);
+        },
+        commit: (_from, to) => onCommit(to),
+        onActive: () => undefined,
+    });
+    return <TransformControls object={bone} mode="rotate" size={0.55} onMouseDown={() => transaction.begin()} onMouseUp={() => transaction.end("commit")} />;
 }
 
 function DirectorMannequin({ color, selected }: { color: string; selected: boolean }) {
@@ -398,13 +843,17 @@ function normalizeModel(root: Object3D, castShadow: boolean, receiveShadow: bool
 
 function applyActorReferenceMaterial(root: Object3D, color: string) {
     const material = new MeshStandardMaterial({ color, roughness: 0.74, metalness: 0.02 });
+    const replaced: Material[] = [];
     root.traverse((child) => {
         const mesh = child as Mesh;
         if (!mesh.isMesh) return;
+        // 被顶掉的原材质不再被任何 mesh 引用，必须释放，否则每次加载都泄漏一份。
+        if (mesh.material) replaced.push(...(Array.isArray(mesh.material) ? mesh.material : [mesh.material]));
         mesh.material = material;
         mesh.userData.directorActor = true;
         mesh.userData.directorActorMaterial = material;
     });
+    disposeDirectorMaterials(replaced.filter((item) => item !== material));
 }
 
 function updateActorReferenceColor(root: Object3D, color: string) {
@@ -465,26 +914,52 @@ function applyDirectorBoneTracks(model: Object3D, object: DirectorObject, playhe
         const target = name ? model.getObjectByName(name) : null;
         if (!target) return;
         const humanoidBone = bone as DirectorHumanoidBone;
-        if (!hasActiveMotion) {
-            const rest = restRotations[humanoidBone];
-            if (rest) target.quaternion.copy(new Quaternion(...rest));
-            const delta = poseDeltas[humanoidBone];
-            if (delta) target.quaternion.multiply(new Quaternion(...delta));
+        // hasActiveMotion 时 mixer 已写入 target.quaternion，直接作为动作层输入。
+        const rotation = resolveDirectorBoneRotation({
+            motion: hasActiveMotion ? target.quaternion.toArray() as DirectorQuat : null,
+            rest: hasActiveMotion ? null : restRotations[humanoidBone] || null,
+            poseDelta: hasActiveMotion ? null : poseDeltas[humanoidBone] || null,
+            override: object.boneOverrides?.[humanoidBone] || null,
+            keyframes: object.boneTracks?.find((item) => item.bone === bone)?.keyframes || null,
+            time: playhead,
+        });
+        if (rotation) {
+            target.quaternion.copy(new Quaternion(...rotation));
+            return;
         }
-        const override = object.boneOverrides?.[bone as DirectorHumanoidBone];
-        const track = object.boneTracks?.find((item) => item.bone === bone);
-        const rotation = track ? interpolateDirectorBoneRotation(override || target.quaternion.toArray() as DirectorQuat, track.keyframes, playhead) : override;
-        if (rotation) target.quaternion.copy(new Quaternion(...rotation));
+        if (hasActiveMotion) return;
+        const rest = restRotations[humanoidBone];
+        if (rest) target.quaternion.copy(new Quaternion(...rest));
+        const delta = poseDeltas[humanoidBone];
+        if (delta) target.quaternion.multiply(new Quaternion(...delta));
     });
 }
 
 function DirectorBillboard({ object, selected }: { object: DirectorObject; selected: boolean }) {
-    const [texture, setTexture] = useState<Texture | null>(null);
+    // 展示状态带 url 身份：只有与当前 object.url 匹配才交给 material，
+    // 这样换 URL 的第一次 render 就卸下旧纹理，随后 cleanup 才 dispose。
+    const [loaded, setLoaded] = useState<{ identity: string; value: Texture } | null>(null);
+    const identity = object.url || "";
+    const texture = resolveDirectorDisplay(loaded, identity);
     useEffect(() => {
         let active = true;
-        new TextureLoader().load(object.url!, (next) => active && setTexture(next), undefined, () => active && setTexture(null));
-        return () => { active = false; };
-    }, [object.url]);
+        let owned: Texture | null = null;
+        setLoaded(null);
+        new TextureLoader().load(object.url!, (next) => {
+            // 晚到的回调：本组件已换 URL 或卸载，直接释放这张纹理。
+            if (!active) {
+                next.dispose();
+                return;
+            }
+            owned = next;
+            setLoaded({ identity, value: next });
+        }, undefined, () => active && setLoaded(null));
+        return () => {
+            active = false;
+            owned?.dispose();
+            owned = null;
+        };
+    }, [identity, object.url]);
     return (
         <mesh castShadow={object.castShadow}>
             <planeGeometry args={[1.6, 1]} />
