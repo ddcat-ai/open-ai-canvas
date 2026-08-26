@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "antd";
-import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video, XCircle } from "lucide-react";
+import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video } from "lucide-react";
 import { useState } from "react";
 
 import { MediaPreview } from "@/components/media-preview";
@@ -18,7 +18,6 @@ export function TaskListRow({
     actingId,
     onOpen,
     onRetry,
-    onCancel,
     onPreview,
 }: {
     task: GenerationTask;
@@ -29,7 +28,6 @@ export function TaskListRow({
     actingId: string;
     onOpen: () => void;
     onRetry: () => void;
-    onCancel: () => void;
     onPreview: () => void;
 }) {
     const context = getTaskCanvasContext(task, canvasById, projectNameById);
@@ -81,11 +79,6 @@ export function TaskListRow({
                 <Tooltip title="查看详情">
                     <Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label="查看详情" onClick={onOpen} />
                 </Tooltip>
-                {isActive && task.provider !== "dreamina-cli" ? (
-                    <Tooltip title="取消任务">
-                        <Button type="text" danger size="small" icon={<XCircle className="size-3.5" />} aria-label="取消任务" loading={actingId === task.id} onClick={onCancel} />
-                    </Tooltip>
-                ) : null}
                 {isFailed ? (
                     <Tooltip title="重试任务">
                         <Button

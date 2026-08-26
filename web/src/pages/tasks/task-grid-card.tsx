@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "antd";
-import { Eye, FileText, Image as ImageIcon, RotateCcw, Video, XCircle } from "lucide-react";
+import { Eye, FileText, Image as ImageIcon, RotateCcw, Video } from "lucide-react";
 
 import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
@@ -7,7 +7,7 @@ import { statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
 
-export function TaskGridCard({ task, actingId, onOpen, onRetry, onCancel }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void; onCancel: () => void }) {
+export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void }) {
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
     const isVideo = task.previewKind === "video";
@@ -25,11 +25,6 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry, onCancel }: { ta
                     <Tooltip title="查看详情">
                         <Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label="查看详情" onClick={onOpen} />
                     </Tooltip>
-                    {isActive && task.provider !== "dreamina-cli" ? (
-                        <Tooltip title="取消任务">
-                            <Button type="text" danger size="small" icon={<XCircle className="size-3.5" />} aria-label="取消任务" loading={actingId === task.id} onClick={onCancel} />
-                        </Tooltip>
-                    ) : null}
                     {isFailed ? (
                         <Tooltip title="重试任务">
                             <Button
