@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 
 import type { CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
+import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 /** 工具栏标识——每个工具栏有独立的注册表与偏好 */
 export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
@@ -38,12 +38,13 @@ export type ToolbarHandlers = {
     onAddFrame: () => void;
     onAddFolder: () => void;
     onAddDrawing: () => void;
+    onAddWorkflow: () => void;
     /**
      * 扩展节点（Markdown / SVG / HTML / 全景 / 对比 / 图表 / 调色）统一走这一个入口。
      * 不给每种扩展节点单开一个 onAddXxx —— 那会让 ToolbarHandlers 随节点数线性膨胀，
      * 而它们的创建逻辑完全一致（都只是 createNode(type)）。
      */
-    onAddExtensionNode: (type: CanvasNodeType) => void;
+    onAddExtensionNode: (type: CanvasNodeTypeId) => void;
     onChooseStyle: () => void;
     onOpenDirector: () => void;
     // 主工具栏——资源
@@ -102,7 +103,7 @@ export type ToolbarHandlers = {
 /** 工具运行时可见的上下文。工具定义通过纯函数读取状态 */
 export type ToolContext = {
     selectedCount: number;
-    selectedNodeTypes: Set<CanvasNodeType>;
+    selectedNodeTypes: Set<CanvasNodeTypeId>;
     selectedVideoCount: number;
     canvasTool: CanvasToolMode;
     workspaceMode: CanvasWorkspaceMode;
@@ -131,6 +132,8 @@ export type ToolContext = {
 export type AddNodeMenuContext = {
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;
+    /** 内置应用插件的启用状态；未声明时视为未提供 gating 信息。 */
+    enabledPluginIds?: ReadonlySet<string>;
     handlers: Pick<ToolbarHandlers,
         | "onAddText"
         | "onAddImage"
@@ -140,6 +143,7 @@ export type AddNodeMenuContext = {
         | "onAddFrame"
         | "onAddFolder"
         | "onAddDrawing"
+        | "onAddWorkflow"
         | "onAddExtensionNode"
         | "onChooseStyle"
         | "onOpenDirector"
@@ -181,7 +185,7 @@ export type AddNodeMenuCommand = {
     icon: ReactNode;
     badge?: string;
     // extension：展示与加工类扩展节点。单独一区，避免挤散 node 区调好的四列网格。
-    section: "node" | "extension" | "project" | "resource";
+    section: "node" | "workflow" | "project" | "resource";
     defaultOrder: number;
     applicable?: (ctx: AddNodeMenuContext) => boolean;
     run: (ctx: AddNodeMenuContext) => void;

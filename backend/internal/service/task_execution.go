@@ -57,7 +57,30 @@ func canRunProviderTask(task model.Task) bool {
 func hasExecutableProviderVideoConfig(input map[string]any) bool {
 	mode, _ := input["mode"].(string)
 	config, ok := input["config"].(map[string]any)
-	if mode != "video" || !ok || stringValue(config["model"]) == "" {
+	if mode != "video" || !ok {
+		return false
+	}
+	interfaceType := stringValue(config["interfaceType"])
+	if isComfyBridgeInterface(interfaceType) {
+		workflowJSON, hasWorkflowJSON := config["workflowJson"]
+		workflowReady := false
+		if hasWorkflowJSON {
+			switch value := workflowJSON.(type) {
+			case map[string]interface{}:
+				workflowReady = len(value) > 0
+			case string:
+				workflowReady = strings.TrimSpace(value) != ""
+			}
+		}
+		return stringValue(config["bridgeId"]) != "" && (stringValue(config["workflowId"]) != "" || workflowReady)
+	}
+	if isRunningHubInterface(interfaceType) {
+		if stringValue(config["workflowId"]) == "" && stringValue(config["webappId"]) == "" && stringValue(config["model"]) == "" {
+			return false
+		}
+		return stringValue(config["baseUrl"]) != "" && stringValue(config["apiKey"]) != ""
+	}
+	if stringValue(config["model"]) == "" {
 		return false
 	}
 	return stringValue(config["channelId"]) != "" || (stringValue(config["baseUrl"]) != "" && stringValue(config["apiKey"]) != "")

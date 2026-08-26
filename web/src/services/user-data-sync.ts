@@ -8,47 +8,46 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 
 let activeRemoteUserId = "";
-let applyingRemoteState = false;
+type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
+
+let remoteUserDataPhase: RemoteUserDataPhase = "inactive";
 let syncTimer: number | null = null;
 let syncPromise: Promise<void> | null = null;
 let syncQueued = false;
-let syncPauseCount = 0;
-let syncPauseTail: Promise<void> = Promise.resolve();
-let resumeSync: (() => void) | null = null;
-let syncResumed: Promise<void> | null = null;
-const activeRemoteSyncOperations = new Set<Promise<void>>();
+let remoteOperationTail: Promise<void> = Promise.resolve();
 let subscriptionsInstalled = false;
-let remoteAssetVersions = new Map<string, string>();
-let remoteProjectVersions = new Map<string, string>();
+let acknowledgedAssets = new Map<string, Asset>();
+let acknowledgedProjects = new Map<string, CanvasProject>();
 
 const LOCAL_STORAGE_KEY_PATTERN = /^(image|video|audio|file|video-reference|audio-reference):/;
 
 export async function syncRemoteUserData(userId?: string | null) {
-    await runRemoteUserDataSyncOperation(async () => {
+    await withRemoteUserDataSyncExclusive(async () => {
         activeRemoteUserId = userId || "";
-        if (!activeRemoteUserId) return;
-        applyingRemoteState = true;
+        acknowledgedProjects.clear();
+        acknowledgedAssets.clear();
+        if (!activeRemoteUserId) {
+            remoteUserDataPhase = "inactive";
+            return;
+        }
+        remoteUserDataPhase = "hydrating";
         try {
             // 登录只拉一次聚合快照。摘要列表再逐条请求详情会把 N 条数据放大成 2N+2 个请求，
             // 并且会在登录阶段同时触发大量媒体解析，任何一项失败都会污染登录结果。
             const snapshot = await getRemoteUserDataSnapshot();
-            remoteProjectVersions = versionMap(snapshot.projects);
-            remoteAssetVersions = versionMap(snapshot.assets);
             // 登录时服务端是实体真相。浏览器 IndexedDB 只作为首屏缓存，不能把服务端已删除的记录补回去。
             // 这里只替换结构化记录，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
             useCanvasStore.getState().replaceProjects(snapshot.projects);
             useAssetStore.getState().replaceAssets(snapshot.assets);
-        } finally {
-            applyingRemoteState = false;
+            await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            acknowledgedProjects = new Map(snapshot.projects.map((project) => [project.id, project]));
+            acknowledgedAssets = new Map(snapshot.assets.map((asset) => [asset.id, asset]));
+            remoteUserDataPhase = "ready";
+        } catch (error) {
+            remoteUserDataPhase = "failed";
+            throw error;
         }
     });
-    // 首次登录可能带有尚未创建到云端的本地画布；先完成一次 upsert，避免详情页保存/分享先于项目创建。
-    try {
-        await saveRemoteUserDataNow();
-    } catch (error) {
-        console.warn("登录后画布首次同步失败，保留本地项目等待重试", error);
-    }
-    scheduleRemoteUserDataSync();
 }
 
 export function installRemoteUserDataAutoSync() {
@@ -64,8 +63,9 @@ export function installRemoteUserDataAutoSync() {
 
 export function resetRemoteUserDataSync() {
     activeRemoteUserId = "";
-    remoteAssetVersions.clear();
-    remoteProjectVersions.clear();
+    remoteUserDataPhase = "inactive";
+    acknowledgedAssets.clear();
+    acknowledgedProjects.clear();
     if (syncTimer) {
         window.clearTimeout(syncTimer);
         syncTimer = null;
@@ -73,73 +73,17 @@ export function resetRemoteUserDataSync() {
     syncQueued = false;
 }
 
-function waitForRemoteUserDataSyncResume() {
-    if (!syncPauseCount) return Promise.resolve();
-    if (!syncResumed) {
-        syncResumed = new Promise<void>((resolve) => {
-            resumeSync = resolve;
-        });
-    }
-    return syncResumed;
-}
-
-async function runRemoteUserDataSyncOperation<T>(operation: () => Promise<T>): Promise<T> {
-    while (syncPauseCount) await waitForRemoteUserDataSyncResume();
-    let finish!: () => void;
-    const active = new Promise<void>((resolve) => {
-        finish = resolve;
-    });
-    activeRemoteSyncOperations.add(active);
-    try {
-        return await operation();
-    } finally {
-        activeRemoteSyncOperations.delete(active);
-        finish();
-    }
-}
-
-export async function withRemoteUserDataSyncPaused<T>(operation: () => Promise<T>): Promise<T> {
-    syncPauseCount += 1;
-    if (syncTimer) {
-        window.clearTimeout(syncTimer);
-        syncTimer = null;
-        syncQueued = true;
-    }
-    let releaseTurn!: () => void;
-    const previousTurn = syncPauseTail;
-    syncPauseTail = new Promise<void>((resolve) => {
-        releaseTurn = resolve;
-    });
-    await previousTurn;
-    try {
-        if (activeRemoteSyncOperations.size) {
-            await Promise.allSettled([...activeRemoteSyncOperations]);
-        }
-        if (syncPromise) await syncPromise;
-        return await operation();
-    } finally {
-        releaseTurn();
-        syncPauseCount -= 1;
-        if (!syncPauseCount) {
-            const resolve = resumeSync;
-            resumeSync = null;
-            syncResumed = null;
-            resolve?.();
-            if (syncQueued) scheduleRemoteUserDataSync();
-        }
-    }
+export function withRemoteUserDataSyncExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = remoteOperationTail.catch(() => undefined).then(operation);
+    remoteOperationTail = pending.then(
+        () => undefined,
+        () => undefined,
+    );
+    return pending;
 }
 
 export function scheduleRemoteUserDataSync() {
-    if (!activeRemoteUserId || applyingRemoteState) return;
-    if (syncPauseCount) {
-        syncQueued = true;
-        if (syncTimer) {
-            window.clearTimeout(syncTimer);
-            syncTimer = null;
-        }
-        return;
-    }
+    if (!activeRemoteUserId || remoteUserDataPhase !== "ready") return;
     if (syncPromise) {
         syncQueued = true;
         return;
@@ -165,12 +109,15 @@ export async function createCanvasProjectWithRemoteSync(title: string, projectId
 }
 
 export async function deleteAssetWithRemoteSync(id: string) {
-    await runRemoteUserDataSyncOperation(async () => {
+    const assetId = id.trim();
+    if (!assetId) throw new Error("素材 ID 不能为空");
+    await withRemoteUserDataSyncExclusive(async () => {
         if (activeRemoteUserId) {
-            await deleteRemoteAsset(id);
-            remoteAssetVersions.delete(id);
+            requireRemoteUserDataBaseline();
+            await deleteRemoteAsset(assetId);
+            acknowledgedAssets.delete(assetId);
         }
-        useAssetStore.getState().removeAsset(id);
+        await useAssetStore.getState().removeAsset(assetId);
         await flushAssetStorePersistence();
     });
 }
@@ -178,31 +125,31 @@ export async function deleteAssetWithRemoteSync(id: string) {
 export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
     const projectIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
     if (!projectIds.length) return;
-    await withRemoteUserDataSyncPaused(async () => {
-        if (activeRemoteUserId) {
-            for (const id of projectIds) {
+    await withRemoteUserDataSyncExclusive(async () => {
+        if (activeRemoteUserId) requireRemoteUserDataBaseline();
+        for (const id of projectIds) {
+            if (activeRemoteUserId) {
                 await deleteRemoteCanvasProject(id);
-                remoteProjectVersions.delete(id);
+                acknowledgedProjects.delete(id);
             }
+            useCanvasStore.getState().deleteProjects([id]);
+            // 批量删除允许部分成功；每个已成功远端删除的实体都立即落实到本地 durable cache。
+            await flushCanvasStorePersistence();
         }
-        useCanvasStore.getState().deleteProjects(projectIds);
-        // 删除完成后再返回，确保刷新不会读到尚未写入 IndexedDB 的旧快照。
-        await flushCanvasStorePersistence();
     });
 }
 
 export async function saveRemoteUserDataNow() {
     if (!activeRemoteUserId) return;
-    if (syncPauseCount) {
-        syncQueued = true;
-        await waitForRemoteUserDataSyncResume();
-        return saveRemoteUserDataNow();
-    }
+    requireRemoteUserDataBaseline();
     if (syncPromise) {
         syncQueued = true;
         return syncPromise;
     }
-    syncPromise = drainRemoteUserDataChanges();
+    syncPromise = withRemoteUserDataSyncExclusive(async () => {
+        requireRemoteUserDataBaseline();
+        await drainRemoteUserDataChanges();
+    });
     try {
         await syncPromise;
     } finally {
@@ -218,53 +165,37 @@ async function drainRemoteUserDataChanges() {
 }
 
 async function saveRemoteUserDataBatch() {
-    try {
-        const currentProjects = useCanvasStore.getState().projects;
-        const currentAssets = useAssetStore.getState().assets;
-        const dirtyProjects = currentProjects.filter((item) => !sameVersion(remoteProjectVersions.get(item.id), item.updatedAt));
-        const dirtyAssets = currentAssets.filter((item) => !sameVersion(remoteAssetVersions.get(item.id), item.updatedAt));
-        const deletedProjectIds = missingIds(remoteProjectVersions, currentProjects);
-        const deletedAssetIds = missingIds(remoteAssetVersions, currentAssets);
-        if (!dirtyProjects.length && !dirtyAssets.length && !deletedProjectIds.length && !deletedAssetIds.length) return;
-        const uploaded = new Map<string, string>();
-        const projects = await prepareRemoteCanvasProjects(dirtyProjects, uploaded);
-        const assets = await prepareRemoteAssets(dirtyAssets, uploaded);
-        applyingRemoteState = true;
-        if (projects.length) useCanvasStore.getState().replaceProjects(replaceById(currentProjects, projects));
-        if (assets.length) useAssetStore.getState().replaceAssets(replaceById(currentAssets, assets));
-        applyingRemoteState = false;
-        // SQLite 和接口频控都要求写入保持有界；逐项提交还能准确记录已完成版本。
-        for (const project of projects) {
-            await upsertRemoteCanvasProject(project);
-            remoteProjectVersions.set(project.id, project.updatedAt);
-        }
-        for (const asset of assets) {
-            await upsertRemoteAsset(asset);
-            remoteAssetVersions.set(asset.id, asset.updatedAt);
-        }
-        for (const id of deletedProjectIds) {
-            await deleteRemoteCanvasProject(id);
-            remoteProjectVersions.delete(id);
-        }
-        for (const id of deletedAssetIds) {
-            await deleteRemoteAsset(id);
-            remoteAssetVersions.delete(id);
-        }
-    } finally {
-        applyingRemoteState = false;
+    const currentProjects = useCanvasStore.getState().projects;
+    const currentAssets = useAssetStore.getState().assets;
+    const dirtyProjects = currentProjects.filter((project) => !sameEntitySnapshot(acknowledgedProjects.get(project.id), project));
+    const dirtyAssets = currentAssets.filter((asset) => !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
+    const currentProjectIds = new Set(currentProjects.map((project) => project.id));
+    const currentAssetIds = new Set(currentAssets.map((asset) => asset.id));
+    const deletedProjectIds = [...acknowledgedProjects.keys()].filter((id) => !currentProjectIds.has(id));
+    const deletedAssetIds = [...acknowledgedAssets.keys()].filter((id) => !currentAssetIds.has(id));
+    if (!dirtyProjects.length && !dirtyAssets.length && !deletedProjectIds.length && !deletedAssetIds.length) return;
+
+    const uploaded = new Map<string, string>();
+    // 转换后的 resource: 引用只属于发往服务端的 payload，不能反写整份实时 store。
+    // 已确认快照记录的是本次上传所依据的本地实体；上传期间的新编辑会在下一轮继续提交。
+    for (const source of dirtyProjects) {
+        const remotePayload = await ensureRemoteResourceReferences(source, uploaded);
+        await upsertRemoteCanvasProject(remotePayload);
+        acknowledgedProjects.set(source.id, source);
     }
-}
-
-async function prepareRemoteAssets(assets: Asset[], uploaded: Map<string, string>) {
-    const result: Asset[] = [];
-    for (const asset of assets) result.push(await ensureRemoteResourceReferences(asset, uploaded));
-    return result;
-}
-
-async function prepareRemoteCanvasProjects(projects: CanvasProject[], uploaded: Map<string, string>) {
-    const result: CanvasProject[] = [];
-    for (const project of projects) result.push(await ensureRemoteResourceReferences(project, uploaded));
-    return result;
+    for (const source of dirtyAssets) {
+        const remotePayload = await ensureRemoteResourceReferences(source, uploaded);
+        await upsertRemoteAsset(remotePayload);
+        acknowledgedAssets.set(source.id, source);
+    }
+    for (const id of deletedProjectIds) {
+        await deleteRemoteCanvasProject(id);
+        acknowledgedProjects.delete(id);
+    }
+    for (const id of deletedAssetIds) {
+        await deleteRemoteAsset(id);
+        acknowledgedAssets.delete(id);
+    }
 }
 
 async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<string, string>()): Promise<T> {
@@ -287,13 +218,12 @@ async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<st
     if (!isLocalStorageKey(storageKey)) {
         const inline = inlineMediaDataUrl(next);
         if (!inline) return next as T;
-        const resourceStorage = await uploadInlineDataUrl(inline).catch(() => "");
-        return (resourceStorage ? applyResourceReference(next, resourceStorage) : next) as T;
+        const resourceStorage = await uploadInlineDataUrl(inline);
+        return applyResourceReference(next, resourceStorage) as T;
     }
 
     const cached = uploaded.get(storageKey);
-    const resourceStorage = cached || (await uploadLocalStorageKey(storageKey, next).catch(() => ""));
-    if (!resourceStorage) return next as T;
+    const resourceStorage = cached || (await uploadLocalStorageKey(storageKey, next));
     uploaded.set(storageKey, resourceStorage);
     return applyResourceReference(next, resourceStorage) as T;
 }
@@ -316,7 +246,9 @@ function inlineMediaDataUrl(payload: Record<string, unknown>) {
 }
 
 async function uploadInlineDataUrl(dataUrl: string) {
-    const blob = await (await fetch(dataUrl)).blob();
+    const response = await fetch(dataUrl);
+    if (!response.ok) throw new Error("内嵌媒体读取失败");
+    const blob = await response.blob();
     const kind: "image" | "video" | "audio" | "file" = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
     const resource = await uploadResourceFile(blob, kind);
     return resourceStorageKey(resource.id);
@@ -324,7 +256,7 @@ async function uploadInlineDataUrl(dataUrl: string) {
 
 async function uploadLocalStorageKey(storageKey: string, payload: Record<string, unknown>) {
     const blob = storageKey.startsWith("image:") ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
-    if (!blob) return "";
+    if (!blob) throw new Error(`本地媒体不存在：${storageKey}`);
     const kind = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
     const resource = await uploadResourceFile(blob, kind, {
         width: numberValue(payload.naturalWidth) || numberValue(payload.width),
@@ -334,27 +266,12 @@ async function uploadLocalStorageKey(storageKey: string, payload: Record<string,
     return resourceStorageKey(resource.id);
 }
 
-function versionMap(items: Array<{ id: string; updatedAt?: string }>) {
-    return new Map<string, string>(items.map((item) => [item.id, item.updatedAt || ""]));
+function requireRemoteUserDataBaseline() {
+    if (remoteUserDataPhase !== "ready") throw new Error("云端数据基线尚未建立，已停止写入");
 }
 
-function missingIds<T extends { id: string }>(remote: Map<string, string>, local: T[]) {
-    const localIds = new Set(local.map((item) => item.id));
-    return Array.from(remote.keys()).filter((id) => !localIds.has(id));
-}
-
-function replaceById<T extends { id: string }>(current: T[], changed: T[]) {
-    const changedById = new Map(changed.map((item) => [item.id, item]));
-    return current.map((item) => changedById.get(item.id) || item);
-}
-
-function timeValue(value?: string) {
-    const time = value ? Date.parse(value) : 0;
-    return Number.isFinite(time) ? time : 0;
-}
-
-function sameVersion(remote?: string, local?: string) {
-    return Boolean(remote && local) && timeValue(remote) === timeValue(local);
+function sameEntitySnapshot<T>(acknowledged: T | undefined, current: T) {
+    return acknowledged !== undefined && (acknowledged === current || JSON.stringify(acknowledged) === JSON.stringify(current));
 }
 
 function isLocalStorageKey(value: string) {

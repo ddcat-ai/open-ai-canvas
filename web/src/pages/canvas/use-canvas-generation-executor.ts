@@ -136,17 +136,18 @@ export function useCanvasGenerationExecutor({
             let rawGenerationContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>>;
             // 视频文本只保留输入框内容；连接的媒体仍作为结构化参考传递。
             const promptOnly = mode === "video";
+            const usesWorkflowProvider = Boolean(mode !== "text" && generationConfig.taskWorkflowProvider && generationConfig.taskWorkflowProvider !== "model");
             try {
                 const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, assets, promptOnly);
                 const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
-                const compatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, requirements);
+                const compatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, requirements);
                 if (compatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${compatibilityError}`);
-                const referenceLimits = modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
+                const referenceLimits = usesWorkflowProvider ? undefined : modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
                 rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits);
                 const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements);
-                const hydratedCompatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
+                const hydratedCompatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
                 if (hydratedCompatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${hydratedCompatibilityError}`);
             } catch (error) {
                 const errorDetails = generationErrorMessage(error);
@@ -337,7 +338,7 @@ function generationModelRequirements(
     mode: CanvasNodeGenerationMode,
     input: Pick<Awaited<ReturnType<typeof hydrateNodeGenerationContext>>, "textCount" | "imageCount" | "videoCount" | "audioCount" | "characterReferences">,
     sourceNode: CanvasNodeData | undefined,
-	config: ReturnType<typeof useEffectiveConfig>,
+    config: ReturnType<typeof useEffectiveConfig>,
     includeCharacterMinimum = false,
 ): ModelRequirements {
     return {
@@ -350,7 +351,7 @@ function generationModelRequirements(
             characterCount: includeCharacterMinimum ? input.characterReferences.length : 0,
         },
         videoOperation: sourceNode?.metadata?.videoEditOperation,
-		videoSeconds: config.videoSeconds,
-		options: modelRequestOptions(config, mode),
+        videoSeconds: config.videoSeconds,
+        options: config.taskWorkflowProvider === "model" ? modelRequestOptions(config, mode) : undefined,
     };
 }

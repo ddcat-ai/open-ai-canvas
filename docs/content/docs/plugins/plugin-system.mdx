@@ -1,22 +1,17 @@
 ---
 title: 插件系统设计
-description: 影策网页插件系统的目标、扩展边界、插件合同与 Eagle 外部素材来源方案
+description: 影策统一插件系统的扩展边界、Manifest 合同与 Eagle 外部素材来源方案
 ---
 
 # 插件系统设计
 
 > 状态：已实现首版（Eagle 外部素材来源 + AI 提示词优化器）
 >
-> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件；第三方远程插件安装与完整 SDK 仍按后续阶段建设。
+> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件。第三方包统一使用 `.yingce-plugin`；远程 Web 入口仍必须经过沙箱运行时和宿主 RPC。
 
 ## 1. 背景与范围
 
-当前项目已经包含一个面向 Codex App 的 `plugins/infinite-canvas` 插件。该插件负责注册 MCP、连接本地 Canvas Agent，并让 Codex 读取或操作画布。
-
-本文讨论的是另一套能力：让网页应用能够安装、启用和管理由其他开发者提供的扩展。两者保持边界清晰：
-
-- Codex 插件：面向 Codex / MCP / Canvas Agent。
-- 网页插件：面向影策画布、素材、工作流和外部服务集成。
+当前项目包含 Codex App 的 MCP 包和影策网页插件贡献。它们可以使用不同的运行时，但安装、权限、版本和能力发现都遵循同一个影策插件 Manifest；MCP 连接本身仍受独立 Agent 安全边界约束。
 
 网页插件的第一目标不是开放所有页面代码，而是提供稳定、可审计、可逐步扩展的宿主 API，让第三方开发者能够在不修改主应用源码的情况下接入能力。
 
@@ -80,36 +75,40 @@ Eagle 插件属于此类，具体方案见第 8 节。
 
 ## 5. 插件包与清单
 
-插件以一个远程或本地可解析的清单作为入口。清单负责描述插件，不负责承载业务逻辑。
+插件以一个统一的 `.yingce-plugin` 包作为入口。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
 
-建议的最小清单：
+建议的最小包结构：
+
+```text
+eagle-asset-connector.yingce-plugin
+├── manifest.json
+├── web/entry.js       # 有 UI/功能代码时声明
+└── web/assets/...     # 可选静态资源
+```
+
+`manifest.json` 建议从以下最小清单开始：
 
 ```json
 {
+  "apiVersion": "yingce.plugin/v1",
   "id": "eagle-asset-connector",
   "name": "Eagle 素材库",
-  "version": "0.1.0",
-  "apiVersion": "1",
-  "entry": "https://example.com/plugins/eagle-asset-connector.js",
-  "category": "asset-connector",
-  "permissions": [
-    "canvas.read",
-    "canvas.write",
-    "asset.read",
-    "asset.import",
-    "asset.upload"
-  ],
-  "dependencies": {},
-  "integrity": "sha256-..."
+  "version": "0.3.0",
+  "author": "影策社区",
+  "permissions": ["asset.read", "asset.search", "asset.upload"],
+  "configuration": { "fields": [{ "name": "baseUrl", "type": "url", "required": true }] },
+  "contributes": { "assetSources": ["eagle"] }
 }
 ```
+
+带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口只接受 `.yingce-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
 
 字段约束：
 
 - `id`：全局唯一，使用小写 kebab-case；安装后不能随意变更。
 - `version`：遵循 SemVer，用于更新和回滚判断。
-- `apiVersion`：表示插件依赖的宿主 API 版本，不等同于插件版本。
-- `entry`：插件入口地址；正式环境应支持 HTTPS。
+- `apiVersion`：固定为 `yingce.plugin/v1`，不接受旧版本或平行 Manifest。
+- `contributes`：声明 provider、workflow、canvasNodes、transforms、assetSources、agents 等能力。
 - `permissions`：最小权限集合，宿主在安装和首次使用时展示。
 - `dependencies`：插件依赖的其他插件或宿主能力。
 - `integrity`：用于校验远程产物是否被替换。
@@ -121,12 +120,13 @@ Eagle 插件属于此类，具体方案见第 8 节。
 建议第一版 SDK 包含以下能力：
 
 ```ts
-export interface CanvasPlugin {
+export interface CanvasPluginManifest {
+  apiVersion: "yingce.plugin/v1";
   id: string;
+  name: string;
   version: string;
-  apiVersion: string;
-  setup(api: PluginSetupApi): void | (() => void);
-  nodes?: CanvasNodeDefinition[];
+  permissions: string[];
+  contributes: Record<string, unknown>;
 }
 
 export interface PluginSetupApi {

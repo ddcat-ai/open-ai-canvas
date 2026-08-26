@@ -11,7 +11,7 @@ export type CanvasCreateCommand = {
     label: string;
     icon: ReactNode;
     badge?: string;
-    section: "node" | "extension" | "project" | "resource";
+    section: "node" | "workflow" | "project" | "resource";
     onClick: () => void;
 };
 
@@ -19,7 +19,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const projectCommands = commands.filter((command) => command.section === "project");
     const nodeCommands = commands.filter((command) => command.section === "node");
-    const extensionCommands = commands.filter((command) => command.section === "extension");
+    const workflowCommands = commands.filter((command) => command.section === "workflow");
     const resourceCommands = commands.filter((command) => command.section === "resource");
 
     return (
@@ -45,25 +45,25 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
             <MenuSection title="创作节点" color={theme.node.muted} />
             <CanvasCreateCommandGrid commands={nodeCommands} variant="node" />
 
-            {extensionCommands.length ? (
+            {workflowCommands.length ? (
                 <>
-                    <MenuSection title="展示与加工" color={theme.node.muted} spaced />
-                    <CanvasCreateCommandGrid commands={extensionCommands} variant="node" />
+                    <MenuSection title="工作流" color={theme.node.muted} spaced />
+                    <CanvasCreateCommandGrid commands={workflowCommands} variant="workflow" />
                 </>
             ) : null}
 
             <MenuSection title="导入资源" color={theme.node.muted} spaced />
-            <CanvasCreateCommandGrid commands={resourceCommands} variant="resource" />
+            <CanvasCreateCommandGrid commands={resourceCommands} variant="compact" />
         </div>
     );
 }
 
-function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreateCommand[]; variant: "node" | "resource" }) {
+function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreateCommand[]; variant: "node" | "compact" | "workflow" }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
 
     return (
-        <div className={cn("grid gap-1", variant === "node" ? "grid-cols-4" : "grid-cols-2")}>
+        <div className={cn("grid gap-1", variant === "node" ? "grid-cols-5" : variant === "workflow" ? "grid-cols-1" : "grid-cols-2")}>
             {commands.map((command) => (
                 <motion.button
                     key={command.id}
@@ -75,7 +75,9 @@ function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreate
                         "group min-w-0 overflow-hidden border border-black/10 bg-white/70 outline-none transition-colors hover:border-black/20 hover:bg-black/5 focus-visible:ring-2 dark:border-white/10 dark:bg-white/[.04] dark:hover:border-white/20 dark:hover:bg-white/8",
                         variant === "node"
                             ? "flex h-[var(--canvas-create-node-height)] flex-col items-start justify-between rounded-[var(--dock-item-radius)] px-1 py-1.5 text-left"
-                            : "flex h-[var(--canvas-create-resource-height)] items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-center",
+                            : variant === "workflow"
+                                ? "flex h-[var(--canvas-create-resource-height)] items-center justify-start gap-2 rounded-[var(--dock-item-radius)] px-2 text-left"
+                                : "flex h-[var(--canvas-create-resource-height)] items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-center",
                     )}
                     style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
                     title={command.label}

@@ -95,6 +95,11 @@ func (c *taskTerminalCoordinator) markPreparationFailure(task *model.Task, stage
 // 让 worker 保留重试/监控所需的失败语义。
 func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err error, providerSucceeded bool, channelSlotFailedBeforeRequest bool) error {
 	if errors.Is(err, context.Canceled) {
+		// 用户取消会先把数据库任务置为 cancelled，再停止 worker context。
+		// 此时不再重复退款/核对，只补齐 worker 侧的会话、回放和日志收尾。
+		if latest, latestErr := c.repo.Task(task.ID); latestErr == nil && latest.Status == model.TaskStatusCancelled {
+			return c.handleAlreadyCancelled(*latest)
+		}
 		task.Status = model.TaskStatusCancelled
 		task.Stage = "任务已取消"
 		task.Error = "任务已取消"
@@ -143,6 +148,16 @@ func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err e
 		resultErr = errors.Join(resultErr, fmt.Errorf("任务失败后的会话状态更新失败：%w", sessionErr))
 	}
 	return resultErr
+}
+
+func (c *taskTerminalCoordinator) handleAlreadyCancelled(task model.Task) error {
+	c.finalizeReplay(&task, model.TaskStatusCancelled, "文本回放草稿归并失败")
+	sessionErr := c.sessions.markSessionFailed(task, "会话任务已取消。")
+	_ = c.logger.log(task.UserID, task.ID, "warn", "任务已取消，worker 已停止执行", "")
+	if sessionErr != nil {
+		return fmt.Errorf("任务取消后的会话状态更新失败：%w", sessionErr)
+	}
+	return nil
 }
 
 func (c *taskTerminalCoordinator) handleCancelledResult(task model.Task) error {

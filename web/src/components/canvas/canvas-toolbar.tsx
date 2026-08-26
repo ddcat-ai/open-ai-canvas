@@ -13,7 +13,8 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveAddNodeMenuCommands, resolveToolbarEntries, type AddNodeMenuCommand, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasNodeType, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
+import { usePluginStore } from "@/stores/use-plugin-store";
+import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
     selectedCount,
@@ -35,6 +36,7 @@ export function CanvasToolbar({
     onAddFolder,
     onAddDrawing,
     onAddExtensionNode,
+    onAddWorkflow,
     onOpenDirector,
     onUndo,
     onRedo,
@@ -65,7 +67,8 @@ export function CanvasToolbar({
     onAddFrame: () => void;
     onAddFolder: () => void;
     onAddDrawing: () => void;
-    onAddExtensionNode: (type: CanvasNodeType) => void;
+    onAddExtensionNode: (type: CanvasNodeTypeId) => void;
+    onAddWorkflow: () => void;
     onOpenDirector: () => void;
     onUndo: () => void;
     onRedo: () => void;
@@ -81,6 +84,7 @@ export function CanvasToolbar({
     const rootRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useThemeStore((state) => state.theme);
+    const installations = usePluginStore((state) => state.installations);
     const setTheme = useThemeStore((state) => state.setTheme);
     const theme = canvasThemes[colorTheme];
     const [addOpen, setAddOpen] = useState(false);
@@ -129,6 +133,7 @@ export function CanvasToolbar({
         onAddFolder,
         onAddDrawing,
         onAddExtensionNode,
+        onAddWorkflow,
         onChooseStyle,
         onOpenDirector,
         onUpload,
@@ -168,10 +173,12 @@ export function CanvasToolbar({
         handlers,
     };
 
+    const enabledPluginIds = new Set(installations.filter((item) => item.enabled).map((item) => item.manifest.id));
+
     const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
 
     // 解析添加节点菜单命令——onClick 绑定到 runAddAction 以在执行后关闭面板
-    const addNodeCommands = resolveAddNodeMenuCommands(ctx);
+    const addNodeCommands = resolveAddNodeMenuCommands({ ...ctx, enabledPluginIds });
     const toCommand = (cmd: AddNodeMenuCommand): CanvasCreateCommand => ({
         id: cmd.id,
         label: cmd.label,
@@ -237,7 +244,7 @@ function AddNodeMenu({ x, theme, commands }: {
     commands: CanvasCreateCommand[];
 }) {
     return (
-        <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[260px] max-w-[calc(100vw-24px)]" style={{ left: x || "50%", transformOrigin: "bottom center", x: "-50%" }}>
+        <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[420px] max-w-[calc(100vw-24px)]" style={{ left: x || "50%", transformOrigin: "bottom center", x: "-50%" }}>
             <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
                 <CanvasCreateMenu commands={commands} />
             </SpotlightSurface>

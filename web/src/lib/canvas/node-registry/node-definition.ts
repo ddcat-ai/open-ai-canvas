@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 import type { CanvasResourceKind } from "@/lib/canvas/canvas-resource-references";
-import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "@/types/canvas";
+import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId } from "@/types/canvas";
+import type { PluginCanvasNodeContribution } from "@/lib/plugins/plugin-types";
 
 /** 作为上游输入被容量校验计数时归入的类别 */
 export type CanvasNodeInputKind = "image" | "video" | "audio" | "text";
@@ -13,7 +14,7 @@ export type CanvasNodeInputKind = "image" | "video" | "audio" | "text";
  * 避免同一份知识散落到创建菜单、搜索弹窗、拉伸逻辑等多处后各自漂移。
  */
 export type CanvasNodeDefinition = {
-    type: CanvasNodeType;
+    type: CanvasNodeTypeId;
     /** UI 短标签——创建菜单等处显示，如「文本」 */
     label: string;
     /** 列表/搜索标签，缺省派生为 `${label}节点` */
@@ -40,9 +41,30 @@ export type CanvasNodeDefinition = {
     resourceKind?: (node: CanvasNodeData) => CanvasResourceKind | null;
     /** 作为生成节点时的生成模式；不设表示该类型不产生生成行为 */
     generationMode?: (node: CanvasNodeData) => CanvasGenerationMode | null;
+    /** 是否显示右侧输出连接点；缺省为 true，消费型终点节点可关闭。 */
+    showOutputConnection?: boolean;
     /**
      * 作为上游输入被参考素材容量校验计数时的类别；
      * 不设表示不参与计数（生成配置、背板）。与 resourceKind 不同，计数不看内容。
      */
     inputKind?: CanvasNodeInputKind;
+    plugin?: {
+        pluginId: string;
+        renderer: PluginCanvasNodeContribution["renderer"];
+        schema: Record<string, unknown>;
+    };
 };
+
+export function canvasNodeDefinitionFromPlugin(pluginId: string, contribution: PluginCanvasNodeContribution): CanvasNodeDefinition {
+    return {
+        type: contribution.id,
+        label: contribution.label,
+        icon: null,
+        defaultTitle: contribution.defaultTitle,
+        defaultSize: contribution.defaultSize,
+        defaultMetadata: { pluginId, pluginNodeId: contribution.id, pluginData: {}, content: "" },
+        minSize: { width: Math.min(contribution.defaultSize.width, 220), height: Math.min(contribution.defaultSize.height, 160) },
+        showInCreateMenu: true,
+        plugin: { pluginId, renderer: contribution.renderer, schema: contribution.schema },
+    };
+}

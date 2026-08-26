@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, InputNumber, Select } from "antd";
-import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, RadioTower, SlidersHorizontal, SquareTerminal } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, MonitorUp, RadioTower, SlidersHorizontal, SquareTerminal, Workflow } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
@@ -10,16 +10,22 @@ import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
 export { UserLocalChannelFields, UserLocalChannelSwitch, userLocalChannelChangePatch, userLocalChannelFormOwner } from "./channel-settings-pane";
+import { ComfyUIBridgeSettingsPane } from "./comfyui-bridge-settings-pane";
 import { ModelDefaultGrid } from "./model-default-grid";
 import { LocalCliSettings } from "./local-cli-settings";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 import DiagnosticsPanel from "./diagnostics-panel";
+import { RunningHubSettingsPane } from "./runninghub-settings-pane";
+import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
-type ConfigSectionKey = "local-cli" | "channels" | "models" | "preferences" | "prompts" | "storage" | "diagnostics";
+type ConfigSectionKey = "local-cli" | "channels" | "models" | "runninghub" | "comfyui" | "preferences" | "prompts" | "storage" | "diagnostics";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "local-cli", label: "本机工具", description: "连接 Runtime 与官方 CLI", icon: <SquareTerminal className="size-4" /> },
-    { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
+    { key: "channels", label: "个人渠道", description: "模型服务与个人工作流", icon: <RadioTower className="size-4" /> },
+    { key: "runninghub", label: "RunningHub 工作流", description: "个人渠道的云端工作流配置", icon: <Workflow className="size-4" /> },
+    { key: "comfyui", label: "ComfyUI Bridge", description: "个人渠道的 Bridge 工作流配置", icon: <MonitorUp className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
     { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
@@ -37,7 +43,13 @@ export default function SettingsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
-    const initialSection = isConfigSection(requestedSection) ? requestedSection : customChannelsEnabled ? "channels" : "models";
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
+    const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
+    const comfyUIPluginEnabled = runtimeStatuses[COMFYUI_PLUGIN_ID] === "enabled";
+    const requestedSectionEnabled = requestedSection !== "runninghub" && requestedSection !== "comfyui"
+        || requestedSection === "runninghub" && runningHubPluginEnabled
+        || requestedSection === "comfyui" && comfyUIPluginEnabled;
+    const initialSection = isConfigSection(requestedSection) && requestedSectionEnabled ? requestedSection : customChannelsEnabled ? "channels" : "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection === "channels" && !customChannelsEnabled ? "models" : initialSection);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
@@ -45,15 +57,19 @@ export default function SettingsPage() {
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
-    const visibleConfigSections = customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels");
+    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
+        .filter((section) => section.key !== "comfyui" || comfyUIPluginEnabled), [comfyUIPluginEnabled, customChannelsEnabled, runningHubPluginEnabled]);
+
+    const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
 
     useEffect(() => {
-        if (isConfigSection(requestedSection) && (requestedSection !== "channels" || customChannelsEnabled)) {
+        if (isVisibleConfigSection(requestedSection)) {
             setActiveTab(requestedSection);
             return;
         }
-        if (!customChannelsEnabled) setActiveTab((current) => (current === "channels" ? "models" : current));
-    }, [customChannelsEnabled, requestedSection]);
+        setActiveTab((current) => visibleConfigSections.some((section) => section.key === current) ? current : customChannelsEnabled ? "channels" : "models");
+    }, [customChannelsEnabled, requestedSection, visibleConfigSections]);
 
     useEffect(() => {
         if (!userId) return;
@@ -67,6 +83,7 @@ export default function SettingsPage() {
     }, [message, userId]);
 
     const selectSection = (section: ConfigSectionKey) => {
+        if ((section === "runninghub" && !runningHubPluginEnabled) || (section === "comfyui" && !comfyUIPluginEnabled)) return;
         setActiveTab(section);
         const next = new URLSearchParams(searchParams);
         next.set("section", section);
@@ -82,7 +99,11 @@ export default function SettingsPage() {
             return;
         }
         const hasReadyLocalRuntime = effectiveConfig.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false && Boolean(channel.localModels?.length));
-        if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime) {
+        const workflowReady = Boolean(
+            (runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim())
+            || (comfyUIPluginEnabled && config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim()),
+        );
+        if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
             message.error(customChannelsEnabled ? (shouldPromptContinue ? "请先完成至少一个渠道的 Base URL、API Key 和模型配置" : "当前没有可用渠道，请先完成连接信息和模型配置") : "当前没有可用的系统模型，请联系管理员配置系统渠道");
             return;
@@ -93,7 +114,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         "local-cli": <SettingsPane><LocalCliSettings /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} /></SettingsPane>,
+        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} onOpenComfyUI={comfyUIPluginEnabled ? () => selectSection("comfyui") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">
@@ -107,6 +128,8 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
+        runninghub: <SettingsPane><RunningHubSettingsPane /></SettingsPane>,
+        comfyui: <SettingsPane><ComfyUIBridgeSettingsPane /></SettingsPane>,
         preferences: (
             <SettingsPane>
                 <div className="settings-pane-header">

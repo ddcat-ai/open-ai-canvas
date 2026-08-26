@@ -13,12 +13,16 @@ export function useCanvasActiveTasks(projectId: string, enabled: boolean) {
     });
 
     useEffect(() => {
-        const handleTaskCreated = (event: Event) => {
+        const handleTaskChanged = (event: Event) => {
             const task = (event as CustomEvent<{ task?: GenerationTask }>).detail?.task;
             if (task?.projectId === projectId) void query.refetch();
         };
-        window.addEventListener("canvas:task-created", handleTaskCreated);
-        return () => window.removeEventListener("canvas:task-created", handleTaskCreated);
+        window.addEventListener("canvas:task-created", handleTaskChanged);
+        window.addEventListener("canvas:task-cancelled", handleTaskChanged);
+        return () => {
+            window.removeEventListener("canvas:task-created", handleTaskChanged);
+            window.removeEventListener("canvas:task-cancelled", handleTaskChanged);
+        };
     }, [projectId, query.refetch]);
 
     return {

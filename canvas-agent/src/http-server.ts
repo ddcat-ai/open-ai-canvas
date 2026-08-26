@@ -1,5 +1,5 @@
 import { CanvasSession } from "./canvas-session.js";
-import type { LocalRuntimeConfig } from "./config.js";
+import { CONFIG_DIR, type LocalRuntimeConfig } from "./config.js";
 import { createLocalRuntimeApp } from "./local-runtime.js";
 import { startLocalRuntime } from "./local-runtime-host.js";
 import { LocalRuntimeSessionManager } from "./local-runtime-session.js";
@@ -11,6 +11,7 @@ import {
     createDreaminaHttpModule,
     type DreaminaHttpModuleOptions,
 } from "./modules/dreamina-http.js";
+import { createPortraitClearanceHttpModule } from "./modules/portrait-clearance-http.js";
 
 export type CanvasAgentHttpDependencies = Pick<DreaminaHttpModuleOptions, "dreamina">;
 
@@ -44,6 +45,7 @@ export function createHttpApp(
         modules: [
             createCanvasAgentHttpModule(config, session),
             createDreaminaHttpModule({ ownerId: config.ownerId!, ...dependencies }),
+            createPortraitClearanceHttpModule({ ownerId: config.ownerId!, configDir: CONFIG_DIR }),
         ],
         legacyMasterToken: config.token,
         legacyOrigins: config.origins ?? [],

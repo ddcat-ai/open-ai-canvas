@@ -37,7 +37,7 @@ export async function executeVideoGeneration({
     const videoId = isEmptyVideoNode ? nodeId : nanoid();
     const versionRootId = isExistingVideoNode && sourceNode ? sourceNode.metadata?.versionOfNodeId || sourceNode.id : undefined;
     const parent = sourceNode?.position || { x: 0, y: 0 };
-    const videoGenerationMetadata = buildVideoGenerationMetadata(sourceNode, generationContext);
+    const videoGenerationMetadata = buildVideoGenerationMetadata(sourceNode, generationContext, generationConfig);
     const videoNode: CanvasNodeData = {
         id: videoId,
         type: CanvasNodeType.Video,

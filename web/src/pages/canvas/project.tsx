@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
@@ -76,6 +76,7 @@ import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
+import { cancelGenerationTask } from "@/services/api/task-center";
 import { CanvasTopBar, CanvasWorkspaceModeSwitch } from "./canvas-project-top-bar";
 import { LibTVImportDialog } from "./components/libtv-import-dialog";
 import { TapNowImportDialog } from "./components/tapnow-import-dialog";
@@ -86,6 +87,7 @@ import { CanvasProjectSelectionToolbar } from "./canvas-project-selection-toolba
 import { CanvasProjectStatusDialogs } from "./canvas-project-status-dialogs";
 import { CanvasProjectWorldLayers } from "./canvas-project-world-layers";
 import { CanvasNodeActionContext } from "@/components/canvas/canvas-node-action-context";
+import { PortraitClearanceModal } from "@/components/canvas/portrait-clearance/portrait-clearance-modal";
 import { CanvasNodeGraphContext, type CanvasNodeGraphContextValue } from "@/components/canvas/canvas-node-graph-context";
 import { CanvasRefreshShell } from "./canvas-refresh-shell";
 import { queryGenerationTask } from "@/services/api/task-center";
@@ -114,6 +116,7 @@ import { useCanvasShortDrama } from "./use-canvas-short-drama";
 import { useCanvasStoryboard } from "./use-canvas-storyboard";
 import { useCanvasUpload } from "./use-canvas-upload";
 import { useCanvasViewportController } from "./use-canvas-viewport-controller";
+import { usePortraitClearanceCoordinator } from "./use-portrait-clearance-coordinator";
 import {
     CanvasNodeType,
     type CanvasAssistantSession,
@@ -133,6 +136,9 @@ import {
     type ViewportTransform,
 } from "@/types/canvas";
 import type { ReferenceImage } from "@/types/image";
+import type { PortraitClearanceNodeState } from "@/lib/portrait-clearance/contracts";
+import { createDefaultPortraitClearanceState, PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
+import { reconcilePortraitClearanceInputBindings } from "@/lib/portrait-clearance/input-bindings";
 
 const CanvasDirectorWorkbench = lazy(() => import("@/components/canvas/director/canvas-director-workbench").then((module) => ({ default: module.CanvasDirectorWorkbench })));
 const CanvasDrawingEditorModal = lazy(() => import("@/components/canvas/canvas-drawing-editor-modal").then((module) => ({ default: module.CanvasDrawingEditorModal })));
@@ -162,6 +168,7 @@ export default function CanvasPage() {
 
 function InfiniteCanvasPage() {
     const { message } = App.useApp();
+    const queryClient = useQueryClient();
     const params = useParams<{ id: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = params.id || "";
@@ -222,6 +229,7 @@ function InfiniteCanvasPage() {
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
+    const [portraitClearanceNodeId, setPortraitClearanceNodeId] = useState<string | null>(null);
     const [scriptScrollTopById, setScriptScrollTopById] = useState<Record<string, number>>({});
     const [directorNodeId, setDirectorNodeId] = useState<string | null>(null);
     const [versionCompareRootId, setVersionCompareRootId] = useState<string | null>(null);
@@ -433,6 +441,35 @@ function InfiniteCanvasPage() {
         taskDetailLoading,
         taskDetailLogs,
     } = useCanvasGeneration({ projectId, domainProjectId: linkedProjectId, projectLoaded, nodes, nodesRef, setNodes });
+
+    const cancelCanvasTask = useCallback(
+        (task: import("@/services/api/task-center").GenerationTask) => {
+            if (task.provider === "dreamina-cli") {
+                message.warning("官方即梦 CLI 当前不支持可靠取消，请等待官方状态同步");
+                return;
+            }
+            Modal.confirm({
+                title: "取消生成任务？",
+                content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和积分状态。",
+                okText: "取消任务",
+                okButtonProps: { danger: true },
+                cancelText: "继续等待",
+                onOk: async () => {
+                    try {
+                        const next = await cancelGenerationTask(task.id);
+                        const node = nodesRef.current.find((item) => item.metadata?.taskId === task.id);
+                        if (node) bindGenerationTask(node.id, next);
+                        setTaskDetail((current) => (current?.id === task.id ? next : current));
+                        await queryClient.invalidateQueries({ queryKey: ["canvas-active-tasks", projectId] });
+                        message.success("任务已取消");
+                    } catch (error) {
+                        message.error(error instanceof Error ? error.message : "取消任务失败");
+                    }
+                },
+            });
+        },
+        [bindGenerationTask, message, nodesRef, projectId, queryClient, setTaskDetail],
+    );
 
     useEffect(() => {
         if (!projectLoaded || !codexAutoConnect) return;
@@ -734,7 +771,7 @@ function InfiniteCanvasPage() {
         emotionNodeId,
         annotationNodeId,
         createImageReversePromptNodes,
-        generatePortraitTextureNode,
+        openPortraitTextureEditor,
         cropImageNode,
         cropNodeId,
         closeSegmentDialog,
@@ -811,6 +848,7 @@ function InfiniteCanvasPage() {
             setPreviewNodeId(clearDeletedId);
             setRunningNodeId(clearDeletedId);
             setScriptEditorNodeId(clearDeletedId);
+            setPortraitClearanceNodeId(clearDeletedId);
             setDirectorNodeId(clearDeletedId);
             setVersionCompareRootId(clearDeletedId);
             setScriptScrollTopById((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !removedIds.has(id))));
@@ -917,15 +955,24 @@ function InfiniteCanvasPage() {
             setDialogNodeId(null);
         } else if (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Frame) {
             setDialogNodeId((current) => (current === node.id ? current : null));
+        } else if (node.type === PORTRAIT_CLEARANCE_NODE_TYPE) {
+            setDialogNodeId(null);
+            setPortraitClearanceNodeId(node.id);
         } else {
-            setDialogNodeId(node.id);
+            // 选择参考媒体时保留当前工作流配置面板，避免点击图片后配置“返回/消失”。
+            // 没有工作流配置面板时，媒体节点仍按原逻辑打开自己的面板。
+            setDialogNodeId((current) => {
+                const currentNode = current ? nodesRef.current.find((item) => item.id === current) : undefined;
+                return currentNode?.type === CanvasNodeType.Config ? current : node.id;
+            });
         }
-    }, []);
+    }, [nodesRef]);
 
     const handleCanvasDeselect = useCallback(() => {
         setContextMenu(null);
         setHoveredNodeId(null);
         setToolbarNodeId(null);
+        setDialogNodeId(null);
     }, []);
 
     const { alignmentGuides, cancelSelectionBox, deselectCanvas, dragPreview, frameDropTargetId, handleCanvasMouseDown, handleNodeMouseDown, isNodeDragging, nodeDraggingRef, selectionBoundsElementRef, selectionBox } = useCanvasSelectionController({
@@ -996,6 +1043,26 @@ function InfiniteCanvasPage() {
         setToolbarNodeId,
         setHoveredNodeId,
     });
+
+    const handlePortraitClearanceStateUpdate = useCallback((nodeId: string, state: PortraitClearanceNodeState) => {
+        handleConfigNodeChange(nodeId, { portraitClearance: state });
+    }, [handleConfigNodeChange]);
+    usePortraitClearanceCoordinator({ nodes, onUpdateState: handlePortraitClearanceStateUpdate });
+
+    useEffect(() => {
+        setNodes((current) => {
+            let changed = false;
+            const next = current.map((node) => {
+                if (node.type !== PORTRAIT_CLEARANCE_NODE_TYPE) return node;
+                const state = node.metadata?.portraitClearance || createDefaultPortraitClearanceState();
+                const inputBindings = reconcilePortraitClearanceInputBindings(node.metadata?.portraitClearance?.mode || state.mode, node.id, connections, current, state.inputBindings);
+                if (JSON.stringify(inputBindings) === JSON.stringify(state.inputBindings) && node.metadata?.portraitClearance) return node;
+                changed = true;
+                return { ...node, metadata: { ...node.metadata, portraitClearance: { ...state, inputBindings } } };
+            });
+            return changed ? next : current;
+        });
+    }, [connections, setNodes]);
 
     const handleRemoveNodeReference = useCallback((targetNodeId: string, reference: CanvasResourceReference) => {
         const referenceNodeId = reference.nodeId;
@@ -1147,6 +1214,30 @@ function InfiniteCanvasPage() {
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
     const drawingNode = drawingNodeId ? nodeById.get(drawingNodeId) || null : null;
+    const portraitClearanceNode = portraitClearanceNodeId ? nodeById.get(portraitClearanceNodeId) || null : null;
+    const portraitClearanceInputs = portraitClearanceNode
+        ? connections
+              .filter((connection) => connection.toNodeId === portraitClearanceNode.id)
+              .sort((left, right) => left.id.localeCompare(right.id))
+              .map((connection) => nodeById.get(connection.fromNodeId))
+              .filter((node): node is CanvasNodeData => Boolean(node))
+        : [];
+    const addPortraitCandidateToCanvas = useCallback(async (candidate: { id: string; title: string; imageArtifactId: string }, dataUrl: string) => {
+        const target = portraitClearanceNodeId ? nodesRef.current.find((node) => node.id === portraitClearanceNodeId) : undefined;
+        if (!target) return;
+        try {
+            const image = await uploadImage(dataUrl);
+            const created = createCanvasNode(CanvasNodeType.Image, { x: target.position.x + target.width + 260, y: target.position.y + target.height / 2 }, imageMetadata(image));
+            created.title = candidate.title.slice(0, 80) || "肖像排查候选";
+            const connection = { id: nanoid(), fromNodeId: created.id, toNodeId: target.id };
+            setNodes((current) => [...current, created]);
+            setConnections((current) => [...current, connection]);
+            setSelectedNodeIds(new Set([created.id]));
+            message.success("候选图片已添加到画布并连接到排查节点");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "候选图片添加失败");
+        }
+    }, [message, portraitClearanceNodeId, setConnections, setNodes, setSelectedNodeIds]);
     const pendingConnectionSourceNode = pendingConnectionCreate?.connection.handleType === "source" ? nodeById.get(pendingConnectionCreate.connection.nodeId) : null;
     const canCreateDrawingFromConnection = !pendingConnectionCreate?.batchSourceNodeIds?.length && pendingConnectionSourceNode?.type === CanvasNodeType.Image && Boolean(pendingConnectionSourceNode.metadata?.content);
 
@@ -1172,6 +1263,16 @@ function InfiniteCanvasPage() {
         setDialogNodeId(null);
         setToolbarNodeId(null);
         setDrawingNodeId(node.id);
+    }, []);
+
+    const openPortraitClearance = useCallback((node: CanvasNodeData) => {
+        if (node.type !== PORTRAIT_CLEARANCE_NODE_TYPE) return;
+        setSelectedNodeIds(new Set([node.id]));
+        setSelectedConnectionId(null);
+        setContextMenu(null);
+        setDialogNodeId(null);
+        setToolbarNodeId(null);
+        setPortraitClearanceNodeId(node.id);
     }, []);
     const { agentSnapshot, agentUndoCount, applyAgentOps, canUndoAgentOps, dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasAgentOperations({
         projectId,
@@ -1955,7 +2056,7 @@ function InfiniteCanvasPage() {
                                 onFileDragLeave={handleFileDragLeave}
                                 onFileDragOver={handleFileDragOver}
                             >
-                                <CanvasNodeActionContext.Provider value={{ download: downloadNodeImage, duplicate: (node) => duplicateNode(node.id), deleteNode: (node) => deleteNodes(new Set([node.id])), updateMetadata: (nodeId, patch) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...patch } } : node))), resizeNode: (nodeId, size) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, width: size.width, height: size.height } : node))) }}>
+                                <CanvasNodeActionContext.Provider value={{ download: downloadNodeImage, duplicate: (node) => duplicateNode(node.id), deleteNode: (node) => deleteNodes(new Set([node.id])), updateMetadata: (nodeId, patch) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...patch } } : node))), resizeNode: (nodeId, size) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, width: size.width, height: size.height } : node))), openPortraitClearance }}>
                                 <CanvasNodeGraphContext.Provider value={nodeGraphContext}>
                                 <CanvasProjectWorldLayers
                                     projectId={projectId}
@@ -2032,7 +2133,7 @@ function InfiniteCanvasPage() {
                                 </CanvasNodeActionContext.Provider>
                             </InfiniteCanvas>
 
-                            <CanvasActiveTaskPanel tasks={activeTasks} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
+                            <CanvasActiveTaskPanel tasks={activeTasks} onCancelTask={cancelCanvasTask} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
 
                             {focusMode ? (
                                 <CanvasFocusModeBar
@@ -2073,6 +2174,7 @@ function InfiniteCanvasPage() {
                                     onAddFolder={createFolder}
                                     onAddDrawing={() => createNode(CanvasNodeType.Drawing)}
                                     onAddExtensionNode={(type) => createNode(type)}
+                                    onAddWorkflow={() => createNode(CanvasNodeType.Config)}
                                     onOpenDirector={() => createDirectorShot()}
                                     onUndo={undoCanvas}
                                     onRedo={redoCanvas}
@@ -2232,7 +2334,7 @@ function InfiniteCanvasPage() {
                             setDialogNodeId(null);
                             setEmotionNodeId((current) => (current === node.id ? null : node.id));
                         }}
-                        onPortraitTexture={generatePortraitTextureNode}
+                        onPortraitTexture={openPortraitTextureEditor}
                         onCrop={(node) => setCropNodeId(node.id)}
                         onSplit={(node) => setSplitNodeId(node.id)}
                         onUpscale={(node) => setUpscaleNodeId(node.id)}
@@ -2445,6 +2547,16 @@ function InfiniteCanvasPage() {
                         </Suspense>
                     ) : null}
 
+                        <PortraitClearanceModal
+                            projectId={projectId}
+                            node={portraitClearanceNode}
+                        upstreamNodes={portraitClearanceInputs}
+                        open={Boolean(portraitClearanceNode)}
+                        onClose={() => setPortraitClearanceNodeId(null)}
+                        onUpdateState={(nodeId, state: PortraitClearanceNodeState) => handleConfigNodeChange(nodeId, { portraitClearance: state })}
+                        onAddCandidate={addPortraitCandidateToCanvas}
+                    />
+
                     <CanvasScriptEditor
                         node={activeScriptNode}
                         nodes={nodes}
@@ -2526,6 +2638,7 @@ function InfiniteCanvasPage() {
                         taskLogs={taskDetailLogs}
                         taskLoading={taskDetailLoading}
                         onCloseTask={() => setTaskDetail(null)}
+                        onCancelTask={cancelCanvasTask}
                         superResolveNode={superResolveNode}
                         onCloseSuperResolve={() => setSuperResolveNodeId(null)}
                         previewNode={previewNode}

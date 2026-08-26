@@ -1,12 +1,13 @@
 import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
 import { AudioLines, CalendarDays, CheckCircle2, Clock3, CloudUpload, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
 import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
+import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import type { PluginManifest, RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
 import { fetchPlugins, setPluginEnabled, uploadPlugin, type BackendPlugin } from "@/services/api/plugins";
@@ -17,13 +18,15 @@ import { PluginDetailsModal, UploadPluginModal } from "./plugin-documentation-mo
 import "./plugins.css";
 
 const categoryLabels: Record<string, string> = {
-    "asset-source": "素材来源",
+    provider: "模型渠道",
     "canvas-node": "画布节点",
     workflow: "工作流",
+    transform: "媒体转换",
+    "asset-source": "素材来源",
     "ai-capability": "AI 能力",
-    "import-export": "导入导出",
+    "usage-observer": "用量观察",
     agent: "智能体",
-    protocol: "请求协议",
+    "import-export": "导入导出",
 };
 
 const surfaceLabels: Record<string, string> = {
@@ -41,6 +44,7 @@ const permissionLabels: Record<string, string> = {
     "asset.import": "导入素材",
     "asset.upload": "上传素材",
     "generation.run": "调用生成",
+    "ai.text": "调用已配置的文本/视觉理解模型",
     "external.open": "打开外部详情",
 };
 
@@ -61,6 +65,8 @@ export default function PluginsPage() {
     const installations = usePluginStore((state) => state.installations);
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setEnabled = usePluginStore((state) => state.setEnabled);
+    const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const updateConfig = usePluginStore((state) => state.updateConfig);
     const builtinPlugins = useMemo(() => listRegisteredPlugins(), []);
     const [backendPlugins, setBackendPlugins] = useState<BackendPlugin[]>([]);
@@ -71,6 +77,7 @@ export default function PluginsPage() {
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("all");
+    const [scrollTarget, setScrollTarget] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "disabled">("all");
     const [trustFilter, setTrustFilter] = useState<"all" | "trusted">("all");
     const [eagleBaseUrl, setEagleBaseUrl] = useState("http://localhost:41595");
@@ -79,6 +86,7 @@ export default function PluginsPage() {
     const [eagleFolders, setEagleFolders] = useState<EagleFolder[]>([]);
     const [eagleFoldersLoading, setEagleFoldersLoading] = useState(false);
     const [eagleFoldersError, setEagleFoldersError] = useState("");
+    const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
     useEffect(() => {
         for (const plugin of builtinPlugins) ensurePlugin(plugin.manifest);
@@ -87,7 +95,8 @@ export default function PluginsPage() {
     const reloadBackendPlugins = async () => {
         setBackendPluginsLoading(true);
         try {
-            setBackendPlugins(await fetchPlugins());
+            const plugins = await fetchPlugins();
+            setBackendPlugins(plugins);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件中心失败");
             setBackendPlugins([]);
@@ -101,7 +110,11 @@ export default function PluginsPage() {
     }, []);
 
     const remotePlugins = useMemo(() => backendPlugins.map(toRegisteredPlugin), [backendPlugins]);
-    const registeredPlugins = useMemo(() => [...builtinPlugins, ...remotePlugins], [builtinPlugins, remotePlugins]);
+    const registeredPlugins = useMemo(() => {
+        const byId = new Map(builtinPlugins.map((plugin) => [plugin.manifest.id, plugin]));
+        for (const plugin of remotePlugins) byId.set(plugin.manifest.id, plugin);
+        return [...byId.values()];
+    }, [builtinPlugins, remotePlugins]);
     const backendPluginById = useMemo(() => new Map(backendPlugins.map((plugin) => [plugin.manifest.id, plugin])), [backendPlugins]);
 
     const eagle = installations.find((item) => item.manifest.id === EAGLE_PLUGIN_ID);
@@ -121,13 +134,16 @@ export default function PluginsPage() {
             const isSystemPlugin = plugin.source !== "uploaded";
             if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && isSystemPlugin) return false;
             const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
-            const enabled = plugin.manifest.kind === "protocol" ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
+            const remote = backendPluginById.get(plugin.manifest.id);
+            const enabled = remote ? remote.status === "enabled" : Boolean(installation?.enabled);
             const manifest = plugin.manifest;
-            const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, categoryLabels[manifest.category]].filter(Boolean).join(" ").toLocaleLowerCase();
+            const contributionKinds = contributionKindsFor(manifest);
+            const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, ...contributionKinds.map((kind) => categoryLabels[kind] || kind)].filter(Boolean).join(" ").toLocaleLowerCase();
             if (normalizedSearch && !searchableText.includes(normalizedSearch)) return false;
             if (categoryFilter !== "all") {
-                const matchesCapability = manifest.kind === "protocol" && manifest.protocol?.categories.includes(categoryFilter as "text" | "image" | "video" | "audio");
-                const matchesApp = categoryFilter === "other" && manifest.kind !== "protocol";
+                const providerCapabilities = providerCapabilitiesFor(manifest);
+                const matchesCapability = providerCapabilities.includes(categoryFilter as "text" | "image" | "video" | "audio");
+                const matchesApp = categoryFilter === "other" && contributionKinds.length > 0 && providerCapabilities.length === 0;
                 if (!matchesCapability && !matchesApp) return false;
             }
             if (trustFilter === "trusted" && !manifest.trusted) return false;
@@ -139,21 +155,37 @@ export default function PluginsPage() {
 
     const pluginSections = useMemo(
         () => [
-            ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind === "protocol" && plugin.manifest.protocol?.categories.includes(section.key)) })),
-            { key: "other", label: "应用插件", description: "画布、素材与工作流扩展", icon: PlugZap, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind !== "protocol") },
+            ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => providerCapabilitiesFor(plugin.manifest).includes(section.key)) })),
+            { key: "other", label: "应用插件", description: "画布、素材与工作流扩展", icon: PlugZap, plugins: filteredPlugins.filter((plugin) => !providerCapabilitiesFor(plugin.manifest).length) },
         ],
         [filteredPlugins],
     );
+
+    const selectCategory = (key: string) => {
+        setCategoryFilter(key);
+        setScrollTarget(key === "all" ? null : key);
+    };
+
+    useEffect(() => {
+        if (!scrollTarget) return;
+        const section = sectionRefs.current[scrollTarget];
+        if (!section) return;
+
+        const frame = window.requestAnimationFrame(() => {
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            section.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+            setScrollTarget(null);
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [pluginSections, scrollTarget]);
 
     const categoryCounts = useMemo(() => {
         const visiblePlugins = registeredPlugins.filter((plugin) => user?.role === "admin" || features.systemPluginsVisibleToUsers || plugin.source === "uploaded");
         const counts: Record<string, number> = { all: visiblePlugins.length, text: 0, image: 0, video: 0, audio: 0, other: 0 };
         for (const plugin of visiblePlugins) {
-            if (plugin.manifest.kind !== "protocol") {
-                counts.other += 1;
-                continue;
-            }
-            for (const capability of plugin.manifest.protocol?.categories || []) {
+            const capabilities = providerCapabilitiesFor(plugin.manifest);
+            if (!capabilities.length) counts.other += 1;
+            for (const capability of capabilities) {
                 counts[capability] = (counts[capability] || 0) + 1;
             }
         }
@@ -162,23 +194,24 @@ export default function PluginsPage() {
 
     const settingsPlugin = settingsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === settingsPluginId) : undefined;
     const settingsInstallation = settingsPlugin ? installations.find((item) => item.manifest.id === settingsPlugin.manifest.id) : undefined;
-    const settingsEnabled = settingsPlugin?.manifest.kind === "protocol" ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" : Boolean(settingsInstallation?.enabled);
+    const settingsEnabled = settingsPlugin ? (backendPluginById.has(settingsPlugin.manifest.id) ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" : Boolean(settingsInstallation?.enabled)) : false;
     const detailsPlugin = detailsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === detailsPluginId) : undefined;
 
-    const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields.length);
+    const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields?.length);
     const canConfigurePlugin = (plugin: RegisteredPlugin) => hasPluginConfiguration(plugin) && user?.role === "admin";
 
     const isPluginEnabled = (plugin: RegisteredPlugin, installation = installations.find((item) => item.manifest.id === plugin.manifest.id)) =>
-        plugin.manifest.kind === "protocol" ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
+        backendPluginById.has(plugin.manifest.id) ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
 
     const togglePlugin = async (plugin: RegisteredPlugin, enabled: boolean) => {
-        if (plugin.manifest.kind !== "protocol") {
-            setEnabled(plugin.manifest.id, enabled);
-            return;
-        }
         try {
-            const next = await setPluginEnabled(plugin.manifest.id, enabled);
-            setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
+            if (backendPluginById.has(plugin.manifest.id)) {
+                const next = await setPluginEnabled(plugin.manifest.id, enabled);
+                setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
+                setRuntimeStatuses({ ...runtimeStatuses, [next.manifest.id]: next.status });
+            } else {
+                setEnabled(plugin.manifest.id, enabled);
+            }
             message.success(`${plugin.manifest.name}${enabled ? "已启用" : "已停用"}`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新插件状态失败");
@@ -228,10 +261,10 @@ export default function PluginsPage() {
                         <div className="plugins-sidebar-heading">
                             <span className="plugins-sidebar-kicker">PLUGIN CENTER</span>
                             <h1>插件中心</h1>
-                            <p>统一管理能力插件与模型请求协议。</p>
+                            <p>统一管理 provider、工作流、画布节点和其他扩展能力。</p>
                         </div>
                         <nav className="plugins-sidebar-nav">
-                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "all" ? " is-active" : ""}`} aria-current={categoryFilter === "all" ? "page" : undefined} onClick={() => setCategoryFilter("all")}>
+                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "all" ? " is-active" : ""}`} aria-current={categoryFilter === "all" ? "page" : undefined} onClick={() => selectCategory("all")}>
                                 <span className="plugins-sidebar-item-label">
                                     <PlugZap className="size-4" />
                                     全部插件
@@ -246,7 +279,7 @@ export default function PluginsPage() {
                                         type="button"
                                         className={`plugins-sidebar-item${categoryFilter === section.key ? " is-active" : ""}`}
                                         aria-current={categoryFilter === section.key ? "page" : undefined}
-                                        onClick={() => setCategoryFilter(section.key)}
+                                        onClick={() => selectCategory(section.key)}
                                     >
                                         <span className="plugins-sidebar-item-label">
                                             <SectionIcon className="size-4" />
@@ -256,7 +289,7 @@ export default function PluginsPage() {
                                     </button>
                                 );
                             })}
-                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "other" ? " is-active" : ""}`} aria-current={categoryFilter === "other" ? "page" : undefined} onClick={() => setCategoryFilter("other")}>
+                            <button type="button" className={`plugins-sidebar-item${categoryFilter === "other" ? " is-active" : ""}`} aria-current={categoryFilter === "other" ? "page" : undefined} onClick={() => selectCategory("other")}>
                                 <span className="plugins-sidebar-item-label">
                                     <PlugZap className="size-4" />
                                     应用插件
@@ -317,7 +350,14 @@ export default function PluginsPage() {
                                     if (!section.plugins.length) return null;
                                     const SectionIcon = section.icon;
                                     return (
-                                        <section key={section.key} className="plugin-section">
+                                        <section
+                                            key={section.key}
+                                            id={`plugin-section-${section.key}`}
+                                            ref={(element) => {
+                                                sectionRefs.current[section.key] = element;
+                                            }}
+                                            className="plugin-section"
+                                        >
                                             <header className="plugin-section-heading">
                                                 <span className="plugin-section-icon">
                                                     <SectionIcon className="size-4" />
@@ -368,7 +408,7 @@ export default function PluginsPage() {
                                                                                     可信插件
                                                                                 </span>
                                                                             ) : null}
-                                                                            <span className="plugin-category-label">{categoryLabels[plugin.manifest.category] ?? plugin.manifest.category}</span>
+                                                                            <span className="plugin-category-label">{contributionKindsFor(plugin.manifest).map((kind) => categoryLabels[kind] ?? kind).join(" · ")}</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -387,13 +427,13 @@ export default function PluginsPage() {
                                                                 </div>
 
                                                                 <div className="plugin-card-tags">
-                                                                    {plugin.manifest.surfaces.map((surface) => (
+                                                                    {(plugin.manifest.surfaces || []).map((surface) => (
                                                                         <span key={surface}>{surfaceLabels[surface] ?? surface}</span>
                                                                     ))}
-                                                                    {plugin.manifest.protocol?.categories.map((capability) => (
+                                                                    {providerCapabilitiesFor(plugin.manifest).map((capability) => (
                                                                         <span key={capability}>{capabilityLabel(capability)}</span>
                                                                     ))}
-                                                                    {plugin.manifest.protocol?.poll ? <span>异步轮询</span> : null}
+                                                                    {plugin.manifest.contributes.providers?.some((provider) => provider.poll) ? <span>异步轮询</span> : null}
                                                                     <span>{plugin.manifest.permissions.length} 项能力</span>
                                                                 </div>
                                                             </button>
@@ -528,18 +568,30 @@ export default function PluginsPage() {
                                             <p>在创作页或图片、视频节点的提示词编辑器中使用“优化”按钮，即可让当前文本模型整理提示词。</p>
                                             <p className="mt-2 text-[var(--fs-micro)] text-foreground/50">插件不会自动覆盖原提示词，只有点击“采用”后才会回填到当前输入框。</p>
                                         </div>
+                                    ) : settingsPlugin.manifest.id === RUNNINGHUB_PLUGIN_ID || settingsPlugin.manifest.id === COMFYUI_PLUGIN_ID ? (
+                                        <div className="plugin-settings-empty">
+                                            <p>{settingsPlugin.manifest.id === RUNNINGHUB_PLUGIN_ID ? "RunningHub 的 API Key、Workflow / App 和字段映射在宿主设置页维护。" : "ComfyUI Bridge 的设备、服务地址和工作流字段在宿主设置页维护。"}</p>
+                                            <Button
+                                                type="primary"
+                                                icon={<ExternalLink className="size-4" />}
+                                                onClick={() => {
+                                                    setSettingsPluginId(null);
+                                                    navigate(`/settings?section=${settingsPlugin.manifest.id === RUNNINGHUB_PLUGIN_ID ? "runninghub" : "comfyui"}`);
+                                                }}
+                                            >
+                                                打开工作流设置
+                                            </Button>
+                                        </div>
                                     ) : (
                                         <div className="plugin-settings-empty">
-                                            {settingsPlugin.manifest.kind === "protocol"
-                                                ? `协议能力：${settingsPlugin.manifest.protocol?.categories.map(capabilityLabel).join("、") || "未声明"}；可用场景：${settingsPlugin.manifest.protocol?.scopes.join("、") || "未声明"}。`
-                                                : "该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。"}
+                                            {`贡献能力：${contributionKindsFor(settingsPlugin.manifest).map((kind) => categoryLabels[kind] || kind).join("、") || "未声明"}。当前接入位置和权限会根据插件清单自动生效。`}
                                         </div>
                                     )}
 
                                     <div className="plugin-permissions">
                                         <div>
                                             <span>接入位置</span>
-                                            {settingsPlugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join("、")}
+                                            {(settingsPlugin.manifest.surfaces || []).map((surface) => surfaceLabels[surface] ?? surface).join("、") || "由贡献点决定"}
                                         </div>
                                         <div>
                                             <span>插件能力</span>
@@ -564,23 +616,26 @@ function formatPluginDate(value?: string) {
 }
 
 function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
-    const manifest: PluginManifest = {
-        id: plugin.manifest.id,
-        name: plugin.manifest.name,
-        version: plugin.manifest.version,
-        publishedAt: plugin.installedAt,
-        updatedAt: plugin.updatedAt,
-        apiVersion: plugin.manifest.apiVersion,
-        category: "protocol",
-        description: plugin.manifest.description || "模型请求协议适配插件",
-        author: plugin.manifest.author,
-        surfaces: ["hybrid"],
-        permissions: ["generation.run"],
-        trusted: plugin.manifest.trusted,
-        kind: "protocol",
-        protocol: plugin.manifest.protocol,
-    };
-    return { manifest, source: plugin.source };
+    return { manifest: plugin.manifest, source: plugin.source };
+}
+
+function contributionKindsFor(manifest: PluginManifest): string[] {
+    const contributions = manifest.contributes;
+    const kinds: string[] = [];
+    if (contributions.providers?.length) kinds.push("provider");
+    if (contributions.workflows?.length) kinds.push("workflow");
+    if (contributions.canvasNodes?.length) kinds.push("canvas-node");
+    if (contributions.transforms?.length) kinds.push("transform");
+    if (contributions.assetSources?.length) kinds.push("asset-source");
+    if (contributions.aiCapabilities?.length) kinds.push("ai-capability");
+    if (contributions.usageObservers?.length) kinds.push("usage-observer");
+    if (contributions.agents?.length) kinds.push("agent");
+    if (contributions.importExport?.length) kinds.push("import-export");
+    return kinds;
+}
+
+function providerCapabilitiesFor(manifest: PluginManifest) {
+    return [...new Set((manifest.contributes.providers || []).flatMap((provider) => provider.capabilities))];
 }
 
 function capabilityLabel(value: string) {

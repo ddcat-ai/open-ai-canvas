@@ -16,7 +16,7 @@ export function CanvasDeleteProjectsDialog() {
         setDeleting(true);
         try {
             await deleteCanvasProjectsWithRemoteSync(ids);
-            cleanupImages();
+            void cleanupImages();
             removeSelectedIds(ids);
             setDeleteIds([]);
         } catch (error) {

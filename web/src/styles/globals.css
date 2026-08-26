@@ -4051,6 +4051,655 @@
     .settings-channel-status.is-warning { color: color-mix(in srgb, var(--palette-status-warning) 78%, var(--foreground)); }
     .settings-preference-block + .settings-preference-block { margin-top: var(--space-2); }
 
+    .workflow-workspace-tabs {
+        display: flex;
+        justify-content: center;
+        padding: var(--space-2) 0;
+    }
+
+    .workflow-workspace-tabs .ant-segmented {
+        min-width: 260px;
+    }
+
+    .workflow-graph-editor {
+        display: grid;
+        min-width: 0;
+        min-height: 620px;
+        grid-template-columns: minmax(300px, 36%) minmax(0, 1fr);
+        overflow: hidden;
+        border-radius: var(--r-xl);
+        background: var(--library-surface);
+    }
+
+    .workflow-graph-sidebar {
+        min-width: 0;
+        max-height: 720px;
+        overflow: auto;
+        padding: var(--space-4);
+        background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
+    }
+
+    .workflow-graph-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-2);
+    }
+
+    .workflow-graph-summary > span {
+        display: grid;
+        min-width: 0;
+        gap: var(--space-1);
+        border-radius: var(--r-lg);
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        padding: var(--space-3);
+    }
+
+    .workflow-graph-summary small,
+    .workflow-graph-selected-heading span,
+    .workflow-graph-node-select > span {
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        font-size: var(--fs-tiny);
+    }
+
+    .workflow-graph-summary strong {
+        font-size: var(--fs-body-lg);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .workflow-graph-node-select {
+        display: grid;
+        gap: var(--space-1-half);
+        margin-top: var(--space-4);
+    }
+
+    .workflow-graph-selected-heading {
+        display: grid;
+        gap: var(--space-1);
+        margin: var(--space-4) 0 var(--space-3);
+    }
+
+    .workflow-graph-selected-heading strong {
+        overflow: hidden;
+        font-size: var(--fs-body);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workflow-graph-sidebar .workflow-field-mapping-editor > p {
+        display: none;
+    }
+
+    .workflow-graph-stage {
+        position: relative;
+        min-width: 0;
+        min-height: 620px;
+        overflow: hidden;
+        background-color: color-mix(in srgb, var(--background) 88%, var(--foreground));
+        background-image: radial-gradient(circle, color-mix(in srgb, var(--foreground) 12%, transparent) 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+
+    .workflow-graph-controls {
+        position: absolute;
+        z-index: var(--node-z-overlay);
+        top: var(--space-3);
+        right: var(--space-3);
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        gap: var(--space-1);
+        border-radius: var(--r-lg);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 92%, transparent);
+        padding: var(--space-1);
+    }
+
+    .workflow-graph-controls span {
+        min-width: 48px;
+        color: color-mix(in srgb, var(--foreground) 62%, transparent);
+        font-size: var(--fs-tiny);
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+    }
+
+    .workflow-graph-controls svg {
+        width: var(--space-4);
+        height: var(--space-4);
+    }
+
+    .workflow-graph-viewport {
+        width: 100%;
+        height: 620px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .workflow-graph-viewport:active {
+        cursor: grabbing;
+    }
+
+    .workflow-graph-viewport > .ant-empty {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    .workflow-graph-svg {
+        display: block;
+        color: var(--foreground);
+    }
+
+    .workflow-graph-edge {
+        fill: none;
+        stroke: color-mix(in srgb, var(--foreground) 20%, transparent);
+        stroke-linecap: round;
+        stroke-width: 1.5;
+    }
+
+    .workflow-graph-node {
+        cursor: pointer;
+        outline: none;
+    }
+
+    .workflow-graph-node rect {
+        fill: color-mix(in srgb, var(--workspace-surface-strong) 96%, var(--background));
+        stroke: color-mix(in srgb, var(--foreground) 34%, transparent);
+        stroke-width: 1.5;
+        transition: fill var(--motion-state) ease-out, stroke var(--motion-state) ease-out;
+    }
+
+    .workflow-graph-node:hover rect,
+    .workflow-graph-node:focus-visible rect {
+        fill: var(--library-surface-hover);
+        stroke: color-mix(in srgb, var(--foreground) 62%, transparent);
+    }
+
+    .workflow-graph-node.has-fields rect {
+        stroke: color-mix(in srgb, var(--workspace-accent) 72%, transparent);
+    }
+
+    .workflow-graph-node.is-selected rect {
+        fill: var(--workspace-accent-soft);
+        stroke: var(--workspace-accent);
+        stroke-width: 2.5;
+    }
+
+    .workflow-graph-node.is-loader rect { stroke: color-mix(in srgb, var(--palette-status-warning) 76%, transparent); }
+    .workflow-graph-node.is-output rect { stroke: color-mix(in srgb, var(--palette-status-success) 72%, transparent); }
+    .workflow-graph-node.is-video rect { stroke: color-mix(in srgb, var(--color-node-video) 76%, transparent); }
+    .workflow-graph-node.is-sampler rect { stroke: color-mix(in srgb, var(--workspace-accent) 62%, transparent); }
+
+    .workflow-graph-node text {
+        pointer-events: none;
+    }
+
+    .workflow-graph-node-title {
+        fill: var(--foreground);
+        font-size: var(--fs-caption);
+        font-weight: 620;
+    }
+
+    .workflow-graph-node-type,
+    .workflow-graph-node-id {
+        fill: color-mix(in srgb, var(--foreground) 46%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .workflow-graph-node-count {
+        fill: var(--workspace-accent);
+        font-size: var(--fs-micro);
+        font-weight: 700;
+    }
+
+    .workflow-json-details {
+        border-radius: var(--r-lg);
+        background: var(--library-surface);
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .workflow-json-details > summary {
+        cursor: pointer;
+        color: color-mix(in srgb, var(--foreground) 68%, transparent);
+        font-size: var(--fs-caption);
+        font-weight: 560;
+    }
+
+    .canvas-workflow-group-label {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        color: color-mix(in srgb, var(--foreground) 46%, transparent);
+        font-size: var(--fs-micro);
+        font-weight: 620;
+        letter-spacing: 0.04em;
+    }
+
+    .canvas-workflow-group-label b {
+        font-size: var(--fs-micro);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .canvas-workflow-option {
+        display: flex;
+        min-width: 0;
+        min-height: 34px;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--foreground);
+    }
+
+    .canvas-workflow-option > svg {
+        width: var(--space-4);
+        height: var(--space-4);
+        flex: 0 0 auto;
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    }
+
+    .canvas-workflow-option > span {
+        min-width: 0;
+        overflow: hidden;
+        flex: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-workflow-option > i {
+        width: var(--space-1-half);
+        height: var(--space-1-half);
+        flex: 0 0 auto;
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--foreground) 68%, transparent);
+    }
+
+    .canvas-workflow-selected-label {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: var(--space-1-half);
+    }
+
+    .canvas-workflow-selected-label > svg {
+        width: var(--space-4);
+        height: var(--space-4);
+        flex: 0 0 auto;
+        color: color-mix(in srgb, currentColor 62%, transparent);
+    }
+
+    .canvas-workflow-selected-label > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 1023px) {
+        .workflow-graph-editor {
+            grid-template-columns: 1fr;
+        }
+
+        .workflow-graph-sidebar {
+            max-height: none;
+        }
+
+        .workflow-graph-stage,
+        .workflow-graph-viewport {
+            min-height: 520px;
+            height: 520px;
+        }
+    }
+
+    .workflow-test-workbench {
+        min-width: 0;
+        overflow: hidden;
+        border-radius: var(--r-xl);
+        background: var(--library-surface);
+    }
+
+    .workflow-test-toolbar {
+        display: flex;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 60px;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
+    }
+
+    .workflow-test-toolbar > div:first-child {
+        display: grid;
+        min-width: 0;
+        flex: 1 1 auto;
+        gap: var(--space-1);
+    }
+
+    .workflow-test-toolbar strong {
+        overflow: hidden;
+        font-size: var(--fs-body);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workflow-test-toolbar span,
+    .workflow-test-notice {
+        color: color-mix(in srgb, var(--foreground) 54%, transparent);
+        font-size: var(--fs-tiny);
+    }
+
+    .workflow-test-toolbar-actions {
+        display: flex;
+        flex: 0 0 auto;
+        min-width: 0;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .workflow-test-toolbar-actions .ant-btn {
+        display: inline-flex;
+        min-width: 96px;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary {
+        border: 0;
+        background: var(--btn-solid-bg) !important;
+        color: var(--btn-solid-fg) !important;
+        box-shadow: none !important;
+        font-weight: 620;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary:not(:disabled):hover {
+        background: var(--btn-solid-hover-bg) !important;
+        color: var(--btn-solid-fg) !important;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary:not(:disabled):active {
+        background: var(--btn-solid-active-bg) !important;
+        color: var(--btn-solid-fg) !important;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary > span,
+    .workflow-test-toolbar-actions .ant-btn-primary .ant-btn-icon {
+        color: inherit !important;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn:disabled {
+        cursor: not-allowed;
+        opacity: 1;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary:disabled {
+        border-color: color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+        background: var(--control-disabled-bg) !important;
+        color: var(--control-disabled-fg) !important;
+    }
+
+    .workflow-test-toolbar-actions .ant-btn-primary:disabled > span,
+    .workflow-test-toolbar-actions .ant-btn-primary:disabled .ant-btn-icon {
+        color: var(--control-disabled-fg) !important;
+    }
+
+    .workflow-test-notice {
+        min-width: 0;
+        padding: var(--space-2) var(--space-4);
+        background: color-mix(in srgb, var(--palette-status-warning) 9%, transparent);
+        color: color-mix(in srgb, var(--palette-status-warning) 78%, var(--foreground));
+    }
+
+    .workflow-test-canvas-scroll {
+        min-width: 0;
+        max-width: 100%;
+        overflow: auto;
+        overscroll-behavior: contain;
+    }
+
+    .workflow-test-canvas {
+        position: relative;
+        width: 100%;
+        min-width: 1040px;
+        height: 760px;
+        overflow: hidden;
+        background-color: color-mix(in srgb, var(--background) 88%, var(--foreground));
+        background-image: radial-gradient(circle, color-mix(in srgb, var(--foreground) 13%, transparent) 1px, transparent 1px);
+        background-size: 20px 20px;
+        user-select: none;
+    }
+
+    .workflow-test-lines {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+    }
+
+    .workflow-test-lines path {
+        fill: none;
+        stroke: color-mix(in srgb, var(--workspace-accent) 72%, transparent);
+        stroke-linecap: round;
+        stroke-width: 2;
+    }
+
+    .workflow-test-node {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 284px;
+        overflow: visible;
+        border-radius: var(--node-radius);
+        background: color-mix(in srgb, var(--library-surface) 94%, var(--background));
+        color: var(--foreground);
+        box-shadow: var(--card-elevation);
+    }
+
+    .workflow-test-node.is-wide {
+        width: 324px;
+    }
+
+    .workflow-test-node-header {
+        display: flex;
+        min-width: 0;
+        min-height: 42px;
+        cursor: grab;
+        touch-action: none;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 0 var(--space-3);
+        border-radius: var(--node-radius) var(--node-radius) 0 0;
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    }
+
+    .workflow-test-node-header:active {
+        cursor: grabbing;
+    }
+
+    .workflow-test-node-header > span,
+    .workflow-test-node-header > span svg {
+        width: var(--space-4);
+        height: var(--space-4);
+        flex: 0 0 auto;
+        color: var(--workspace-accent);
+    }
+
+    .workflow-test-node-header strong {
+        min-width: 0;
+        overflow: hidden;
+        flex: 1;
+        font-size: var(--fs-caption);
+        font-weight: 620;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workflow-test-node-header .workflow-test-node-grip {
+        width: var(--space-4);
+        height: var(--space-4);
+        color: color-mix(in srgb, var(--foreground) 28%, transparent);
+    }
+
+    .workflow-test-node-body {
+        max-height: 430px;
+        overflow: auto;
+        padding: var(--space-3);
+    }
+
+    .workflow-test-port {
+        position: absolute;
+        top: 66px;
+        width: 12px;
+        height: 12px;
+        border: 3px solid color-mix(in srgb, var(--background) 84%, transparent);
+        border-radius: var(--r-full);
+        background: var(--workspace-accent);
+    }
+
+    .workflow-test-port.is-input { left: -6px; }
+    .workflow-test-port.is-output { right: -6px; }
+
+    .workflow-test-upload {
+        display: grid;
+        min-height: 76px;
+        cursor: pointer;
+        place-items: center;
+        border-radius: var(--r-lg);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+        color: color-mix(in srgb, var(--foreground) 58%, transparent);
+        font-size: var(--fs-tiny);
+        transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out;
+    }
+
+    .workflow-test-upload:hover {
+        background: color-mix(in srgb, var(--foreground) 7%, transparent);
+        color: var(--foreground);
+    }
+
+    .workflow-test-upload > span {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .workflow-test-upload svg {
+        width: var(--space-4);
+        height: var(--space-4);
+    }
+
+    .workflow-test-file-list {
+        display: grid;
+        width: 100%;
+        gap: var(--space-2);
+    }
+
+    .workflow-test-file-list > span {
+        display: grid;
+        min-width: 0;
+        grid-template-columns: 34px auto minmax(0, 1fr);
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1-half) var(--space-2);
+    }
+
+    .workflow-test-file-list img,
+    .workflow-test-file-list svg {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--r-md);
+        object-fit: cover;
+    }
+
+    .workflow-test-file-list b {
+        color: var(--workspace-accent);
+        font-size: var(--fs-micro);
+        font-style: normal;
+    }
+
+    .workflow-test-file-list em {
+        overflow: hidden;
+        font-size: var(--fs-tiny);
+        font-style: normal;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workflow-test-parameters {
+        display: grid;
+        gap: var(--space-3);
+    }
+
+    .workflow-test-parameters > label {
+        display: grid;
+        min-width: 0;
+        gap: var(--space-1-half);
+    }
+
+    .workflow-test-parameters > label > span {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        color: color-mix(in srgb, var(--foreground) 72%, transparent);
+        font-size: var(--fs-tiny);
+    }
+
+    .workflow-test-parameters small {
+        overflow: hidden;
+        color: color-mix(in srgb, var(--foreground) 38%, transparent);
+        font-size: var(--fs-micro);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .workflow-test-empty-text {
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        font-size: var(--fs-tiny);
+    }
+
+    .workflow-test-output {
+        display: grid;
+        min-height: 150px;
+        place-items: center;
+        overflow: hidden;
+        border-radius: var(--r-lg);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    }
+
+    .workflow-test-output img,
+    .workflow-test-output video {
+        display: block;
+        width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+    }
+
+    .workflow-test-image-results {
+        display: grid;
+        width: 100%;
+        gap: var(--space-2);
+    }
+
+    .workflow-test-output audio {
+        width: calc(100% - var(--space-4));
+    }
+
+    .workflow-test-output .ant-empty {
+        margin-block: var(--space-3);
+    }
+
+    .workflow-test-node .ant-progress {
+        margin-top: var(--space-2);
+    }
+
     .settings-pane-header {
         display: flex;
         min-width: 0;
@@ -4121,6 +4770,22 @@
 
     .settings-page .ant-btn {
         border-radius: var(--r-md);
+    }
+
+    .workflow-entry-actions-field .ant-form-item-control-input {
+        min-height: 34px;
+    }
+
+    .workflow-entry-actions {
+        display: flex;
+        min-width: 0;
+        min-height: 34px;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .workflow-entry-actions .ant-btn {
+        white-space: nowrap;
     }
 
     .settings-page .ant-form-item-explain-error,
@@ -9435,6 +10100,127 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-chat-reference-add:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: var(--space-half); }
 .creation-chat-composer .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
 
+.creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
+.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+}
+
+.creation-home .creation-reference-track-wrapper { position: relative; min-width: 0; min-height: 85px; margin: -2px 0 var(--space-2); }
+.creation-home .creation-reference-stack-shell { position: relative; width: fit-content; min-width: 0; max-width: 100%; }
+.creation-home .creation-reference-track {
+    display: flex;
+    width: fit-content;
+    min-width: 0;
+    max-width: 100%;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0;
+    list-style: none;
+    padding: var(--space-1) var(--space-half);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    user-select: none;
+}
+.creation-home .creation-reference-track::-webkit-scrollbar { display: none; }
+.creation-home .creation-reference-track.is-expanded { gap: var(--space-2); }
+.creation-home .creation-reference-track.is-dragging { cursor: grabbing; scroll-behavior: auto; }
+.creation-home .creation-reference-track:not(.is-dragging):not(.is-expanded) { cursor: default; }
+.creation-home .creation-reference-track.is-expanded:not(.is-dragging) { cursor: grab; }
+.creation-home .creation-reference-stack-card {
+    position: relative;
+    display: block;
+    width: 58px;
+    height: 77px;
+    flex: 0 0 58px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    transition: margin-left var(--motion-state) var(--motion-ease-out), box-shadow var(--motion-dur-fast-calc) ease;
+}
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card { margin-left: -48px; }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(1) { --stack-rotate: -7deg; margin-left: 0; z-index: 4; }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(2) { --stack-rotate: 2deg; z-index: 3; }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(3) { --stack-rotate: -5deg; z-index: 2; }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(4),
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(n+5) { --stack-rotate: 3deg; z-index: 1; }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(n+5) { display: none; }
+.creation-home .creation-reference-track.is-expanded .creation-reference-stack-card { width: 52px; height: 69px; flex-basis: 52px; margin-left: 0; z-index: auto; }
+.creation-home .creation-reference-card-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border: var(--stroke-1) solid var(--creation-border);
+    border-radius: var(--r-sm);
+    background: var(--creation-surface-muted);
+    transform: rotate(var(--stack-rotate, 0deg));
+    transform-origin: center bottom;
+    transition: transform var(--motion-state) var(--motion-ease-out), box-shadow var(--motion-dur-fast-calc) ease;
+}
+.creation-home .creation-reference-track.is-expanded .creation-reference-card-content { transform: rotate(0deg); }
+.creation-home .creation-reference-stack-card[data-framer-dragging="true"] { margin-left: 0; box-shadow: var(--elevation-overlay); z-index: var(--z-popover); }
+.creation-home .creation-reference-stack-card[data-framer-dragging="true"] .creation-reference-card-content { transform: rotate(0deg) scale(1.05); }
+.creation-home .creation-reference-card-preview { display: block; width: 100%; height: 100%; border: 0; background: transparent; padding: 0; cursor: zoom-in; }
+.creation-home .creation-reference-card-preview img,
+.creation-home .creation-reference-card-preview video { width: 100%; height: 100%; object-fit: cover; transition: transform var(--motion-dur-fast-calc) var(--motion-ease-out); }
+.creation-home .creation-reference-card-preview:hover img,
+.creation-home .creation-reference-card-preview:hover video { transform: scale(1.04); }
+.creation-home .creation-reference-card-preview > span { position: absolute; right: var(--space-1); bottom: var(--space-1); display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 72%, transparent); color: var(--color-neutral-0); opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-card-preview:hover > span,
+.creation-home .creation-reference-card-preview:focus-visible > span { opacity: 1; }
+.creation-home .creation-reference-card-preview:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: calc(-1 * var(--stroke-2)); }
+.creation-home .creation-reference-card-remove { position: absolute; top: var(--space-1); right: var(--space-1); z-index: 1; display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border: 0; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); padding: 0; opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-stack-card:hover .creation-reference-card-remove,
+.creation-home .creation-reference-card-remove:focus-visible { opacity: 1; }
+.creation-home .creation-reference-card-remove:hover { background: var(--status-error); }
+.creation-home .creation-reference-card-remove svg { width: var(--space-3); height: var(--space-3); }
+.creation-home .creation-reference-add-slot { display: flex; flex: 0 0 auto; list-style: none; }
+.creation-home .creation-reference-add-button { display: grid; width: 58px; height: 77px; flex: 0 0 58px; place-items: center; border: var(--stroke-1) dashed var(--creation-border); border-radius: var(--r-sm); background: transparent; color: var(--creation-muted); padding: 0; transition: border-color var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease, color var(--motion-dur-fast-calc) ease, width var(--motion-state) var(--motion-ease-out), height var(--motion-state) var(--motion-ease-out); }
+.creation-home .creation-reference-track:not(.is-expanded) .creation-reference-add-slot { margin-left: var(--space-2); }
+.creation-home .creation-reference-track.is-empty .creation-reference-add-slot { margin-left: 0; }
+.creation-home .creation-reference-track.is-expanded .creation-reference-add-button { width: 52px; height: 69px; flex-basis: 52px; }
+.creation-home .creation-reference-add-button:hover:not(:disabled) { border-color: var(--creation-text); background: var(--creation-surface-hover); color: var(--creation-text); }
+.creation-home .creation-reference-add-button:disabled { cursor: wait; opacity: .5; }
+.creation-home .creation-reference-add-button svg { width: var(--space-5); height: var(--space-5); }
+.creation-home .creation-reference-track-button { position: absolute; z-index: 1; top: 50%; display: grid; width: var(--space-6); height: var(--space-6); place-items: center; border: var(--stroke-1) solid color-mix(in srgb, var(--color-neutral-0) 12%, transparent); border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); padding: 0; transform: translateY(-50%); transition: background-color var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-track-button:hover { background: color-mix(in srgb, var(--color-neutral-950) 92%, transparent); }
+.creation-home .creation-reference-track-button:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: var(--space-half); }
+.creation-home .creation-reference-track-button.is-left { left: var(--space-1); }
+.creation-home .creation-reference-track-button.is-right { right: var(--space-1); }
+.creation-home .creation-reference-track-button svg { width: var(--space-4); height: var(--space-4); }
+html:not(.dark) .creation-home .creation-reference-track-button { border-color: rgba(28, 32, 37, .12); background: rgba(255, 255, 255, .9); color: #272c32; box-shadow: var(--elevation-overlay); }
+html:not(.dark) .creation-home .creation-reference-add-button:hover:not(:disabled) { background: rgba(28, 32, 37, .055); }
+
+@media (max-width: 680px) {
+    .creation-home .creation-reference-track-wrapper { min-height: 69px; margin-bottom: var(--space-2); }
+    .creation-home .creation-reference-stack-card { width: 46px; height: 61px; flex-basis: 46px; }
+    .creation-home .creation-reference-track.is-expanded .creation-reference-stack-card { width: 42px; height: 56px; flex-basis: 42px; }
+    .creation-home .creation-reference-add-button { width: 46px; height: 61px; flex-basis: 46px; }
+    .creation-home .creation-reference-track.is-expanded .creation-reference-add-button { width: 42px; height: 56px; flex-basis: 42px; }
+    .creation-home .creation-reference-track-button { width: var(--space-5); height: var(--space-5); }
+    .creation-home .creation-reference-track-button.is-left { left: 0; }
+    .creation-home .creation-reference-track-button.is-right { right: 0; }
+}
+
+@media (hover: none) {
+    .creation-home .creation-reference-track { gap: var(--space-2); }
+    .creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card { display: block; margin-left: 0; }
+    .creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(n+5) { display: block; }
+    .creation-home .creation-reference-track:not(.is-expanded) .creation-reference-card-content { transform: rotate(0deg); }
+    .creation-home .creation-reference-stack-card { width: 52px; height: 69px; flex-basis: 52px; margin-left: 0; }
+    .creation-home .creation-reference-add-button { width: 52px; height: 69px; flex-basis: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .creation-home .creation-reference-stack-card,
+    .creation-home .creation-reference-add-button { transition: box-shadow var(--motion-dur-fast-calc) ease; }
+}
+
 .creation-custom-value {
     display: flex;
     height: 28px;
@@ -9511,8 +10297,9 @@ html:not(.dark) .creation-duration-choices button:hover { background: rgba(28, 3
     padding: 18px 20px 8px;
 }
 
+/* 上传 input 为 hidden，编辑器是该网格的唯一可见子项；创作页输入区保持整行宽度。 */
 .creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
-.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
+.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .creation-home .creation-chat-editor textarea,
 .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
 .creation-home .creation-chat-mention-container { min-height: 124px; }
@@ -9650,14 +10437,22 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-secondary-drawer,
 .admin-modal-root,
 .admin-channel-modal-root {
-    --admin-layer-0: #f7f7f5;
-    --admin-layer-1: #ffffff;
-    --admin-layer-2: #f5f4f2;
-    --admin-sidebar: #f0efe9;
+    --admin-layer-0: var(--workspace-content);
+    --admin-layer-1: var(--workspace-surface);
+    --admin-layer-2: color-mix(in srgb, var(--foreground) 4%, var(--workspace-content));
+    --admin-sidebar: var(--workspace-navigation);
+    --admin-text-primary: var(--foreground);
+    --admin-text-secondary: color-mix(in srgb, var(--foreground) 72%, transparent);
+    --admin-text-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
+    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
+    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
+    --admin-divider: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-border: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-shadow: none;
     --admin-status-success: oklch(0.52 0.14 155);
     --admin-status-warning: oklch(0.62 0.14 78);
     --admin-status-error: var(--destructive);
-    --admin-status-info: oklch(0.54 0.13 250);
+    --admin-status-info: var(--foreground);
     --admin-chart-primary: var(--workspace-accent);
     --admin-chart-secondary: oklch(0.55 0.11 180);
     --admin-chart-warning: oklch(0.64 0.14 78);
@@ -9668,32 +10463,41 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .dark .admin-secondary-drawer,
 .dark .admin-modal-root,
 .dark .admin-channel-modal-root {
-    --admin-layer-0: #0d0d0d;
-    --admin-layer-1: #111111;
-    --admin-layer-2: #1a1a1a;
-    --admin-sidebar: #0a0a0a;
+    --admin-layer-0: var(--workspace-content);
+    --admin-layer-1: var(--workspace-surface);
+    --admin-layer-2: color-mix(in srgb, var(--foreground) 5%, var(--workspace-content));
+    --admin-sidebar: var(--workspace-navigation);
+    --admin-text-primary: var(--foreground);
+    --admin-text-secondary: color-mix(in srgb, var(--foreground) 74%, transparent);
+    --admin-text-muted: color-mix(in srgb, var(--foreground) 54%, transparent);
+    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 43%, transparent);
+    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
+    --admin-divider: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-border: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --admin-card-shadow: none;
     --admin-status-success: oklch(0.72 0.14 155);
     --admin-status-warning: oklch(0.78 0.14 78);
-    --admin-status-info: oklch(0.76 0.13 250);
+    --admin-status-info: var(--foreground);
     --admin-chart-secondary: oklch(0.72 0.11 180);
     --admin-chart-warning: oklch(0.78 0.14 78);
 }
 
 .admin-shell .admin-nav-group-label {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    margin-bottom: 5px !important;
+    padding-inline: 10px;
+    color: color-mix(in srgb, var(--admin-text-secondary) 84%, transparent) !important;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 18px;
 }
 
 .admin-shell .admin-nav-group-label::before,
 .admin-shell .admin-nav-group-label::after {
-    height: 1px;
-    flex: 1 1 auto;
-    background: color-mix(in srgb, var(--foreground) 12%, transparent);
-    content: "";
+    display: none;
 }
 
 .admin-shell .admin-nav-group-label span {
@@ -9702,7 +10506,9 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-shell .app-workspace-nav-link {
     position: relative;
-    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    height: 34px !important;
+    border-radius: 8px;
+    color: var(--admin-text-secondary);
 }
 
 .admin-shell .app-workspace-brand-link {
@@ -9710,23 +10516,30 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-shell .app-workspace-nav-link.is-active {
-    background: color-mix(in srgb, var(--foreground) 5%, transparent);
-    color: var(--foreground);
+    background: var(--workspace-nav-active-bg);
+    box-shadow: none;
+    color: var(--admin-text-primary);
     font-weight: 600;
 }
 
 .admin-shell .app-workspace-nav-link.is-active::before {
-    display: none;
+    display: block;
 }
 
 .admin-shell .app-workspace-nav-link:hover:not(.is-active) {
-    background: var(--surface-hover);
-    color: var(--foreground);
+    background: var(--admin-layer-2);
+    color: var(--admin-text-primary);
 }
 
 .admin-shell .app-workspace-nav-link > svg {
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
+    color: var(--admin-text-muted);
+    stroke-width: 1.8;
+}
+
+.admin-shell .app-workspace-nav-link.is-active > svg {
+    color: var(--admin-text-primary);
 }
 
 .admin-shell .app-workspace-nav-link:focus-visible,
@@ -9739,17 +10552,102 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-shell .app-workspace-sidebar,
 .admin-shell .admin-sidebar {
     background: var(--admin-sidebar);
+    border-radius: 0 !important;
+    border-right: 0;
+    box-shadow: none;
 }
 
 /* 管理后台侧栏不复用通用 Tailwind 宽度：通用 sidebar 规则在后面会覆盖 w-*，导致视觉收缩但布局仍占展开宽度。 */
 .admin-shell .admin-sidebar {
-    width: 212px;
-    flex-basis: 212px;
+    width: var(--workspace-sidebar-width);
+    flex-basis: var(--workspace-sidebar-width);
 }
 
 .admin-shell .admin-sidebar.is-collapsed {
-    width: var(--workspace-sidebar-collapsed-width, 56px);
-    flex-basis: var(--workspace-sidebar-collapsed-width, 56px);
+    width: 64px;
+    flex-basis: 64px;
+}
+
+.admin-shell .admin-sidebar-header {
+    height: 68px;
+    border-bottom: 0;
+    background: var(--admin-sidebar);
+}
+
+.admin-shell .admin-sidebar-brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.admin-shell .admin-sidebar-brand-copy > span:first-child {
+    color: var(--admin-text-primary);
+    font-size: 14px;
+    line-height: 18px;
+}
+
+.admin-shell .admin-sidebar-brand-copy > span:last-child {
+    margin-top: 1px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    letter-spacing: 0;
+    line-height: 15px;
+}
+
+.admin-shell .admin-sidebar-toggle {
+    width: 30px;
+    height: 30px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--admin-text-muted);
+}
+
+.admin-shell .admin-sidebar-toggle:hover {
+    border-color: var(--admin-card-border);
+    background: var(--admin-layer-2);
+    color: var(--admin-text-primary);
+}
+
+.admin-shell .admin-sidebar-nav {
+    padding: 6px 10px;
+}
+
+.admin-shell .admin-nav-group {
+    margin-bottom: 0;
+}
+
+.admin-shell .admin-nav-group + .admin-nav-group {
+    margin-top: 12px;
+}
+
+.admin-shell .admin-nav-collapsed-separator {
+    width: 28px;
+    height: 1px;
+    margin: 8px auto;
+    background: var(--admin-divider);
+}
+
+.admin-shell .admin-sidebar-footer {
+    border-top: 0;
+    background: var(--admin-sidebar);
+    padding: 9px 10px 10px;
+}
+
+.admin-shell .admin-sidebar-footer :is(button, a) {
+    min-height: 34px;
+    border-radius: 8px;
+    color: var(--admin-text-muted);
+}
+
+.admin-shell .admin-sidebar-footer :is(button, a):hover {
+    background: var(--admin-layer-2);
+    color: var(--admin-text-primary);
+}
+
+.admin-shell .admin-sidebar.is-collapsed .admin-sidebar-nav,
+.admin-shell .admin-sidebar.is-collapsed .admin-sidebar-footer {
+    padding-inline: 8px;
 }
 
 .admin-shell .app-user-content,
@@ -9798,7 +10696,23 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-page-header {
-    min-height: 44px;
+    min-height: 58px;
+    border-bottom: 0;
+    padding-bottom: 10px;
+}
+
+.admin-page-title {
+    color: var(--admin-text-primary);
+    font-size: 20px;
+    letter-spacing: 0;
+    line-height: 1.35;
+}
+
+.admin-page-description {
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
 }
 
 .admin-data-table {
@@ -9811,14 +10725,15 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-list-toolbar {
     flex: 0 0 auto;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .admin-list-toolbar-main .app-list-search {
     min-width: 180px;
-    width: auto !important;
-    flex: 1 1 280px;
+    width: min(360px, 100%) !important;
+    max-width: 360px;
+    flex: 0 1 360px;
 }
 
 .admin-filter-toggle {
@@ -9881,11 +10796,23 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     background: var(--foreground);
 }
 
+.admin-table-frame {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 10px;
+    background: var(--admin-layer-1);
+    box-shadow: var(--admin-card-shadow);
+}
+
 .admin-table-surface {
     min-height: 0;
     flex: 1 1 auto;
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: 0;
 }
 
 .admin-table-scroll {
@@ -9898,7 +10825,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-table-pagination {
     flex: 0 0 auto;
     min-height: 44px;
-    border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    border-top: 1px solid var(--admin-divider);
     background: color-mix(in srgb, var(--admin-layer-1) 92%, transparent);
     backdrop-filter: blur(10px);
 }
@@ -9916,22 +10843,30 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     position: sticky;
     top: 0;
     z-index: 3;
-    height: 38px;
-    padding: 8px 16px !important;
-    background: var(--admin-layer-1) !important;
+    height: 42px;
+    padding: 9px 16px !important;
+    background: var(--admin-layer-2) !important;
     color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
     font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.035em;
 }
 
 .admin-shell .admin-table-surface .ant-table-tbody > tr > td,
 .admin-modal-root .admin-table-surface .ant-table-tbody > tr > td {
-    height: 48px;
-    padding: 10px 16px !important;
+    height: 52px;
+    padding: 11px 16px !important;
     font-size: 13px;
     font-variant-numeric: tabular-nums;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr.ant-table-measure-row > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr.ant-table-measure-row > td {
+    height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 0;
+    line-height: 0;
 }
 
 .admin-shell .admin-table-surface .ant-table-tbody > tr:hover > td,
@@ -10051,47 +10986,70 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
     white-space: nowrap;
 }
 
 .admin-row-action.ant-btn {
-    height: 24px;
-    min-height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent !important;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 6px;
+    background: var(--admin-layer-1) !important;
     box-shadow: none !important;
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    color: var(--admin-text-secondary);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 550;
     line-height: 1;
-    transition: none !important;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease !important;
+}
+
+.admin-row-action.ant-btn .ant-btn-icon {
+    display: grid;
+    margin-inline-end: 0;
+}
+
+.admin-row-action.ant-btn .ant-btn-icon > svg {
+    width: 13px;
+    height: 13px;
 }
 
 .admin-row-action.ant-btn:hover:not(:disabled),
 .admin-row-action.ant-btn:active:not(:disabled),
 .admin-row-action.ant-btn:focus:not(:disabled),
 .admin-row-action.ant-btn.ant-dropdown-open {
-    background: transparent !important;
-    color: var(--foreground);
+    border-color: var(--admin-control-border);
+    background: var(--admin-layer-2) !important;
+    color: var(--admin-text-primary);
 }
 
 .admin-row-action-primary.ant-btn {
-    color: color-mix(in srgb, var(--foreground) 88%, transparent);
-    font-weight: 600;
+    border-color: color-mix(in srgb, var(--admin-status-info) 30%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-status-info) 8%, var(--admin-layer-1)) !important;
+    color: color-mix(in srgb, var(--admin-status-info) 68%, var(--admin-text-primary));
+    font-weight: 650;
+}
+
+.admin-row-action-primary.ant-btn:hover:not(:disabled),
+.admin-row-action-primary.ant-btn:focus:not(:disabled) {
+    border-color: color-mix(in srgb, var(--admin-status-info) 52%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-status-info) 13%, var(--admin-layer-1)) !important;
+    color: var(--admin-text-primary);
 }
 
 .admin-row-action-danger.ant-btn {
+    border-color: color-mix(in srgb, var(--destructive) 24%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--destructive) 6%, var(--admin-layer-1)) !important;
     color: var(--destructive);
 }
 
 .admin-row-action-more.ant-btn {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
-    color: color-mix(in srgb, var(--foreground) 54%, transparent);
+    gap: 3px;
+    min-width: 54px;
+    color: var(--admin-text-secondary);
 }
 
 .admin-row-action-chevron {
@@ -10172,8 +11130,9 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-stat-tile {
     min-width: 0;
-    padding: var(--space-3);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--foreground) 7%, var(--admin-layer-1)), var(--admin-layer-1) 72%);
+    min-height: 112px;
+    padding: 18px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--foreground) 6%, var(--admin-layer-1)), var(--admin-layer-1) 70%);
 }
 
 .admin-stat-tile + .admin-stat-tile {
@@ -10182,33 +11141,107 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-stat-tile-label {
     color: color-mix(in srgb, var(--foreground) 55%, transparent);
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .admin-stat-tile-value {
-    margin-top: var(--space-1);
+    margin-top: 7px;
     color: var(--foreground);
-    font-size: 16px;
+    font-size: 22px;
     font-variant-numeric: tabular-nums;
     font-weight: 650;
     line-height: 1.25;
 }
 
 .admin-stat-tile-detail {
-    margin-top: var(--space-1);
+    margin-top: 8px;
     color: color-mix(in srgb, var(--foreground) 45%, transparent);
     font-size: 11px;
 }
 
 .admin-settings-section {
-    margin-top: 12px;
+    width: 100%;
     overflow: hidden;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
+    border: 0;
+    border-radius: var(--r-lg);
+    background: var(--admin-layer-1);
+    box-shadow: var(--admin-card-shadow);
 }
 
 .admin-settings-section > :last-child {
     min-width: 0;
+}
+
+.admin-settings-section-summary {
+    background: var(--admin-layer-1);
+}
+
+.admin-settings-section-content {
+    background: var(--admin-layer-1);
+}
+
+.admin-settings-section-footer {
+    border-top: 0;
+    background: var(--admin-layer-2);
+}
+
+.admin-operation-card {
+    overflow: hidden;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 12px;
+    background: var(--admin-layer-1);
+    padding: 18px 20px 20px;
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-operation-card-heading {
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-operation-card-heading p {
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.admin-analytics-trend-section {
+    overflow: hidden;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 12px;
+    background: var(--admin-layer-1);
+    padding: 18px 20px;
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-analytics-empty-chart {
+    display: flex;
+    min-height: 220px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--admin-text-secondary);
+    text-align: center;
+}
+
+.admin-analytics-empty-chart > span {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    margin-bottom: 12px;
+    place-items: center;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 10px;
+    background: var(--admin-layer-2);
+    color: var(--admin-text-muted);
+}
+
+.admin-analytics-empty-chart p {
+    margin-top: 5px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
 }
 
 .admin-drawer .ant-drawer-body,
@@ -10248,9 +11281,699 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     overflow-y: auto;
 }
 
+/* 系统渠道模型编辑器：恢复已确认的信息层级、协议参数与价格档布局。 */
+.admin-model-editor-drawer .ant-drawer-header {
+    min-height: 52px;
+    padding-inline: 24px;
+}
+
+.admin-model-editor-drawer .ant-drawer-body {
+    padding: 20px 24px 24px;
+}
+
+.admin-model-editor-form {
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+}
+
+.admin-model-editor-section {
+    display: grid;
+    grid-template-columns: minmax(140px, 176px) minmax(0, 1fr);
+    gap: 24px;
+    padding: 20px 22px;
+}
+
+.admin-model-editor-section-stacked {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.admin-model-editor-section-heading,
+.admin-model-editor-section-content {
+    min-width: 0;
+}
+
+.admin-model-editor-section-heading h2 {
+    color: var(--foreground);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.admin-model-editor-section-heading p {
+    margin-top: 6px;
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: 11px;
+    line-height: 1.65;
+}
+
+.admin-model-editor-section-content > .ant-form-item:last-child,
+.admin-model-editor-section-content > .ant-form-item-row:last-child {
+    margin-bottom: 0;
+}
+
+.admin-model-editor-parameters .admin-model-editor-section-content {
+    overflow: hidden;
+}
+
+.admin-model-identity-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.admin-model-editor-drawer .admin-capability-editor {
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+}
+
+.admin-model-editor-drawer .admin-capability-editor-heading {
+    padding: 0 2px 2px;
+}
+
+.admin-model-editor-drawer .admin-capability-group {
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
+    padding: 14px;
+}
+
+.admin-model-editor-drawer .admin-capability-group > summary {
+    position: relative;
+    padding-right: 20px;
+}
+
+.admin-model-editor-drawer .admin-capability-group > summary::after {
+    position: absolute;
+    top: 5px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    content: "";
+    transform: rotate(45deg);
+    transition: transform 140ms ease;
+}
+
+.admin-model-editor-drawer .admin-capability-group:not([open]) > summary::after {
+    transform: rotate(-45deg);
+}
+
+.admin-model-editor-drawer .admin-capability-group-description {
+    color: var(--admin-text-muted) !important;
+    line-height: 1.5;
+}
+
+.admin-model-editor-drawer .admin-capability-block + .admin-capability-block {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--admin-divider);
+}
+
+.admin-model-editor-drawer .admin-capability-block-title {
+    margin-bottom: 9px;
+    color: var(--admin-text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.admin-model-editor-drawer .admin-capability-number-field,
+.admin-model-editor-drawer .admin-capability-boolean-field,
+.admin-model-editor-drawer .admin-capability-parameter-field {
+    min-width: 0;
+}
+
+.admin-model-editor-drawer .admin-capability-number-field .ant-input-number {
+    width: 100% !important;
+    min-width: 0;
+}
+
+.admin-capability-reference-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-capability-reference-grid.is-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-capability-reference-grid.is-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-capability-reference-card,
+.admin-capability-protocol-card {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
+    padding: 14px;
+}
+
+.admin-capability-reference-card-heading {
+    min-height: 38px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-capability-reference-card-heading h3,
+.admin-capability-protocol-card-heading h3 {
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.admin-capability-reference-card-heading p,
+.admin-capability-protocol-card-heading p {
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.admin-capability-reference-fields {
+    display: grid;
+    gap: 4px;
+}
+
+.admin-capability-reference-fields .admin-capability-number-field {
+    display: grid;
+    min-height: 62px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: end;
+    gap: 5px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+    padding-block: 4px;
+}
+
+.admin-capability-reference-fields .admin-capability-number-field:last-child {
+    border-bottom: 0;
+}
+
+.admin-capability-reference-fields .admin-capability-field-label {
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
+.admin-capability-reference-fields .admin-capability-boolean-field {
+    min-height: 48px;
+    margin-top: 4px;
+    padding-block: 6px;
+}
+
+.admin-capability-reference-fields .admin-capability-boolean-field > div:first-child > div:last-child {
+    display: none;
+}
+
+.admin-capability-protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-capability-protocol-card-heading {
+    display: flex;
+    min-height: 46px;
+    align-items: flex-start;
+    gap: 9px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-capability-protocol-card-heading > span {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--admin-layer-3);
+    color: var(--admin-text-muted);
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.admin-capability-protocol-card-heading p {
+    margin-top: 2px;
+    line-height: 1.45;
+}
+
+.admin-capability-protocol-fields,
+.admin-capability-spec-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.admin-capability-duration-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-price-tier-card {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 2%, var(--admin-layer-1));
+}
+
+.admin-price-tier-card-header {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    padding: 12px 14px;
+}
+
+.admin-price-tier-card-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+}
+
+.admin-price-tier-block {
+    padding: 14px;
+}
+
+.admin-price-tier-block + .admin-price-tier-block {
+    border-left: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.admin-price-tier-block-title {
+    margin-bottom: 10px;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+}
+
+.admin-price-tier-block-title > span {
+    margin-right: 5px;
+    color: var(--admin-text-muted);
+}
+
+.admin-price-tier-match-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-price-tier-upstream {
+    grid-column: 1 / -1;
+}
+
+.admin-price-tier-billing-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: end;
+    gap: 12px;
+}
+
+.admin-price-tier-billing-mode,
+.admin-price-tier-unit-price,
+.admin-price-tier-token-grid,
+.admin-price-tier-controls {
+    grid-column: 1 / -1;
+}
+
+.admin-price-tier-token-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-price-tier-billing-mode .ant-segmented {
+    border: 1px solid var(--admin-card-border);
+    background: var(--admin-layer-2);
+    padding: 3px;
+}
+
+.admin-price-tier-billing-mode .ant-segmented-item {
+    min-height: 32px;
+    border-radius: 5px;
+}
+
+.admin-price-tier-billing-mode .ant-segmented-item-label {
+    min-height: 32px;
+    padding-inline: 12px;
+    line-height: 32px;
+}
+
+.admin-price-tier-billing-mode .ant-segmented-item-selected {
+    background: var(--admin-layer-1);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.admin-price-tier-unit-price .ant-input-number {
+    width: 100% !important;
+}
+
+.admin-price-tier-controls {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px !important;
+}
+
+.admin-price-tier-toggle {
+    display: flex;
+    min-width: 0;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 7px;
+    background: var(--admin-layer-2);
+    padding: 8px 10px;
+}
+
+.admin-price-tier-toggle > div {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.admin-price-tier-toggle strong {
+    color: var(--admin-text-primary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.admin-price-tier-toggle span {
+    overflow: hidden;
+    color: var(--admin-text-muted);
+    font-size: 9px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-model-editor-add-tier.ant-btn {
+    min-height: 38px;
+}
+
+.admin-drawer.admin-model-editor-drawer .ant-drawer-footer {
+    border-top: 0;
+    background: var(--admin-layer-0);
+    padding: 8px 24px 12px;
+    backdrop-filter: none;
+}
+
+.admin-model-editor-footer-actions {
+    width: 100%;
+    max-width: 1120px;
+    min-height: 52px;
+    margin-inline: auto;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 10px;
+    background: var(--admin-layer-1);
+    padding: 8px 10px;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.admin-model-editor-footer-primary {
+    min-width: 0;
+}
+
+.admin-model-editor-footer-status {
+    display: flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    margin-right: 4px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 6px;
+    background: var(--admin-layer-2);
+    padding: 4px 8px;
+}
+
+.admin-model-editor-footer-status > span {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--admin-text-muted);
+}
+
+.admin-model-editor-footer-status > span.is-enabled {
+    background: #10a36a;
+}
+
+.admin-model-editor-footer-status > div {
+    display: grid;
+    min-width: 0;
+    margin-right: 4px;
+}
+
+.admin-model-editor-footer-status strong {
+    color: var(--admin-text-primary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.admin-model-editor-footer-status small {
+    color: var(--admin-text-muted);
+    font-size: 9px;
+    line-height: 1.2;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-header,
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-footer {
+    border-color: #d4dae2;
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-body,
+:root:not(.dark) .admin-drawer.admin-model-editor-drawer .ant-drawer-footer {
+    background: #edf1f5;
+}
+
+:root:not(.dark) .admin-model-editor-section {
+    border: 1px solid #d4dae2;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.055);
+}
+
+:root:not(.dark) .admin-model-editor-drawer :is(.admin-capability-group, .admin-capability-boolean-field, .admin-capability-parameter-field),
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card,
+:root:not(.dark) .admin-price-tier-toggle,
+:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented {
+    border-color: #cbd3dd;
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-price-tier-card {
+    border-color: #cbd3dd;
+    background: #f5f7fa;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card {
+    border-color: #cbd3dd;
+    background: #f5f7fa;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"] {
+    border-color: #c3ccd7;
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"]:hover {
+    border-color: #929eac;
+    background: #f8fafc;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"][aria-checked="true"] {
+    border-color: #657180;
+    background: #eef3f7;
+    box-shadow: inset 0 0 0 1px rgb(31 41 55 / 0.08);
+}
+
+:root:not(.dark) .admin-model-editor-drawer
+    :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-selector, .ant-segmented) {
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-section-heading h2 {
+    color: #20262e;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .ant-form-item-label > label {
+    color: #364152;
+    font-weight: 550;
+}
+
+:root:not(.dark) .admin-model-editor-footer-actions {
+    border-color: #d4dae2;
+    background: #ffffff;
+    box-shadow: 0 6px 20px rgb(15 23 42 / 0.08);
+}
+
+:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
+    background: #e8edf2;
+    box-shadow: inset 0 0 0 1px rgb(31 41 55 / 0.12);
+}
+
+@media (max-width: 899px) {
+    .admin-model-editor-section,
+    .admin-capability-protocol-grid,
+    .admin-price-tier-card-body,
+    .admin-model-identity-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-model-editor-section {
+        gap: 16px;
+    }
+
+    .admin-model-editor-section-heading {
+        padding-bottom: 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    }
+
+    .admin-price-tier-block + .admin-price-tier-block {
+        border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+        border-left: 0;
+    }
+}
+
+/* 管理后台可读性基线：收敛历史页面中过低的文字透明度，并统一表单层级。 */
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root) {
+    color: var(--admin-text-primary);
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.text-foreground\/30, .text-foreground\/35, .text-foreground\/38, .text-foreground\/40, .text-foreground\/42, .text-foreground\/45) {
+    color: var(--admin-text-muted) !important;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.text-foreground\/48, .text-foreground\/50, .text-foreground\/52, .text-foreground\/55) {
+    color: var(--admin-text-secondary) !important;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.ant-form-item-label > label, .ant-checkbox-wrapper, .ant-radio-wrapper, .ant-segmented-item-label) {
+    color: var(--admin-text-secondary);
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-picker, .ant-select-selector) {
+    border-color: var(--admin-control-border) !important;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.ant-input, .ant-input-affix-wrapper input, .ant-input-number-input, .ant-picker-input > input, .ant-select-selection-item) {
+    color: var(--admin-text-primary) !important;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(input, textarea)::placeholder {
+    color: var(--admin-text-placeholder) !important;
+    opacity: 1;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    .ant-select-selection-placeholder,
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    .ant-input-number-input::placeholder {
+    color: var(--admin-text-placeholder) !important;
+    opacity: 1;
+}
+
+:is(.admin-shell, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root)
+    :is(.ant-input-disabled, .ant-input-number-disabled, .ant-picker-disabled, .ant-select-disabled .ant-select-selector) {
+    color: var(--admin-text-muted) !important;
+    opacity: 0.82;
+}
+
+.admin-shell .app-workspace-nav-link,
+.admin-shell .admin-sidebar :is(button, a) {
+    color: var(--admin-text-secondary);
+}
+
+.admin-shell .admin-nav-group-label {
+    color: color-mix(in srgb, var(--admin-text-secondary) 84%, transparent) !important;
+}
+
+.admin-shell .admin-table-surface .ant-table-thead > tr > th,
+.admin-modal-root .admin-table-surface .ant-table-thead > tr > th {
+    color: var(--admin-text-muted) !important;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td,
+.admin-shell .admin-pagination-total {
+    color: var(--admin-text-primary);
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td,
+.admin-table-pagination,
+.admin-drawer .ant-drawer-footer,
+.admin-secondary-drawer .ant-drawer-footer {
+    border-color: var(--admin-divider);
+}
+
+.admin-model-editor-section-heading p,
+.admin-model-editor-subsection-heading p,
+.admin-price-tier-block-title {
+    color: var(--admin-text-muted);
+}
+
 .admin-channel-modal .ant-modal-body {
     max-height: min(70vh, 620px);
     overflow-y: auto;
+}
+
+@media (min-width: 1024px) {
+    .admin-page-frame {
+        padding: 18px 24px 0;
+    }
+
+    .admin-page-frame-scrollable {
+        padding-bottom: 28px;
+    }
+
+    .admin-page-frame-scrollable > :not(.admin-page-header) {
+        width: 100%;
+        max-width: none;
+        margin-inline: 0;
+    }
+
+    .admin-settings-section:not(.is-stacked) .admin-settings-section-content {
+        border-left: 0;
+    }
+
+    .admin-settings-section.is-stacked .admin-settings-section-summary {
+        border-bottom: 0;
+    }
+}
+
+.canvas-config-prompt-button {
+    border: 0;
+    transition: background-color var(--motion-instant) ease-out, transform var(--motion-instant) ease-out;
+}
+
+.canvas-config-prompt-button:hover {
+    filter: brightness(1.04);
+}
+
+.canvas-config-prompt-button:focus-visible,
+.canvas-config-composer-editor:focus-within {
+    outline: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+    outline-offset: 1px;
 }
 
 .admin-shell .admin-monospace {
@@ -10284,6 +12007,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
     .admin-list-toolbar-main .app-list-search {
         min-width: 0;
+        width: 100% !important;
+        max-width: none;
         flex-basis: 100%;
     }
 
@@ -12938,6 +14663,13 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 .assets-empty-card-icon svg { width: 17px; height: 17px; stroke-width: 1.8; }
 .assets-empty-card strong { color: var(--foreground); font-size: var(--fs-body); font-weight: 620; }
 .assets-empty-card > span:last-child { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-label); line-height: 1.55; }
+
+.asset-preview-uploading { position: relative; overflow: hidden; }
+.asset-preview-uploading.is-uploading::after { position: absolute; inset: 0; background: color-mix(in srgb, var(--foreground) 16%, transparent); content: ""; pointer-events: none; }
+.asset-preview-uploading-panel { position: absolute; right: var(--space-3); bottom: var(--space-3); left: var(--space-3); z-index: 1; padding: var(--space-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--background) 92%, transparent); color: var(--foreground); }
+.asset-preview-uploading-copy { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-caption); }
+.asset-preview-uploading-copy strong { font-variant-numeric: tabular-nums; }
+.asset-preview-uploading-panel .ant-progress { margin: var(--space-2) 0 0; }
 
 /* 资产档案抽屉 */
 .asset-archive-header { display: flex; align-items: flex-start; gap: 14px; }

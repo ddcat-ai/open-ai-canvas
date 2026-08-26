@@ -1,0 +1,1223 @@
+# 肖像权可识别性排查画布插件实施规格
+
+> 文档状态：首版实现已接入，待固定图片金标、真实浏览器搜图和项目视觉模型联调验收。
+>
+> 目标读者：后续负责实现、评审和验收的 AI 或开发者。
+>
+> 原能力参照：仓库同级目录 `../肖像权可识别性检测skill/portrait-identifiability/`。
+>
+> 硬约束：业务代码全部使用 TypeScript / TSX 重写；运行时不调用 Python、原 EXE 或原项目 HTTP 服务。
+
+## 1. 已确认需求
+
+1. 插件代码使用 TypeScript；React 界面使用 TSX。
+2. 插件作为影策的应用插件集成，不制作独立网页或独立桌面程序。
+3. 插件的主要入口是画布节点，节点类型建议为 `portrait-clearance`。
+4. 暂不接入 Codex 对话、MCP 工具、Skill 或其他 Agent 协作流程。
+5. 需要复用影策现有视觉语言、主题 token、Ant Design 主题和画布交互规范。
+6. 支持两张图片直接比对。
+7. 支持单张查询图的网络反向搜图，并继续完成候选采集、去重、比对、排序和报告。
+8. 支持原项目除“批量排查”外的全部核心能力。
+9. 完整结果通过节点级全屏工作台查看，复用项目现有节点 Modal 状态模式。
+10. 视觉分析模型复用影策已经配置的项目模型、渠道、密钥、中转和计费能力；插件不维护自己的供应商配置。
+11. 不支持目录、多张查询图或清单式批量排查。
+
+### 1.1 “暂不与 AI 配合”的准确边界
+
+本需求中的“不与 AI 配合”是指不增加聊天入口、Agent 指令、MCP 工具或自动修改画布的 AI 协作能力。项目视觉模型仍可作为检测流水线中的可选分析器，由用户在插件工作台中显式选择并运行。
+
+因此首版有两种执行方式：
+
+- `local-plus-vision`：本地 ONNX 预检 + 项目视觉模型结构化分析，推荐用于正式排查。
+- `local-only`：只运行本地指标，不发起项目模型调用；风格化图片无法可靠判断时必须返回“无法判断”。
+
+## 2. 范围和非目标
+
+### 2.1 首版必须交付
+
+- 两图直接比对。
+- 单图百度识图网络排查。
+- 查询图人脸检测、最佳人脸选择和带上下文裁剪。
+- 图像质量评估。
+- 人脸对齐、ArcFace embedding 和余弦相似度。
+- SSIM 与颜色直方图等本地辅助指标。
+- 候选图下载和来源线索保留。
+- 字节哈希、pHash、可选 ArcFace 双条件去重。
+- 真实图片 Path A 与风格化图片 Path B 分析。
+- 风险等级、依据、限制、修改建议和人工复核提示。
+- 节点摘要、全屏候选画廊和候选详情。
+- JSON、Markdown、无脚本 HTML、DOCX 四种报告导出。
+- 当前节点和当前项目范围内的历史运行查看、恢复和删除。
+- 任务进度、取消、失败重试、页面重开后恢复。
+- 明暗主题、键盘操作、焦点管理和窄屏降级。
+
+### 2.2 明确不做
+
+- 不做批量查询图、目录扫描、批量清单、批量汇总报告。
+- 不做私人自然人身份确认、人名推断或人脸库建设。
+- 不做法律结论，不输出“确认侵权”“确认同一人”“绝对安全”。
+- 不引入插件专属 API Key、Base URL、模型列表或供应商探活页面。
+- 不把模型密钥发送给 Canvas Agent。
+- 不把插件暴露为 Codex Skill、MCP 工具或画布助手工具。
+- 不复用原 Python 包、原 EXE、原 FastAPI/Web GUI 服务。
+- 不把现有 `compare` 节点改造成检测节点；`compare` 继续只负责 A/B 滑杆视觉查看。
+
+### 2.3 “网络候选循环”不属于批量排查
+
+网络模式始终只有一张查询图。对搜索返回的多个候选逐一比对，是一个单图任务的内部阶段，不提供多查询图队列、批量任务表或批量报告。
+
+## 3. 总体架构
+
+```text
+┌──────────────────────── Web / React ─────────────────────────┐
+│ 画布肖像排查节点                                             │
+│   ├─ 紧凑摘要、输入角色、进度、风险结果                       │
+│   └─ portraitClearanceNodeId → 节点级全屏 Modal              │
+│                                                              │
+│ 页面级任务协调器（Modal 关闭后仍挂载）                        │
+│   ├─ 读取项目有效模型配置                                    │
+│   ├─ 领取本机运行时生成的待分析模型作业                       │
+│   ├─ requestToolResponse + 强制结构化工具调用                 │
+│   └─ 将校验后的模型结果回传本机运行时                         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ 签名 Local Runtime 请求
+                           │ 不传 API Key
+┌──────────────────────────▼───────────────────────────────────┐
+│ Canvas Agent / Node.js / TypeScript                          │
+│ portrait-clearance Local Runtime module                      │
+│   ├─ sharp 图像解码、缩放、质量指标、裁剪、pHash             │
+│   ├─ onnxruntime-node：SCRFD + ArcFace                       │
+│   ├─ playwright-core：百度识图和候选采集                     │
+│   ├─ 安全候选下载、去重、风险后处理                          │
+│   ├─ 持久任务、模型作业租约、SSE 进度                        │
+│   └─ JSON / Markdown / HTML / DOCX 报告                      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 3.1 责任边界
+
+| 模块 | 负责 | 不负责 |
+| --- | --- | --- |
+| Web 插件 | 节点 UI、全屏 UI、输入解析、模型选择、项目模型调用、结果呈现 | ONNX 推理、Playwright、候选文件持久化 |
+| 页面级协调器 | 保持模型作业在 Modal 关闭后继续、控制并发、恢复待处理作业 | 搜图和本地人脸算法 |
+| 本机运行时模块 | 本地算法、网络检索、任务持久化、报告、模型作业状态 | 读取项目 API Key、选择供应商 |
+| 现有后端 | 沿用既有模型中转、登录、逻辑模型和计费 | 新增肖像任务表或保存人脸数据 |
+
+首版不要求修改 Go 后端。项目模型请求仍走现有 `channelRequest` 和后端中转路径。
+
+## 4. 插件接入方式
+
+### 4.1 插件定位
+
+这是一个随 Web 构建发布的可信内置应用插件，不是可上传任意 React 代码的远程插件。原因是现有远程插件只承载协议清单，不能安全执行第三方 UI、Node 原生依赖或 Playwright。
+
+建议清单：
+
+```ts
+export const PORTRAIT_CLEARANCE_PLUGIN_ID = "portrait-clearance";
+
+const manifest: PluginManifest = {
+    apiVersion: "yingce.plugin/v1",
+    id: PORTRAIT_CLEARANCE_PLUGIN_ID,
+    name: "肖像权可识别性排查",
+    version: "0.1.0",
+    description: "对虚拟人和人物图片执行本地人脸预检、网络候选排查与审慎风险报告。",
+    author: "影策团队",
+    surfaces: ["node", "fullscreen"],
+    permissions: [
+        "canvas.read",
+        "canvas.write",
+        "asset.read",
+        "asset.import",
+        "ai.text",
+        "external.open",
+    ],
+    trusted: true,
+    runtime: { backend: "trusted-backend", web: "declarative" },
+    contributes: {
+        canvasNodes: [{
+            id: "portrait-clearance",
+            label: "肖像排查",
+            defaultTitle: "肖像可识别性排查",
+            defaultSize: { width: 560, height: 420 },
+            schema: { type: "object", properties: { portraitClearance: { type: "object" } } },
+            renderer: "declarative",
+        }],
+    },
+};
+```
+
+继续使用现有 `PluginPermission`，不为合并本功能扩展插件协议。`ai.text` 补齐中文权限文案；网络检索和上传发生在具备独立签名 scope 的可信 Local Runtime 中，必须在排查工作台常驻告知，不能伪装成 `external.open` 权限。
+
+### 4.2 安装和启停
+
+- 应用启动时必须确保所有内置插件清单已经写入 `usePluginStore`，不能依赖用户先访问插件中心。
+- 插件首次安装默认关闭；用户在插件中心看完权限后启用。
+- 启用后，“添加节点 → 展示与加工”出现“肖像排查”。
+- 停用后隐藏创建和重新运行入口，但已有节点、历史摘要和本地报告仍可查看。
+- 重新启用后恢复已有节点能力，不迁移、不删除历史数据。
+- 停用插件不能注销节点类型或渲染器，否则旧画布会退化成“未知节点”。
+
+### 4.3 现有插件系统的最小补强
+
+首版无需建设通用远程 UI 插件加载器。采用以下最小实现：
+
+1. 节点 ID 继续走 `CanvasNodeTypeId` 扩展边界，不增加 `CanvasNodeType` 内置枚举成员。
+2. 节点定义由 `yingce.plugin/v1` 的 `contributes.canvasNodes` 注册；可信内置节点的专用渲染器随 Web 构建接入。
+3. 插件安装状态只控制创建入口、运行入口和权限提示。
+4. 节点组件自行读取安装状态，停用时呈现只读态。
+5. 添加节点菜单的 `applicable` 根据插件是否启用过滤。
+
+## 5. 画布节点合同
+
+### 5.1 节点定义
+
+```ts
+export const PORTRAIT_CLEARANCE_NODE_TYPE = "portrait-clearance" as const;
+```
+
+建议规格：
+
+| 项 | 值 |
+| --- | --- |
+| 菜单标签 | 肖像排查 |
+| 默认标题 | 肖像可识别性排查 |
+| 默认尺寸 | 560 × 420 |
+| 最小尺寸 | 420 × 300 |
+| 是否锁定比例 | 否 |
+| 菜单分区 | 展示与加工 |
+| 图标 | `ScanFace` 或语义相近的 Lucide 图标 |
+| 输入类型 | 图片 |
+| 输出类型 | 首版不作为生成输入；可显式创建报告节点和候选图片节点 |
+
+不得复用 `metadata.status` 表示插件任务状态。`CanvasNodeContent` 会把通用 `loading/error` 拦截为生成任务 UI。插件状态全部放入 `metadata.portraitClearance`。
+
+### 5.2 输入角色
+
+画布仍使用通用连接线，不新增一套连线系统。输入角色持久化在节点 metadata：
+
+```ts
+type PortraitClearanceInputRole = "query" | "reference" | "candidate";
+
+type PortraitClearanceInputBinding = {
+    nodeId: string;
+    role: PortraitClearanceInputRole;
+};
+```
+
+规则：
+
+- 直接比对：必须有一个 `query` 和一个 `reference`。
+- 网络排查：必须有一个 `query`；其他已连接图片可以作为 `candidate`，与网络候选合并。
+- 用户点击“交换 A/B”时只交换 `query` 与 `reference` 角色，不改变连接。
+- 新连接完成时立即写入 binding；不要每次渲染按上游数组顺序重新猜测。
+- 断开连接时删除对应 binding。
+- 历史画布存在连接但没有 binding 时，按 connection id 排序后确定性补齐：第一张为 query，直接模式第二张为 reference，网络模式其余为 candidate。
+- binding 指向已删除节点时，在加载时清理，不让失效 ID 阻止运行。
+- 只接受 `getNodeResourceKind(node) === "image"` 且能解析出实际图片数据的上游。
+
+### 5.3 节点紧凑态
+
+节点内容最多表达四件事：输入、当前模式、任务状态、最高风险。
+
+空态：
+
+- 顶部显示“直接比对 / 网络排查”切换。
+- 直接比对显示查询图和参考图两个槽位。
+- 网络排查显示查询图和“手动候选 N 张”。
+- 给出明确连接提示，不只依赖空白占位。
+- 主按钮为“开始排查”；未满足输入、插件关闭、本机引擎未连接或模型不兼容时禁用并显示就近原因。
+
+运行态：
+
+- 显示阶段名称、确定进度或不确定进度、已处理候选数。
+- 关闭全屏不能取消任务。
+- 提供“查看进度”和“停止”入口；停止必须二次确认网络任务已产生的候选不会自动删除。
+
+完成态：
+
+- 显示最高风险中文标签和图标，不只用颜色区分。
+- 显示“高 N / 中 N / 中低 N / 低 N / 无法判断 N”。
+- 显示最后完成时间和项目模型名称。
+- 主按钮为“查看完整结果”。
+- 次按钮为“重新排查”。
+
+停用态：
+
+- 保留历史摘要和“查看已有结果”。
+- 明确显示“插件已停用，启用后可重新运行”。
+- 不把停用误显示为任务失败。
+
+### 5.4 画布交互边界
+
+- 节点内按钮、滚动区、滑杆和下拉框使用 `data-canvas-no-zoom`。
+- 节点内可滚动区域使用 `data-canvas-wheel-scroll`，阻止滚轮继续缩放画布。
+- 指针操作需要正确停止冒泡和释放 pointer capture。
+- 所有按钮必须有可见 `:focus-visible`；图标按钮必须有 `aria-label`。
+- 持久模式切换使用 `aria-pressed` 或有明确 label 的 `Segmented`，不能只靠颜色表达。
+
+## 6. 节点级全屏工作台
+
+### 6.1 打开方式
+
+在 `web/src/pages/canvas/project.tsx` 增加：
+
+```ts
+const [portraitClearanceNodeId, setPortraitClearanceNodeId] = useState<string | null>(null);
+```
+
+按现有 `textEditorNodeId`、`drawingNodeId`、`scriptEditorNodeId`、`previewNodeId` 模式挂载 `PortraitClearanceModal`。这不是浏览器 Fullscreen API，也不是整个画布的 Focus Mode。
+
+`CanvasNodeActionContext` 增加 `openPortraitClearance`，节点渲染器调用画布页面提供的打开动作。Modal 关闭后页面级协调器仍然存在。
+
+### 6.2 Modal 外壳
+
+- 桌面端尺寸：`min(1600px, calc(100vw - 32px))`，高度不超过 `calc(100dvh - 32px)`。
+- 小于 768px 时贴近全视口，内容改为单列和 Tabs，不产生页面横向滚动。
+- 使用 Ant Design `Modal` 的 `styles.container`、`styles.body` 和组件 class，不新增全局 `.ant-modal-*` 覆盖。
+- 打开时焦点进入标题后的第一个主要操作；关闭后焦点回到触发按钮。
+- Escape 关闭 Modal 但不停止任务；任务正在运行时在界面明确提示这一行为。
+- 固定头部或底部不能遮挡键盘焦点，滚动容器需要相应 `scroll-padding`。
+
+### 6.3 信息架构
+
+顶部工具栏：
+
+- 节点标题与当前任务状态。
+- 模式切换。
+- “开始/重新排查”“停止”“导出”“关闭”。
+- 运行前显示最大模型调用数；运行中显示实际完成数。
+
+设置栏：
+
+- 执行方式：本地 + 视觉模型 / 仅本地。
+- 视觉分析模型。
+- 网络候选上限，默认 30，范围 1–60。
+- 去重方式：pHash 快速 / ArcFace 双条件。
+- 模型并发，默认 2，最大不超过当前渠道并发和 10。
+- 高级选项：百度滚动次数、是否用可见浏览器调试。
+
+直接比对结果区：
+
+- 查询图与参考图并排；可切换 A/B 滑杆视图。
+- 结论卡：风险、Path A/B、整体相似度、人工复核建议。
+- 本地预检：人脸数、质量、检测置信度、ArcFace 相似度、可靠性问题。
+- 特征维度：脸型、五官布局、眼眉、鼻口、发型发际线、标志性特征。
+- 依据、限制和修改建议。
+- 报告预览与导出。
+
+网络排查结果区：
+
+- 总览：最高风险、风险分布、原始候选数、去重后候选数、已分析数。
+- 候选画廊：缩略图、风险、相似度、来源域名和分析状态。
+- 支持按风险筛选，默认按风险降序、相似度降序、原始 rank 升序。
+- 选中候选后展示与直接比对相同的右侧详情。
+- “添加到画布”创建图片节点并连回当前排查节点；不默认一次性把全部候选加入画布。
+- 无候选时给出原因和替代路径，例如可见浏览器重试或连接手动候选，不能只显示“0 条”。
+
+历史运行区：
+
+- 默认只显示当前节点的历史，可切换到当前项目。
+- 显示模式、最高风险、候选数、模型、开始/完成时间和详情是否仍可用。
+- 可以恢复查看、基于原设置重新运行或显式删除本地数据。
+- 不提供跨项目人脸历史聚合或身份索引。
+
+### 6.4 视觉规范
+
+- 只使用项目现有 Primitive → Semantic → Component token，不在组件散落十六进制色值、阴影和圆角。
+- 风险色必须配套文字和图标；“无法判断”使用中性语义色。
+- 正文不小于项目 `--fs-body`，辅助信息不低于 `--fs-tiny` 的既有下限。
+- 主要可点击目标建议至少 44 × 44px，紧凑表格内的次要按钮也要保留足够间距。
+- 图片预留固定比例容器并懒加载，避免候选加载造成布局跳动。
+- 动画仅用于阶段变化、Modal 和轻量状态反馈，并尊重 `prefers-reduced-motion`。
+
+## 7. 节点 metadata 数据合同
+
+```ts
+export type PortraitRiskLevel =
+    | "high"
+    | "medium"
+    | "low_to_medium"
+    | "low"
+    | "unable_to_determine";
+
+export type PortraitClearanceMode = "direct-compare" | "network-search";
+export type PortraitClearanceAnalysisMode = "local-plus-vision" | "local-only";
+export type PortraitClearanceDedupMode = "phash" | "arcface";
+
+export type PortraitClearanceModelPolicy =
+    | { mode: "project-default" }
+    | { mode: "pinned"; modelRef: string };
+
+export type PortraitClearanceNodeState = {
+    schemaVersion: 1;
+    mode: PortraitClearanceMode;
+    analysisMode: PortraitClearanceAnalysisMode;
+    modelPolicy: PortraitClearanceModelPolicy;
+    inputBindings: PortraitClearanceInputBinding[];
+    settings: {
+        maxCandidates: number;
+        searchScrolls: number;
+        dedupMode: PortraitClearanceDedupMode;
+        modelConcurrency: number;
+        showBrowserForDebug: boolean;
+    };
+    activeTaskId?: string;
+    task?: {
+        status: PortraitClearanceTaskStatus;
+        stage: PortraitClearanceTaskStage;
+        progress: number;
+        processedCandidates: number;
+        totalCandidates?: number;
+        errorCode?: string;
+        errorMessage?: string;
+        updatedAt: string;
+    };
+    lastResult?: {
+        taskId: string;
+        highestRisk: PortraitRiskLevel;
+        riskCounts: Partial<Record<PortraitRiskLevel, number>>;
+        candidateCount: number;
+        comparedCount: number;
+        modelRef?: string;
+        completedAt: string;
+        detailsAvailable: boolean;
+    };
+};
+```
+
+只把紧凑、可恢复的 UI 状态写入画布 JSON。以下内容禁止写入节点 metadata：
+
+- 原图和候选图 data URL。
+- 人脸 embedding。
+- 模型完整响应。
+- 候选列表和完整比对结果。
+- HTML 或 DOCX 二进制。
+- API Key、Cookie、百度浏览器配置目录。
+
+## 8. 本机任务和结果合同
+
+### 8.1 状态机
+
+```ts
+type PortraitClearanceTaskStatus =
+    | "queued"
+    | "running"
+    | "waiting_model"
+    | "partial"
+    | "completed"
+    | "failed"
+    | "cancelled";
+
+type PortraitClearanceTaskStage =
+    | "validating-inputs"
+    | "checking-model-resources"
+    | "preparing-query"
+    | "searching"
+    | "downloading-candidates"
+    | "deduplicating"
+    | "local-comparing"
+    | "waiting-for-model"
+    | "model-comparing"
+    | "building-report"
+    | "done";
+```
+
+终态只有 `partial/completed/failed/cancelled`。`partial` 表示部分候选成功且仍有可交付结果；不能把部分失败包装为全部成功。
+
+### 8.2 完整结果结构
+
+```ts
+type PortraitImageQuality = {
+    width: number;
+    height: number;
+    sharpness: number;
+    brightness: number;
+    contrast: number;
+    grade: "good" | "usable" | "poor";
+};
+
+type PortraitLocalPrecheck = {
+    qualityA: PortraitImageQuality;
+    qualityB: PortraitImageQuality;
+    facesA: number;
+    facesB: number;
+    selectedFaceA?: { bbox: [number, number, number, number]; detScore: number; areaRatio: number };
+    selectedFaceB?: { bbox: [number, number, number, number]; detScore: number; areaRatio: number };
+    faceSimilarity?: number;
+    ssim: number;
+    colorHistogramCorrelation: number;
+    canExtractEmbedding: boolean;
+    reliabilityIssues: string[];
+};
+
+type PortraitFeatureKey =
+    | "face_shape"
+    | "facial_layout"
+    | "eyes_brows"
+    | "nose_mouth"
+    | "hair_hairline"
+    | "distinctive_features";
+
+type PortraitVisionComparison = {
+    imageAType: "realistic" | "stylized";
+    imageBType: "realistic" | "stylized";
+    analysisPath: "A" | "B";
+    status: "success" | "unable_to_determine";
+    riskLevel: PortraitRiskLevel;
+    overallSimilarity: number;
+    featureComparison: Record<PortraitFeatureKey, {
+        similarity: "high" | "medium" | "low" | "none";
+        note: string;
+    }>;
+    basis: string[];
+    limitations: string[];
+    modificationSuggestions: string[];
+    insightfaceFusionNote: string;
+    manualReviewRecommended: boolean;
+};
+
+type PortraitPairResult = {
+    id: string;
+    queryImageId: string;
+    comparisonImageId: string;
+    candidateId?: string;
+    source: "connected-reference" | "connected-candidate" | "baidu";
+    status: "success" | "partial" | "failed";
+    riskLevel: PortraitRiskLevel;
+    overallSimilarity?: number;
+    analysisPath: "A" | "B" | "unable";
+    localPrecheck: PortraitLocalPrecheck;
+    visionComparison?: PortraitVisionComparison;
+    basis: string[];
+    limitations: string[];
+    error?: { code: string; message: string; retryable: boolean };
+};
+
+type PortraitCandidate = {
+    id: string;
+    originalRank: number;
+    title: string;
+    imageArtifactId: string;
+    imageUrl?: string;
+    sourcePageUrl?: string;
+    sourceDomain?: string;
+    source: "connected" | "baidu";
+    byteSize: number;
+    width?: number;
+    height?: number;
+    dedupGroupId?: string;
+    resultId?: string;
+};
+```
+
+所有跨 Web/Agent 边界的数据必须用 Zod 做严格校验，拒绝未知枚举和非有限数值。存储合同增加 `schemaVersion`，但首版不为尚未存在的数据制造兼容层。
+
+## 9. TypeScript 本地检测引擎
+
+### 9.1 依赖
+
+在 `canvas-agent/package.json` 增加：
+
+- `onnxruntime-node`：SCRFD 与 ArcFace ONNX 推理。
+- `sharp`：图片解码、缩放、裁剪、像素统计和报告图片处理。
+- `playwright-core`：驱动已安装的 Chrome / Edge / Chromium。
+- `docx`：生成 DOCX。
+
+pHash、DCT、余弦相似度、NMS、SSIM 和直方图计算直接用 TypeScript 实现，不为简单数学逻辑增加依赖。
+
+Web 端不新增图像算法依赖；继续使用现有 React、Ant Design、Lucide 和模型服务。
+
+### 9.2 ONNX 模型
+
+首版只需要原 `buffalo_l` 中实际参与本功能的两个模型：
+
+- `det_10g.onnx`：SCRFD 人脸检测和五点关键点。
+- `w600k_r50.onnx`：ArcFace embedding。
+
+不要下载未使用的年龄、性别或 68/106 点模型。模型资源放在 Canvas Agent 数据目录下独立子目录，不进入仓库和画布 JSON。
+
+模型安装必须：
+
+1. 先展示来源、预计体积和许可提示。
+2. 下载到临时文件。
+3. 校验固定 SHA-256。
+4. 通过后原子移动到模型目录。
+5. 下载或校验失败时保留旧的可用模型，不留下半成品。
+
+原项目 `model_resources.py` 中可找到当前模型文件哈希，但正式发布前必须重新核验模型权重的分发和商用许可。许可未确认前，不得把权重直接打进发行包。
+
+### 9.3 图像质量和可靠性规则
+
+迁移原实现的确定性阈值：
+
+```text
+good:
+  sharpness >= 120
+  55 <= brightness <= 205
+  contrast >= 35
+
+usable:
+  sharpness >= 50
+  35 <= brightness <= 225
+  contrast >= 20
+
+其他：poor
+```
+
+- 灰度亮度：全图灰度平均值。
+- 对比度：灰度标准差。
+- 清晰度：Laplacian 响应方差，可用 `sharp.convolve` 后对 raw 像素计算。
+- 最佳人脸选择顺序：检测置信度优先，面积次之。
+- 检测置信度 `< 0.65` 记为可靠性问题。
+- 人脸面积占全图 `< 0.02` 记为可靠性问题。
+- 任一图多于一张人脸时，首版不猜测目标，结果进入“无法判断”并提示裁剪。
+- 网络搜索裁剪对最佳人脸 bbox 使用 `35%` padding，保留发际线和局部上下文；未检测到人脸时使用原图并记录原因。
+
+### 9.4 人脸流程
+
+1. `sharp` 解码并修正 EXIF 方向。
+2. 转为 SCRFD 所需 RGB/BGR、尺寸和归一化张量。
+3. 解析多尺度输出，应用置信度过滤和 NMS。
+4. 通过五点关键点做 similarity transform，得到 112 × 112 对齐脸。
+5. ArcFace 推理，得到 embedding 后做 L2 normalize。
+6. 两向量余弦相似度作为 `faceSimilarity`。
+7. 同一查询图的检测、质量和 embedding 在任务内只计算一次。
+8. ONNX session 是进程级懒加载单例；CPU 本地比对默认并发 1，防止多个 session 抢占内存。
+
+需要用原 Python 实现和固定测试图片建立金标，比较检测框、最佳人脸、embedding 余弦和最终风险。不能只验证“代码能跑”。
+
+### 9.5 仅本地风险阈值
+
+只有双方 embedding 可用且没有可靠性问题时才使用：
+
+| ArcFace 余弦相似度 | 风险 |
+| --- | --- |
+| `>= 0.65` | 高 |
+| `>= 0.50` | 中 |
+| `>= 0.35` | 中低 |
+| `< 0.35` | 低 |
+
+否则返回“无法判断”，并列出可靠性问题。SSIM 和颜色直方图只能作为辅助指标，不能单独得出肖像风险等级。
+
+## 10. 网络反向搜图
+
+### 10.1 首版搜索源
+
+只实现百度识图。原项目中的 Google Lens 路径已经停用，不要在新插件中保留无效开关或兼容参数。
+
+默认配置：
+
+- 候选上限：30，可选 1–60。
+- 滚动次数：5。
+- 默认无头浏览器。
+- 浏览器自动顺序：系统 Chrome → Edge →可用 Chromium。
+- 可见浏览器只作为验证码、页面结构变化和调试的显式重试路径。
+
+### 10.2 搜索流程
+
+1. 校验输入图片和本机模型状态。
+2. 裁剪搜索图；无法检测人脸则保留原图。
+3. 打开百度识图页。
+4. 找到文件输入并上传搜索图。
+5. 等待结果页，监听网络图片响应，同时提取 DOM 图片和所属链接。
+6. 按滚动次数加载更多结果。
+7. 下载候选到任务目录。
+8. 做字节和视觉去重。
+9. 合并用户连接的手动候选。
+10. 对每个候选运行本地预检；需要视觉模型时创建模型作业。
+11. 生成总览、候选结果和报告。
+
+### 10.3 外部下载安全
+
+候选下载不能直接信任页面 URL：
+
+- 只允许 `http` 和 `https`。
+- DNS 解析后拒绝 localhost、私网、链路本地和保留地址；每次重定向都重新校验。
+- 限制重定向次数、响应时间、单图字节数和总候选字节数。
+- 校验响应 `Content-Type`，再由 `sharp` 实际解码；扩展名不作为可信依据。
+- 对 HTML、SVG、超大图片、解码炸弹和损坏图片返回可解释错误。
+- 来源 URL 仅用于追溯和用户显式打开，不在日志中输出查询参数中的潜在敏感信息。
+
+### 10.4 外部上传告知
+
+插件详情和运行区都要说明网络模式会把查询图上传到百度识图。用户点击“开始排查”即表示授权本次任务上传查询图，不再对同一任务重复弹确认框；运行区仍保留常驻提示。
+
+如果验证码、网络或网页结构阻断，任务进入可恢复错误，提供“用可见浏览器重试”和“改用手动候选”；不得悄悄改用其他搜索服务。
+
+## 11. 候选去重
+
+三层规则：
+
+1. SHA-256 字节哈希：完全相同文件合并。
+2. DCT pHash：32 × 32 灰度 DCT，取左上 8 × 8 与中位数比较得到 64 bit；汉明距离 `<= 5` 视为同图变体。
+3. 保留策略：同组保留可解码像素面积优先、文件体积次之的候选。
+
+模式：
+
+- `phash`：字节哈希 + pHash，默认且快速。
+- `arcface`：pHash 距离 `<= 5` 且双方有人脸时 ArcFace 余弦 `>= 0.90` 才合并；任一方无人脸时仍只依据 pHash。
+
+不要仅用 ArcFace 去重。不同照片中的相似人脸可能有很高 ArcFace 分数，容易误删真正需要排查的撞脸候选。
+
+去重结果必须保留：输入数、输出数、字节去重数、视觉去重数、阈值、耗时、被丢弃项、保留项和原因。
+
+## 12. 项目视觉模型复用
+
+### 12.1 配置来源
+
+必须复用：
+
+- `useEffectiveConfig`
+- `ModelPicker`
+- `selectableModelsByCapability`
+- `resolveModelRequestConfig`
+- `requestToolResponse`
+- `channelRequest`
+
+插件不增加自己的 provider、API Key、Base URL、模型目录和密钥存储。
+
+模型选择策略：
+
+- `project-default`：每次创建任务时解析 `effectiveConfig.textModel || effectiveConfig.model`。
+- `pinned`：节点保存 channel-qualified `modelRef`，不保存渠道密钥。
+- 每个任务创建时冻结实际 `modelRef`，运行中项目默认模型变化不影响已启动任务。
+- pinned 模型被删除或失效时暂停模型作业并要求重新选择，不能静默换模型。
+- 只展示项目中可选的 text 模型；本插件按约定直接向所选模型发送本次任务的查询图和当前比对图，不要求额外维护“双图能力”字段。
+
+模型选择只校验所选模型仍属于项目可选的 text 模型，不根据模型名或额外能力元数据拦截请求。实际请求固定携带查询图和当前比对图；如果上游模型拒绝该请求，按真实请求错误处理。
+
+如果项目默认文本模型不存在或已失效，显示明确错误并让用户选择项目中可用的 text 模型；不能自动跳到未知模型。
+
+选择 `local-plus-vision` 时，运行前常驻说明查询图和当前候选图会随模型请求发送给所选项目模型渠道；选择 `local-only` 时不发送给项目模型。该说明与百度搜图上传说明分开呈现，不能让用户误以为两者是同一外部接收方。
+
+### 12.2 结构化调用
+
+使用 `requestToolResponse`，工具选择固定为 required，不解析自由文本 JSON。工具建议名：`submit_portrait_comparison`。
+
+工具字段与 `PortraitVisionComparison` 对齐，`additionalProperties: false`，全部关键字段 required。调用后：
+
+1. 解析唯一工具调用。
+2. 用 Zod 严格校验。
+3. 限制数组长度和单项文本长度，避免异常结果进入报告。
+4. 校验 `overallSimilarity` 位于 0–1。
+5. 将结构化结果回传本机任务。
+
+模型提示必须明确：
+
+- 两张均为真实人像走 Path A，参考本地 ArcFace 和可靠性信息。
+- 任一张为风格化图走 Path B，本地 embedding 不作为主要结论。
+- 对脸型、五官布局、眼眉、鼻口、发型发际线、标志性特征分别说明。
+- 不识别人名或私人身份。
+- 结论是风险排查辅助，不是法律判断。
+
+### 12.3 确定性后处理
+
+- Path B 且 `distinctive_features.similarity === "high"` 时，风险下限提升为 `medium`，并记录规则 `stylized_distinctive_features_high_floor_medium`。
+- 多张人脸且用户未裁剪目标时，最终风险强制为 `unable_to_determine`。
+- 模型返回未知枚举、非有限数字或缺关键字段时，该候选模型分析失败，不使用自由文本兜底。
+- 最高风险排序：高 → 中 → 中低 → 低；只有没有可判断结果时才是“无法判断”。
+
+### 12.4 调用数量和成本提示
+
+- 直接比对最多 1 次视觉模型调用。
+- 网络排查最多等于去重后候选数，不超过用户设置的候选上限。
+- 运行前显示“最多 N 次模型调用”；运行中显示实际完成数。
+- 有价格数据时展示项目现有价格信息；token 计费只能标为估算，不能承诺精确费用。
+- 用户可选择仅本地模式以避免模型调用。
+
+## 13. Modal 关闭后继续执行的协调器
+
+模型密钥只能留在 Web 的现有模型请求路径，因此不能让 Canvas Agent 直接调用项目模型。为保证关闭全屏后任务继续，在画布页面根部挂载 `usePortraitClearanceCoordinator`：
+
+1. 从当前画布节点收集活动 `taskId`。
+2. 与本机运行时建立任务 SSE；断线后使用 Last-Event-ID 恢复。
+3. 对 `waiting_model` 任务领取一个有时限的模型作业 lease。
+4. 通过签名接口读取两张为模型优化过的 JPEG，转换为 data URL。
+5. 使用任务冻结的 `modelRef` 调用 `requestToolResponse`。
+6. 校验并提交结果；使用 `taskId + jobId + attempt` 保证幂等。
+7. lease 超时或页面关闭后，作业回到 pending，下次打开画布继续。
+8. Modal 只订阅状态，不拥有任务生命周期。
+
+页面标签完全关闭时，本机搜索和本地预检可以继续；需要项目模型的阶段停在 `waiting_model`。用户重新打开项目后自动恢复，不把等待误报为失败。
+
+并发限制取以下最小值：节点设置、渠道 `concurrencyLimit`、插件硬上限 10。取消任务时终止未开始和正在等待的模型作业；已经发出的模型请求使用 `AbortController` 尝试取消。
+
+## 14. Local Runtime 模块和 API
+
+### 14.1 合同扩展
+
+在 Canvas Agent 和 Web 同步增加：
+
+```ts
+type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance";
+
+type LocalRuntimeScope =
+    | /* existing scopes */
+    | "portrait:status"
+    | "portrait:model"
+    | "portrait:run"
+    | "portrait:read";
+```
+
+模块 descriptor：
+
+```ts
+{
+    id: "portrait-clearance",
+    displayName: "肖像可识别性本机引擎",
+    apiVersion: 1,
+    scopes: ["portrait:status", "portrait:model", "portrait:run", "portrait:read"]
+}
+```
+
+所有路由继续使用现有 Origin 信任、签名 session、nonce、timestamp、exact authority 和 CORS 白名单。不要另开无认证端口。
+
+### 14.2 建议路由
+
+| 方法 | 路径 | scope | 用途 |
+| --- | --- | --- | --- |
+| GET | `/portrait-clearance/status` | `portrait:status` | 模块、模型、浏览器和任务能力状态 |
+| POST | `/portrait-clearance/model/install` | `portrait:model` | 下载并校验 ONNX 模型 |
+| POST | `/portrait-clearance/tasks` | `portrait:run` | 创建直接或网络任务 |
+| GET | `/portrait-clearance/tasks` | `portrait:read` | 按 projectId/nodeId 分页读取历史任务 |
+| GET | `/portrait-clearance/tasks/:taskId` | `portrait:read` | 读取紧凑任务详情 |
+| GET | `/portrait-clearance/tasks/:taskId/events` | `portrait:read` | SSE 任务事件 |
+| POST | `/portrait-clearance/tasks/:taskId/cancel` | `portrait:run` | 取消任务 |
+| POST | `/portrait-clearance/tasks/:taskId/retry` | `portrait:run` | 按错误阶段安全重试 |
+| POST | `/portrait-clearance/tasks/:taskId/delete` | `portrait:run` | 用户显式删除本地数据 |
+| GET | `/portrait-clearance/tasks/:taskId/candidates` | `portrait:read` | 分页候选摘要 |
+| GET | `/portrait-clearance/tasks/:taskId/images/:imageId` | `portrait:read` | 返回受保护图片 blob |
+| GET | `/portrait-clearance/tasks/:taskId/artifacts/:artifactId` | `portrait:read` | 下载报告 |
+| POST | `/portrait-clearance/tasks/:taskId/model-jobs/claim` | `portrait:run` | 领取模型作业 lease |
+| POST | `/portrait-clearance/tasks/:taskId/model-jobs/:jobId/complete` | `portrait:run` | 幂等提交模型结果 |
+| POST | `/portrait-clearance/tasks/:taskId/model-jobs/:jobId/fail` | `portrait:run` | 提交可重试/不可重试错误 |
+
+请求继续使用 `application/json`。画布输入图可以在创建任务时作为受限 data URL 发送，沿用本机运行时 30MB 请求上限；Agent 接收后立刻解码、校验并写入任务目录。列表接口必须分页，任务摘要不能内嵌候选图片或完整报告。
+
+### 14.3 任务创建请求
+
+```ts
+type CreatePortraitClearanceTaskRequest = {
+    schemaVersion: 1;
+    clientOperationId: string;
+    ownerScopeHash: string;
+    projectId: string;
+    nodeId: string;
+    mode: PortraitClearanceMode;
+    analysisMode: PortraitClearanceAnalysisMode;
+    modelRef?: string;
+    inputs: Array<{
+        nodeId: string;
+        role: PortraitClearanceInputRole;
+        fileName: string;
+        mimeType: "image/jpeg" | "image/png" | "image/webp";
+        dataUrl: string;
+    }>;
+    settings: PortraitClearanceNodeState["settings"];
+};
+```
+
+`clientOperationId` 必须幂等。同一 owner、project、node 和 operation id 重试创建时返回原 task，不能重复网络上传或重复模型调用。
+
+## 15. 本地存储、账号隔离和生命周期
+
+任务文件建议位于 Canvas Agent 配置目录：
+
+```text
+portrait-clearance/
+  models/
+    buffalo_l/
+      det_10g.onnx
+      w600k_r50.onnx
+  tasks/
+    <taskId>/
+      task.json
+      inputs/
+      candidates/
+      model-inputs/
+      results/
+      reports/
+```
+
+要求：
+
+- `task.json` 使用临时文件 + rename 原子保存。
+- 所有路径由服务端生成，API 不接收任意输出路径。
+- 任务 owner 绑定 `origin + runtime browser keyId + ownerScopeHash + projectId + nodeId`。
+- `ownerScopeHash` 由 Web 对当前用户 scope 做 SHA-256 后生成，不把真实账号 ID写入本机路径。
+- 读取、下载、取消和提交模型结果都校验 owner。
+- embedding 只保存在任务目录或内存，不写浏览器 localStorage。
+- 插件偏好使用现有 user-scoped localforage；节点只保存紧凑摘要。
+- 节点删除不立即物理删除任务，以便画布撤销；任务进入 orphan 状态后延迟清理。
+- 全屏提供“删除本地排查数据”强操作，执行后报告和候选不可恢复，需二次确认。
+- 首版历史任务默认保留在本机，直到用户显式删除或项目永久删除；后续自动保留期必须作为单独产品决策。
+
+画布导出时不携带任务文件。导入其他环境后保留历史摘要，但将 `detailsAvailable` 设为 false，并提示重新运行。
+
+复制单个排查节点时清除 `activeTaskId`、任务状态和历史结果；复制包含上游图片的子图时可重映射 input binding，但仍不复制历史任务。
+
+## 16. 报告生成
+
+### 16.1 格式
+
+每个终态可交付任务生成：
+
+- `clearance-result.json`
+- `clearance-report.md`
+- `clearance-report.html`
+- `clearance-report.docx`
+
+HTML 是纯展示文件：图片内嵌、无脚本、无外部字体、所有文本 HTML escape。全屏工作台直接用 React 渲染结构化数据，不用 iframe 执行报告 HTML。
+
+DOCX 使用 `docx` 生成 A4 报告，包含查询图、风险总览、详细候选、特征依据、限制说明和人工复核建议。不要迁移原报告中的个人联系方式或作者广告信息。
+
+三种可读报告共用同一套内容层级：检测结论与综合风险、风险分布和处理状态；每个候选的双图、来源、分析路径、整体相似度和处理状态；InsightFace 本地预检（人脸数、画质、SSIM、颜色相关性、embedding 与可靠性问题）；视觉模型的六个特征维度、融合说明、主要依据和修改建议；失败/跳过原因、来源链接以及限制与人工复核。单个候选失败只在对应条目中标记，不覆盖其他候选结果。
+
+### 16.2 必备措辞
+
+推荐：
+
+- “当前检索范围内未发现明显高相似候选”。
+- “存在疑似撞脸风险，建议人工复核”。
+- “外部检索返回若干相似图片，需要人工复核”。
+- “本结果不能替代司法鉴定、律师意见或法院判断”。
+
+禁止：
+
+- “该人就是某某”。
+- “确认同一人”。
+- “确认侵权/未侵权”。
+- “绝对安全/可以放心商用”。
+
+### 16.3 网络报告字段
+
+- 搜索源、搜索时间、候选上限和实际候选数。
+- 原始数量、字节去重数、视觉去重数、最终数量。
+- 每个候选的来源域名、来源链接、风险、相似度、主要特征、限制。
+- 搜索服务、地区、时间、索引、验证码和页面可访问性限制。
+- 不展示搜索页中不必要的个人信息，不推断身份。
+
+## 17. 错误、恢复和降级
+
+错误使用稳定 code，UI 根据 code 给出下一步，不依赖错误字符串解析。
+
+| code | 用户提示/动作 |
+| --- | --- |
+| `portrait_plugin_disabled` | 到插件中心启用；已有结果只读 |
+| `portrait_runtime_unavailable` | 连接或启动本机检测引擎 |
+| `portrait_module_unavailable` | 更新 Canvas Agent 到包含本模块的版本 |
+| `portrait_model_missing` | 安装并校验本地 ONNX 模型 |
+| `portrait_input_missing` | 连接所需图片 |
+| `portrait_input_invalid` | 替换损坏、过大或不支持格式的图片 |
+| `portrait_multiple_faces` | 裁剪到单一目标人脸后重试 |
+| `portrait_vision_model_unavailable` | 选择项目中可用的 text 模型 |
+| `portrait_vision_model_removed` | 重新选择模型；不自动降级 |
+| `portrait_search_captcha` | 用可见浏览器重试或连接手动候选 |
+| `portrait_search_layout_changed` | 提示网页结构变化，不换搜索源 |
+| `portrait_candidate_download_blocked` | 跳过该候选并在报告记录 |
+| `portrait_model_rate_limited` | 保留本地结果，退避后恢复模型作业 |
+| `portrait_model_timeout` | 跳过当前候选并继续批次，在 pair 和报告中记录超时 |
+| `portrait_model_attempts_exhausted` | 跳过多次未完成的候选，生成部分结果，不阻塞其他候选 |
+| `portrait_task_cancelled` | 显示已停止和已完成阶段，不标为错误 |
+
+网络任务允许部分完成：例如 20 个候选中 18 个成功、2 个下载或模型比对失败，任务为 `partial`，报告明确列出失败项；单个候选失败不会阻塞其他候选。直接比对的唯一 pair 失败则任务为 `failed`。
+
+## 18. 建议代码地图
+
+### 18.1 Web 新增
+
+```text
+web/src/lib/plugins/builtin/portrait-clearance.ts
+    插件 manifest 和注册
+
+web/src/lib/portrait-clearance/contracts.ts
+    Web/节点领域类型与 Zod schema
+
+web/src/lib/portrait-clearance/model-selection.ts
+    项目视觉模型筛选、冻结和兼容检查
+
+web/src/lib/portrait-clearance/input-bindings.ts
+    连接与 query/reference/candidate 角色同步
+
+web/src/services/portrait-clearance-runtime.ts
+    签名 Local Runtime API 客户端、SSE、图片和报告下载
+
+web/src/components/canvas/nodes/portrait-clearance-node.tsx
+    节点紧凑态
+
+web/src/components/canvas/portrait-clearance/
+    portrait-clearance-modal.tsx
+    portrait-clearance-settings.tsx
+    portrait-clearance-overview.tsx
+    portrait-clearance-gallery.tsx
+    portrait-clearance-pair-detail.tsx
+    portrait-clearance-report.tsx
+
+web/src/pages/canvas/use-portrait-clearance-coordinator.ts
+    Modal 外的模型作业执行和恢复
+```
+
+### 18.2 Web 需要修改
+
+```text
+web/src/types/canvas.ts
+    保留 CanvasNodeTypeId 扩展边界并声明紧凑 metadata 字段
+
+web/src/lib/plugins/builtin/portrait-clearance.ts
+    通过 yingce.plugin/v1 contributes.canvasNodes 注册节点定义
+
+web/src/components/canvas/canvas-node-content.tsx
+    注册 PortraitClearanceNodeContent
+
+web/src/components/canvas/canvas-node-action-context.ts
+    打开全屏动作
+
+web/src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx
+    受插件启用状态控制的创建入口
+
+web/src/pages/canvas/project.tsx
+    portraitClearanceNodeId、Modal、协调器和 metadata 更新
+
+web/src/pages/plugins/index.tsx
+web/src/pages/plugins/plugin-documentation.ts
+    ai.text 权限中文文案
+
+web/src/components/layout/app-providers.tsx 或相邻 bootstrap
+    应用启动时 ensure 内置插件
+
+web/src/services/local-runtime.ts
+    新模块和 scope 合同
+
+web/src/lib/canvas/canvas-node-copy.ts
+    复制时移除任务引用、重映射输入 binding
+```
+
+### 18.3 Canvas Agent 新增
+
+```text
+canvas-agent/src/modules/portrait-clearance-http.ts
+
+canvas-agent/src/portrait-clearance/contracts.ts
+canvas-agent/src/portrait-clearance/task-store.ts
+canvas-agent/src/portrait-clearance/task-runner.ts
+canvas-agent/src/portrait-clearance/image-metrics.ts
+canvas-agent/src/portrait-clearance/face-engine.ts
+canvas-agent/src/portrait-clearance/face-alignment.ts
+canvas-agent/src/portrait-clearance/search-image.ts
+canvas-agent/src/portrait-clearance/baidu-search.ts
+canvas-agent/src/portrait-clearance/safe-image-download.ts
+canvas-agent/src/portrait-clearance/phash.ts
+canvas-agent/src/portrait-clearance/dedup.ts
+canvas-agent/src/portrait-clearance/risk-rules.ts
+canvas-agent/src/portrait-clearance/model-job-store.ts
+canvas-agent/src/portrait-clearance/reports/json-report.ts
+canvas-agent/src/portrait-clearance/reports/markdown-report.ts
+canvas-agent/src/portrait-clearance/reports/html-report.ts
+canvas-agent/src/portrait-clearance/reports/docx-report.ts
+```
+
+### 18.4 Canvas Agent 需要修改
+
+```text
+canvas-agent/src/local-runtime-contract.ts
+    module id 和 scope
+
+canvas-agent/src/local-runtime.ts
+    模块 allowlist 和路由合同
+
+canvas-agent/src/local-runtime-host.ts
+    创建 portrait-clearance 模块
+
+canvas-agent/package.json
+    原生推理、图片、浏览器和 DOCX 依赖
+
+canvas-agent/README.md
+    本机模块、模型资源、数据目录和安全边界
+```
+
+### 18.5 原 Python 到 TypeScript 的映射
+
+| 原文件 | 新实现 |
+| --- | --- |
+| `common.py` | `image-metrics.ts`、`risk-rules.ts`、通用图片 helper |
+| `face_engine.py` | `face-engine.ts`、`face-alignment.ts` |
+| `prepare_search_image.py` | `search-image.ts` |
+| `baidu_image_search_playwright.py` | `baidu-search.ts` |
+| `collect_reverse_image_candidates.py` | `task-runner.ts` 的网络 workflow |
+| `dedup_candidates.py` | `phash.ts`、`dedup.ts` |
+| `visual_compare.py` | Agent 本地预检 + Web 结构化模型协调器 + `risk-rules.ts` |
+| `portrait_clearance.py` | `task-runner.ts` 和报告模块 |
+| `html_report.py` | `reports/html-report.ts` |
+| `docx_report.py` | `reports/docx-report.ts` |
+| `web_server.py` / 原 GUI | 不迁移；由画布节点和 Local Runtime API 取代 |
+| `multimodal_config.py` | 不迁移；复用项目模型配置 |
+| `batch_clearance.py` | 不迁移 |
+
+## 19. 推荐实施顺序
+
+### 阶段 0：合同和插件壳
+
+- 增加文档中的类型、节点枚举、默认尺寸和清单。
+- 完成插件启停、菜单 gating、节点空态和只读态。
+- 增加 Local Runtime 模块空壳、scope 和健康状态。
+- 此阶段不调用模型、不下载模型。
+
+退出条件：插件启用后能创建节点，停用后旧节点仍可打开但不能运行。
+
+### 阶段 1：直接比对的本地链路
+
+- 实现图片校验、质量、SCRFD、对齐、ArcFace、SSIM 和风险阈值。
+- 实现任务持久化、SSE、取消和本地-only 直接比对。
+- 建立 Python 金标对照测试。
+
+退出条件：两图直接比对在重启 Canvas Agent 后仍可恢复结果，数值在约定误差内。
+
+### 阶段 2：项目视觉模型链路
+
+- 实现兼容模型筛选和 `ModelPicker`。
+- 实现页面级协调器、模型作业 lease、结构化工具调用和幂等回传。
+- 实现 Path A/B 与风格化风险下限规则。
+
+退出条件：关闭 Modal 后模型任务继续；关闭整个页面后重开可恢复；Agent 全程看不到 API Key。
+
+### 阶段 3：单图网络排查
+
+- 实现百度 Playwright、查询图裁剪、安全下载、候选合并和去重。
+- 实现候选分页、画廊、筛选、详情和部分失败。
+- 加入外部上传说明、验证码恢复和模型调用上限提示。
+
+退出条件：一张图能完成搜索到报告的完整链路；没有任何多查询图批量入口。
+
+### 阶段 4：报告和完整 UI
+
+- 实现 JSON、Markdown、HTML、DOCX。
+- 完成全屏响应式、键盘、焦点、主题和 reduced-motion。
+- 完成添加候选到画布、导出和本地数据删除。
+
+退出条件：四种报告内容一致；明暗主题和窄屏可用；节点历史摘要与任务详情一致。
+
+## 20. 测试计划
+
+### 20.1 Web 自动化测试
+
+- 节点注册表、默认尺寸和 renderer 完整性。
+- 插件未启用/启用/停用时菜单与节点行为。
+- input binding 的新增、断开、交换、失效 ID 清理和复制重映射。
+- metadata 不包含图片、embedding 和完整候选结果。
+- 项目默认与 pinned 模型解析。
+- 可选 text 模型解析；不依赖额外的双图能力字段或模型名猜测。
+- pinned 模型删除后暂停而非静默 fallback。
+- 模型工具 schema 解析和异常结果拒绝。
+- coordinator 的 lease、并发、取消、幂等和恢复。
+- Modal 关闭不取消任务；Escape 后焦点返回。
+
+建议新测试：
+
+```text
+web/test/canvas-portrait-clearance-node.test.ts
+web/test/portrait-clearance-input-bindings.test.ts
+web/test/portrait-clearance-model-selection.test.ts
+web/test/portrait-clearance-coordinator.test.ts
+web/test/portrait-clearance-runtime.test.ts
+```
+
+### 20.2 Canvas Agent 自动化测试
+
+- 图片质量阈值边界。
+- pHash 固定向量、压缩/缩放近似和不同照片不误并。
+- cosine 和风险阈值边界。
+- NMS、最佳人脸和可靠性规则。
+- ONNX 金标测试；无模型环境下跳过并明确标注，不伪造通过。
+- 安全下载拒绝私网、重定向私网、非图片、超限和损坏内容。
+- 任务创建幂等、原子持久化、重启恢复、取消和部分成功。
+- 模型作业 lease 过期、重复 complete 和错误重试。
+- Local Runtime Origin、签名、scope、exact keys 和 CORS。
+- SSE Last-Event-ID 恢复。
+- 报告 escaping、无脚本 HTML、DOCX 可打开和四格式字段一致。
+
+建议新测试目录：
+
+```text
+canvas-agent/test/portrait-clearance-*.test.ts
+canvas-agent/test/fixtures/portrait-clearance/
+```
+
+### 20.3 手工验收
+
+- 明暗主题。
+- 画布 25%–200% 缩放下节点操作不误触缩放和拖拽。
+- 直接比对：缺图、单图、双图、交换 A/B、多脸、无脸、模糊图、风格化图。
+- 网络排查：无候选、验证码、页面结构变化、候选部分下载失败。
+- pHash 和 ArcFace 两种去重模式。
+- 模型未配置、不支持双图、被删除、限流、超时。
+- 运行中关闭 Modal、切换项目、刷新页面、重启 Canvas Agent。
+- 插件停用后旧节点和历史报告可查看。
+- 四种报告导出，候选来源打开，候选添加到画布。
+- 键盘完成模式切换、运行、候选选择、导出和关闭；焦点不被固定区域遮挡。
+
+### 20.4 最小验证命令
+
+```bash
+cd web
+bun test test/canvas-portrait-clearance-node.test.ts \
+  test/portrait-clearance-input-bindings.test.ts \
+  test/portrait-clearance-model-selection.test.ts \
+  test/portrait-clearance-coordinator.test.ts \
+  test/portrait-clearance-runtime.test.ts
+bun run build
+
+cd ../canvas-agent
+npm test
+npm run build
+```
+
+## 21. 验收标准
+
+功能验收：
+
+- [ ] 所有新增业务代码是 TS/TSX，没有 Python 子进程、原 EXE 或原服务依赖。
+- [ ] 插件通过插件中心启停，并作为画布节点创建。
+- [ ] 直接比对和单图网络排查均可完整运行。
+- [ ] 不存在批量查询图入口、批量任务表或批量汇总报告。
+- [ ] 本地-only 与本地+视觉模型两种方式行为明确。
+- [ ] 视觉模型来自项目配置，插件没有独立密钥配置。
+- [ ] 完整结果在节点级全屏 Modal 中查看。
+- [ ] Modal 关闭后任务继续，页面重开后可恢复。
+- [ ] JSON、Markdown、HTML、DOCX 均可导出。
+- [ ] 当前节点/项目历史可以查看、恢复和显式删除，不形成跨项目身份索引。
+
+质量和安全验收：
+
+- [ ] Canvas Agent 不接收、读取或持久化项目 API Key。
+- [ ] 网络上传在插件权限和运行界面中明确告知。
+- [ ] 外部候选下载有 SSRF、重定向、体积和内容校验。
+- [ ] 人脸数据只保存在本机受保护任务目录，不进入画布 JSON 和 localStorage。
+- [ ] 风险结果不识别人名、不输出确定性法律结论。
+- [ ] 多脸、低质量、模型异常和搜索失败不会被包装为低风险。
+- [ ] 明暗主题、键盘焦点、reduced-motion 和窄屏布局通过验收。
+- [ ] 插件停用、节点复制、画布导出导入和账号切换不会串任务数据。
+
+## 22. 实施门禁和默认决策
+
+以下不是功能需求澄清，而是实现前必须完成的工程门禁：
+
+1. 核验 `det_10g.onnx` 和 `w600k_r50.onnx` 的来源、SHA-256、分发许可和商业使用边界。
+2. 用固定图片建立 Python 原实现与 TS 新实现的数值金标。
+3. 确认目标发布平台与 `onnxruntime-node`、`sharp` 原生二进制兼容。
+4. 确认 Canvas Agent 使用系统 Chrome/Edge 的最低版本；缺少浏览器时给出安装提示，不静默下载未知二进制。
+
+其余默认决策已经在本文固定：百度单源、候选上限默认 30、模型并发默认 2、本地数据默认保留至用户显式删除、插件首次默认关闭、批量排查不实现。后续如要改变这些决策，应先更新本文再改代码。
+
+## 23. 给后续实现 AI 的开工指令
+
+后续 AI 收到“开始实现”后，应按以下顺序工作：
+
+1. 完整阅读根目录 `AGENTS.md` 和本文，不以对话摘要替代本文合同。
+2. 检查 `git status --short`，保留用户和其他协作者已有改动，不清理、不回滚、不提交代码。
+3. 阅读本文代码地图列出的现有入口和相邻测试，再从阶段 0 开始；不要一次跨越多个阶段制造不可验证的大改动。
+4. 原项目只作为行为和金标参照，不复制 Python 胶水代码，不启动原 EXE/服务，不新增 Python 运行时依赖。
+5. 先完成纯合同、纯算法和任务恢复测试，再接 UI；UI 完成后按本文手工验收项检查明暗主题、焦点、Modal、画布缩放和空态。
+6. 每个阶段只修改必要文件，运行该阶段最小充分测试，并如实记录未验证项。
+7. 若实现发现本文与当前代码不一致，先用代码证据更新本文的相关合同，再继续实现；不得静默改变已确认范围。
+8. 不得加入批量查询图、独立供应商配置、Agent/MCP/Skill 入口或未经许可的模型权重。

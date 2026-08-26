@@ -183,6 +183,7 @@
 
 .plugin-section {
     min-width: 0;
+    scroll-margin-top: var(--space-5);
 }
 
 .plugin-section-heading {

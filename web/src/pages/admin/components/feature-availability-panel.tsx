@@ -111,8 +111,15 @@ export default function FeatureAvailabilityPanel() {
                                     <h3 className="text-sm font-medium">{item.title}</h3>
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
+                                <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/52">{item.description}</p>
                             </div>
-                            <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key) || (item.key === "systemPluginsVisibleToUsers" && features?.pluginCenterEnabled !== true)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
+                            <Switch
+                                checked={features?.[item.key] === true}
+                                loading={!features || saving === item.key}
+                                disabled={Boolean(saving && saving !== item.key) || (item.key === "systemPluginsVisibleToUsers" && features?.pluginCenterEnabled !== true)}
+                                onChange={(checked) => toggle(item.key, checked)}
+                                aria-label={`开放${item.title}`}
+                            />
                         </div>
                     ))}
                 </div>
@@ -132,6 +139,7 @@ export default function FeatureAvailabilityPanel() {
                                     <h3 className="text-sm font-medium">{item.title}</h3>
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
+                                <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/52">{item.description}</p>
                             </div>
                             <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
                         </div>

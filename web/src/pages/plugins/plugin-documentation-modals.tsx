@@ -34,12 +34,12 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                         <span className="plugin-upload-panel-icon"><CloudUpload className="size-5" /></span>
                         <div>
                             <h2>安装插件包</h2>
-                            <p>选择符合清单规范的 JSON 文件，安装后会立即进入插件中心。</p>
+                            <p>选择统一影策插件包，安装后会立即进入插件中心。</p>
                         </div>
                     </div>
                     <Upload.Dragger
                         className="plugin-upload-dropzone"
-                        accept=".json,application/json"
+                        accept=".yingce-plugin,application/zip"
                         maxCount={1}
                         showUploadList={false}
                         beforeUpload={(file) => {
@@ -49,11 +49,11 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                     >
                         <CloudUpload className="plugin-upload-dropzone-icon" />
                         <p className="ant-upload-text">点击选择插件文件</p>
-                        <p className="ant-upload-hint">仅支持 JSON 清单，大小不超过 512 KiB</p>
+                        <p className="ant-upload-hint">仅支持 .yingce-plugin 包，大小不超过 16 MiB</p>
                     </Upload.Dragger>
                     <div className="plugin-upload-notice">
                         <ShieldCheck className="size-4" />
-                        <span>上传前请确认插件来源可信。协议插件不会在浏览器执行任意脚本，密钥也不会从清单读取。</span>
+                        <span>上传前请确认插件来源可信。Web 入口只能进入声明的隔离运行时，不会获得主页面权限；密钥也不会从清单读取。</span>
                     </div>
                 </aside>
             </div>

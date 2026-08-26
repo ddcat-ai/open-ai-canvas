@@ -57,7 +57,19 @@ export function CapabilityCardPicker({ value, onChange, density = "comfortable" 
     );
 }
 
-export function ProtocolCardPicker({ capability, value, onChange, density = "comfortable", protocols = [] }: { capability?: ModelCapabilityChoice; value?: ModelProtocol; onChange?: (value: ModelProtocol) => void; density?: PickerDensity; protocols?: ModelProtocolDefinition[] }) {
+export function ProtocolCardPicker({
+    capability,
+    value,
+    onChange,
+    density = "comfortable",
+    protocols = [],
+}: {
+    capability?: ModelCapabilityChoice;
+    value?: ModelProtocol;
+    onChange?: (value: ModelProtocol) => void;
+    density?: PickerDensity;
+    protocols?: ModelProtocolDefinition[];
+}) {
     const availableProtocols = protocols.filter((item) => item.capability === capability && item.enabled !== false);
     return (
         <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", density === "compact" && "gap-1.5 xl:grid-cols-3")} role="radiogroup" aria-label="模型请求协议">
@@ -79,8 +91,8 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
                         <div className={cn("flex min-w-0 items-start", density === "compact" ? "gap-1.5 pr-4" : "gap-2.5 pr-6")}>
                             <ProtocolBrandMark protocol={protocol} compact={density === "compact"} />
                             <div className="min-w-0 flex-1">
-                                <div className={cn("truncate font-semibold", density === "compact" ? "text-xs" : "text-sm")}>{protocol.label}</div>
-                                <div className={cn("mt-0.5 truncate font-mono text-foreground/48", density === "compact" ? "text-[var(--fs-micro)]" : "text-[var(--fs-tiny)]")}>{protocol.create}</div>
+                                <div className={cn("model-protocol-card-title truncate font-semibold", density === "compact" ? "text-xs" : "text-sm")}>{protocol.label}</div>
+                                <div className={cn("model-protocol-card-endpoint mt-0.5 truncate font-mono text-foreground/48", density === "compact" ? "text-[var(--fs-micro)]" : "text-[var(--fs-tiny)]")}>{protocol.create}</div>
                             </div>
                         </div>
                         {selected ? (
@@ -104,7 +116,15 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
     );
 }
 
-export function ModelCapabilityProtocolModal({ value, onChange, protocols = [] }: { value: { capability: ModelCapabilityChoice; protocol: ModelProtocol }; onChange: (value: { capability: ModelCapabilityChoice; protocol: ModelProtocol }) => void; protocols?: ModelProtocolDefinition[] }) {
+export function ModelCapabilityProtocolModal({
+    value,
+    onChange,
+    protocols = [],
+}: {
+    value: { capability: ModelCapabilityChoice; protocol: ModelProtocol };
+    onChange: (value: { capability: ModelCapabilityChoice; protocol: ModelProtocol }) => void;
+    protocols?: ModelProtocolDefinition[];
+}) {
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(value);
 

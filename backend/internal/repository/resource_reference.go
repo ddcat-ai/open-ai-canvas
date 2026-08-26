@@ -9,7 +9,7 @@ import (
 )
 
 // ResourceReferenceDocument 是资源删除校验使用的只读业务文档快照。
-// JSON 中的精确资源 ID 识别由 service 完成，repository 只负责缩小候选记录。
+// repository 只按用户范围读取记录；JSON 中的资源引用合同由 service 统一解释。
 type ResourceReferenceDocument struct {
 	Kind          string
 	ID            string
@@ -87,7 +87,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 
 	var assets []model.Asset
 	assetQuery := r.db.Where("user_id = ? AND id <> ?", userID, excludingAssetID)
-	if err := resourceTextQuery(assetQuery, []string{"payload_json"}, resourceIDs).Find(&assets).Error; err != nil {
+	if err := assetQuery.Find(&assets).Error; err != nil {
 		return snapshot, err
 	}
 	for _, asset := range assets {
@@ -95,7 +95,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 
 	var canvases []model.CanvasProject
-	if err := resourceTextQuery(r.db.Where("user_id = ?", userID), []string{"payload_json"}, resourceIDs).Find(&canvases).Error; err != nil {
+	if err := r.db.Where("user_id = ?", userID).Find(&canvases).Error; err != nil {
 		return snapshot, err
 	}
 	for _, canvas := range canvases {
@@ -103,7 +103,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 
 	var projects []model.Project
-	if err := resourceTextQuery(r.db.Where("user_id = ?", userID), []string{"style_profile_json"}, resourceIDs).Find(&projects).Error; err != nil {
+	if err := r.db.Where("user_id = ?", userID).Find(&projects).Error; err != nil {
 		return snapshot, err
 	}
 	for _, project := range projects {
@@ -111,7 +111,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 
 	var styles []model.StyleProfile
-	if err := resourceTextQuery(r.db.Where("user_id = ?", userID), []string{"cover_url", "profile_json"}, resourceIDs).Find(&styles).Error; err != nil {
+	if err := r.db.Where("user_id = ?", userID).Find(&styles).Error; err != nil {
 		return snapshot, err
 	}
 	for _, style := range styles {
@@ -129,7 +129,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		Select("asset_versions.id, assets.title, asset_versions.definition_json AS primary_json").
 		Joins("JOIN assets ON assets.id = asset_versions.asset_id").
 		Where("assets.user_id = ? AND assets.id <> ?", userID, excludingAssetID)
-	if err := resourceTextQuery(versionQuery, []string{"asset_versions.definition_json"}, resourceIDs).Scan(&versions).Error; err != nil {
+	if err := versionQuery.Scan(&versions).Error; err != nil {
 		return snapshot, err
 	}
 	for _, version := range versions {
@@ -141,7 +141,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		Select("project_asset_candidates.id, projects.name AS title, project_asset_candidates.details_json AS primary_json").
 		Joins("JOIN projects ON projects.id = project_asset_candidates.project_id").
 		Where("projects.user_id = ?", userID)
-	if err := resourceTextQuery(candidateQuery, []string{"project_asset_candidates.details_json"}, resourceIDs).Scan(&candidates).Error; err != nil {
+	if err := candidateQuery.Scan(&candidates).Error; err != nil {
 		return snapshot, err
 	}
 	for _, candidate := range candidates {
@@ -154,7 +154,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		Joins("JOIN workflow_instances ON workflow_instances.id = workflow_step_instances.workflow_instance_id").
 		Joins("JOIN projects ON projects.id = workflow_instances.project_id").
 		Where("projects.user_id = ?", userID)
-	if err := resourceTextQuery(stepQuery, []string{"workflow_step_instances.input_json", "workflow_step_instances.output_json"}, resourceIDs).Scan(&steps).Error; err != nil {
+	if err := stepQuery.Scan(&steps).Error; err != nil {
 		return snapshot, err
 	}
 	for _, step := range steps {
@@ -227,7 +227,7 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 	return result, nil
 }
 
-func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string) error {
+func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", assetID)
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
@@ -251,6 +251,11 @@ func (r *Repository) DeleteAssetAndResources(userID string, assetID string, reso
 		if err := tx.Delete(&model.Asset{}, "id = ? AND user_id = ?", assetID, userID).Error; err != nil {
 			return err
 		}
+		if len(deletionJobs) > 0 {
+			if err := tx.Create(&deletionJobs).Error; err != nil {
+				return err
+			}
+		}
 		if len(resourceIDs) == 0 {
 			return nil
 		}
@@ -259,19 +264,4 @@ func (r *Repository) DeleteAssetAndResources(userID string, assetID string, reso
 		}
 		return tx.Where("user_id = ? AND id IN ?", userID, resourceIDs).Delete(&model.Resource{}).Error
 	})
-}
-
-func resourceTextQuery(query *gorm.DB, columns []string, resourceIDs []string) *gorm.DB {
-	conditions := make([]string, 0, len(columns)*len(resourceIDs))
-	args := make([]any, 0, len(columns)*len(resourceIDs))
-	for _, column := range columns {
-		for _, resourceID := range resourceIDs {
-			conditions = append(conditions, column+" LIKE ?")
-			args = append(args, "%"+resourceID+"%")
-		}
-	}
-	if len(conditions) == 0 {
-		return query
-	}
-	return query.Where("("+strings.Join(conditions, " OR ")+")", args...)
 }

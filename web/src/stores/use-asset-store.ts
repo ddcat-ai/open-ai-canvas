@@ -52,9 +52,9 @@ type AssetStore = {
     addAsset: (asset: NewAsset) => string;
     addGenerationAsset: (effectKey: string, asset: NewAsset, signal?: AbortSignal) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
-    removeAsset: (id: string) => void;
+    removeAsset: (id: string) => Promise<void>;
     replaceAssets: (assets: Asset[]) => void;
-    cleanupImages: (extra?: unknown) => void;
+    cleanupImages: (extra?: unknown) => Promise<void>;
 };
 
 export const ASSET_STORE_KEY = "infinite-canvas:asset_store";
@@ -355,42 +355,52 @@ export const useAssetStore = create<AssetStore>()(
                 set((state) => ({
                     assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, ...patch, updatedAt: new Date().toISOString() } as Asset) : asset)),
                 })),
-            removeAsset: (id) =>
+            removeAsset: async (id) => {
+                let remainingAssets: Asset[] = [];
+                let removedAsset: Asset | undefined;
                 set((state) => {
+                    removedAsset = state.assets.find((asset) => asset.id === id);
                     const assets = state.assets.filter((asset) => asset.id !== id);
-                    get().cleanupImages({ assets });
+                    remainingAssets = assets;
                     return { assets };
-                }),
+                });
+                // 没有本地媒体定位时没有需要由该删除动作回收的 Blob；跳过全库扫描，
+                // 避免纯文本/远程资源删除依赖浏览器 IndexedDB 驱动。
+                if (!removedAsset || (!collectImageStorageKeys(removedAsset).size && !collectMediaStorageKeys(removedAsset).size)) return;
+                await get().cleanupImages({ assets: remainingAssets });
+            },
             replaceAssets: (assets) => set({ assets }),
-            cleanupImages: (extra) => {
+            cleanupImages: async (extra) => {
                 const scope = getActiveUserScope();
                 const frozenExtraImageKeys = collectImageStorageKeys(extra);
                 const frozenExtraMediaKeys = collectMediaStorageKeys(extra);
-                window.setTimeout(async () => {
-                    await withGenerationArtifactCommitLock(scope, async () => {
-                        // 固定锁序：artifact -> Canvas（释放）-> Asset，避免跨 store 锁重入。
-                        const canvasProjects = await withCanvasStorePersistenceLock(scope, async () => {
-                            await commitPendingCanvasStorePersistenceLocked(scope);
-                            const durableCanvas = parseCanvasStorageDocument(await localForageStorageForScope(scope).getItem(CANVAS_STORE_KEY));
-                            return pendingCanvasStorePersistence(scope)?.projects ?? durableCanvas.state.projects;
-                        });
-                        await withGenerationAssetStorageLock(scope, async () => {
-                            await commitPendingAssetStorePersistenceLocked(scope);
-                            const durableAssets = (await readPersistedAssetDocumentForScope(scope)).state.assets;
-                            const references = { projects: canvasProjects, assets: durableAssets };
-                            const imageKeys = new Set([...frozenExtraImageKeys, ...collectImageStorageKeys(references)]);
-                            const mediaKeys = new Set([...frozenExtraMediaKeys, ...collectMediaStorageKeys(references)]);
-                            await cleanupUnusedImages(
-                                [...imageKeys].map((storageKey) => ({ storageKey })),
-                                scope,
-                            );
-                            await cleanupUnusedMedia(
-                                [...mediaKeys].map((storageKey) => ({ storageKey })),
-                                scope,
-                            );
-                        });
-                    });
-                }, 0);
+                await new Promise<void>((resolve, reject) => {
+                    window.setTimeout(() =>
+                        withGenerationArtifactCommitLock(scope, async () => {
+                            // 固定锁序：artifact -> Canvas（释放）-> Asset，避免跨 store 锁重入。
+                            const canvasProjects = await withCanvasStorePersistenceLock(scope, async () => {
+                                await commitPendingCanvasStorePersistenceLocked(scope);
+                                const durableCanvas = parseCanvasStorageDocument(await localForageStorageForScope(scope).getItem(CANVAS_STORE_KEY));
+                                return pendingCanvasStorePersistence(scope)?.projects ?? durableCanvas.state.projects;
+                            });
+                            await withGenerationAssetStorageLock(scope, async () => {
+                                await commitPendingAssetStorePersistenceLocked(scope);
+                                const durableAssets = (await readPersistedAssetDocumentForScope(scope)).state.assets;
+                                const references = { projects: canvasProjects, assets: durableAssets };
+                                const imageKeys = new Set([...frozenExtraImageKeys, ...collectImageStorageKeys(references)]);
+                                const mediaKeys = new Set([...frozenExtraMediaKeys, ...collectMediaStorageKeys(references)]);
+                                await cleanupUnusedImages(
+                                    [...imageKeys].map((storageKey) => ({ storageKey })),
+                                    scope,
+                                );
+                                await cleanupUnusedMedia(
+                                    [...mediaKeys].map((storageKey) => ({ storageKey })),
+                                    scope,
+                                );
+                            });
+                        }).then(resolve, reject),
+                    );
+                });
             },
         }),
         {

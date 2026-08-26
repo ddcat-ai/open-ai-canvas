@@ -21,8 +21,12 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@openai/codex": "^0.149.1",
+    "docx": "^9.5.1",
     "express": "^5.2.1",
     "json-canonicalize": "2.0.0",
+    "onnxruntime-node": "^1.22.0",
+    "playwright-core": "^1.55.0",
+    "sharp": "^0.34.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -46,5 +50,8 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "trustedDependencies": [
+    "onnxruntime-node"
+  ]
 }

@@ -45,6 +45,7 @@ func Models() []any {
 		&model.Skill{},
 		&model.UserSkillState{},
 		&model.Resource{},
+		&model.ResourceDeletionJob{},
 		&model.Asset{},
 		&model.ProjectAssetLink{},
 		&model.ProjectAssetFolder{},
@@ -76,6 +77,8 @@ func Models() []any {
 		&model.TaskLog{},
 		&model.SessionFile{},
 		&model.Result{},
+		&model.ComfyBridge{},
+		&model.ComfyBridgeRequest{},
 	}
 }
 

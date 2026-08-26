@@ -42,6 +42,9 @@ func TestBuiltinCatalogContainsRequestedProtocols(t *testing.T) {
 	if !found {
 		t.Fatal("Agnes metadata was omitted from the administrator catalog")
 	}
+	if _, ok := registry.Get("autodl-comfyui"); ok {
+		t.Fatal("AutoDL must be provided by the uploaded plugin package, not the host registry")
+	}
 }
 
 func TestTextAdaptersMapRequestsAndResponses(t *testing.T) {
@@ -216,11 +219,9 @@ func TestAgnesIsExplicitlyUnavailable(t *testing.T) {
 
 func TestDeclarativeManifestMapsFieldsAndResponses(t *testing.T) {
 	manifest := []byte(`{
-			"apiVersion":"v1",
-			"metadata":{"id":"example-video","version":"1.0.0","name":"Example Video","vendor":"Example","categories":["video"],"scopes":["admin.system-channel","user.custom-channel"],"documentation":"# Example Video"},
-		"create":{"method":"POST","path":"/v1/tasks","fields":{"model":"request.model","input.prompt":"request.prompt","input.seconds":"request.duration"}},
-		"poll":{"method":"GET","path":"/v1/tasks/{{taskId}}"},
-		"response":{"taskIdPaths":["id","data.id"],"statusPaths":["status","data.status"],"resultUrlPaths":["result.video_url","data.result.video_url"],"resultKind":"video"}
+			"apiVersion":"yingce.plugin/v1",
+			"id":"example-video","version":"1.0.0","name":"Example Video","author":"Example","documentation":"# Example Video",
+		"contributes":{"providers":[{"id":"example-video","label":"Example Video","capabilities":["video"],"scopes":["admin.system-channel","user.custom-channel"],"create":{"method":"POST","path":"/v1/tasks","fields":{"model":"request.model","input.prompt":"request.prompt","input.seconds":"request.duration"}},"poll":{"method":"GET","path":"/v1/tasks/{{taskId}}"},"response":{"taskIdPaths":["id","data.id"],"statusPaths":["status","data.status"],"resultPaths":["result.video_url","data.result.video_url"],"resultKind":"video"}}]}
 	}`)
 	adapter, err := LoadManifest(manifest)
 	if err != nil {
@@ -255,6 +256,33 @@ func TestDeclarativeManifestMapsFieldsAndResponses(t *testing.T) {
 	}
 	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Videos) != 1 || result.Result.Videos[0].URL != "https://cdn.example/clip.mp4" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDeclarativeManifestSupportsMediaPathsTransformsAndErrors(t *testing.T) {
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"declarative-expression-test","version":"1.0.0","name":"Declarative Expression Test","author":"Test","documentation":"# Declarative Expression Test",
+		"contributes":{"providers":[{"id":"declarative-expression-test","label":"Declarative Expression Test","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"resolution":"request.resolution|lower","ref_image_0":"request.images.0.url","ref_image_1":"request.images.1.url"}},"response":{"errorPaths":["code"],"messagePaths":["msg"]}}]}
+	}`)
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Resolution: "768P", Images: []MediaReference{{URL: "https://cdn.example/one.png"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := spec.Body.(map[string]any)
+	if body["resolution"] != "768p" || body["ref_image_0"] != "https://cdn.example/one.png" {
+		t.Fatalf("mapped body = %#v", body)
+	}
+	if _, exists := body["ref_image_1"]; exists {
+		t.Fatalf("empty media path was not omitted: %#v", body)
+	}
+	failed, err := adapter.ParseCreate(context.Background(), []byte(`{"code":"RequestParameterIsWrong","msg":"invalid resolution"}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "invalid resolution" {
+		t.Fatalf("failed response = %#v, err = %v", failed, err)
 	}
 }
 

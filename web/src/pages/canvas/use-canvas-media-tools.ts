@@ -24,7 +24,7 @@ import {
 } from "@/lib/canvas/canvas-project-generation";
 import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
-import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS, buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
+import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { captureVideoLastFrame } from "@/lib/canvas/canvas-video-frame";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { extractVideoAudio, trimVideoSegment } from "@/lib/canvas/canvas-video-segment";
@@ -157,53 +157,20 @@ export function useCanvasMediaTools({
         setContextMenu(null);
     }, [effectiveConfig.model, effectiveConfig.textModel, message, setConnections, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const generatePortraitTextureNode = useCallback(async (node: CanvasNodeData) => {
+    const openPortraitTextureEditor = useCallback((node: CanvasNodeData) => {
         if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
             message.warning("图片节点为空，无法调节人物质感");
             return;
         }
-        const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1" };
-        if (!isAiConfigReady(generationConfig, generationConfig.model)) {
-            navigateToSettings({ continueCreation: true });
-            return;
-        }
-        const childId = nanoid();
-        const imageSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
-        const composerContent = `@[node:${node.id}]`;
-        const source = nodeReferenceImage(node);
-        if (!source) return;
-        const prompt = buildPortraitTexturePrompt(composerContent, { ...DEFAULT_PORTRAIT_TEXTURE_SETTINGS, ...node.metadata?.portraitTexture });
-        const styleExecution = resolveImageEditStyle(node, prompt, generationConfig);
-        if (!styleExecution) return;
-        const { prompt: effectivePrompt, metadata: styleMetadata } = styleExecution;
-        const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [source]);
         const portraitTextureSettings = { ...DEFAULT_PORTRAIT_TEXTURE_SETTINGS, ...node.metadata?.portraitTexture };
+        const composerContent = node.metadata?.composerContent?.trim() || node.metadata?.prompt?.trim() || `@[node:${node.id}]`;
         setHoveredNodeId(null);
         setToolbarNodeId(null);
-        setRunningNodeId(childId);
-        setNodes((current) => [...current, { id: childId, type: CanvasNodeType.Image, title: "人物质感调节", position: { x: node.position.x + node.width + 96 + imageSpec.width / 2, y: node.position.y + node.height / 2 }, width: imageSpec.width, height: imageSpec.height, metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, composerContent, portraitTexture: portraitTextureSettings, ...generationMetadata, ...styleMetadata } }]);
-        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
-        setSelectedNodeIds(new Set([childId]));
+        setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, prompt: composerContent, composerContent, portraitTexture: portraitTextureSettings } } : item));
+        setSelectedNodeIds(new Set([node.id]));
         setSelectedConnectionId(null);
-        setDialogNodeId(childId);
-        const controller = startGenerationRequest(childId, node.id, childId);
-        try {
-            const result = await runBackendCanvasGenerationTask({ projectId, nodeId: childId, mode: "image", prompt: effectivePrompt, config: generationConfig, referenceImages: [source], signal: controller.signal, metadata: { sourceNodeId: node.id, edit: "portraitTexture", portraitTexture: portraitTextureSettings, ...styleMetadata }, onTaskCreated: (task) => bindGenerationTask(childId, task) });
-            const image = result.images?.[0];
-            if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
-            const uploaded = await uploadImage(image.dataUrl);
-            const size = fitNodeSize(uploaded.width, uploaded.height, imageSpec.width, imageSpec.height);
-            setNodes((current) => current.map((item) => item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt: effectivePrompt, ...generationMetadata, portraitTexture: portraitTextureSettings } } : item));
-        } catch (error) {
-            if (isGenerationCanceled(error)) return;
-            const details = generationErrorMessage(error);
-            message.error(details);
-            setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
-        } finally {
-            finishGenerationRequest(childId, controller);
-            setRunningNodeId(null);
-        }
-    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, projectId, resolveImageEditStyle, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest]);
+        setDialogNodeId(node.id);
+    }, [message, setDialogNodeId, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
 
     const cropImageNode = useCallback(async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
         if (!node.metadata?.content) return;
@@ -713,7 +680,7 @@ export function useCanvasMediaTools({
         emotionNodeId,
         annotationNodeId,
         createImageReversePromptNodes,
-        generatePortraitTextureNode,
+        openPortraitTextureEditor,
         cropImageNode,
         cropNodeId,
         closeSegmentDialog,

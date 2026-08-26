@@ -10,20 +10,6 @@ import (
 	"strings"
 )
 
-// Manifest is the declarative format used by future protocol packages. It is
-// intentionally limited to relative HTTP paths and JSON field mappings; a
-// plugin cannot inject code or bypass the host outbound policy.
-type Manifest struct {
-	APIVersion    string                 `json:"apiVersion"`
-	Metadata      Metadata               `json:"metadata"`
-	Create        ManifestOperation      `json:"create"`
-	Agent         *ManifestOperation     `json:"agent,omitempty"`
-	Poll          *ManifestOperation     `json:"poll,omitempty"`
-	Cancel        *ManifestOperation     `json:"cancel,omitempty"`
-	Response      ManifestResponse       `json:"response"`
-	AgentResponse *ManifestAgentResponse `json:"agentResponse,omitempty"`
-}
-
 type ManifestOperation struct {
 	Method      string            `json:"method"`
 	Path        string            `json:"path"`
@@ -32,13 +18,16 @@ type ManifestOperation struct {
 }
 
 type ManifestResponse struct {
-	TaskIDPaths    []string `json:"taskIdPaths,omitempty"`
-	StatusPaths    []string `json:"statusPaths,omitempty"`
-	MessagePaths   []string `json:"messagePaths,omitempty"`
-	TextPaths      []string `json:"textPaths,omitempty"`
-	ReasoningPaths []string `json:"reasoningPaths,omitempty"`
-	ResultURLPaths []string `json:"resultUrlPaths,omitempty"`
-	ResultKind     string   `json:"resultKind,omitempty"`
+	TaskIDPaths     []string `json:"taskIdPaths,omitempty"`
+	StatusPaths     []string `json:"statusPaths,omitempty"`
+	ErrorPaths      []string `json:"errorPaths,omitempty"`
+	MessagePaths    []string `json:"messagePaths,omitempty"`
+	TextPaths       []string `json:"textPaths,omitempty"`
+	ReasoningPaths  []string `json:"reasoningPaths,omitempty"`
+	ResultURLPaths  []string `json:"resultUrlPaths,omitempty"`
+	ResultPaths     []string `json:"resultPaths,omitempty"`
+	ResultKind      string   `json:"resultKind,omitempty"`
+	ResultEphemeral bool     `json:"resultEphemeral,omitempty"`
 }
 
 // ManifestAgentResponse describes the provider response shape for a
@@ -59,25 +48,60 @@ type ManifestAgentResponse struct {
 type AdapterResolver func(string) (Adapter, bool)
 
 func LoadInstalledPlugin(data []byte, resolve AdapterResolver) (Adapter, error) {
-	var manifest Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("decode protocol plugin: %w", err)
+	adapters, err := LoadInstalledProviders(data, resolve)
+	if err != nil {
+		return nil, err
 	}
-	if strings.HasPrefix(strings.TrimSpace(manifest.Metadata.Execution), "host:") {
-		if resolve == nil {
-			return nil, fmt.Errorf("protocol plugin %q requires a host execution engine", manifest.Metadata.ID)
+	if len(adapters) == 0 {
+		return nil, fmt.Errorf("plugin does not provide an executable provider")
+	}
+	return adapters[0], nil
+}
+
+// LoadInstalledProviders loads every provider contribution from one plugin
+// package. The package remains the lifecycle and permission unit; providers
+// are separate execution entries in the runtime index.
+func LoadInstalledProviders(data []byte, resolve AdapterResolver) ([]Adapter, error) {
+	manifest, err := decodeManifest(data)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(strings.TrimSpace(manifest.Runtime.Backend), "host:") {
+		if len(manifest.Contributes.Providers) != 1 {
+			return nil, fmt.Errorf("host-backed plugin must declare exactly one provider")
 		}
-		name := strings.TrimPrefix(strings.TrimSpace(manifest.Metadata.Execution), "host:")
+		if resolve == nil {
+			return nil, fmt.Errorf("plugin %q requires a host execution engine", manifest.Metadata.ID)
+		}
+		name := strings.TrimPrefix(strings.TrimSpace(manifest.Runtime.Backend), "host:")
 		adapter, ok := resolve(name)
 		if !ok {
-			return nil, fmt.Errorf("protocol plugin host execution %q is unavailable", name)
+			return nil, fmt.Errorf("plugin host execution %q is unavailable", name)
 		}
-		if err := validatePluginMetadata(manifest.Metadata); err != nil {
+		if err := ValidateManifest(manifest); err != nil {
 			return nil, err
 		}
-		return metadataAdapter{metadata: manifest.Metadata, delegate: adapter}, nil
+		if err := normalizeManifest(&manifest); err != nil {
+			return nil, err
+		}
+		return []Adapter{metadataAdapter{metadata: manifest.Metadata, delegate: adapter}}, nil
 	}
-	return LoadManifest(data)
+	if len(manifest.Contributes.Providers) == 0 {
+		adapter, err := loadDeclarativeManifest(manifest)
+		if err != nil {
+			return nil, err
+		}
+		return []Adapter{adapter}, nil
+	}
+	result := make([]Adapter, 0, len(manifest.Contributes.Providers))
+	for index := range manifest.Contributes.Providers {
+		adapter, err := loadDeclarativeManifestProvider(manifest, index)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, adapter)
+	}
+	return result, nil
 }
 
 func validatePluginMetadata(metadata Metadata) error {
@@ -139,21 +163,42 @@ func (a metadataAdapter) ParseAgent(ctx context.Context, body []byte) (AgentResu
 }
 
 func LoadManifest(data []byte) (Adapter, error) {
-	var manifest Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("decode protocol manifest: %w", err)
-	}
-	if err := ValidateManifest(manifest); err != nil {
+	manifest, err := decodeManifest(data)
+	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(manifest.Metadata.Execution) == "" {
-		manifest.Metadata.Execution = "declarative"
+	return loadDeclarativeManifest(manifest)
+}
+
+func decodeManifest(data []byte) (Manifest, error) {
+	var manifest Manifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return Manifest{}, fmt.Errorf("decode plugin manifest: %w", err)
+	}
+	if err := ValidateManifest(manifest); err != nil {
+		return Manifest{}, err
+	}
+	return manifest, nil
+}
+
+func loadDeclarativeManifest(manifest Manifest) (Adapter, error) {
+	manifest.Runtime.Backend = "declarative"
+	if err := normalizeManifest(&manifest); err != nil {
+		return nil, err
+	}
+	return manifestAdapter{manifest: manifest}, nil
+}
+
+func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, error) {
+	manifest.Runtime.Backend = "declarative"
+	if err := normalizeManifestForProvider(&manifest, index); err != nil {
+		return nil, err
 	}
 	return manifestAdapter{manifest: manifest}, nil
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if strings.TrimSpace(manifest.APIVersion) != "v1" {
+	if strings.TrimSpace(manifest.APIVersion) != "yingce.plugin/v1" {
 		return fmt.Errorf("unsupported protocol manifest apiVersion %q", manifest.APIVersion)
 	}
 	if strings.TrimSpace(manifest.Metadata.ID) == "" || strings.TrimSpace(manifest.Metadata.Version) == "" {
@@ -162,52 +207,111 @@ func ValidateManifest(manifest Manifest) error {
 	if strings.TrimSpace(manifest.Metadata.Name) == "" {
 		return fmt.Errorf("protocol manifest metadata requires name")
 	}
-	if strings.TrimSpace(manifest.Metadata.Documentation) == "" {
-		return fmt.Errorf("protocol manifest metadata requires Markdown documentation")
-	}
 	if !validManifestIdentifier(manifest.Metadata.ID) {
 		return fmt.Errorf("protocol manifest metadata id is invalid")
 	}
 	if len(manifest.Metadata.Name) > 160 || len(manifest.Metadata.Vendor) > 120 {
 		return fmt.Errorf("protocol manifest metadata name or vendor is too long")
 	}
-	if len(manifest.Metadata.Categories) == 0 || len(manifest.Metadata.Scopes) == 0 {
-		return fmt.Errorf("protocol manifest metadata requires categories and scopes")
+	if len(manifest.Contributes.Providers) == 0 && !hasNonProviderContribution(manifest.Contributes) {
+		return fmt.Errorf("plugin must declare at least one contribution")
 	}
-	for _, capability := range manifest.Metadata.Categories {
+	if len(manifest.Contributes.Providers) == 0 {
+		return nil
+	}
+	provider := manifest.Contributes.Providers[0]
+	if strings.TrimSpace(provider.ID) == "" || strings.TrimSpace(provider.Label) == "" {
+		return fmt.Errorf("provider contribution requires id and label")
+	}
+	if len(provider.Capabilities) == 0 || len(provider.Scopes) == 0 {
+		return fmt.Errorf("provider contribution requires capabilities and scopes")
+	}
+	for _, capability := range provider.Capabilities {
 		if capability != CapabilityText && capability != CapabilityImage && capability != CapabilityVideo && capability != CapabilityAudio {
 			return fmt.Errorf("unsupported protocol capability %q", capability)
 		}
 	}
-	for _, scope := range manifest.Metadata.Scopes {
+	for _, scope := range provider.Scopes {
 		switch scope {
 		case SurfaceAdminSystemChannel, SurfaceUserCustomChannel, SurfaceCanvas, SurfaceCreation, SurfaceAgent:
 		default:
 			return fmt.Errorf("unsupported protocol scope %q", scope)
 		}
 	}
-	if err := validateManifestOperation(manifest.Create); err != nil {
+	if err := validateManifestOperation(provider.Create); err != nil {
 		return fmt.Errorf("create operation: %w", err)
 	}
-	if manifest.Agent != nil {
-		if err := validateManifestOperation(*manifest.Agent); err != nil {
+	if provider.Agent != nil {
+		if err := validateManifestOperation(*provider.Agent); err != nil {
 			return fmt.Errorf("agent operation: %w", err)
 		}
-		if manifest.AgentResponse == nil {
+		if provider.AgentResponse == nil {
 			return fmt.Errorf("agent response mapping is required when agent operation is declared")
 		}
 	}
-	if manifest.Poll != nil {
-		if err := validateManifestOperation(*manifest.Poll); err != nil {
+	if provider.Poll != nil {
+		if err := validateManifestOperation(*provider.Poll); err != nil {
 			return fmt.Errorf("poll operation: %w", err)
 		}
 	}
-	if manifest.Cancel != nil {
-		if err := validateManifestOperation(*manifest.Cancel); err != nil {
+	if provider.Cancel != nil {
+		if err := validateManifestOperation(*provider.Cancel); err != nil {
 			return fmt.Errorf("cancel operation: %w", err)
 		}
 	}
 	return nil
+}
+
+func normalizeManifest(manifest *Manifest) error {
+	if manifest == nil {
+		return fmt.Errorf("plugin manifest is missing")
+	}
+	if len(manifest.Contributes.Providers) == 0 {
+		manifest.Metadata.Execution = manifest.Runtime.Backend
+		return nil
+	}
+	return normalizeManifestForProvider(manifest, 0)
+}
+
+func normalizeManifestForProvider(manifest *Manifest, index int) error {
+	if manifest == nil || index < 0 || index >= len(manifest.Contributes.Providers) {
+		return fmt.Errorf("plugin provider contribution is missing")
+	}
+	provider := manifest.Contributes.Providers[index]
+	manifest.Metadata.ID = provider.ID
+	manifest.Metadata.Categories = provider.Capabilities
+	manifest.Metadata.Scopes = provider.Scopes
+	manifest.Metadata.Parameters = provider.Parameters
+	manifest.Metadata.Create = operationSummary(provider.Create)
+	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)
+	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
+	manifest.Metadata.ContentType = provider.Create.ContentType
+	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
+	manifest.Metadata.Execution = manifest.Runtime.Backend
+	manifest.Create = provider.Create
+	manifest.Agent = provider.Agent
+	manifest.Poll = provider.Poll
+	manifest.Cancel = provider.Cancel
+	manifest.Response = provider.Response
+	manifest.AgentResponse = provider.AgentResponse
+	return nil
+}
+
+func hasNonProviderContribution(contributes ManifestContributions) bool {
+	return len(contributes.Workflows) > 0 || len(contributes.CanvasNodes) > 0 || len(contributes.Transforms) > 0 || len(contributes.Commands) > 0 || len(contributes.AssetSources) > 0 || len(contributes.UsageObservers) > 0 || len(contributes.AICapabilities) > 0 || len(contributes.Agents) > 0 || len(contributes.ImportExport) > 0
+}
+
+func operationSummary(operation ManifestOperation) string {
+	path := strings.ReplaceAll(operation.Path, "{{model}}", "{model}")
+	path = strings.ReplaceAll(path, "{{taskId}}", "{task_id}")
+	return strings.ToUpper(operation.Method) + " " + path
+}
+
+func operationSummaryPtr(operation *ManifestOperation) string {
+	if operation == nil {
+		return ""
+	}
+	return operationSummary(*operation)
 }
 
 func validateManifestOperation(operation ManifestOperation) error {
@@ -225,6 +329,9 @@ type manifestAdapter struct{ manifest Manifest }
 
 func (a manifestAdapter) Metadata() Metadata { return a.manifest.Metadata }
 func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (RequestSpec, error) {
+	if len(a.manifest.Contributes.Providers) == 0 {
+		return RequestSpec{}, fmt.Errorf("plugin %s does not provide a provider", a.manifest.Metadata.ID)
+	}
 	return buildManifestOperation(a.manifest.Create, c.Request, ""), nil
 }
 func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (RequestSpec, error) {
@@ -302,13 +409,18 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 		status = StatusPending
 	}
 	message := firstPathValue(payload, a.manifest.Response.MessagePaths...)
+	if manifestError(payload, a.manifest.Response.ErrorPaths...) {
+		status = StatusFailed
+	}
 	result := &Result{
 		Text:      firstPathValue(payload, a.manifest.Response.TextPaths...),
 		Reasoning: firstPathValue(payload, a.manifest.Response.ReasoningPaths...),
 	}
-	for _, path := range a.manifest.Response.ResultURLPaths {
-		if value := firstPathValue(payload, path); value != "" {
-			item := MediaReference{URL: value, Kind: a.manifest.Response.ResultKind}
+	paths := append([]string{}, a.manifest.Response.ResultURLPaths...)
+	paths = append(paths, a.manifest.Response.ResultPaths...)
+	for _, path := range paths {
+		for _, value := range mediaPathValues(payload, path) {
+			item := MediaReference{URL: value, Kind: a.manifest.Response.ResultKind, Ephemeral: a.manifest.Response.ResultEphemeral}
 			switch a.manifest.Response.ResultKind {
 			case "image":
 				result.Images = append(result.Images, item)
@@ -328,13 +440,42 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}
 }
 
+func mediaPathValues(payload map[string]any, path string) []string {
+	value := pathValue(payload, path)
+	if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+		return []string{strings.TrimSpace(text)}
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				values = append(values, strings.TrimSpace(typed))
+			}
+		case map[string]any:
+			if url := firstString(typed, "url", "file_url", "fileUrl", "video_url", "videoUrl", "image_url", "imageUrl"); url != "" {
+				values = append(values, url)
+			}
+		}
+	}
+	return values
+}
+
 func buildManifestOperation(operation ManifestOperation, request GenerationRequest, taskID string) RequestSpec {
 	var body map[string]any
 	if len(operation.Fields) > 0 {
 		body = make(map[string]any, len(operation.Fields))
 	}
 	for key, expression := range operation.Fields {
-		setMapPath(body, key, manifestExpressionValue(expression, request, taskID))
+		value := manifestExpressionValue(expression, request, taskID)
+		if value == nil {
+			continue
+		}
+		setMapPath(body, key, value)
 	}
 	path := strings.ReplaceAll(operation.Path, "{{taskId}}", url.PathEscape(taskID))
 	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
@@ -343,40 +484,79 @@ func buildManifestOperation(operation ManifestOperation, request GenerationReque
 
 func manifestExpressionValue(expression string, request GenerationRequest, taskID string) any {
 	expression = strings.TrimSpace(expression)
-	switch expression {
-	case "request.model":
-		return request.Model
-	case "request.prompt":
-		return request.Prompt
-	case "request.images":
-		return request.Images
-	case "request.videos":
-		return request.Videos
-	case "request.audios":
-		return request.Audios
-	case "request.imageCount":
-		return request.ImageCount
-	case "request.duration":
-		return request.Duration
-	case "request.aspectRatio":
-		return request.AspectRatio
-	case "request.resolution":
-		return request.Resolution
-	case "request.quality":
-		return request.Quality
-	case "request.generateAudio":
-		return request.GenerateAudio
-	case "request.watermark":
-		return request.Watermark
-	case "request.operation":
-		return request.Operation
-	case "taskId":
-		return taskID
+	source := expression
+	transforms := []string{}
+	if separator := strings.IndexByte(expression, '|'); separator >= 0 {
+		source = strings.TrimSpace(expression[:separator])
+		transforms = strings.Split(expression[separator+1:], "|")
 	}
-	if strings.HasPrefix(expression, "request.extra.") {
-		return pathValue(request.Extra, strings.TrimPrefix(expression, "request.extra."))
+
+	var value any
+	switch {
+	case source == "taskId":
+		value = taskID
+	case strings.HasPrefix(source, "request."):
+		value = pathValue(manifestRequestValues(request), strings.TrimPrefix(source, "request."))
+	default:
+		value = source
 	}
-	return expression
+	for _, transform := range transforms {
+		value = applyManifestTransform(value, transform)
+	}
+	return value
+}
+
+// manifestRequestValues is deliberately a small, JSON-shaped view of the
+// platform request. It lets uploaded manifests address media items by index
+// without exposing Go structs or adding provider-specific host code.
+func manifestRequestValues(request GenerationRequest) map[string]any {
+	return map[string]any{
+		"model":         request.Model,
+		"prompt":        request.Prompt,
+		"images":        manifestMediaValues(request.Images),
+		"videos":        manifestMediaValues(request.Videos),
+		"audios":        manifestMediaValues(request.Audios),
+		"imageCount":    request.ImageCount,
+		"duration":      request.Duration,
+		"aspectRatio":   request.AspectRatio,
+		"resolution":    request.Resolution,
+		"quality":       request.Quality,
+		"generateAudio": request.GenerateAudio,
+		"watermark":     request.Watermark,
+		"operation":     request.Operation,
+		"extra":         request.Extra,
+	}
+}
+
+func manifestMediaValues(values []MediaReference) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, map[string]any{
+			"url":       value.URL,
+			"dataUrl":   value.DataURL,
+			"kind":      value.Kind,
+			"ephemeral": value.Ephemeral,
+		})
+	}
+	return result
+}
+
+func applyManifestTransform(value any, transform string) any {
+	transform = strings.ToLower(strings.TrimSpace(transform))
+	text, ok := value.(string)
+	if !ok {
+		return value
+	}
+	switch transform {
+	case "trim":
+		return strings.TrimSpace(text)
+	case "lower", "lowercase":
+		return strings.ToLower(text)
+	case "upper", "uppercase":
+		return strings.ToUpper(text)
+	default:
+		return value
+	}
 }
 
 func pathValue(payload map[string]any, path string) any {
@@ -411,6 +591,73 @@ func firstPathValue(payload map[string]any, paths ...string) string {
 		}
 	}
 	return ""
+}
+
+func manifestError(payload map[string]any, paths ...string) bool {
+	for _, path := range paths {
+		value := pathValue(payload, path)
+		switch typed := value.(type) {
+		case nil:
+			continue
+		case string:
+			switch strings.ToLower(strings.TrimSpace(typed)) {
+			case "", "0", "ok", "success", "succeeded", "true":
+				continue
+			default:
+				return true
+			}
+		case float64:
+			if typed == 0 {
+				continue
+			}
+			return true
+		case float32:
+			if typed == 0 {
+				continue
+			}
+			return true
+		case int, int8, int16, int32, int64:
+			if reflectValueIsZero(typed) {
+				continue
+			}
+			return true
+		case uint, uint8, uint16, uint32, uint64:
+			if reflectValueIsZero(typed) {
+				continue
+			}
+			return true
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+func reflectValueIsZero(value any) bool {
+	switch typed := value.(type) {
+	case int:
+		return typed == 0
+	case int8:
+		return typed == 0
+	case int16:
+		return typed == 0
+	case int32:
+		return typed == 0
+	case int64:
+		return typed == 0
+	case uint:
+		return typed == 0
+	case uint8:
+		return typed == 0
+	case uint16:
+		return typed == 0
+	case uint32:
+		return typed == 0
+	case uint64:
+		return typed == 0
+	default:
+		return false
+	}
 }
 
 // firstPathJSONValue keeps scalar response fields string-like while allowing

@@ -185,7 +185,7 @@ function validateModules(modules: readonly LocalRuntimeModule[]) {
     const ids = new Set<LocalRuntimeModuleId>();
     const routes = new Set<string>();
     for (const module of modules) {
-        if (module.descriptor.id !== "canvas-agent" && module.descriptor.id !== "dreamina") {
+        if (module.descriptor.id !== "canvas-agent" && module.descriptor.id !== "dreamina" && module.descriptor.id !== "portrait-clearance") {
             throw new Error(`Unsupported Local Runtime module id: ${module.descriptor.id}`);
         }
         if (ids.has(module.descriptor.id)) throw new Error(`Duplicate Local Runtime module id: ${module.descriptor.id}`);
@@ -220,18 +220,27 @@ function corsPolicies(modules: readonly LocalRuntimeModule[], legacyOrigins: rea
     ]);
     for (const module of modules) {
         for (const item of module.routes) {
+            const previous = policies.get(item.path);
+            const legacyHeaders = item.legacy
+                ? item.method === "POST" ? ["content-type", "x-canvas-agent-token"] : ["x-canvas-agent-token"]
+                : [];
             policies.set(item.path, {
-                methods: [item.method],
-                headers: protectedCorsHeaders(item.method, item.lastEventId),
-                trustedOrigin: true,
-                ...(item.legacy ? {
-                    legacyOrigins,
-                    legacyHeaders: item.method === "POST" ? ["content-type", "x-canvas-agent-token"] : ["x-canvas-agent-token"],
+                methods: uniqueStrings([...(previous?.methods || []), item.method]),
+                headers: uniqueStrings([...(previous?.headers || []), ...protectedCorsHeaders(item.method, item.lastEventId)]),
+                ...(previous?.publicInfo ? { publicInfo: true } : {}),
+                ...(previous?.trustedOrigin || item.legacy || !previous ? { trustedOrigin: true } : {}),
+                ...(previous?.legacyOrigins || item.legacy ? {
+                    legacyOrigins: previous?.legacyOrigins || legacyOrigins,
+                    legacyHeaders: uniqueStrings([...(previous?.legacyHeaders || []), ...legacyHeaders]),
                 } : {}),
             });
         }
     }
     return policies;
+}
+
+function uniqueStrings(values: readonly string[]) {
+    return [...new Set(values)];
 }
 
 function route(handler: (req: Request, res: Response) => void | Promise<void>): RequestHandler {

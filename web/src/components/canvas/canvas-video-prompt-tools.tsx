@@ -23,6 +23,8 @@ type CanvasVideoPromptToolsProps = {
     metadata?: CanvasNodeMetadata;
     frameOptions: VideoFrameOption[];
     onMetadataChange: (patch: Partial<CanvasNodeMetadata>) => void;
+    referenceMode?: "frames" | "all";
+    referenceSummary?: { imageCount: number; videoCount: number; audioCount: number };
 };
 
 const EMPTY_FRAME_VALUE = "__none__";
@@ -31,7 +33,7 @@ const MENU_MARGIN = 8;
 const MENU_ITEM_HEIGHT = 28;
 const CONTROL_TEXT_STYLE: CSSProperties = { fontFamily: "inherit", fontSize: 11, fontWeight: 400, letterSpacing: 0, lineHeight: 1 };
 
-export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange }: CanvasVideoPromptToolsProps) {
+export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange, referenceMode = "frames", referenceSummary }: CanvasVideoPromptToolsProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const startFrame = metadata?.videoStartFrameNodeId || EMPTY_FRAME_VALUE;
     const endFrame = metadata?.videoEndFrameNodeId || EMPTY_FRAME_VALUE;
@@ -40,6 +42,30 @@ export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChang
         const next = value === EMPTY_FRAME_VALUE ? undefined : value;
         onMetadataChange(key === "videoStartFrameNodeId" ? { videoStartFrameNodeId: next } : { videoEndFrameNodeId: next });
     };
+
+    if (referenceMode === "all") {
+        const summary = referenceSummary
+            ? [
+                  referenceSummary.imageCount ? `${referenceSummary.imageCount} 图` : "",
+                  referenceSummary.videoCount ? `${referenceSummary.videoCount} 视频` : "",
+                  referenceSummary.audioCount ? `${referenceSummary.audioCount} 音频` : "",
+              ].filter(Boolean).join(" · ")
+            : "";
+        return (
+            <div
+                className="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-2 py-1.5"
+                data-canvas-no-zoom
+                style={{ background: theme.toolbar.itemHover, color: theme.node.text }}
+                title="已连接的图片、视频和音频会按工作流字段映射传入"
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                <ImageIcon className="size-3.5 shrink-0 opacity-80" />
+                <span className="shrink-0 text-[var(--fs-tiny)] font-medium">工作流参考</span>
+                <span className="min-w-0 truncate text-[var(--fs-micro)] opacity-65">{summary || "尚未连接媒体"}</span>
+            </div>
+        );
+    }
 
     if (!frameOptions.length) return null;
 

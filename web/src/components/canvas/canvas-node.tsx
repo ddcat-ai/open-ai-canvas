@@ -8,9 +8,11 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
+import { PortraitClearanceIcon } from "@/components/canvas/portrait-clearance/portrait-clearance-icon";
+import { PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
+import { getNodeDefinition, getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
 import { CanvasNodeContent, CanvasNodeImageInfo } from "./canvas-node-content";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -111,6 +113,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
+    const mediaDimensionLabel = formatMediaDimensionLabel(data, hasImageContent || hasVideoContent);
     const isComposerNode = data.type === CanvasNodeType.Config;
     const hasMediaContent = hasImageContent || hasVideoContent || hasAudioContent;
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
@@ -118,6 +121,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const showStatusTrack = Boolean(resourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly));
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const nodeState = isFocusRelated ? "focus" : isConnectionTarget ? "target" : isSelected ? "selected" : isRelated && !isBatchChild ? "related" : "idle";
+    const showOutputConnection = data.type !== PORTRAIT_CLEARANCE_NODE_TYPE && getNodeDefinition(data.type)?.showOutputConnection !== false;
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -277,6 +281,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             <NodeExternalHeader
                 node={data}
                 scale={scale}
+                dimensionLabel={mediaDimensionLabel}
                 active={hovered || isSelected || isFocusRelated}
                 editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
                 editing={isEditingTitle}
@@ -456,7 +461,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             </div>
 
             {!readOnly && data.type !== CanvasNodeType.Script && (hovered || forceInputVisible) ? <ConnectionSideRail side="left" scale={scale} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
-            {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config && hovered ? <ConnectionSideRail side="right" scale={scale} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
+            {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config && showOutputConnection && hovered ? <ConnectionSideRail side="right" scale={scale} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
 
         </div>
     );
@@ -598,9 +603,17 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
 
 const NODE_EXTERNAL_HEADER_MIN_SCALE = 0.35;
 
-function NodeExternalHeader({ node, scale, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
+function formatMediaDimensionLabel(node: CanvasNodeData, hasVisualMediaContent: boolean) {
+    const width = node.metadata?.naturalWidth;
+    const height = node.metadata?.naturalHeight;
+    if (!hasVisualMediaContent || !Number.isFinite(width) || !Number.isFinite(height) || !width || !height || width <= 0 || height <= 0) return null;
+    return `${Math.round(width)}*${Math.round(height)}`;
+}
+
+function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
     node: CanvasNodeData;
     scale: number;
+    dimensionLabel: string | null;
     active: boolean;
     editable: boolean;
     editing: boolean;
@@ -616,12 +629,14 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
     const inverseScale = 1 / Math.max(scale, 0.05);
     const Icon = nodeTypeIcon(node.type);
     const maxHeaderWidth = Math.min(240, node.width * scale);
+    const externalHeaderWidth = node.width * scale;
 
     return (
         <div
             className="canvas-node-external-header absolute bottom-full left-0 z-[var(--node-z-overlay)] flex h-6 items-center gap-1 overflow-hidden"
             style={{
-                maxWidth: maxHeaderWidth,
+                width: dimensionLabel ? externalHeaderWidth : undefined,
+                maxWidth: dimensionLabel ? undefined : maxHeaderWidth,
                 borderRadius: "var(--r-sm)",
                 background: "transparent",
                 paddingInline: "var(--space-1-half)",
@@ -632,35 +647,38 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <Icon className="size-3 shrink-0" strokeWidth={1.8} />
-            {editing ? (
-                <input
-                    autoFocus
-                    value={draft}
-                    className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
-                    style={{ background: "transparent", color: theme.node.text }}
-                    onChange={(event) => onDraftChange(event.target.value)}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onBlur={onCommit}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter") event.currentTarget.blur();
-                        if (event.key === "Escape") onCancel();
-                    }}
-                    aria-label="节点名称"
-                />
-            ) : editable ? (
-                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1" style={{ opacity: active ? 1 : 0.78, outlineColor: theme.node.muted }} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
-                    <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
-                    <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
-                </button>
-            ) : (
-                <span className="min-w-0 flex-1 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
-            )}
+            <div className="flex min-w-0 items-center gap-1" style={{ maxWidth: maxHeaderWidth }}>
+                <Icon className="size-3 shrink-0" strokeWidth={1.8} />
+                {editing ? (
+                    <input
+                        autoFocus
+                        value={draft}
+                        className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
+                        style={{ background: "transparent", color: theme.node.text }}
+                        onChange={(event) => onDraftChange(event.target.value)}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onBlur={onCommit}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") event.currentTarget.blur();
+                            if (event.key === "Escape") onCancel();
+                        }}
+                        aria-label="节点名称"
+                    />
+                ) : editable ? (
+                    <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1" style={{ opacity: active ? 1 : 0.78, outlineColor: theme.node.muted }} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                        <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
+                        <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
+                    </button>
+                ) : (
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+                )}
+            </div>
+            {dimensionLabel ? <span className="ml-auto shrink-0 whitespace-nowrap text-[var(--fs-micro)] font-medium leading-none tabular-nums" style={{ color: theme.node.muted }}>{dimensionLabel}</span> : null}
         </div>
     );
 }
 
-function nodeTypeIcon(type: CanvasNodeType) {
+function nodeTypeIcon(type: CanvasNodeTypeId) {
     if (type === CanvasNodeType.Image) return ImageIcon;
     if (type === CanvasNodeType.Video) return Video;
     if (type === CanvasNodeType.Audio) return Music2;
@@ -668,6 +686,7 @@ function nodeTypeIcon(type: CanvasNodeType) {
     if (type === CanvasNodeType.Script) return Clapperboard;
     if (type === CanvasNodeType.Config) return Settings2;
     if (type === CanvasNodeType.Skill) return BookOpenCheck;
+    if (type === PORTRAIT_CLEARANCE_NODE_TYPE) return PortraitClearanceIcon;
     return Type;
 }
 

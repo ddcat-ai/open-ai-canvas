@@ -8,10 +8,14 @@ import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_HEADER_HEIGHT, g
 import { alignCanvasNodes, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata } from "@/lib/canvas/canvas-node-copy";
-import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 import { useUserStore } from "@/stores/use-user-store";
+import { useEffectiveConfig } from "@/stores/use-config-store";
+import { createDefaultPortraitClearanceState, PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
+import { workflowProviderPluginEnabled } from "@/lib/plugins/builtin/workflows";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 type CanvasClipboard = {
     nodes: CanvasNodeData[];
@@ -54,7 +58,9 @@ export function useCanvasNodeOperations({
     onNodesDeleted,
 }: UseCanvasNodeOperationsOptions) {
     const { message } = App.useApp();
+    const effectiveConfig = useEffectiveConfig();
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
     const preferCopiedNodesRef = useRef(false);
     const markerWritePendingRef = useRef(false);
@@ -122,16 +128,32 @@ export function useCanvasNodeOperations({
         setSelectedConnectionId(null);
     }, [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const createNode = useCallback((type: CanvasNodeType, position?: Position) => {
+    const createNode = useCallback((type: CanvasNodeTypeId, position?: Position, workflowProvider?: "runninghub" | "comfyui") => {
         if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
             message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
             return;
         }
-        const node = createCanvasNode(type, position || getCanvasCenter(), type === CanvasNodeType.Drawing ? { drawingEngine: defaultDrawingEngine } : undefined);
+        const selectedWorkflowProvider = type === CanvasNodeType.Config
+            ? workflowProvider || (workflowProviderPluginEnabled(runtimeStatuses, "runninghub") ? "runninghub" : workflowProviderPluginEnabled(runtimeStatuses, "comfyui") ? "comfyui" : undefined)
+            : undefined;
+        if (selectedWorkflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, selectedWorkflowProvider)) {
+            message.error(`${selectedWorkflowProvider === "runninghub" ? "RunningHub" : "ComfyUI"} 工作流插件未启用`);
+            return;
+        }
+        const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : type === CanvasNodeType.Config && selectedWorkflowProvider === "comfyui" ? "ComfyUI Bridge" : undefined;
+        const metadata: CanvasNodeMetadata | undefined = type === CanvasNodeType.Drawing
+            ? { drawingEngine: defaultDrawingEngine }
+            : type === CanvasNodeType.Config
+                ? { generationMode: "image", workflowProvider: selectedWorkflowProvider || "model" }
+                : type === PORTRAIT_CLEARANCE_NODE_TYPE
+                    ? { portraitClearance: createDefaultPortraitClearanceState() }
+                    : undefined;
+        const node = createCanvasNode(type, position || getCanvasCenter(), metadata);
+        if (workflowTitle) node.title = workflowTitle;
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
-        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing) setDialogNodeId(node.id);
-    }, [commitNodes, defaultDrawingEngine, getCanvasCenter, message, nodesRef, selectNodes, setDialogNodeId, tldrawLicenseKey]);
+        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing && type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(node.id);
+    }, [commitNodes, defaultDrawingEngine, effectiveConfig.comfyBridge.enabled, effectiveConfig.comfyBridge.workflows.length, effectiveConfig.runningHub.enabled, effectiveConfig.runningHub.workflows.length, getCanvasCenter, message, nodesRef, runtimeStatuses, selectNodes, setDialogNodeId, tldrawLicenseKey]);
 
     const createFolder = useCallback((position?: Position, linked?: { id: string; projectId: string; title: string; style: CanvasFolderStyle; theme: CanvasFolderTheme; createdAt: string }) => {
         const folder = createCanvasNode(CanvasNodeType.Frame, position || getCanvasCenter(), {
@@ -371,7 +393,7 @@ export function useCanvasNodeOperations({
             const sourceNode = sourceByTargetId.get(targetNode.id);
             if (sourceNode) cloneDrawingForNode(sourceNode, targetNode, "绘图副本保存失败，请重新复制");
         });
-        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing) setDialogNodeId(id);
+        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing && source.type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(id);
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, nodesRef, selectNodes, setDialogNodeId]);
 
     const setPrimaryVersion = useCallback((nodeId: string) => {
@@ -482,7 +504,7 @@ export function useCanvasNodeOperations({
         selectNodes(topLevelIds);
         setContextMenu(null);
         const primaryNode = nextNodes.find((node) => !node.parentId);
-        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) && primaryNode.type !== CanvasNodeType.Drawing ? primaryNode.id : null);
+        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) && primaryNode.type !== CanvasNodeType.Drawing && primaryNode.type !== PORTRAIT_CLEARANCE_NODE_TYPE ? primaryNode.id : null);
         return true;
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, getCanvasCenter, nodesRef, selectNodes, setContextMenu, setDialogNodeId]);
 

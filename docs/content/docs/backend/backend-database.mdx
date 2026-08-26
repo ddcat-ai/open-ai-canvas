@@ -1,0 +1,19 @@
+---
+title: 后端数据库
+description: 影策后端核心持久化表与状态边界
+---
+
+# 后端数据库
+
+后端通过 GORM 管理 SQLite 与 PostgreSQL 表结构。服务启动时由 `backend/internal/database/schema.go` 执行迁移；业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。
+
+## ComfyUI Bridge
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `comfy_bridges` | 保存用户注册的 Bridge 身份、Token 摘要、启用状态和心跳能力 | Token 明文只在注册时返回一次；查询和日志只使用摘要 |
+| `comfy_bridge_requests` | 保存云端任务交给本地 Bridge 的请求、领取状态和完成结果 | `id` 同时作为任务的 `provider_request_id`；状态按 `queued -> claimed -> succeeded/failed/cancelled` 单向流转 |
+
+`comfy_bridge_requests` 是 Bridge 交接的真相源。后端进程重启后，未领取请求继续从数据库投递；已领取请求的迟到结果先落库，任务 worker 恢复后使用原请求 ID 读取结果，不会创建第二次本地工作流执行。请求有效期当前为两小时，过期的排队或执行记录会转为失败。
+
+请求表保存工作流执行 payload 和结果，但不保存 Bridge Token。任务取消时，未领取请求可以确定取消；已经领取的本机工作流无法可靠中止，迟到结果会被丢弃并进入费用核对流程。

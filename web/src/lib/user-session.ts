@@ -8,12 +8,12 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/st
 import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
-import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "@/services/user-data-sync";
+import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "@/services/user-data-sync";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 
 export async function switchUserStorageScope(userId?: string | null) {
     await withGenerationConsumersPaused(async () => {
-        await withRemoteUserDataSyncPaused(async () => {
+        await withRemoteUserDataSyncExclusive(async () => {
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
             resetRemoteUserDataSync();
             setActiveUserScope(userId);
@@ -69,8 +69,9 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         }
         installRemoteUserDataAutoSync();
         if (payload.user?.id) {
-            // 认证状态先完成，云端数据在后台合并；远端同步失败不能伪装成登录失败。
-            void syncRemoteUserData(payload.user.id).catch((error) => console.warn("登录后云端数据同步失败，保留本地数据等待重试", error));
+            // 登录后的服务端快照是实体基线；基线完成前不开放工作区写操作。
+            // 拉取失败时保留本地缓存供只读降级，但远端写入口会明确拒绝，不能把旧缓存上传成真相。
+            await syncRemoteUserData(payload.user.id).catch((error) => console.warn("登录后云端数据基线建立失败，已停止远端写入", error));
         } else resetRemoteUserDataSync();
     } finally {
         useUserStore.getState().setHydrated(true);

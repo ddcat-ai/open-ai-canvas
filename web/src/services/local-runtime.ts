@@ -1,7 +1,7 @@
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
-export type LocalRuntimeModuleId = "canvas-agent" | "dreamina";
-export type LocalRuntimeScope = "runtime:status" | "runtime:revoke" | "canvas:connect" | "dreamina:status" | "dreamina:login" | "dreamina:logout" | "dreamina:run" | "dreamina:models" | "dreamina:generate";
+export type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance";
+export type LocalRuntimeScope = "runtime:status" | "runtime:revoke" | "canvas:connect" | "dreamina:status" | "dreamina:login" | "dreamina:logout" | "dreamina:run" | "dreamina:models" | "dreamina:generate" | "portrait:status" | "portrait:model" | "portrait:run" | "portrait:read";
 
 export type LocalRuntimeModuleDescriptor = {
     id: LocalRuntimeModuleId;
@@ -27,6 +27,7 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 const MODULE_SCOPES: Record<LocalRuntimeModuleId, ReadonlySet<LocalRuntimeScope>> = {
     "canvas-agent": new Set(["canvas:connect"]),
     dreamina: new Set(["dreamina:status", "dreamina:login", "dreamina:logout", "dreamina:run", "dreamina:models", "dreamina:generate"]),
+    "portrait-clearance": new Set(["portrait:status", "portrait:model", "portrait:run", "portrait:read"]),
 };
 
 export async function readLocalRuntimeStatus(client: LocalRuntimeTransport, signal?: AbortSignal): Promise<LocalRuntimeStatus> {
@@ -135,7 +136,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isModuleId(value: unknown): value is LocalRuntimeModuleId {
-    return value === "canvas-agent" || value === "dreamina";
+    return value === "canvas-agent" || value === "dreamina" || value === "portrait-clearance";
 }
 
 function invalidResponse(status: number) {

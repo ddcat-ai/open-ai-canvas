@@ -15,6 +15,7 @@ import {
     rebasePendingCanvasStorePersistenceAfterGenerationCommitLocked,
     reconcileCanvasGenerationFailure,
     recordCanvasStorageDocument,
+    registerCanvasGenerationPersistenceAttempt,
     useCanvasStore,
     withCanvasStorePersistenceLock,
     withCanvasStorePersistenceSuppressed,
@@ -445,9 +446,17 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
     const delta = generationProjectDelta(input, memoryProject);
     if (!delta.stamped) throw new Error("生成副作用缺少持久幂等标记");
 
-    return withCanvasStorePersistenceLock(
-        scope,
-        async () => {
+    const unregisterAttempt = registerCanvasGenerationPersistenceAttempt(scope, input.projectId, input.effectKey, {
+        previousNodes: input.previousNodes,
+        nodes: input.nodes,
+        previousChatSessions: input.previousChatSessions,
+        chatSessions: input.chatSessions,
+    });
+
+    try {
+        return await withCanvasStorePersistenceLock(
+            scope,
+            async () => {
             let latestDurable: ReturnType<typeof parseCanvasStorageDocument> | undefined;
             let generationCommittedProject: CanvasProject | undefined;
             let reconcileLiveOnFailure = false;
@@ -519,7 +528,10 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
                 }
                 throw error;
             }
-        },
-        { requireCrossRealmLock: true },
-    );
+            },
+            { requireCrossRealmLock: true },
+        );
+    } finally {
+        unregisterAttempt();
+    }
 }

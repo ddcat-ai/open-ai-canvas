@@ -26,37 +26,46 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		return nil, err
 	}
 
-	// 根据 frontendModelsEnabled 开关强制分流模型选择
-	frontendEnabled, err := s.FeatureEnabled(FeatureFrontendModels)
-	if err != nil {
-		return nil, err
-	}
-
 	var routed *RoutedModel
 	logicalModelID := strings.TrimSpace(req.LogicalModelID)
-
-	if frontendEnabled {
-		// 前台模型模式：必须有 logicalModelId
-		if logicalModelID == "" {
-			return nil, InvalidModelSelection("前台模型模式下必须指定 logicalModelId")
+	workflowProviderTask := taskInputUsesWorkflowProvider(normalizedInput)
+	frontendEnabled := false
+	if workflowProviderTask {
+		config, _ := normalizedInput["config"].(map[string]any)
+		if err := s.RequireWorkflowPluginForInterface(strings.TrimSpace(fmt.Sprint(config["interfaceType"]))); err != nil {
+			return nil, err
 		}
-		intent := ModelRequestIntentFromTaskInput(normalizedInput, taskType, req.Operation)
-		routed, err = s.ResolveLogicalModel(logicalModelID, intent)
+	} else {
+		// 工作流是独立执行器；普通模型仍严格使用主线的目录和路由校验。
+		frontendEnabled, err = s.FeatureEnabled(FeatureFrontendModels)
 		if err != nil {
 			return nil, err
 		}
-		normalizedInput = applyRoutedProviderSelection(normalizedInput, routed)
-	} else {
-		// 系统渠道模型模式：禁止 logicalModelId
-		if logicalModelID != "" {
-			return nil, ModelCatalogMismatch("模型目录已更新，请重新选择")
-		}
-		// 自定义渠道没有系统 channelId；它会在后续由自定义渠道功能开关、
-		// 能力校验和 provider 配置校验共同处理，不能误报为“缺少系统渠道”。
-		if !taskInputUsesCustomChannel(normalizedInput) {
-			// 非自定义任务必须校验 channelId + model 属于启用的系统渠道模型。
-			if err := s.validateSystemChannelModelSelection(normalizedInput); err != nil {
+	}
+
+	if !workflowProviderTask {
+		if frontendEnabled {
+			// 前台模型模式：必须有 logicalModelId
+			if logicalModelID == "" {
+				return nil, InvalidModelSelection("前台模型模式下必须指定 logicalModelId")
+			}
+			intent := ModelRequestIntentFromTaskInput(normalizedInput, taskType, req.Operation)
+			routed, err = s.ResolveLogicalModel(logicalModelID, intent)
+			if err != nil {
 				return nil, err
+			}
+			normalizedInput = applyRoutedProviderSelection(normalizedInput, routed)
+		} else {
+			// 系统渠道模型模式：禁止 logicalModelId
+			if logicalModelID != "" {
+				return nil, ModelCatalogMismatch("模型目录已更新，请重新选择")
+			}
+			// 自定义渠道没有系统 channelId；它会在后续由自定义渠道功能开关、
+			// 能力校验和 provider 配置校验共同处理，不能误报为“缺少系统渠道”。
+			if !taskInputUsesCustomChannel(normalizedInput) {
+				if err := s.validateSystemChannelModelSelection(normalizedInput); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -306,6 +315,9 @@ func (s *Service) validateSystemChannelModelSelection(input map[string]any) erro
 }
 
 func taskInputUsesCustomChannel(input map[string]any) bool {
+	if taskInputUsesWorkflowProvider(input) {
+		return false
+	}
 	config, ok := input["config"].(map[string]any)
 	if !ok {
 		return false
@@ -317,6 +329,14 @@ func taskInputUsesCustomChannel(input map[string]any) bool {
 		return false
 	}
 	return strings.TrimSpace(baseURL) != "" && strings.TrimSpace(apiKey) != ""
+}
+
+func taskInputUsesWorkflowProvider(input map[string]any) bool {
+	config, ok := input["config"].(map[string]any)
+	if !ok {
+		return false
+	}
+	return isWorkflowProviderInterface(strings.TrimSpace(fmt.Sprint(config["interfaceType"])))
 }
 
 func compactPersistedValue(value interface{}) interface{} {
