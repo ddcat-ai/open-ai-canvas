@@ -61,8 +61,14 @@ export type NodeGenerationInput = {
 
 export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, assets: Asset[], promptOnly = false): NodeGenerationContext {
     const connectedInputs = buildNodeGenerationInputs(nodeId, nodes, connections);
-    const inputs = [...connectedInputs, ...buildAssetGenerationInputs(assets)];
     const sourceNode = nodes.find((node) => node.id === nodeId);
+    const portraitTextureInput = sourceNode?.type === CanvasNodeType.Image && sourceNode.metadata?.content && sourceNode.metadata?.portraitTexture
+        ? (() => {
+              const image = readReferenceImage(sourceNode, nodes, connections);
+              return image ? [{ nodeId: sourceNode.id, type: "image" as const, title: sourceNode.title, image }] : [];
+          })()
+        : [];
+    const inputs = [...connectedInputs, ...portraitTextureInput, ...buildAssetGenerationInputs(assets)];
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
     const hasExplicitResourceMention = /@\[(?:node|asset):[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
     if ((sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitResourceMention) {
