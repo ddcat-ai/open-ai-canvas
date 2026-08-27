@@ -2062,7 +2062,11 @@ func executeProtocolRequest(ctx context.Context, config providerConfig, spec pro
 		}
 		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, apiURL(config.BaseURL, spec.Path), body)
+	requestURL, err := protocolRequestURL(config.BaseURL, spec)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2076,6 +2080,25 @@ func executeProtocolRequest(ctx context.Context, config providerConfig, spec pro
 	ApplyOutboundHeaders(req, config.Headers)
 	data, _, err := doBinary(req)
 	return data, err
+}
+
+func protocolRequestURL(baseURL string, spec protocol.RequestSpec) (string, error) {
+	if !spec.OriginPath {
+		return apiURL(baseURL, spec.Path), nil
+	}
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return "", fmt.Errorf("协议根路径请求的 Base URL 无效")
+	}
+	requestPath, err := url.Parse(spec.Path)
+	if err != nil || !strings.HasPrefix(requestPath.Path, "/") {
+		return "", fmt.Errorf("协议根路径请求必须使用绝对路径")
+	}
+	base.Path = requestPath.Path
+	base.RawPath = requestPath.RawPath
+	base.RawQuery = requestPath.RawQuery
+	base.Fragment = ""
+	return base.String(), nil
 }
 
 func finishProtocolResult(ctx context.Context, config providerConfig, mode string, result *protocol.Result) (map[string]interface{}, error) {

@@ -21,23 +21,21 @@ export type CanvasResourceReference = {
     skill?: Skill;
     assetId?: string;
     category?: AssetCategory;
+    mentionToken?: string;
 };
 
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
+    if (reference.mentionToken) return reference.mentionToken;
     if (reference.kind === "skill" && reference.skill?.skill_id) return `@[skill:${reference.skill.skill_id}]`;
     if (reference.assetId) return `@[asset:${reference.assetId}]`;
-    return `@[node:${reference.nodeId}]`;
+    return `@${reference.label}`;
 }
 
-export function removeCanvasResourceMention(prompt: string, reference: CanvasResourceReference) {
-    const token = canvasResourceMentionToken(reference);
-    if (!token || !prompt.includes(token)) return prompt;
-    return prompt
-        .split(token)
-        .join("")
-        .replace(/[ \t]{2,}/g, " ")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+export function normalizeCanvasNodeMentionTokens(prompt: string, references: CanvasResourceReference[]) {
+    return references.reduce((value, reference) => {
+        if (!reference.nodeId || reference.assetId || reference.kind === "skill") return value;
+        return value.split(`@[node:${reference.nodeId}]`).join(`@${reference.label}`);
+    }, prompt);
 }
 
 export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceReference[] {
@@ -71,6 +69,10 @@ export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connectio
 
 export function buildNodeMentionReferences(node: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     return labelResourceNodes(getMentionResourceNodes(node.id, nodes, connections), true);
+}
+
+export function buildOrderedCanvasResourceReferences(nodes: CanvasNodeData[], active = true) {
+    return labelResourceNodes(nodes.filter(isResourceNode), active);
 }
 
 export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
@@ -138,7 +140,7 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
                 kind,
                 label,
                 title: node.title || label,
-                previewUrl: node.metadata?.workflowKind === "character" ? node.metadata.characterCoverUrl : node.type === CanvasNodeType.Drawing ? node.metadata?.drawingPreviewUrl : node.metadata?.content,
+                previewUrl: node.metadata?.workflowKind === "character" ? node.metadata.characterCoverUrl : node.type === CanvasNodeType.Drawing ? node.metadata?.drawingPreviewUrl : node.metadata?.previewContent || node.metadata?.content,
                 storageKey: node.metadata?.storageKey,
                 text: node.metadata?.workflowKind === "character" ? node.metadata.characterPrompt : node.type === CanvasNodeType.Text ? node.metadata?.content || node.metadata?.prompt : node.type === CanvasNodeType.Skill ? skillResourceText(node) : undefined,
                 active,

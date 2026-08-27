@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
@@ -73,6 +74,16 @@ func TestChannelAPIURLNormalizesConfiguredVersionPrefix(t *testing.T) {
 func TestChannelAPIURLForProtocolUsesGeminiDefault(t *testing.T) {
 	if got := ChannelAPIURLForProtocol("https://generativelanguage.googleapis.com", "/models/gemini:generateContent", model.ChannelInterfaceGeminiVeo); got != "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent" {
 		t.Fatalf("Gemini URL = %q", got)
+	}
+}
+
+func TestProtocolRequestURLCanResolveSameOriginRootPath(t *testing.T) {
+	got, err := protocolRequestURL("https://apihub.agnes-ai.com/v1", protocol.RequestSpec{Path: "/agnesapi?video_id=video-1&model_name=agnes-video-2.5", OriginPath: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://apihub.agnes-ai.com/agnesapi?video_id=video-1&model_name=agnes-video-2.5" {
+		t.Fatalf("root path URL = %q", got)
 	}
 }
 

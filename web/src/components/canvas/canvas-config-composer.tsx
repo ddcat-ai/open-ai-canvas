@@ -7,7 +7,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import type { NodeGenerationInput } from "./canvas-node-generation";
+import { generationInputMentionLabel, normalizeGenerationNodeMentionTokens, type NodeGenerationInput } from "./canvas-node-generation";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
 import type { CanvasGenerationMode, CanvasNodeMetadata, CanvasWorkspaceMode } from "@/types/canvas";
@@ -42,7 +42,7 @@ type ComposerCandidate =
           reference: CanvasResourceReference;
       };
 
-export const CONFIG_REFERENCE_PATTERN = /@\[node:([^\]]+)\]/g;
+export const CONFIG_REFERENCE_PATTERN = /@\[node:([^\]]+)\]|@(图片|视频|音频|文本|角色|绘图)(\d+)/g;
 
 export function CanvasConfigComposer({ value, inputs, skillReferences = [], generationMode, metadata, onChange, onMetadataChange, onClose, workspaceMode = "professional" }: CanvasConfigComposerProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -54,7 +54,8 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
     const [presetOpen, setPresetOpen] = useState(false);
     const simpleMode = workspaceMode === "simple";
     const workflowVideoReferenceMode = generationMode === "video" && isCanvasWorkflowProvider(metadata);
-    const tokens = useMemo(() => parseComposerTokens(value), [value]);
+    const normalizedValue = useMemo(() => normalizeGenerationNodeMentionTokens(value, inputs), [inputs, value]);
+    const tokens = useMemo(() => parseComposerTokens(normalizedValue, inputs), [inputs, normalizedValue]);
     const referenceById = useMemo(() => new Map(inputs.map((input) => [input.nodeId, input])), [inputs]);
     const videoFrameOptions = useMemo(
         () =>
@@ -72,6 +73,10 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
     }, [inputs, mention, skillReferences]);
 
     useEffect(() => {
+        if (normalizedValue !== value) {
+            onChange(normalizedValue);
+            return;
+        }
         if (document.activeElement === editorRef.current) return;
         const editor = editorRef.current;
         if (!editor) return;
@@ -84,7 +89,7 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
             const input = referenceById.get(token.nodeId);
             if (input) editor.append(createReferenceChip(input, inputs, theme, setImagePreview));
         });
-    }, [inputs, referenceById, theme, tokens]);
+    }, [inputs, normalizedValue, onChange, referenceById, theme, tokens, value]);
 
     const syncFromEditor = () => {
         const editor = editorRef.current;
@@ -344,6 +349,7 @@ function createReferenceChip(input: NodeGenerationInput, inputs: NodeGenerationI
     const wrapper = document.createElement("span");
     wrapper.contentEditable = "false";
     wrapper.dataset.referenceNodeId = input.nodeId;
+    wrapper.dataset.referenceToken = `@${generationInputMentionLabel(input, inputs)}`;
     wrapper.className = "mx-px inline-flex h-7 max-w-40 items-center justify-center overflow-hidden rounded-md border px-1 text-xs leading-none align-middle";
     Object.assign(wrapper.style, chipStyle(theme));
     if (input.type === "image" && input.image && input.sourceKind !== "drawing") {
@@ -377,8 +383,8 @@ function serializeNodes(nodes: NodeListOf<ChildNode>) {
     nodes.forEach((node) => {
         if (node.nodeType === Node.TEXT_NODE) result += node.textContent || "";
         if (!(node instanceof HTMLElement)) return;
-        const nodeId = node.dataset.referenceNodeId;
-        if (nodeId) result += `@[node:${nodeId}]`;
+        const referenceToken = node.dataset.referenceToken;
+        if (referenceToken) result += referenceToken;
         else if (node.tagName === "BR") result += "\n";
         else result += serializeNodes(node.childNodes);
     });
@@ -454,27 +460,31 @@ function placeCaretAtEnd(element: HTMLElement) {
     selection?.addRange(range);
 }
 
-function parseComposerTokens(value: string): Token[] {
+function parseComposerTokens(value: string, inputs: NodeGenerationInput[]): Token[] {
     const tokens: Token[] = [];
+    const inputByLabel = new Map(inputs.map((input) => [generationInputMentionLabel(input, inputs), input]));
+    const inputByNodeId = new Map(inputs.map((input) => [input.nodeId, input]));
     let lastIndex = 0;
     for (const match of value.matchAll(CONFIG_REFERENCE_PATTERN)) {
         if (match.index === undefined) continue;
+        const input = match[1] ? inputByNodeId.get(match[1]) : inputByLabel.get(`${match[2]}${match[3]}`);
+        const end = match.index + match[0].length;
+        if (!input || (!match[1] && !hasMentionBoundary(value, end))) continue;
         if (match.index > lastIndex) tokens.push({ type: "text", value: value.slice(lastIndex, match.index) });
-        tokens.push({ type: "reference", nodeId: match[1] });
-        lastIndex = match.index + match[0].length;
+        tokens.push({ type: "reference", nodeId: input.nodeId });
+        lastIndex = end;
     }
     if (lastIndex < value.length) tokens.push({ type: "text", value: value.slice(lastIndex) });
     return tokens;
 }
 
 function resourceLabel(input: NodeGenerationInput, inputs: NodeGenerationInput[]) {
-    const sameTypeInputs = inputs.filter((item) => item.type === input.type && item.sourceKind === input.sourceKind);
-    const index = Math.max(0, sameTypeInputs.findIndex((item) => item.nodeId === input.nodeId));
-    if (input.sourceKind === "drawing") return `绘图${index + 1}`;
-    if (input.type === "image") return `图片${index + 1}`;
-    if (input.type === "video") return `视频${index + 1}`;
-    if (input.type === "audio") return `音频${index + 1}`;
-    return `文本${index + 1}`;
+    return generationInputMentionLabel(input, inputs);
+}
+
+function hasMentionBoundary(value: string, index: number) {
+    const char = value[index];
+    return !char || /\s|[,.!?;:，。！？；：、)\]}】）]/.test(char);
 }
 
 function chipStyle(theme: (typeof canvasThemes)[keyof typeof canvasThemes]): CSSProperties {

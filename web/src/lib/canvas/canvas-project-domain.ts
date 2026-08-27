@@ -236,7 +236,7 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
     if (!scriptNodeId || !linkedNode || !scriptNode) return nodes;
     const row = rowId ? scriptNode.metadata?.storyboard?.rows.find((item) => item.id === rowId) : undefined;
     const videoPrompt = row ? (row.videoMotionPrompt || row.plotDescription).trim() : "";
-    const videoComposerContent = row ? storyboardComposerContent(videoPrompt, storyboardRowReferenceNodeIds(scriptNode, row, nodes, [], false)) : "";
+    const videoComposerContent = row ? storyboardComposerContent(videoPrompt, storyboardRowReferenceNodeIds(scriptNode, row, nodes, [], false), nodes) : "";
 
     return nodes.map((node) => {
         if (row && node.id === linkedNode.id && scriptNodeId === connection.fromNodeId && node.type === CanvasNodeType.Video) {
@@ -272,7 +272,8 @@ export function expandStoryboardTextMentions(prompt: string, references: CanvasR
     let expanded = prompt;
     references.filter((reference) => reference.active && reference.kind === "text" && reference.text?.trim()).forEach((reference) => {
         const replacement = `【项目设定：${reference.title}】\n${reference.text!.trim()}`;
-        for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`]) {
+        for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`, reference.nodeId ? `@[node:${reference.nodeId}]` : ""]) {
+            if (!token) continue;
             if (expanded.includes(token)) expanded = expanded.split(token).join(replacement);
         }
     });

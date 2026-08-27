@@ -26,4 +26,31 @@ describe("canvas resource mention editor", () => {
         expect(previewRule).toContain("flex: 0 0 var(--canvas-mention-chip-preview-size)");
         expect(previewRule).toContain("object-fit: cover");
     });
+
+    test("exposes inline image references as replacement drop targets", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const css = source("../src/styles/globals.css");
+
+        expect(component).toContain("activeDropReferenceId?: string | null");
+        expect(component).toContain("onReferenceFilesDrop?:");
+        expect(component).toContain("chip.dataset.mentionReferenceId = reference.id");
+        expect(component).toContain('chip.classList.toggle("is-replace-target"');
+        expect(component).toContain("onReferenceFilesDrop(reference, files)");
+        expect(css).toContain(".canvas-resource-inline-mention.is-replace-target");
+        expect(css).toContain('content: "替换"');
+    });
+
+    test("resolves storage-backed previews and renders a visible loading spinner", () => {
+        const editor = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const panel = source("../src/components/canvas/canvas-node-prompt-panel.tsx");
+        const configComposer = source("../src/components/canvas/canvas-config-composer.tsx");
+        const project = source("../src/pages/canvas/project.tsx");
+
+        expect(editor).toContain("useResolvedCanvasResourceReferences");
+        expect(panel).toContain("<LoaderCircle className=\"size-3 animate-spin");
+        expect(panel).not.toContain("isRunning ? theme.accent.danger");
+        expect(configComposer).toContain("wrapper.dataset.referenceToken");
+        expect(configComposer).not.toContain('result += `@[node:');
+        expect(project).not.toContain("removeCanvasResourceMention");
+    });
 });

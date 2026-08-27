@@ -23,7 +23,7 @@ describe("creation library button", () => {
         expect(attachmentIndex).toBeGreaterThan(modePickerIndex);
         expect(libraryIndex).toBeGreaterThan(attachmentIndex);
         expect(dockSource).toContain("onClick={props.onOpenLibrary}");
-        expect(dockSource).toContain("disabled={props.busy || !referencesSupported}");
+        expect(dockSource).toContain("disabled={interactionBusy || !referencesSupported}");
     });
 
     test("uploads from the library without adding a reference before confirmation", () => {
@@ -63,6 +63,7 @@ describe("creation library button", () => {
         expect(source).toContain('axis="x"');
         expect(source).toContain("values={props.attachments}");
         expect(source).toContain("onReorder={props.onReorderAttachments}");
+        expect(source).toContain('className="creation-reference-card-remove" onPointerDown={(event) => event.stopPropagation()}');
         expect(source).toContain("<Reorder.Item");
         expect(source).toContain('layout="position"');
         expect(source).toContain("isExpanded");
@@ -74,6 +75,10 @@ describe("creation library button", () => {
         expect(source).toContain("creation-reference-stack-card");
         expect(source).toContain("creation-reference-add-button");
         expect(source).toContain("creation-reference-track-button");
+        expect(source).toContain("imageReferenceAtPoint");
+        expect(source).toContain("setDropTargetReferenceId");
+        expect(source).toContain("props.onReplaceAttachment(target.attachmentId, item)");
+        expect(source).toContain("onReferenceFilesDrop=");
         expect(source).toContain("CanvasPromptOptimizerDrawer");
         expect(source).toContain("promptOptimizerOpen");
         expect(source).toContain("provider={props.promptOptimizerProvider}");

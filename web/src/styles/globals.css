@@ -945,7 +945,7 @@
         --workspace-border-strong: rgba(17, 17, 17, 0.2);
         --workspace-grid-line: rgba(17, 17, 17, 0.035);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
+        --workspace-sidebar: var(--workspace-navigation);
         --workspace-accent: #171717;
         --workspace-accent-soft: rgba(17, 17, 17, 0.065);
         background-color: var(--workspace-canvas);
@@ -966,7 +966,7 @@
         --workspace-border-strong: rgba(255, 255, 255, 0.18);
         --workspace-grid-line: rgba(255, 255, 255, 0.026);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
+        --workspace-sidebar: var(--workspace-navigation);
         --workspace-accent: #f5f5f5;
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
@@ -8849,6 +8849,7 @@
     }
 
     .canvas-resource-inline-mention {
+        position: relative;
         display: inline-flex;
         min-width: 0;
         max-width: 100%;
@@ -8867,6 +8868,26 @@
         vertical-align: baseline;
         user-select: none;
         transform: translateY(var(--canvas-mention-chip-offset-y));
+    }
+
+    .canvas-resource-inline-mention.is-replace-target {
+        outline: var(--stroke-2) solid var(--control-focus-ring);
+        outline-offset: var(--space-half);
+        background: color-mix(in srgb, var(--control-focus-ring) 18%, var(--canvas-composer-control-surface));
+    }
+
+    .canvas-resource-inline-mention.is-replace-target::after {
+        content: "替换";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent);
+        color: var(--color-neutral-0);
+        font-size: var(--fs-micro);
+        font-weight: 600;
+        letter-spacing: 0.04em;
     }
 
     .canvas-resource-inline-at,
@@ -11457,8 +11478,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-model-editor-section {
     display: grid;
-    grid-template-columns: minmax(140px, 176px) minmax(0, 1fr);
-    gap: 24px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
     padding: 20px 22px;
 }
 
@@ -11470,6 +11491,11 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-model-editor-section-heading,
 .admin-model-editor-section-content {
     min-width: 0;
+}
+
+.admin-model-editor-section-heading {
+    padding-bottom: 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .admin-model-editor-section-heading h2 {
@@ -11714,7 +11740,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 
 .admin-price-tier-card-body {
     display: grid;
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .admin-price-tier-block {
@@ -11722,7 +11748,7 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .admin-price-tier-block + .admin-price-tier-block {
-    border-left: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .admin-price-tier-block-title {
@@ -11991,19 +12017,6 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .admin-model-editor-section {
-        gap: 16px;
-    }
-
-    .admin-model-editor-section-heading {
-        padding-bottom: 12px;
-        border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    }
-
-    .admin-price-tier-block + .admin-price-tier-block {
-        border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-        border-left: 0;
-    }
 }
 
 /* 管理后台可读性基线：收敛历史页面中过低的文字透明度，并统一表单层级。 */

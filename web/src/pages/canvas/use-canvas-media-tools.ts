@@ -145,7 +145,7 @@ export function useCanvasMediaTools({
                 generationMode: "text",
                 model: effectiveConfig.textModel || effectiveConfig.model || defaultConfig.textModel,
                 count: 1,
-                composerContent: `参考图片：@[node:${node.id}]\n任务说明：@[node:${textNode.id}]`,
+                composerContent: "参考图片：@图片1\n任务说明：@文本1",
             }),
             title: "反推提示词结果",
         };
@@ -163,7 +163,7 @@ export function useCanvasMediaTools({
             return;
         }
         const portraitTextureSettings = { ...DEFAULT_PORTRAIT_TEXTURE_SETTINGS, ...node.metadata?.portraitTexture };
-        const composerContent = node.metadata?.composerContent?.trim() || node.metadata?.prompt?.trim() || `@[node:${node.id}]`;
+        const composerContent = node.metadata?.composerContent?.trim() || node.metadata?.prompt?.trim() || "@图片1";
         setHoveredNodeId(null);
         setToolbarNodeId(null);
         setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, prompt: composerContent, composerContent, portraitTexture: portraitTextureSettings } } : item));

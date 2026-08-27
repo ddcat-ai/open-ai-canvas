@@ -21,6 +21,7 @@ import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessionPollingAbort, resumeCinematicAgentSession } from "@/lib/canvas/canvas-agent-session";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
+import { buildOrderedCanvasResourceReferences, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { AgentChatComposer, AgentChatMessage, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelLogo } from "@/components/model-logo";
@@ -1560,7 +1561,20 @@ function generationFlowOps(input: Record<string, unknown>, snapshot: CanvasAgent
     const textId = `text-${nanoid()}`;
     const targetId = `${mode}-${nanoid()}`;
     const referenceNodeIds = Array.isArray(input.referenceNodeIds) ? input.referenceNodeIds.filter((id): id is string => typeof id === "string") : [];
-    const tokens = [`@[node:${textId}]`, ...referenceNodeIds.map((id) => `@[node:${id}]`)];
+    const promptNode: CanvasNodeData = {
+        id: textId,
+        type: CanvasNodeType.Text,
+        title: stringOptional(input.title) || "提示词",
+        position: { x, y },
+        width: NODE_DEFAULT_SIZE[CanvasNodeType.Text].width,
+        height: NODE_DEFAULT_SIZE[CanvasNodeType.Text].height,
+        metadata: { content: prompt },
+    };
+    const referenceNodes = referenceNodeIds.flatMap((id) => {
+        const node = snapshot.nodes.find((candidate) => candidate.id === id);
+        return node ? [node] : [];
+    });
+    const tokens = buildOrderedCanvasResourceReferences([promptNode, ...referenceNodes]).map(canvasResourceMentionToken);
     return [
         textNodeOp({ id: textId, text: prompt, title: stringOptional(input.title) || "提示词" }, x, y),
         generationTargetNodeOp(targetId, { ...input, prompt: tokens.join("\n") }, x + NODE_DEFAULT_SIZE[CanvasNodeType.Text].width + 80, y, config),
