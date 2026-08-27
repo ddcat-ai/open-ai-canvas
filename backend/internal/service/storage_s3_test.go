@@ -152,3 +152,27 @@ func TestDefaultOSSPathPrefix(t *testing.T) {
 		t.Fatalf("default path prefix = %q, default setting = %q", value.PathPrefix, defaultOSSSetting().PathPrefix)
 	}
 }
+
+func TestResourceObjectKeyPreservesOrInfersExtension(t *testing.T) {
+	setting := ossSettingValue{PathPrefix: "assets"}
+	now := time.Date(2026, time.August, 27, 20, 31, 0, 0, time.UTC)
+
+	for _, test := range []struct {
+		name     string
+		fileName string
+		mimeType string
+		kind     string
+		ext      string
+	}{
+		{name: "original filename", fileName: "photo.JPEG", mimeType: "image/jpeg", kind: "image", ext: ".jpeg"},
+		{name: "mime type", mimeType: "image/png", kind: "image", ext: ".png"},
+		{name: "kind fallback", kind: "video", ext: ".mp4"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			objectKey := ossObjectKey(setting, "user-1", test.kind, test.fileName, test.mimeType, now)
+			if !strings.HasSuffix(objectKey, test.ext) {
+				t.Fatalf("object key = %q, want suffix %q", objectKey, test.ext)
+			}
+		})
+	}
+}

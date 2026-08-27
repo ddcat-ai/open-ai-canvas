@@ -394,11 +394,11 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, err
 	}
 	provider := "local"
-	objectKey := localObjectKey(userID, kind, fileName, now)
+	objectKey := localObjectKey(userID, kind, fileName, mimeType, now)
 	resource := model.Resource{ID: newID(), UserID: userID, Kind: kind, Status: model.ResourceStatusPending, Provider: provider, ObjectKey: objectKey, MimeType: mimeType, Size: size, Width: width, Height: height, DurationMs: durationMs, CreatedAt: now, UpdatedAt: now}
 	if useOSS {
 		provider = setting.Provider
-		objectKey = ossObjectKey(setting, userID, kind, fileName, now)
+		objectKey = ossObjectKey(setting, userID, kind, fileName, mimeType, now)
 		resource.Provider = provider
 		resource.Endpoint = setting.Endpoint
 		resource.Bucket = setting.Bucket
@@ -457,8 +457,8 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	return &resource, nil
 }
 
-func localObjectKey(userID string, kind string, fileName string, now time.Time) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
+func localObjectKey(userID string, kind string, fileName string, mimeType string, now time.Time) string {
+	ext := resourceFileExtension(fileName, mimeType, kind)
 	return path.Join("users", safeObjectSegment(userID), kind, now.Format("2006/01/02"), newID()+ext)
 }
 
@@ -702,6 +702,26 @@ func extensionFromMimeType(mimeType string) string {
 	return "bin"
 }
 
+func resourceFileExtension(fileName string, mimeType string, kind string) string {
+	if ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName))); ext != "" && ext != "." {
+		return ext
+	}
+	cleanMimeType := strings.TrimSpace(strings.Split(mimeType, ";")[0])
+	if extensions, err := mime.ExtensionsByType(cleanMimeType); err == nil && len(extensions) > 0 {
+		return strings.ToLower(extensions[0])
+	}
+	switch kind {
+	case "image":
+		return ".png"
+	case "video":
+		return ".mp4"
+	case "audio":
+		return ".mp3"
+	default:
+		return ".bin"
+	}
+}
+
 func imageDimensions(data []byte) (int, int) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
@@ -862,8 +882,8 @@ func normalizeResourceKind(kind string, mimeType string) string {
 	return "file"
 }
 
-func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName string, now time.Time) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
+func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName string, mimeType string, now time.Time) string {
+	ext := resourceFileExtension(fileName, mimeType, kind)
 	name := newID()
 	parts := []string{setting.PathPrefix, "users", safeObjectSegment(userID), kind, now.Format("2006/01/02"), name + ext}
 	return strings.Trim(strings.Join(nonEmptySegments(parts), "/"), "/")
