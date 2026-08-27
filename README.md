@@ -19,10 +19,6 @@
 
 当前版本以仓库根目录 [`VERSION`](VERSION) 为准。
 
-## 仓库协作
-
-本项目的远端上游仓库是 [`ddcat-ai/open-ai-canvas`](https://github.com/ddcat-ai/open-ai-canvas)。本地同步主线代码时，应以该仓库的 `main` 分支为准。
-
 ## 赞助商
 
 感谢以下赞助商对影策项目的支持：
@@ -56,7 +52,8 @@
 Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="360">
+  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="280">
+  <img src="assets/wx.jpg" alt="影策 微信交流群" width="280">
 </p>
 
 ## 当前能力
