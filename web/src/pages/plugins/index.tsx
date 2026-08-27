@@ -303,7 +303,7 @@ export default function PluginsPage() {
                                 options={[
                                     { value: "all", label: "全部状态" },
                                     { value: "enabled", label: "已启用" },
-                                    { value: "disabled", label: "未启用" },
+                                    { value: "disabled", label: "已停用" },
                                 ]}
                                 onChange={(value) => setStatusFilter(value as "all" | "enabled" | "disabled")}
                                 aria-label="按状态筛选"
@@ -427,9 +427,9 @@ export default function PluginsPage() {
                                                             <div className="plugin-card-actions">
                                                                 <span role="status" className={`settings-channel-status ${enabled ? "is-ready" : ""}`}>
                                                                     <i aria-hidden="true" />
-                                                                    {!state?.platformAvailable && state?.blockedReason ? state.blockedReason : enabled ? "已启用" : "未启用"}
+                                                                    {!state?.platformAvailable && state?.blockedReason ? state.blockedReason : enabled ? "已启用" : "已停用"}
                                                                 </span>
-                                                                <Switch disabled={!state?.canToggle} checked={enabled} aria-label={`${plugin.manifest.name}${enabled ? "停用" : "启用"}`} title={state?.blockedReason} onChange={(checked) => void togglePlugin(plugin, checked)} />
+                                                                <Switch className="plugin-state-switch" disabled={!state?.canToggle} checked={enabled} aria-label={`${plugin.manifest.name}，当前${enabled ? "已启用，点击停用" : "已停用，点击启用"}`} title={state?.blockedReason} onChange={(checked) => void togglePlugin(plugin, checked)} />
                                                                 {canConfigure ? (
                                                                     <Button
                                                                         className="plugin-settings-button"
