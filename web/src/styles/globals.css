@@ -9765,6 +9765,94 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
     background: var(--director-sequencer-border);
 }
 
+/* 一级模式切换。位于工作台顶栏（跟随明暗主题），因此用主题感知的语义 token，
+   不能用 --director-dock-* 那套常暗色，否则亮色主题下会看不见。
+   选中态用 control-selected 角色，而不是主操作色：它表达「当前视图」而非主要命令。 */
+.director-mode-switch {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-half);
+}
+
+.director-mode-switch-button {
+    height: var(--space-6);
+    padding: 0 var(--space-2);
+    border: var(--stroke-1) solid transparent;
+    border-radius: var(--r-sm);
+    color: var(--foreground);
+    font-size: var(--fs-tiny);
+    opacity: 0.62;
+    transition: background var(--motion-dur-fast-calc) var(--motion-ease-out), opacity var(--motion-dur-fast-calc) var(--motion-ease-out);
+}
+
+.director-mode-switch-button:hover {
+    background: var(--surface-card-hover);
+    opacity: 1;
+}
+
+.director-mode-switch-button.is-active {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-weight: 500;
+    opacity: 1;
+}
+
+.director-mode-switch-button:focus-visible {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+    outline-offset: 1px;
+}
+
+/* 模板选择卡片。位于 Modal 内（跟随明暗主题），同样只用主题感知语义 token。 */
+.director-template-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.director-template-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: var(--stroke-1) solid var(--card-border);
+    border-radius: var(--r-md);
+    background: var(--card-surface);
+    color: var(--foreground);
+    text-align: left;
+    transition: background var(--motion-dur-fast-calc) var(--motion-ease-out);
+}
+
+.director-template-card:hover {
+    border-color: var(--control-selected-border);
+    background: var(--card-surface-hover);
+}
+
+.director-template-card:focus-visible {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+    outline-offset: 1px;
+}
+
+.director-template-card-name {
+    font-size: var(--fs-body);
+    font-weight: 500;
+}
+
+.director-template-card-summary {
+    color: var(--control-selected-fg);
+    font-size: var(--fs-micro);
+    opacity: 0.72;
+}
+
+.director-template-card-description {
+    font-size: var(--fs-tiny);
+    line-height: 1.5;
+    opacity: 0.6;
+}
+
 .director-actor-colors {
     display: flex;
     min-width: 0;
@@ -9991,6 +10079,36 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
     border-radius: var(--r-xs);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.38);
     transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* 可删除关键帧：8px 菱形本体太小，用透明外框把命中区扩到 18px，保留视觉尺寸。
+   hover / focus 都走 outline，不覆写 box-shadow —— 基础规则的 hairline 保持原样。
+   focus-visible 与 hover 同特异性，靠源码顺序让焦点环压过悬停环。 */
+.director-sequencer-key.is-actionable {
+    padding: 0;
+    border: 0;
+    outline-offset: 2px;
+    cursor: pointer;
+    transition: outline-color var(--motion-dur-fast-calc) var(--motion-ease-out);
+}
+
+.director-sequencer-key.is-actionable::after {
+    position: absolute;
+    inset: -5px;
+    content: "";
+}
+
+.director-sequencer-key.is-actionable:hover {
+    outline: var(--stroke-2) solid color-mix(in srgb, var(--control-focus-ring) 55%, transparent);
+}
+
+.director-sequencer-key.is-actionable:focus-visible {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+}
+
+.director-sequencer-key.is-actionable.is-selected {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+    outline-offset: 2px;
 }
 
 .director-sequencer-clip {

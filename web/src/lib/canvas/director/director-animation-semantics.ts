@@ -1,6 +1,6 @@
 import { Euler, Quaternion } from "three";
 
-import type { DirectorBoneKeyframe, DirectorKeyframe, DirectorQuat, DirectorTransform, DirectorVec3 } from "../../../types/director";
+import type { DirectorBoneKeyframe, DirectorCamera, DirectorKeyframe, DirectorQuat, DirectorTransform, DirectorVec3 } from "../../../types/director";
 import { interpolateDirectorBoneRotation, interpolateDirectorTransform, upsertDirectorKeyframe } from "./director-scene";
 
 // 缩放为 0 时无法用比例表达增量，改用绝对偏移；阈值同时兼顾数值噪声。
@@ -119,6 +119,31 @@ export function reduceDirectorGesture(state: DirectorGestureState, event: Direct
 export function resolveDirectorKeyframeRecord(input: { base: DirectorTransform; keyframes: DirectorKeyframe[]; rawTime: number; snappedTime: number }) {
     const rendered = interpolateDirectorTransform(input.base, input.keyframes, input.rawTime);
     return { time: input.snappedTime, transform: rendered, keyframes: upsertDirectorKeyframe(input.keyframes, input.snappedTime, rendered) };
+}
+
+/**
+ * 把自由观察相机显式写回实际摄影机。
+ *
+ * 没有动画轨道时更新基础 transform；已有轨道时写当前播放头关键帧，否则旧关键帧会
+ * 继续接管 CAM 取景，让界面提示“已对齐”但画面立即跳回旧位置。
+ */
+export function resolveDirectorCameraAlignment(camera: DirectorCamera, transform: DirectorTransform, time: number): DirectorCamera {
+    if (!camera.keyframes.length) return { ...camera, transform };
+    return { ...camera, keyframes: upsertDirectorKeyframe(camera.keyframes, time, transform) };
+}
+
+/** 生成运镜只更新首尾帧；保留用户手工添加的中间帧、帧 id 与 easing。 */
+export function resolveDirectorCameraMoveKeyframes(keyframes: DirectorKeyframe[], start: DirectorTransform, end: DirectorTransform, duration: number) {
+    const endTime = Number.isFinite(duration) && duration > 0 ? duration : 0;
+    return upsertDirectorKeyframe(upsertDirectorKeyframe(keyframes, 0, start), endTime, end);
+}
+
+/** 播放头按镜头时长循环；非法输入回落 0，长帧也保留越界余量。 */
+export function advanceDirectorPlayhead(playhead: number, elapsed: number, duration: number) {
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    const current = Number.isFinite(playhead) ? playhead : 0;
+    const delta = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0;
+    return ((current + delta) % duration + duration) % duration;
 }
 
 /**

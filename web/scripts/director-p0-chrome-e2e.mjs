@@ -360,26 +360,41 @@ async function smokeWorkbench(cdp, baseUrl) {
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.director-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "A5 real canvas present in viewport shell");
 
+    // P1-A 起 AutoKey/时间轴归属动画模式：默认摆场模式下它们必须不存在。
+    const layoutGating = await cdp.evaluate(`(() => ({
+        mode: document.querySelector('button[data-mode="layout"]')?.getAttribute('aria-pressed') ?? null,
+        sequencer: document.querySelectorAll('.director-sequencer').length,
+        autoKey: document.querySelectorAll('button[title="自动关键帧"]').length,
+    }))()`);
+    assert(layoutGating.mode === "true", "A6 默认进入摆场模式", `got ${JSON.stringify(layoutGating.mode)}`);
+    assert(layoutGating.sequencer === 0 && layoutGating.autoKey === 0, "A7 摆场模式不显示时间轴与 AutoKey", JSON.stringify(layoutGating));
+
+    // 原 A6 的断言意图（AutoKey 默认不开启）在它真正存在的模式里继续守住。
+    const switched = await cdp.click('button[data-mode="animate"]');
+    if (!switched) throw new Error("A: 动画模式按钮 not clickable");
+    const sequencerShown = await cdp.poll(`document.querySelectorAll('.director-sequencer').length === 1`, "sequencer in animate mode", 20000);
+    assert(sequencerShown, "A8 动画模式显示时间轴");
+
     const autoKey = await cdp.evaluate(`document.querySelector('button[title="自动关键帧"]')?.getAttribute('aria-pressed') ?? null`);
-    assert(autoKey === "false", "A6 AutoKey defaults to aria-pressed=false", `got ${JSON.stringify(autoKey)}`);
+    assert(autoKey === "false", "A9 AutoKey defaults to aria-pressed=false", `got ${JSON.stringify(autoKey)}`);
 
     const addedCube = await cdp.click('[aria-label="添加立方体"]');
     if (!addedCube) throw new Error("A: 添加立方体 button not clickable");
     const cubeAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除立方体"]')`, "cube row", 20000);
-    assert(cubeAppeared, "A7 added cube appears in object list");
+    assert(cubeAppeared, "A10 added cube appears in object list");
 
     const undone = await cdp.click('[aria-label="撤销"]');
     if (!undone) throw new Error("A: 撤销 button not clickable");
     const cubeGone = await cdp.poll(`!document.querySelector('[aria-label="删除立方体"]')`, "cube removed by undo", 20000);
-    assert(cubeGone, "A8 Undo removes the added cube");
+    assert(cubeGone, "A11 Undo removes the added cube");
 
     // 场景结束前必须真实关闭：下一个场景要重新导航，不能靠忽略 beforeunload 绕过未保存态。
     const closed = await cdp.click('[aria-label="关闭导演台"]');
     if (!closed) throw new Error("A: 关闭导演台 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.director-viewport-shell').length === 0`, "workbench closed", 30000);
-    assert(shellGone, "A9 workbench closed cleanly before leaving scenario A");
+    assert(shellGone, "A12 workbench closed cleanly before leaving scenario A");
 
-    assert(cdp.problems.length === 0, "A10 no browser problems in scenario A", JSON.stringify(cdp.problems));
+    assert(cdp.problems.length === 0, "A13 no browser problems in scenario A", JSON.stringify(cdp.problems));
 }
 
 /**

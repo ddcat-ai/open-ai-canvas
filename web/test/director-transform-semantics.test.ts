@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Euler, Vector3 } from "three";
 
-import { applyDirectorTransformDelta, directorTransformDelta, resolveDirectorKeyframeRecord, resolveDirectorObjectTransformEdit, snapDirectorTime } from "../src/lib/canvas/director/director-animation-semantics";
-import { interpolateDirectorTransform } from "../src/lib/canvas/director/director-scene";
+import { advanceDirectorPlayhead, applyDirectorTransformDelta, directorTransformDelta, resolveDirectorCameraAlignment, resolveDirectorCameraMoveKeyframes, resolveDirectorKeyframeRecord, resolveDirectorObjectTransformEdit, snapDirectorTime } from "../src/lib/canvas/director/director-animation-semantics";
+import { createDirectorCamera, directorTransformPathLength, interpolateDirectorTransform } from "../src/lib/canvas/director/director-scene";
 import type { DirectorKeyframe, DirectorTransform } from "../src/types/director";
 
 function transform(position: [number, number, number], rotation: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1]): DirectorTransform {
@@ -18,6 +18,84 @@ describe("snapDirectorTime", () => {
         expect(snapDirectorTime(1.031, 24)).toBeCloseTo(1.0416666, 6);
         expect(snapDirectorTime(-0.4, 24)).toBe(0);
         expect(snapDirectorTime(1.031, 0)).toBeCloseTo(1.0416666, 6);
+    });
+});
+
+describe("摄影机对齐当前视图", () => {
+    test("无关键帧时更新基础 transform", () => {
+        const camera = createDirectorCamera();
+        const aligned = transform([9, 3, 2]);
+        const next = resolveDirectorCameraAlignment(camera, aligned, 1);
+        expect(next.transform).toEqual(aligned);
+        expect(next.keyframes).toEqual([]);
+    });
+
+    test("已有轨迹时写当前时间关键帧，CAM 立即显示对齐结果且不丢其他帧", () => {
+        const camera = {
+            ...createDirectorCamera(),
+            keyframes: [keyframe("start", 0, transform([0, 0, 0])), keyframe("end", 2, transform([10, 0, 0]))],
+        };
+        const aligned = transform([4, 5, 6]);
+        const next = resolveDirectorCameraAlignment(camera, aligned, 1);
+        expect(next.transform).toBe(camera.transform);
+        expect(next.keyframes).toHaveLength(3);
+        expect(interpolateDirectorTransform(next.transform, next.keyframes, 1)).toEqual(aligned);
+        expect(next.keyframes.find((item) => item.id === "start")).toEqual(camera.keyframes[0]);
+        expect(next.keyframes.find((item) => item.id === "end")).toEqual(camera.keyframes[1]);
+    });
+});
+
+describe("生成摄影机运镜首尾帧", () => {
+    test("保留手工中间帧、已有 id 与 easing，只更新首尾 transform", () => {
+        const existing: DirectorKeyframe[] = [
+            { ...keyframe("start", 0, transform([9, 0, 0])), easing: "step" },
+            { ...keyframe("manual", 1, transform([4, 2, 0])), easing: "smooth" },
+            keyframe("end", 2, transform([8, 0, 0])),
+        ];
+        const next = resolveDirectorCameraMoveKeyframes(existing, transform([0, 0, 0]), transform([2, 0, 0]), 2);
+        expect(next.map((item) => item.id)).toEqual(["start", "manual", "end"]);
+        expect(next[0].transform.position).toEqual([0, 0, 0]);
+        expect(next[1]).toEqual(existing[1]);
+        expect(next[2].transform.position).toEqual([2, 0, 0]);
+        expect(next[0].easing).toBe("step");
+    });
+
+    test("空轨道生成两枚有序首尾帧", () => {
+        const next = resolveDirectorCameraMoveKeyframes([], transform([0, 0, 0]), transform([0, 0, -2]), 3);
+        expect(next.map((item) => item.time)).toEqual([0, 3]);
+    });
+});
+
+describe("播放头循环推进", () => {
+    test("跨越镜头末尾时保留余量", () => {
+        expect(advanceDirectorPlayhead(1.9, 0.3, 2)).toBeCloseTo(0.2, 8);
+    });
+
+    test("非法播放头、增量和时长安全回落", () => {
+        expect(advanceDirectorPlayhead(Number.NaN, 0.5, 2)).toBe(0.5);
+        expect(advanceDirectorPlayhead(1, Number.NaN, 2)).toBe(1);
+        expect(advanceDirectorPlayhead(1, 1, 0)).toBe(0);
+    });
+});
+
+describe("Transform 轨迹统计", () => {
+    test("按时间顺序累计空间路径，不把输入数组顺序当成路径顺序", () => {
+        const keys = [
+            keyframe("end", 2, transform([3, 4, 0])),
+            keyframe("start", 0, transform([0, 0, 0])),
+            keyframe("middle", 1, transform([0, 4, 0])),
+        ];
+        expect(directorTransformPathLength(keys)).toBe(7);
+        expect(keys.map((key) => key.id)).toEqual(["end", "start", "middle"]);
+    });
+
+    test("忽略含非法坐标的段，避免 NaN 污染轨迹显示判断", () => {
+        const keys = [
+            keyframe("valid", 0, transform([0, 0, 0])),
+            keyframe("invalid", 1, transform([Number.NaN, 2, 0])),
+            keyframe("valid-again", 2, transform([3, 4, 0])),
+        ];
+        expect(directorTransformPathLength(keys)).toBe(0);
     });
 });
 

@@ -96,7 +96,7 @@ export default function DirectorReproLab() {
             <DiagnosticEventList events={events} />
             <ReproMatrix />
 
-            {workbenchOpen ? <CanvasDirectorWorkbench open scene={scene} imageNodes={[]} onClose={() => setWorkbenchOpen(false)} onChange={onChange} onApply={onApply} onDeleteImageNode={() => undefined} onFlush={onFlush} /> : null}
+            {workbenchOpen ? <CanvasDirectorWorkbench open scene={scene} imageNodes={[]} onboardingScope="director-repro-lab" onClose={() => setWorkbenchOpen(false)} onChange={onChange} onApply={onApply} onDeleteImageNode={() => undefined} onFlush={onFlush} /> : null}
         </div>
     );
 }
