@@ -10012,13 +10012,11 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
     color: #ffffff;
 }
 .app-workspace-shell.is-creation-workspace,
-.app-workspace-shell.is-creation-workspace .app-workspace-sidebar,
 .app-workspace-shell.is-creation-workspace .app-workspace-stage {
     background: var(--workspace-page) !important;
 }
 
 html:not(.dark) .app-workspace-shell.is-creation-workspace,
-html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-sidebar,
 html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage {
     background: var(--workspace-page) !important;
 }
