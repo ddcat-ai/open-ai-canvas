@@ -262,11 +262,12 @@ export function CanvasNodeContextMenu({
 function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, reducedMotion, onAddNode, onAddFolder, onChooseStyle, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; reducedMotion: boolean; onAddNode: (type: CanvasNodeTypeId) => void; onAddFolder: () => void; onChooseStyle: () => void; onOpenDirector: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const installations = usePluginStore((state) => state.installations);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
     const left = getSubmenuLeft(parentPosition.left);
     const createContext: AddNodeMenuContext = {
         workspaceMode,
         isProjectLinked,
-        enabledPluginIds: new Set(installations.filter((item) => item.enabled).map((item) => item.manifest.id)),
+        enabledPluginIds: new Set(installations.filter((item) => pluginStates[item.manifest.id]?.effectiveEnabled ?? item.enabled).map((item) => item.manifest.id)),
         handlers: {
             onAddText: () => onAddNode(CanvasNodeType.Text),
             onAddImage: () => onAddNode(CanvasNodeType.Image),

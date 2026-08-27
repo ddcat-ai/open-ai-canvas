@@ -38,7 +38,7 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
+		if err := svc.RequireWorkflowPluginForUser(user.ID, "comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -61,7 +61,7 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
+		if err := svc.RequireWorkflowPluginForUser(user.ID, "comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -78,10 +78,6 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
-			failService(c, err)
-			return
-		}
 		if err := svc.RevokeComfyBridge(user.ID, c.Param("id")); err != nil {
 			failService(c, err)
 			return
@@ -94,10 +90,6 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/comfy-bridge/poll", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
-			failService(c, err)
-			return
-		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -119,10 +111,6 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/comfy-bridge/result", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
-			failService(c, err)
-			return
-		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -160,10 +148,6 @@ func RegisterComfyBridgeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/comfy-bridge/heartbeat", func(c *gin.Context) {
 		bridge, err := authenticateComfyBridgeRequest(c, svc)
 		if err != nil {
-			failService(c, err)
-			return
-		}
-		if err := svc.RequireWorkflowPluginForInterface("comfyui-bridge-image"); err != nil {
 			failService(c, err)
 			return
 		}

@@ -23,11 +23,10 @@ const roleLabels: Record<PortraitClearanceInputRole, string> = {
 
 export function PortraitClearanceNodeContent({ node }: PortraitClearanceNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const installations = usePluginStore((state) => state.installations);
+    const enabled = usePluginStore((state) => state.pluginStates[PORTRAIT_CLEARANCE_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PORTRAIT_CLEARANCE_PLUGIN_ID)?.enabled));
     const { openPortraitClearance } = useCanvasNodeActions();
     const upstream = useUpstreamNodes(node.id).filter((item) => isPortraitImageInput(item));
     const state = node.metadata?.portraitClearance;
-    const enabled = Boolean(installations.find((item) => item.manifest.id === PORTRAIT_CLEARANCE_PLUGIN_ID)?.enabled);
     const bindings = state?.inputBindings || [];
     const roleByNodeId = new Map(bindings.map((binding) => [binding.nodeId, binding.role]));
     const query = upstream.find((item) => roleByNodeId.get(item.id) === "query") || upstream[0];

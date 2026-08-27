@@ -135,10 +135,11 @@ export default function CreatePage() {
     const { message: toast, modal } = App.useApp();
     const config = useEffectiveConfig();
     const promptOptimizerInstallation = usePluginStore((state) => state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID));
+    const promptOptimizerEnabled = usePluginStore((state) => state.pluginStates[PROMPT_OPTIMIZER_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID)?.enabled));
     const promptOptimizerProvider = useMemo<PromptOptimizerProvider | null>(() => {
-        if (!promptOptimizerInstallation?.enabled || !promptOptimizerPlugin.createPromptOptimizer) return null;
+        if (!promptOptimizerEnabled || !promptOptimizerInstallation || !promptOptimizerPlugin.createPromptOptimizer) return null;
         return promptOptimizerPlugin.createPromptOptimizer(createPluginHostContext(promptOptimizerPlugin, promptOptimizerInstallation, config));
-    }, [config, promptOptimizerInstallation]);
+    }, [config, promptOptimizerEnabled, promptOptimizerInstallation]);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);

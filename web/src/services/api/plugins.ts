@@ -11,18 +11,37 @@ export type BackendPlugin = {
     updatedAt: string;
     status: "enabled" | "disabled" | "invalid" | string;
     error?: string;
+    management: PluginManagement;
 };
 
 export type WorkflowPluginStatus = "enabled" | "disabled" | "invalid" | string;
 
+export type PluginManagement = {
+    origin: "official" | "uploaded";
+    kind: "protocol" | "application";
+    activationScope: "system" | "user";
+    configurationScope: "none" | "system" | "user";
+};
+
+export type PluginState = {
+    pluginId: string;
+    platformAvailable: boolean;
+    userEnabled: boolean;
+    userConfigured: boolean;
+    effectiveEnabled: boolean;
+    canToggle: boolean;
+    canConfigure: boolean;
+    blockedReason?: string;
+};
+
+export type AdminPluginState = PluginState & { enabledUserCount: number };
+
 export async function fetchPlugins() {
-    const result = await request<{ plugins: BackendPlugin[] }>(apiClient.get("/plugins"));
-    return result.plugins;
+    return request<{ plugins: BackendPlugin[]; states: Record<string, PluginState> }>(apiClient.get("/plugins"));
 }
 
-export async function fetchWorkflowPluginStatuses() {
-    const result = await request<{ statuses: Record<string, WorkflowPluginStatus> }>(apiClient.get("/plugins/status"));
-    return result.statuses;
+export async function fetchPluginRuntimeState() {
+    return request<{ statuses: Record<string, WorkflowPluginStatus>; states: Record<string, PluginState> }>(apiClient.get("/plugins/status"));
 }
 
 export async function uploadPlugin(file: File) {
@@ -32,9 +51,18 @@ export async function uploadPlugin(file: File) {
     return result.plugin;
 }
 
-export async function setPluginEnabled(id: string, enabled: boolean) {
-    const result = await request<{ plugin: BackendPlugin }>(apiClient.post(`/plugins/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`));
-    return result.plugin;
+export async function setUserPluginEnabled(id: string, enabled: boolean) {
+    const result = await request<{ state: PluginState }>(apiClient.put(`/plugins/${encodeURIComponent(id)}/activation`, { enabled }));
+    return result.state;
+}
+
+export async function fetchAdminPlugins() {
+    return request<{ plugins: BackendPlugin[]; states: Record<string, AdminPluginState> }>(apiClient.get("/admin/plugins"));
+}
+
+export async function setPluginPlatformAvailability(id: string, available: boolean) {
+    const result = await request<{ state: AdminPluginState }>(apiClient.put(`/admin/plugins/${encodeURIComponent(id)}/availability`, { available }));
+    return result.state;
 }
 
 export async function uninstallPlugin(id: string) {

@@ -1,5 +1,5 @@
 import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
-import { AudioLines, CalendarDays, CheckCircle2, Clock3, CloudUpload, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { AudioLines, CalendarDays, CheckCircle2, Clock3, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -10,11 +10,11 @@ import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimiz
 import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import type { PluginManifest, RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
-import { fetchPlugins, setPluginEnabled, uploadPlugin, type BackendPlugin } from "@/services/api/plugins";
+import { fetchPlugins, setUserPluginEnabled, type BackendPlugin, type PluginState } from "@/services/api/plugins";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-import { PluginDetailsModal, UploadPluginModal } from "./plugin-documentation-modals";
+import { PluginDetailsModal } from "./plugin-documentation-modals";
 import "./plugins.css";
 
 const categoryLabels: Record<string, string> = {
@@ -66,7 +66,8 @@ export default function PluginsPage() {
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setEnabled = usePluginStore((state) => state.setEnabled);
     const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
-    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
+    const setPluginStates = usePluginStore((state) => state.setPluginStates);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
     const updateConfig = usePluginStore((state) => state.updateConfig);
     const builtinPlugins = useMemo(() => listRegisteredPlugins(), []);
     const [backendPlugins, setBackendPlugins] = useState<BackendPlugin[]>([]);
@@ -74,7 +75,6 @@ export default function PluginsPage() {
     const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
     const [detailsPluginId, setDetailsPluginId] = useState<string | null>(null);
     const [detailsRestoreFocus, setDetailsRestoreFocus] = useState(false);
-    const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [scrollTarget, setScrollTarget] = useState<string | null>(null);
@@ -95,8 +95,9 @@ export default function PluginsPage() {
     const reloadBackendPlugins = async () => {
         setBackendPluginsLoading(true);
         try {
-            const plugins = await fetchPlugins();
-            setBackendPlugins(plugins);
+            const result = await fetchPlugins();
+            setBackendPlugins(result.plugins);
+            setPluginStates(result.states);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件中心失败");
             setBackendPlugins([]);
@@ -107,7 +108,7 @@ export default function PluginsPage() {
 
     useEffect(() => {
         void reloadBackendPlugins();
-    }, []);
+    }, [user?.id]);
 
     const remotePlugins = useMemo(() => backendPlugins.map(toRegisteredPlugin), [backendPlugins]);
     const registeredPlugins = useMemo(() => {
@@ -131,11 +132,11 @@ export default function PluginsPage() {
     const filteredPlugins = useMemo(() => {
         const normalizedSearch = search.trim().toLocaleLowerCase();
         return registeredPlugins.filter((plugin) => {
-            const isSystemPlugin = plugin.source !== "uploaded";
-            if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && isSystemPlugin) return false;
+            const state = pluginStates[plugin.manifest.id];
+            const isApplicationPlugin = backendPluginById.get(plugin.manifest.id)?.management.kind === "application" || isOfficialApplicationPlugin(plugin.manifest.id);
+            if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && !isApplicationPlugin) return false;
             const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
-            const remote = backendPluginById.get(plugin.manifest.id);
-            const enabled = remote ? remote.status === "enabled" : Boolean(installation?.enabled);
+            const enabled = state?.effectiveEnabled ?? Boolean(installation?.enabled);
             const manifest = plugin.manifest;
             const contributionKinds = contributionKindsFor(manifest);
             const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, ...contributionKinds.map((kind) => categoryLabels[kind] || kind)].filter(Boolean).join(" ").toLocaleLowerCase();
@@ -151,7 +152,7 @@ export default function PluginsPage() {
             if (statusFilter === "disabled" && enabled) return false;
             return true;
         });
-    }, [backendPluginById, categoryFilter, features.systemPluginsVisibleToUsers, installations, registeredPlugins, search, statusFilter, trustFilter, user?.role]);
+    }, [backendPluginById, categoryFilter, features.systemPluginsVisibleToUsers, installations, pluginStates, registeredPlugins, search, statusFilter, trustFilter, user?.role]);
 
     const pluginSections = useMemo(
         () => [
@@ -180,7 +181,7 @@ export default function PluginsPage() {
     }, [pluginSections, scrollTarget]);
 
     const categoryCounts = useMemo(() => {
-        const visiblePlugins = registeredPlugins.filter((plugin) => user?.role === "admin" || features.systemPluginsVisibleToUsers || plugin.source === "uploaded");
+        const visiblePlugins = registeredPlugins.filter((plugin) => user?.role === "admin" || features.systemPluginsVisibleToUsers || isOfficialApplicationPlugin(plugin.manifest.id));
         const counts: Record<string, number> = { all: visiblePlugins.length, text: 0, image: 0, video: 0, audio: 0, other: 0 };
         for (const plugin of visiblePlugins) {
             const capabilities = providerCapabilitiesFor(plugin.manifest);
@@ -194,38 +195,26 @@ export default function PluginsPage() {
 
     const settingsPlugin = settingsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === settingsPluginId) : undefined;
     const settingsInstallation = settingsPlugin ? installations.find((item) => item.manifest.id === settingsPlugin.manifest.id) : undefined;
-    const settingsEnabled = settingsPlugin ? (backendPluginById.has(settingsPlugin.manifest.id) ? backendPluginById.get(settingsPlugin.manifest.id)?.status === "enabled" : Boolean(settingsInstallation?.enabled)) : false;
+    const settingsEnabled = settingsPlugin ? (pluginStates[settingsPlugin.manifest.id]?.effectiveEnabled ?? Boolean(settingsInstallation?.enabled)) : false;
     const detailsPlugin = detailsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === detailsPluginId) : undefined;
 
     const hasPluginConfiguration = (plugin: RegisteredPlugin) => Boolean(plugin.manifest.configuration?.fields?.length);
-    const canConfigurePlugin = (plugin: RegisteredPlugin) => hasPluginConfiguration(plugin) && user?.role === "admin";
+    const canConfigurePlugin = (plugin: RegisteredPlugin) => Boolean(pluginStates[plugin.manifest.id]?.canConfigure) && (hasPluginConfiguration(plugin) || plugin.manifest.id === RUNNINGHUB_PLUGIN_ID || plugin.manifest.id === COMFYUI_PLUGIN_ID);
 
     const isPluginEnabled = (plugin: RegisteredPlugin, installation = installations.find((item) => item.manifest.id === plugin.manifest.id)) =>
-        backendPluginById.has(plugin.manifest.id) ? backendPluginById.get(plugin.manifest.id)?.status === "enabled" : Boolean(installation?.enabled);
+        pluginStates[plugin.manifest.id]?.effectiveEnabled ?? Boolean(installation?.enabled);
 
     const togglePlugin = async (plugin: RegisteredPlugin, enabled: boolean) => {
         try {
-            if (backendPluginById.has(plugin.manifest.id)) {
-                const next = await setPluginEnabled(plugin.manifest.id, enabled);
-                setBackendPlugins((items) => items.map((item) => (item.manifest.id === next.manifest.id ? next : item)));
-                setRuntimeStatuses({ ...runtimeStatuses, [next.manifest.id]: next.status });
-            } else {
-                setEnabled(plugin.manifest.id, enabled);
+            const next = await setUserPluginEnabled(plugin.manifest.id, enabled);
+            setEnabled(plugin.manifest.id, enabled);
+            setPluginStates({ ...usePluginStore.getState().pluginStates, [next.pluginId]: next });
+            if (next.pluginId === RUNNINGHUB_PLUGIN_ID || next.pluginId === COMFYUI_PLUGIN_ID) {
+                setRuntimeStatuses({ ...usePluginStore.getState().runtimeStatuses, [next.pluginId]: next.effectiveEnabled ? "enabled" : "disabled" });
             }
             message.success(`${plugin.manifest.name}${enabled ? "已启用" : "已停用"}`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新插件状态失败");
-        }
-    };
-
-    const handleUpload = async (file: File) => {
-        try {
-            const plugin = await uploadPlugin(file);
-            setBackendPlugins((items) => [...items.filter((item) => item.manifest.id !== plugin.manifest.id), plugin]);
-            setUploadModalOpen(false);
-            message.success("插件已安装并立即生效");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "安装插件失败");
         }
     };
 
@@ -332,16 +321,12 @@ export default function PluginsPage() {
                             <span className="plugins-filter-icon" aria-hidden="true">
                                 <SlidersHorizontal className="size-4" />
                             </span>
-                            {user?.role === "admin" ? (
-                                <div className="plugins-toolbar-actions">
-                                    <Button icon={<RefreshCw className="size-4" />} loading={backendPluginsLoading} onClick={() => void reloadBackendPlugins()}>
-                                        刷新插件
-                                    </Button>
-                                    <Button type="primary" icon={<CloudUpload className="size-4" />} onClick={() => setUploadModalOpen(true)}>
-                                        上传插件
-                                    </Button>
-                                </div>
-                            ) : null}
+                            <div className="plugins-toolbar-actions">
+                                <Button icon={<RefreshCw className="size-4" />} loading={backendPluginsLoading} onClick={() => void reloadBackendPlugins()}>
+                                    刷新插件
+                                </Button>
+                                {user?.role === "admin" ? <Button type="primary" onClick={() => navigate("/admin/plugins")}>管理员插件管理</Button> : null}
+                            </div>
                         </div>
 
                         {filteredPlugins.length ? (
@@ -374,7 +359,8 @@ export default function PluginsPage() {
                                                     const remote = backendPluginById.get(plugin.manifest.id);
                                                     const enabled = isPluginEnabled(plugin, installation);
                                                     const trusted = Boolean(plugin.manifest.trusted);
-                                                    const isSystemPlugin = plugin.source !== "uploaded";
+                                                    const state = pluginStates[plugin.manifest.id];
+                                                    const sourceLabel = pluginSourceLabel(plugin, state);
                                                     const canConfigure = canConfigurePlugin(plugin);
                                                     return (
                                                         <section key={plugin.manifest.id} className={`plugin-card library-card-surface${trusted ? " is-trusted" : ""}`}>
@@ -399,8 +385,8 @@ export default function PluginsPage() {
                                                                             <span className="plugin-version">v{plugin.manifest.version}</span>
                                                                         </div>
                                                                         <div className="plugin-card-labels">
-                                                                            <span className={`plugin-source-label${isSystemPlugin ? " is-system" : ""}`}>
-                                                                                {isSystemPlugin ? "系统插件" : "用户插件"}
+                                                                            <span className={`plugin-source-label${sourceLabel === "系统插件" ? " is-system" : ""}`}>
+                                                                                {sourceLabel}
                                                                             </span>
                                                                             {trusted ? (
                                                                                 <span className="plugin-trust-label">
@@ -441,9 +427,9 @@ export default function PluginsPage() {
                                                             <div className="plugin-card-actions">
                                                                 <span role="status" className={`settings-channel-status ${enabled ? "is-ready" : ""}`}>
                                                                     <i aria-hidden="true" />
-                                                                    {enabled ? "已启用" : "未启用"}
+                                                                    {!state?.platformAvailable && state?.blockedReason ? state.blockedReason : enabled ? "已启用" : "未启用"}
                                                                 </span>
-                                                                <Switch disabled={user?.role !== "admin"} checked={enabled} aria-label={`${plugin.manifest.name}${enabled ? "停用" : "启用"}`} onChange={(checked) => void togglePlugin(plugin, checked)} />
+                                                                <Switch disabled={!state?.canToggle} checked={enabled} aria-label={`${plugin.manifest.name}${enabled ? "停用" : "启用"}`} title={state?.blockedReason} onChange={(checked) => void togglePlugin(plugin, checked)} />
                                                                 {canConfigure ? (
                                                                     <Button
                                                                         className="plugin-settings-button"
@@ -488,7 +474,6 @@ export default function PluginsPage() {
                             </div>
                         )}
 
-                        <UploadPluginModal open={uploadModalOpen} onClose={() => setUploadModalOpen(false)} onUpload={(file) => void handleUpload(file)} />
                         <Modal
                             className="workspace-modal workspace-modal-wide plugin-settings-modal"
                             title={settingsPlugin ? `${settingsPlugin.manifest.name} 设置` : null}
@@ -617,6 +602,16 @@ function formatPluginDate(value?: string) {
 
 function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
     return { manifest: plugin.manifest, source: plugin.source };
+}
+
+function isOfficialApplicationPlugin(pluginId: string) {
+    return [RUNNINGHUB_PLUGIN_ID, COMFYUI_PLUGIN_ID, EAGLE_PLUGIN_ID, PROMPT_OPTIMIZER_PLUGIN_ID, "portrait-clearance"].includes(pluginId);
+}
+
+function pluginSourceLabel(plugin: RegisteredPlugin, state?: PluginState) {
+    if (plugin.source === "uploaded") return "自定义插件";
+    if (state?.canToggle || isOfficialApplicationPlugin(plugin.manifest.id)) return "官方插件";
+    return "系统插件";
 }
 
 function contributionKindsFor(manifest: PluginManifest): string[] {

@@ -23,15 +23,16 @@ const protocolPluginMaxBytes = protocol.PluginManifestMaxBytes
 // plugin center. Protocol-specific runtime data is nested under Protocol so
 // the public plugin contract can grow without adding another center API.
 type PluginView struct {
-	Manifest    PluginManifestView `json:"manifest"`
-	Source      string             `json:"source"`
-	FileName    string             `json:"fileName"`
-	Package     string             `json:"package"`
-	SHA256      string             `json:"sha256"`
-	InstalledAt time.Time          `json:"installedAt"`
-	UpdatedAt   time.Time          `json:"updatedAt"`
-	Status      string             `json:"status"`
-	Error       string             `json:"error,omitempty"`
+	Manifest    PluginManifestView   `json:"manifest"`
+	Source      string               `json:"source"`
+	FileName    string               `json:"fileName"`
+	Package     string               `json:"package"`
+	SHA256      string               `json:"sha256"`
+	InstalledAt time.Time            `json:"installedAt"`
+	UpdatedAt   time.Time            `json:"updatedAt"`
+	Status      string               `json:"status"`
+	Error       string               `json:"error,omitempty"`
+	Management  PluginManagementView `json:"management"`
 }
 
 type PluginManifestView struct {
