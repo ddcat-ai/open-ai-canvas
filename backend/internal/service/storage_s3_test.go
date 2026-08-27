@@ -118,10 +118,11 @@ func TestS3EndpointAndDigestsEnforceStorageContract(t *testing.T) {
 }
 
 func TestOSSSettingKeepsS3SecretsWhenLocationChanges(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	current := ossSettingValue{
 		Provider:        s3Provider,
 		Region:          "us-east-1",
-		Endpoint:        "https://s3.example.com",
+		Endpoint:        "https://127.0.0.1",
 		Bucket:          "old-bucket",
 		AccessKeyID:     "access-id",
 		AccessKeySecret: "secret-value",
@@ -133,7 +134,7 @@ func TestOSSSettingKeepsS3SecretsWhenLocationChanges(t *testing.T) {
 		Provider:    s3Provider,
 		S3Preset:    "custom",
 		Region:      "us-east-1",
-		Endpoint:    "https://s3.example.com",
+		Endpoint:    "https://127.0.0.1",
 		Bucket:      "new-bucket",
 		AccessKeyID: "access-id",
 		PathPrefix:  "changed-prefix",
