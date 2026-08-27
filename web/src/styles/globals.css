@@ -9654,7 +9654,8 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
 
 .director-viewport-notice {
     position: absolute;
-    z-index: var(--z-toolbar);
+    /* 可恢复故障必须压过右上角的新手引导，否则真实点击会被引导卡片截获。 */
+    z-index: var(--z-toast);
     display: grid;
     gap: var(--space-2);
     padding: var(--space-4);
