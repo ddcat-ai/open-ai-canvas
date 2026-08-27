@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -59,12 +60,18 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 	return map[string]interface{}{"title": plan.Title, "rows": rows}, nil, nil
 }
 
-const maxStoryboardRepairAttempts = 2
+const (
+	maxStoryboardRepairAttempts = 1
+	storyboardRepairMaxDuration = 4 * time.Minute
+	storyboardFinalizeReserve   = 30 * time.Second
+	storyboardMinimumRepairTime = 90 * time.Second
+)
 
 func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, input agentStoryboardInput, config providerConfig, originalText string, validationErr error, shotDuration int, shotCount int) (agentStoryboardPlan, error) {
 	currentText := originalText
 	currentErr := validationErr
 	for attempt := 1; attempt <= maxStoryboardRepairAttempts; attempt++ {
+		_ = s.log(task.UserID, task.ID, "warn", "分镜结构校验失败", fmt.Sprintf("第 %d 次修复前：%s", attempt, currentErr.Error()))
 		if err := s.repo.UpdateTaskProgress(task.ID, "修复分镜结构", 55+attempt*10); err != nil {
 			return agentStoryboardPlan{}, fmt.Errorf("更新分镜修复进度失败，上游修复请求未发出：%w", err)
 		}
@@ -72,7 +79,12 @@ func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, inp
 		if promptErr != nil {
 			return agentStoryboardPlan{}, promptErr
 		}
-		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
+		repairCtx, cancel, budgetErr := storyboardRepairContext(ctx)
+		if budgetErr != nil {
+			return agentStoryboardPlan{}, budgetErr
+		}
+		repaired, repairErr := runTextTask(withProviderRequestKind(repairCtx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true, MaxOutputTokens: storyboardOutputTokenLimit(shotCount)})
+		cancel()
 		if repairErr != nil {
 			return agentStoryboardPlan{}, fmt.Errorf("分镜结构修复失败：%w", repairErr)
 		}
@@ -128,7 +140,7 @@ func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, i
 	if err != nil {
 		return agentStoryboardPlan{}, nil, err
 	}
-	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config, StreamText: true})
+	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config, StreamText: true, MaxOutputTokens: storyboardOutputTokenLimit(shotCount)})
 	if err != nil {
 		return agentStoryboardPlan{}, nil, err
 	}
@@ -148,6 +160,21 @@ func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, i
 		_ = s.log(task.UserID, task.ID, "warn", "分镜复杂度建议", complexityErr.Error())
 	}
 	return plan, assets, nil
+}
+
+func storyboardRepairContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		repairCtx, cancel := context.WithTimeout(ctx, storyboardRepairMaxDuration)
+		return repairCtx, cancel, nil
+	}
+	remaining := time.Until(deadline)
+	if remaining <= storyboardFinalizeReserve+storyboardMinimumRepairTime {
+		return nil, nil, fmt.Errorf("分镜结构校验失败，但任务剩余时间不足以安全修复：剩余 %s", remaining.Round(time.Second))
+	}
+	repairDuration := min(storyboardRepairMaxDuration, remaining-storyboardFinalizeReserve)
+	repairCtx, cancel := context.WithTimeout(ctx, repairDuration)
+	return repairCtx, cancel, nil
 }
 
 func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboardPlan, assets []storyboardAsset, projectStyle storyboardProjectStyle) (map[string]interface{}, []map[string]interface{}, error) {

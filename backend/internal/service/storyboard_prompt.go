@@ -37,7 +37,7 @@ func storyboardPromptValues(brief string, requirements string, assets []storyboa
 	if shotDuration == 5 || shotDuration == 10 || shotDuration == 15 || shotDuration == 30 {
 		durationRule = fmt.Sprintf("本次生成单个镜头时长必须严格等于 %d 秒。", shotDuration)
 	}
-	countRule := "镜头数量由模型按剧情节奏自动决定。"
+	countRule := fmt.Sprintf("镜头数量由模型按剧情节奏自动决定，但 shots 数组必须为 1 到 %d 个镜头，并优先使用完整表达剧情所需的最少镜头数。", maxStoryboardShots)
 	if shotCount >= 1 && shotCount <= 10 {
 		countRule = fmt.Sprintf("shots 数组必须严格输出 %d 个镜头。", shotCount)
 	}
@@ -46,6 +46,13 @@ func storyboardPromptValues(brief string, requirements string, assets []storyboa
 		"画布资产": string(assetJSON), "项目画风": styleText, "角色版本": string(characterJSON),
 		"单镜头时长规则": durationRule, "镜头数量规则": countRule,
 	}
+}
+
+func storyboardOutputTokenLimit(shotCount int) int {
+	if shotCount >= 1 && shotCount <= 10 {
+		return min(12_000, 2_000+shotCount*800)
+	}
+	return 12_000
 }
 
 // 兼容历史模板中强制真人媒介的冲突规则；项目画风才是视觉媒介的唯一来源。

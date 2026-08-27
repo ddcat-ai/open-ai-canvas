@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -22,6 +24,29 @@ func TestStoryboardCinematicQualityContractIncludesCameraLanguageGuide(t *testin
 		if !strings.Contains(contract, term) {
 			t.Fatalf("camera language guide is missing %q: %s", term, contract)
 		}
+	}
+	if !strings.Contains(contract, "1 到 12 个镜头") || !strings.Contains(contract, "所需的最少镜头数") {
+		t.Fatalf("automatic shot count contract is not bounded: %s", contract)
+	}
+}
+
+func TestStoryboardOutputTokenLimitTracksRequestedShotCount(t *testing.T) {
+	if got := storyboardOutputTokenLimit(1); got != 2800 {
+		t.Fatalf("one-shot token limit = %d, want 2800", got)
+	}
+	if got := storyboardOutputTokenLimit(10); got != 10000 {
+		t.Fatalf("ten-shot token limit = %d, want 10000", got)
+	}
+	if got := storyboardOutputTokenLimit(0); got != 12000 {
+		t.Fatalf("automatic token limit = %d, want 12000", got)
+	}
+}
+
+func TestStoryboardRepairContextRejectsInsufficientBudget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), storyboardFinalizeReserve+storyboardMinimumRepairTime-time.Second)
+	defer cancel()
+	if _, _, err := storyboardRepairContext(ctx); err == nil {
+		t.Fatal("expected insufficient repair budget to fail")
 	}
 }
 

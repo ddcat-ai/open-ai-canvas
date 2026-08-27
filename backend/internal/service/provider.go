@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +28,8 @@ import (
 
 	"gorm.io/gorm"
 )
+
+var sseFrameBoundaryPattern = regexp.MustCompile(`\r?\n\r?\n`)
 
 type canvasGenerationInput struct {
 	Mode            string                 `json:"mode"`
@@ -40,6 +44,8 @@ type canvasGenerationInput struct {
 	AgentRequests   *agentToolRequests     `json:"agentRequests"`
 	ImageCapability *ImageCapabilityConfig `json:"-"`
 	StreamText      bool                   `json:"-"` // 分镜请求使用上游 SSE 保活；最终结构仍在流结束后统一校验。
+	MaxOutputTokens int                    `json:"-"`
+	OnTextDelta     func(string)           `json:"-"`
 	VideoCapability *VideoCapabilityConfig `json:"-"`
 }
 
@@ -321,6 +327,13 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	}
 	input.Config = config
 	ctx = withProviderOutboundPolicy(ctx, input.Config)
+	var textPublisher *taskTextStreamPublisher
+	if input.Mode == "text" && strings.HasPrefix(taskType, "canvas_text") {
+		textPublisher = newTaskTextStreamPublisher(s, userID, taskExecutionID(ctx))
+		input.StreamText = true
+		input.OnTextDelta = textPublisher.Publish
+		defer textPublisher.Close()
+	}
 	if isWorkflowProviderInterface(input.Config.InterfaceType) {
 		if err := s.RequireWorkflowPluginForInterface(input.Config.InterfaceType); err != nil {
 			return nil, err
@@ -427,26 +440,23 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 		body = claudeAgentBody(body)
 	}
 	body["model"] = input.Config.Model
-	var payload map[string]interface{}
-	err := postJSON(ctx, input.Config, path, body, &payload)
+	result, err := postStreamingAgent(ctx, input.Config, path, body, protocol, input.OnTextDelta)
 	if protocol == "chat-completion" && isAgentToolChoiceCompatibilityError(err) {
 		if !isAutoAgentToolChoice(body["tool_choice"]) {
 			autoBody := cloneStringAnyMap(body)
 			autoBody["tool_choice"] = "auto"
-			payload = nil
-			err = postJSON(ctx, input.Config, path, autoBody, &payload)
+			result, err = postStreamingAgent(ctx, input.Config, path, autoBody, protocol, input.OnTextDelta)
 		}
 		if isAgentToolChoiceCompatibilityError(err) {
 			withoutToolChoice := cloneStringAnyMap(body)
 			delete(withoutToolChoice, "tool_choice")
-			payload = nil
-			err = postJSON(ctx, input.Config, path, withoutToolChoice, &payload)
+			result, err = postStreamingAgent(ctx, input.Config, path, withoutToolChoice, protocol, input.OnTextDelta)
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
-	return parseAgentToolPayload(payload, protocol)
+	return result, nil
 }
 
 func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, adapter protocol.AgentAdapter) (map[string]interface{}, error) {
@@ -604,6 +614,10 @@ func isAgentToolChoiceCompatibilityError(err error) bool {
 	if errors.As(err, &payloadErr) {
 		message += " " + strings.ToLower(payloadErr.raw)
 	}
+	var httpErr providerHTTPError
+	if errors.As(err, &httpErr) {
+		message += " " + strings.ToLower(httpErr.Body)
+	}
 	return strings.Contains(message, "tool_choice") || strings.Contains(message, "tool choice") || strings.Contains(message, "tool-choice") || strings.Contains(message, "thinking mode")
 }
 
@@ -673,6 +687,293 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 	}
 	result["toolCalls"] = calls
 	return result, nil
+}
+
+func postStreamingAgent(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, onDelta func(string)) (map[string]interface{}, error) {
+	body["stream"] = true
+	if protocol == "chat-completion" {
+		metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+		if metadata.BillingMode == "token" {
+			if err := ensureChatCompletionStreamUsage(body); err != nil {
+				return nil, err
+			}
+		}
+	}
+	parser := newStreamingAgentParser(protocol, onDelta)
+	data, mimeType, err := postStreamingBinary(ctx, config, path, body, parser.consume)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(strings.ToLower(mimeType), "event-stream") {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return nil, fmt.Errorf("Agent 接口返回格式无效：%w", err)
+		}
+		return parseAgentToolPayload(payload, protocol)
+	}
+	parser.flush()
+	return parser.result()
+}
+
+type streamingAgentToolCall struct {
+	id        string
+	name      string
+	arguments string
+}
+
+type streamingAgentParser struct {
+	protocol     string
+	buffer       string
+	text         strings.Builder
+	reasoning    strings.Builder
+	toolCalls    map[int]*streamingAgentToolCall
+	toolCallByID map[string]int
+	completed    map[string]interface{}
+	err          error
+	emit         func(string)
+}
+
+func newStreamingAgentParser(protocol string, emit func(string)) *streamingAgentParser {
+	return &streamingAgentParser{protocol: protocol, toolCalls: map[int]*streamingAgentToolCall{}, toolCallByID: map[string]int{}, emit: emit}
+}
+
+func (p *streamingAgentParser) consume(mimeType string, chunk []byte) {
+	if p == nil || p.err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") || len(chunk) == 0 {
+		return
+	}
+	p.buffer += string(chunk)
+	p.consumeFrames(false)
+}
+
+func (p *streamingAgentParser) flush() {
+	if p == nil || p.err != nil {
+		return
+	}
+	p.consumeFrames(true)
+}
+
+func (p *streamingAgentParser) consumeFrames(flush bool) {
+	for p.err == nil {
+		match := sseFrameBoundaryPattern.FindStringIndex(p.buffer)
+		if match == nil {
+			break
+		}
+		p.consumeFrame(p.buffer[:match[0]])
+		p.buffer = p.buffer[match[1]:]
+	}
+	if flush && p.err == nil && strings.TrimSpace(p.buffer) != "" {
+		p.consumeFrame(p.buffer)
+		p.buffer = ""
+	}
+}
+
+func (p *streamingAgentParser) consumeFrame(frame string) {
+	var eventName string
+	var dataLines []string
+	for _, line := range strings.Split(strings.ReplaceAll(frame, "\r\n", "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			dataLines = append(dataLines, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
+		}
+	}
+	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
+	if raw == "" || raw == "[DONE]" {
+		return
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		p.err = fmt.Errorf("Agent 流式事件解析失败：%w", err)
+		return
+	}
+	if err := validateTextPayload(payload); err != nil {
+		p.err = err
+		return
+	}
+	switch p.protocol {
+	case "responses":
+		p.consumeResponsesEvent(eventName, payload)
+	case "claude-api":
+		p.consumeClaudeEvent(payload)
+	default:
+		p.consumeChatCompletionEvent(payload)
+	}
+}
+
+func (p *streamingAgentParser) consumeResponsesEvent(eventName string, payload map[string]interface{}) {
+	eventType := firstNonEmptyString(strings.TrimSpace(eventName), stringField(payload, "type"))
+	switch eventType {
+	case "response.output_text.delta", "output_text.delta":
+		p.appendText(stringField(payload, "delta"))
+	case "response.reasoning.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
+		p.reasoning.WriteString(stringField(payload, "delta"))
+	case "response.completed":
+		p.completed, _ = payload["response"].(map[string]interface{})
+	case "response.output_item.added":
+		item, _ := payload["item"].(map[string]interface{})
+		if stringField(item, "type") == "function_call" {
+			index := intField(payload, "output_index", len(p.toolCalls))
+			p.setToolCall(index, firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), stringField(item, "name"), stringField(item, "arguments"))
+		}
+	case "response.function_call_arguments.delta":
+		index := p.responseToolCallIndex(payload)
+		p.toolCall(index).arguments += stringField(payload, "delta")
+	case "response.function_call_arguments.done":
+		index := p.responseToolCallIndex(payload)
+		if arguments := stringField(payload, "arguments"); arguments != "" {
+			p.toolCall(index).arguments = arguments
+		}
+	}
+}
+
+func (p *streamingAgentParser) responseToolCallIndex(payload map[string]interface{}) int {
+	itemID := firstNonEmptyString(stringField(payload, "item_id"), stringField(payload, "call_id"))
+	if index, ok := p.toolCallByID[itemID]; ok {
+		return index
+	}
+	return intField(payload, "output_index", len(p.toolCalls))
+}
+
+func (p *streamingAgentParser) consumeChatCompletionEvent(payload map[string]interface{}) {
+	choices, _ := payload["choices"].([]interface{})
+	for _, value := range choices {
+		choice, _ := value.(map[string]interface{})
+		delta, _ := choice["delta"].(map[string]interface{})
+		p.appendText(streamContentText(delta["content"]))
+		p.reasoning.WriteString(firstNonEmptyString(stringField(delta, "reasoning_content"), stringField(delta, "reasoning"), stringField(delta, "reasoning_text")))
+		for fallbackIndex, toolValue := range interfaceSlice(delta["tool_calls"]) {
+			tool, _ := toolValue.(map[string]interface{})
+			index := intField(tool, "index", fallbackIndex)
+			function, _ := tool["function"].(map[string]interface{})
+			current := p.toolCall(index)
+			if id := stringField(tool, "id"); id != "" {
+				current.id = id
+				p.toolCallByID[id] = index
+			}
+			if name := stringField(function, "name"); name != "" {
+				current.name += name
+			}
+			current.arguments += stringField(function, "arguments")
+		}
+	}
+}
+
+func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}) {
+	switch stringField(payload, "type") {
+	case "content_block_start":
+		block, _ := payload["content_block"].(map[string]interface{})
+		index := intField(payload, "index", len(p.toolCalls))
+		switch stringField(block, "type") {
+		case "text":
+			p.appendText(stringField(block, "text"))
+		case "tool_use":
+			arguments := ""
+			if input := block["input"]; input != nil {
+				if encoded, err := json.Marshal(input); err == nil && string(encoded) != "{}" {
+					arguments = string(encoded)
+				}
+			}
+			p.setToolCall(index, stringField(block, "id"), stringField(block, "name"), arguments)
+		}
+	case "content_block_delta":
+		delta, _ := payload["delta"].(map[string]interface{})
+		index := intField(payload, "index", len(p.toolCalls)-1)
+		if stringField(delta, "type") == "text_delta" {
+			p.appendText(stringField(delta, "text"))
+		}
+		if stringField(delta, "type") == "input_json_delta" {
+			p.toolCall(index).arguments += stringField(delta, "partial_json")
+		}
+	case "error":
+		errValue, _ := payload["error"].(map[string]interface{})
+		p.err = errors.New(defaultString(stringField(errValue, "message"), "Claude 上游返回失败"))
+	}
+}
+
+func (p *streamingAgentParser) appendText(delta string) {
+	if delta == "" {
+		return
+	}
+	p.text.WriteString(delta)
+	if p.emit != nil {
+		p.emit(delta)
+	}
+}
+
+func (p *streamingAgentParser) toolCall(index int) *streamingAgentToolCall {
+	if index < 0 {
+		index = 0
+	}
+	if p.toolCalls[index] == nil {
+		p.toolCalls[index] = &streamingAgentToolCall{}
+	}
+	return p.toolCalls[index]
+}
+
+func (p *streamingAgentParser) setToolCall(index int, id string, name string, arguments string) {
+	call := p.toolCall(index)
+	call.id, call.name, call.arguments = id, name, arguments
+	if id != "" {
+		p.toolCallByID[id] = index
+	}
+}
+
+func (p *streamingAgentParser) result() (map[string]interface{}, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	if p.completed != nil {
+		result, err := parseAgentToolPayload(p.completed, p.protocol)
+		if err != nil {
+			return nil, err
+		}
+		if p.text.Len() > 0 {
+			result["text"] = p.text.String()
+		}
+		if p.reasoning.Len() > 0 {
+			result["reasoning"] = p.reasoning.String()
+		}
+		return result, nil
+	}
+	result := map[string]interface{}{"mode": "text", "text": p.text.String(), "toolCalls": []interface{}{}}
+	if p.reasoning.Len() > 0 {
+		result["reasoning"] = p.reasoning.String()
+	}
+	indices := make([]int, 0, len(p.toolCalls))
+	for index := range p.toolCalls {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+	calls := make([]interface{}, 0, len(indices))
+	for _, index := range indices {
+		call := p.toolCalls[index]
+		if call == nil || strings.TrimSpace(call.id) == "" || strings.TrimSpace(call.name) == "" {
+			continue
+		}
+		arguments := call.arguments
+		if strings.TrimSpace(arguments) == "" {
+			arguments = "{}"
+		}
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(arguments), &parsed); err != nil {
+			return nil, fmt.Errorf("Agent 工具参数不是完整 JSON：%w", err)
+		}
+		calls = append(calls, map[string]interface{}{"id": call.id, "type": "function", "function": map[string]interface{}{"name": call.name, "arguments": arguments}})
+	}
+	result["toolCalls"] = calls
+	if p.text.Len() == 0 && len(calls) == 0 {
+		return nil, errors.New("画布 Agent 接口没有返回内容")
+	}
+	return result, nil
+}
+
+func intField(value map[string]interface{}, key string, fallback int) int {
+	number, ok := value[key].(float64)
+	if !ok || math.IsNaN(number) || math.IsInf(number, 0) {
+		return fallback
+	}
+	return int(number)
 }
 
 func extractResponseReasoning(payload map[string]interface{}) string {
@@ -1673,7 +1974,8 @@ func runLegacyTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 		return nil, err
 	}
 	body := map[string]interface{}{"model": input.Config.Model, "input": responseInput}
-	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText)
+	applyTextOutputLimit(body, input.MaxOutputTokens, "max_output_tokens")
+	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText, input.OnTextDelta)
 	if err != nil {
 		if !shouldFallbackTextToChat(err) {
 			return nil, err
@@ -1693,7 +1995,8 @@ func runResponsesTextTask(ctx context.Context, input canvasGenerationInput) (map
 		return nil, err
 	}
 	body := map[string]interface{}{"model": input.Config.Model, "input": responseInput}
-	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText)
+	applyTextOutputLimit(body, input.MaxOutputTokens, "max_output_tokens")
+	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText, input.OnTextDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -1712,7 +2015,8 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 	}
 	messages = append(messages, map[string]interface{}{"role": "user", "content": userContent})
 	body := map[string]interface{}{"model": input.Config.Model, "messages": messages}
-	text, err := requestTextProvider(ctx, input.Config, "/chat/completions", body, "chat-completion", input.StreamText)
+	applyTextOutputLimit(body, input.MaxOutputTokens, "max_tokens")
+	text, err := requestTextProvider(ctx, input.Config, "/chat/completions", body, "chat-completion", input.StreamText, input.OnTextDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -1732,15 +2036,25 @@ func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 		return nil, err
 	}
 	messages = append(messages, map[string]interface{}{"role": "user", "content": content})
-	body := map[string]interface{}{"model": input.Config.Model, "max_tokens": 4096, "messages": messages}
+	maxTokens := 4096
+	if input.MaxOutputTokens > 0 {
+		maxTokens = input.MaxOutputTokens
+	}
+	body := map[string]interface{}{"model": input.Config.Model, "max_tokens": maxTokens, "messages": messages}
 	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
 		body["system"] = systemPrompt
 	}
-	text, err := requestTextProvider(ctx, input.Config, "/messages", body, "claude-api", input.StreamText)
+	text, err := requestTextProvider(ctx, input.Config, "/messages", body, "claude-api", input.StreamText, input.OnTextDelta)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "text", "text": text}, nil
+}
+
+func applyTextOutputLimit(body map[string]interface{}, limit int, field string) {
+	if limit > 0 {
+		body[field] = limit
+	}
 }
 
 func claudeTextContent(input canvasGenerationInput) (interface{}, error) {
@@ -2024,6 +2338,10 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			"audioFormat":  input.Config.AudioFormat,
 			"count":        input.Config.Count,
 		},
+	}
+	if input.MaxOutputTokens > 0 {
+		request.Extra["max_output_tokens"] = input.MaxOutputTokens
+		request.Extra["max_tokens"] = input.MaxOutputTokens
 	}
 	if duration, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds)); err == nil && duration > 0 {
 		request.Duration = duration
@@ -3613,7 +3931,7 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 	return nil, fmt.Errorf("%s视频生成超时", providerName)
 }
 
-func requestTextProvider(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, stream bool) (string, error) {
+func requestTextProvider(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, stream bool, onDelta func(string)) (string, error) {
 	if stream {
 		metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
 		if protocol == "chat-completion" && metadata.BillingMode == "token" {
@@ -3621,7 +3939,7 @@ func requestTextProvider(ctx context.Context, config providerConfig, path string
 				return "", err
 			}
 		}
-		return postStreamingText(ctx, config, path, body, protocol)
+		return postStreamingText(ctx, config, path, body, protocol, onDelta)
 	}
 	var payload map[string]interface{}
 	if err := postJSON(ctx, config, path, body, &payload); err != nil {
@@ -3634,13 +3952,15 @@ func requestTextProvider(ctx context.Context, config providerConfig, path string
 	return text, nil
 }
 
-func postStreamingText(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string) (string, error) {
+func postStreamingText(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, onDelta func(string)) (string, error) {
 	// 只把分镜规划/修复切到上游 SSE，完整 JSON 仍在流结束后校验，避免半截结构污染画布。
 	body["stream"] = true
-	data, mimeType, err := postStreamingBinary(ctx, config, path, body)
+	parser := newStreamingTextDeltaParser(protocol, onDelta)
+	data, mimeType, err := postStreamingBinary(ctx, config, path, body, parser.consume)
 	if err != nil {
 		return "", err
 	}
+	parser.flush()
 	if !strings.Contains(strings.ToLower(mimeType), "event-stream") {
 		var payload map[string]interface{}
 		if err := json.Unmarshal(data, &payload); err != nil {
@@ -3682,11 +4002,12 @@ func extractTextPayload(payload map[string]interface{}, protocol string) string 
 
 func validateTextPayload(payload map[string]interface{}) error {
 	if code, ok := payload["code"].(float64); ok && code != 0 {
-		return errors.New(defaultString(stringField(payload, "msg"), "请求失败"))
+		rawMessage := defaultString(stringField(payload, "msg"), "请求失败")
+		return providerPayloadError{raw: rawMessage, message: providerPayloadErrorMessage(rawMessage)}
 	}
 	if errValue, ok := payload["error"].(map[string]interface{}); ok {
 		if message := stringField(errValue, "message"); message != "" {
-			return errors.New(message)
+			return providerPayloadError{raw: message, message: providerPayloadErrorMessage(message)}
 		}
 	}
 	return nil
@@ -3786,7 +4107,7 @@ func streamContentText(value interface{}) string {
 	return result.String()
 }
 
-func postStreamingBinary(ctx context.Context, config providerConfig, path string, body interface{}) ([]byte, string, error) {
+func postStreamingBinary(ctx context.Context, config providerConfig, path string, body interface{}, onChunk func(string, []byte)) ([]byte, string, error) {
 	data, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL(config.BaseURL, path), bytes.NewReader(data))
 	if err != nil {
@@ -3796,7 +4117,96 @@ func postStreamingBinary(ctx context.Context, config providerConfig, path string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	ApplyOutboundHeaders(req, config.Headers)
-	return doBinary(req)
+	return doBinaryWithConsumer(req, onChunk)
+}
+
+type streamingTextDeltaParser struct {
+	protocol string
+	buffer   string
+	emit     func(string)
+}
+
+func newStreamingTextDeltaParser(protocol string, emit func(string)) *streamingTextDeltaParser {
+	return &streamingTextDeltaParser{protocol: protocol, emit: emit}
+}
+
+func (p *streamingTextDeltaParser) consume(mimeType string, chunk []byte) {
+	if p == nil || p.emit == nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") || len(chunk) == 0 {
+		return
+	}
+	p.buffer += string(chunk)
+	p.consumeFrames(false)
+}
+
+func (p *streamingTextDeltaParser) flush() {
+	if p == nil || p.emit == nil {
+		return
+	}
+	p.consumeFrames(true)
+}
+
+func (p *streamingTextDeltaParser) consumeFrames(flush bool) {
+	for {
+		match := sseFrameBoundaryPattern.FindStringIndex(p.buffer)
+		if match == nil {
+			break
+		}
+		p.consumeFrame(p.buffer[:match[0]])
+		p.buffer = p.buffer[match[1]:]
+	}
+	if flush && strings.TrimSpace(p.buffer) != "" {
+		p.consumeFrame(p.buffer)
+		p.buffer = ""
+	}
+}
+
+func (p *streamingTextDeltaParser) consumeFrame(frame string) {
+	var eventName string
+	var dataLines []string
+	for _, line := range strings.Split(strings.ReplaceAll(frame, "\r\n", "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
+	if raw == "" || raw == "[DONE]" {
+		return
+	}
+	var payload map[string]interface{}
+	if json.Unmarshal([]byte(raw), &payload) != nil {
+		return
+	}
+	if delta := streamingTextDelta(p.protocol, eventName, payload); delta != "" {
+		p.emit(delta)
+	}
+}
+
+func streamingTextDelta(protocol string, eventName string, payload map[string]interface{}) string {
+	if protocol == "responses" {
+		eventType := firstNonEmptyString(strings.TrimSpace(eventName), stringField(payload, "type"))
+		if eventType == "response.output_text.delta" || eventType == "output_text.delta" || eventType == "" || eventType == "message" {
+			return stringField(payload, "delta")
+		}
+		return ""
+	}
+	if protocol == "claude-api" {
+		delta, _ := payload["delta"].(map[string]interface{})
+		if stringField(delta, "type") == "text_delta" {
+			return stringField(delta, "text")
+		}
+		return ""
+	}
+	choices, _ := payload["choices"].([]interface{})
+	var text strings.Builder
+	for _, choice := range choices {
+		record, _ := choice.(map[string]interface{})
+		delta, _ := record["delta"].(map[string]interface{})
+		text.WriteString(streamContentText(delta["content"]))
+	}
+	return text.String()
 }
 
 func postJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {
@@ -3951,6 +4361,10 @@ func providerLoopbackPolicyForRequest(req *http.Request) (OutboundPolicy, bool) 
 }
 
 func doBinary(req *http.Request) ([]byte, string, error) {
+	return doBinaryWithConsumer(req, nil)
+}
+
+func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]byte, string, error) {
 	startedAt := time.Now()
 	requestTimeout := providerHTTPTimeout
 	if deadline, ok := req.Context().Deadline(); ok {
@@ -4022,17 +4436,37 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
 		return nil, "", err
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
-	if err != nil {
-		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
-		return nil, "", err
+	mimeType := resp.Header.Get("Content-Type")
+	var buffered bytes.Buffer
+	reader := io.LimitReader(resp.Body, responseLimit+1)
+	chunk := make([]byte, 32<<10)
+	for {
+		readCount, readErr := reader.Read(chunk)
+		if readCount > 0 {
+			if int64(buffered.Len()+readCount) > responseLimit {
+				err = fmt.Errorf("上游响应超过 %s 限制", formatStorageLimit(responseLimit))
+				recordProviderRequest(req, startedAt, resp.StatusCode, buffered.Bytes(), err)
+				return nil, "", err
+			}
+			_, _ = buffered.Write(chunk[:readCount])
+			if onChunk != nil {
+				onChunk(mimeType, chunk[:readCount])
+			}
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			recordProviderRequest(req, startedAt, resp.StatusCode, buffered.Bytes(), readErr)
+			return nil, "", readErr
+		}
 	}
+	data := buffered.Bytes()
 	if int64(len(data)) > responseLimit {
 		err = fmt.Errorf("上游响应超过 %s 限制", formatStorageLimit(responseLimit))
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
 		return nil, "", err
 	}
-	mimeType := resp.Header.Get("Content-Type")
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if runtimeService != nil {
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)

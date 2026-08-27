@@ -158,6 +158,7 @@ export function useCanvasStoryboard({
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(task), status: NODE_STATUS_LOADING } } : node));
             const completed = await waitForGenerationTask(task.id, {
                 initialTask: task,
+                useTextEvents: true,
                 onTaskUpdate: (next) => setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(next), status: NODE_STATUS_LOADING } } : node)),
             });
             const result = storyboardRowsFromTask(completed);

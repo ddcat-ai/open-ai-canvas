@@ -622,6 +622,7 @@ export default function CreatePage() {
 						signal: requestLifecycle.signal,
 						metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
 						onTaskUpdate: bindTask,
+						onTextDelta: (text) => updateOriginAssistant((item) => ({ ...item, content: text })),
 						...retryContext,
 					}));
 					if (!result.text?.trim()) throw new Error("后端任务没有返回文本");

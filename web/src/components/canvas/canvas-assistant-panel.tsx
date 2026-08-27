@@ -1665,8 +1665,7 @@ function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
 
 async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void, promptCacheKey?: string) {
     if (backendModelRuntimeRequired(config)) {
-        const result = await runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice });
-        if (result.content.trim()) onDelta(result.content);
+        const result = await runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice, onDelta });
         return result;
     }
     return requestToolResponse(config, messages, ONLINE_AGENT_TOOLS, toolChoice, onDelta, { promptCacheKey });
