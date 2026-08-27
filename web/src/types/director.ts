@@ -13,12 +13,13 @@ export type DirectorPose = "neutral" | "stand" | "t_pose" | "walk" | "run" | "si
 export type DirectorCameraMove = "static" | "push_in" | "pull_out" | "pan_left" | "pan_right" | "tilt_up" | "tilt_down" | "orbit_left" | "orbit_right" | "handheld";
 export type DirectorShotSize = "extreme_wide" | "wide" | "full" | "medium" | "close_up" | "extreme_close_up";
 export type DirectorRenderMode = "beauty" | "clay" | "depth" | "normal" | "pose";
+export type DirectorKeyframeEasing = "step" | "linear" | "smooth";
 
 export type DirectorKeyframe = {
     id: string;
     time: number;
     transform: DirectorTransform;
-    easing?: "step" | "linear" | "smooth";
+    easing?: DirectorKeyframeEasing;
 };
 
 export type DirectorFingerBone =
@@ -31,13 +32,22 @@ export type DirectorBoneKeyframe = {
     id: string;
     time: number;
     rotation: DirectorQuat;
-    easing?: "step" | "linear" | "smooth";
+    easing?: DirectorKeyframeEasing;
 };
 
 export type DirectorBoneTrack = {
     bone: DirectorHumanoidBone;
     keyframes: DirectorBoneKeyframe[];
 };
+
+/**
+ * 时间轴上一个可删除关键帧的定位信息。
+ * 三类覆盖当前时间轴真正可见的关键帧轨道：对象 transform、对象骨骼、摄影机。
+ */
+export type DirectorKeyframeDeleteTarget =
+    | { track: "object-transform"; objectId: string; keyframeId: string }
+    | { track: "object-bone"; objectId: string; bone: DirectorHumanoidBone; keyframeId: string }
+    | { track: "camera"; cameraId: string; keyframeId: string };
 
 export type DirectorRig = {
     status: "unmapped" | "ready";

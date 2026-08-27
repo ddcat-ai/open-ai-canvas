@@ -1,12 +1,12 @@
-import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
-import { createDirectorScene } from "@/lib/canvas/director/director-scene";
-import { upsertDirectorSceneById } from "@/lib/canvas/director/director-session";
+import { createDirectorSceneFromTemplate, type DirectorTemplateId } from "@/lib/canvas/director/director-templates";
+import { mergeDirectorOutputPreview, upsertDirectorSceneById } from "@/lib/canvas/director/director-session";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -53,11 +53,24 @@ export function useCanvasDirector({
     updateProject,
 }: UseCanvasDirectorOptions) {
     const { message } = App.useApp();
+    const projectIdRef = useRef<string | null>(projectId);
+    projectIdRef.current = projectId;
 
-    const createDirectorShot = useCallback((position?: Position) => {
+    useEffect(() => {
+        projectIdRef.current = projectId;
+        return () => {
+            if (projectIdRef.current === projectId) projectIdRef.current = null;
+        };
+    }, [projectId]);
+
+    /**
+     * 新建镜头。templateId 由调用方（模板选择弹窗）显式给出 —— 这里不设默认模板，
+     * 否则又会回到「无条件塞一个默认演员」的老问题。
+     */
+    const createDirectorShot = useCallback((templateId: DirectorTemplateId, position?: Position) => {
         const shots = nodesRef.current.filter((node) => node.metadata?.workflowKind === "shot");
         const shotIndex = Math.max(0, ...shots.map((node) => node.metadata?.shotIndex || 0)) + 1;
-        let scene = createDirectorScene(`镜头 ${shotIndex}`);
+        let scene = createDirectorSceneFromTemplate(templateId, `镜头 ${shotIndex}`);
         const shot = scene.shots[0];
         scene = { ...scene, shots: [{ ...shot, name: `镜头 ${shotIndex}` }] };
         const node = createCanvasNode(CanvasNodeType.Video, position || getCanvasCenter(), {
@@ -87,7 +100,9 @@ export function useCanvasDirector({
         if (!node || node.metadata?.workflowKind !== "shot") return;
         let scene = currentDirectorScenes(projectId, directorScenes).find((item) => item.id === node.metadata?.directorSceneId);
         if (!scene) {
-            scene = createDirectorScene(node.metadata?.workflowTitle || node.title || "镜头场景");
+            // 孤儿节点修复路径：节点存在但场景丢了。这不是「新建」，不弹模板选择，
+            // 用空场景兜底 —— 绝不在用户没选过的情况下塞演员进去。
+            scene = createDirectorSceneFromTemplate("empty", node.metadata?.workflowTitle || node.title || "镜头场景");
             const shot = scene.shots[0];
             scene = { ...scene, shots: [{ ...shot, name: node.metadata?.workflowTitle || node.title || shot.name, prompt: node.metadata?.workflowDescription || "" }] };
             const directorSceneId = scene.id;
@@ -104,13 +119,24 @@ export function useCanvasDirector({
     }, [directorScenes, projectId, updateProject]);
 
     const applyDirectorOutput = useCallback(async (output: DirectorSceneOutput) => {
-        const sourceNode = nodesRef.current.find((item) => item.id === directorNodeId);
-        if (!sourceNode) throw new Error("镜头节点不存在");
+        const outputProjectId = projectId;
+        if (projectIdRef.current !== outputProjectId) throw new Error("画布项目已切换，请重试");
+        const sourceNodeAtStart = nodesRef.current.find((item) => item.id === directorNodeId);
+        if (!sourceNodeAtStart || sourceNodeAtStart.metadata?.directorSceneId !== output.scene.id) throw new Error("镜头节点不存在或场景已切换");
+        const sourceNodeId = sourceNodeAtStart.id;
         const [image, videoUpload] = await Promise.all([
             uploadImage(output.beauty),
             output.clayVideo ? uploadMediaFile(output.clayVideo, "director-clay") : Promise.resolve(null),
         ]);
+        // 上传期间项目、节点和镜头都可能变化。以当前权威状态重新核验并合并，
+        // 不允许旧输出写入另一项目，也不允许旧 scene 快照覆盖并发编辑。
+        const outputProject = useCanvasStore.getState().projects.find((item) => item.id === outputProjectId);
+        const sourceNode = nodesRef.current.find((item) => item.id === sourceNodeId);
+        const latestScene = outputProject?.directorScenes.find((item) => item.id === output.scene.id);
+        if (projectIdRef.current !== outputProjectId || !outputProject || !sourceNode || sourceNode.metadata?.directorSceneId !== output.scene.id || !latestScene || !latestScene.shots.some((shot) => shot.id === output.shot.id)) throw new Error("输出期间项目或镜头已切换、删除，请重试");
         const previewId = sourceNode.metadata?.directorPreviewNodeId || `image-director-${Date.now()}`;
+        const mergedScene = mergeDirectorOutputPreview(latestScene, { sceneId: output.scene.id, shotId: output.shot.id, previewNodeId: previewId });
+        if (!mergedScene) throw new Error("输出期间镜头已切换或删除，请重试");
         const previewSize = fitNodeSize(image.width, image.height);
         const nextNodes = [...nodesRef.current];
         const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
@@ -175,8 +201,8 @@ export function useCanvasDirector({
         connectionsRef.current = nextConnections;
         setNodes(finalizedNodes);
         setConnections(nextConnections);
-        saveDirectorScene({ ...output.scene, shots: output.scene.shots.map((shot) => shot.id === output.shot.id ? { ...shot, previewNodeId: previewId, depthNodeId: undefined, normalNodeId: undefined } : shot) });
-    }, [connectionsRef, directorNodeId, nodesRef, saveDirectorScene, setConnections, setNodes]);
+        saveDirectorScene(mergedScene);
+    }, [connectionsRef, directorNodeId, nodesRef, projectId, saveDirectorScene, setConnections, setNodes]);
 
     return { applyDirectorOutput, createDirectorShot, openDirectorWorkbench, saveDirectorScene };
 }
