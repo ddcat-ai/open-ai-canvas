@@ -242,25 +242,52 @@ func providerUserFacingErrorMessage(err error) string {
 	}
 	var httpErr providerHTTPError
 	if errors.As(err, &httpErr) {
+		// 仅对上游参数校验类状态码解析正文。其他状态码的正文可能是网关 HTML、
+		// 鉴权诊断或含密钥的内部信息，归类价值低且更容易误判。
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			if message, ok := providerPayloadErrorCategory(httpErr.Body); ok {
+				return message
+			}
+		}
 		return httpErr.Error()
 	}
 	return "连接模型服务失败，请检查渠道地址和网络"
 }
 
-func providerPayloadErrorMessage(raw string) string {
+// providerPayloadErrorCategory 把上游失败正文归类为固定的用户可见原因。
+// 第二个返回值为 false 表示正文无法归类，调用方应退回到更通用的提示，
+// 不要因为归类失败就把正文本身当作错误信息。
+// 正文可能包含密钥或内部诊断信息，只能参与归类，不得回传用户或写入日志。
+func providerPayloadErrorCategory(raw string) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
-	switch {
-	case strings.Contains(normalized, "safety"), strings.Contains(normalized, "moderation"), strings.Contains(normalized, "content policy"), strings.Contains(normalized, "blocked"):
-		return "请求内容未通过模型服务安全审核，请调整后重试"
-	case strings.Contains(normalized, "quota"), strings.Contains(normalized, "insufficient"), strings.Contains(normalized, "balance"), strings.Contains(normalized, "billing"):
-		return "模型服务额度不足，请检查渠道余额或配额"
-	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
-		return "模型不存在或当前渠道未获得模型权限"
-	case strings.Contains(normalized, "invalid"), strings.Contains(normalized, "parameter"), strings.Contains(normalized, "argument"):
-		return "模型服务拒绝了请求，请检查模型和参数"
-	default:
-		return "模型服务返回失败，请检查请求内容或渠道配置"
+	if normalized == "" {
+		return "", false
 	}
+	switch {
+	// 真人肖像类目只匹配供应商错误码里的稳定标识，不扫描自然语言。
+	// 正文常常回显用户提示词，"likeness"、"肖像"这类词单独出现并不能证明
+	// 上游是因为真人形象拒绝，按词判断会把普通参数错误误报成肖像问题。
+	// 该类目排在安全审核之前：错误码已经足够具体，比通用审核提示更可行动。
+	case strings.Contains(normalized, "privacyinformation"), strings.Contains(normalized, "sensitivecontentdetected"):
+		return "输入素材疑似包含真人形象，该模型拒绝生成，请更换为非真人素材或改用其他模型", true
+	case strings.Contains(normalized, "safety"), strings.Contains(normalized, "moderation"), strings.Contains(normalized, "content policy"), strings.Contains(normalized, "blocked"):
+		return "请求内容未通过模型服务安全审核，请调整后重试", true
+	case strings.Contains(normalized, "quota"), strings.Contains(normalized, "insufficient"), strings.Contains(normalized, "balance"), strings.Contains(normalized, "billing"):
+		return "模型服务额度不足，请检查渠道余额或配额", true
+	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
+		return "模型不存在或当前渠道未获得模型权限", true
+	case strings.Contains(normalized, "invalid"), strings.Contains(normalized, "parameter"), strings.Contains(normalized, "argument"):
+		return "模型服务拒绝了请求，请检查模型和参数", true
+	}
+	return "", false
+}
+
+func providerPayloadErrorMessage(raw string) string {
+	if message, ok := providerPayloadErrorCategory(raw); ok {
+		return message
+	}
+	return "模型服务返回失败，请检查请求内容或渠道配置"
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {

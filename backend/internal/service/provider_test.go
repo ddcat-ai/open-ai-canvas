@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -382,6 +383,169 @@ func TestProviderPayloadErrorMessageUsesSafeActionableCategories(t *testing.T) {
 				t.Fatalf("provider payload detail leaked: %q", message)
 			}
 		})
+	}
+}
+
+func TestProviderPayloadErrorCategoryFlagsRealPersonRejection(t *testing.T) {
+	raw := `{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"The request failed because the input image 'content[1]' may contain real person. Request id: secret-trace"}}`
+	message, ok := providerPayloadErrorCategory(raw)
+	if !ok {
+		t.Fatalf("providerPayloadErrorCategory() ok = false, want true")
+	}
+	if !strings.Contains(message, "真人形象") {
+		t.Fatalf("providerPayloadErrorCategory() = %q, want 真人形象 category", message)
+	}
+	if strings.Contains(message, "secret") || strings.Contains(message, "content[1]") {
+		t.Fatalf("provider payload detail leaked: %q", message)
+	}
+}
+
+func TestProviderPayloadErrorCategoryReportsUnclassifiedBodies(t *testing.T) {
+	for _, raw := range []string{"", "   ", "trace_id=private internal stack"} {
+		if message, ok := providerPayloadErrorCategory(raw); ok {
+			t.Fatalf("providerPayloadErrorCategory(%q) = %q, want no category", raw, message)
+		}
+	}
+}
+
+func TestProviderUserFacingErrorMessageClassifiesRejectedRequestBodies(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		want       string
+	}{
+		{
+			name:       "real person rejection",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"input image may contain real person, secret-trace"}}`,
+			want:       "真人形象",
+		},
+		{
+			name:       "moderation rejection",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"message":"request blocked by content policy, secret-trace"}}`,
+			want:       "安全审核",
+		},
+		{
+			name:       "unprocessable entity is classified too",
+			statusCode: http.StatusUnprocessableEntity,
+			body:       `{"error":{"message":"insufficient balance, secret-trace"}}`,
+			want:       "额度不足",
+		},
+		{
+			name:       "unclassified body keeps the generic parameter hint",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"message":"trace_id=secret-trace"}}`,
+			want:       "请检查模型和参数",
+		},
+		{
+			name:       "empty body keeps the generic parameter hint",
+			statusCode: http.StatusBadRequest,
+			body:       "",
+			want:       "请检查模型和参数",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := providerUserFacingErrorMessage(providerHTTPError{StatusCode: tt.statusCode, Body: tt.body})
+			if !strings.Contains(message, tt.want) {
+				t.Fatalf("providerUserFacingErrorMessage() = %q, want category %q", message, tt.want)
+			}
+			if strings.Contains(message, "secret-trace") || strings.Contains(message, `{"error"`) {
+				t.Fatalf("provider response body leaked: %q", message)
+			}
+		})
+	}
+}
+
+func TestProviderUserFacingErrorMessageOnlyClassifiesValidationStatuses(t *testing.T) {
+	// 鉴权失败与网关错误的正文可能是密钥诊断或代理 HTML，不参与归类。
+	for _, statusCode := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadGateway} {
+		message := providerUserFacingErrorMessage(providerHTTPError{
+			StatusCode: statusCode,
+			Body:       `{"error":{"message":"blocked by content policy, api-key=secret"}}`,
+		})
+		if strings.Contains(message, "安全审核") {
+			t.Fatalf("status %d classified from response body: %q", statusCode, message)
+		}
+		if strings.Contains(message, "secret") || strings.Contains(message, "api-key") {
+			t.Fatalf("status %d leaked response body: %q", statusCode, message)
+		}
+	}
+}
+
+func TestProviderUserFacingErrorMessageClassifiesWrappedHTTPErrors(t *testing.T) {
+	wrapped := fmt.Errorf("视频任务创建失败：%w", providerHTTPError{
+		StatusCode: http.StatusBadRequest,
+		Body:       `{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"may contain real person","request_id":"secret-trace"}}`,
+	})
+	message := providerUserFacingErrorMessage(wrapped)
+	if !strings.Contains(message, "真人形象") {
+		t.Fatalf("providerUserFacingErrorMessage() = %q, want 真人形象 category", message)
+	}
+	if strings.Contains(message, "secret-trace") || strings.Contains(message, `{"error"`) {
+		t.Fatalf("provider response body leaked through wrapped error: %q", message)
+	}
+}
+
+// 正文经常回显用户提示词。肖像类词汇本身不能触发真人类目，
+// 否则普通的参数错误或安全审核会被误报成肖像问题。
+func TestProviderPayloadErrorCategoryIgnoresEchoedPortraitWording(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "echoed chinese portrait prompt stays a parameter error",
+			raw:  `{"error":{"message":"invalid parameter: prompt=生成油画肖像"}}`,
+			want: "请检查模型和参数",
+		},
+		{
+			name: "echoed english likeness prompt stays a parameter error",
+			raw:  `{"error":{"message":"invalid argument: style=likeness study"}}`,
+			want: "请检查模型和参数",
+		},
+		{
+			name: "moderation wins over echoed real person prompt",
+			raw:  `{"error":{"message":"request blocked by content policy: prompt=real person portrait"}}`,
+			want: "安全审核",
+		},
+		{
+			name: "bare real person prose is not classified as likeness",
+			raw:  `{"error":{"message":"this model does not support real people yet"}}`,
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message, ok := providerPayloadErrorCategory(tt.raw)
+			if tt.want == "" {
+				if ok {
+					t.Fatalf("providerPayloadErrorCategory() = %q, want no category", message)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("providerPayloadErrorCategory() ok = false, want category %q", tt.want)
+			}
+			if strings.Contains(message, "真人形象") {
+				t.Fatalf("echoed portrait wording misclassified as likeness: %q", message)
+			}
+			if !strings.Contains(message, tt.want) {
+				t.Fatalf("providerPayloadErrorCategory() = %q, want category %q", message, tt.want)
+			}
+		})
+	}
+}
+
+// 供应商错误码与安全审核措辞同时出现时，以更具体的错误码为准。
+func TestProviderPayloadErrorCategoryPrefersProviderCodeOverModerationWording(t *testing.T) {
+	raw := `{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"blocked by content policy"}}`
+	message, ok := providerPayloadErrorCategory(raw)
+	if !ok || !strings.Contains(message, "真人形象") {
+		t.Fatalf("providerPayloadErrorCategory() = %q, ok = %v, want 真人形象 category", message, ok)
 	}
 }
 
