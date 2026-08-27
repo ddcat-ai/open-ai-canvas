@@ -103,6 +103,9 @@ func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Tim
 	setting.Provider = firstNonEmpty(resource.Provider, setting.Provider)
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
+	if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
+		return s.signedHTTPSPublicResourceURL(resource.ID, expiresAt)
+	}
 	return signedOSSObjectURL(setting, resource.ObjectKey, expiresAt)
 }
 
@@ -130,6 +133,11 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		if err != nil {
 			return nil, err
 		}
+		// S3 兼容 Endpoint 可能是私网服务；浏览器默认始终使用同源代理。
+		// 只有明确的服务端上游需求才签发可公开访问的短时地址。
+		if setting.Provider == s3Provider && !options.ForceDirect {
+			return &ResourceDelivery{Resource: resource}, nil
+		}
 		if setting.Provider == qiniuKodoProvider && setting.CDNBaseURL != "" {
 			// 七牛私有空间即使配置了绑定域名，也不能匿名访问；必须使用
 			// Kodo 私有下载签名，否则浏览器会收到 NotSupportAnonymous。
@@ -147,6 +155,13 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 			return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
 		}
 		if options.ForceDirect {
+			if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
+				redirectURL, err := s.signedHTTPSPublicResourceURL(resource.ID, time.Now().Add(directResourceURLTTL))
+				if err != nil {
+					return nil, err
+				}
+				return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
+			}
 			redirectURL, err := signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(directResourceURLTTL))
 			if err != nil {
 				return nil, err
@@ -173,6 +188,17 @@ func (s *Service) signedPublicResourceURL(resourceID string, expiresAt time.Time
 	query.Set("signature", signature)
 	baseURL.RawQuery = query.Encode()
 	return baseURL.String(), nil
+}
+
+func (s *Service) signedHTTPSPublicResourceURL(resourceID string, expiresAt time.Time) (string, error) {
+	baseURL, err := s.publicResourceBaseURL()
+	if err != nil {
+		return "", err
+	}
+	if baseURL.Scheme != "https" {
+		return "", BadAuthRequest("私网或 HTTP S3 用于上游资源时，服务器公开访问地址必须使用 HTTPS")
+	}
+	return s.signedPublicResourceURL(resourceID, expiresAt)
 }
 
 func (s *Service) verifyPublicResourceSignature(resourceID string, expires string, signature string) error {
@@ -323,7 +349,7 @@ func (s *Service) OpenPublicResourceRange(id string, expires string, signature s
 	if err != nil {
 		return nil, Forbidden("匿名下载链接无效")
 	}
-	if resource.Provider != "local" {
+	if resource.Provider != "local" && resource.Provider != s3Provider {
 		return nil, Forbidden("匿名下载链接无效")
 	}
 	if err := s.verifyPublicResourceSignature(resource.ID, expires, signature); err != nil {
@@ -368,11 +394,11 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, err
 	}
 	provider := "local"
-	objectKey := localObjectKey(userID, kind, fileName, now)
+	objectKey := localObjectKey(userID, kind, fileName, mimeType, now)
 	resource := model.Resource{ID: newID(), UserID: userID, Kind: kind, Status: model.ResourceStatusPending, Provider: provider, ObjectKey: objectKey, MimeType: mimeType, Size: size, Width: width, Height: height, DurationMs: durationMs, CreatedAt: now, UpdatedAt: now}
 	if useOSS {
 		provider = setting.Provider
-		objectKey = ossObjectKey(setting, userID, kind, fileName, now)
+		objectKey = ossObjectKey(setting, userID, kind, fileName, mimeType, now)
 		resource.Provider = provider
 		resource.Endpoint = setting.Endpoint
 		resource.Bucket = setting.Bucket
@@ -431,8 +457,8 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	return &resource, nil
 }
 
-func localObjectKey(userID string, kind string, fileName string, now time.Time) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
+func localObjectKey(userID string, kind string, fileName string, mimeType string, now time.Time) string {
+	ext := resourceFileExtension(fileName, mimeType, kind)
 	return path.Join("users", safeObjectSegment(userID), kind, now.Format("2006/01/02"), newID()+ext)
 }
 
@@ -676,6 +702,26 @@ func extensionFromMimeType(mimeType string) string {
 	return "bin"
 }
 
+func resourceFileExtension(fileName string, mimeType string, kind string) string {
+	if ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName))); ext != "" && ext != "." {
+		return ext
+	}
+	cleanMimeType := strings.TrimSpace(strings.Split(mimeType, ";")[0])
+	if extensions, err := mime.ExtensionsByType(cleanMimeType); err == nil && len(extensions) > 0 {
+		return strings.ToLower(extensions[0])
+	}
+	switch kind {
+	case "image":
+		return ".png"
+	case "video":
+		return ".mp4"
+	case "audio":
+		return ".mp3"
+	default:
+		return ".bin"
+	}
+}
+
 func imageDimensions(data []byte) (int, int) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
@@ -697,26 +743,30 @@ func (s *Service) activeResourceOSSSetting(userID string) (ossSettingValue, stri
 	if err != nil {
 		return ossSettingValue{}, "", false, err
 	}
-	if userSetting != nil && value.Enabled {
-		value, err = validateActiveOSSSetting(value, "用户 OSS 尚未启用", "你的 OSS 配置不完整")
-		return value, userSetting.ID, true, err
-	}
 	_, systemValue, err := s.readOSSSetting()
 	if err != nil {
 		return ossSettingValue{}, "", false, err
+	}
+	userAllowed := value.Provider != s3Provider || systemValue.AllowUserS3
+	if userSetting != nil && value.Enabled && userAllowed {
+		value, err = validateActiveOSSSetting(value, "用户 OSS 尚未启用", "你的 OSS 配置不完整")
+		return value, firstNonEmpty(value.StorageLocationID, userSetting.ID), true, err
 	}
 	if !systemValue.Enabled {
 		return ossSettingValue{}, "", false, nil
 	}
 	systemValue, err = validateActiveOSSSetting(systemValue, "管理员尚未启用 OSS", "平台 OSS 配置不完整，请联系管理员")
-	return systemValue, "", true, err
+	return systemValue, systemValue.StorageLocationID, true, err
 }
 
 func (s *Service) ossSettingForResource(userID string, resource *model.Resource) (ossSettingValue, error) {
 	var setting ossSettingValue
 	var err error
 	if resource.StorageSettingID != "" {
-		_, setting, err = s.readUserOSSSettingByID(userID, resource.StorageSettingID)
+		_, setting, err = s.storageLocationValue(resource.StorageSettingID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			_, setting, err = s.readUserOSSSettingByID(userID, resource.StorageSettingID)
+		}
 		if err == nil {
 			_, current, currentErr := s.readUserOSSSetting(userID)
 			if currentErr != nil {
@@ -805,8 +855,8 @@ func validateActiveOSSSetting(setting ossSettingValue, disabledMessage string, i
 	if !setting.Enabled {
 		return ossSettingValue{}, BadAuthRequest(disabledMessage)
 	}
-	if setting.Provider != aliyunOSSProvider && setting.Provider != tencentCOSProvider && setting.Provider != qiniuKodoProvider {
-		return ossSettingValue{}, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS 和七牛云 Kodo")
+	if setting.Provider != aliyunOSSProvider && setting.Provider != tencentCOSProvider && setting.Provider != qiniuKodoProvider && setting.Provider != s3Provider {
+		return ossSettingValue{}, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo 和通用 S3")
 	}
 	if setting.Bucket == "" || setting.Endpoint == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return ossSettingValue{}, BadAuthRequest(incompleteMessage)
@@ -832,8 +882,8 @@ func normalizeResourceKind(kind string, mimeType string) string {
 	return "file"
 }
 
-func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName string, now time.Time) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
+func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName string, mimeType string, now time.Time) string {
+	ext := resourceFileExtension(fileName, mimeType, kind)
 	name := newID()
 	parts := []string{setting.PathPrefix, "users", safeObjectSegment(userID), kind, now.Format("2006/01/02"), name + ext}
 	return strings.Trim(strings.Join(nonEmptySegments(parts), "/"), "/")
@@ -846,6 +896,9 @@ func putOSSObject(setting ossSettingValue, objectKey string, mimeType string, si
 	}
 	if setting.Provider == qiniuKodoProvider {
 		return putQiniuObject(setting, objectKey, mimeType, size, body)
+	}
+	if setting.Provider == s3Provider {
+		return putS3Object(setting, objectKey, mimeType, size, body)
 	}
 	return putAliyunOSSObject(setting, objectKey, mimeType, size, body)
 }
@@ -884,6 +937,9 @@ type ossObjectStream struct {
 
 func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
 	setting = normalizeOSSSetting(setting)
+	if setting.Provider == s3Provider {
+		return getS3ObjectRange(setting, objectKey, rangeHeader)
+	}
 	if setting.CDNBaseURL != "" {
 		return getOSSObjectRangeViaCDN(setting, objectKey, rangeHeader)
 	}
@@ -939,6 +995,9 @@ func decimalDigits(value string) bool {
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
 	setting = normalizeOSSSetting(setting)
+	if setting.Provider == s3Provider {
+		return signedS3ObjectURL(setting, objectKey, expiresAt)
+	}
 	if setting.Provider == qiniuKodoProvider {
 		return signedQiniuObjectURL(setting, objectKey, expiresAt)
 	}
