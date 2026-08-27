@@ -259,7 +259,7 @@ function RecentProjectRow({ summary, divided }: { summary: ProjectSummary; divid
 
 function StartMode({ icon, title, description, action, href, onClick }: { icon: ReactNode; title: string; description: string; action: string; href?: string; onClick?: () => void }) {
     const content = <><span className="mt-0.5 text-foreground/45">{icon}</span><span className="min-w-0"><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs leading-5 text-foreground/48">{description}</span></span><span className="self-center text-xs font-medium text-foreground/50">{action} →</span></>;
-    const className = "grid grid-cols-[20px_minmax(0,1fr)_auto] gap-3 py-4 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
+    const className = "grid w-full grid-cols-[20px_minmax(0,1fr)_auto] gap-3 py-4 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
     return href ? <Link to={href} className={className}>{content}</Link> : <button type="button" className={className} onClick={onClick}>{content}</button>;
 }
 
