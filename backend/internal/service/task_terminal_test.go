@@ -170,6 +170,32 @@ func TestTaskTerminalCoordinatorRefundsFailureBeforeProviderRequest(t *testing.T
 	}
 }
 
+func TestTaskTerminalCoordinatorLogsUnrecordedProviderFailure(t *testing.T) {
+	task := &model.Task{ID: "task-1", UserID: "user-1", BillingOrderID: "order-1"}
+	coordinator := newTaskTerminalCoordinatorForTest(
+		&taskTerminalRepositoryStub{task: task},
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	var loggedTask model.Task
+	var loggedErr error
+	coordinator.logFailedAttempt = func(value model.Task, err error) {
+		loggedTask = value
+		loggedErr = err
+	}
+	failure := errors.New("provider preflight failed")
+
+	if err := coordinator.handleExecutionFailure(task, failure, false, true); !errors.Is(err, failure) {
+		t.Fatalf("handleExecutionFailure() error = %v, want %v", err, failure)
+	}
+	if loggedTask.ID != task.ID || !errors.Is(loggedErr, failure) {
+		t.Fatalf("logged failure = task:%#v error:%v", loggedTask, loggedErr)
+	}
+}
+
 func TestTaskTerminalCoordinatorReturnsTerminalStateWriteError(t *testing.T) {
 	task := &model.Task{ID: "task-1", UserID: "user-1", BillingOrderID: "order-1"}
 	terminalError := errors.New("database unavailable")

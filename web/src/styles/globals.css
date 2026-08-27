@@ -8818,6 +8818,22 @@
         color: var(--canvas-composer-submit-action-fg);
     }
 
+    .canvas-node-composer-submit.canvas-node-composer-submit-canvas {
+        min-width: var(--space-8) !important;
+        height: var(--space-8) !important;
+        gap: var(--space-1-half) !important;
+        padding: var(--space-half) !important;
+        font-size: var(--fs-caption) !important;
+    }
+
+    .canvas-node-composer-submit.canvas-node-composer-submit-canvas.has-cost {
+        padding-left: var(--space-2-half) !important;
+    }
+
+    .canvas-node-composer-submit-canvas .canvas-node-composer-submit-cost > :first-child {
+        font-size: var(--fs-caption);
+    }
+
     .canvas-node-composer-resize-handle {
         display: grid;
         width: 100%;

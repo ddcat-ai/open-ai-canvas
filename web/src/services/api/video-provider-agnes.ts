@@ -11,6 +11,7 @@ type AgnesTaskResponse = {
     task_id?: string;
     video_id?: string;
     status?: string;
+    url?: string;
     metadata?: { url?: string } | null;
     error?: { message?: string; detail?: string; code?: string } | null;
     message?: string;
@@ -64,8 +65,8 @@ export async function pollAgnesVideoTask(deps: VideoProviderDeps, config: Resolv
         const state = deps.response.unwrapEnvelope(raw, "Agnes 接口没有返回任务状态");
         const status = String(state.status || "").trim().toLowerCase();
         if (status === "completed" || status === "succeeded" || status === "success" || status === "done") {
-            const url = String(state.metadata?.url || "").trim();
-            if (!url) return { status: "failed", error: "Agnes 任务已完成但没有返回 metadata.url" };
+            const url = String(state.metadata?.url || state.url || "").trim();
+            if (!url) return { status: "failed", error: "Agnes 任务已完成但没有返回视频 URL" };
             return { status: "completed", result: await deps.response.videoResultFromUrl(url, options) };
         }
         if (status === "failed" || status === "cancelled" || status === "canceled") return { status: "failed", error: agnesFailureMessage(state) };

@@ -7,6 +7,7 @@ import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig
 import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-generation";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { modelQuoteRequest } from "@/lib/model-pricing";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -26,6 +27,7 @@ import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins
 import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
+import { quoteLogicalModel } from "@/services/api/logical-models";
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -111,13 +113,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     }, [globalConfig, promptOptimizerEnabled, promptOptimizerInstallation]);
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
-    const credits = requestCreditCost({
+    const configuredCredits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
         modelCosts: priceChannel.modelCosts,
         model: modelOptionName(config.model),
         count: mode === "image" ? generationCount : 1,
         seconds: mode === "video" ? config.videoSeconds : 1,
+        capability: mode,
+        config,
+        requirements,
     });
+    const quoteRequest = modelQuoteRequest(config, config.model, mode, requirements);
+    const quoteRequestKey = JSON.stringify(quoteRequest || null);
+    const [quotedCredits, setQuotedCredits] = useState<number | null>(null);
+    const credits = quotedCredits ?? configuredCredits;
     const activeReferenceCount = activeReferences.length;
     const videoFrameOptions = resolvedMentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
     const hasVideoPromptTools = mode === "video" && !simpleMode && videoFrameOptions.length > 0;
@@ -158,6 +167,23 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         setManualPromptHeight(null);
         setManualExpandedPromptHeight(null);
     }, [node.id]);
+
+    useEffect(() => {
+        if (!creditsEnabled || !quoteRequest) {
+            setQuotedCredits(null);
+            return;
+        }
+        const controller = new AbortController();
+        setQuotedCredits(null);
+        quoteLogicalModel(quoteRequest.logicalModelID, quoteRequest.intent, controller.signal)
+            .then(({ quote }) => setQuotedCredits(quote.amountMicrocredits / 1_000_000))
+            .catch(() => {
+                if (!controller.signal.aborted) setQuotedCredits(null);
+            });
+        return () => controller.abort();
+        // quoteRequestKey captures the full normalized request without retriggering on object identity.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [creditsEnabled, quoteRequestKey]);
 
     const skillReferences = useMemo(() => resolvedMentionReferences.filter((item) => item.kind === "skill"), [resolvedMentionReferences]);
 
@@ -270,12 +296,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     const renderSubmitButton = (expanded: boolean) => {
         const showCost = creditsEnabled && credits !== null;
-        const formattedCredits = credits?.toLocaleString();
+        const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
         const actionLabel = isRunning ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，生成` : "生成";
         return (
             <Button
                 type="text"
-                className={`canvas-node-composer-submit ${showCost ? "has-cost" : ""}`}
+                className={`canvas-node-composer-submit canvas-node-composer-submit-canvas ${showCost ? "has-cost" : ""}`}
                 disabled={isRunning || isSubmitDisabled}
                 style={
                     {
@@ -295,7 +321,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     </span>
                 ) : null}
                 <span className="canvas-node-composer-submit-action" aria-hidden>
-                    {isRunning ? <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-3" />}
+                    {isRunning ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-3.5" strokeWidth={2.4} />}
                 </span>
             </Button>
         );

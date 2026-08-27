@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -82,6 +83,24 @@ func TestEnrichAPICallLogReadsArkVideoUsage(t *testing.T) {
 	(&Service{}).EnrichAPICallLog(missing, []byte(`{"usage":{}}`))
 	if missing.UsageAvailable {
 		t.Fatalf("EnrichAPICallLog() accepted empty Ark usage: %#v", missing)
+	}
+}
+
+func TestEnrichAPICallLogKeepsUserFacingAndUpstreamFailureDetails(t *testing.T) {
+	log := &model.ApiCallLog{
+		Status:     model.ApiCallStatusFailed,
+		StatusCode: 400,
+		Error:      "上游 HTTP 400",
+	}
+	(&Service{}).EnrichAPICallLog(log, []byte(`{"error":{"code":"invalid_request","message":"invalid parameter: size"}}`))
+	if !strings.Contains(log.Error, "模型服务拒绝了请求，请检查模型和参数") {
+		t.Fatalf("EnrichAPICallLog() missing user-facing category: %q", log.Error)
+	}
+	if !strings.Contains(log.Error, "invalid parameter: size") {
+		t.Fatalf("EnrichAPICallLog() missing upstream detail: %q", log.Error)
+	}
+	if log.ErrorCode != "invalid_request" {
+		t.Fatalf("EnrichAPICallLog() error code = %q", log.ErrorCode)
 	}
 }
 

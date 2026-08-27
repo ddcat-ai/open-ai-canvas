@@ -942,12 +942,29 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 		log.ProviderRequestID = providerRequestIDFromPath(log.Path)
 	}
 	payloads := providerResponsePayloads(responseBody)
-	if len(payloads) == 0 {
-		return
-	}
 	for _, payload := range payloads {
 		s.enrichAPICallLogPayload(log, payload)
 	}
+	s.enrichAPICallLogFailureSummary(log, responseBody)
+}
+
+func (s *Service) enrichAPICallLogFailureSummary(log *model.ApiCallLog, responseBody []byte) {
+	if log.Status != model.ApiCallStatusFailed || log.StatusCode < 400 {
+		return
+	}
+	userMessage := providerUserFacingErrorMessage(providerHTTPError{
+		StatusCode: log.StatusCode,
+		Body:       string(responseBody),
+	})
+	detail := strings.TrimSpace(log.Error)
+	if detail == "" || detail == userMessage {
+		log.Error = userMessage
+		return
+	}
+	if strings.Contains(detail, userMessage) {
+		return
+	}
+	log.Error = truncateRunes(userMessage+"；上游："+detail, 2_000)
 }
 
 func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[string]any) {

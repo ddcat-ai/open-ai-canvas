@@ -22,6 +22,7 @@ type taskTerminalCoordinator struct {
 	logger            taskLifecycleLogger
 	outputs           taskOutputLifecycle
 	userFacingMessage func(error) string
+	logFailedAttempt  func(model.Task, error)
 }
 
 type taskTerminalRepository interface {
@@ -61,6 +62,7 @@ func newTaskTerminalCoordinator(s *Service) *taskTerminalCoordinator {
 		logger:            s,
 		outputs:           s,
 		userFacingMessage: s.UserFacingErrorMessage,
+		logFailedAttempt:  s.ensureFailedProviderAttemptLogged,
 	}
 }
 
@@ -73,6 +75,7 @@ func (s *Service) terminalCoordinator() *taskTerminalCoordinator {
 }
 
 func (c *taskTerminalCoordinator) markPreparationFailure(task *model.Task, stage string, err error, billingUncertain bool, refundReason string) error {
+	c.ensureFailedAttemptLogged(task, err)
 	task.Status = model.TaskStatusFailed
 	task.Stage = stage
 	task.Error = c.userFacingMessage(err)
@@ -126,6 +129,7 @@ func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err e
 	}
 
 	task.Status = model.TaskStatusFailed
+	c.ensureFailedAttemptLogged(task, err)
 	task.Stage = "任务失败"
 	task.Error = c.userFacingMessage(err)
 	if terminalErr := c.markTerminalState(task); terminalErr != nil {
@@ -206,6 +210,13 @@ func (c *taskTerminalCoordinator) handleResultPersistenceFailure(task *model.Tas
 		resultErr = errors.Join(resultErr, fmt.Errorf("任务结果保存失败后的会话状态更新失败：%w", sessionErr))
 	}
 	return false, resultErr
+}
+
+func (c *taskTerminalCoordinator) ensureFailedAttemptLogged(task *model.Task, err error) {
+	if c.logFailedAttempt == nil || task == nil || err == nil {
+		return
+	}
+	c.logFailedAttempt(*task, err)
 }
 
 func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {

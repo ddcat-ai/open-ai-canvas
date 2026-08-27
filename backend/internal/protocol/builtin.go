@@ -752,7 +752,10 @@ func parseAgnesPoll(c PollContext, payload map[string]any) (PollResult, error) {
 	metadata := object(payload["metadata"])
 	videoURL := firstString(metadata, "url")
 	if videoURL == "" {
-		return PollResult{}, fmt.Errorf("Agnes 完成响应没有 metadata.url")
+		videoURL = firstString(payload, "url")
+	}
+	if videoURL == "" {
+		return PollResult{}, fmt.Errorf("Agnes 完成响应没有返回视频 URL")
 	}
 	return PollResult{TaskID: id, Status: status, Result: &Result{Videos: []MediaReference{{URL: videoURL, Kind: string(CapabilityVideo)}}}}, nil
 }

@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
+
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -69,5 +72,43 @@ func TestRecordUserActivityQualifiesPostgresConflictColumns(t *testing.T) {
 				t.Fatalf("first active column is not target-qualified: %s", statement)
 			}
 		})
+	}
+}
+
+func TestQueryAPICallLogsSearchesFailureFields(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:api-log-error-search?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}, &model.ModelChannel{}, &model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	item := model.ApiCallLog{
+		ID:          "api-log-1",
+		UserID:      "user-1",
+		RequestKind: "create",
+		Status:      model.ApiCallStatusFailed,
+		ErrorCode:   "request_not_sent",
+		Error:       "模型服务拒绝了请求，请检查模型和参数；上游：invalid parameter: size",
+		CreatedAt:   now,
+	}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	for _, keyword := range []string{"模型服务拒绝", "invalid parameter", "request_not_sent"} {
+		logs, total, err := repo.QueryAPICallLogs(APICallLogFilter{
+			AnalyticsFilter: AnalyticsFilter{From: now.Add(-time.Hour), To: now.Add(time.Hour)},
+			Keyword:         keyword,
+			Page:            1,
+			Limit:           20,
+		})
+		if err != nil {
+			t.Fatalf("QueryAPICallLogs(%q) error = %v", keyword, err)
+		}
+		if total != 1 || len(logs) != 1 || logs[0].ID != item.ID {
+			t.Fatalf("QueryAPICallLogs(%q) = total:%d logs:%#v", keyword, total, logs)
+		}
 	}
 }

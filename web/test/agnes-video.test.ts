@@ -133,6 +133,14 @@ describe("Agnes Video 2.5 request contract", () => {
         expect(state).toEqual({ status: "completed", result: { url: "https://cdn.example.com/result.mp4", mimeType: "video/mp4" } });
     });
 
+    test("accepts the top-level result url returned by Agnes Video V2.0", async () => {
+        const config = resolveModelRequestConfig(configForAgnes("agnes-video-v2.0"), "agnes::agnes-video-v2.0");
+        const { deps } = providerDeps(config, { polled: { id: "video-1", status: "completed", url: "https://cdn.example.com/v20-result.mp4" } });
+        const state = await pollAgnesVideoTask(deps, config, { id: "video-1", provider: "agnes", model: "agnes::agnes-video-v2.0" });
+
+        expect(state).toEqual({ status: "completed", result: { url: "https://cdn.example.com/v20-result.mp4", mimeType: "video/mp4" } });
+    });
+
     test("keeps system-channel polls inside the proxy while preserving the root path", () => {
         const config = { ...resolveModelRequestConfig(configForAgnes(), "agnes::agnes-video-2.5"), baseUrl: "/api/system-agnes" };
         expect(agnesPollUrl(config, "video/1", "agnes-video-2.5")).toBe("/api/system-agnes/agnesapi?video_id=video%2F1&model_name=agnes-video-2.5");
