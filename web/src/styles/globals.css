@@ -693,6 +693,14 @@
    Layer 3: Component — 引用 Semantic，某组件专属
    ------------------------------------------------------------------------- */
 :root {
+    /* 插件可用性开关：状态色只服务插件页，不改变其他设置开关的中性语义。 */
+    --plugin-switch-checked-bg: #15803d;
+    --plugin-switch-checked-hover-bg: #16a34a;
+    --plugin-switch-checked-handle: #ffffff;
+    --plugin-switch-off-bg: #d4d4d8;
+    --plugin-switch-off-hover-bg: #a1a1aa;
+    --plugin-switch-off-handle: #52525b;
+
     /* Library 卡片组件：所有作品库共用同一表面和状态合同。 */
     --library-surface: var(--card-surface);
     --library-surface-hover: var(--card-surface-hover);
@@ -823,6 +831,15 @@
     --flow-step-track-height: var(--stroke-2);    /* 2px 状态轨道高 */
     --flow-step-track-width: var(--space-5);      /* 20px 轨道段长 */
     --flow-step-current-glow: 0 0 0 4px var(--cn-active-stroke-soft); /* 当前节点光晕 */
+}
+
+.dark {
+    --plugin-switch-checked-bg: #16a34a;
+    --plugin-switch-checked-hover-bg: #22c55e;
+    --plugin-switch-checked-handle: #ffffff;
+    --plugin-switch-off-bg: #3f3f46;
+    --plugin-switch-off-hover-bg: #52525b;
+    --plugin-switch-off-handle: #f4f4f5;
 }
 
 @layer base {
@@ -1877,6 +1894,30 @@
 
     :where(.ant-switch:not(.ant-switch-checked)) .ant-switch-handle::before {
         background: var(--control-switch-off-handle) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch.ant-switch-checked) {
+        background: var(--plugin-switch-checked-bg) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch.ant-switch-checked:not(.ant-switch-disabled)):hover {
+        background: var(--plugin-switch-checked-hover-bg) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch.ant-switch-checked) .ant-switch-handle::before {
+        background: var(--plugin-switch-checked-handle) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch:not(.ant-switch-checked)) {
+        background: var(--plugin-switch-off-bg) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch:not(.ant-switch-checked):not(.ant-switch-disabled)):hover {
+        background: var(--plugin-switch-off-hover-bg) !important;
+    }
+
+    :where(.plugin-state-switch.ant-switch:not(.ant-switch-checked)) .ant-switch-handle::before {
+        background: var(--plugin-switch-off-handle) !important;
     }
 
     :where(.ant-switch):focus-visible {
@@ -10012,13 +10053,11 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
     color: #ffffff;
 }
 .app-workspace-shell.is-creation-workspace,
-.app-workspace-shell.is-creation-workspace .app-workspace-sidebar,
 .app-workspace-shell.is-creation-workspace .app-workspace-stage {
     background: var(--workspace-page) !important;
 }
 
 html:not(.dark) .app-workspace-shell.is-creation-workspace,
-html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-sidebar,
 html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage {
     background: var(--workspace-page) !important;
 }

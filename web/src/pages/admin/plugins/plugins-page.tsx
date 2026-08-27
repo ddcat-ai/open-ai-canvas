@@ -170,7 +170,12 @@ export default function AdminPluginsPage() {
                                         ) : null}
                                     </div>
                                 </div>
-                                <Switch loading={savingId === item.manifest.id} checked={available} aria-label={`${item.manifest.name}平台可用性`} onChange={(checked) => void changeAvailability(item, checked)} />
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <span className={`whitespace-nowrap text-xs font-medium ${available ? "text-status-success" : "text-foreground/52"}`}>
+                                        {available ? "平台开放" : "平台停用"}
+                                    </span>
+                                    <Switch className="plugin-state-switch" loading={savingId === item.manifest.id} checked={available} aria-label={`${item.manifest.name}，当前${available ? "平台开放，点击停用" : "平台停用，点击开放"}`} onChange={(checked) => void changeAvailability(item, checked)} />
+                                </div>
                             </div>
                             <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-foreground/58">{item.manifest.description || "未提供插件说明"}</p>
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-foreground/48">
