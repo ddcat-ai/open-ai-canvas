@@ -46,7 +46,6 @@ const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(() => import("@/pages/projects/detail"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
-const FolderPreviewLab = lazy(() => import("@/pages/dev/folder-preview-lab"));
 
 function deferred(element: ReactNode) {
     return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
@@ -54,6 +53,23 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+/**
+ * DEV 专用实验室路由。
+ *
+ * lazy(() => import(...)) 写在函数体内，而不是模块顶层常量：
+ * 生产构建时 import.meta.env.DEV 被替换为 false，本函数随之不可达，
+ * 摇树会连同其中的动态 import 一起删除，实验室代码不进入生产依赖图。
+ * 若把 lazy 提到模块顶层，动态 import 会被静态分析成真实 chunk 并打进 dist。
+ */
+function devRoutes() {
+    const FolderPreviewLab = lazy(() => import("@/pages/dev/folder-preview-lab"));
+    const DirectorReproLab = lazy(() => import("@/pages/dev/director-repro-lab"));
+    return [
+        { path: "/dev/folders", element: fullScreenDeferred(<FolderPreviewLab />), errorElement: <RouteErrorPage /> },
+        { path: "/dev/director-repro", element: fullScreenDeferred(<DirectorReproLab />), errorElement: <RouteErrorPage /> },
+    ];
 }
 
 export const router = createBrowserRouter([
@@ -66,9 +82,7 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
-    ...(import.meta.env.DEV
-        ? [{ path: "/dev/folders", element: fullScreenDeferred(<FolderPreviewLab />), errorElement: <RouteErrorPage /> }]
-        : []),
+    ...(import.meta.env.DEV ? devRoutes() : []),
     {
         element: (
             <UserLayout>

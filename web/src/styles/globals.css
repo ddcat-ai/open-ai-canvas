@@ -9604,6 +9604,68 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
     font-size: var(--fs-caption);
 }
 
+.director-viewport-shell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.director-viewport-notice {
+    position: absolute;
+    z-index: var(--z-toolbar);
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border-radius: var(--r-lg);
+    background: var(--director-dock-surface);
+    box-shadow: var(--shadow-xl);
+    color: var(--director-dock-fg-strong);
+}
+
+.director-viewport-notice.is-cover {
+    inset: 50% auto auto 50%;
+    max-width: 320px;
+    justify-items: start;
+    text-align: left;
+    transform: translate(-50%, -50%);
+}
+
+.director-viewport-notice.is-corner {
+    top: var(--space-3);
+    right: var(--space-3);
+    max-width: 280px;
+}
+
+.director-viewport-notice-title {
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+
+.director-viewport-notice-text {
+    margin: 0;
+    color: var(--director-dock-fg);
+    font-size: var(--fs-tiny);
+    line-height: 1.5;
+}
+
+.director-viewport-notice-action {
+    height: var(--space-8);
+    padding: 0 var(--space-3);
+    justify-self: start;
+    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border-radius: var(--r-sm);
+    background: var(--director-dock-active-surface);
+    color: var(--director-dock-fg-strong);
+    font-size: var(--fs-tiny);
+    transition: background var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-viewport-notice-action:hover {
+    background: var(--director-control-hover);
+}
+
 .director-viewport-dock {
     position: absolute;
     z-index: var(--z-toolbar);
@@ -9733,6 +9795,7 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
 
 @media (prefers-reduced-motion: reduce) {
     .director-viewport-dock-button,
+    .director-viewport-notice-action,
     .director-pose-button {
         transition: none;
     }

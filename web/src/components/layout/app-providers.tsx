@@ -48,13 +48,22 @@ export function AppProviders({ children }: { children: ReactNode }) {
         document.documentElement.style.colorScheme = theme;
     }, [dark, theme]);
 
+    // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
+    // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。
+    // 只精确匹配该路径；生产构建中 import.meta.env.DEV 为 false，本分支被摇树删除。
+    const isolateDevRepro = import.meta.env.DEV && typeof window !== "undefined" && window.location.pathname === "/dev/director-repro";
+
     return (
         <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
             <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
                 <QueryClientProvider client={appQueryClient}>
-                    <AuthSessionHydrator>
-                        <ClientRootInit>{children}</ClientRootInit>
-                    </AuthSessionHydrator>
+                    {isolateDevRepro ? (
+                        children
+                    ) : (
+                        <AuthSessionHydrator>
+                            <ClientRootInit>{children}</ClientRootInit>
+                        </AuthSessionHydrator>
+                    )}
                 </QueryClientProvider>
             </App>
         </ConfigProvider>

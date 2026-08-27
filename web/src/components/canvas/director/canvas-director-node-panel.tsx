@@ -1,14 +1,21 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Box, Camera, Clapperboard, Lightbulb, LockKeyhole, Move3d } from "lucide-react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
+import { gateDirectorPreviewFailure, resolveDirectorActiveShot, resolveDirectorPreviewSource, type DirectorNodeContentReader } from "@/lib/canvas/director/director-preview";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { DirectorScene } from "@/types/director";
 
-export function CanvasDirectorNodePanel({ node, scene, previewUrl, onOpen, professional = true }: { node: CanvasNodeData; scene: DirectorScene | null; previewUrl?: string; onOpen: () => void; professional?: boolean }) {
+export function CanvasDirectorNodePanel({ node, scene, readNodeContent, onOpen, professional = true }: { node: CanvasNodeData; scene: DirectorScene | null; readNodeContent: DirectorNodeContentReader; onOpen: () => void; professional?: boolean }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const shot = scene?.shots?.find((item) => item.id === node.metadata?.directorShotId) || scene?.shots?.[0];
+    const shot = resolveDirectorActiveShot(scene, node.metadata?.directorShotId);
+    // 记录「失败的那个 URL」而非布尔量：同一个坏 URL 不再反复渲染，换成另一个 URL 时自动重试。
+    const [failedUrl, setFailedUrl] = useState<string | null>(null);
+    const preview = gateDirectorPreviewFailure(
+        resolveDirectorPreviewSource({ scene, shot, previewNodeId: node.metadata?.directorPreviewNodeId, readNodeContent }),
+        failedUrl,
+    );
 
     return (
         <div className="flex h-full w-full cursor-move flex-col p-3 pt-7" style={{ color: theme.node.text }}>
@@ -27,14 +34,16 @@ export function CanvasDirectorNodePanel({ node, scene, previewUrl, onOpen, profe
                 type="button"
                 data-canvas-no-zoom
                 className="group relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-lg border text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default"
-                style={{ background: scene?.background || theme.canvas.background, borderColor: theme.node.stroke }}
+                style={{ background: theme.node.fill, borderColor: theme.node.stroke }}
                 title={professional ? "打开 3D 导演台" : "切换到专业模式后编辑导演台"}
                 disabled={!professional}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); onOpen(); }}
             >
-                {previewUrl ? <img src={previewUrl} alt={`${node.title} 场景缩略图`} className="h-full w-full object-cover" draggable={false} /> : <SceneSchematic scene={scene} />}
+                {preview.kind === "image"
+                    ? <img src={preview.url} alt={`${node.metadata?.workflowTitle || node.title} 已回写的导演台构图`} className="h-full w-full object-contain" draggable={false} onError={() => setFailedUrl(preview.url)} />
+                    : <DirectorPreviewState kind={preview.kind} theme={theme} />}
                 <span className={`absolute inset-x-0 bottom-0 flex h-10 items-center justify-center gap-1.5 text-xs font-semibold backdrop-blur-sm transition-opacity ${professional ? "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" : "opacity-100"}`} style={{ background: `${theme.toolbar.panel}dd`, color: theme.node.text }}>{professional ? <><Move3d className="size-3.5" />进入导演台</> : <><LockKeyhole className="size-3.5" />专业模式可编辑</>}</span>
             </button>
 
@@ -47,21 +56,19 @@ export function CanvasDirectorNodePanel({ node, scene, previewUrl, onOpen, profe
     );
 }
 
-function SceneSchematic({ scene }: { scene: DirectorScene | null }) {
+/**
+ * 诚实空态/准备态：不绘制地面、地平线、机位或任何伪 3D 物体。
+ * 颜色全部走画布主题 token；层级靠字号/字重区分，不靠降低对比度。
+ */
+function DirectorPreviewState({ kind, theme }: { kind: "loading" | "empty"; theme: CanvasTheme }) {
+    const loading = kind === "loading";
     return (
-        <div className="relative h-full w-full overflow-hidden">
-            <div className="absolute inset-x-0 bottom-0 h-[55%] origin-bottom -skew-y-6 border-t border-white/25 bg-black/15" />
-            <div className="absolute inset-x-[8%] bottom-[18%] h-px bg-white/25" />
-            <div className="absolute inset-x-[16%] bottom-[32%] h-px bg-white/15" />
-            {(scene?.objects || []).slice(0, 6).map((object, index) => {
-                const left = 48 + object.transform.position[0] * 12;
-                const bottom = 25 + object.transform.position[2] * 7 + Math.max(0, object.transform.position[1]) * 4;
-                const height = object.primitive === "character" ? 42 : 22 + Math.min(18, object.transform.scale[1] * 8);
-                return <span key={object.id} className={`absolute border border-white/45 shadow-sm ${object.primitive === "sphere" ? "rounded-full" : "rounded-sm"}`} style={{ left: `${Math.max(12, Math.min(82, left + index * 2))}%`, bottom: `${Math.max(18, Math.min(58, bottom))}%`, width: object.primitive === "character" ? 13 : 22, height, background: object.color, transform: "translateX(-50%)" }} />;
-            })}
-            <Camera className="absolute bottom-[14%] left-[12%] size-5 text-white/75" />
-            <span className="absolute left-[18%] top-[18%] size-16 rounded-full bg-white/10 blur-xl" />
-            <span className="absolute inset-x-3 top-3 text-[var(--fs-tiny)] font-medium text-white/70">{scene ? "场景预览" : "正在准备场景"}</span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 pb-10 text-center">
+            <span className="grid size-10 shrink-0 place-items-center rounded-[var(--r-lg)]" style={{ background: theme.toolbar.activeBg }}>
+                <Clapperboard className="size-4" style={{ color: theme.node.muted }} aria-hidden />
+            </span>
+            <span className="max-w-full truncate text-[var(--fs-tiny)] font-semibold" style={{ color: theme.node.text }}>{loading ? "正在准备场景" : "尚未生成预览"}</span>
+            <span className="max-w-full text-[var(--fs-tiny)] leading-4" style={{ color: theme.node.muted }}>{loading ? "场景数据加载完成后显示" : "进入导演台并回写构图后显示"}</span>
         </div>
     );
 }

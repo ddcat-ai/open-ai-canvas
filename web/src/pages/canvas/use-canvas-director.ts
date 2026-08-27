@@ -6,8 +6,10 @@ import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-tas
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createDirectorScene } from "@/lib/canvas/director/director-scene";
+import { upsertDirectorSceneById } from "@/lib/canvas/director/director-session";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 import type { DirectorScene, DirectorSceneOutput } from "@/types/director";
 
@@ -28,6 +30,14 @@ type UseCanvasDirectorOptions = {
 
 const NODE_STATUS_IDLE = "idle" as const;
 
+/**
+ * 项目真实内存权威在 useCanvasStore.getState().projects；
+ * 闭包里的 directorScenes 只作为 store 尚未就绪时的兜底。
+ */
+function currentDirectorScenes(projectId: string, fallback: DirectorScene[]) {
+    const project = useCanvasStore.getState().projects.find((item) => item.id === projectId);
+    return project?.directorScenes ?? fallback;
+}
 export function useCanvasDirector({
     projectId,
     directorNodeId,
@@ -68,14 +78,14 @@ export function useCanvasDirector({
         setNodes(nextNodes);
         setSelectedNodeIds(new Set([node.id]));
         setSelectedConnectionId(null);
-        updateProject(projectId, { directorScenes: [...directorScenes, scene] });
+        updateProject(projectId, { directorScenes: upsertDirectorSceneById(currentDirectorScenes(projectId, directorScenes), scene) });
         message.success("已创建导演台节点，点击缩略图进入编辑");
     }, [directorScenes, getCanvasCenter, message, nodesRef, projectId, setNodes, setSelectedConnectionId, setSelectedNodeIds, updateProject]);
 
     const openDirectorWorkbench = useCallback((nodeId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
         if (!node || node.metadata?.workflowKind !== "shot") return;
-        let scene = directorScenes.find((item) => item.id === node.metadata?.directorSceneId);
+        let scene = currentDirectorScenes(projectId, directorScenes).find((item) => item.id === node.metadata?.directorSceneId);
         if (!scene) {
             scene = createDirectorScene(node.metadata?.workflowTitle || node.title || "镜头场景");
             const shot = scene.shots[0];
@@ -83,13 +93,14 @@ export function useCanvasDirector({
             const directorSceneId = scene.id;
             const directorShotId = shot.id;
             setNodes((current) => current.map((item) => item.id === nodeId ? { ...item, metadata: { ...item.metadata, directorSceneId, directorShotId } } : item));
-            updateProject(projectId, { directorScenes: [...directorScenes, scene] });
+            updateProject(projectId, { directorScenes: upsertDirectorSceneById(currentDirectorScenes(projectId, directorScenes), scene) });
         }
         setDirectorNodeId(nodeId);
     }, [directorScenes, nodesRef, projectId, setDirectorNodeId, setNodes, updateProject]);
 
+    /** 每次保存都基于 store 中最新 directorScenes upsert，避免旧闭包数组覆盖并发保存。 */
     const saveDirectorScene = useCallback((scene: DirectorScene) => {
-        updateProject(projectId, { directorScenes: directorScenes.some((item) => item.id === scene.id) ? directorScenes.map((item) => item.id === scene.id ? scene : item) : [...directorScenes, scene] });
+        updateProject(projectId, { directorScenes: upsertDirectorSceneById(currentDirectorScenes(projectId, directorScenes), scene) });
     }, [directorScenes, projectId, updateProject]);
 
     const applyDirectorOutput = useCallback(async (output: DirectorSceneOutput) => {

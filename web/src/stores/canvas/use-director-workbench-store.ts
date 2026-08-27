@@ -26,7 +26,7 @@ type DirectorWorkbenchStore = {
     reset: () => void;
 };
 
-const initialState = { selectedObjectId: null, selectedBone: null, selectedLightId: null, transformMode: "translate" as const, renderMode: "beauty" as const, playhead: 0, playing: false, autoKey: true, sequencerHeight: 300, sequencerVisible: true };
+const initialState = { selectedObjectId: null, selectedBone: null, selectedLightId: null, transformMode: "translate" as const, renderMode: "beauty" as const, playhead: 0, playing: false, autoKey: false, sequencerHeight: 300, sequencerVisible: true };
 
 export const useDirectorWorkbenchStore = create<DirectorWorkbenchStore>((set) => ({
     ...initialState,

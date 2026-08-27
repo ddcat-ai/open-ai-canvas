@@ -1784,7 +1784,7 @@ function InfiniteCanvasPage() {
                     <CanvasDirectorNodePanel
                         node={contentNode}
                         scene={currentProject?.directorScenes?.find((scene) => scene.id === contentNode.metadata?.directorSceneId) || null}
-                        previewUrl={nodesRef.current.find((item) => item.id === contentNode.metadata?.directorPreviewNodeId)?.metadata?.content}
+                        readNodeContent={(nodeId) => (nodeId ? nodesRef.current.find((item) => item.id === nodeId)?.metadata?.content : undefined)}
                         professional={workspaceMode === "professional"}
                         onOpen={() => openDirectorWorkbench(contentNode.id)}
                     />
@@ -2598,6 +2598,7 @@ function InfiniteCanvasPage() {
                                 onChange={saveDirectorScene}
                                 onApply={applyDirectorOutput}
                                 onDeleteImageNode={(nodeId) => deleteNodes(new Set([nodeId]))}
+                                onFlush={() => flushCanvasStorePersistence()}
                             />
                         </Suspense>
                     ) : null}
