@@ -259,33 +259,52 @@ async function connectCdp(cdpPort) {
     };
 
     /**
-     * 真实鼠标点击：先量出可见目标的中心点，再派发 Input.dispatchMouseEvent。
+     * 真实鼠标点击：等待目标中心稳定且位于最上层，再派发 Input.dispatchMouseEvent。
      * 不用 el.click()，因为那是 untrusted 合成事件，拿不到真实 user gesture。
      */
     const clickPoint = async (locatorExpression, label) => {
-        const box = await evaluate(`(() => {
+        const readInteractiveBox = () =>
+            evaluate(`(() => {
             const el = ${locatorExpression};
-            if (!el) return null;
-            const r = el.getBoundingClientRect();
-            if (r.width <= 0 || r.height <= 0) return null;
+            if (!(el instanceof HTMLElement)) return null;
             el.scrollIntoView({ block: "center", inline: "center" });
-            const after = el.getBoundingClientRect();
-            return { x: after.left + after.width / 2, y: after.top + after.height / 2 };
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none" || Number(style.opacity) <= 0 || el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") return null;
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || (hit !== el && !el.contains(hit))) return null;
+            return { x: Math.round(x), y: Math.round(y) };
         })()`);
+        const deadline = Date.now() + 5000;
+        let previous = null;
+        let box = null;
+        while (Date.now() < deadline) {
+            const next = await readInteractiveBox();
+            if (next && previous && next.x === previous.x && next.y === previous.y) {
+                box = next;
+                break;
+            }
+            previous = next;
+            await sleep(100);
+        }
         if (!box) {
-            console.log(`      (click target not visible: ${label})`);
+            console.log(`      (click target not interactable: ${label})`);
             return false;
         }
-        const point = { x: Math.round(box.x), y: Math.round(box.y), button: "left", buttons: 1 };
-        await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
-        await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, clickCount: 1 });
-        await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, clickCount: 1 });
+        const point = { x: box.x, y: box.y, button: "left" };
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, buttons: 0 });
+        await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, buttons: 1, clickCount: 1 });
+        await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, buttons: 0, clickCount: 1 });
         return true;
     };
 
     const click = (selector) => clickPoint(`document.querySelector(${JSON.stringify(selector)})`, selector);
 
-    const clickText = (text, tag = "button") => clickPoint(`[...document.querySelectorAll(${JSON.stringify(tag)})].find((b) => (b.textContent || "").includes(${JSON.stringify(text)}) && b.getClientRects().length > 0)`, `${tag}:contains(${text})`);
+    const clickText = (text, tag = "button") =>
+        clickPoint(`[...document.querySelectorAll(${JSON.stringify(tag)})].find((element) => (element.textContent || "").trim() === ${JSON.stringify(text)} && element.getClientRects().length > 0)`, `${tag}:text-is(${text})`);
 
     /** 每个场景都从干净页面开始：诊断缓冲区与 store 都重置。 */
     const navigateFresh = async (url) => {
