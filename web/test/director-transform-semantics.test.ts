@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { Euler, Vector3 } from "three";
 
-import { advanceDirectorPlayhead, applyDirectorTransformDelta, directorTransformDelta, resolveDirectorCameraAlignment, resolveDirectorCameraMoveKeyframes, resolveDirectorKeyframeRecord, resolveDirectorObjectTransformEdit, snapDirectorTime } from "../src/lib/canvas/director/director-animation-semantics";
+import {
+    advanceDirectorPlayhead,
+    applyDirectorTransformDelta,
+    directorTransformDelta,
+    resolveDirectorCameraAlignment,
+    resolveDirectorCameraMoveKeyframes,
+    resolveDirectorKeyframeRecord,
+    resolveDirectorObjectTransformEdit,
+    snapDirectorTime,
+} from "../src/lib/canvas/director/director-animation-semantics";
 import { createDirectorCamera, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "../src/lib/canvas/director/director-scene";
 import type { DirectorKeyframe, DirectorTransform } from "../src/types/director";
 
@@ -47,11 +56,7 @@ describe("摄影机对齐当前视图", () => {
 
 describe("生成摄影机运镜首尾帧", () => {
     test("保留手工中间帧、已有 id 与 easing，只更新首尾 transform", () => {
-        const existing: DirectorKeyframe[] = [
-            { ...keyframe("start", 0, transform([9, 0, 0])), easing: "step" },
-            { ...keyframe("manual", 1, transform([4, 2, 0])), easing: "smooth" },
-            keyframe("end", 2, transform([8, 0, 0])),
-        ];
+        const existing: DirectorKeyframe[] = [{ ...keyframe("start", 0, transform([9, 0, 0])), easing: "step" }, { ...keyframe("manual", 1, transform([4, 2, 0])), easing: "smooth" }, keyframe("end", 2, transform([8, 0, 0]))];
         const next = resolveDirectorCameraMoveKeyframes(existing, transform([0, 0, 0]), transform([2, 0, 0]), 2);
         expect(next.map((item) => item.id)).toEqual(["start", "manual", "end"]);
         expect(next[0].transform.position).toEqual([0, 0, 0]);
@@ -80,31 +85,18 @@ describe("播放头循环推进", () => {
 
 describe("Transform 轨迹统计", () => {
     test("按时间顺序累计空间路径，不把输入数组顺序当成路径顺序", () => {
-        const keys = [
-            keyframe("end", 2, transform([3, 4, 0])),
-            keyframe("start", 0, transform([0, 0, 0])),
-            keyframe("middle", 1, transform([0, 4, 0])),
-        ];
+        const keys = [keyframe("end", 2, transform([3, 4, 0])), keyframe("start", 0, transform([0, 0, 0])), keyframe("middle", 1, transform([0, 4, 0]))];
         expect(directorTransformPathLength(keys)).toBe(7);
         expect(keys.map((key) => key.id)).toEqual(["end", "start", "middle"]);
     });
 
     test("忽略含非法坐标的段，避免 NaN 污染轨迹显示判断", () => {
-        const keys = [
-            keyframe("valid", 0, transform([0, 0, 0])),
-            keyframe("invalid", 1, transform([Number.NaN, 2, 0])),
-            keyframe("valid-again", 2, transform([3, 4, 0])),
-        ];
+        const keys = [keyframe("valid", 0, transform([0, 0, 0])), keyframe("invalid", 1, transform([Number.NaN, 2, 0])), keyframe("valid-again", 2, transform([3, 4, 0]))];
         expect(directorTransformPathLength(keys)).toBe(0);
     });
 
     test("轨迹渲染过滤非法时间与坐标，不把 NaN/Infinity 传给 Three", () => {
-        const keys = [
-            keyframe("start", 0, transform([0, 0, 0])),
-            keyframe("bad-time", Number.NaN, transform([1, 0, 0])),
-            keyframe("bad-position", 1, transform([Number.POSITIVE_INFINITY, 0, 0])),
-            keyframe("end", 2, transform([2, 0, 0])),
-        ];
+        const keys = [keyframe("start", 0, transform([0, 0, 0])), keyframe("bad-time", Number.NaN, transform([1, 0, 0])), keyframe("bad-position", 1, transform([Number.POSITIVE_INFINITY, 0, 0])), keyframe("end", 2, transform([2, 0, 0]))];
         const renderable = finiteDirectorTransformKeyframes(keys);
         expect(renderable.map((item) => item.id)).toEqual(["start", "end"]);
         expect(renderable.flatMap((item) => [item.time, ...item.transform.position]).every(Number.isFinite)).toBe(true);

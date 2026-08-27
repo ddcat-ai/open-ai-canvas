@@ -201,14 +201,24 @@ describe("透视投影可用性：拒绝写进 Three 的非法 fov/near/far", ()
     });
 
     test("far 不大于 near 时不产生取景", () => {
-        [{ near: 1, far: 1 }, { near: 2, far: 1 }, { near: 0.05, far: 0 }, { near: 0.05, far: Number.NaN }].forEach((optics) => {
+        [
+            { near: 1, far: 1 },
+            { near: 2, far: 1 },
+            { near: 0.05, far: 0 },
+            { near: 0.05, far: Number.NaN },
+        ].forEach((optics) => {
             expect(directorUsablePerspectiveProjection({ fov: 50, ...optics })).toBe(false);
             expect(resolveDirectorViewFraming({ scene: sceneWithOptics(optics), mode: "camera", playhead: 0 })).toBeNull();
         });
     });
 
     test("边界合法：开区间内的小 fov、接近 180 的 fov、极小正 near 且 far 更大", () => {
-        [{ fov: 0.1, near: 0.05, far: 500 }, { fov: 179.9, near: 0.05, far: 500 }, { fov: 50, near: 1e-6, far: 1e-5 }, { fov: 50, near: 0.05, far: 0.0500001 }].forEach((optics) => {
+        [
+            { fov: 0.1, near: 0.05, far: 500 },
+            { fov: 179.9, near: 0.05, far: 500 },
+            { fov: 50, near: 1e-6, far: 1e-5 },
+            { fov: 50, near: 0.05, far: 0.0500001 },
+        ].forEach((optics) => {
             expect(directorUsablePerspectiveProjection(optics)).toBe(true);
             const framing = resolveDirectorViewFraming({ scene: sceneWithOptics(optics), mode: "camera", playhead: 0 });
             expect(framing).not.toBeNull();
@@ -313,13 +323,15 @@ describe("up 向量：保住荷兰角，且绝不与视线共线", () => {
 
     test("任意朝向下 up 与视线都不共线：抽样覆盖球面", () => {
         const angles = [-Math.PI / 2, -Math.PI / 4, 0, Math.PI / 4, Math.PI / 2, Math.PI];
-        angles.forEach((pitch) => angles.forEach((roll) => {
-            const rotation: DirectorVec3 = [pitch, 0, roll];
-            const view = new Vector3(0, 0, -1).applyEuler(new Euler(...rotation)).toArray() as DirectorVec3;
-            const up = resolveDirectorViewUp(rotation, view);
-            expect(up.every(Number.isFinite)).toBe(true);
-            expect(new Vector3(...up).cross(new Vector3(...view)).length()).toBeGreaterThan(1e-6);
-        }));
+        angles.forEach((pitch) =>
+            angles.forEach((roll) => {
+                const rotation: DirectorVec3 = [pitch, 0, roll];
+                const view = new Vector3(0, 0, -1).applyEuler(new Euler(...rotation)).toArray() as DirectorVec3;
+                const up = resolveDirectorViewUp(rotation, view);
+                expect(up.every(Number.isFinite)).toBe(true);
+                expect(new Vector3(...up).cross(new Vector3(...view)).length()).toBeGreaterThan(1e-6);
+            }),
+        );
     });
 });
 
@@ -621,13 +633,15 @@ describe("正交视锥：同时装下水平与竖直跨度", () => {
 
     test("跨度为 0 / 负 / NaN / ±Infinity 时仍给出有限正半范围", () => {
         const invalid = [0, -4, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-        invalid.forEach((horizontalSpan) => invalid.forEach((verticalSpan) => {
-            const frustum = resolveDirectorOrthographicFrustum({ horizontalSpan, verticalSpan, aspect: 1 });
-            expect(frustum.halfWidth).toBeGreaterThan(0);
-            expect(frustum.halfHeight).toBeGreaterThan(0);
-            expect([frustum.halfWidth, frustum.halfHeight, frustum.left, frustum.right, frustum.top, frustum.bottom].every(Number.isFinite)).toBe(true);
-            expect(frustum.halfWidth).toBeCloseTo(frustum.halfHeight, 9);
-        }));
+        invalid.forEach((horizontalSpan) =>
+            invalid.forEach((verticalSpan) => {
+                const frustum = resolveDirectorOrthographicFrustum({ horizontalSpan, verticalSpan, aspect: 1 });
+                expect(frustum.halfWidth).toBeGreaterThan(0);
+                expect(frustum.halfHeight).toBeGreaterThan(0);
+                expect([frustum.halfWidth, frustum.halfHeight, frustum.left, frustum.right, frustum.top, frustum.bottom].every(Number.isFinite)).toBe(true);
+                expect(frustum.halfWidth).toBeCloseTo(frustum.halfHeight, 9);
+            }),
+        );
     });
 
     test("left/right 的极宽内容沿 Z 装入水平跨度，top 的极宽内容沿 X 装入水平跨度", () => {

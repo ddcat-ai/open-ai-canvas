@@ -88,7 +88,7 @@ describe("模式接线", () => {
 
     test("动画模式把 Transform 轨迹接入视口，隐藏演员和零长度轨迹不显示", () => {
         expect(workbench).toContain("showMotionPaths={capabilities.timeline}");
-        expect(viewport).toContain("object.visible && (object.kind === \"actor\" || object.primitive === \"character\")");
+        expect(viewport).toContain('object.visible && (object.kind === "actor" || object.primitive === "character")');
         expect(viewport).toContain("directorTransformPathLength(object.keyframes) > 0.001");
         expect(viewport).toContain("<Line points={points}");
         expect(viewport).toContain("interpolateDirectorTransform(sorted[0].transform, sorted, playhead).position");
@@ -146,7 +146,7 @@ describe("模式接线", () => {
 
     test("小屏把属性检查器放到下方而不是隐藏，姿态与骨骼入口仍可达", () => {
         expect(workbench).toContain("max-lg:col-span-2 max-lg:max-h-[40vh] max-lg:border-l-0 max-lg:border-t");
-        expect(workbench).not.toContain('border-l max-lg:hidden');
+        expect(workbench).not.toContain("border-l max-lg:hidden");
     });
 
     test("store 的 setMode 走 resolveDirectorModeTransition，清理不靠组件自觉", () => {

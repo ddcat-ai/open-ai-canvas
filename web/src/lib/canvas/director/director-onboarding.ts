@@ -198,12 +198,7 @@ export async function saveDirectorOnboardingProgress(scope: string, progress: Di
  * 调用 next 之类的恒等动作会在校验之前就 return progress，空 scope 也能悄悄跑过去。
  * 无变化的动作仍然不写盘。
  */
-export async function advanceDirectorOnboarding(
-    scope: string,
-    progress: DirectorOnboardingProgress,
-    action: DirectorOnboardingAction,
-    storage?: DirectorOnboardingStorage,
-): Promise<DirectorOnboardingProgress> {
+export async function advanceDirectorOnboarding(scope: string, progress: DirectorOnboardingProgress, action: DirectorOnboardingAction, storage?: DirectorOnboardingStorage): Promise<DirectorOnboardingProgress> {
     const normalizedScope = requireScope(scope);
     const next = reduceDirectorOnboarding(progress, action);
     if (next === progress) return progress;

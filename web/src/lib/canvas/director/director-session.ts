@@ -23,7 +23,7 @@ export function mergeDirectorOutputPreview(scene: DirectorScene, input: { sceneI
     if (scene.id !== input.sceneId || !scene.shots.some((shot) => shot.id === input.shotId)) return null;
     return {
         ...scene,
-        shots: scene.shots.map((shot) => shot.id === input.shotId ? { ...shot, previewNodeId: input.previewNodeId, depthNodeId: undefined, normalNodeId: undefined } : shot),
+        shots: scene.shots.map((shot) => (shot.id === input.shotId ? { ...shot, previewNodeId: input.previewNodeId, depthNodeId: undefined, normalNodeId: undefined } : shot)),
     };
 }
 

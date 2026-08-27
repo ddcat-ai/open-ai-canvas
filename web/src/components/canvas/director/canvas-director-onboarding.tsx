@@ -208,13 +208,7 @@ export function CanvasDirectorOnboarding({ scope, open = true, restartSignal = 0
             </div>
 
             <div className="flex items-center justify-between gap-[var(--space-2)]">
-                <button
-                    type="button"
-                    className={FOCUS_RING}
-                    onClick={dismiss}
-                    disabled={busy}
-                    style={{ height: "var(--space-6)", padding: "0 var(--space-2)", borderRadius: "var(--r-sm)", color: "var(--cn-muted)", fontSize: "var(--fs-tiny)" }}
-                >
+                <button type="button" className={FOCUS_RING} onClick={dismiss} disabled={busy} style={{ height: "var(--space-6)", padding: "0 var(--space-2)", borderRadius: "var(--r-sm)", color: "var(--cn-muted)", fontSize: "var(--fs-tiny)" }}>
                     跳过引导
                 </button>
                 <div className="flex items-center gap-[var(--space-1)]">

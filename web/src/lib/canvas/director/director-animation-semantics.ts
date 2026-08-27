@@ -143,7 +143,7 @@ export function advanceDirectorPlayhead(playhead: number, elapsed: number, durat
     if (!Number.isFinite(duration) || duration <= 0) return 0;
     const current = Number.isFinite(playhead) ? playhead : 0;
     const delta = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0;
-    return ((current + delta) % duration + duration) % duration;
+    return (((current + delta) % duration) + duration) % duration;
 }
 
 /**

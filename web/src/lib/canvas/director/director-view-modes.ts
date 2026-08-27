@@ -89,7 +89,11 @@ export type DirectorViewFraming = {
 const DIRECTOR_VIEW_COLLINEAR_EPSILON = 1e-6;
 
 // 退化时的备选 up：世界 up 优先，其次两个水平轴 —— 正俯视/正仰视镜头落在这里。
-const DIRECTOR_VIEW_UP_FALLBACKS: DirectorVec3[] = [[0, 1, 0], [0, 0, -1], [1, 0, 0]];
+const DIRECTOR_VIEW_UP_FALLBACKS: DirectorVec3[] = [
+    [0, 1, 0],
+    [0, 0, -1],
+    [1, 0, 0],
+];
 
 /**
  * 解出带 roll 的 up 向量。
