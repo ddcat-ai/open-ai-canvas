@@ -47,6 +47,7 @@ import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dial
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
+import { CanvasDirectorTemplateModal } from "@/components/canvas/director/canvas-director-template-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
 import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
@@ -190,6 +191,7 @@ function InfiniteCanvasPage() {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const defaultDrawingEngine = useUserStore((state) => state.drawingEngine.defaultEngine);
     const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    const directorOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "");
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
@@ -219,6 +221,8 @@ function InfiniteCanvasPage() {
     const [characterReferenceNodeId, setCharacterReferenceNodeId] = useState<string | null>(null);
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
     const [stylePickerOpen, setStylePickerOpen] = useState(false);
+    // 新建导演台镜头必须先选模板：null 表示未在选择中，undefined position 表示用画布中心。
+    const [directorTemplateRequest, setDirectorTemplateRequest] = useState<{ position?: Position } | null>(null);
     const [projectAssetOpen, setProjectAssetOpen] = useState(false);
     const [projectAssetInitialCategory, setProjectAssetInitialCategory] = useState("all");
     const [projectAssetInitialFolderId, setProjectAssetInitialFolderId] = useState("all");
@@ -2018,6 +2022,12 @@ function InfiniteCanvasPage() {
 
                     <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} applying={styleApplying} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
+                    <CanvasDirectorTemplateModal
+                        open={Boolean(directorTemplateRequest)}
+                        onClose={() => setDirectorTemplateRequest(null)}
+                        onSelect={(templateId) => createDirectorShot(templateId, directorTemplateRequest?.position)}
+                    />
+
                     <div className="relative flex min-h-0 min-w-0 flex-1">
                         <div className="relative min-w-0 flex-1 overflow-hidden">
                             <InfiniteCanvas
@@ -2175,7 +2185,7 @@ function InfiniteCanvasPage() {
                                     onAddDrawing={() => createNode(CanvasNodeType.Drawing)}
                                     onAddExtensionNode={(type) => createNode(type)}
                                     onAddWorkflow={() => createNode(CanvasNodeType.Config)}
-                                    onOpenDirector={() => createDirectorShot()}
+                                    onOpenDirector={() => setDirectorTemplateRequest({})}
                                     onUndo={undoCanvas}
                                     onRedo={redoCanvas}
                                     onUpload={() => handleUploadRequest()}
@@ -2404,7 +2414,7 @@ function InfiniteCanvasPage() {
                         onAddNode={(type, position) => createNode(type, position)}
                         onAddFolder={createFolder}
                         onChooseStyle={() => setStylePickerOpen(true)}
-                        onOpenDirector={createDirectorShot}
+                        onOpenDirector={(position) => setDirectorTemplateRequest({ position })}
                         onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
                         onOpenAssets={openCanvasAssetLibrary}
                         onOpenProjectCharacters={(position) => openProjectAssets("character", position)}
@@ -2599,6 +2609,7 @@ function InfiniteCanvasPage() {
                                 onApply={applyDirectorOutput}
                                 onDeleteImageNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                                 onFlush={() => flushCanvasStorePersistence()}
+                                onboardingScope={directorOnboardingScope}
                             />
                         </Suspense>
                     ) : null}

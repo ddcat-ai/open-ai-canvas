@@ -259,33 +259,52 @@ async function connectCdp(cdpPort) {
     };
 
     /**
-     * 真实鼠标点击：先量出可见目标的中心点，再派发 Input.dispatchMouseEvent。
+     * 真实鼠标点击：等待目标中心稳定且位于最上层，再派发 Input.dispatchMouseEvent。
      * 不用 el.click()，因为那是 untrusted 合成事件，拿不到真实 user gesture。
      */
     const clickPoint = async (locatorExpression, label) => {
-        const box = await evaluate(`(() => {
+        const readInteractiveBox = () =>
+            evaluate(`(() => {
             const el = ${locatorExpression};
-            if (!el) return null;
-            const r = el.getBoundingClientRect();
-            if (r.width <= 0 || r.height <= 0) return null;
+            if (!(el instanceof HTMLElement)) return null;
             el.scrollIntoView({ block: "center", inline: "center" });
-            const after = el.getBoundingClientRect();
-            return { x: after.left + after.width / 2, y: after.top + after.height / 2 };
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none" || Number(style.opacity) <= 0 || el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") return null;
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || (hit !== el && !el.contains(hit))) return null;
+            return { x: Math.round(x), y: Math.round(y) };
         })()`);
+        const deadline = Date.now() + 5000;
+        let previous = null;
+        let box = null;
+        while (Date.now() < deadline) {
+            const next = await readInteractiveBox();
+            if (next && previous && next.x === previous.x && next.y === previous.y) {
+                box = next;
+                break;
+            }
+            previous = next;
+            await sleep(100);
+        }
         if (!box) {
-            console.log(`      (click target not visible: ${label})`);
+            console.log(`      (click target not interactable: ${label})`);
             return false;
         }
-        const point = { x: Math.round(box.x), y: Math.round(box.y), button: "left", buttons: 1 };
-        await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
-        await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, clickCount: 1 });
-        await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, clickCount: 1 });
+        const point = { x: box.x, y: box.y, button: "left" };
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, buttons: 0 });
+        await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, buttons: 1, clickCount: 1 });
+        await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, buttons: 0, clickCount: 1 });
         return true;
     };
 
     const click = (selector) => clickPoint(`document.querySelector(${JSON.stringify(selector)})`, selector);
 
-    const clickText = (text, tag = "button") => clickPoint(`[...document.querySelectorAll(${JSON.stringify(tag)})].find((b) => (b.textContent || "").includes(${JSON.stringify(text)}) && b.getClientRects().length > 0)`, `${tag}:contains(${text})`);
+    const clickText = (text, tag = "button") =>
+        clickPoint(`[...document.querySelectorAll(${JSON.stringify(tag)})].find((element) => (element.textContent || "").trim() === ${JSON.stringify(text)} && element.getClientRects().length > 0)`, `${tag}:text-is(${text})`);
 
     /** 每个场景都从干净页面开始：诊断缓冲区与 store 都重置。 */
     const navigateFresh = async (url) => {
@@ -360,26 +379,41 @@ async function smokeWorkbench(cdp, baseUrl) {
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.director-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "A5 real canvas present in viewport shell");
 
+    // P1-A 起 AutoKey/时间轴归属动画模式：默认摆场模式下它们必须不存在。
+    const layoutGating = await cdp.evaluate(`(() => ({
+        mode: document.querySelector('button[data-mode="layout"]')?.getAttribute('aria-pressed') ?? null,
+        sequencer: document.querySelectorAll('.director-sequencer').length,
+        autoKey: document.querySelectorAll('button[title="自动关键帧"]').length,
+    }))()`);
+    assert(layoutGating.mode === "true", "A6 默认进入摆场模式", `got ${JSON.stringify(layoutGating.mode)}`);
+    assert(layoutGating.sequencer === 0 && layoutGating.autoKey === 0, "A7 摆场模式不显示时间轴与 AutoKey", JSON.stringify(layoutGating));
+
+    // 原 A6 的断言意图（AutoKey 默认不开启）在它真正存在的模式里继续守住。
+    const switched = await cdp.click('button[data-mode="animate"]');
+    if (!switched) throw new Error("A: 动画模式按钮 not clickable");
+    const sequencerShown = await cdp.poll(`document.querySelectorAll('.director-sequencer').length === 1`, "sequencer in animate mode", 20000);
+    assert(sequencerShown, "A8 动画模式显示时间轴");
+
     const autoKey = await cdp.evaluate(`document.querySelector('button[title="自动关键帧"]')?.getAttribute('aria-pressed') ?? null`);
-    assert(autoKey === "false", "A6 AutoKey defaults to aria-pressed=false", `got ${JSON.stringify(autoKey)}`);
+    assert(autoKey === "false", "A9 AutoKey defaults to aria-pressed=false", `got ${JSON.stringify(autoKey)}`);
 
     const addedCube = await cdp.click('[aria-label="添加立方体"]');
     if (!addedCube) throw new Error("A: 添加立方体 button not clickable");
     const cubeAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除立方体"]')`, "cube row", 20000);
-    assert(cubeAppeared, "A7 added cube appears in object list");
+    assert(cubeAppeared, "A10 added cube appears in object list");
 
     const undone = await cdp.click('[aria-label="撤销"]');
     if (!undone) throw new Error("A: 撤销 button not clickable");
     const cubeGone = await cdp.poll(`!document.querySelector('[aria-label="删除立方体"]')`, "cube removed by undo", 20000);
-    assert(cubeGone, "A8 Undo removes the added cube");
+    assert(cubeGone, "A11 Undo removes the added cube");
 
     // 场景结束前必须真实关闭：下一个场景要重新导航，不能靠忽略 beforeunload 绕过未保存态。
     const closed = await cdp.click('[aria-label="关闭导演台"]');
     if (!closed) throw new Error("A: 关闭导演台 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.director-viewport-shell').length === 0`, "workbench closed", 30000);
-    assert(shellGone, "A9 workbench closed cleanly before leaving scenario A");
+    assert(shellGone, "A12 workbench closed cleanly before leaving scenario A");
 
-    assert(cdp.problems.length === 0, "A10 no browser problems in scenario A", JSON.stringify(cdp.problems));
+    assert(cdp.problems.length === 0, "A13 no browser problems in scenario A", JSON.stringify(cdp.problems));
 }
 
 /**

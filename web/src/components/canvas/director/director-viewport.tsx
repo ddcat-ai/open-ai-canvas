@@ -1,20 +1,22 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
+import { Grid, Line, OrbitControls, TransformControls } from "@react-three/drei";
 import { Component, forwardRef, memo, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { AnimationClip, AnimationMixer, Box3, Bone, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Plane, Quaternion, Raycaster, Scene, SkeletonHelper, Texture, TextureLoader, Vector2, Vector3, WebGLRenderer } from "three";
 import type { Material } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
-import { directorCameraSyncKey, resolveDirectorBoneRotation } from "@/lib/canvas/director/director-animation-semantics";
+import { resolveDirectorBoneRotation } from "@/lib/canvas/director/director-animation-semantics";
 import { createDirectorTransaction, installDirectorTerminalListeners } from "@/lib/canvas/director/director-gesture-transaction";
 import { emptyDirectorPlacementIntent, finiteDirectorGroundPoint, type DirectorGroundPoint, type DirectorPlacementIntent } from "@/lib/canvas/director/director-placement";
 import { directorDiagnosticObjectKind } from "@/lib/canvas/director/director-diagnostics";
 import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { directorCaptureInitial, directorCaptureUsable, directorLoadIdentity, directorLoadInitial, installDirectorContextListeners, reduceDirectorCapture, reduceDirectorLoad, releaseDirectorCapture, resolveDirectorDisplay, restoreDirectorCapture, upsertDirectorFailedLoad, type DirectorFailedLoads, type DirectorLoadSignal } from "@/lib/canvas/director/director-recovery";
 import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorMaterials, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "@/lib/canvas/director/director-resources";
-import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { DIRECTOR_DEFAULT_VIEW_MODE, directorViewFramingKey, resolveDirectorEffectiveViewport, resolveDirectorOrthographicFraming, resolveDirectorOrthographicFrustum, resolveDirectorViewFraming, type DirectorOrthographicFraming, type DirectorViewFraming, type DirectorViewMode } from "@/lib/canvas/director/director-view-modes";
+import { DirectorViewToolbar } from "@/components/canvas/director/director-view-toolbar";
 import { resolveMediaUrl } from "@/services/file-storage";
-import type { DirectorCamera, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
+import type { DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
 
 export type DirectorOrbitControls = ComponentRef<typeof OrbitControls>;
 
@@ -34,6 +36,12 @@ type DirectorViewportProps = {
     renderMode: DirectorRenderMode;
     playhead: number;
     playing: boolean;
+    /** 动画模式下显示演员与摄影机 Transform 关键帧形成的空间路径。 */
+    showMotionPaths?: boolean;
+    /** 取景模式。省略即自由视角，保持接线前的行为不变。 */
+    viewMode?: DirectorViewMode;
+    /** 提供该回调即在视口内渲染 3D/CAM 切换器；不提供则不显示，视口仍按 viewMode 取景。 */
+    onViewModeChange?: (mode: DirectorViewMode) => void;
     onSelectObject: (id: string | null) => void;
     onSelectBone: (bone: string | null) => void;
     onObjectTransform: (id: string, from: DirectorTransform, to: DirectorTransform) => void;
@@ -41,7 +49,7 @@ type DirectorViewportProps = {
     onActorRigReady: (id: string, rig: DirectorRig, animations: AnimationClip[]) => void;
 };
 
-type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; suspendDisplayMaterialOverride: () => () => void };
+type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: Camera; suspendDisplayMaterialOverride: () => () => void };
 
 // 稳定空值：identity 不匹配时返回同一引用，避免下游 effect 依赖每次 render 都变化。
 const emptyAnimations: AnimationClip[] = [];
@@ -53,8 +61,14 @@ const emptyRestRotations: Partial<Record<DirectorHumanoidBone, DirectorQuat>> = 
 const directorCanvasGl = { antialias: true, preserveDrawingBuffer: true, alpha: false } as const;
 const directorCanvasCamera = { position: [4.8, 2.7, 6.8] as [number, number, number], fov: 50, near: 0.05, far: 500 } as const;
 const directorCanvasDpr: [number, number] = [1, 1.5];
+// 自由视角固定环绕焦点：free 是独立观察相机，不跟随 shot 摄影机的 target 走，
+// 否则切换镜头/摄影机会连带把用户正在环绕的焦点也悄悄挪走。
+const DIRECTOR_FREE_ORBIT_TARGET: DirectorVec3 = [0, 1, 0];
 
 export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewportProps>(function DirectorViewport(props, ref) {
+    // onViewModeChange 只服务 DOM 层的切换器，绝不进 Canvas 子树：它的身份每次父级
+    // render 都可能变化，穿透到 memo 化的 Canvas 会触发 configure 重建 renderer。
+    const { onViewModeChange, ...sceneProps } = props;
     const captureContext = useRef<CaptureContext | null>(null);
     // 地面点连同 owner canvas 一起记录：owner 不是当前 renderer 的 canvas 就是陈旧值。
     const groundRef = useRef<{ owner: HTMLCanvasElement; point: DirectorGroundPoint } | null>(null);
@@ -145,7 +159,7 @@ export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewp
             <DirectorViewportErrorBoundary key={`boundary-${retryKey}`} onRelease={releaseCapture} onRetry={retry}>
                 <DirectorCanvasSurface
                     key={`canvas-${retryKey}`}
-                    {...props}
+                    {...sceneProps}
                     onCaptureContext={onCaptureContext}
                     onRelease={releaseCapture}
                     onContextLost={onContextLost}
@@ -155,6 +169,8 @@ export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewp
                     onOrbitControls={onOrbitControls}
                 />
             </DirectorViewportErrorBoundary>
+            {/* 取景切换是纯视口状态：放在 DOM 层，不随 Canvas 重建而丢失。 */}
+            {onViewModeChange ? <DirectorViewToolbar viewMode={props.viewMode ?? DIRECTOR_DEFAULT_VIEW_MODE} onViewModeChange={onViewModeChange} /> : null}
             {capture.contextLost ? (
                 <DirectorViewportNotice
                     title="3D 显示上下文已丢失"
@@ -180,7 +196,8 @@ export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewp
     );
 });
 
-type DirectorCanvasSurfaceProps = DirectorViewportProps & {
+// onViewModeChange 被显式排除：切换器活在 DOM 层，Canvas 子树只需要 viewMode 取值。
+type DirectorCanvasSurfaceProps = Omit<DirectorViewportProps, "onViewModeChange"> & {
     onCaptureContext: (context: CaptureContext) => void;
     onRelease: () => void;
     onContextLost: () => void;
@@ -270,13 +287,28 @@ function DirectorViewportNotice({ title, description, actionLabel, onAction, var
     );
 }
 
-function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorViewportProps & { onCaptureContext: (context: CaptureContext) => void; onRelease: () => void; onContextLost: () => void; onContextRestored: () => void; onLoadStateChange: (id: string, signal: DirectorLoadSignal, retry: () => void) => void; onGroundPoint: (owner: HTMLCanvasElement, point: DirectorGroundPoint | null) => void; onOrbitControls: (controls: DirectorOrbitControls | null) => void }) {
-    const { gl, camera, scene: threeScene, invalidate } = useThree();
+function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, showMotionPaths = false, viewMode = DIRECTOR_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorCanvasSurfaceProps) {
+    const { gl, camera, scene: threeScene, invalidate, set, size } = useThree();
     const orbitRef = useRef<DirectorOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
     const displayClayRestoreRef = useRef<(() => void) | null>(null);
-    const shot = scene.shots.find((item) => item.id === scene.activeShotId) || scene.shots[0];
-    const activeCamera = scene.cameras.find((item) => item.id === shot?.cameraId) || scene.cameras[0];
+    // 三台相机各司其职、互不共享：free 只由 OrbitControls 驱动，CAM/正交只在各自模式下
+    // 由取景数据接管。切换 viewMode 只挪动「谁是活动相机」这个指针，任何一台的内部状态
+    // 都不会因为切换而被读写——这是「切换不丢失/不污染任一相机状态」的唯一来源。
+    const [freeCamera] = useState(() => {
+        const instance = new PerspectiveCamera(directorCanvasCamera.fov, 1, directorCanvasCamera.near, directorCanvasCamera.far);
+        instance.position.set(...directorCanvasCamera.position);
+        return instance;
+    });
+    const [camCamera] = useState(() => new PerspectiveCamera(directorCanvasCamera.fov, 1, directorCanvasCamera.near, directorCanvasCamera.far));
+    const [orthoCamera] = useState(() => new OrthographicCamera(-1, 1, 1, -1, 0.05, 500));
+    // CAM 与正交轴向的取景解算都是纯函数：mode 不匹配时各自返回 null，互不冲突。
+    // 活动相机不直接看 viewMode：CAM 取景失败必须回落 free，否则会露出从未写入的 camCamera。
+    const camFraming = resolveDirectorViewFraming({ scene, mode: viewMode, playhead });
+    const orthoFraming = resolveDirectorOrthographicFraming({ scene, mode: viewMode });
+    const effectiveViewport = resolveDirectorEffectiveViewport({ mode: viewMode, framing: camFraming });
+    const actorMotionPaths = useMemo(() => showMotionPaths ? scene.objects.filter((object) => object.visible && (object.kind === "actor" || object.primitive === "character") && directorTransformPathLength(object.keyframes) > 0.001) : [], [scene.objects, showMotionPaths]);
+    const cameraMotionPaths = useMemo(() => showMotionPaths ? scene.cameras.filter((item) => directorTransformPathLength(item.keyframes) > 0.001) : [], [scene.cameras, showMotionPaths]);
     const suspendDisplayMaterialOverride = useCallback(() => {
         const suspended = Boolean(displayClayRestoreRef.current);
         displayClayRestoreRef.current?.();
@@ -286,7 +318,7 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
         };
     }, [threeScene]);
 
-    const readCaptureContext = useCallback((): CaptureContext => ({ gl, camera: camera as PerspectiveCamera, scene: threeScene, suspendDisplayMaterialOverride }), [camera, gl, suspendDisplayMaterialOverride, threeScene]);
+    const readCaptureContext = useCallback((): CaptureContext => ({ gl, camera: camera as Camera, scene: threeScene, suspendDisplayMaterialOverride }), [camera, gl, suspendDisplayMaterialOverride, threeScene]);
 
     useEffect(() => {
         onCaptureContext(readCaptureContext());
@@ -367,9 +399,32 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
         };
     }, [invalidate, renderMode, scene.objects, threeScene]);
 
+    // 透视相机（free/CAM）的宽高比随容器尺寸变化；正交相机的半范围在自己的同步 effect 里
+    // 按水平/竖直跨度与 aspect 同时拟合，这里只负责两台透视相机的 aspect + 投影矩阵。
+    useEffect(() => {
+        const aspect = size.width / Math.max(size.height, 1);
+        freeCamera.aspect = aspect;
+        freeCamera.updateProjectionMatrix();
+        camCamera.aspect = aspect;
+        camCamera.updateProjectionMatrix();
+        invalidate();
+    }, [camCamera, freeCamera, invalidate, size]);
+
+    // 唯一决定「视口活动相机是谁」的入口：只挪动 state.camera 指针，从不读写另外两台
+    // 相机对象的内部状态——这是「切换模式互不污染」的保证来源。
+    // CAM 无合法取景时指针指向 freeCamera，取景恢复后再指回 camCamera。
+    useEffect(() => {
+        const next = effectiveViewport.camera === "orthographic" ? orthoCamera : effectiveViewport.camera === "camera" ? camCamera : freeCamera;
+        set({ camera: next });
+        invalidate();
+    }, [camCamera, effectiveViewport.camera, freeCamera, invalidate, orthoCamera, set]);
+
     return (
         <>
-            <CameraSync camera={activeCamera} playhead={playhead} playing={playing} />
+            {/* CAM 与正交轴向的取景各自独立同步到专属相机对象，互不干扰；free 完全交给
+                下面的 OrbitControls，这里不对它做任何写入。 */}
+            <DirectorShotCameraSync camera={camCamera} framing={camFraming} />
+            <DirectorOrthoCameraSync camera={orthoCamera} framing={orthoFraming} aspect={size.width / Math.max(size.height, 1)} />
             <ambientLight intensity={scene.environmentIntensity * 0.35} />
             {scene.lights.map((light) => <DirectorLightView key={light.id} light={light} />)}
             {scene.gridVisible ? <Grid position={[0, 0, 0]} infiniteGrid fadeDistance={40} fadeStrength={5} cellSize={0.5} sectionSize={5} cellColor="#8f99a3" sectionColor="#626d77" /> : null}
@@ -377,6 +432,8 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
                 <planeGeometry args={[120, 120]} />
                 <meshStandardMaterial color="#aeb7bf" roughness={0.92} />
             </mesh>
+            {actorMotionPaths.map((object) => <DirectorTransformPath key={`actor-path-${object.id}`} keyframes={object.keyframes} playhead={playhead} color="#61d2ad" />)}
+            {cameraMotionPaths.map((item) => <DirectorTransformPath key={`camera-path-${item.id}`} keyframes={item.keyframes} playhead={playhead} color="#78a9ff" />)}
             {scene.objects.filter((item) => item.visible).map((object) => (
                 <DirectorObjectView
                     key={object.id}
@@ -394,30 +451,100 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
                     onLoadStateChange={onLoadStateChange}
                 />
             ))}
-            <OrbitControls ref={orbitRef} makeDefault enabled={!transforming} target={activeCamera?.target || [0, 1, 0]} minDistance={0.6} maxDistance={80} />
+            {/* 只有有效 free 回落允许环绕：drei 只在 enabled 时调 controls.update()，CAM/正交下这是
+                真正的锁定，不会有 controls 每帧把相机拽回自己 target 的回写竞争。
+                camera 显式绑定 freeCamera：即使 state.camera 当前指向别的相机，也绝不会
+                被这份环绕状态误伤。CAM 取景失败时 orbit 打开，用已有的自由视角，不改场景。 */}
+            <OrbitControls ref={orbitRef} makeDefault camera={freeCamera} enabled={!transforming && effectiveViewport.orbit} target={DIRECTOR_FREE_ORBIT_TARGET} minDistance={0.6} maxDistance={80} />
         </>
     );
 }
 
-function CameraSync({ camera, playhead, playing }: { camera?: DirectorCamera; playhead: number; playing: boolean }) {
-    const threeCamera = useThree((state) => state.camera as PerspectiveCamera);
+/** 起点、终点、路径点、方向与当前进度共用一条 Transform 关键帧路径。 */
+function DirectorTransformPath({ keyframes, playhead, color }: { keyframes: DirectorObject["keyframes"]; playhead: number; color: string }) {
+    const sorted = useMemo(() => finiteDirectorTransformKeyframes(keyframes).toSorted((left, right) => left.time - right.time), [keyframes]);
+    const points = useMemo(() => sorted.map((keyframe) => keyframe.transform.position), [sorted]);
+    const current = interpolateDirectorTransform(sorted[0].transform, sorted, playhead).position;
+    const previous = points[points.length - 2];
+    const end = points[points.length - 1];
+    const direction = useMemo(() => {
+        const vector = new Vector3(...end).sub(new Vector3(...previous));
+        if (vector.lengthSq() < 1e-8) return [0, 0, 0, 1] as DirectorQuat;
+        return new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), vector.normalize()).toArray() as DirectorQuat;
+    }, [end, previous]);
+
+    return <group>
+        <Line points={points} color={color} lineWidth={2} />
+        {points.map((point, index) => <mesh key={`${index}-${point.join("-")}`} position={point}>
+            <sphereGeometry args={[index === 0 || index === points.length - 1 ? 0.11 : 0.075, 10, 8]} />
+            <meshBasicMaterial color={index === 0 ? "#61d2ad" : index === points.length - 1 ? "#f08b6a" : color} />
+        </mesh>)}
+        <mesh position={end} quaternion={direction}>
+            <coneGeometry args={[0.1, 0.28, 10]} />
+            <meshBasicMaterial color={color} />
+        </mesh>
+        <mesh position={current}>
+            <sphereGeometry args={[0.14, 12, 8]} />
+            <meshBasicMaterial color="#f0d36a" />
+        </mesh>
+    </group>;
+}
+
+/**
+ * CAM 取景：把 shot 摄影机的解算结果写进专属的机位相机对象。
+ *
+ * 这台相机独立持有，不是共享的视口默认相机：离开 CAM 模式后不需要任何快照/还原——
+ * 没有人会在其他模式下碰它，回到 CAM 时上一次写入的状态原样还在，物理上不可能被污染。
+ *
+ * 只写这台相机对象，绝不触碰 DirectorScene：换一只眼睛看场景不是内容改动，
+ * 因此不产生任何 undo/history 记录，也不会触发保存。
+ */
+function DirectorShotCameraSync({ camera, framing }: { camera: PerspectiveCamera; framing: DirectorViewFraming | null }) {
     const invalidate = useThree((state) => state.invalidate);
-    // 只有相机真正被关键帧/播放驱动时才写入，暂停时用户 Orbit 不会被拉回。
-    const syncKey = directorCameraSyncKey({ camera, playhead, playing });
+    const framingKey = directorViewFramingKey(framing);
     useEffect(() => {
-        if (!camera || !syncKey) return;
-        const transform = interpolateDirectorTransform(camera.transform, camera.keyframes, playhead);
-        threeCamera.position.set(...transform.position);
-        threeCamera.rotation.set(...transform.rotation);
-        threeCamera.fov = camera.fov;
-        threeCamera.near = camera.near;
-        threeCamera.far = camera.far;
-        threeCamera.lookAt(...camera.target);
-        threeCamera.updateProjectionMatrix();
+        if (!framing) return;
+        // up 必须先写：lookAt 用当前 camera.up 解基向量，顺序颠倒会丢掉荷兰角。
+        camera.up.set(...framing.up);
+        camera.position.set(...framing.position);
+        camera.fov = framing.fov;
+        camera.near = framing.near;
+        camera.far = framing.far;
+        camera.lookAt(...framing.target);
+        camera.updateProjectionMatrix();
         invalidate();
-        // camera/playhead 只通过 syncKey 参与依赖，避免草稿对象身份变化触发无谓回写。
+        // framing 只通过 framingKey 参与依赖：草稿对象身份变化不触发无谓回写。
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [invalidate, syncKey, threeCamera]);
+    }, [framingKey, invalidate, camera]);
+    return null;
+}
+
+/**
+ * 正交轴向取景：把包围盒解算结果写进专属的正交相机对象，语义与 DirectorShotCameraSync
+ * 完全对称——独立持有、无需快照还原、绝不碰 DirectorScene。
+ *
+ * 水平/竖直跨度由领域层给出；视口只传入运行时 aspect，半范围换算走
+ * resolveDirectorOrthographicFrustum，同时装下两条轴，避免宽内容被裁切。
+ */
+function DirectorOrthoCameraSync({ camera, framing, aspect }: { camera: OrthographicCamera; framing: DirectorOrthographicFraming | null; aspect: number }) {
+    const invalidate = useThree((state) => state.invalidate);
+    const framingKey = framing ? [...framing.position, ...framing.target, ...framing.up, framing.horizontalSpan, framing.verticalSpan, framing.near, framing.far].map((value) => value.toFixed(4)).join("|") : "";
+    useEffect(() => {
+        if (!framing) return;
+        const frustum = resolveDirectorOrthographicFrustum({ horizontalSpan: framing.horizontalSpan, verticalSpan: framing.verticalSpan, aspect });
+        camera.up.set(...framing.up);
+        camera.position.set(...framing.position);
+        camera.left = frustum.left;
+        camera.right = frustum.right;
+        camera.top = frustum.top;
+        camera.bottom = frustum.bottom;
+        camera.near = framing.near;
+        camera.far = framing.far;
+        camera.lookAt(...framing.target);
+        camera.updateProjectionMatrix();
+        invalidate();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [framingKey, aspect, invalidate, camera]);
     return null;
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createDirectorTransaction } from "../src/lib/canvas/director/director-gesture-transaction";
-import { shouldReinitializeDirectorSession, upsertDirectorSceneById } from "../src/lib/canvas/director/director-session";
+import { isDirectorOutputSnapshotCurrent, mergeDirectorOutputPreview, shouldReinitializeDirectorSession, upsertDirectorSceneById } from "../src/lib/canvas/director/director-session";
 import { createDirectorScene } from "../src/lib/canvas/director/director-scene";
 import type { DirectorScene } from "../src/types/director";
 
@@ -73,6 +73,44 @@ describe("upsertDirectorSceneById：连续保存不丢 scene（A6 回归）", ()
         const authoritative = upsertDirectorSceneById(stale, a);
         expect(upsertDirectorSceneById(stale, b).map((item) => item.id)).toEqual(["b"]);
         expect(upsertDirectorSceneById(authoritative, b).map((item) => item.id)).toEqual(["a", "b"]);
+    });
+});
+
+describe("异步输出只合并预览引用，不覆盖最新场景", () => {
+    test("保留上传期间发生的场景与镜头编辑", () => {
+        const latest = scene("s1", "上传期间改过的标题");
+        const shotId = latest.shots[0].id;
+        latest.shots[0] = { ...latest.shots[0], name: "上传期间改过的镜头" };
+        const merged = mergeDirectorOutputPreview(latest, { sceneId: latest.id, shotId, previewNodeId: "preview-1" });
+        expect(merged?.title).toBe("上传期间改过的标题");
+        expect(merged?.shots[0].name).toBe("上传期间改过的镜头");
+        expect(merged?.shots[0].previewNodeId).toBe("preview-1");
+        expect(merged?.shots[0].depthNodeId).toBeUndefined();
+        expect(merged?.shots[0].normalNodeId).toBeUndefined();
+    });
+
+    test("场景或镜头已经切换/删除时拒绝合并", () => {
+        const latest = scene("s1");
+        expect(mergeDirectorOutputPreview(latest, { sceneId: "other", shotId: latest.shots[0].id, previewNodeId: "preview" })).toBeNull();
+        expect(mergeDirectorOutputPreview(latest, { sceneId: latest.id, shotId: "missing", previewNodeId: "preview" })).toBeNull();
+    });
+});
+
+describe("截图与录制绑定开始时的场景快照", () => {
+    test("同一场景快照引用与同一活动镜头才允许继续", () => {
+        const current = scene("s1");
+        const expected = { scene: current, shotId: current.shots[0].id };
+        expect(isDirectorOutputSnapshotCurrent(current, expected)).toBe(true);
+        expect(isDirectorOutputSnapshotCurrent({ ...current }, expected)).toBe(false);
+        expect(isDirectorOutputSnapshotCurrent(null, expected)).toBe(false);
+    });
+
+    test("活动镜头切换时拒绝继续，即使原镜头仍存在", () => {
+        const current = scene("s1");
+        const originalShot = current.shots[0];
+        const otherShot = { ...originalShot, id: "shot-2", name: "镜头 2" };
+        const withOtherActive = { ...current, shots: [originalShot, otherShot], activeShotId: otherShot.id };
+        expect(isDirectorOutputSnapshotCurrent(withOtherActive, { scene: withOtherActive, shotId: originalShot.id })).toBe(false);
     });
 });
 
