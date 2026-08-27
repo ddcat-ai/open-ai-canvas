@@ -35,6 +35,7 @@ type PublicChannelModel struct {
 	ID               string                        `json:"id"`
 	ModelKey         string                        `json:"modelKey"`
 	DisplayName      string                        `json:"displayName"`
+	Icon             string                        `json:"icon"`
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
@@ -168,7 +169,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) PublicChannelMode
 	if cm.CapabilityConfigJSON != "" {
 		config, _ := DecodeModelCapabilityConfig(cm.CapabilityConfigJSON)
 		if config != nil {
-			normalized, _ := NormalizeModelCapabilityConfig(cm.Capability, string(cm.Protocol), config)
+			normalized, _ := NormalizeModelCapabilityConfigForModel(cm.Capability, string(cm.Protocol), firstNonEmpty(cm.ProviderModelKey, cm.ModelKey), config)
 			if normalized != nil {
 				// 转换为 map[string]any
 				capabilityConfig = modelCapabilityConfigToMap(normalized)
@@ -180,6 +181,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) PublicChannelMode
 		ID:               cm.ID,
 		ModelKey:         cm.ModelKey,
 		DisplayName:      cm.DisplayName,
+		Icon:             cm.Icon,
 		Capability:       cm.Capability,
 		Protocol:         cm.Protocol,
 		CapabilityConfig: capabilityConfig,

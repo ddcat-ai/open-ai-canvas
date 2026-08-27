@@ -7,6 +7,15 @@ description: 影策后端核心持久化表与状态边界
 
 后端通过 GORM 管理 SQLite 与 PostgreSQL 表结构。服务启动时由 `backend/internal/database/schema.go` 执行迁移；业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。
 
+## 模型渠道与目录
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `model_channels` | 保存系统渠道与用户渠道的连接配置 | 系统渠道密钥不进入公开目录；普通用户只能读取脱敏后的可用模型集合 |
+| `channel_models` | 保存系统渠道中的产品模型标识、上游模型 ID、显示名称、模型 Logo、能力、协议和版本状态 | `icon` 只用于模型选择器展示；能力、协议、启用状态和价格仍由 service 强校验 |
+| `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录 |
+| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联 |
+
 ## 插件管理
 
 | 表 | 用途 | 关键边界 |

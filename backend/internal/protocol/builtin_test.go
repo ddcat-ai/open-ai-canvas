@@ -248,6 +248,23 @@ func TestAgnesMapsOfficialCreateAndPollContracts(t *testing.T) {
 	}
 }
 
+func TestAgnesVideo25SeparatesHistoricalPixelSizeFromResolutionTier(t *testing.T) {
+	adapter, _ := Builtins().Get("agnes-video")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "agnes-video-2.5", Prompt: "test", Duration: 5, Resolution: "720", AspectRatio: "1280x720",
+	}})
+	if err != nil {
+		t.Fatalf("BuildCreate() error = %v", err)
+	}
+	body := create.Body.(map[string]any)
+	if body["size"] != "720P" || body["aspect_ratio"] != "16:9" {
+		t.Fatalf("Agnes normalized body = %#v", body)
+	}
+	if body["size"] == "1280x720" {
+		t.Fatalf("Agnes size must be a resolution tier: %#v", body)
+	}
+}
+
 func TestAgnesFlashRejectsUnsupportedOfficialInputs(t *testing.T) {
 	adapter, _ := Builtins().Get("agnes-video")
 	_, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "agnes-video-2.5-flash", Prompt: "test", Duration: 5, Resolution: "2K"}})
@@ -257,6 +274,21 @@ func TestAgnesFlashRejectsUnsupportedOfficialInputs(t *testing.T) {
 	_, err = adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "agnes-video-2.5-flash", Prompt: "test", Duration: 5, Videos: []MediaReference{{URL: "https://cdn.example/reference.mp4"}}}})
 	if err == nil || !strings.Contains(err.Error(), "不支持参考视频") {
 		t.Fatalf("video error = %v", err)
+	}
+}
+
+func TestAgnesVideo25UsesRequestedReferenceOperationForSingleImage(t *testing.T) {
+	adapter, _ := Builtins().Get("agnes-video")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "agnes-video-2.5", Prompt: "use it as a style reference", Duration: 5, Resolution: "720P", AspectRatio: "16:9",
+		Operation: "reference_to_video", Images: []MediaReference{{URL: "https://cdn.example/reference.png"}},
+	}})
+	if err != nil {
+		t.Fatalf("BuildCreate() error = %v", err)
+	}
+	body := spec.Body.(map[string]any)
+	if body["mode"] != "reference" || body["images"] == nil || body["first_frame"] != nil {
+		t.Fatalf("Agnes reference body = %#v", body)
 	}
 }
 

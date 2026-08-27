@@ -77,6 +77,13 @@ func TestChannelAPIURLForProtocolUsesGeminiDefault(t *testing.T) {
 	}
 }
 
+func TestChannelAPIURLForProtocolUsesAgnesOriginPollPath(t *testing.T) {
+	got := ChannelAPIURLForProtocol("https://apihub.agnes-ai.com/v1", "/agnesapi?video_id=video-1&model_name=agnes-video-2.5", model.ChannelInterfaceAgnesVideo)
+	if got != "https://apihub.agnes-ai.com/agnesapi?video_id=video-1&model_name=agnes-video-2.5" {
+		t.Fatalf("Agnes poll URL = %q", got)
+	}
+}
+
 func TestProtocolRequestURLCanResolveSameOriginRootPath(t *testing.T) {
 	got, err := protocolRequestURL("https://apihub.agnes-ai.com/v1", protocol.RequestSpec{Path: "/agnesapi?video_id=video-1&model_name=agnes-video-2.5", OriginPath: true})
 	if err != nil {
@@ -84,6 +91,83 @@ func TestProtocolRequestURLCanResolveSameOriginRootPath(t *testing.T) {
 	}
 	if got != "https://apihub.agnes-ai.com/agnesapi?video_id=video-1&model_name=agnes-video-2.5" {
 		t.Fatalf("root path URL = %q", got)
+	}
+}
+
+func TestRunVideoTaskUsesHostBackedAgnesJSONProtocol(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatalf("newPluginRuntime() error = %v", err)
+	}
+	adapter, ok := center.registrySnapshot().Resolve("agnes-video")
+	if !ok {
+		t.Fatal("host-backed Agnes adapter is missing")
+	}
+	if metadata := adapter.Metadata(); metadata.Version != "1.2.0" || metadata.Execution != "host:agnes-video" || !metadata.RequiresPublicMediaURLs {
+		t.Fatalf("Agnes runtime metadata = %#v", metadata)
+	}
+
+	paths := make([]string, 0, 3)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.RequestURI())
+		switch r.Method + " " + r.URL.Path {
+		case "POST /v1/videos":
+			if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", contentType)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode create body: %v", err)
+			}
+			want := map[string]any{
+				"model": "agnes-video-2.5", "prompt": "make it move", "mode": "keyframe",
+				"seconds": "5", "size": "720P", "aspect_ratio": "16:9", "n": float64(1),
+				"first_frame": server.URL + "/reference.png",
+			}
+			if !reflect.DeepEqual(body, want) {
+				t.Errorf("create body = %#v, want %#v", body, want)
+			}
+			for _, legacy := range []string{"input_reference", "input_reference[]", "preset", "resolution_name"} {
+				if _, exists := body[legacy]; exists {
+					t.Errorf("create body contains legacy field %q: %#v", legacy, body)
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"video_id":"video-1","status":"queued"}`))
+		case "GET /agnesapi":
+			if r.URL.Query().Get("video_id") != "video-1" || r.URL.Query().Get("model_name") != "agnes-video-2.5" {
+				t.Errorf("poll query = %q", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"video_id":"video-1","status":"completed","metadata":{"url":"` + server.URL + `/video.mp4"}}`))
+		case "GET /video.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	result, err := runVideoTask(ctx, canvasGenerationInput{
+		Mode:            "video",
+		Prompt:          "make it move",
+		Config:          providerConfig{BaseURL: server.URL + "/v1", APIKey: "test-key", InterfaceType: "agnes-video", Model: "agnes-video-2.5", VideoSeconds: "5", Size: "16:9", VQuality: "720P"},
+		ReferenceImages: []providerMedia{{URL: server.URL + "/reference.png"}},
+	})
+	if err != nil {
+		t.Fatalf("runVideoTask() error = %v", err)
+	}
+	video, ok := result["video"].(map[string]interface{})
+	if !ok || video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
+		t.Fatalf("video = %#v", result["video"])
+	}
+	wantPaths := "POST /v1/videos,GET /agnesapi?video_id=video-1&model_name=agnes-video-2.5,GET /video.mp4"
+	if got := strings.Join(paths, ","); got != wantPaths {
+		t.Fatalf("paths = %q, want %q", got, wantPaths)
 	}
 }
 

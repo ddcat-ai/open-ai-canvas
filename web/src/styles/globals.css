@@ -11557,6 +11557,10 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     gap: 16px;
 }
 
+.admin-model-identity-grid-with-icon {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .admin-model-editor-drawer .admin-capability-editor {
     border-radius: 0;
     background: transparent;
@@ -12043,7 +12047,8 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     .admin-model-editor-section,
     .admin-capability-protocol-grid,
     .admin-price-tier-card-body,
-    .admin-model-identity-grid {
+    .admin-model-identity-grid,
+    .admin-model-identity-grid-with-icon {
         grid-template-columns: minmax(0, 1fr);
     }
 

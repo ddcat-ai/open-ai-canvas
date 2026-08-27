@@ -761,6 +761,12 @@ func channelModelCapabilitySpec(channelModel model.ChannelModel) (CapabilitySpec
 	if err != nil {
 		return CapabilitySpec{}, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
 	}
+	if config != nil {
+		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config)
+		if err != nil {
+			return CapabilitySpec{}, err
+		}
+	}
 	spec, err := CapabilitySpecFromModelCapabilityConfig(config, normalizeCapability(channelModel.Capability))
 	if err != nil {
 		return CapabilitySpec{}, err
@@ -820,6 +826,12 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
 	if err != nil {
 		return nil, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
+	}
+	if config != nil {
+		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defaults := make(map[string]any)
 	if config != nil {

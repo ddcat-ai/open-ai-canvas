@@ -834,6 +834,9 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		return
 	}
 	modelName := proxyRequestModelForPath(path, c.GetHeader("Content-Type"), body)
+	if modelName == "" && c.Request.Method == http.MethodGet && path == "/agnesapi" {
+		modelName = strings.TrimSpace(c.Query("model_name"))
+	}
 	protocol := model.ChannelInterfaceType("")
 	capability := "text"
 	var channelModel *model.ChannelModel

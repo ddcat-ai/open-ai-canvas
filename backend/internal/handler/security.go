@@ -65,6 +65,12 @@ func authorizeCustomRelay(method string, target *url.URL, apiFormat string, cont
 		return errors.New("自定义渠道调用格式无效")
 	}
 	if method == http.MethodGet {
+		if apiFormat == "openai" && requestPath == "/agnesapi" {
+			if len(query) == 2 && len(query["video_id"]) == 1 && len(query["model_name"]) == 1 && strings.TrimSpace(query.Get("video_id")) != "" && strings.TrimSpace(query.Get("model_name")) != "" {
+				return nil
+			}
+			return errors.New("Agnes 视频查询必须提供 video_id 和 model_name")
+		}
 		if customNovitaTaskResultPath.MatchString(requestPath) {
 			if len(query) == 1 && len(query["task_id"]) == 1 && strings.TrimSpace(query.Get("task_id")) != "" {
 				return nil
@@ -166,6 +172,23 @@ func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInt
 		return err
 	}
 	if method == http.MethodGet && requestPath == "/models" {
+		return nil
+	}
+	if protocol == model.ChannelInterfaceAgnesVideo {
+		if method == http.MethodGet && requestPath == "/agnesapi" {
+			return nil
+		}
+		if method != http.MethodPost || requestPath != "/videos" {
+			return errors.New("系统渠道不允许访问该上游接口")
+		}
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil || mediaType != "application/json" {
+			return errors.New("Agnes 视频生成请求必须使用 application/json")
+		}
+		modelName := proxyRequestModel(contentType, body)
+		if modelName == "" || !channelAllowsModel(channel, modelName) {
+			return errors.New("当前系统渠道未授权该模型")
+		}
 		return nil
 	}
 	if protocol == model.ChannelInterfaceMiniMaxVideo {

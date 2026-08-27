@@ -150,7 +150,8 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 				Permissions: []string{"generation.run"},
 				Contributes: protocol.ManifestContributions{Providers: []protocol.ManifestProvider{{
 					ID: metadata.ID, Label: metadata.Name, Capabilities: metadata.Categories, Scopes: metadata.Scopes,
-					Parameters: metadata.Parameters, Create: protocol.ManifestOperation{Method: "POST", Path: "/__host__/" + metadata.ID}, Response: protocol.ManifestResponse{},
+					Parameters: metadata.Parameters, RequiresPublicMediaURLs: metadata.RequiresPublicMediaURLs,
+					Create: protocol.ManifestOperation{Method: "POST", Path: "/__host__/" + metadata.ID}, Response: protocol.ManifestResponse{},
 				}}},
 			}
 		}

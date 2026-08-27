@@ -18,12 +18,16 @@ func withProtocolRegistry(ctx context.Context, registry *protocol.Registry) cont
 	return context.WithValue(ctx, protocolRegistryContextKey{}, registry)
 }
 
-func declarativeProtocolAdapterForContext(ctx context.Context, id string) (protocol.Adapter, bool) {
+func protocolAdapterForContext(ctx context.Context, id string) (protocol.Adapter, bool) {
 	registry, _ := ctx.Value(protocolRegistryContextKey{}).(*protocol.Registry)
 	if registry == nil {
 		registry = protocol.Builtins()
 	}
-	adapter, ok := registry.Resolve(strings.TrimSpace(id))
+	return registry.Resolve(strings.TrimSpace(id))
+}
+
+func declarativeProtocolAdapterForContext(ctx context.Context, id string) (protocol.Adapter, bool) {
+	adapter, ok := protocolAdapterForContext(ctx, id)
 	if !ok || adapter.Metadata().Execution != "declarative" {
 		return nil, false
 	}
