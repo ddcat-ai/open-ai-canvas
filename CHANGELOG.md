@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 新增平台与个人 S3 兼容存储，支持 AWS S3、Cloudflare R2、Backblaze B2、RustFS 和自定义 Endpoint，提供 Path Style、临时凭据、连接测试、历史位置绑定及私网资源 HTTPS 代理；个人配置启用时优先于平台存储。
 - 新增用户诊断包导出：设置页和失败任务详情支持导出最近 15 分钟、30 分钟、1 小时或 24 小时内的脱敏 ZIP，并通过 `traceId`、`requestId`、`taskId` 和 `providerRequestId` 关联前端、任务日志与模型上游调用。
 - 建立诊断数据安全边界：前端内存事件缓冲区最多保留 500 条，后端按当前用户校验任务和项目归属，导出时排除提示词、任务输入、请求/响应体、密钥、Cookie 和 URL 查询参数，并补充脱敏与越权测试。
 - 修复 Eagle 素材库在素材缺少文件夹或标签时的空集合兼容问题，避免前端读取 `folderIds` 或 `tags` 时出现异常。

@@ -41,13 +41,16 @@ func TestStreamTaskTextEventsWritesSequenceAndTerminalEvent(t *testing.T) {
 		Deltas:    []model.TaskTextDelta{{Sequence: 8, Content: "增量"}},
 		Complete:  true,
 		FinalText: "增量",
+		Status:    model.TaskStatusSucceeded,
+		Stage:     "已完成",
+		Progress:  100,
 	}
 	streamTaskTextEvents(context, nil, "user-1", "task-1", 7, replay)
 	if response.Header().Get("Content-Type") != "text/event-stream; charset=utf-8" {
 		t.Fatalf("content type = %q", response.Header().Get("Content-Type"))
 	}
 	body := response.Body.String()
-	if !strings.Contains(body, "id: 8\nevent: delta") || !strings.Contains(body, "event: terminal") {
+	if !strings.Contains(body, "event: progress") || !strings.Contains(body, `"progress":100`) || !strings.Contains(body, "id: 8\nevent: delta") || !strings.Contains(body, "event: terminal") {
 		t.Fatalf("unexpected SSE body: %q", body)
 	}
 }

@@ -67,10 +67,10 @@ describe("storyboard target materializer", () => {
     const nodes = [script, node("project-style", CanvasNodeType.Image, { content: "style" }), node("prop", CanvasNodeType.Image, { content: "prop" }), node("character", CanvasNodeType.Image, { workflowKind: "character", characterAssetId: "character-asset" }), node("manual", CanvasNodeType.Video, { content: "video" }), node("direct-manual", CanvasNodeType.Audio, { content: "audio" }), node("first-frame", CanvasNodeType.Image, { content: "frame", workflowKind: "shot" }), node("target", CanvasNodeType.Video)];
     const connections: CanvasConnection[] = [{ id: "manual-row-input", fromNodeId: "manual", toNodeId: "script", toHandleId: "row:row-1" }];
 
-    it("combines stable bindings and produces standard node mention tokens", () => {
+    it("combines stable bindings and produces position mention tokens", () => {
         const references = storyboardRowReferenceNodeIds(script, row, nodes, connections, true);
         expect(references).toEqual(["project-style", "prop", "character", "manual", "first-frame"]);
-        expect(storyboardComposerContent("快速跟拍", references)).toBe("参考资产：@[node:project-style] @[node:prop] @[node:character] @[node:manual] @[node:first-frame]\n快速跟拍");
+        expect(storyboardComposerContent("快速跟拍", references, nodes)).toBe("参考资产：@图片1 @图片2 @角色1 @视频1 @图片3\n快速跟拍");
 
         const withDirectManualInput = storyboardRowReferenceNodeIds(script, row, nodes, [...connections, { id: "direct", fromNodeId: "direct-manual", toNodeId: "target" }], false, "target");
         expect(withDirectManualInput).toContain("direct-manual");

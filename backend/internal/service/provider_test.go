@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
@@ -73,6 +74,16 @@ func TestChannelAPIURLNormalizesConfiguredVersionPrefix(t *testing.T) {
 func TestChannelAPIURLForProtocolUsesGeminiDefault(t *testing.T) {
 	if got := ChannelAPIURLForProtocol("https://generativelanguage.googleapis.com", "/models/gemini:generateContent", model.ChannelInterfaceGeminiVeo); got != "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent" {
 		t.Fatalf("Gemini URL = %q", got)
+	}
+}
+
+func TestProtocolRequestURLCanResolveSameOriginRootPath(t *testing.T) {
+	got, err := protocolRequestURL("https://apihub.agnes-ai.com/v1", protocol.RequestSpec{Path: "/agnesapi?video_id=video-1&model_name=agnes-video-2.5", OriginPath: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://apihub.agnes-ai.com/agnesapi?video_id=video-1&model_name=agnes-video-2.5" {
+		t.Fatalf("root path URL = %q", got)
 	}
 }
 
@@ -335,9 +346,85 @@ data: [DONE]
 	}))
 	defer server.Close()
 
-	got, err := postStreamingText(context.Background(), providerConfig{BaseURL: server.URL, APIKey: "test-key"}, "/chat/completions", map[string]interface{}{"model": "test-model"}, "chat-completion")
+	var deltas strings.Builder
+	got, err := postStreamingText(context.Background(), providerConfig{BaseURL: server.URL, APIKey: "test-key"}, "/chat/completions", map[string]interface{}{"model": "test-model"}, "chat-completion", func(delta string) {
+		deltas.WriteString(delta)
+	})
 	if err != nil || got != "流式分镜" {
 		t.Fatalf("postStreamingText() = %q, err = %v", got, err)
+	}
+	if deltas.String() != "流式分镜" {
+		t.Fatalf("stream deltas = %q", deltas.String())
+	}
+}
+
+func TestStreamingAgentParserReassemblesChatToolCallsAcrossChunks(t *testing.T) {
+	var deltas strings.Builder
+	parser := newStreamingAgentParser("chat-completion", func(delta string) {
+		deltas.WriteString(delta)
+	})
+	stream := `data: {"choices":[{"delta":{"content":"准备","tool_calls":[{"index":0,"id":"call-1","function":{"name":"canvas_apply_ops","arguments":"{\"ops\":"}}]}}]}
+
+data: {"choices":[{"delta":{"content":"执行","tool_calls":[{"index":0,"function":{"arguments":"[]}"}}]}}]}
+
+data: [DONE]
+
+`
+	parser.consume("text/event-stream", []byte(stream[:47]))
+	parser.consume("text/event-stream", []byte(stream[47:]))
+	parser.flush()
+	result, err := parser.result()
+	if err != nil {
+		t.Fatalf("streamingAgentParser.result() error = %v", err)
+	}
+	if result["text"] != "准备执行" || deltas.String() != "准备执行" {
+		t.Fatalf("text = %v, deltas = %q", result["text"], deltas.String())
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	call, _ := calls[0].(map[string]interface{})
+	function, _ := call["function"].(map[string]interface{})
+	if call["id"] != "call-1" || function["name"] != "canvas_apply_ops" || function["arguments"] != `{"ops":[]}` {
+		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestStreamingAgentParserSeparatesResponsesReasoningFromVisibleText(t *testing.T) {
+	var deltas strings.Builder
+	parser := newStreamingAgentParser("responses", func(delta string) {
+		deltas.WriteString(delta)
+	})
+	parser.consume("text/event-stream", []byte(`event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","delta":"内部分析"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"可见回答"}
+
+event: response.completed
+data: {"type":"response.completed","response":{"output":[{"type":"message","content":[{"type":"output_text","text":"可见回答"}]}]}}
+
+`))
+	parser.flush()
+	result, err := parser.result()
+	if err != nil {
+		t.Fatalf("streamingAgentParser.result() error = %v", err)
+	}
+	if result["text"] != "可见回答" || result["reasoning"] != "内部分析" || deltas.String() != "可见回答" {
+		t.Fatalf("result = %#v, deltas = %q", result, deltas.String())
+	}
+}
+
+func TestStreamingAgentParserWaitsForCompleteClaudeToolJSON(t *testing.T) {
+	parser := newStreamingAgentParser("claude-api", nil)
+	parser.consume("text/event-stream", []byte(`event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call-2","name":"canvas_get_state","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"include\":"}}
+
+`))
+	parser.flush()
+	if _, err := parser.result(); err == nil || !strings.Contains(err.Error(), "完整 JSON") {
+		t.Fatalf("incomplete tool arguments error = %v", err)
 	}
 }
 

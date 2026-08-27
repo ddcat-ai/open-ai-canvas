@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { storyboardAssetRoleForNode } from "@/lib/canvas/canvas-storyboard-assets";
+import { buildOrderedCanvasResourceReferences, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardAssetBinding, type StoryboardRow } from "@/types/canvas";
 
 export function storyboardRowReferenceNodeIds(
@@ -28,8 +29,13 @@ export function storyboardRowReferenceNodeIds(
     return Array.from(referenceIds).filter((nodeId) => nodes.some((node) => node.id === nodeId));
 }
 
-export function storyboardComposerContent(prompt: string, referenceNodeIds: string[]) {
-    const mentions = Array.from(new Set(referenceNodeIds)).map((nodeId) => `@[node:${nodeId}]`);
+export function storyboardComposerContent(prompt: string, referenceNodeIds: string[], nodes: CanvasNodeData[]) {
+    const referenceIds = Array.from(new Set(referenceNodeIds));
+    const referenceNodes = referenceIds.flatMap((nodeId) => {
+        const node = nodes.find((candidate) => candidate.id === nodeId);
+        return node ? [node] : [];
+    });
+    const mentions = buildOrderedCanvasResourceReferences(referenceNodes).map(canvasResourceMentionToken);
     return mentions.length ? [`参考资产：${mentions.join(" ")}`, prompt.trim()].filter(Boolean).join("\n") : prompt.trim();
 }
 

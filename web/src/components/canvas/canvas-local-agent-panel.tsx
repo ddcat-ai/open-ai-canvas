@@ -56,6 +56,14 @@ type AgentLogContext = { connected: boolean; enabled: boolean; activity: string;
 type AgentWorkspace = { canvasId: string; workspacePath: string; activeThreadId?: string };
 type AgentThreadsResponse = { ok?: boolean; workspace?: AgentWorkspace; data?: AgentThreadSummary[] };
 type AgentThreadResponse = { ok?: boolean; workspace?: AgentWorkspace; thread?: AgentThreadSummary; messages?: AgentChatItem[] };
+type AgentTurnPayload = {
+    text: string;
+    prompt: string;
+    canvasId: string;
+    threadId?: string;
+    attachments: Array<Pick<AgentAttachment, "name" | "type" | "dataUrl">>;
+    skills: Array<{ skillId: string; name: string; description: string; instruction: string }>;
+};
 
 export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     snapshot,
@@ -106,6 +114,8 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         clearEventLogs,
     } = useCanvasAgentStore();
     const [resizing, setResizing] = useState(false);
+    const [retryTurn, setRetryTurn] = useState<AgentTurnPayload | null>(null);
+    const [retryMessageId, setRetryMessageId] = useState<string | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
     // 供 Agent 输入框「@」插入的画布节点引用候选（active 标记为可用，供「@」菜单列出），与「/」弹出的已加入技能候选
     const composerReferences = useMemo(() => buildCanvasResourceReferences(snapshot.nodes, snapshot.connections).map((item) => ({ ...item, active: true })), [snapshot]);
@@ -139,6 +149,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     const connectionControllerRef = useRef<AbortController | null>(null);
     const activeToolRequestIdsRef = useRef(new Set<string>());
     const recoveredToolResultIdsRef = useRef(new Set<string>());
+    const activeTurnRef = useRef<AgentTurnPayload | null>(null);
     const syncState = useCallback(
         (clientId: string, nextSnapshot: CanvasAgentSnapshot) => {
             const stateHash = hashCanvasAgentSnapshot(nextSnapshot);
@@ -202,6 +213,9 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         runtimeRevisionRef.current = 0;
         runtimeStateHashRef.current = "";
         runtimeCanonicalStateHashRef.current = "";
+        activeTurnRef.current = null;
+        setRetryTurn(null);
+        setRetryMessageId(null);
     }, [snapshot.projectId]);
     useEffect(() => {
         if (!connected) return;
@@ -269,8 +283,12 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             }
             if (event.type === "agent_error") {
                 const errorMessage = parseEventJson<{ message?: unknown }>(event.data)?.message;
-                setAgentState({ activity: "出错", waiting: false });
-                addMessage({ role: "error", title: "错误", text: normalizeText(errorMessage) });
+                setAgentState({ activity: "出错", waiting: false, sending: false });
+                const messageId = addMessage({ role: "error", title: "错误", text: normalizeText(errorMessage) || "本地 Agent 执行失败，请重试本轮。" });
+                if (activeTurnRef.current) {
+                    setRetryTurn(activeTurnRef.current);
+                    setRetryMessageId(messageId || null);
+                }
                 addEventLog("错误", errorMessage, errorMessage);
                 return;
             }
@@ -322,6 +340,54 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         return () => clearTimeout(timer);
     }, [connected, snapshot, syncState]);
 
+    const submitTurn = async (payload: AgentTurnPayload, appendUserMessage: boolean) => {
+        const state = useCanvasAgentStore.getState();
+        if (!state.connected || state.sending || state.waiting) return;
+        activeTurnRef.current = payload;
+        if (appendUserMessage) {
+            setRetryTurn(null);
+            setRetryMessageId(null);
+        }
+        setAgentState({ activity: appendUserMessage ? "发送中" : "重试中", sending: true, waiting: true });
+        if (appendUserMessage) {
+            const files = state.attachments;
+            addMessage({ role: "user", text: payload.text || "发送了图片", attachments: files });
+            addEventLog("用户发送", { text: payload.text, attachments: files.map(({ name, type, size }) => ({ name, type, size })) });
+            files.forEach((item) => {
+                URL.revokeObjectURL(item.url);
+                attachmentUrlsRef.current.delete(item.url);
+            });
+            setAgentState({ prompt: "", attachments: [] });
+        } else {
+            addEventLog("重试本轮", { threadId: payload.threadId, attachments: payload.attachments.map(({ name, type }) => ({ name, type })) });
+        }
+        try {
+            const data = await fetchAgentJson<{ threadId?: string }>("/agent/codex/turn", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    prompt: payload.prompt,
+                    canvasId: payload.canvasId,
+                    threadId: payload.threadId,
+                    attachments: payload.attachments,
+                    skills: payload.skills,
+                }),
+            });
+            const acceptedPayload = data.threadId ? { ...payload, threadId: data.threadId } : payload;
+            activeTurnRef.current = acceptedPayload;
+            if (data.threadId) setAgentState({ activeThreadId: data.threadId });
+            addEventLog(appendUserMessage ? "本地 Agent 已接收" : "本地 Agent 已接收重试", { accepted: true });
+        } catch (error) {
+            setRetryTurn(activeTurnRef.current);
+            setAgentState({ activity: "发送失败", waiting: false });
+            const messageId = addMessage({ role: "error", title: appendUserMessage ? "发送失败" : "重试失败", text: error instanceof Error ? error.message : "发送失败" });
+            setRetryMessageId(messageId || null);
+            addEventLog(appendUserMessage ? "发送失败" : "重试失败", error);
+        } finally {
+            setAgentState({ sending: false });
+        }
+    };
+
     const sendPrompt = async (overrideText?: string) => {
         const text = (overrideText ?? prompt).trim();
         const files = attachments;
@@ -332,35 +398,14 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             addMessage({ role: "error", title: "图片过大", text: "图片附件超过 30MB，请删减后再发送。" });
             return;
         }
-        setAgentState({ activity: "发送中", sending: true, waiting: true });
-        addMessage({ role: "user", text: text || "发送了图片", attachments: files });
-        addEventLog("用户发送", { text, attachments: files.map(({ name, type, size }) => ({ name, type, size })) });
-        try {
-            const data = await fetchAgentJson<{ threadId?: string }>("/agent/codex/turn", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                    prompt: requestPrompt,
-                    canvasId: snapshotRef.current.projectId,
-                    threadId: useCanvasAgentStore.getState().activeThreadId || undefined,
-                    attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
-                    skills: mentionedSkills.map((skill) => ({ skillId: skill.skill_id, name: skill.skill_name, description: skill.description, instruction: skill.instruction || skill.description })),
-                }),
-            });
-            if (data.threadId) setAgentState({ activeThreadId: data.threadId });
-            addEventLog("本地 Agent 已接收", { accepted: true });
-            files.forEach((item) => {
-                URL.revokeObjectURL(item.url);
-                attachmentUrlsRef.current.delete(item.url);
-            });
-            setAgentState({ prompt: "", attachments: [] });
-        } catch (error) {
-            setAgentState({ activity: "发送失败", waiting: false });
-            addMessage({ role: "error", title: "发送失败", text: error instanceof Error ? error.message : "发送失败" });
-            addEventLog("发送失败", error);
-        } finally {
-            setAgentState({ sending: false });
-        }
+        await submitTurn({
+            text,
+            prompt: requestPrompt,
+            canvasId: snapshotRef.current.projectId,
+            threadId: useCanvasAgentStore.getState().activeThreadId || undefined,
+            attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
+            skills: mentionedSkills.map((skill) => ({ skillId: skill.skill_id, name: skill.skill_name, description: skill.description, instruction: skill.instruction || skill.description })),
+        }, true);
     };
 
     const addAttachments = async (files: FileList | File[] | null) => {
@@ -549,6 +594,9 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         setAgentState({ loadingThreads: true });
         try {
             const data = await fetchAgentJson<AgentThreadResponse>("/agent/codex/threads/new", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ canvasId: projectId }) });
+            activeTurnRef.current = null;
+            setRetryTurn(null);
+            setRetryMessageId(null);
             setAgentState({ activeThreadId: data.thread?.id || data.workspace?.activeThreadId || "", messages: [], activeTab: "chat", activity: "新对话" });
             await loadThreads();
         } catch (error) {
@@ -565,6 +613,9 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         setAgentState({ loadingThreads: true });
         try {
             const data = await fetchAgentJson<AgentThreadResponse>(`/agent/codex/threads/${encodeURIComponent(threadId)}/resume`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ canvasId: projectId }) });
+            activeTurnRef.current = null;
+            setRetryTurn(null);
+            setRetryMessageId(null);
             setAgentState({ activeThreadId: data.thread?.id || threadId, messages: normalizeHistoryMessages(data.messages || []), activeTab: "chat", activity: "已恢复会话" });
             await loadThreads();
         } catch (error) {
@@ -582,6 +633,11 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         try {
             await fetchAgentJson(`/agent/codex/threads/${encodeURIComponent(threadId)}/delete`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ canvasId: projectId }) });
             const current = useCanvasAgentStore.getState();
+            if (current.activeThreadId === threadId) {
+                activeTurnRef.current = null;
+                setRetryTurn(null);
+                setRetryMessageId(null);
+            }
             setAgentState({
                 threads: current.threads.filter((thread) => thread.id !== threadId),
                 activeThreadId: current.activeThreadId === threadId ? "" : current.activeThreadId,
@@ -630,24 +686,25 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
 
     const addMessage = (item: Omit<AgentChatItem, "id">) => {
         const text = normalizeText(item.text);
-        if (!text && !item.attachments?.length) return;
+        if (!text && !item.attachments?.length) return undefined;
         const next = { ...item, id: `${Date.now()}-${Math.random()}`, text };
         const currentMessages = useCanvasAgentStore.getState().messages;
         if (next.streamId) {
             const index = currentMessages.findIndex((message) => message.streamId === next.streamId);
             if (index >= 0) {
                 setAgentState({ messages: currentMessages.map((message, i) => (i === index ? { ...message, ...next, id: message.id, text: next.text || message.text } : message)) });
-                return;
+                return currentMessages[index].id;
             }
         }
         const last = currentMessages.at(-1);
         if (last?.role === "assistant" && next.role === "assistant" && last.title === next.title) {
             const merged = mergeAgentText(last.text, next.text);
-            if (merged === last.text) return;
+            if (merged === last.text) return last.id;
             setAgentState({ messages: [...useCanvasAgentStore.getState().messages.slice(0, -1), { ...last, text: merged, meta: next.meta || last.meta }] });
-            return;
+            return last.id;
         }
         pushMessage(next);
+        return next.id;
     };
 
     const addEventLog = (title: string, text: unknown, raw?: unknown) => {
@@ -660,11 +717,20 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         const nextActivity = activityText(event);
         if (nextActivity) setAgentState({ activity: nextActivity });
         if (event.type === "turn.started") setAgentState({ waiting: true });
-        if (event.type === "turn.completed" || event.type === "turn.failed" || event.type === "error") setAgentState({ waiting: false, sending: false });
+        if (event.type === "turn.completed") {
+            activeTurnRef.current = null;
+            setRetryTurn(null);
+            setRetryMessageId(null);
+            setAgentState({ waiting: false, sending: false });
+        } else if (event.type === "turn.failed" || event.type === "error") {
+            if (activeTurnRef.current) setRetryTurn(activeTurnRef.current);
+            setAgentState({ waiting: false, sending: false });
+        }
         const item = formatAgentEvent(event);
         if (item) {
             if (item.role === "error") setAgentState({ waiting: false, sending: false });
-            addMessage(item);
+            const messageId = addMessage(item);
+            if ((event.type === "turn.failed" || event.type === "error") && activeTurnRef.current && item.role === "error") setRetryMessageId(messageId || null);
         }
     };
 
@@ -716,7 +782,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                             />
                         ) : null}
                         {messages.map((item) => (
-                            <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} isStreaming={(sending || waiting) && item.id === messages.at(-1)?.id && item.role === "assistant"} onQuickAction={(text) => void sendPrompt(text)} />
+                            <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} isStreaming={(sending || waiting) && item.id === messages.at(-1)?.id && item.role === "assistant"} retrying={sending && item.id === retryMessageId} onRetry={item.id === retryMessageId && retryTurn ? () => void submitTurn(retryTurn, false) : undefined} onQuickAction={(text) => void sendPrompt(text)} />
                         ))}
                         {pendingTool ? (
                             <AgentPendingToolCard
@@ -1025,6 +1091,7 @@ function agentAttachmentToChatAttachment(item: AgentAttachment): CanvasAgentChat
 
 function formatAgentEvent(event: AgentEventPayload): Omit<AgentChatItem, "id"> | null {
     const item = event.item;
+    if (event.type === "turn.failed" || event.type === "error") return { role: "error", title: "模型调用失败", text: normalizeText(event.error?.message || event.message) || "模型调用失败，请重试本轮。", detail: event };
     if (event.type === "item.completed" && item?.type === "error") return { role: "error", title: "错误", text: normalizeText(item.message), detail: item };
     if ((event.type === "item.updated" || event.type === "item.completed") && item?.type === "agent_message") return { role: "assistant", title: "Codex", text: stringText(item.text), meta: usageText(event), streamId: item.id };
     if (event.type === "item.completed" && isMcpToolItem(item) && isReadTool(String(item?.tool || ""))) return { role: "tool", title: `${toolName(String(item?.tool || ""))}完成`, text: item?.error?.message || toolSummary(item), detail: toolDetail(item) };

@@ -52,6 +52,7 @@ type BackendGenerationTaskOptions = {
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
+    onTextDelta?: (text: string) => void;
     localIdempotencyKey?: string;
     localResumeOnly?: boolean;
     clientOperationId?: string;
@@ -130,6 +131,7 @@ export async function runBackendToolGenerationTask(options: {
     tools: ResponseFunctionTool[];
     toolChoice: ToolChoice;
     signal?: AbortSignal;
+    onDelta?: (text: string) => void;
 }): Promise<ToolResponseResult> {
     throwIfAborted(options.signal);
     const logicalModelId = logicalModelIDForConfig(options.config);
@@ -149,7 +151,7 @@ export async function runBackendToolGenerationTask(options: {
             metadata: { source: "canvas-online-agent" },
         },
     });
-    const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task });
+    const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task, onTextDelta: options.onDelta });
     const result = parseBackendGenerationResult(completed);
     return {
         content: result.text || "",
@@ -399,7 +401,7 @@ async function prepareGenerationReferences({
 }
 
 async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
-    const { projectId, mode, prompt, config, signal, metadata, onTaskUpdate } = options;
+    const { projectId, mode, prompt, config, signal, metadata, onTaskUpdate, onTextDelta } = options;
     const videoOperation = generationOperation(options);
     const workflow = resolveGenerationWorkflowExecution(config, mode);
     const logicalModelId = workflow ? "" : logicalModelIDForConfig(config);
@@ -426,7 +428,7 @@ async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions
         },
     });
     onTaskUpdate?.(task);
-    const completed = await dependencies.waitTask(task.id, { signal, initialTask: task, onTaskUpdate });
+    const completed = await dependencies.waitTask(task.id, { signal, initialTask: task, onTaskUpdate, onTextDelta });
     return parseBackendGenerationResult(completed);
 }
 

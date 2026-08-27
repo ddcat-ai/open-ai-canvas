@@ -24,18 +24,25 @@ func TestBuiltinCatalogContainsRequestedProtocols(t *testing.T) {
 		t.Fatal("legacy OpenAI video alias was not registered")
 	}
 	available := registry.List(SurfaceUserCustomChannel, CapabilityVideo, false)
+	var agnesAvailable bool
 	for _, item := range available {
 		if item.ID == "agnes-video" {
-			t.Fatal("unavailable Agnes adapter was selectable")
+			agnesAvailable = true
+			if !item.Enabled || !item.Installable || item.UnavailableReason != "" {
+				t.Fatalf("Agnes metadata must be enabled: %#v", item)
+			}
 		}
+	}
+	if !agnesAvailable {
+		t.Fatal("Agnes adapter was not selectable")
 	}
 	all := registry.List(SurfaceAdminSystemChannel, CapabilityVideo, true)
 	var found bool
 	for _, item := range all {
 		if item.ID == "agnes-video" {
 			found = true
-			if item.UnavailableReason == "" || item.Enabled {
-				t.Fatalf("Agnes metadata must explain that it is disabled: %#v", item)
+			if !item.Enabled || item.UnavailableReason != "" {
+				t.Fatalf("Agnes metadata must stay enabled: %#v", item)
 			}
 		}
 	}
@@ -126,6 +133,7 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 		{"gemini-veo", "/v1beta/models/veo-test:predictLongRunning", "/v1beta/operations/video-1", GenerationRequest{Model: "veo-test", Prompt: "a clip"}},
 		{"novita-video", "/v3/video/create", "/v3/async/task-result?task_id=video-1", GenerationRequest{Model: "novita", Prompt: "a clip"}},
 		{"minimax-video", "/v2/video_generation", "/v2/query/video_generation/video-1", GenerationRequest{Model: "MiniMax-H3", Prompt: "a clip"}},
+		{"agnes-video", "/v1/videos", "/agnesapi?video_id=video-1&model_name=agnes-video-2.5", GenerationRequest{Model: "agnes-video-2.5", Prompt: "a clip", Duration: 5}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.id, func(t *testing.T) {
@@ -206,14 +214,49 @@ func TestAsyncVideoResponseNormalizesStatusAndResult(t *testing.T) {
 	}
 }
 
-func TestAgnesIsExplicitlyUnavailable(t *testing.T) {
+func TestAgnesMapsOfficialCreateAndPollContracts(t *testing.T) {
 	adapter, _ := Builtins().Get("agnes-video")
-	_, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "agnes", Prompt: "test"}})
-	if err == nil {
-		t.Fatal("Agnes unexpectedly accepted a request")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "agnes-video-2.5", Prompt: "use the first frame", Duration: 5, Resolution: "960P", AspectRatio: "16:9",
+		Images: []MediaReference{{URL: "https://cdn.example/first.png"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := err.(UnavailableError); !ok {
-		t.Fatalf("error = %T %v", err, err)
+	body := create.Body.(map[string]any)
+	if create.Path != "/v1/videos" || body["mode"] != "keyframe" || body["seconds"] != "5" || body["size"] != "960P" || body["first_frame"] != "https://cdn.example/first.png" {
+		t.Fatalf("create = %#v", create)
+	}
+	poll, err := adapter.BuildPoll(context.Background(), PollContext{Model: "agnes-video-2.5", TaskID: "video/1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !poll.OriginPath || poll.Path != "/agnesapi?video_id=video%2F1&model_name=agnes-video-2.5" {
+		t.Fatalf("poll = %#v", poll)
+	}
+	created, err := adapter.ParseCreate(context.Background(), []byte(`{"id":"task-1","video_id":"video-1","status":"queued"}`))
+	if err != nil || created.TaskID != "video-1" || created.Status != StatusPending {
+		t.Fatalf("created = %#v, err = %v", created, err)
+	}
+	completed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "video-1"}, []byte(`{"video_id":"video-1","status":"completed","metadata":{"url":"https://cdn.example/result.mp4"}}`))
+	if err != nil || completed.Status != StatusSucceeded || completed.Result == nil || completed.Result.Videos[0].URL != "https://cdn.example/result.mp4" {
+		t.Fatalf("completed = %#v, err = %v", completed, err)
+	}
+	failed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "video-1"}, []byte(`{"video_id":"video-1","status":"failed","error":{"message":"quota exceeded"}}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "quota exceeded" {
+		t.Fatalf("failed = %#v, err = %v", failed, err)
+	}
+}
+
+func TestAgnesFlashRejectsUnsupportedOfficialInputs(t *testing.T) {
+	adapter, _ := Builtins().Get("agnes-video")
+	_, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "agnes-video-2.5-flash", Prompt: "test", Duration: 5, Resolution: "2K"}})
+	if err == nil || !strings.Contains(err.Error(), "720P") {
+		t.Fatalf("resolution error = %v", err)
+	}
+	_, err = adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "agnes-video-2.5-flash", Prompt: "test", Duration: 5, Videos: []MediaReference{{URL: "https://cdn.example/reference.mp4"}}}})
+	if err == nil || !strings.Contains(err.Error(), "不支持参考视频") {
+		t.Fatalf("video error = %v", err)
 	}
 }
 

@@ -1,46 +1,49 @@
-# Agnes 视频协议（当前不可用）
+# Agnes AI 视频协议
 
-Agnes 作为内置占位插件保留，是为了让历史模型配置能显示明确的不可用原因，而不是静默消失。当前仓库没有可验证的官方接口、鉴权、模型、轮询和响应资料，因此插件被强制禁用，也不可安装或选择。
+Agnes AI 官方视频接口使用 Bearer API Key 和异步任务模型。影策实现覆盖 `agnes-video-v2.0`、`agnes-video-2.5`、`agnes-video-2.5-flash`，创建任务后保存响应中的 `video_id`，再查询任务状态。官方国际站 Base URL 为 `https://apihub.agnes-ai.com/v1`；密钥只配置在后端渠道，不进入浏览器 URL、日志或任务正文。
 
-## 接口与当前状态
+## 接口与鉴权
 
 {{OPERATIONS}}
 
-创建、轮询、取消路径均为空。调用 `BuildCreate` 会返回 `UnavailableError`：`未提供可验证的官方请求、鉴权、轮询和响应协议资料`。页面展示该条目不代表可以发送任务。
+创建请求发送到 `/v1/videos`。轮询接口比较特殊：它位于同一主机的根路径 `/agnesapi`，而不是 Base URL 的 `/v1` 下。影策通过“同源根路径”合同拼接请求，因此配置 `https://apihub.agnes-ai.com/v1` 时会得到 `https://apihub.agnes-ai.com/agnesapi?...`，不会错误拼成 `/v1/agnesapi`，也不会把主机硬编码进协议适配器。
 
-## 模型与能力状态
+请求头使用 `Authorization: Bearer <API_KEY>` 和 `Content-Type: application/json`。创建响应优先读取 `video_id`，兼容读取 `task_id` 和 `id`；轮询始终携带 `video_id`，并在模型名可用时携带 `model_name`。
 
-当前没有任何经过验证的模型 ID、能力范围或计费规则。任何 Agnes 模型名都不可提交；只有取得官方模型目录并完成真实账户验证后，才能写入渠道模型配置。
+## 模型与模式
 
-## 参数与字段状态
+- `agnes-video-2.5`：支持 `text`、`keyframe`、`reference`。时长为字符串 `"4"` 到 `"12"`，默认 5 秒；分辨率支持 `720P`、`960P`、`2K`。
+- `agnes-video-2.5-flash`：模式与 2.5 相同，但固定 `720P`，参考图最多 5 张，不支持参考视频。
+- `agnes-video-v2.0`：支持文生视频、单图生视频和多关键帧；时长由 `num_frames / frame_rate` 控制，`num_frames` 必须符合 `8n + 1` 且不超过 441。
 
-当前 metadata 没有参数映射，创建请求也不存在。`model`、`prompt`、参考素材、时长、比例、分辨率、音频和水印均不得推测或透传。
+2.5 系列未显式传 `mode` 时，纯文本使用 `text`；存在音频或视频时使用 `reference`；只有一至两张图片时使用 `keyframe`。如果业务需要把图片当风格或主体参考，应在扩展参数中明确传 `mode: "reference"`。模式与媒体组合不合法时，影策在发出上游请求前直接拒绝。
 
-## 启用前必须补齐的事实
+## 参数映射
 
-| 项目 | 必须取得的证据 | 验收方式 |
-| --- | --- | --- |
-| 服务入口 | 官方 Base URL、版本、区域 | 官方文档链接和最小健康探测 |
-| 鉴权 | Header、Token/签名算法、权限范围 | 不在 URL/日志泄露密钥的集成测试 |
-| 模型 | 精确模型 ID、能力和停用策略 | 真实账户模型发现或官方表 |
-| 创建 | Method、Path、Content-Type、完整字段 | 请求 fixture 与真实 2xx 响应 |
-| 轮询 | 任务 ID、状态枚举、失败结构 | queued -> running -> completed/failed fixture |
-| 结果 | 视频 URL、文件接口、有效期 | 下载并存入影策资源的冒烟测试 |
-| 取消与账务 | 是否支持取消、失败退款语义 | 官方合同与错误场景验证 |
+{{PARAMETERS}}
 
-## 禁止的临时处理
+### Agnes Video 2.5 / 2.5 Flash
 
-- 不得根据插件名猜测 `/v1/videos`、模型名或 Bearer 鉴权。
-- 不得复用其他视频供应商的字段并把 200 响应当兼容。
-- 不得用空任务 ID、默认成功状态或假 URL 让页面“看起来能用”。
-- 不得仅在前端隐藏；后端 registry 和写路径必须继续拒绝不可用协议。
+公共请求字段包括 `model`、`prompt`、`mode`、`seconds`、`size`、`aspect_ratio`、`seed`、`n`。影策固定 `n: 1`。影策字段 `images` 在 `keyframe` 模式把前两张图片依次映射为 `first_frame`、`last_frame`；在 `reference` 模式映射为官方图片数组。影策字段 `videos`、`audios` 分别映射为官方同名数组。参考视频当前发送 `{ "url": "..." }`，不臆造 `start_seconds` 或 `require_audio`。
 
-## 未来实现结构
+### Agnes Video V2.0
 
-取得官方资料后，应新增独立 adapter、专属 create/poll/result fixture、错误码映射和一份替换本文的完整文档。若协议实际是已有供应商的别名，应迁移历史配置到明确的 canonical ID，而不是永久保留第二套执行逻辑。
+单张 `images` 输入映射为 `image`；多张图片映射为 `extra_body.image` 并设置 `extra_body.mode: "keyframes"`。影策字段 `duration` 会按 `frame_rate`（缺省 24）换算到最近的 `8n + 1` 帧并限制在 441 帧内。高级字段 `width`、`height`、`num_frames`、`frame_rate`、`num_inference_steps`、`seed`、`negative_prompt` 可由模型协议扩展参数传入。V2.0 不使用 `aspectRatio` 或 `resolution` 直接猜测尺寸。
+
+## 响应、状态与错误
+
+创建成功响应中的 `video_id` 是推荐轮询标识。状态映射为：`queued` -> 等待，`in_progress` -> 处理中，`completed` -> 成功，`failed` -> 失败。成功结果只读取官方 `metadata.url`；如果响应宣称完成却没有该字段，影策会返回真实协议错误，不生成假 URL。失败信息优先读取 `error.message`，其次读取顶层 `message` 或 `detail`。
+
+参考媒体必须是 Agnes 服务可公开访问且在任务完成前持续有效的 URL。适配器声明了公共媒体 URL 要求，影策运行时会按现有资源流程准备上游可访问地址；本机、私网、Cookie 保护或很快过期的链接不能作为 Agnes 输入。
 
 ## 官方资料
 
-当前未找到可验证且与本插件对应的官方开发者资料。为避免误导，本页不引用搜索聚合、论坛转述或其他同名产品文档。
+- 官网：<https://agnes-ai.com/>
+- 文档首页：<https://wiki.agnes-ai.com/en/docs/overview>
+- Agnes Video 2.5：<https://wiki.agnes-ai.com/en/docs/agnes-video-25>
+- Agnes Video 2.5 Flash：<https://wiki.agnes-ai.com/en/docs/agnes-video-25-flash>
+- Agnes Video V2.0：<https://wiki.agnes-ai.com/en/docs/agnes-video-v20>
+
+官方当前给出的创建接口是 `POST https://apihub.agnes-ai.com/v1/videos`，推荐查询接口是 `GET https://apihub.agnes-ai.com/agnesapi?video_id=<VIDEO_ID>&model_name=<MODEL>`。价格和促销会变化，不在协议适配器中固化。
 
 {{CONTRACT}}

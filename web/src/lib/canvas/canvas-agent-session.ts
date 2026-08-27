@@ -7,7 +7,6 @@ import {
 } from "@/services/api/task-center";
 
 const CINEMATIC_SESSION_POLL_INTERVAL_MS = 2000;
-const CINEMATIC_SESSION_MAX_POLLS = 120;
 
 type CinematicSessionWaitOptions = {
     signal?: AbortSignal;
@@ -42,14 +41,15 @@ export function isAgentSessionPollingAbort(error: unknown) {
 
 async function waitForCinematicAgentSession(initialDetail: AgentSessionDetail, options: CinematicSessionWaitOptions) {
     let detail = initialDetail;
-    for (let attempt = 0; attempt < CINEMATIC_SESSION_MAX_POLLS; attempt += 1) {
+    // 后端任务策略负责生成超时和终态收敛；前端只在调用方 Abort 时停止监听，
+    // 避免用独立的固定轮询次数把仍在服务端执行的分镜误判为失败。
+    for (;;) {
         throwIfAborted(options.signal);
         if (detail.session.status === "completed") return detail;
         if (detail.session.status === "failed") throw new Error(agentSessionFailureMessage(detail));
         await abortableDelay(CINEMATIC_SESSION_POLL_INTERVAL_MS, options.signal);
         detail = await queryAgentSession(initialDetail.session.id);
     }
-    throw new Error("后端影视 Agent 会话超时");
 }
 
 function abortableDelay(ms: number, signal?: AbortSignal) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Button, Tooltip } from "antd";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
+import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
@@ -48,7 +48,7 @@ export function extractCanvasAgentQuickActions(text: string): CanvasAgentQuickAc
 
 const WORKING_TEXT = "正在推演...";
 
-export function AgentChatMessage({ item, theme, user, isStreaming = false, onRejectTool, onApproveTool, onQuickAction }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void }) {
+export function AgentChatMessage({ item, theme, user, isStreaming = false, retrying = false, onRejectTool, onApproveTool, onQuickAction, onRetry }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; retrying?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void; onRetry?: () => void }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
@@ -77,6 +77,11 @@ export function AgentChatMessage({ item, theme, user, isStreaming = false, onRej
             {!isUser ? <AgentAvatar theme={theme} /> : null}
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
                 {item.role === "assistant" ? <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>{item.text}</AIMessageMarkdown> : <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>}
+                {item.role === "error" && onRetry ? (
+                    <Button size="small" className="mt-2 !h-7" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
+                        {retrying ? "重试中" : "重试本轮"}
+                    </Button>
+                ) : null}
                 {quickActions.length && onQuickAction ? (
                     <div className="mt-3 flex flex-wrap gap-1.5" aria-label="快捷选项">
                         {quickActions.map((action) => (
@@ -341,7 +346,7 @@ export function AgentChatComposer({
                             value={prompt}
                             references={references}
                             includeAssetLibrary={includeAssetLibrary}
-                            sendOnEnter
+                            sendOnEnter={false}
                             disabled={disabled}
                             onChange={handlePromptChange}
                             onSubmit={onSubmit}

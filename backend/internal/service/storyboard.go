@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 )
 
+const maxStoryboardShots = 12
+
 type agentStoryboardInput struct {
 	References     []string                  `json:"references"`
 	CanvasSnapshot map[string]any            `json:"canvasSnapshot"`
@@ -105,8 +107,8 @@ func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
 	if len(plan.Shots) == 0 {
 		return agentStoryboardPlan{}, errors.New("分镜模型没有返回 shots")
 	}
-	if len(plan.Shots) > 12 {
-		return agentStoryboardPlan{}, fmt.Errorf("分镜数量最多 12 个，实际返回 %d 个", len(plan.Shots))
+	if len(plan.Shots) > maxStoryboardShots {
+		return agentStoryboardPlan{}, fmt.Errorf("分镜数量最多 %d 个，实际返回 %d 个", maxStoryboardShots, len(plan.Shots))
 	}
 	for i := range plan.Shots {
 		if strings.TrimSpace(plan.Shots[i].Title) == "" {

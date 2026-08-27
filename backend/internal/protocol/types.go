@@ -78,6 +78,7 @@ type PollContext struct {
 type RequestSpec struct {
 	Method      string            `json:"method"`
 	Path        string            `json:"path"`
+	OriginPath  bool              `json:"originPath,omitempty"`
 	ContentType string            `json:"contentType"`
 	Headers     map[string]string `json:"headers,omitempty"`
 	Body        any               `json:"body,omitempty"`

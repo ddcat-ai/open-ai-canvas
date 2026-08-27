@@ -65,7 +65,7 @@ import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-co
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
-import { getContextResourceNodes, removeCanvasResourceMention, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { getContextResourceNodes, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
@@ -146,6 +146,31 @@ const CanvasDrawingEditorModal = lazy(() => import("@/components/canvas/canvas-d
 
 const NODE_STATUS_SUCCESS = "success" as const;
 const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
+
+async function copyImageToSystemClipboard(source: string) {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("当前浏览器不支持复制图片");
+    const response = await fetch(source);
+    if (!response.ok) throw new Error(`图片读取失败（HTTP ${response.status}）`);
+    const sourceBlob = await response.blob();
+    const blob = sourceBlob.type === "image/png" ? sourceBlob : await convertClipboardImageToPNG(sourceBlob);
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+}
+
+async function convertClipboardImageToPNG(blob: Blob) {
+    if (typeof createImageBitmap !== "function") throw new Error("当前浏览器无法转换这张图片的格式");
+    const bitmap = await createImageBitmap(blob);
+    try {
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("当前浏览器无法处理这张图片");
+        context.drawImage(bitmap, 0, 0);
+        return await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("图片格式转换失败")), "image/png"));
+    } finally {
+        bitmap.close();
+    }
+}
 
 function visibleGenerationBatch(node: CanvasNodeData) {
     const batches = node.metadata?.generationBatches || [];
@@ -1081,15 +1106,11 @@ function InfiniteCanvasPage() {
                 .filter((connection) => connection.fromNodeId === referenceNodeId && (connection.toNodeId === targetNodeId || connection.toNodeId === configNodeId))
                 .map((connection) => connection.id),
         );
-        const targetNode = nodesRef.current.find((node) => node.id === targetNodeId);
-        const currentPrompt = targetNode?.metadata?.composerContent ?? targetNode?.metadata?.prompt ?? "";
-        const nextPrompt = removeCanvasResourceMention(currentPrompt, reference);
-        if (nextPrompt !== currentPrompt) handleNodePromptChange(targetNodeId, nextPrompt);
         if (!removedConnectionIds.size) return;
         connectionsRef.current = connectionsRef.current.filter((connection) => !removedConnectionIds.has(connection.id));
         setConnections(connectionsRef.current);
         setSelectedConnectionId((current) => current && removedConnectionIds.has(current) ? null : current);
-    }, [connectionsRef, handleNodePromptChange, nodesRef, setConnections, setSelectedConnectionId]);
+    }, [connectionsRef, nodesRef, setConnections, setSelectedConnectionId]);
 
     const handleProjectFolderInsert = useCallback((folderId: string) => {
         const folder = linkedProjectQuery.data?.assetFolders.find((item) => item.id === folderId);
@@ -1211,6 +1232,26 @@ function InfiniteCanvasPage() {
         scriptEditorNodeId,
         dialogNodeId,
     });
+    useEffect(() => {
+        setNodes((current) => {
+            let changed = false;
+            const next = current.map((node) => {
+                const references = mentionReferencesByNodeId.get(node.id);
+                const savedPrompt = node.metadata?.composerContent ?? node.metadata?.prompt;
+                if (!references?.length || !savedPrompt?.includes("@[node:")) return node;
+                const normalizedPrompt = normalizeCanvasNodeMentionTokens(savedPrompt, references);
+                if (normalizedPrompt === savedPrompt) return node;
+                changed = true;
+                return {
+                    ...node,
+                    metadata: node.metadata?.composerContent !== undefined
+                        ? { ...node.metadata, composerContent: normalizedPrompt }
+                        : { ...node.metadata, prompt: normalizedPrompt },
+                };
+            });
+            return changed ? next : current;
+        });
+    }, [mentionReferencesByNodeId, setNodes]);
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
     const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
     const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
@@ -1449,29 +1490,26 @@ function InfiniteCanvasPage() {
     const copyNodeContentToClipboard = useCallback(
         async (node: CanvasNodeData | null) => {
             releaseCopiedNodesPastePriority();
-            const content = node?.metadata?.content;
-            if (!node || !content) {
+            const content = node?.metadata?.content?.trim();
+            const resourceId = resourceIdFromStorageKey(node?.metadata?.storageKey);
+            const copySource = content || (node?.type === CanvasNodeType.Image && resourceId ? resourceFileUrl(resourceId) : "");
+            if (!node || !copySource) {
                 message.warning("没有可复制的内容");
                 return;
             }
 
             try {
-                if (node.type === CanvasNodeType.Image && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-                    const response = await fetch(content);
-                    const blob = await response.blob();
-                    await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
+                if (node.type === CanvasNodeType.Image) {
+                    await copyImageToSystemClipboard(copySource);
                     message.success("图片已复制");
                     return;
                 }
 
-                if (!navigator.clipboard?.writeText) {
-                    message.warning("当前浏览器不支持写入剪贴板");
-                    return;
-                }
-                await navigator.clipboard.writeText(content);
+                if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(copySource);
+                else if (!copyToClipboard(copySource)) throw new Error("当前浏览器不支持写入剪贴板");
                 message.success(node.type === CanvasNodeType.Text ? "文本已复制" : "内容链接已复制");
-            } catch {
-                message.error("复制失败，请检查浏览器剪贴板权限");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "复制失败，请检查浏览器剪贴板权限");
             }
         },
         [message, releaseCopiedNodesPastePriority],
@@ -1670,8 +1708,8 @@ function InfiniteCanvasPage() {
                     y: sourceNode.position.y + sourceNode.height / 2,
                 },
                 {
-                    prompt: `@[node:${sourceNode.id}]`,
-                    composerContent: `@[node:${sourceNode.id}]`,
+                    prompt: "@文本1",
+                    composerContent: "@文本1",
                     model: effectiveConfig.imageModel || effectiveConfig.model,
                     size: effectiveConfig.size,
                     quality: effectiveConfig.quality,

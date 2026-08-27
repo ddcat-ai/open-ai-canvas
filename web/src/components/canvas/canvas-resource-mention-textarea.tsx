@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ClipboardEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
+import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, Sparkles, UserRound, Video } from "lucide-react";
 
@@ -8,6 +8,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { buildAssetMentionReferences, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { useAssetStore, type AssetCategory } from "@/stores/use-asset-store";
 import { CanvasNodeType } from "@/types/canvas";
+import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
 
 type MentionState = {
     start: number;
@@ -42,10 +43,12 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     sendOnEnter?: boolean;
     onContentSizeChange?: (height: number) => void;
     includeAssetLibrary?: boolean;
+    activeDropReferenceId?: string | null;
+    onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
 };
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, ...props },
+    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, ...props },
     forwardedRef,
 ) {
     const rawTheme = useThemeStore((state) => state.theme);
@@ -59,8 +62,11 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const lastRenderedValueRef = useRef("");
     const [mention, setMention] = useState<MentionState | null>(null);
     const [activeIndex, setActiveIndex] = useState(-1);
-    const assetReferences = useMemo(() => includeAssetLibrary ? buildAssetMentionReferences(assets) : [], [assets, includeAssetLibrary]);
-    const activeCanvasReferences = useMemo(() => references.filter((item) => item.active), [references]);
+    const [nativeDropReferenceId, setNativeDropReferenceId] = useState<string | null>(null);
+    const canvasReferences = useResolvedCanvasResourceReferences(references);
+    const rawAssetReferences = useMemo(() => includeAssetLibrary ? buildAssetMentionReferences(assets) : [], [assets, includeAssetLibrary]);
+    const assetReferences = useResolvedCanvasResourceReferences(rawAssetReferences);
+    const activeCanvasReferences = useMemo(() => canvasReferences.filter((item) => item.active), [canvasReferences]);
     const availableReferences = useMemo(() => [...activeCanvasReferences, ...assetReferences], [activeCanvasReferences, assetReferences]);
     const candidates = useMemo(() => {
         if (!mention) return [];
@@ -105,6 +111,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         pendingSelectionRef.current = null;
         reportContentSize(editor);
     }, [activeReferences, reportContentSize, useRichEditor, value]);
+
+    useLayoutEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        const dropReferenceId = nativeDropReferenceId || activeDropReferenceId || "";
+        editor.querySelectorAll<HTMLElement>("[data-mention-reference-id]").forEach((chip) => {
+            chip.classList.toggle("is-replace-target", Boolean(dropReferenceId) && chip.dataset.mentionReferenceId === dropReferenceId);
+        });
+    }, [activeDropReferenceId, nativeDropReferenceId, useRichEditor, value]);
 
     useLayoutEffect(() => {
         const element = useRichEditor ? editorRef.current : textareaRef.current;
@@ -199,6 +214,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (typeof cursor === "number") syncMention(serializeEditableValue(editor), cursor);
     };
 
+    const referenceForDropTarget = (target: EventTarget | null) => {
+        const element = target instanceof Element ? target.closest<HTMLElement>("[data-mention-reference-id]") : null;
+        const referenceId = element?.dataset.mentionReferenceId;
+        return referenceId ? activeReferences.find((reference) => reference.id === referenceId) : undefined;
+    };
+
+    const imageFilesFromTransfer = (event: DragEvent<HTMLDivElement>) => Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+
     const mergedStyle = {
         ...(style || {}),
         caretColor: style?.color || theme.node.text,
@@ -253,6 +276,35 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
+                    }}
+                    onDragOver={(event: DragEvent<HTMLDivElement>) => {
+                        const reference = referenceForDropTarget(event.target);
+                        const hasImageFile = Array.from(event.dataTransfer.items).some((item) => item.kind === "file" && (!item.type || item.type.startsWith("image/")))
+                            || Array.from(event.dataTransfer.files).some((file) => file.type.startsWith("image/"));
+                        if (!onReferenceFilesDrop || reference?.kind !== "image" || !hasImageFile) {
+                            setNativeDropReferenceId(null);
+                            props.onDragOver?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
+                            return;
+                        }
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "copy";
+                        setNativeDropReferenceId(reference.id);
+                        props.onDragOver?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
+                    }}
+                    onDragLeave={(event: DragEvent<HTMLDivElement>) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        if (event.clientX <= bounds.left || event.clientX >= bounds.right || event.clientY <= bounds.top || event.clientY >= bounds.bottom) setNativeDropReferenceId(null);
+                        props.onDragLeave?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
+                    }}
+                    onDrop={(event: DragEvent<HTMLDivElement>) => {
+                        const reference = referenceForDropTarget(event.target);
+                        const files = imageFilesFromTransfer(event);
+                        setNativeDropReferenceId(null);
+                        if (onReferenceFilesDrop && reference?.kind === "image" && files.length) {
+                            event.preventDefault();
+                            onReferenceFilesDrop(reference, files);
+                        }
+                        props.onDrop?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                         if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current)) return;
@@ -409,6 +461,7 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     const chip = document.createElement("span");
     chip.contentEditable = "false";
     chip.dataset.mentionToken = token;
+    chip.dataset.mentionReferenceId = reference.id;
     chip.className = "canvas-resource-inline-mention";
 
     const at = document.createElement("span");
@@ -641,6 +694,7 @@ function splitMentionText(value: string, references: CanvasResourceReference[]) 
         const serializedToken = canvasResourceMentionToken(reference);
         referenceByToken.set(serializedToken, { reference, serializedToken });
         referenceByToken.set(`@${reference.label}`, { reference, serializedToken });
+        if (reference.nodeId && !reference.assetId) referenceByToken.set(`@[node:${reference.nodeId}]`, { reference, serializedToken });
     });
     const tokens = [...referenceByToken.keys()].sort((a, b) => b.length - a.length);
     const parts: MentionTextPart[] = [];

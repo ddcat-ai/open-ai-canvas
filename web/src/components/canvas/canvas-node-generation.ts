@@ -71,7 +71,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         : [];
     const inputs = [...connectedInputs, ...portraitTextureInput, ...buildAssetGenerationInputs(assets)];
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
-    const hasExplicitResourceMention = /@\[(?:node|asset):[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
+    const hasExplicitResourceMention = hasResolvableGenerationMention(prompt, inputs);
     const isWorkflowSource = sourceNode?.type === CanvasNodeType.Config && isCanvasWorkflowProvider(sourceNode.metadata);
     if ((Boolean(sourceNode?.metadata?.composerContent?.trim()) && (sourceNode?.type === CanvasNodeType.Config || isWorkflowSource)) || hasExplicitResourceMention) {
         const autoIncludeWorkflowMedia = isWorkflowSource;
@@ -139,8 +139,9 @@ function buildComposerGenerationContext(
     autoIncludeWorkflowMedia = false,
     workflowMediaInputs: NodeGenerationInput[] = [],
 ): NodeGenerationContext {
-    const normalizedPrompt = normalizeLegacyNodeMentions(prompt, inputs);
-    const inputByToken = new Map(inputs.map((input) => [generationInputToken(input), input]));
+    const normalizedPrompt = normalizeGenerationNodeMentionTokens(prompt, inputs);
+    const slotInputByToken = new Map(generationSlotEntries(inputs).map(({ token, input }) => [token, input]));
+    const assetInputById = new Map(inputs.filter((input) => input.nodeId.startsWith("asset:")).map((input) => [input.nodeId.slice("asset:".length), input]));
     const nodeInputById = new Map(inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => [input.nodeId, input]));
     const selectedInputs: NodeGenerationInput[] = [];
     const labelByNodeId = new Map<string, string>();
@@ -160,12 +161,12 @@ function buildComposerGenerationContext(
         });
     }
 
-    for (const match of normalizedPrompt.matchAll(/@\[(node|asset):([^\]]+)\]/g)) {
+    for (const match of normalizedPrompt.matchAll(GENERATION_MENTION_PATTERN)) {
         if (match.index === undefined) continue;
-        hasToken = true;
         nextPrompt += normalizedPrompt.slice(lastIndex, match.index);
-        const input = inputByToken.get(`${match[1]}:${match[2]}`);
+        const input = resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById);
         if (input) {
+            hasToken = true;
             let label = labelByNodeId.get(input.nodeId);
             if (!label) {
                 const labelKind = input.sourceKind === "drawing" ? "drawing" : input.type;
@@ -243,32 +244,56 @@ function buildComposerGenerationContext(
     };
 }
 
-// 旧画布保存的是 @角色1 等显示标签；生成时升级为稳定节点 Token，避免标题或排序变化后引用错位。
-function normalizeLegacyNodeMentions(prompt: string, inputs: NodeGenerationInput[]) {
-    const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
-    const labels = inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => {
-        const kind = input.sourceKind === "drawing" ? "drawing" : input.type;
-        return { label: generationLabel(kind, counts[kind]++), nodeId: input.nodeId };
-    }).sort((a, b) => b.label.length - a.label.length);
-    let next = prompt;
-    labels.forEach(({ label, nodeId }) => {
-        const token = `@${label}`;
-        let cursor = 0;
-        let result = "";
-        while (cursor < next.length) {
-            const found = next.indexOf(token, cursor);
-            if (found < 0) {
-                result += next.slice(cursor);
-                break;
-            }
-            const end = found + token.length;
-            result += next.slice(cursor, found);
-            result += hasMentionBoundary(next, end) ? `@[node:${nodeId}]` : token;
-            cursor = end;
-        }
-        next = result;
+const GENERATION_MENTION_PATTERN = /@\[(node|asset):([^\]]+)\]|@(图片|视频|音频|文本|角色|绘图)(\d+)/g;
+
+export function generationInputMentionLabel(input: NodeGenerationInput, inputs: NodeGenerationInput[]) {
+    const entry = generationSlotEntries(inputs).find((item) => item.input.nodeId === input.nodeId);
+    return entry?.label || generationLabel(input.sourceKind === "drawing" ? "drawing" : input.type, 0);
+}
+
+export function normalizeGenerationNodeMentionTokens(prompt: string, inputs: NodeGenerationInput[]) {
+    const labelByNodeId = new Map(generationSlotEntries(inputs).map(({ input, label }) => [input.nodeId, label]));
+    return prompt.replace(/@\[node:([^\]]+)\]/g, (token, nodeId: string) => {
+        const label = labelByNodeId.get(nodeId);
+        return label ? `@${label}` : token;
     });
-    return next;
+}
+
+function hasResolvableGenerationMention(prompt: string, inputs: NodeGenerationInput[]) {
+    const normalizedPrompt = normalizeGenerationNodeMentionTokens(prompt, inputs);
+    const slotInputByToken = new Map(generationSlotEntries(inputs).map(({ token, input }) => [token, input]));
+    const nodeInputById = new Map(inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => [input.nodeId, input]));
+    const assetInputById = new Map(inputs.filter((input) => input.nodeId.startsWith("asset:")).map((input) => [input.nodeId.slice("asset:".length), input]));
+    for (const match of normalizedPrompt.matchAll(GENERATION_MENTION_PATTERN)) {
+        if (resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById)) return true;
+    }
+    return false;
+}
+
+function generationSlotEntries(inputs: NodeGenerationInput[]) {
+    const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
+    return inputs.flatMap((input) => {
+        if (input.nodeId.startsWith("asset:")) return [];
+        const kind = input.sourceKind === "drawing" ? "drawing" : input.type;
+        const label = generationLabel(kind, counts[kind]++);
+        return [{ input, label, token: `@${label}` }];
+    });
+}
+
+function resolveGenerationMention(
+    prompt: string,
+    match: RegExpMatchArray,
+    slotInputByToken: Map<string, NodeGenerationInput>,
+    nodeInputById: Map<string, NodeGenerationInput>,
+    assetInputById: Map<string, NodeGenerationInput>,
+) {
+    if (match[3]) {
+        const end = (match.index || 0) + match[0].length;
+        return hasMentionBoundary(prompt, end) ? slotInputByToken.get(match[0]) : undefined;
+    }
+    if (match[1] === "node") return nodeInputById.get(match[2]);
+    if (match[1] === "asset") return assetInputById.get(match[2]);
+    return undefined;
 }
 
 function hasMentionBoundary(value: string, index: number) {
@@ -305,10 +330,6 @@ function buildAssetGenerationInputs(assets: Asset[]): NodeGenerationInput[] {
         if (asset.kind === "entity" && asset.category === "character") return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
         return [];
     });
-}
-
-function generationInputToken(input: NodeGenerationInput) {
-    return input.nodeId.startsWith("asset:") ? input.nodeId : `node:${input.nodeId}`;
 }
 
 function getConnectedStoryboardRows(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
