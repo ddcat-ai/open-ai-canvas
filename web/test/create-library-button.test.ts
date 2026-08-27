@@ -81,6 +81,7 @@ describe("creation library button", () => {
         expect(source).toContain("creation-reference-stack-card");
         expect(source).toContain("creation-reference-add-button");
         expect(source).toContain("addReferenceLabel");
+        expect(source).toContain("aria-busy={interactionBusy}");
         expect(source).toContain("disabled={interactionBusy || !canAddMoreReferences}");
         expect(source).toContain("creation-reference-track-button");
         expect(source).toContain("imageReferenceAtPoint");
