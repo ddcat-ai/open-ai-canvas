@@ -50,6 +50,22 @@ type UserOSSSetting struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// StorageLocation is an immutable object-storage address. Credentials may be
+// rotated in place, while resources keep referring to the same location ID.
+type StorageLocation struct {
+	ID             string     `json:"id" gorm:"primaryKey;size:36"`
+	Scope          string     `json:"scope" gorm:"size:16;index:idx_storage_locations_scope_owner_active,priority:1;uniqueIndex:idx_storage_locations_identity,priority:1"`
+	OwnerID        string     `json:"ownerId" gorm:"size:36;index:idx_storage_locations_scope_owner_active,priority:2;uniqueIndex:idx_storage_locations_identity,priority:2"`
+	Provider       string     `json:"provider" gorm:"size:24;index;uniqueIndex:idx_storage_locations_identity,priority:3"`
+	LocationDigest string     `json:"-" gorm:"size:64;uniqueIndex:idx_storage_locations_identity,priority:4"`
+	ValueJSON      string     `json:"-" gorm:"type:text"`
+	TestedDigest   string     `json:"-" gorm:"size:64"`
+	TestedAt       *time.Time `json:"testedAt,omitempty"`
+	Active         bool       `json:"active" gorm:"index:idx_storage_locations_scope_owner_active,priority:3"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
 type UserDailyUploadUsage struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:64"`
 	UserID    string    `json:"userId" gorm:"size:36;index;uniqueIndex:idx_user_daily_upload_day,priority:1"`

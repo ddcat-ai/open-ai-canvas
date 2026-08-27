@@ -26,3 +26,13 @@ description: 影策后端核心持久化表与状态边界
 `comfy_bridge_requests` 是 Bridge 交接的真相源。后端进程重启后，未领取请求继续从数据库投递；已领取请求的迟到结果先落库，任务 worker 恢复后使用原请求 ID 读取结果，不会创建第二次本地工作流执行。请求有效期当前为两小时，过期的排队或执行记录会转为失败。
 
 请求表保存工作流执行 payload 和结果，但不保存 Bridge Token。任务取消时，未领取请求可以确定取消；已经领取的本机工作流无法可靠中止，迟到结果会被丢弃并进入费用核对流程。
+
+## 资源存储
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `resources` | 保存资源元数据和实际存储位置引用 | S3 资源必须通过 `storage_setting_id` 固定绑定创建时的位置；浏览器默认经同源接口读取 |
+| `storage_locations` | 保存平台或个人 S3 位置版本、加密凭据和连接测试摘要 | Endpoint、Bucket、Region、PathStyle、PathPrefix、Provider 组成不可变位置；同位置只轮换凭据，位置变化创建新记录 |
+| `resource_deletion_jobs` | 在业务记录删除后可靠清理物理对象 | 固化资源的存储位置与对象键；删除失败保留任务并重试，S3 404 按幂等成功处理 |
+
+`storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。

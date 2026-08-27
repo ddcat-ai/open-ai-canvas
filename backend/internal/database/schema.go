@@ -43,6 +43,7 @@ func Models() []any {
 		&model.UserPluginState{},
 		&model.ArkPrivateAssetBinding{},
 		&model.UserOSSSetting{},
+		&model.StorageLocation{},
 		&model.UserDailyUploadUsage{},
 		&model.Skill{},
 		&model.UserSkillState{},

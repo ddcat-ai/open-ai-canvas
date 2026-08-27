@@ -1,6 +1,7 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 import axios from "axios";
 import { apiBaseURL, apiClient, request, type BackendEnvelope } from "@/services/api/request";
+import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 
 export type RemoteResource = {
     id: string;
@@ -25,20 +26,30 @@ export type RemoteResource = {
 
 export type UserOSSSetting = {
     enabled: boolean;
-    provider: "aliyun" | "tencent" | "qiniu";
+    provider: OSSProvider;
+    s3Preset: S3Preset;
     region: string;
     endpoint: string;
     cdnBaseUrl: string;
     bucket: string;
     accessKeyId: string;
     hasAccessKeySecret: boolean;
+    sessionToken?: string;
+    hasSessionToken: boolean;
+    pathStyle: boolean;
+    allowUserS3: boolean;
     publicBaseUrl: string;
     pathPrefix: string;
+    testedAt?: string;
+    testedDigest?: string;
+    historyCount?: number;
+    referencedResourceCount?: number;
     updatedAt?: string;
 };
 
-export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "pathPrefix"> & {
+export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "s3Preset" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "pathPrefix" | "pathStyle"> & {
     accessKeySecret?: string;
+    sessionToken?: string;
 };
 
 export type AccountFileStorageUsage = {
@@ -66,6 +77,10 @@ export function getUserOSSSetting() {
 
 export function updateUserOSSSetting(input: UserOSSSettingInput) {
     return request<{ setting: UserOSSSetting }>(api.patch("/settings/oss", input));
+}
+
+export function testUserOSSConnection(input: OSSConnectionTestInput) {
+    return request<OSSConnectionTestResult>(api.post("/settings/oss/test", input));
 }
 
 export async function getAccountFileStorageUsage() {
