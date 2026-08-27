@@ -11,7 +11,7 @@ import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { fetchWorkflowPluginStatuses } from "@/services/api/plugins";
+import { fetchPluginRuntimeState, setUserPluginEnabled } from "@/services/api/plugins";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -19,29 +19,52 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const dark = theme === "dark";
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
+    const setPluginStates = usePluginStore((state) => state.setPluginStates);
+    const pluginStoreHydrated = usePluginStore((state) => state.hydrated);
     const userId = useUserStore((state) => state.user?.id);
 
     useEffect(() => {
+        if (!pluginStoreHydrated) return;
         for (const plugin of listRegisteredPlugins()) ensurePlugin(plugin.manifest);
-    }, [ensurePlugin]);
+    }, [ensurePlugin, pluginStoreHydrated, userId]);
 
     useEffect(() => {
         if (!userId) {
             setRuntimeStatuses({});
+            setPluginStates({});
             return;
         }
+        if (!pluginStoreHydrated) return;
         let cancelled = false;
-        void fetchWorkflowPluginStatuses()
-            .then((statuses) => {
-                if (!cancelled) setRuntimeStatuses(statuses);
+        void fetchPluginRuntimeState()
+            .then(async ({ statuses, states }) => {
+                const legacyEnabledIds = usePluginStore.getState().installations
+                    .filter((installation) => installation.enabled && states[installation.manifest.id]?.canToggle && !states[installation.manifest.id]?.userConfigured)
+                    .map((installation) => installation.manifest.id);
+                if (legacyEnabledIds.length) {
+                    try {
+                        const migrated = await Promise.all(legacyEnabledIds.map((pluginId) => setUserPluginEnabled(pluginId, true)));
+                        for (const state of migrated) states[state.pluginId] = state;
+                        for (const pluginId of legacyEnabledIds) statuses[pluginId] = states[pluginId]?.effectiveEnabled ? "enabled" : "disabled";
+                    } catch (error) {
+                        console.warn("迁移用户插件启用状态失败，已保留服务端状态", error);
+                    }
+                }
+                if (!cancelled) {
+                    setRuntimeStatuses(statuses);
+                    setPluginStates(states);
+                }
             })
             .catch(() => {
-                if (!cancelled) setRuntimeStatuses({});
+                if (!cancelled) {
+                    setRuntimeStatuses({});
+                    setPluginStates({});
+                }
             });
         return () => {
             cancelled = true;
         };
-    }, [setRuntimeStatuses, userId]);
+    }, [pluginStoreHydrated, setPluginStates, setRuntimeStatuses, userId]);
 
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);

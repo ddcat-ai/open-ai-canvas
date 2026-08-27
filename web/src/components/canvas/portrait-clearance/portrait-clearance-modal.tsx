@@ -22,9 +22,8 @@ type PortraitClearanceModalProps = {
 };
 
 export function PortraitClearanceModal({ projectId, node, upstreamNodes, open, onClose, onUpdateState, onAddCandidate }: PortraitClearanceModalProps) {
-    const installations = usePluginStore((state) => state.installations);
     const effectiveConfig = useEffectiveConfig();
-    const enabled = Boolean(installations.find((item) => item.manifest.id === PORTRAIT_CLEARANCE_PLUGIN_ID)?.enabled);
+    const enabled = usePluginStore((state) => state.pluginStates[PORTRAIT_CLEARANCE_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PORTRAIT_CLEARANCE_PLUGIN_ID)?.enabled));
     const state = node?.metadata?.portraitClearance || createDefaultPortraitClearanceState();
     const [starting, setStarting] = useState(false);
     const [installingModels, setInstallingModels] = useState(false);

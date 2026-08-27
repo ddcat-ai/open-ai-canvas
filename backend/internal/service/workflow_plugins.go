@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 
+	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 )
 
@@ -66,12 +67,32 @@ func workflowPluginIDForInterface(value string) (string, bool) {
 
 func (s *Service) WorkflowPluginStatuses() map[string]string {
 	statuses := make(map[string]string, 2)
-	for _, plugin := range s.Plugins() {
-		if plugin.Manifest.ID == WorkflowPluginRunningHub || plugin.Manifest.ID == WorkflowPluginComfyUI {
-			statuses[plugin.Manifest.ID] = plugin.Status
+	for _, pluginID := range []string{WorkflowPluginRunningHub, WorkflowPluginComfyUI} {
+		state, err := s.pluginStateForUser(nil, pluginID, s.Plugins())
+		if err == nil && state.PlatformAvailable {
+			statuses[pluginID] = "enabled"
+		} else {
+			statuses[pluginID] = "disabled"
 		}
 	}
 	return statuses
+}
+
+func (s *Service) WorkflowPluginStatusesForUser(userID string) (map[string]string, error) {
+	statuses := make(map[string]string, 2)
+	actor := &model.User{ID: strings.TrimSpace(userID)}
+	for _, pluginID := range []string{WorkflowPluginRunningHub, WorkflowPluginComfyUI} {
+		state, err := s.pluginStateForUser(actor, pluginID, s.Plugins())
+		if err != nil {
+			return nil, err
+		}
+		if state.EffectiveEnabled {
+			statuses[pluginID] = "enabled"
+		} else {
+			statuses[pluginID] = "disabled"
+		}
+	}
+	return statuses, nil
 }
 
 func (s *Service) RequireWorkflowPluginForInterface(interfaceType string) error {
@@ -81,6 +102,20 @@ func (s *Service) RequireWorkflowPluginForInterface(interfaceType string) error 
 	}
 	status, exists := s.WorkflowPluginStatuses()[pluginID]
 	if !exists || status != "enabled" {
+		if pluginID == WorkflowPluginRunningHub {
+			return Forbidden("RunningHub 工作流插件未启用")
+		}
+		return Forbidden("ComfyUI Bridge 工作流插件未启用")
+	}
+	return nil
+}
+
+func (s *Service) RequireWorkflowPluginForUser(userID string, interfaceType string) error {
+	pluginID, ok := workflowPluginIDForInterface(normalizeWorkflowInterfaceType(interfaceType))
+	if !ok {
+		return Forbidden("未知工作流插件")
+	}
+	if err := s.RequirePluginForUser(userID, pluginID); err != nil {
 		if pluginID == WorkflowPluginRunningHub {
 			return Forbidden("RunningHub 工作流插件未启用")
 		}

@@ -14,7 +14,7 @@ const userFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; des
     { key: "creditsEnabled", title: "积分中心", menu: "/wallet", description: "关闭后隐藏用户积分入口，新创建的任务和系统渠道请求不再冻结或消费积分。", icon: <Coins className="size-4" /> },
     { key: "customChannelsEnabled", title: "自定义渠道", menu: "/settings?section=channels", description: "关闭后隐藏用户自定义渠道入口，并拦截模型目录拉取、渠道中转和新的生成任务。已有渠道配置不会删除。", icon: <RadioTower className="size-4" /> },
     { key: "pluginCenterEnabled", title: "插件中心", menu: "/plugins", description: "关闭后普通用户无法进入插件中心或调用插件中心相关接口；管理员仍可进入后台恢复开关。已有插件不会删除。", icon: <PlugZap className="size-4" /> },
-    { key: "systemPluginsVisibleToUsers", title: "向普通用户显示系统插件（不可编辑）", menu: "/plugins", description: "仅在插件中心开启时生效。关闭后普通用户看不到系统插件，用户插件不受影响。", icon: <PlugZap className="size-4" /> },
+    { key: "systemPluginsVisibleToUsers", title: "向普通用户显示系统插件（只读）", menu: "/plugins", description: "仅在插件中心开启时生效。关闭后普通用户看不到协议类系统插件和管理员上传的自定义插件；官方应用插件仍可由用户自行启用。", icon: <PlugZap className="size-4" /> },
 ];
 
 const adminFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; description: string; icon: ReactNode }> = [

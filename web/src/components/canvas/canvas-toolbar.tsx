@@ -85,6 +85,7 @@ export function CanvasToolbar({
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useThemeStore((state) => state.theme);
     const installations = usePluginStore((state) => state.installations);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
     const setTheme = useThemeStore((state) => state.setTheme);
     const theme = canvasThemes[colorTheme];
     const [addOpen, setAddOpen] = useState(false);
@@ -173,7 +174,7 @@ export function CanvasToolbar({
         handlers,
     };
 
-    const enabledPluginIds = new Set(installations.filter((item) => item.enabled).map((item) => item.manifest.id));
+    const enabledPluginIds = new Set(installations.filter((item) => pluginStates[item.manifest.id]?.effectiveEnabled ?? item.enabled).map((item) => item.manifest.id));
 
     const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
 

@@ -32,7 +32,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	frontendEnabled := false
 	if workflowProviderTask {
 		config, _ := normalizedInput["config"].(map[string]any)
-		if err := s.RequireWorkflowPluginForInterface(strings.TrimSpace(fmt.Sprint(config["interfaceType"]))); err != nil {
+		if err := s.RequireWorkflowPluginForUser(userID, strings.TrimSpace(fmt.Sprint(config["interfaceType"]))); err != nil {
 			return nil, err
 		}
 	} else {

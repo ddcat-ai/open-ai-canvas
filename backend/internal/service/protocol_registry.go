@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
@@ -168,7 +169,11 @@ func (s *Service) Plugins() []PluginView {
 	if s.pluginRuntime == nil {
 		return []PluginView{}
 	}
-	return s.pluginRuntime.list()
+	items := s.pluginRuntime.list()
+	for index := range items {
+		items[index].Management = pluginManagement(items[index].Manifest.ID, items[index].Source)
+	}
+	return items
 }
 
 // PluginsForUser keeps the plugin center response aligned with the public
@@ -188,7 +193,7 @@ func (s *Service) PluginsForUser(actor *model.User) ([]PluginView, error) {
 	}
 	filtered := make([]PluginView, 0, len(items))
 	for _, item := range items {
-		if item.Source != "bundled" {
+		if item.Management.ActivationScope == PluginScopeUser {
 			filtered = append(filtered, item)
 		}
 	}
@@ -200,6 +205,33 @@ func (s *Service) InstallPlugin(data []byte, fileName string) (PluginView, error
 		return PluginView{}, fmt.Errorf("插件运行时未初始化")
 	}
 	return s.pluginRuntime.install(data, fileName)
+}
+
+func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName string) (PluginView, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return PluginView{}, err
+	}
+	parsed, err := protocol.ParsePluginPackage(data)
+	if err != nil {
+		return PluginView{}, err
+	}
+	if _, reserved := officialApplicationPolicies[parsed.Manifest.Metadata.ID]; reserved {
+		return PluginView{}, fmt.Errorf("插件 ID %q 由官方应用保留", parsed.Manifest.Metadata.ID)
+	}
+	plugin, err := s.InstallPlugin(data, fileName)
+	if err != nil {
+		return PluginView{}, err
+	}
+	plugin.Management = pluginManagement(plugin.Manifest.ID, plugin.Source)
+	now := time.Now()
+	state := &model.PluginPlatformState{PluginID: plugin.Manifest.ID, Available: plugin.Status == "enabled", UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
+	if err := s.repo.SavePluginPlatformState(state); err != nil {
+		return PluginView{}, fmt.Errorf("保存插件平台状态：%w", err)
+	}
+	if err := s.appendAdminAudit(actor, "plugin.install", "plugin", plugin.Manifest.ID, "安装自定义插件", map[string]any{"fileName": fileName, "sha256": plugin.SHA256}); err != nil {
+		return PluginView{}, err
+	}
+	return plugin, nil
 }
 
 func (s *Service) PluginPackage(id string) ([]byte, string, error) {
@@ -234,4 +266,20 @@ func (s *Service) UninstallPlugin(id string) error {
 		return fmt.Errorf("插件运行时未初始化")
 	}
 	return s.pluginRuntime.uninstall(id)
+}
+
+func (s *Service) UninstallPluginForAdmin(actor *model.User, id string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	if err := s.UninstallPlugin(id); err != nil {
+		return err
+	}
+	if err := s.repo.DeleteUserPluginStates(id); err != nil {
+		return fmt.Errorf("清理用户插件状态：%w", err)
+	}
+	if err := s.repo.DeletePluginPlatformState(id); err != nil {
+		return fmt.Errorf("清理插件平台状态：%w", err)
+	}
+	return s.appendAdminAudit(actor, "plugin.uninstall", "plugin", id, "卸载自定义插件", nil)
 }

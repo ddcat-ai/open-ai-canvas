@@ -11,11 +11,12 @@ import (
 // RegisterRunningHubRoutes 是独立工作流 Provider 的管理代理，不复用 ModelChannel。
 func RegisterRunningHubRoutes(r *gin.RouterGroup, svc *service.Service) {
 	fetch := func(c *gin.Context, app bool) {
-		if _, err := currentUser(c, svc); err != nil {
+		user, err := currentUser(c, svc)
+		if err != nil {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireWorkflowPluginForInterface("runninghub-workflow-image"); err != nil {
+		if err := svc.RequireWorkflowPluginForUser(user.ID, "runninghub-workflow-image"); err != nil {
 			failService(c, err)
 			return
 		}
@@ -26,7 +27,6 @@ func RegisterRunningHubRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		var result map[string]any
-		var err error
 		if app {
 			result, err = svc.FetchRunningHubAppInfo(c.Request.Context(), req)
 		} else {

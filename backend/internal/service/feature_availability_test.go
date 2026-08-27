@@ -72,7 +72,7 @@ func TestUpdateFeatureAvailabilityPersistsAndAudits(t *testing.T) {
 	}
 }
 
-func TestPluginsForUserHidesBundledPluginsOnlyForOrdinaryUsers(t *testing.T) {
+func TestPluginsForUserKeepsOfficialApplicationsAndHidesManagedPlugins(t *testing.T) {
 	svc, _ := newFeatureAvailabilityTestService(t)
 	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
 	if _, err := svc.UpdateFeatureAvailability(admin, FeatureAvailability{
@@ -83,21 +83,22 @@ func TestPluginsForUserHidesBundledPluginsOnlyForOrdinaryUsers(t *testing.T) {
 	}
 	svc.pluginRuntime = &pluginRuntime{plugins: map[string]pluginRecord{
 		"bundled":  {Source: "bundled", Metadata: protocol.Metadata{ID: "bundled", Name: "系统协议", Version: "1"}},
-		"uploaded": {Source: "uploaded", Metadata: protocol.Metadata{ID: "uploaded", Name: "用户协议", Version: "1"}},
+		"uploaded": {Source: "uploaded", Metadata: protocol.Metadata{ID: "uploaded", Name: "自定义协议", Version: "1"}},
+		"app":      {Source: "bundled", Metadata: protocol.Metadata{ID: WorkflowPluginRunningHub, Name: "官方应用", Version: "1"}},
 	}}
 
 	visibleToUser, err := svc.PluginsForUser(&model.User{ID: "user-1", Role: model.UserRoleUser})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(visibleToUser) != 1 || visibleToUser[0].Source != "uploaded" {
+	if len(visibleToUser) != 1 || visibleToUser[0].Manifest.ID != WorkflowPluginRunningHub {
 		t.Fatalf("PluginsForUser(user) = %#v", visibleToUser)
 	}
 	visibleToAdmin, err := svc.PluginsForUser(admin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(visibleToAdmin) != 2 {
+	if len(visibleToAdmin) != 3 {
 		t.Fatalf("PluginsForUser(admin) = %#v", visibleToAdmin)
 	}
 }
