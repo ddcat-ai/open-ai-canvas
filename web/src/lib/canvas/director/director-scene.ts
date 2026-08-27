@@ -197,14 +197,21 @@ export function resolveDirectorKeyframeProgress(progress: number, easing: Direct
     return clamped;
 }
 
-/** 按时间顺序累计 Transform 关键帧路径长度；非法坐标段忽略，不污染界面统计。 */
+/** 轨迹渲染只接受有限时间与位置；坏数据不得进入 Three 几何体。 */
+export function finiteDirectorTransformKeyframes(keyframes: DirectorKeyframe[]) {
+    return keyframes.filter((keyframe) => [keyframe.time, ...keyframe.transform.position].every(Number.isFinite));
+}
+
+/** 按时间顺序累计 Transform 关键帧路径长度；非法时间或坐标段忽略，不污染界面统计。 */
 export function directorTransformPathLength(keyframes: DirectorKeyframe[]) {
     const sorted = keyframes.toSorted((left, right) => left.time - right.time);
     let length = 0;
     for (let index = 1; index < sorted.length; index += 1) {
+        const previousTime = sorted[index - 1].time;
+        const currentTime = sorted[index].time;
         const previous = sorted[index - 1].transform.position;
         const current = sorted[index].transform.position;
-        if (![...previous, ...current].every(Number.isFinite)) continue;
+        if (![previousTime, currentTime, ...previous, ...current].every(Number.isFinite)) continue;
         length += Math.hypot(current[0] - previous[0], current[1] - previous[1], current[2] - previous[2]);
     }
     return length;

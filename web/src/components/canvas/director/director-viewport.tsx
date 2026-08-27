@@ -12,7 +12,7 @@ import { directorDiagnosticObjectKind } from "@/lib/canvas/director/director-dia
 import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { directorCaptureInitial, directorCaptureUsable, directorLoadIdentity, directorLoadInitial, installDirectorContextListeners, reduceDirectorCapture, reduceDirectorLoad, releaseDirectorCapture, resolveDirectorDisplay, restoreDirectorCapture, upsertDirectorFailedLoad, type DirectorFailedLoads, type DirectorLoadSignal } from "@/lib/canvas/director/director-recovery";
 import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorMaterials, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "@/lib/canvas/director/director-resources";
-import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, directorTransformPathLength, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
 import { DIRECTOR_DEFAULT_VIEW_MODE, directorViewFramingKey, resolveDirectorEffectiveViewport, resolveDirectorOrthographicFraming, resolveDirectorOrthographicFrustum, resolveDirectorViewFraming, type DirectorOrthographicFraming, type DirectorViewFraming, type DirectorViewMode } from "@/lib/canvas/director/director-view-modes";
 import { DirectorViewToolbar } from "@/components/canvas/director/director-view-toolbar";
 import { resolveMediaUrl } from "@/services/file-storage";
@@ -462,7 +462,7 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
 
 /** 起点、终点、路径点、方向与当前进度共用一条 Transform 关键帧路径。 */
 function DirectorTransformPath({ keyframes, playhead, color }: { keyframes: DirectorObject["keyframes"]; playhead: number; color: string }) {
-    const sorted = useMemo(() => keyframes.toSorted((left, right) => left.time - right.time), [keyframes]);
+    const sorted = useMemo(() => finiteDirectorTransformKeyframes(keyframes).toSorted((left, right) => left.time - right.time), [keyframes]);
     const points = useMemo(() => sorted.map((keyframe) => keyframe.transform.position), [sorted]);
     const current = interpolateDirectorTransform(sorted[0].transform, sorted, playhead).position;
     const previous = points[points.length - 2];

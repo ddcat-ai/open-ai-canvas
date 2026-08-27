@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Euler, Vector3 } from "three";
 
 import { advanceDirectorPlayhead, applyDirectorTransformDelta, directorTransformDelta, resolveDirectorCameraAlignment, resolveDirectorCameraMoveKeyframes, resolveDirectorKeyframeRecord, resolveDirectorObjectTransformEdit, snapDirectorTime } from "../src/lib/canvas/director/director-animation-semantics";
-import { createDirectorCamera, directorTransformPathLength, interpolateDirectorTransform } from "../src/lib/canvas/director/director-scene";
+import { createDirectorCamera, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "../src/lib/canvas/director/director-scene";
 import type { DirectorKeyframe, DirectorTransform } from "../src/types/director";
 
 function transform(position: [number, number, number], rotation: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1]): DirectorTransform {
@@ -96,6 +96,18 @@ describe("Transform 轨迹统计", () => {
             keyframe("valid-again", 2, transform([3, 4, 0])),
         ];
         expect(directorTransformPathLength(keys)).toBe(0);
+    });
+
+    test("轨迹渲染过滤非法时间与坐标，不把 NaN/Infinity 传给 Three", () => {
+        const keys = [
+            keyframe("start", 0, transform([0, 0, 0])),
+            keyframe("bad-time", Number.NaN, transform([1, 0, 0])),
+            keyframe("bad-position", 1, transform([Number.POSITIVE_INFINITY, 0, 0])),
+            keyframe("end", 2, transform([2, 0, 0])),
+        ];
+        const renderable = finiteDirectorTransformKeyframes(keys);
+        expect(renderable.map((item) => item.id)).toEqual(["start", "end"]);
+        expect(renderable.flatMap((item) => [item.time, ...item.transform.position]).every(Number.isFinite)).toBe(true);
     });
 });
 
