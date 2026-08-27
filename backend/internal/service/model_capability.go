@@ -245,6 +245,8 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Resolutions = []string{"768P", "2K"}
 		video.DefaultResolution = "768P"
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
+	case model.ChannelInterfaceAgnesVideo:
+		video = applyModelSpecificVideoCapability(video, protocol, modelName)
 	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }
@@ -260,7 +262,11 @@ func DecodeModelCapabilityConfig(raw string) (*ModelCapabilityConfig, error) {
 	return &value, nil
 }
 
-func NormalizeModelCapabilityConfig(capability string, _ string, input *ModelCapabilityConfig) (*ModelCapabilityConfig, error) {
+func NormalizeModelCapabilityConfig(capability string, protocol string, input *ModelCapabilityConfig) (*ModelCapabilityConfig, error) {
+	return NormalizeModelCapabilityConfigForModel(capability, protocol, "", input)
+}
+
+func NormalizeModelCapabilityConfigForModel(capability string, protocol string, modelName string, input *ModelCapabilityConfig) (*ModelCapabilityConfig, error) {
 	if capability != "text" && capability != "image" && capability != "video" {
 		return nil, nil
 	}
@@ -287,11 +293,50 @@ func NormalizeModelCapabilityConfig(capability string, _ string, input *ModelCap
 	if input == nil || input.Video == nil {
 		return nil, BadAuthRequest("请配置视频模型能力参数")
 	}
-	value := &ModelCapabilityConfig{Version: 1, Video: input.Video}
+	value := &ModelCapabilityConfig{Version: 1, Video: applyModelSpecificVideoCapability(input.Video, protocol, modelName)}
 	if err := validateVideoCapabilityConfig(value.Video); err != nil {
 		return nil, err
 	}
 	return value, nil
+}
+
+func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
+	if profile == nil || model.ChannelInterfaceType(strings.TrimSpace(protocol)) != model.ChannelInterfaceAgnesVideo {
+		return profile
+	}
+	normalizedModel := strings.ToLower(strings.TrimSpace(modelName))
+	if normalizedModel != "agnes-video-2.5" && normalizedModel != "agnes-video-2.5-flash" {
+		return profile
+	}
+	value := *profile
+	value.References = profile.References
+	flash := normalizedModel == "agnes-video-2.5-flash"
+	value.References.MaxImages = 9
+	value.References.MaxVideos = 3
+	value.References.MaxAudios = 3
+	value.References.MaxVideoBytes = 200 * 1024 * 1024
+	value.References.MaxVideoDuration = 15
+	value.References.MaxAudioBytes = 15 * 1024 * 1024
+	value.References.MaxAudioDuration = 15
+	if flash {
+		value.References.MaxImages = 5
+		value.References.MaxVideos = 0
+		value.References.MaxVideoBytes = 0
+		value.References.MaxVideoDuration = 0
+	}
+	value.Duration = VideoDurationConfig{Selection: "range", Min: 4, Max: 12, Step: 1, Default: 5}
+	value.Ratios = []string{"21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
+	value.DefaultRatio = "16:9"
+	value.Resolutions = []string{"720P", "960P", "2K"}
+	if flash {
+		value.Resolutions = []string{"720P"}
+	}
+	value.DefaultResolution = "720P"
+	value.GenerateAudio = VideoBooleanConfig{Supported: false, Default: false}
+	value.Watermark = VideoBooleanConfig{Supported: false, Default: false}
+	value.Operations = []string{"text_to_video", "image_to_video", "reference_to_video", "audio_to_video"}
+	value.DefaultOperation = "text_to_video"
+	return &value
 }
 
 // CapabilitySpecFromModelCapabilityConfig 将渠道模型的真实供应能力投影为路由能力规格。
@@ -557,10 +602,18 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 			}
 			return validateImageTask(profile, taskInput)
 		}
-		if taskInput.Config.CapabilityConfig == nil || taskInput.Config.CapabilityConfig.Video == nil {
-			return nil
+		profile := taskInput.Config.CapabilityConfig
+		if profile == nil || profile.Video == nil {
+			if taskInput.Config.InterfaceType != string(model.ChannelInterfaceAgnesVideo) {
+				return nil
+			}
+			profile = DefaultModelCapabilityConfigForModel(taskInput.Config.InterfaceType, taskInput.Config.Model)
 		}
-		return validateVideoTask(taskInput.Config.CapabilityConfig.Video, taskInput)
+		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile)
+		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
+			return BadAuthRequest("当前视频模型能力参数无效")
+		}
+		return validateVideoTask(normalized.Video, taskInput)
 	}
 	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
 	if err != nil {
@@ -580,11 +633,15 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if err != nil || profile == nil || profile.Video == nil {
 		return BadAuthRequest("当前视频模型尚未配置能力参数")
 	}
-	applyFixedVideoResolution(&taskInput, profile.Video)
+	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile)
+	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
+		return BadAuthRequest("当前视频模型能力参数无效")
+	}
+	applyFixedVideoResolution(&taskInput, normalized.Video)
 	if config, ok := input["config"].(map[string]any); ok {
 		config["vquality"] = taskInput.Config.VQuality
 	}
-	return validateVideoTask(profile.Video, taskInput)
+	return validateVideoTask(normalized.Video, taskInput)
 }
 
 // applyModelSpecificImageCapability is retained as a narrow normalization hook

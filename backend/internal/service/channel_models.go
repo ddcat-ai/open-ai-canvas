@@ -21,6 +21,7 @@ type ChannelModelRequest struct {
 	ModelKey                     string                         `json:"modelKey"`
 	ProviderModelKey             string                         `json:"providerModelKey"`
 	DisplayName                  string                         `json:"displayName"`
+	Icon                         string                         `json:"icon"`
 	Capability                   string                         `json:"capability"`
 	Protocol                     string                         `json:"protocol"`
 	BillingMode                  string                         `json:"billingMode"`
@@ -100,7 +101,7 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 		if decodeErr != nil || config == nil {
 			continue
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfig(items[index].Capability, string(items[index].Protocol), config)
+		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(items[index].Capability, string(items[index].Protocol), firstNonEmpty(items[index].ProviderModelKey, items[index].ModelKey), config)
 		if normalizeErr != nil || normalized == nil {
 			continue
 		}
@@ -204,7 +205,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
+		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -230,11 +231,12 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if item.DisplayName == "" {
 		item.DisplayName = modelKey
 	}
+	item.Icon = strings.TrimSpace(req.Icon)
 	item.Capability = capability
 	item.Protocol = protocol
 	s.applyChannelModelPriceTierSummary(item, tiers)
 	if capability == "text" || capability == "image" || capability == "video" {
-		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
+		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -529,7 +531,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		return nil, err
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
+		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -559,7 +561,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	imageSize, imageQuality := "", ""
 	var imageProfile *ImageCapabilityConfig
 	if capability == "image" {
-		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
+		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}

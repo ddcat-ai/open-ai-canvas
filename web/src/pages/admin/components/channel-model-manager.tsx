@@ -4,6 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { FlaskConical, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
+import { ModelIconPicker } from "@/components/model-logo";
 import { ModelIcon } from "@/components/model-picker";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } from "@/components/model-protocol-picker";
@@ -21,6 +22,7 @@ type FormValues = {
     modelKey: string;
     providerModelKey?: string;
     displayName?: string;
+    icon?: string;
     capability: EditableCapability;
     protocol?: ModelProtocol;
     priceTiers: PriceTierFormValues[];
@@ -114,6 +116,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             modelKey: "",
             providerModelKey: "",
             displayName: "",
+            icon: "",
             capability: "text",
             protocol: availableProtocols.find((item) => item.capability === "text")?.value,
             priceTiers: [defaultPriceTier()],
@@ -129,6 +132,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             modelKey: item.modelKey,
             providerModelKey: item.providerModelKey || item.modelKey,
             displayName: item.displayName,
+            icon: item.icon,
             capability: item.capability || undefined,
             protocol: item.protocol,
             priceTiers: item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)],
@@ -152,6 +156,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 modelKey: values.modelKey.trim(),
                 providerModelKey: upstreamModel,
                 displayName: values.displayName?.trim() || values.modelKey.trim(),
+                icon: values.icon?.trim() || "",
                 capability: values.capability,
                 protocol: values.protocol,
                 priceTiers: values.priceTiers.map((tier) => ({
@@ -247,7 +252,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             render: (_, item) => (
                 <div className="flex min-w-0 items-center gap-2.5">
                     <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-muted/35">
-                        <ModelIcon model={item.modelKey} />
+                        <ModelIcon model={item.modelKey} icon={item.icon} />
                     </span>
                     <div className="min-w-0">
                         <div className="truncate font-medium">{item.displayName || item.modelKey}</div>
@@ -469,7 +474,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     </Form.Item>
                     <section className="admin-form-section admin-model-editor-section">
                         <SectionHeading title="模型身份" description="区分产品侧展示标识与上游实际调用 ID。" />
-                        <div className="admin-model-editor-section-content admin-model-identity-grid">
+                        <div className="admin-model-editor-section-content admin-model-identity-grid admin-model-identity-grid-with-icon">
                             <Form.Item name="modelKey" label="产品模型标识" rules={[{ required: true, message: "请输入产品模型标识" }]}>
                                 <Input
                                     prefix={
@@ -485,6 +490,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                             </Form.Item>
                             <Form.Item name="displayName" label="后台显示名称">
                                 <Input placeholder="不填则使用模型标识" />
+                            </Form.Item>
+                            <Form.Item name="icon" label="模型 Logo">
+                                <ModelIconPicker />
                             </Form.Item>
                         </div>
                     </section>

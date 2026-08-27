@@ -134,6 +134,7 @@ export type PublicChannelModel = {
     id: string;
     modelKey: string;
     displayName: string;
+    icon: string;
     capability: string;
     protocol?: string;
     capabilityConfig?: Record<string, any>;

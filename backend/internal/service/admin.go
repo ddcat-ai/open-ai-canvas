@@ -119,6 +119,7 @@ type PublicModelChannel struct {
 type PublicChannelModelPrice struct {
 	Model                        string                     `json:"model"`
 	DisplayName                  string                     `json:"displayName"`
+	Icon                         string                     `json:"icon"`
 	Capability                   string                     `json:"capability"`
 	Protocol                     model.ChannelInterfaceType `json:"protocol"`
 	BillingMode                  string                     `json:"billingMode"`
@@ -828,11 +829,11 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		if item.Enabled && item.PriceConfigured {
 			capabilityConfig, decodeErr := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
 			if decodeErr == nil && capabilityConfig != nil {
-				if normalized, normalizeErr := NormalizeModelCapabilityConfig(item.Capability, string(item.Protocol), capabilityConfig); normalizeErr == nil {
+				if normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(item.Capability, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), capabilityConfig); normalizeErr == nil {
 					capabilityConfig = normalized
 				}
 			}
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Icon: item.Icon, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
 		}
 	}
 	if len(models) == 0 {

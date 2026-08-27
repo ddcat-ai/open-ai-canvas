@@ -488,6 +488,7 @@ func asyncAudioAdapter() Adapter {
 
 func agnesAdapter() Adapter {
 	info := metadata("agnes-video", "Agnes 视频", "Agnes AI", CapabilityVideo, "POST /v1/videos", "GET /agnesapi?video_id={id}&model_name={model}", "application/json")
+	info.Version = "1.2.0"
 	info.Description = "Agnes AI 官方异步视频协议，支持 Agnes Video V2.0、2.5 与 2.5 Flash。"
 	info.RequiresPublicMediaURLs = true
 	info.Parameters = []Parameter{
@@ -497,8 +498,8 @@ func agnesAdapter() Adapter {
 		{Name: "videos", Type: "media[]", Mapping: "videos", Description: "仅 Agnes Video 2.5 reference 模式支持，Flash 与 V2.0 不支持。"},
 		{Name: "audios", Type: "media[]", Mapping: "audios", Description: "Agnes Video 2.5 系列 reference 模式支持。"},
 		{Name: "duration", Type: "integer", Mapping: "seconds/num_frames", Description: "2.5 系列映射为字符串 seconds；V2.0 按帧率换算 num_frames。"},
-		{Name: "aspectRatio", Type: "string", Mapping: "aspect_ratio", Description: "2.5 系列画幅比例。"},
-		{Name: "resolution", Type: "string", Mapping: "size", Description: "2.5 支持 720P、960P、2K；Flash 固定 720P。"},
+		{Name: "aspectRatio", Type: "string", Values: []string{"21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}, Mapping: "aspect_ratio", Description: "2.5 系列画幅比例；历史像素尺寸会在插件边界转换为对应比例。"},
+		{Name: "resolution", Type: "string", Values: []string{"720P", "960P", "2K"}, Mapping: "size", Description: "通用层分辨率档位，映射为 Agnes 的 size；Flash 固定 720P。"},
 	}
 	return builtinAdapter{
 		info:        info,
@@ -542,13 +543,22 @@ func buildAgnesCreate(r GenerationRequest) (RequestSpec, error) {
 func buildAgnesV25Body(r GenerationRequest) (map[string]any, error) {
 	mode := firstString(r.Extra, "mode")
 	if mode == "" {
-		switch {
-		case len(r.Videos) > 0 || len(r.Audios) > 0:
+		switch strings.TrimSpace(r.Operation) {
+		case "reference_to_video", "audio_to_video":
 			mode = "reference"
-		case len(r.Images) > 0:
+		case "image_to_video":
 			mode = "keyframe"
 		default:
-			mode = "text"
+			switch {
+			case len(r.Videos) > 0 || len(r.Audios) > 0:
+				mode = "reference"
+			case len(r.Images) > 2:
+				mode = "reference"
+			case len(r.Images) > 0:
+				mode = "keyframe"
+			default:
+				mode = "text"
+			}
 		}
 	}
 	if mode != "text" && mode != "keyframe" && mode != "reference" {
@@ -558,9 +568,13 @@ func buildAgnesV25Body(r GenerationRequest) (map[string]any, error) {
 	if seconds < 4 || seconds > 12 {
 		return nil, fmt.Errorf("Agnes 2.5 seconds 必须在 4 到 12 秒之间")
 	}
-	size := strings.ToUpper(defaultValue(r.Resolution, firstString(r.Extra, "size")))
-	if size == "" {
-		size = "720P"
+	size, err := normalizeAgnesV25Resolution(defaultValue(r.Resolution, firstString(r.Extra, "size")))
+	if err != nil {
+		return nil, err
+	}
+	aspectRatio, err := normalizeAgnesV25AspectRatio(defaultValue(r.AspectRatio, firstString(r.Extra, "aspect_ratio")))
+	if err != nil {
+		return nil, err
 	}
 	if r.Model == "agnes-video-2.5-flash" {
 		if size != "720P" {
@@ -581,7 +595,7 @@ func buildAgnesV25Body(r GenerationRequest) (map[string]any, error) {
 		"mode":         mode,
 		"seconds":      strconv.Itoa(seconds),
 		"size":         size,
-		"aspect_ratio": defaultValue(r.AspectRatio, firstString(r.Extra, "aspect_ratio")),
+		"aspect_ratio": aspectRatio,
 		"n":            1,
 	}
 	if seed, ok := r.Extra["seed"]; ok {
@@ -619,6 +633,48 @@ func buildAgnesV25Body(r GenerationRequest) (map[string]any, error) {
 		}
 	}
 	return compactMap(body), nil
+}
+
+func normalizeAgnesV25Resolution(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto", "720", "720p":
+		return "720P", nil
+	case "960", "960p":
+		return "960P", nil
+	case "2k", "1440", "1440p":
+		return "2K", nil
+	default:
+		return "", fmt.Errorf("Agnes Video 2.5 分辨率必须是 720P、960P 或 2K")
+	}
+}
+
+func normalizeAgnesV25AspectRatio(value string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "×", "x")))
+	if normalized == "" || normalized == "auto" {
+		return "16:9", nil
+	}
+	ratios := []string{"21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
+	for _, ratio := range ratios {
+		if normalized == ratio {
+			return ratio, nil
+		}
+	}
+	dimensions := strings.Split(normalized, "x")
+	if len(dimensions) == 2 {
+		width, widthErr := strconv.ParseInt(dimensions[0], 10, 64)
+		height, heightErr := strconv.ParseInt(dimensions[1], 10, 64)
+		if widthErr == nil && heightErr == nil && width > 0 && height > 0 && width <= 1_000_000 && height <= 1_000_000 {
+			for _, ratio := range ratios {
+				parts := strings.Split(ratio, ":")
+				ratioWidth, _ := strconv.ParseInt(parts[0], 10, 64)
+				ratioHeight, _ := strconv.ParseInt(parts[1], 10, 64)
+				if width*ratioHeight == height*ratioWidth {
+					return ratio, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("Agnes Video 2.5 画幅必须是 21:9、16:9、4:3、1:1、3:4 或 9:16")
 }
 
 func buildAgnesV20Body(r GenerationRequest) (map[string]any, error) {

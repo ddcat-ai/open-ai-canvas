@@ -320,6 +320,18 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.watermark = { supported: true, default: false };
         video.operations.push("reference_to_video");
     }
+    if (protocol === "agnes-video" && ["agnes-video-2.5", "agnes-video-2.5-flash"].includes(model.trim().toLowerCase())) {
+        const flash = model.trim().toLowerCase() === "agnes-video-2.5-flash";
+        video.references.maxImages = flash ? 5 : 9;
+        video.references.maxVideos = flash ? 0 : 3;
+        video.references.maxAudios = 3;
+        video.duration = { selection: "range", min: 4, max: 12, step: 1, default: 5 };
+        video.ratios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+        video.defaultRatio = "16:9";
+        video.resolutions = flash ? ["720P"] : ["720P", "960P", "2K"];
+        video.defaultResolution = "720P";
+        video.operations.push("reference_to_video", "audio_to_video");
+    }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 

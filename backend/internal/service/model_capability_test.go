@@ -93,6 +93,38 @@ func TestDefaultMiniMaxVideoCapabilitySupportsReferenceGeneration(t *testing.T) 
 	}
 }
 
+func TestAgnesVideo25CapabilityUsesOfficialLimits(t *testing.T) {
+	standard := DefaultModelCapabilityConfigForModel("agnes-video", "agnes-video-2.5").Video
+	if standard.Duration.Min != 4 || standard.Duration.Max != 12 || standard.Duration.Default != 5 {
+		t.Fatalf("Agnes 2.5 duration = %#v", standard.Duration)
+	}
+	if fmt.Sprint(standard.Resolutions) != fmt.Sprint([]string{"720P", "960P", "2K"}) || standard.References.MaxVideos != 3 {
+		t.Fatalf("Agnes 2.5 capability = %#v", standard)
+	}
+	flash := DefaultModelCapabilityConfigForModel("agnes-video", "agnes-video-2.5-flash").Video
+	if fmt.Sprint(flash.Resolutions) != fmt.Sprint([]string{"720P"}) || flash.References.MaxImages != 5 || flash.References.MaxVideos != 0 {
+		t.Fatalf("Agnes 2.5 Flash capability = %#v", flash)
+	}
+}
+
+func TestNormalizeAgnesVideo25CapabilityRepairsLegacyStoredLimits(t *testing.T) {
+	legacy := DefaultModelCapabilityConfigForModel("newapi", "legacy-video")
+	normalized, err := NormalizeModelCapabilityConfigForModel("video", "agnes-video", "agnes-video-2.5", legacy)
+	if err != nil {
+		t.Fatalf("NormalizeModelCapabilityConfigForModel() error = %v", err)
+	}
+	if normalized.Video.Duration.Min != 4 || normalized.Video.Duration.Max != 12 || normalized.Video.Duration.Default != 5 {
+		t.Fatalf("normalized duration = %#v", normalized.Video.Duration)
+	}
+	if fmt.Sprint(normalized.Video.Resolutions) != fmt.Sprint([]string{"720P", "960P", "2K"}) {
+		t.Fatalf("normalized resolutions = %v", normalized.Video.Resolutions)
+	}
+	input := canvasGenerationInput{Config: providerConfig{InterfaceType: "agnes-video", Model: "agnes-video-2.5", VideoSeconds: "15", Size: "16:9", VQuality: "720P"}}
+	if err := validateVideoTask(normalized.Video, input); err == nil {
+		t.Fatalf("validateVideoTask(15 seconds) error = %v", err)
+	}
+}
+
 func TestDefaultVolcengineArkVideoCapabilitySupportsFullModalReference(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-260128")
 	if profile == nil || profile.Video == nil {
