@@ -11,7 +11,18 @@ import { ModelDefaultGrid } from "../src/pages/settings/model-default-grid";
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
 import { fetchChannelModels } from "../src/services/api/image";
 import { createVideoGenerationTask } from "../src/services/api/video";
-import { configuredModelMatchesCapability, createModelChannel, defaultConfig, effectiveConfigForCustomChannels, modelDisplayName, normalizeConfigSnapshot, resolveModelRequestConfig, selectableModelsByCapability, selectableModelValue, type AiConfig } from "../src/stores/use-config-store";
+import {
+    configuredModelMatchesCapability,
+    createModelChannel,
+    defaultConfig,
+    effectiveConfigForCustomChannels,
+    modelDisplayName,
+    normalizeConfigSnapshot,
+    resolveModelRequestConfig,
+    selectableModelsByCapability,
+    selectableModelValue,
+    type AiConfig,
+} from "../src/stores/use-config-store";
 
 const originalAxiosPost = axios.post;
 
@@ -307,10 +318,7 @@ describe("public channel model catalog", () => {
         expect(selectableModelsByCapability(config, "text")).toEqual(["custom-generation::4.5 block"]);
         expect(selectableModelsByCapability(config, "video")).toEqual(["custom-generation::custom-video-1"]);
         expect(selectableModelsByCapability(config, "image")).toEqual([]);
-        expect(selectableModelsByCapability(config)).toEqual([
-            "custom-generation::4.5 block",
-            "custom-generation::custom-video-1",
-        ]);
+        expect(selectableModelsByCapability(config)).toEqual(["custom-generation::4.5 block", "custom-generation::custom-video-1"]);
         expect(selectableModelValue(config, "", "text")).toBe("custom-generation::4.5 block");
         expect(selectableModelValue(config, "4.5 block", "text")).toBe("custom-generation::4.5 block");
         expect(selectableModelValue(config, "missing-model", "text")).toBe("custom-generation::4.5 block");

@@ -51,17 +51,19 @@ jobs:
         run: |
           changed_files=()
           repo_prefix="$(git rev-parse --show-prefix)"
+          format_tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$format_tmp_dir"' EXIT
           while IFS= read -r -d '' file; do
             case "$file" in
               *.css|*.html|*.json|*.js|*.jsx|*.md|*.mdx|*.mjs|*.cjs|*.ts|*.tsx|*.yaml|*.yml)
                 base_path="${repo_prefix}${file}"
-                if git cat-file -e "$BASE_SHA:$base_path" 2>/dev/null \
-                  && ! diff -q \
-                    <(git show "$BASE_SHA:$base_path") \
-                    <(git show "$BASE_SHA:$base_path" | bunx prettier --ignore-path /dev/null --stdin-filepath "$file") \
-                    >/dev/null; then
-                  echo "Skipping legacy unformatted file: $file"
-                  continue
+                if git cat-file -e "$BASE_SHA:$base_path" 2>/dev/null; then
+                  git show "$BASE_SHA:$base_path" > "$format_tmp_dir/base"
+                  bunx prettier --ignore-path /dev/null --stdin-filepath "$file" < "$format_tmp_dir/base" > "$format_tmp_dir/formatted"
+                  if ! diff -q "$format_tmp_dir/base" "$format_tmp_dir/formatted" >/dev/null; then
+                    echo "Skipping legacy unformatted file: $file"
+                    continue
+                  fi
                 fi
                 changed_files+=("$file")
                 ;;
