@@ -6,6 +6,7 @@ import type { RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import pluginDevelopmentGuideMarkdown from "./plugin-development-guide.md?raw";
 import { getPluginDocumentation } from "./plugin-documentation";
 import { PluginMarkdown } from "./plugin-markdown";
+import "./plugins.css";
 
 type UploadPluginModalProps = {
     open: boolean;
