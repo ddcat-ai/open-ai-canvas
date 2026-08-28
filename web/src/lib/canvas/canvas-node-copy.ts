@@ -1,6 +1,21 @@
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import type { CanvasNodeData, CanvasNodeMetadata, StoryboardRow } from "@/types/canvas";
 
+const COPY_TITLE_SUFFIX = /^(.*)_copy(\d+)$/i;
+
+export function nextCopiedNodeTitle(sourceTitle: string, existingTitles: Iterable<string>) {
+    const sourceMatch = sourceTitle.match(COPY_TITLE_SUFFIX);
+    const baseTitle = (sourceMatch?.[1] || sourceTitle.replace(/ Copy$/i, "")).trim() || sourceTitle.trim() || "未命名节点";
+    let maxCopyIndex = 0;
+    for (const title of existingTitles) {
+        const match = title.match(COPY_TITLE_SUFFIX);
+        if (!match || match[1] !== baseTitle) continue;
+        const copyIndex = Number(match[2]);
+        if (Number.isSafeInteger(copyIndex)) maxCopyIndex = Math.max(maxCopyIndex, copyIndex);
+    }
+    return `${baseTitle}_copy${maxCopyIndex + 1}`;
+}
+
 function remapReferenceId(nodeId: string | undefined, idMap: ReadonlyMap<string, string>) {
     return nodeId ? idMap.get(nodeId) || nodeId : undefined;
 }

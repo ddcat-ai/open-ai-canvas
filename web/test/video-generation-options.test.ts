@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
-import { normalizeVideoResolution, VIDEO_RESOLUTION_CAPABILITY_OPTIONS, VIDEO_RESOLUTION_OPTIONS } from "../src/lib/video-generation-options";
+import { formatVideoResolutionLabel, normalizeVideoResolution, videoResolutionComparisonKey, VIDEO_RESOLUTION_CAPABILITY_OPTIONS, VIDEO_RESOLUTION_OPTIONS } from "../src/lib/video-generation-options";
 
 describe("video generation resolution options", () => {
     test("统一档位包含 1440P 与 4K，并识别常见别名", () => {
@@ -14,6 +14,10 @@ describe("video generation resolution options", () => {
 
     test("保留模型声明的非标准档位而不是静默降级", () => {
         expect(normalizeVideoResolution("768p")).toBe("768");
+        expect(normalizeVideoResolution("768p竖")).toBe("768p竖");
+        expect(normalizeVideoResolution("HD_Portrait")).toBe("HD_Portrait");
+        expect(videoResolutionComparisonKey("768P竖")).toBe("768p竖");
+        expect(formatVideoResolutionLabel("768p竖")).toBe("768P竖");
     });
 
     test("按协议限制实际可选档位", () => {

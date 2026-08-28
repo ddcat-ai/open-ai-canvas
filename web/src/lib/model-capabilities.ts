@@ -902,8 +902,12 @@ export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { sec
     const duration = profile.duration.selection === "enum" ? ((profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default) : normalizeRangeDuration(profile, Number(value.seconds));
     const ratio = profile.ratios.includes(value.ratio || "") ? value.ratio! : profile.defaultRatio;
     // 前端状态历史上保存过 `720`，而能力配置和供应商通常使用 `720p`；统一按能力中的原始值返回，避免被误判为不支持。
-    const resolution = videoResolutionRequest(profile, value.resolution) || profile.defaultResolution || profile.resolutions[0] || "";
+    const resolution = resolveVideoResolutionValue(profile, value.resolution);
     return { seconds: String(duration), ratio, resolution };
+}
+
+export function resolveVideoResolutionValue(profile: VideoCapabilityConfig, value: string | undefined) {
+    return videoResolutionRequest(profile, value) || profile.defaultResolution || profile.resolutions[0] || "";
 }
 
 export function videoResolutionRequest(profile: VideoCapabilityConfig, value: string | undefined) {

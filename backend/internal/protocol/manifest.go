@@ -555,13 +555,15 @@ func applyManifestTransform(value any, transform string) any {
 	case "upper", "uppercase":
 		return strings.ToUpper(text)
 	case "video-resolution", "video_resolution", "videoresolution":
-		return normalizeManifestVideoResolution(text)
+		// Compatibility for already-installed 1.0.1 manifests. New plugins
+		// should declare exact enum values and use generic string transforms.
+		return normalizeLegacyManifestVideoResolution(text)
 	default:
 		return value
 	}
 }
 
-func normalizeManifestVideoResolution(value string) string {
+func normalizeLegacyManifestVideoResolution(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	if normalized == "" {
 		return ""

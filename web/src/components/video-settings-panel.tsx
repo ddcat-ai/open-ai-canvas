@@ -4,8 +4,8 @@ import { Switch } from "antd";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceRatioOptions } from "@/lib/seedance-video";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { normalizeVideoDuration, normalizeVideoResolution, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
-import { modelCapabilityConfigFor, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { formatVideoResolutionLabel, normalizeVideoDuration, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
+import { modelCapabilityConfigFor, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
 const sizeOptions = [
@@ -38,8 +38,8 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const seconds = normalizeVideoDuration(config.videoSeconds);
     const size = normalizeVideoSizeValue(config.size);
     const dimensions = readSizeDimensions(size);
-    const resolution = normalizeVideoResolutionValue(config.vquality);
-    const configuredResolutions = profile.resolutions.map((value) => ({ value: value.replace(/p$/i, ""), label: value.toUpperCase() }));
+    const resolution = resolveVideoResolutionValue(profile, config.vquality);
+    const configuredResolutions = profile.resolutions.map((value) => ({ value, label: formatVideoResolutionLabel(value) }));
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
     const watermark = boolConfig(config.videoWatermark, profile.watermark.default);
     const updateDimension = (key: "width" | "height", value: number | null) => {
@@ -182,7 +182,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
 }
 
 export function videoResolutionLabel(value: string) {
-    return `${normalizeVideoResolutionValue(value)}P`;
+    return formatVideoResolutionLabel(value);
 }
 
 export function videoSizeLabel(value: string) {
@@ -205,13 +205,9 @@ export function normalizeVideoSizeValue(value: string) {
     return ["9:16", "2:3", "3:4"].includes(value) ? "720x1280" : "1280x720";
 }
 
-export function normalizeVideoResolutionValue(value: string) {
-    return normalizeVideoResolution(value);
-}
-
 function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
     return (
-        <button type="button" disabled={disabled} className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
+        <button type="button" disabled={disabled} aria-pressed={selected} className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
             {children}
         </button>
     );
@@ -301,9 +297,7 @@ function hasPriceTierForVideoSelection(tiers: ReturnType<typeof modelPriceTiers>
 }
 
 function normalizeTierResolution(value: string) {
-	const normalized = normalizeVideoResolution(value);
-	if (/^\d+$/.test(normalized)) return `${normalized}p`;
-	return normalized.toLowerCase();
+	return videoResolutionComparisonKey(value);
 }
 
 function DurationRangeControl({ value, min, max, step, theme, onChange }: { value: number; min: number; max: number; step: number; theme: CanvasTheme; onChange: (value: number) => void }) {

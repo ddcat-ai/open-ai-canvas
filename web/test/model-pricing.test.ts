@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { modelQuoteRequest, priceTiersForCurrentSelection, requestCreditCost } from "../src/lib/model-pricing";
+import { modelQuoteRequest, normalizeTierResolution, priceTiersForCurrentSelection, requestCreditCost } from "../src/lib/model-pricing";
 import type { ModelRequirements } from "../src/lib/model-selection";
 import { createModelChannel, defaultConfig, normalizeConfigSnapshot, resolveModelChannel, type AiConfig } from "../src/stores/use-config-store";
 
@@ -58,6 +58,11 @@ const textVideoRequirements: ModelRequirements = {
 };
 
 describe("model request pricing", () => {
+    test("preserves provider-specific resolution enums when matching price tiers", () => {
+        expect(normalizeTierResolution("768P竖")).toBe("768p竖");
+        expect(normalizeTierResolution("HD_Portrait")).toBe("hd_portrait");
+    });
+
     test("matches the current Agnes resolution and duration tier and totals per-second credits", () => {
         const config = systemConfig({
             tiers: [

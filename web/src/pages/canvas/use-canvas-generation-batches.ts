@@ -213,6 +213,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                 void handleGenerateNode(node.id, generationMode, prompt, {
                     controller,
                     waitForTaskCapacity: true,
+                    skipDuplicateConfirmation: true,
                     retryContext:
                         node.metadata?.retryOf && node.metadata.attemptGroupId && node.metadata.taskClientOperationId
                             ? { retryOf: node.metadata.retryOf, attemptGroupId: node.metadata.attemptGroupId, clientOperationId: node.metadata.taskClientOperationId }

@@ -7016,7 +7016,6 @@
     }
 
     .canvas-tool-button,
-    .canvas-menu-item,
     .canvas-node-tool-button {
         transform: translate3d(0, 0, 0) scale(1);
         transition:
@@ -7025,6 +7024,15 @@
             opacity 140ms ease,
             box-shadow 140ms ease,
             transform 160ms var(--motion-ease-out);
+    }
+
+    .canvas-menu-item {
+        transition:
+            background-color 140ms ease,
+            border-color 140ms ease,
+            color 140ms ease,
+            opacity 140ms ease,
+            box-shadow 140ms ease;
     }
 
     .canvas-connection-handle {
@@ -7044,23 +7052,20 @@
     }
 
     .canvas-tool-button:not(:disabled):active,
-    .canvas-node-tool-button:not(:disabled):active,
-    .canvas-menu-item:not(:disabled):active {
+    .canvas-node-tool-button:not(:disabled):active {
         transform: translate3d(0, 0, 0) scale(0.94);
     }
 
-    .canvas-menu-item:not(:disabled):hover {
-        transform: translate3d(4px, 0, 0);
-    }
-
-    .canvas-menu-item:not(:disabled):hover .canvas-menu-item-icon,
     .canvas-node-tool-button:not(:disabled):hover .canvas-node-tool-icon {
         transform: scale(1.08);
     }
 
-    .canvas-menu-item-icon,
     .canvas-node-tool-icon {
         transition: transform 160ms var(--motion-ease-out);
+    }
+
+    .canvas-menu-item-icon {
+        transition: opacity 140ms ease;
     }
 
     .canvas-node-shell,
@@ -12837,6 +12842,375 @@ html:not(.dark) .creation-history-drawer-root {
     border-radius: var(--modal-radius) !important;
     background: var(--popover) !important;
     box-shadow: var(--elevation-overlay) !important;
+}
+.canvas-shortcuts-modal .ant-modal-close {
+    top: 16px;
+    right: 16px;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+}
+.canvas-shortcuts-modal .ant-modal-close:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.canvas-shortcuts-shell {
+    display: flex;
+    height: min(680px, 78dvh);
+    min-height: 500px;
+    flex-direction: column;
+    color: var(--foreground);
+    overscroll-behavior: contain;
+}
+.canvas-shortcuts-header {
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: minmax(220px, 1fr) minmax(260px, 360px);
+    align-items: center;
+    gap: var(--space-6);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 56px 18px 20px;
+}
+.canvas-shortcuts-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+}
+.canvas-shortcuts-heading-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: color-mix(in srgb, var(--foreground) 76%, transparent);
+}
+.canvas-shortcuts-heading-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.7;
+}
+.canvas-shortcuts-heading > span:last-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+}
+.canvas-shortcuts-heading strong {
+    font-size: var(--fs-body);
+    font-weight: 680;
+    line-height: 1.2;
+}
+.canvas-shortcuts-heading small {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-shortcuts-search {
+    display: flex;
+    height: 38px;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    padding: 0 10px;
+    transition: border-color var(--motion-state) ease, background-color var(--motion-state) ease, box-shadow var(--motion-state) ease;
+}
+.canvas-shortcuts-search:focus-within {
+    border-color: color-mix(in srgb, var(--ring) 48%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+.canvas-shortcuts-search > svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: color-mix(in srgb, var(--foreground) 40%, transparent);
+    stroke-width: 1.8;
+}
+.canvas-shortcuts-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--foreground);
+    font-size: var(--fs-label);
+}
+.canvas-shortcuts-search input::placeholder {
+    color: color-mix(in srgb, var(--foreground) 36%, transparent);
+}
+.canvas-shortcuts-search button {
+    flex-shrink: 0;
+    border: 0;
+    border-radius: var(--r-xs);
+    background: transparent;
+    padding: 3px 5px;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: var(--fs-micro);
+    cursor: pointer;
+}
+.canvas-shortcuts-search button:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.canvas-shortcuts-search button:focus-visible,
+.canvas-shortcuts-categories button:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: -2px;
+}
+.canvas-shortcuts-close-hint kbd {
+    display: inline-flex;
+    min-width: 28px;
+    height: 22px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-radius: var(--r-xs);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    padding: 0 6px;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+.canvas-shortcuts-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: 174px minmax(0, 1fr);
+}
+.canvas-shortcuts-categories {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 3px;
+    border-right: 1px solid var(--border);
+    padding: 14px 10px;
+}
+.canvas-shortcuts-categories button {
+    display: flex;
+    width: 100%;
+    min-height: 36px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    padding: 0 10px;
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: var(--fs-label);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--motion-state) ease, color var(--motion-state) ease;
+}
+.canvas-shortcuts-categories button:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.canvas-shortcuts-categories button.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-weight: 620;
+}
+.canvas-shortcuts-categories button small {
+    color: color-mix(in srgb, currentColor 52%, transparent);
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+}
+.canvas-shortcuts-results {
+    min-width: 0;
+    overflow-y: auto;
+    padding: 8px 18px 18px;
+    scrollbar-gutter: stable;
+}
+.canvas-shortcuts-list {
+    display: flex;
+    flex-direction: column;
+}
+.canvas-shortcuts-row {
+    display: grid;
+    min-height: 66px;
+    grid-template-columns: minmax(180px, 1fr) minmax(220px, auto);
+    align-items: center;
+    gap: var(--space-5);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    padding: 11px 8px;
+}
+.canvas-shortcuts-row:last-child {
+    border-bottom: 0;
+}
+.canvas-shortcuts-row:hover {
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--foreground) 3.5%, transparent);
+}
+.canvas-shortcuts-row-copy {
+    min-width: 0;
+}
+.canvas-shortcuts-row-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+.canvas-shortcuts-row-title strong {
+    overflow: hidden;
+    font-size: var(--fs-label);
+    font-weight: 640;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-shortcuts-row-title small {
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    padding: 2px 6px;
+    color: color-mix(in srgb, var(--foreground) 44%, transparent);
+    font-size: var(--fs-tiny);
+    line-height: 1.3;
+}
+.canvas-shortcuts-row-copy p {
+    margin: 4px 0 0;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--foreground) 43%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-shortcuts-keys {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+.canvas-shortcuts-combination,
+.canvas-shortcuts-key-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.canvas-shortcuts-combination em,
+.canvas-shortcuts-key-part i {
+    color: color-mix(in srgb, var(--foreground) 28%, transparent);
+    font-size: var(--fs-tiny);
+    font-style: normal;
+}
+.canvas-shortcuts-combination em {
+    margin: 0 2px;
+}
+.canvas-shortcuts-key-part kbd {
+    display: inline-flex;
+    min-width: 28px;
+    min-height: 26px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+    padding: 4px 7px;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.canvas-shortcuts-empty {
+    display: grid;
+    min-height: 300px;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    text-align: center;
+}
+.canvas-shortcuts-empty svg {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 3px;
+    color: color-mix(in srgb, var(--foreground) 28%, transparent);
+    stroke-width: 1.5;
+}
+.canvas-shortcuts-empty strong {
+    font-size: var(--fs-label);
+    font-weight: 620;
+}
+.canvas-shortcuts-empty span {
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: var(--fs-micro);
+}
+.canvas-shortcuts-footer {
+    display: flex;
+    min-height: 44px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    border-top: 1px solid var(--border);
+    padding: 8px 18px;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: var(--fs-micro);
+}
+.canvas-shortcuts-close-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+@media (max-width: 680px) {
+    .canvas-shortcuts-shell {
+        height: min(720px, 88dvh);
+        min-height: 440px;
+    }
+    .canvas-shortcuts-header {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 16px 48px 14px 14px;
+    }
+    .canvas-shortcuts-body {
+        display: flex;
+        flex-direction: column;
+    }
+    .canvas-shortcuts-categories {
+        flex-shrink: 0;
+        flex-direction: row;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 8px 10px;
+    }
+    .canvas-shortcuts-categories button {
+        width: auto;
+        min-width: max-content;
+        gap: 7px;
+        padding: 0 10px;
+    }
+    .canvas-shortcuts-results {
+        padding: 6px 10px 14px;
+    }
+    .canvas-shortcuts-row {
+        min-height: 0;
+        grid-template-columns: 1fr;
+        gap: 9px;
+        padding: 12px 6px;
+    }
+    .canvas-shortcuts-row-copy p {
+        white-space: normal;
+    }
+    .canvas-shortcuts-keys {
+        justify-content: flex-start;
+    }
 }
 .asset-library-picker-modal { margin: 0 auto !important; }
 .asset-library-picker-modal .ant-modal-container { padding: 0 !important; }

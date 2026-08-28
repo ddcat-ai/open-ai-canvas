@@ -2,20 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { applyCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import { createGenerationRetryContext, type GenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
+import { createGenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
 import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
 import { persistCanvasAgentGenerationContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
 import type { CanvasConnection, CanvasNodeData, ContextMenuState, ViewportTransform } from "@/types/canvas";
 
+import type { CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
+
 export type CanvasAgentGenerationContext = { conversationId?: string; messageId?: string; source?: "online" | "local" };
-type CanvasAgentRetryContext = GenerationRetryContext;
 type CanvasAgentGenerationContinuation = NonNullable<NonNullable<CanvasNodeData["metadata"]>["agentGenerationContinuation"]>;
-type CanvasAgentGenerationOptions = {
-    context?: CanvasAgentGenerationContext;
-    retryContext?: CanvasAgentRetryContext;
-    onTaskUpdate?: (task: GenerationTask) => void;
-};
+type CanvasAgentGenerationOptions = Pick<CanvasNodeGenerationOptions, "context" | "retryContext" | "onTaskUpdate" | "skipDuplicateConfirmation">;
 type CanvasAgentGenerationContinuationDependencies = {
     consumeAgent?: typeof consumeGenerationTaskAgent;
     persistContinuation?: typeof persistCanvasAgentGenerationContinuationEffect;
@@ -149,6 +146,7 @@ export async function runCanvasAgentGenerationOps({
             let continuationTaskId = "";
             const generationPromise = generate(op.nodeId, op.mode || target?.metadata?.generationMode || "image", prompt, {
                 context: context ? { conversationId: context.conversationId, messageId: context.messageId } : undefined,
+                skipDuplicateConfirmation: true,
                 ...(retryContext ? { retryContext } : {}),
                 onTaskUpdate: (task) => {
                     if (continuationTaskId) return;

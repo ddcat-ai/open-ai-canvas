@@ -1,5 +1,5 @@
 import { modelRequestOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
-import { normalizeVideoResolution } from "@/lib/video-generation-options";
+import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import type { ModelRequestIntent } from "@/services/api/logical-models";
 import { modelOptionName, resolveModelChannel, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
@@ -115,5 +115,5 @@ function priceSelectorForTier(tier: ModelPriceTier) {
 export function normalizeTierResolution(value: string) {
     const raw = String(value || "").trim();
     if (!raw || raw === "*") return "*";
-    return `${normalizeVideoResolution(raw)}p`;
+    return videoResolutionComparisonKey(raw);
 }

@@ -5,6 +5,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { CanvasVideoSettingsPopover } from "../src/components/canvas/canvas-video-settings-popover";
+import { VideoSettingsPanel } from "../src/components/video-settings-panel";
+import { canvasThemes } from "../src/lib/canvas-theme";
 import { mergeFetchedChannelModelCosts, type ChannelModelCatalogItem } from "../src/lib/channel-model-catalog";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
@@ -327,5 +329,33 @@ describe("public channel model catalog", () => {
         expect(body.model).toBe("veo-public");
         expect(body.seconds).toBe("8");
         expect(body.size).toBe("1280x720");
+    });
+
+    test("preserves provider resolution enums with direction suffixes across Canvas display and requests", async () => {
+        let body: Record<string, string> = {};
+        axios.post = (async (_url: string, requestBody: unknown) => {
+            body = formEntries(requestBody);
+            return { data: { id: "synthetic-directional" } };
+        }) as typeof axios.post;
+        const catalog: ChannelModelCatalogItem = {
+            ...omniCatalog,
+            id: "directional-video",
+            displayName: "Directional Video",
+            defaultParameters: { aspectRatio: "16:9", durationSeconds: "8", resolution: "768p竖" },
+            options: {
+                ...omniCatalog.options,
+                durationSeconds: [{ value: "8" }],
+                resolution: [{ value: "480p竖" }, { value: "768p竖" }, { value: "480p横" }, { value: "768p横" }],
+            },
+        };
+        const config = configForCatalog([catalog], { videoSeconds: "8", size: "16:9", vquality: "768P竖" });
+
+        const html = renderToStaticMarkup(React.createElement(CanvasVideoSettingsPopover, { config, onConfigChange: () => undefined }));
+        const panelHtml = renderToStaticMarkup(React.createElement(VideoSettingsPanel, { config, onConfigChange: () => undefined, theme: canvasThemes.dark }));
+        await createVideoGenerationTask(config, "synthetic prompt");
+
+        expect(html).toContain("768P竖 · 16:9 · 8s");
+        expect(panelHtml).toMatch(/aria-pressed="true"[^>]*>768P竖<\/button>/);
+        expect(body.resolution_name).toBe("768p竖");
     });
 });

@@ -34,8 +34,19 @@ type UseCanvasKeyboardOptions = {
     focusMode: boolean;
     exitFocusMode: () => void;
     toggleFocusMode: () => void;
+    onOpenSearch: () => void;
     beginBatchConnection: () => void;
 };
+
+type TextSelectionLike = {
+    isCollapsed: boolean;
+    rangeCount: number;
+    toString(): string;
+};
+
+export function hasCanvasTextSelection(selection: TextSelectionLike | null | undefined) {
+    return Boolean(selection && !selection.isCollapsed && selection.rangeCount > 0 && selection.toString());
+}
 
 export function useCanvasKeyboard({
     nodesRef,
@@ -69,6 +80,7 @@ export function useCanvasKeyboard({
     focusMode,
     exitFocusMode,
     toggleFocusMode,
+    onOpenSearch,
     beginBatchConnection,
 }: UseCanvasKeyboardOptions) {
     useEffect(() => {
@@ -101,8 +113,13 @@ export function useCanvasKeyboard({
                 return;
             }
             if (isModifierShortcut && !event.altKey && key === "f") {
+                if (target?.closest(".ant-modal-wrap, .ant-dropdown, .ant-popover")) return;
                 event.preventDefault();
-                if (!event.repeat) toggleFocusMode();
+                event.stopPropagation();
+                if (!event.repeat) {
+                    if (event.shiftKey) toggleFocusMode();
+                    else onOpenSearch();
+                }
                 return;
             }
             if (isTextEditingTarget) return;
@@ -145,6 +162,7 @@ export function useCanvasKeyboard({
                 return;
             }
             if (isModifierShortcut && !event.altKey && key === "c") {
+                if (hasCanvasTextSelection(window.getSelection())) return;
                 event.preventDefault();
                 copySelectedNodes();
                 return;
@@ -200,5 +218,5 @@ export function useCanvasKeyboard({
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("paste", handlePaste, true);
         };
-    }, [beginBatchConnection, cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
+    }, [beginBatchConnection, cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, onOpenSearch, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
 }

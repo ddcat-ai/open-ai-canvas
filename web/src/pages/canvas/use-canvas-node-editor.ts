@@ -5,14 +5,16 @@ import { saveAs } from "file-saver";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_COLLAPSED_HEIGHT, FRAME_COLLAPSED_WIDTH, getFrameChildIds, isCanvasFolderNode, isFrameNode } from "@/lib/canvas/canvas-frame";
+import { buildCanvasMediaDownloadFileName } from "@/lib/canvas/canvas-media-download";
 import { applyBatchPrimaryImage, applyNodeConfigPatch } from "@/lib/canvas/canvas-project-domain";
-import { audioExtension, imageExtension, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
+import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 
 type UseCanvasNodeEditorOptions = {
     canvasId: string;
+    canvasTitle: string;
     domainProjectId?: string;
     nodesRef: { current: CanvasNodeData[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -25,6 +27,7 @@ type UseCanvasNodeEditorOptions = {
 
 export function useCanvasNodeEditor({
     canvasId,
+    canvasTitle,
     domainProjectId,
     nodesRef,
     setNodes,
@@ -180,8 +183,8 @@ export function useCanvasNodeEditor({
 
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
         if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
-        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
-    }, []);
+        saveAs(node.metadata.content, buildCanvasMediaDownloadFileName(canvasTitle, node));
+    }, [canvasTitle]);
 
     const saveNodeAsset = useCallback(async (node: CanvasNodeData) => {
         if (node.type !== CanvasNodeType.Text && node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return message.error("当前节点类型不能保存为素材");

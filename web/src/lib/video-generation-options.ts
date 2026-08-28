@@ -9,11 +9,32 @@ export function normalizeVideoDuration(value: string | number | undefined) {
 }
 
 export function normalizeVideoResolution(value: string | number | undefined) {
-    const token = String(value || "").trim().toLowerCase();
+    const raw = String(value || "").trim();
+    const token = raw.toLowerCase();
     if (token === "low") return "480";
     if (token === "auto" || token === "medium" || token === "high") return "720";
     if (token === "2k") return "1440";
     if (token === "4k") return "2160";
     const resolution = Number(token.replace(/p$/i, ""));
-    return Number.isFinite(resolution) && resolution > 0 ? String(Math.floor(resolution)) : "720";
+    if (Number.isFinite(resolution)) return resolution > 0 ? String(Math.floor(resolution)) : "720";
+    // Channel-declared values are opaque enums, not necessarily numeric tiers.
+    // Preserve them verbatim so values such as `768p竖` remain selectable and
+    // can be sent back to the provider without being collapsed to 720p.
+    return raw || "720";
+}
+
+export function videoResolutionComparisonKey(value: string | number | undefined) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const normalized = normalizeVideoResolution(raw);
+    return /^\d+$/.test(normalized) ? `${normalized}p` : normalized.toLowerCase();
+}
+
+export function formatVideoResolutionLabel(value: string | number | undefined) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const normalized = normalizeVideoResolution(raw);
+    if (normalized === "2160") return "4K";
+    if (/^\d+$/.test(normalized)) return `${normalized}P`;
+    return normalized.replace(/^(\d+)p/i, "$1P");
 }

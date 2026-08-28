@@ -39,11 +39,14 @@ export function createCanvasNode(type: CanvasNodeTypeId, position: Position, met
     const spec = builtinSpec || (pluginDefinition ? { width: pluginDefinition.defaultSize.width, height: pluginDefinition.defaultSize.height, title: pluginDefinition.defaultTitle, metadata: pluginDefinition.defaultMetadata } : undefined);
     if (!spec) throw new Error(`未注册的画布节点类型：${type}`);
     const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const now = new Date().toISOString();
 
     return {
         id,
         type,
         title: spec.title,
+        createdAt: now,
+        updatedAt: now,
         position: {
             x: position.x - spec.width / 2,
             y: position.y - spec.height / 2,

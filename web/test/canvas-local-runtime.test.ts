@@ -230,6 +230,27 @@ test("Canvas launch mode auto-connects after rejected legacy deep-link secrets a
     expect(shouldAutoConnect(new URLSearchParams("agentUrl=http://127.0.0.1:17371"))).toBe(false);
 });
 
+test("Canvas local Agent setup generates exact-origin commands for Unix and Windows", async () => {
+    const module = await import("../src/lib/canvas/local-agent-setup");
+    const unix = module.buildLocalAgentSetupCommands("https://ddcat.pronhubcn.com", "unix");
+    const windows = module.buildLocalAgentSetupCommands("https://ddcat.pronhubcn.com", "windows");
+
+    expect(unix.install).toContain("git clone https://github.com/ddcat-ai/open-ai-canvas.git");
+    expect(unix.start).toContain("FRAMEFIELD_TRUSTED_WEB_ORIGINS='https://ddcat.pronhubcn.com'");
+    expect(unix.start).toContain("node dist/index.js");
+    expect(windows.start).toContain("$env:FRAMEFIELD_TRUSTED_WEB_ORIGINS='https://ddcat.pronhubcn.com'");
+    expect(windows.start).toContain("node .\\dist\\index.js");
+    expect(module.detectLocalAgentSetupPlatform("Windows NT 10.0")).toBe("windows");
+    expect(module.detectLocalAgentSetupPlatform("Macintosh Intel Mac OS X")).toBe("unix");
+});
+
+test("Canvas local Agent tutorial replaces the conversation only while disconnected", async () => {
+    const source = await Bun.file(new URL("../src/components/canvas/canvas-local-agent-panel.tsx", import.meta.url)).text();
+    expect(source).toContain('!connected ? (\n                <AgentConnectView');
+    expect(source).toContain("连接成功后，这里会自动恢复原对话");
+    expect(source).toContain("当前支持范围");
+});
+
 test("Canvas reconnect wait resolves quietly when component cleanup aborts", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
     const waitForReconnect = (
