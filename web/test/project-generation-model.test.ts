@@ -58,11 +58,13 @@ describe("project text generation model", () => {
         const config = normalizeConfigSnapshot({
             config: {
                 ...defaultConfig,
-                channels: [createModelChannel({
-                    id: "video-only",
-                    models: ["custom-video-1"],
-                    modelCosts: [{ model: "custom-video-1", capability: "video", billingMode: "per_second", unitPriceMicrocredits: 0 }],
-                })],
+                channels: [
+                    createModelChannel({
+                        id: "video-only",
+                        models: ["custom-video-1"],
+                        modelCosts: [{ model: "custom-video-1", capability: "video", billingMode: "per_second", unitPriceMicrocredits: 0 }],
+                    }),
+                ],
             },
         }).config;
 
