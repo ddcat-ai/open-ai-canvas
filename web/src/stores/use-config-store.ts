@@ -573,10 +573,16 @@ export function selectableModelsByCapability(config: AiConfig, capability?: Mode
     return filterModelsByCapability(models, capability, config.channels);
 }
 
+export function selectableModelValue(config: AiConfig, value: string, capability?: ModelCapability) {
+    const options = selectableModelsByCapability(config, capability);
+    const normalized = normalizeModelOptionValue(value, config.channels);
+    return normalized && options.includes(normalized) ? normalized : options[0] || "";
+}
+
 export function configuredModelMatchesCapability(config: AiConfig, model: string, capability?: ModelCapability) {
     const normalized = normalizeModelOptionValue(model, config.channels);
     if (!normalized) return false;
-    return selectableModelsByCapability(config, capability).includes(normalized);
+    return selectableModelValue(config, normalized, capability) === normalized;
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
@@ -850,7 +856,7 @@ export function modelOptionLabel(config: AiConfig, value: string) {
 
 export function modelOptionsFromChannels(channels: ModelChannel[]) {
     return uniqueModelOptions(
-        channels.flatMap((channel) =>
+        channels.filter((channel) => channel.enabled !== false).flatMap((channel) =>
             channel.models
                 .map(normalizeRawModelName)
                 .filter(Boolean)

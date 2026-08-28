@@ -10393,10 +10393,11 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-home .creation-reference-card-preview:hover > span,
 .creation-home .creation-reference-card-preview:focus-visible > span { opacity: 1; }
 .creation-home .creation-reference-card-preview:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: calc(-1 * var(--stroke-2)); }
-.creation-home .creation-reference-card-remove { position: absolute; top: var(--space-1); right: var(--space-1); z-index: 1; display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border: 0; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); padding: 0; opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-card-remove { position: absolute; top: var(--space-1); right: var(--space-1); z-index: 1; display: grid; width: var(--space-6); height: var(--space-6); place-items: center; border: 0; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); padding: 0; opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease; }
 .creation-home .creation-reference-stack-card:hover .creation-reference-card-remove,
 .creation-home .creation-reference-card-remove:focus-visible { opacity: 1; }
 .creation-home .creation-reference-card-remove:hover { background: var(--status-error); }
+.creation-home .creation-reference-card-remove:disabled { cursor: wait; opacity: .5; }
 .creation-home .creation-reference-card-remove svg { width: var(--space-3); height: var(--space-3); }
 .creation-home .creation-reference-add-slot { display: flex; flex: 0 0 auto; list-style: none; }
 .creation-home .creation-reference-add-button { display: flex; width: 58px; height: 77px; flex: 0 0 58px; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); border: var(--stroke-1) dashed var(--creation-border); border-radius: var(--r-sm); background: transparent; color: var(--creation-muted); padding: 0; transition: border-color var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease, color var(--motion-dur-fast-calc) ease, width var(--motion-state) var(--motion-ease-out), height var(--motion-state) var(--motion-ease-out); }
@@ -10438,7 +10439,17 @@ html:not(.dark) .creation-home .creation-reference-add-button:hover:not(:disable
     .creation-home .creation-reference-track:not(.is-expanded) { gap: var(--space-2); }
     .creation-home .creation-reference-track:not(.is-expanded) .creation-reference-stack-card { margin-left: 0; }
     .creation-home .creation-reference-track:not(.is-expanded) .creation-reference-card-content { transform: rotate(0deg); }
-    .creation-home .creation-reference-card-remove { opacity: 1; }
+    .creation-home .creation-reference-filter-tabs button,
+    .creation-home .creation-reference-panel-actions button { min-height: 44px; }
+    .creation-home .creation-reference-panel-actions .creation-reference-panel-collapse,
+    .creation-home .creation-reference-panel-expand,
+    .creation-home .creation-reference-track-button { width: 44px; height: 44px; }
+    .creation-home .creation-reference-panel-expand { flex-basis: 44px; }
+    .creation-home .creation-reference-card-remove { top: calc(-1 * var(--space-2)); right: calc(-1 * var(--space-2)); width: 44px; height: 44px; background: transparent; opacity: 1; }
+    .creation-home .creation-reference-card-remove:hover { background: transparent; }
+    .creation-home .creation-reference-card-remove::before { position: absolute; width: var(--space-6); height: var(--space-6); border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); content: ""; }
+    .creation-home .creation-reference-card-remove:hover::before { background: var(--status-error); }
+    .creation-home .creation-reference-card-remove svg { position: relative; }
 }
 
 @media (prefers-reduced-motion: reduce) {

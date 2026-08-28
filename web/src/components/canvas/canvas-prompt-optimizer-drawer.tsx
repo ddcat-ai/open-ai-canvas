@@ -6,7 +6,7 @@ import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, LoaderCircle
 import { ModelPicker } from "@/components/model-picker";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { PromptOptimizationMode, PromptOptimizationResult, PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
-import type { AiConfig } from "@/stores/use-config-store";
+import { selectableModelValue, type AiConfig } from "@/stores/use-config-store";
 
 type CanvasPromptOptimizerDrawerProps = {
     open: boolean;
@@ -142,7 +142,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
         abortRef.current?.abort();
         setDraftPrompt(prompt);
         setSubmittedPrompt(prompt.trim());
-        setActiveOptimizerModel(optimizerModel);
+        setActiveOptimizerModel(selectableModelValue(config, optimizerModel, "text"));
         setSelectedReferenceIds(references.filter((reference) => reference.active).map((reference) => reference.id));
         setResult(null);
         setSelectedPrompt("");
@@ -150,6 +150,11 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
         setWorking(false);
         setStreaming(false);
     }, [open, optimizerModel, prompt]);
+
+    useEffect(() => {
+        if (!open) return;
+        setActiveOptimizerModel((current) => selectableModelValue(config, current || optimizerModel, "text"));
+    }, [config, open, optimizerModel]);
 
     useLayoutEffect(() => {
         if (open && !wasOpenRef.current) {

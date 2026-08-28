@@ -9,6 +9,7 @@ import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/co
 import { CanvasStylePickerModal, resolveCanvasStylePreset, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { ModelPicker } from "@/components/model-picker";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
+import { resolveProjectTextGenerationConfig } from "@/lib/project-generation-model";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
 import { settingsPath } from "@/lib/settings-navigation";
 import { requestImageQuestion } from "@/services/api/image";
@@ -67,21 +68,19 @@ export default function ProjectsPage() {
     const generateStory = async () => {
         const story = storyDraft.trim();
         if (!story || generating) return;
-        const textModel = generateModel || effectiveConfig.textModel;
-        if (!textModel || !effectiveConfig.textModels.includes(textModel)) {
-            if (!textModel) {
-                modal.warning({
-                    title: "需要先选择文本模型",
-                    content: "请在上方“AI 模型”中选择一个已配置的文本模型，或先到设置中完成模型渠道配置。",
-                    okText: "去设置",
-                    cancelText: "取消",
-                    onOk: () => navigate(settingsPath("models")),
-                });
-            } else {
-                message.error(`模型 ${textModel} 未在文本模型列表中，请重新选择`);
-            }
+        const generationConfig = resolveProjectTextGenerationConfig(effectiveConfig, generateModel);
+        if (!generationConfig) {
+            modal.warning({
+                title: "需要先选择文本模型",
+                content: "请在上方“AI 模型”中选择一个已配置的文本模型，或先到设置中完成模型渠道配置。",
+                okText: "去设置",
+                cancelText: "取消",
+                onOk: () => navigate(settingsPath("models")),
+            });
             return;
         }
+        const { requestConfig, textModel } = generationConfig;
+        if (generateModel !== textModel) setGenerateModel(textModel);
         setGenerating(true);
         setGenerationStatus("正在创建项目…");
         setGenerationPreview("");
@@ -89,7 +88,7 @@ export default function ProjectsPage() {
             const project = await createUniqueProjectName(story, selectedStyle);
             setGenerationStatus("AI 正在生成故事大纲与章节…");
             const answer = await requestImageQuestion(
-                { ...effectiveConfig, model: textModel, imageModel: textModel, videoModel: textModel, textModel },
+                requestConfig,
                 [
                     { role: "system", content: `你是短剧编剧。根据用户的一句话故事，生成一部短剧的标题、一句话简介和 ${generateChapterCount} 个章节。生成要求：叙事采用${generateStructure}结构，每章约 ${generateWordCount} 字，使用${generatePerspective}视角，整体基调${generateTone}，主要角色约 ${generateCharacterScale}，章节篇幅${generateChapterLength}。只输出一个 JSON 对象，不要输出 markdown 代码块或其他文字。JSON 结构：{"title":"剧名","synopsis":"一句话简介","chapters":[{"title":"章节标题","content":"本章情节"}]}` },
                     { role: "user", content: story },

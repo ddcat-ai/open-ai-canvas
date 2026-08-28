@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
 import { Reorder } from "motion/react";
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
@@ -522,6 +522,7 @@ export default function CreatePage() {
         try {
             const { asset, attachment } = await uploadCreationAsset(file);
             if (creationAttachmentKind(attachment) !== "image") throw new Error("上传结果不是可用图片");
+            if (!attachmentsRef.current.some((item) => item.id === targetAttachmentId)) throw new Error("要替换的参考图已被移除");
             if (asset) addAsset(asset);
             if (replaceAttachmentReference(targetAttachmentId, attachment)) toast.success("参考图已替换，槽位不变，提示词无需修改");
         } catch (error) {
@@ -1132,10 +1133,11 @@ function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: 
     return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <img className="creation-media-preview-image" src={url} alt="媒体预览" /> : null}</Modal>;
 }
 
-function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
+function CreationAttachmentThumbnail({ item, onPreview, onRemove, disabled }: {
     item: CreationAttachment;
     onPreview: (type: "image" | "video", url: string) => void;
     onRemove: (id: string) => void;
+    disabled: boolean;
 }) {
     const kind = creationAttachmentKind(item);
     const previewable = kind === "image" || kind === "video";
@@ -1143,7 +1145,7 @@ function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
     const content = kind === "video" ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : kind === "image" ? <img src={item.previewUrl} alt={item.name} /> : <span className="creation-chat-file-icon">{kind === "audio" ? <Music2 /> : <FileText />}<em>{item.name}</em></span>;
     return <div className="creation-reference-card-content">
         {previewable ? <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", url)} aria-label={`放大预览 ${item.name}`} disabled={!url}>{content}<span aria-hidden="true"><Maximize2 /></span></button> : <div className="creation-reference-card-preview is-file" aria-label={item.name}>{content}</div>}
-        <button type="button" className="creation-reference-card-remove" onPointerDownCapture={(event) => event.stopPropagation()} onMouseDownCapture={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemove(item.id); }} aria-label={`移除 ${item.name}`}><X /></button>
+        <button type="button" className="creation-reference-card-remove" onPointerDownCapture={(event) => event.stopPropagation()} onMouseDownCapture={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemove(item.id); }} aria-label={`移除 ${item.name}`} disabled={disabled}><X /></button>
     </div>;
 }
 
@@ -1192,6 +1194,7 @@ type ComposerProps = {
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 function CreationComposer(props: ComposerProps) {
+    const referenceTrackId = useId();
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
@@ -1339,10 +1342,10 @@ function CreationComposer(props: ComposerProps) {
                         </div>
                         <div className="creation-reference-panel-actions">
                             {props.attachments.length ? <button type="button" onClick={props.onClearAttachments} disabled={interactionBusy}>清空全部素材</button> : null}
-                            <Tooltip title="收起素材面板"><button type="button" className="creation-reference-panel-collapse" onClick={() => setReferencePanelExpanded(false)} aria-label="收起素材面板"><Minimize2 aria-hidden="true" /></button></Tooltip>
+                            <Tooltip title="收起素材面板"><button type="button" className="creation-reference-panel-collapse" onClick={() => setReferencePanelExpanded(false)} aria-label="收起素材面板" aria-controls={referenceTrackId} aria-expanded="true"><Minimize2 aria-hidden="true" /></button></Tooltip>
                         </div>
                     </div> : null}
-                    <div className="creation-reference-track-wrapper">
+                    <div id={referenceTrackId} className="creation-reference-track-wrapper">
                         <div className="creation-reference-stack-shell">
                             {trackState.canScrollLeft ? <button type="button" className="creation-reference-track-button is-left" onClick={() => scrollAttachmentTrack(-1)} aria-label="向左浏览参考内容" title="向左浏览参考内容"><ChevronLeft aria-hidden="true" /></button> : null}
                             <Reorder.Group<CreationAttachment[]>
@@ -1380,13 +1383,13 @@ function CreationComposer(props: ComposerProps) {
                                         if (target?.attachmentId && target.attachmentId !== item.id) props.onReplaceAttachment(target.attachmentId, item);
                                     }}
                                 >
-                                    <CreationAttachmentThumbnail item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />
+                                    <CreationAttachmentThumbnail item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} disabled={interactionBusy} />
                                 </Reorder.Item>)}
                                 {!visibleAttachments.length && props.attachments.length ? <li className="creation-reference-filter-empty">该类型暂无参考内容</li> : null}
                                 {referencesSupported ? <li className="creation-reference-add-slot"><Tooltip title={addReferenceLabel}><button type="button" className="creation-reference-add-button" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip></li> : null}
                             </Reorder.Group>
                             {trackState.canScrollRight ? <button type="button" className="creation-reference-track-button is-right" onClick={() => scrollAttachmentTrack(1)} aria-label="向右浏览参考内容" title="向右浏览参考内容"><ChevronRight aria-hidden="true" /></button> : null}
-                            {!trackState.isExpanded && props.attachments.length ? <Tooltip title="查看全部"><button type="button" className="creation-reference-panel-expand" onClick={() => setReferencePanelExpanded(true)} aria-label={`查看全部 ${props.attachments.length} 个参考内容`} aria-expanded="false"><Maximize2 aria-hidden="true" /></button></Tooltip> : null}
+                            {!trackState.isExpanded && props.attachments.length ? <Tooltip title="查看全部"><button type="button" className="creation-reference-panel-expand" onClick={() => setReferencePanelExpanded(true)} aria-label={`查看全部 ${props.attachments.length} 个参考内容`} aria-controls={referenceTrackId} aria-expanded="false"><Maximize2 aria-hidden="true" /></button></Tooltip> : null}
                         </div>
                     </div>
                 </div> : null}

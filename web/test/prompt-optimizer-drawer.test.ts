@@ -11,4 +11,11 @@ describe("prompt optimizer drawer instance isolation", () => {
         expect(source).toContain('<div ref={contentRef} className={`canvas-prompt-optimizer-panel');
         expect(source).not.toContain('document.querySelector<HTMLElement>(".canvas-prompt-optimizer-popover")');
     });
+
+    test("normalizes the optimizer model through the effective text catalog", () => {
+        expect(source).toContain('setActiveOptimizerModel(selectableModelValue(config, optimizerModel, "text"))');
+        expect(source).toContain('setActiveOptimizerModel((current) => selectableModelValue(config, current || optimizerModel, "text"))');
+        expect(source).toContain("[config, open, optimizerModel]");
+        expect(source).toContain("optimizerModel: activeOptimizerModel || undefined");
+    });
 });

@@ -66,12 +66,16 @@ describe("creation library button", () => {
         expect(source).toContain("values={visibleAttachments}");
         expect(source).toContain("onReorder={reorderVisibleAttachments}");
         expect(source).toContain('className="creation-reference-card-remove" onPointerDownCapture={(event) => event.stopPropagation()}');
+        expect(source).toContain("disabled={disabled}");
+        expect(source).toContain("disabled={interactionBusy}");
         expect(source).toContain("<Reorder.Item");
         expect(source).toContain('layout="position"');
         expect(source).toContain("isExpanded");
         expect(source).toContain("setReferencePanelExpanded");
         expect(source).toContain("aria-label={`查看全部 ${props.attachments.length} 个参考内容`}");
+        expect(source).toContain('aria-controls={referenceTrackId} aria-expanded="false"');
         expect(source).toContain('aria-label="收起素材面板"');
+        expect(source).toContain('aria-controls={referenceTrackId} aria-expanded="true"');
         expect(source).toContain("清空全部素材");
         expect(source).toContain('role="group"');
         expect(source).toContain("aria-pressed={referenceFilter === filter.id}");
@@ -97,7 +101,8 @@ describe("creation library button", () => {
         expect(styles).toContain(".creation-reference-track.is-expanded");
         expect(styles).toContain(".creation-reference-stack-card:is(:hover, :focus-within) .creation-reference-card-content");
         expect(styles).toContain("@media (hover: none)");
-        expect(styles).toContain(".creation-reference-card-remove { opacity: 1; }");
+        expect(styles).toContain(".creation-reference-track-button { width: 44px; height: 44px; }");
+        expect(styles).toContain(".creation-reference-card-remove { top: calc(-1 * var(--space-2)); right: calc(-1 * var(--space-2)); width: 44px; height: 44px;");
         expect(styles).not.toContain(".creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(n+5) { display: block; }");
     });
 
@@ -118,6 +123,7 @@ describe("creation library button", () => {
 
         expect(source).toContain("onPointerDownCapture={(event) => event.stopPropagation()}");
         expect(source).toContain("onRemove(item.id)");
+        expect(source).toContain('if (!attachmentsRef.current.some((item) => item.id === targetAttachmentId)) throw new Error("要替换的参考图已被移除")');
         expect(source).toContain("onClick={() => props.fileInputRef.current?.click()}");
         expect(source).toContain("onClick={props.onOpenLibrary}");
     });

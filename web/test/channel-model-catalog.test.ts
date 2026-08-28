@@ -7,10 +7,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { CanvasVideoSettingsPopover } from "../src/components/canvas/canvas-video-settings-popover";
 import { mergeFetchedChannelModelCosts, type ChannelModelCatalogItem } from "../src/lib/channel-model-catalog";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
+import { ModelDefaultGrid } from "../src/pages/settings/model-default-grid";
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
 import { fetchChannelModels } from "../src/services/api/image";
 import { createVideoGenerationTask } from "../src/services/api/video";
-import { createModelChannel, defaultConfig, modelDisplayName, normalizeConfigSnapshot, resolveModelRequestConfig, selectableModelsByCapability, type AiConfig } from "../src/stores/use-config-store";
+import { configuredModelMatchesCapability, createModelChannel, defaultConfig, effectiveConfigForCustomChannels, modelDisplayName, normalizeConfigSnapshot, resolveModelRequestConfig, selectableModelsByCapability, selectableModelValue, type AiConfig } from "../src/stores/use-config-store";
 
 const originalAxiosPost = axios.post;
 
@@ -280,6 +281,64 @@ describe("public channel model catalog", () => {
         expect(staleSnapshot.channels.some((channel) => channel.id === "default")).toBe(false);
         expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("default::gpt-image-2");
         expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("ghost-image");
+    });
+
+    test("keeps custom channel models available across matching entry-point capabilities", () => {
+        const custom = createModelChannel({
+            id: "custom-generation",
+            name: "我的模型",
+            baseUrl: "https://custom.example.com",
+            apiKey: "synthetic-test-key",
+            models: ["4.5 block", "custom-video-1"],
+            modelCosts: [
+                { model: "4.5 block", capability: "text", billingMode: "token", unitPriceMicrocredits: 0 },
+                { model: "custom-video-1", capability: "video", billingMode: "per_second", unitPriceMicrocredits: 0 },
+            ],
+        });
+        const config = normalizeConfigSnapshot({
+            config: {
+                ...defaultConfig,
+                channels: [custom],
+                textModel: "4.5 block",
+                videoModel: "custom-video-1",
+            },
+        }).config;
+
+        expect(selectableModelsByCapability(config, "text")).toEqual(["custom-generation::4.5 block"]);
+        expect(selectableModelsByCapability(config, "video")).toEqual(["custom-generation::custom-video-1"]);
+        expect(selectableModelsByCapability(config, "image")).toEqual([]);
+        expect(selectableModelsByCapability(config)).toEqual([
+            "custom-generation::4.5 block",
+            "custom-generation::custom-video-1",
+        ]);
+        expect(selectableModelValue(config, "", "text")).toBe("custom-generation::4.5 block");
+        expect(selectableModelValue(config, "4.5 block", "text")).toBe("custom-generation::4.5 block");
+        expect(selectableModelValue(config, "missing-model", "text")).toBe("custom-generation::4.5 block");
+        expect(selectableModelValue(config, " custom-generation::4.5 block ", "text")).toBe("custom-generation::4.5 block");
+        expect(selectableModelValue(config, "missing-channel::4.5 block", "text")).toBe("custom-generation::4.5 block");
+        expect(selectableModelValue(config, "custom-video-1", "text")).toBe("custom-generation::4.5 block");
+        expect(configuredModelMatchesCapability(config, "4.5 block", "text")).toBe(true);
+        expect(configuredModelMatchesCapability(config, "custom-generation::custom-video-1", "text")).toBe(false);
+        expect(configuredModelMatchesCapability(config, "missing-channel::4.5 block", "text")).toBe(false);
+        expect(configuredModelMatchesCapability(config, "", "text")).toBe(false);
+        expect(resolveModelRequestConfig(config, selectableModelValue(config, "4.5 block", "text"))).toMatchObject({
+            model: "4.5 block",
+            baseUrl: "https://custom.example.com",
+            apiKey: "synthetic-test-key",
+        });
+
+        const defaultGrid = renderToStaticMarkup(React.createElement(ModelDefaultGrid, { config, onChange: () => undefined }));
+        expect(defaultGrid).toContain("4.5 block");
+        expect(defaultGrid).toContain("custom-video-1");
+
+        const gated = effectiveConfigForCustomChannels(config, false);
+        expect(selectableModelsByCapability(gated, "text")).toEqual([]);
+        expect(selectableModelsByCapability(gated, "video")).toEqual([]);
+        expect(selectableModelValue(gated, "4.5 block", "text")).toBe("");
+
+        const disabled = normalizeConfigSnapshot({ config: { ...config, channels: [{ ...custom, enabled: false }] } }).config;
+        expect(selectableModelsByCapability(disabled, "text")).toEqual([]);
+        expect(selectableModelsByCapability(disabled, "video")).toEqual([]);
     });
 
     test("omits resolution_name for Omni and for auto instead of inventing 720p", async () => {
