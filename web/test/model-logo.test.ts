@@ -10,6 +10,8 @@ describe("模型 Logo 选择器", () => {
 
         expect(source).toContain('import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js"');
         expect(source).not.toContain("import.meta.glob?.(");
+        expect(source).toContain('"Bun" in globalThis');
+        expect(source).not.toContain("typeof import.meta.glob");
         expect(options.length).toBeGreaterThan(300);
         expect(options.some((item) => item.id === "OpenAI")).toBe(true);
         expect(options.some((item) => item.id === "AgnesAI")).toBe(true);
