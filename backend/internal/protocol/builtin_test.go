@@ -365,6 +365,23 @@ func TestDeclarativeManifestSupportsMediaPathsTransformsAndErrors(t *testing.T) 
 	}
 }
 
+func TestDeclarativeManifestNormalizesVideoResolutionWithoutBreakingWorkflowValues(t *testing.T) {
+	tests := map[string]string{
+		"768":    "768p",
+		"768p":   "768p",
+		"768P":   "768p",
+		" 768P ": "768p",
+		"768p竖":  "768p竖",
+		"768P横":  "768p横",
+		"2K":     "2k",
+	}
+	for input, expected := range tests {
+		if actual := applyManifestTransform(input, "video-resolution"); actual != expected {
+			t.Errorf("video resolution transform %q = %#v, want %q", input, actual, expected)
+		}
+	}
+}
+
 func TestDeclarativeManifestRequiresDocumentation(t *testing.T) {
 	manifest := Manifest{
 		APIVersion: "v1",

@@ -25,7 +25,7 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatalf("loaded adapters = %d", len(adapters))
 	}
 	adapter := adapters[0]
-	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Execution != "declarative" {
+	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Version != "1.0.1" || adapter.Metadata().Execution != "declarative" {
 		t.Fatalf("metadata = %#v", adapter.Metadata())
 	}
 	if !adapter.Metadata().RequiresPublicMediaURLs {
@@ -33,7 +33,7 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 	}
 
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{BaseURL: "https://autodl.art", Request: GenerationRequest{
-		Model: "minimax_h3_lightx2v_no_pic", Prompt: "a cinematic test", Duration: 3, Resolution: "768P", Images: []MediaReference{{URL: "https://cdn.example/reference.png"}},
+		Model: "minimax_h3_lightx2v_no_pic", Prompt: "a cinematic test", Duration: 3, Resolution: "768", Images: []MediaReference{{URL: "https://cdn.example/reference.png"}},
 	}})
 	if err != nil {
 		t.Fatal(err)

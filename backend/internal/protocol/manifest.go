@@ -554,9 +554,24 @@ func applyManifestTransform(value any, transform string) any {
 		return strings.ToLower(text)
 	case "upper", "uppercase":
 		return strings.ToUpper(text)
+	case "video-resolution", "video_resolution", "videoresolution":
+		return normalizeManifestVideoResolution(text)
 	default:
 		return value
 	}
+}
+
+func normalizeManifestVideoResolution(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return ""
+	}
+	for _, char := range normalized {
+		if char < '0' || char > '9' {
+			return normalized
+		}
+	}
+	return normalized + "p"
 }
 
 func pathValue(payload map[string]any, path string) any {

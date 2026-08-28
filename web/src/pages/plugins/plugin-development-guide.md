@@ -65,7 +65,7 @@ my-plugin.yingce-plugin
 
 ## 4. Provider 与工作流
 
-请求字段右侧只能引用影策统一请求，例如 `request.prompt`、`request.model`、`request.duration`、`request.extra`。声明式字段也支持安全的对象/数组路径（例如 `request.images.0.url`）和字符串变换（`|trim`、`|lower`、`|upper`），不执行插件代码。字段解析为空时会省略该字段，适合映射可选参考素材。Provider 如果把 `requiresPublicMediaUrls` 设为 `true`，宿主会在请求前把用户资源转换为短期签名公网 URL。响应映射支持对象路径和数组下标，并可用 `errorPaths` 声明上游错误码路径。同步 provider 只需要 `create` 和 `response`；异步 provider 再声明 `poll`。
+请求字段右侧只能引用影策统一请求，例如 `request.prompt`、`request.model`、`request.duration`、`request.extra`。声明式字段也支持安全的对象/数组路径（例如 `request.images.0.url`）和字符串变换（`|trim`、`|lower`、`|upper`、`|video-resolution`），不执行插件代码。`video-resolution` 会 trim 并转为小写，仅在输入是纯数字时补上 `p`，因此同时兼容历史状态中的 `768`、标准值 `768p` 和工作流值 `768p竖`。字段解析为空时会省略该字段，适合映射可选参考素材。Provider 如果把 `requiresPublicMediaUrls` 设为 `true`，宿主会在请求前把用户资源转换为短期签名公网 URL。响应映射支持对象路径和数组下标，并可用 `errorPaths` 声明上游错误码路径。同步 provider 只需要 `create` 和 `response`；异步 provider 再声明 `poll`。
 
 结果 URL 如果是短期地址，必须设置 `resultEphemeral: true`。宿主会在任务完成后立即下载并保存资源，画布和任务记录只保存影策资源引用。
 
