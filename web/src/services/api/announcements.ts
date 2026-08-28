@@ -1,4 +1,4 @@
-import { apiClient, request } from "@/services/api/request";
+import { apiBaseURL, apiClient, request } from "@/services/api/request";
 
 export type AnnouncementLevel = "info" | "success" | "warning" | "critical";
 export type AnnouncementStatus = "active" | "closed";
@@ -7,7 +7,10 @@ export type SystemAnnouncement = {
     id: string;
     title: string;
     content: string;
+    imageResourceId?: string;
+    imageUrl?: string;
     level: AnnouncementLevel;
+    pinned?: boolean;
     status: AnnouncementStatus;
     createdBy: string;
     publishedAt: string;
@@ -34,6 +37,13 @@ export function getAnnouncementFeed() {
     return request<AnnouncementFeed>(api.get("/announcements"));
 }
 
+export function announcementImageUrl(announcement: Pick<SystemAnnouncement, "imageUrl">) {
+    const imageUrl = announcement.imageUrl;
+    if (!imageUrl || !imageUrl.startsWith("/api/")) return imageUrl || "";
+    const base = String(apiBaseURL).replace(/\/+$/, "");
+    return base === "/api" ? imageUrl : `${base}${imageUrl.slice("/api".length)}`;
+}
+
 export function markAnnouncementsRead(announcementIds: string[]) {
     return request<{ unreadCount: number }>(api.post("/announcements/read", { announcementIds }));
 }
@@ -42,11 +52,11 @@ export function listAdminAnnouncements(params: AdminAnnouncementListParams = {})
     return request<{ announcements: SystemAnnouncement[]; total: number; page: number; limit: number }>(api.get("/admin/announcements", { params }));
 }
 
-export function createAdminAnnouncement(input: { title: string; content: string; level: AnnouncementLevel }) {
+export function createAdminAnnouncement(input: { title: string; content: string; imageResourceId?: string; level: AnnouncementLevel; pinned?: boolean }) {
     return request<{ announcement: SystemAnnouncement }>(api.post("/admin/announcements", input));
 }
 
-export function updateAdminAnnouncement(id: string, input: { title: string; content: string; level: AnnouncementLevel }) {
+export function updateAdminAnnouncement(id: string, input: { title: string; content: string; imageResourceId?: string; level: AnnouncementLevel; pinned?: boolean }) {
     return request<{ announcement: SystemAnnouncement }>(api.patch(`/admin/announcements/${encodeURIComponent(id)}`, input));
 }
 

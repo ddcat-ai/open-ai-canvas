@@ -265,3 +265,23 @@ func (r *Repository) DeleteAssetAndResources(userID string, assetID string, reso
 		return tx.Where("user_id = ? AND id IN ?", userID, resourceIDs).Delete(&model.Resource{}).Error
 	})
 }
+
+func (r *Repository) DeleteResourceAndEnqueueDeletion(resource *model.Resource, job model.ResourceDeletionJob) error {
+	if resource == nil {
+		return gorm.ErrRecordNotFound
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("resource_id = ?", resource.ID).Delete(&model.ArkPrivateAssetBinding{})
+		if result.Error != nil {
+			return result.Error
+		}
+		result = tx.Where("id = ? AND user_id = ?", resource.ID, resource.UserID).Delete(&model.Resource{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Create(&job).Error
+	})
+}

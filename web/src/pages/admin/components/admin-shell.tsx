@@ -5,6 +5,7 @@ import {
     BellRing,
     CloudUpload,
     Coins,
+    Database,
     FileClock,
     HardDrive,
     Home,
@@ -19,6 +20,7 @@ import {
     PanelLeftOpen,
     RadioTower,
     Settings2,
+    Server,
     ShieldAlert,
     ShieldCheck,
     TicketCheck,
@@ -47,11 +49,15 @@ type AdminNavigationItem = {
 const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = [
     {
         label: "概览",
-        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> }],
+        items: [
+            { path: "/admin/system-info", label: "系统信息", description: "服务器实例与核心资源状态", icon: <Server className="size-4" /> },
+            { path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
+        ],
     },
     {
         label: "平台资源",
         items: [
+            { path: "/admin/resources", label: "存储管理", description: "全部用户资源与物理对象", icon: <Database className="size-4" /> },
             { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },

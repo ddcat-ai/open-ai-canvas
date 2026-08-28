@@ -11,6 +11,8 @@ import RouteErrorPage from "@/pages/route-error";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const SystemInfoPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.SystemInfoPage })));
+const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
 const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
 const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
@@ -105,8 +107,22 @@ export const router = createBrowserRouter([
             },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
             { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
-            { path: "/plugins", element: <RequireAuth><RequireFeature feature="pluginCenterEnabled">{deferred(<PluginsPage />)}</RequireFeature></RequireAuth> },
-            { path: "/plugins/eagle", element: <RequireAuth><RequireFeature feature="pluginCenterEnabled">{deferred(<EagleLibraryPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/plugins",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="pluginCenterEnabled">{deferred(<PluginsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/plugins/eagle",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="pluginCenterEnabled">{deferred(<EagleLibraryPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             {
                 path: "/wallet",
                 element: (
@@ -156,6 +172,8 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
                     { index: true, element: deferred(<AnalyticsPage />) },
+                    { path: "system-info", element: deferred(<SystemInfoPage />) },
+                    { path: "resources", element: deferred(<StorageResourcesPage />) },
                     { path: "users", element: deferred(<UsersPage />) },
                     { path: "channels", element: deferred(<ChannelsPage />) },
                     { path: "models", element: <RequireFeature feature="frontendModelsEnabled">{deferred(<LogicalModelsPage />)}</RequireFeature> },

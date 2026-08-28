@@ -24,7 +24,7 @@ func (r *Repository) AdminAnnouncements(keyword string, status model.Announcemen
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := query.Order("published_at desc").Limit(limit).Offset(offset).Find(&announcements).Error; err != nil {
+	if err := query.Order("pinned desc, published_at desc").Limit(limit).Offset(offset).Find(&announcements).Error; err != nil {
 		return nil, 0, err
 	}
 	return announcements, total, nil
@@ -34,7 +34,7 @@ func (r *Repository) AnnouncementFeed(userID string) ([]model.Announcement, int6
 	var announcements []model.Announcement
 	var unreadCount int64
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("status = ?", model.AnnouncementStatusActive).Order("published_at desc").Find(&announcements).Error; err != nil {
+		if err := tx.Where("status = ?", model.AnnouncementStatusActive).Order("pinned desc, published_at desc").Find(&announcements).Error; err != nil {
 			return err
 		}
 		return tx.Model(&model.Announcement{}).
@@ -65,7 +65,9 @@ func (r *Repository) UpdateAnnouncement(announcement *model.Announcement) error 
 		result := tx.Model(&model.Announcement{}).Where("id = ?", announcement.ID).Updates(map[string]any{
 			"title":        announcement.Title,
 			"content":      announcement.Content,
+			"image_resource_id": announcement.ImageResourceID,
 			"level":        announcement.Level,
+			"pinned":      announcement.Pinned,
 			"status":       announcement.Status,
 			"published_at": announcement.PublishedAt,
 			"closed_at":    announcement.ClosedAt,

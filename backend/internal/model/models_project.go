@@ -316,16 +316,19 @@ type UserPromptCustomization struct {
 }
 
 type Announcement struct {
-	ID          string             `json:"id" gorm:"primaryKey;size:36"`
-	Title       string             `json:"title" gorm:"size:120"`
-	Content     string             `json:"content" gorm:"type:text"`
-	Level       AnnouncementLevel  `json:"level" gorm:"index;size:24"`
-	Status      AnnouncementStatus `json:"status" gorm:"index;size:24;index:idx_announcements_status_published,priority:1"`
-	CreatedBy   string             `json:"createdBy" gorm:"index;size:36"`
-	PublishedAt time.Time          `json:"publishedAt" gorm:"index:idx_announcements_status_published,priority:2"`
-	ClosedAt    *time.Time         `json:"closedAt"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	UpdatedAt   time.Time          `json:"updatedAt"`
+	ID              string             `json:"id" gorm:"primaryKey;size:36"`
+	Title           string             `json:"title" gorm:"size:120"`
+	Content         string             `json:"content" gorm:"type:text"`
+	ImageResourceID string             `json:"imageResourceId,omitempty" gorm:"index;size:36"`
+	ImageURL        string             `json:"imageUrl,omitempty" gorm:"-"`
+	Level           AnnouncementLevel  `json:"level" gorm:"index;size:24"`
+	Pinned          bool               `json:"pinned" gorm:"index"`
+	Status          AnnouncementStatus `json:"status" gorm:"index;size:24;index:idx_announcements_status_published,priority:1"`
+	CreatedBy       string             `json:"createdBy" gorm:"index;size:36"`
+	PublishedAt     time.Time          `json:"publishedAt" gorm:"index:idx_announcements_status_published,priority:2"`
+	ClosedAt        *time.Time         `json:"closedAt"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	UpdatedAt       time.Time          `json:"updatedAt"`
 }
 
 type UserAnnouncementRead struct {

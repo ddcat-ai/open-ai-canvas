@@ -180,6 +180,22 @@ func (r *Repository) User(id string) (*model.User, error) {
 	return &user, nil
 }
 
+// UsersByIDs 批量读取后台资源列表需要展示的用户信息，避免逐条查询造成 N+1。
+func (r *Repository) UsersByIDs(ids []string) (map[string]model.User, error) {
+	if len(ids) == 0 {
+		return map[string]model.User{}, nil
+	}
+	var users []model.User
+	if err := r.db.Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]model.User, len(users))
+	for _, user := range users {
+		result[user.ID] = user
+	}
+	return result, nil
+}
+
 func (r *Repository) UserByAccount(account string) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("lower(username) = lower(?) OR lower(email) = lower(?)", account, account).First(&user).Error; err != nil {
@@ -975,6 +991,109 @@ func (r *Repository) Resources(userID string, limit int) ([]model.Resource, erro
 	}
 	err := r.db.Order("created_at desc").Limit(limit).Find(&resources, "user_id = ?", userID).Error
 	return resources, err
+}
+
+type AdminResourceFilter struct {
+	Kind     string
+	Status   string
+	Provider string
+	UserID   string
+	Keyword  string
+	From     *time.Time
+	To       *time.Time
+	Limit    int
+	Offset   int
+}
+
+func resourceProviderExpression() string {
+	return "COALESCE(NULLIF(provider, ''), 'local')"
+}
+
+func (r *Repository) AdminResources(filter AdminResourceFilter) ([]model.Resource, int64, error) {
+	var resources []model.Resource
+	var total int64
+	query := r.db.Model(&model.Resource{})
+	if value := strings.TrimSpace(filter.Kind); value != "" {
+		query = query.Where("kind = ?", value)
+	}
+	if value := strings.TrimSpace(filter.Status); value != "" {
+		query = query.Where("status = ?", value)
+	}
+	if value := strings.TrimSpace(filter.Provider); value != "" {
+		query = query.Where(resourceProviderExpression()+" = ?", value)
+	}
+	if value := strings.TrimSpace(filter.UserID); value != "" {
+		query = query.Where("user_id = ?", value)
+	}
+	if value := strings.TrimSpace(filter.Keyword); value != "" {
+		pattern := "%" + strings.ToLower(value) + "%"
+		query = query.Where("lower(id) LIKE ? OR lower(object_key) LIKE ?", pattern, pattern)
+	}
+	if filter.From != nil {
+		query = query.Where("created_at >= ?", *filter.From)
+	}
+	if filter.To != nil {
+		query = query.Where("created_at <= ?", *filter.To)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if filter.Limit <= 0 || filter.Limit > 200 {
+		filter.Limit = 20
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	if err := query.Order("created_at desc").Limit(filter.Limit).Offset(filter.Offset).Find(&resources).Error; err != nil {
+		return nil, 0, err
+	}
+	return resources, total, nil
+}
+
+type ResourceKindStat struct {
+	Kind  string `json:"kind" gorm:"column:kind"`
+	Count int64  `json:"count" gorm:"column:count"`
+	Bytes int64  `json:"bytes" gorm:"column:bytes"`
+}
+
+type ResourceProviderStat struct {
+	Provider      string `json:"provider" gorm:"column:provider"`
+	Count         int64  `json:"count" gorm:"column:count"`
+	LogicalBytes  int64  `json:"logicalBytes" gorm:"column:logical_bytes"`
+	PhysicalBytes int64  `json:"physicalBytes" gorm:"column:physical_bytes"`
+}
+
+func (r *Repository) ResourceKindStats() ([]ResourceKindStat, error) {
+	var stats []ResourceKindStat
+	err := r.db.Model(&model.Resource{}).
+		Select("kind, COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes").
+		Group("kind").
+		Order("bytes desc").
+		Scan(&stats).Error
+	return stats, err
+}
+
+func (r *Repository) ResourceProviderStats() ([]ResourceProviderStat, error) {
+	var stats []ResourceProviderStat
+	provider := resourceProviderExpression()
+	err := r.db.Model(&model.Resource{}).
+		Select(provider+" AS provider, COUNT(*) AS count, COALESCE(SUM(size), 0) AS logical_bytes, COALESCE(SUM(CASE WHEN status = 'ready' THEN size ELSE 0 END), 0) AS physical_bytes").
+		Group(provider).
+		Order("logical_bytes desc").
+		Scan(&stats).Error
+	return stats, err
+}
+
+func (r *Repository) ResourceCount() (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Resource{}).Count(&count).Error
+	return count, err
+}
+
+func (r *Repository) ResourceAnnouncementCount(resourceID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Announcement{}).Where("image_resource_id = ?", resourceID).Count(&count).Error
+	return count, err
 }
 
 func (r *Repository) Assets(userID string) ([]model.Asset, error) {

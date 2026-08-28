@@ -45,3 +45,11 @@ description: 影策后端核心持久化表与状态边界
 | `resource_deletion_jobs` | 在业务记录删除后可靠清理物理对象 | 固化资源的存储位置与对象键；删除失败保留任务并重试，S3 404 按幂等成功处理 |
 
 `storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。
+
+## 管理后台资源与公告
+
+管理员可以通过 `/api/admin/system/instances` 查看当前实例的 CPU、内存、磁盘和构建信息；该接口仅允许管理员访问，指标在服务端按请求实时采样。
+
+后台存储管理通过 `/api/admin/resources` 分页查询资源，并通过 `/api/admin/storage/stats` 返回按类型和存储位置聚合的统计。删除资源前会复用资源引用检查；数据库记录与 `resource_deletion_jobs` 在同一事务中提交，物理对象由后台 worker 清理，失败时保留任务重试。
+
+系统公告通过 `/api/admin/announcements` 管理，用户通过 `/api/announcements` 获取当前公告和未读数量。公告可置顶并关联已上传的图片资源，图片读取使用公告鉴权接口，不把对象存储地址直接下发给浏览器。

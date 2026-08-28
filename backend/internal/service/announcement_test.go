@@ -113,6 +113,39 @@ func TestAnnouncementUpdateRepublishesAndResetsReads(t *testing.T) {
 	}
 }
 
+func TestPinnedAnnouncementsAreReturnedFirst(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&model.User{}, &model.Announcement{}, &model.UserAnnouncementRead{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir())
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := &model.User{ID: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
+
+	if _, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "普通", Content: "普通公告", Level: model.AnnouncementLevelInfo}); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "置顶", Content: "置顶公告", Level: model.AnnouncementLevelWarning, Pinned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed, err := svc.UserAnnouncements(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Announcements) != 2 || feed.Announcements[0].ID != pinned.ID || !feed.Announcements[0].Pinned {
+		t.Fatalf("feed = %+v, want pinned announcement first", feed)
+	}
+}
+
 func TestAnnouncementPublishRejectsInvalidInput(t *testing.T) {
 	svc := &Service{}
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}

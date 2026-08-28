@@ -85,6 +85,8 @@ func main() {
 	handler.RegisterAdminRoutes(api, svc)
 	handler.RegisterAdminAnalyticsRoutes(api, svc)
 	handler.RegisterAnnouncementRoutes(api, svc)
+	handler.RegisterSystemInfoRoutes(api, svc, env("CANVAS_GIT_COMMIT", "local"), env("CANVAS_BUILD_TIME", "dev"))
+	handler.RegisterStorageAdminRoutes(api, svc)
 	handler.RegisterFinanceRoutes(api, svc)
 	handler.RegisterLibTVRoutes(api, svc)
 	handler.RegisterTapNowRoutes(api, svc)
