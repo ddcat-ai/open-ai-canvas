@@ -32,7 +32,7 @@ Agnes AI 官方视频接口使用 Bearer API Key 和异步任务模型。影策�
 
 ## 响应、状态与错误
 
-创建成功响应中的 `video_id` 是推荐轮询标识。状态映射为：`queued` -> 等待，`in_progress` -> 处理中，`completed` -> 成功，`failed` -> 失败。成功结果只读取官方 `metadata.url`；如果响应宣称完成却没有该字段，影策会返回真实协议错误，不生成假 URL。失败信息优先读取 `error.message`，其次读取顶层 `message` 或 `detail`。
+创建成功响应中的 `video_id` 是推荐轮询标识。状态映射为：`queued` -> 等待，`in_progress` -> 处理中，`completed` -> 成功，`failed` -> 失败。成功结果优先读取 2.5 官方结构中的 `metadata.url`，并兼容 V2.0 返回的顶层 `url`；如果响应宣称完成却没有视频 URL，影策会返回真实协议错误，不生成假 URL。失败信息优先读取 `error.message`，其次读取顶层 `message` 或 `detail`。
 
 参考媒体必须是 Agnes 服务可公开访问且在任务完成前持续有效的 URL。适配器声明了公共媒体 URL 要求，影策运行时会按现有资源流程准备上游可访问地址；本机、私网、Cookie 保护或很快过期的链接不能作为 Agnes 输入。
 

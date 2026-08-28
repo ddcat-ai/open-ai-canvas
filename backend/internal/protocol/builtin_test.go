@@ -242,6 +242,10 @@ func TestAgnesMapsOfficialCreateAndPollContracts(t *testing.T) {
 	if err != nil || completed.Status != StatusSucceeded || completed.Result == nil || completed.Result.Videos[0].URL != "https://cdn.example/result.mp4" {
 		t.Fatalf("completed = %#v, err = %v", completed, err)
 	}
+	completedV20, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "video-2"}, []byte(`{"id":"video-2","status":"completed","url":"https://cdn.example/v20-result.mp4"}`))
+	if err != nil || completedV20.Status != StatusSucceeded || completedV20.Result == nil || completedV20.Result.Videos[0].URL != "https://cdn.example/v20-result.mp4" {
+		t.Fatalf("completed v2.0 = %#v, err = %v", completedV20, err)
+	}
 	failed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "video-1"}, []byte(`{"video_id":"video-1","status":"failed","error":{"message":"quota exceeded"}}`))
 	if err != nil || failed.Status != StatusFailed || failed.Message != "quota exceeded" {
 		t.Fatalf("failed = %#v, err = %v", failed, err)
