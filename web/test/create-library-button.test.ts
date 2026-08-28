@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { removeCreationAttachment } from "../src/pages/create/creation-assets";
+
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();
 }
@@ -61,19 +63,26 @@ describe("creation library button", () => {
         expect(source).toContain('import { Reorder } from "motion/react"');
         expect(source).toContain("<Reorder.Group");
         expect(source).toContain('axis="x"');
-        expect(source).toContain("values={props.attachments}");
-        expect(source).toContain("onReorder={props.onReorderAttachments}");
-        expect(source).toContain('className="creation-reference-card-remove" onPointerDown={(event) => event.stopPropagation()}');
+        expect(source).toContain("values={visibleAttachments}");
+        expect(source).toContain("onReorder={reorderVisibleAttachments}");
+        expect(source).toContain('className="creation-reference-card-remove" onPointerDownCapture={(event) => event.stopPropagation()}');
         expect(source).toContain("<Reorder.Item");
         expect(source).toContain('layout="position"');
         expect(source).toContain("isExpanded");
-        expect(source).toContain("handleTrackMouseEnter");
-        expect(source).toContain("handleTrackMouseLeave");
-        expect(source).toContain("handleTrackFocus");
-        expect(source).toContain("handleTrackBlur");
+        expect(source).toContain("setReferencePanelExpanded");
+        expect(source).toContain("aria-label={`查看全部 ${props.attachments.length} 个参考内容`}");
+        expect(source).toContain('aria-label="收起素材面板"');
+        expect(source).toContain("清空全部素材");
+        expect(source).toContain('role="group"');
+        expect(source).toContain("aria-pressed={referenceFilter === filter.id}");
+        expect(source).toContain('{ id: "file", label: "文件", count: referenceCounts.file }');
+        expect(source).toContain("canDragReferences");
         expect(source).toContain("creation-reference-track-wrapper");
         expect(source).toContain("creation-reference-stack-card");
         expect(source).toContain("creation-reference-add-button");
+        expect(source).toContain("addReferenceLabel");
+        expect(source).toContain("aria-busy={interactionBusy}");
+        expect(source).toContain("disabled={interactionBusy || !canAddMoreReferences}");
         expect(source).toContain("creation-reference-track-button");
         expect(source).toContain("imageReferenceAtPoint");
         expect(source).toContain("setDropTargetReferenceId");
@@ -86,6 +95,30 @@ describe("creation library button", () => {
         expect(styles).toContain(".creation-reference-stack-card");
         expect(styles).toContain("--stack-rotate: -7deg");
         expect(styles).toContain(".creation-reference-track.is-expanded");
+        expect(styles).toContain(".creation-reference-stack-card:is(:hover, :focus-within) .creation-reference-card-content");
         expect(styles).toContain("@media (hover: none)");
+        expect(styles).toContain(".creation-reference-card-remove { opacity: 1; }");
+        expect(styles).not.toContain(".creation-reference-track:not(.is-expanded) .creation-reference-stack-card:nth-child(n+5) { display: block; }");
+    });
+
+    test("首个、中间和末尾参考内容都按稳定 id 独立删除并保留顺序", () => {
+        const attachments = [
+            { id: "first", name: "首个" },
+            { id: "middle", name: "中间" },
+            { id: "last", name: "末尾" },
+        ];
+
+        expect(removeCreationAttachment(attachments, "first").map((item) => item.id)).toEqual(["middle", "last"]);
+        expect(removeCreationAttachment(attachments, "middle").map((item) => item.id)).toEqual(["first", "last"]);
+        expect(removeCreationAttachment(attachments, "last").map((item) => item.id)).toEqual(["first", "middle"]);
+    });
+
+    test("删除按钮在指针按下阶段隔离拖拽，附件与素材库入口职责独立", () => {
+        const source = compactSource(readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8"));
+
+        expect(source).toContain("onPointerDownCapture={(event) => event.stopPropagation()}");
+        expect(source).toContain("onRemove(item.id)");
+        expect(source).toContain("onClick={() => props.fileInputRef.current?.click()}");
+        expect(source).toContain("onClick={props.onOpenLibrary}");
     });
 });

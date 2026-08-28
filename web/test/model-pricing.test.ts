@@ -15,22 +15,24 @@ function systemConfig(input: { capability?: "image" | "video"; logicalModelId?: 
         apiKey: "system",
         apiFormat: "openai",
         models: [model],
-        modelCosts: [{
-            model,
-            capability,
-            pricePolicy: "channel",
-            billingMode: input.tiers[0]?.billingMode || "fixed_request",
-            unitPriceMicrocredits: input.tiers[0]?.unitPriceMicrocredits || 0,
-            logicalModelId: input.logicalModelId,
-            logicalPriceTiers: input.tiers.map((tier) => ({
-                ...tier,
-                resolution: tier.selector.vquality || "*",
-                videoSeconds: Number(tier.selector.videoSeconds || 0),
-                inputTokenPriceMicrocredits: 0,
-                outputTokenPriceMicrocredits: 0,
-                cachedTokenPriceMicrocredits: 0,
-            })),
-        }],
+        modelCosts: [
+            {
+                model,
+                capability,
+                pricePolicy: "channel",
+                billingMode: input.tiers[0]?.billingMode || "fixed_request",
+                unitPriceMicrocredits: input.tiers[0]?.unitPriceMicrocredits || 0,
+                logicalModelId: input.logicalModelId,
+                logicalPriceTiers: input.tiers.map((tier) => ({
+                    ...tier,
+                    resolution: tier.selector.vquality || "*",
+                    videoSeconds: Number(tier.selector.videoSeconds || 0),
+                    inputTokenPriceMicrocredits: 0,
+                    outputTokenPriceMicrocredits: 0,
+                    cachedTokenPriceMicrocredits: 0,
+                })),
+            },
+        ],
     });
     return normalizeConfigSnapshot({
         config: {
@@ -66,15 +68,17 @@ describe("model request pricing", () => {
         });
         const channel = resolveModelChannel(config, config.model);
 
-        expect(requestCreditCost({
-            channelMode: "remote",
-            modelCosts: channel.modelCosts,
-            model: "agnes-video-2.5",
-            capability: "video",
-            config,
-            requirements: textVideoRequirements,
-            seconds: "5",
-        })).toBe(0.125);
+        expect(
+            requestCreditCost({
+                channelMode: "remote",
+                modelCosts: channel.modelCosts,
+                model: "agnes-video-2.5",
+                capability: "video",
+                config,
+                requirements: textVideoRequirements,
+                seconds: "5",
+            }),
+        ).toBe(0.125);
     });
 
     test("uses reference count and operation to avoid a text-video price tier", () => {
@@ -101,15 +105,17 @@ describe("model request pricing", () => {
         });
         const channel = resolveModelChannel(config, config.model);
 
-        expect(requestCreditCost({
-            channelMode: "remote",
-            modelCosts: channel.modelCosts,
-            model: "image-model",
-            capability: "image",
-            config,
-            requirements: { capability: "image" },
-            count: 3,
-        })).toBe(0.03);
+        expect(
+            requestCreditCost({
+                channelMode: "remote",
+                modelCosts: channel.modelCosts,
+                model: "image-model",
+                capability: "image",
+                config,
+                requirements: { capability: "image" },
+                count: 3,
+            }),
+        ).toBe(0.03);
     });
 
     test("builds a logical-model quote using the normalized current request", () => {
