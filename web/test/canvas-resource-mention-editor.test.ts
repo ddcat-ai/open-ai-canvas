@@ -47,10 +47,11 @@ describe("canvas resource mention editor", () => {
         const project = source("../src/pages/canvas/project.tsx");
 
         expect(editor).toContain("useResolvedCanvasResourceReferences");
-        expect(panel).toContain("<LoaderCircle className=\"size-3 animate-spin");
+        expect(panel).toContain("<LoaderCircle className=");
+        expect(panel).toContain("animate-spin motion-reduce:animate-none");
         expect(panel).not.toContain("isRunning ? theme.accent.danger");
         expect(configComposer).toContain("wrapper.dataset.referenceToken");
-        expect(configComposer).not.toContain('result += `@[node:');
+        expect(configComposer).not.toContain("result += `@[node:");
         expect(project).not.toContain("removeCanvasResourceMention");
     });
 });
