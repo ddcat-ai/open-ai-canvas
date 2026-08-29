@@ -6,7 +6,7 @@ import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-ang
 import type { NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
-import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -275,7 +275,7 @@ export function expandStoryboardTextMentions(prompt: string, references: CanvasR
     let expanded = prompt;
     references.filter((reference) => reference.active && reference.kind === "text" && reference.text?.trim()).forEach((reference) => {
         const replacement = `【项目设定：${reference.title}】\n${reference.text!.trim()}`;
-        for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`, reference.nodeId ? `@[node:${reference.nodeId}]` : ""]) {
+        for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`, reference.nodeId ? canvasNodeMentionToken(reference.nodeId) : ""]) {
             if (!token) continue;
             if (expanded.includes(token)) expanded = expanded.split(token).join(replacement);
         }

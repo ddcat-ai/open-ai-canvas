@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
@@ -43,6 +46,21 @@ type SkillItem struct {
 	SkillName       string               `json:"skill_name"`
 	Description     string               `json:"description"`
 	Instruction     string               `json:"instruction,omitempty"`
+	VersionID       string               `json:"version_id"`
+	Version         string               `json:"version"`
+	ContentHash     string               `json:"content_hash"`
+	FileCount       int                  `json:"file_count"`
+	TotalBytes      int64                `json:"total_bytes"`
+	SourceType      string               `json:"source_type"`
+	SourceURL       string               `json:"source_url"`
+	SourceRef       string               `json:"source_ref"`
+	SourceSubdir    string               `json:"source_subdir"`
+	SourceCommit    string               `json:"source_commit"`
+	SyncStatus      string               `json:"sync_status"`
+	SyncError       string               `json:"sync_error,omitempty"`
+	AutoUpdate      bool                 `json:"auto_update"`
+	LastCheckedAt   int64                `json:"last_checked_at"`
+	LastSyncedAt    int64                `json:"last_synced_at"`
 	Status          int                  `json:"status"`
 	MarkdownURL     string               `json:"markdown_url"`
 	CreateTime      int64                `json:"create_time"`
@@ -137,7 +155,7 @@ func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.skillItems(userID, rows, true)
+	return s.skillItems(userID, rows, false)
 }
 
 func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
@@ -153,26 +171,21 @@ func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
 }
 
 func (s *Service) CreateSkill(userID string, req SkillMutationRequest) (*SkillItem, error) {
-	normalized, mediaJSON, err := normalizeSkillMutationRequest(req)
+	normalized, mediaJSON, err := normalizeSkillMutationRequest(req, true)
 	if err != nil {
 		return nil, err
 	}
-	skill := &model.Skill{
-		ID:                newID(),
-		OwnerID:           userID,
-		Name:              normalized.SkillName,
-		Description:       normalized.Description,
-		Instruction:       normalized.Instruction,
-		Status:            skillStatusEnabled,
-		Source:            skillSourceUser,
-		Tag:               normalized.Tag,
-		IsPrivate:         normalized.IsPrivate,
-		MarkdownURL:       normalized.MarkdownURL,
-		ShowcaseMediaJSON: mediaJSON,
-		ExtraInfo:         normalized.ExtraInfo,
+	created, err := s.createSingleMarkdownSkill(userID, normalized)
+	if err != nil {
+		return nil, err
 	}
-	state := &model.UserSkillState{ID: newID(), UserID: userID, SkillID: skill.ID, Added: true}
-	if err := s.repo.CreateSkill(skill, state); err != nil {
+	skill, err := s.ownedSkill(userID, created.SkillID)
+	if err != nil {
+		return nil, err
+	}
+	skill.ShowcaseMediaJSON = mediaJSON
+	skill.ExtraInfo = normalized.ExtraInfo
+	if err := s.repo.SaveSkill(skill); err != nil {
 		return nil, err
 	}
 	return s.SkillDetail(userID, skill.ID)
@@ -183,19 +196,23 @@ func (s *Service) UpdateSkill(userID string, id string, req SkillMutationRequest
 	if err != nil {
 		return nil, err
 	}
-	normalized, mediaJSON, err := normalizeSkillMutationRequest(req)
+	requireInstruction := skill.SourceType == "markdown" || skill.SourceType == "builtin" || skill.SourceType == ""
+	normalized, mediaJSON, err := normalizeSkillMutationRequest(req, requireInstruction)
 	if err != nil {
 		return nil, err
 	}
 	skill.Name = normalized.SkillName
 	skill.Description = normalized.Description
-	skill.Instruction = normalized.Instruction
 	skill.Tag = normalized.Tag
 	skill.IsPrivate = normalized.IsPrivate
 	skill.MarkdownURL = normalized.MarkdownURL
 	skill.ShowcaseMediaJSON = mediaJSON
 	skill.ExtraInfo = normalized.ExtraInfo
-	if err := s.repo.Save(skill); err != nil {
+	if skill.SourceType == "markdown" || skill.SourceType == "builtin" || skill.SourceType == "" {
+		if err := s.updateSingleMarkdownSkill(skill, normalized); err != nil {
+			return nil, err
+		}
+	} else if err := s.repo.SaveSkill(skill); err != nil {
 		return nil, err
 	}
 	return s.SkillDetail(userID, skill.ID)
@@ -206,7 +223,10 @@ func (s *Service) DeleteSkill(userID string, id string) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.DeleteSkill(skill.ID)
+	if err := s.repo.DeleteSkill(skill.ID); err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(s.dataDir, "skill-packages", skill.ID))
 }
 
 func (s *Service) SetSkillAdded(userID string, id string, added bool) (*SkillItem, error) {
@@ -225,6 +245,8 @@ func (s *Service) SetSkillAdded(userID string, id string, added bool) (*SkillIte
 		return nil, err
 	}
 	state.Added = added
+	state.InstalledVersionID = skill.CurrentVersionID
+	state.AutoUpdate = skill.AutoUpdate
 	if err := s.repo.SetUserSkillAdded(state); err != nil {
 		return nil, err
 	}
@@ -300,6 +322,9 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 		}
 		items = append(items, SkillItem{
 			SkillID: skill.ID, SkillName: skill.Name, Description: skill.Description, Instruction: instruction,
+			VersionID: skill.CurrentVersionID, Version: skill.VersionLabel, ContentHash: skill.ContentHash, FileCount: skill.FileCount, TotalBytes: skill.TotalBytes,
+			SourceType: skill.SourceType, SourceURL: skill.SourceURL, SourceRef: skill.SourceRef, SourceSubdir: skill.SourceSubdir, SourceCommit: skill.SourceCommit,
+			SyncStatus: skill.SyncStatus, SyncError: skill.SyncError, AutoUpdate: skill.AutoUpdate, LastCheckedAt: unixMillis(skill.LastCheckedAt), LastSyncedAt: unixMillis(skill.LastSyncedAt),
 			Status: skill.Status, MarkdownURL: skill.MarkdownURL, CreateTime: skill.CreatedAt.UnixMilli(), UpdateTime: skill.UpdatedAt.UnixMilli(),
 			Source: skill.Source, Tag: skill.Tag, SortWeight: skill.SortWeight, IsPrivate: skill.IsPrivate,
 			LikeCount: metric.LikeCount, IsLike: state.Liked, OwnerUID: skill.OwnerID,
@@ -381,7 +406,7 @@ func normalizeSkillListRequest(req SkillListRequest) SkillListRequest {
 	return req
 }
 
-func normalizeSkillMutationRequest(req SkillMutationRequest) (SkillMutationRequest, string, error) {
+func normalizeSkillMutationRequest(req SkillMutationRequest, requireInstruction bool) (SkillMutationRequest, string, error) {
 	req.SkillName = strings.TrimSpace(req.SkillName)
 	req.Description = strings.TrimSpace(req.Description)
 	req.Instruction = strings.TrimSpace(req.Instruction)
@@ -394,7 +419,7 @@ func normalizeSkillMutationRequest(req SkillMutationRequest) (SkillMutationReque
 	if req.Description == "" || utf8.RuneCountInString(req.Description) > 500 {
 		return req, "", BadAuthRequest("技能简介必须为 1-500 个字符")
 	}
-	if req.Instruction == "" || utf8.RuneCountInString(req.Instruction) > 100000 {
+	if (requireInstruction && req.Instruction == "") || utf8.RuneCountInString(req.Instruction) > 100000 {
 		return req, "", BadAuthRequest("技能指令必须为 1-100000 个字符")
 	}
 	if _, ok := skillCategoryLabels[req.Tag]; !ok {
@@ -444,4 +469,11 @@ func skillCategories() []SkillCategory {
 		{Value: "social", Label: skillCategoryLabels["social"]},
 		{Value: "others", Label: skillCategoryLabels["others"]},
 	}
+}
+
+func unixMillis(value *time.Time) int64 {
+	if value == nil {
+		return 0
+	}
+	return value.UnixMilli()
 }

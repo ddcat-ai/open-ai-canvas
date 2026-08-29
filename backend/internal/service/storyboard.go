@@ -65,28 +65,30 @@ type agentStoryboardPlan struct {
 }
 
 type agentStoryboardShot struct {
-	Title         string               `json:"title"`
-	Description   string               `json:"description"`
-	Duration      int                  `json:"durationSeconds"`
-	Dialogue      string               `json:"dialogue"`
-	ShotSize      string               `json:"shotSize"`
-	Emotion       string               `json:"emotion"`
-	Lighting      string               `json:"lightingAndAtmosphere"`
-	AudioEffects  string               `json:"audioEffects"`
-	VisualPrompt  string               `json:"visualPrompt"`
-	VideoPrompt   string               `json:"videoPrompt"`
-	Camera        string               `json:"camera"`
-	Motion        string               `json:"motion"`
-	TimeBeats     string               `json:"timeBeats"`
-	Negative      string               `json:"negativePrompt"`
-	AssetRefs     []storyboardAssetRef `json:"assetRefs"`
-	CharacterIDs  []string             `json:"characterIds"`
-	Intent        string               `json:"narrativeIntent"`
-	ViewerPOV     string               `json:"viewerPOV"`
-	Performance   string               `json:"performanceBlocking"`
-	MustHave      []string             `json:"mustHave"`
-	Optional      []string             `json:"optionalDetails"`
-	ContinuityOut string               `json:"continuityOut"`
+	Title           string               `json:"title"`
+	Description     string               `json:"description"`
+	Duration        int                  `json:"durationSeconds"`
+	Dialogue        string               `json:"dialogue"`
+	ShotSize        string               `json:"shotSize"`
+	Emotion         string               `json:"emotion"`
+	Lighting        string               `json:"lightingAndAtmosphere"`
+	AudioEffects    string               `json:"audioEffects"`
+	VisualPrompt    string               `json:"visualPrompt"`
+	VideoPrompt     string               `json:"videoPrompt"`
+	Camera          string               `json:"camera"`
+	Motion          string               `json:"motion"`
+	TimeBeats       string               `json:"timeBeats"`
+	Negative        string               `json:"negativePrompt"`
+	AssetRefs       []storyboardAssetRef `json:"assetRefs"`
+	CharacterIDs    []string             `json:"characterIds"`
+	CharacterNames  []string             `json:"-"`
+	CharacterLabels []string             `json:"-"`
+	Intent          string               `json:"narrativeIntent"`
+	ViewerPOV       string               `json:"viewerPOV"`
+	Performance     string               `json:"performanceBlocking"`
+	MustHave        []string             `json:"mustHave"`
+	Optional        []string             `json:"optionalDetails"`
+	ContinuityOut   string               `json:"continuityOut"`
 }
 
 func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
@@ -184,8 +186,13 @@ func validateStoryboardContext(projectStyle storyboardProjectStyle, characters [
 		}
 	}
 	for _, character := range characters {
-		if strings.TrimSpace(character.AssetID) == "" || strings.TrimSpace(character.VersionID) == "" || strings.TrimSpace(character.Name) == "" {
-			return errors.New("角色卡缺少当前资产版本，请刷新角色资产后再生成分镜")
+		if strings.TrimSpace(character.Name) == "" {
+			return errors.New("角色卡缺少角色名称，请刷新角色信息后再生成分镜")
+		}
+		hasAssetID := strings.TrimSpace(character.AssetID) != ""
+		hasVersionID := strings.TrimSpace(character.VersionID) != ""
+		if hasAssetID != hasVersionID {
+			return fmt.Errorf("角色 %s 的资产 ID 与版本 ID 必须同时提供", strings.TrimSpace(character.Name))
 		}
 	}
 	return nil
@@ -206,20 +213,21 @@ func validateStoryboardShotDuration(plan agentStoryboardPlan, target int) error 
 	return nil
 }
 
-func validateStoryboardPlan(plan agentStoryboardPlan, shotDuration int, shotCount int, characters []storyboardCharacterCard, assets []storyboardAsset) error {
+func validateStoryboardPlan(plan *agentStoryboardPlan, shotDuration int, shotCount int, characters []storyboardCharacterCard, assets []storyboardAsset) error {
+	if plan == nil {
+		return errors.New("分镜方案不能为空")
+	}
 	if utf8.RuneCountInString(strings.TrimSpace(plan.StyleGuide)) > 120 {
 		return errors.New("styleGuide 最多 120 个中文字符")
 	}
-	if err := validateStoryboardShotDuration(plan, shotDuration); err != nil {
+	if err := validateStoryboardShotDuration(*plan, shotDuration); err != nil {
 		return err
 	}
-	if err := validateStoryboardShotCount(plan, shotCount); err != nil {
+	if err := validateStoryboardShotCount(*plan, shotCount); err != nil {
 		return err
 	}
-	if err := validateStoryboardCharacterIDs(plan, characters); err != nil {
-		return err
-	}
-	if err := validateStoryboardAssetRefs(plan, assets); err != nil {
+	normalizeStoryboardCharacterReferences(plan, characters)
+	if err := validateStoryboardAssetRefs(*plan, assets); err != nil {
 		return err
 	}
 	return nil
@@ -276,8 +284,9 @@ func validateStoryboardComplexity(plan agentStoryboardPlan) error {
 	issues := make([]string, 0)
 	for index, shot := range plan.Shots {
 		shotNumber := index + 1
-		if len(shot.CharacterIDs) > 2 {
-			issues = append(issues, fmt.Sprintf("镜头 %d 有 %d 名主要角色，最多 2 名", shotNumber, len(shot.CharacterIDs)))
+		characterCount := len(shot.CharacterIDs) + len(shot.CharacterNames)
+		if characterCount > 2 {
+			issues = append(issues, fmt.Sprintf("镜头 %d 有 %d 名主要角色，最多 2 名", shotNumber, characterCount))
 		}
 		if len(shot.MustHave) > 3 {
 			issues = append(issues, fmt.Sprintf("镜头 %d 有 %d 个必须完成项，最多 3 个", shotNumber, len(shot.MustHave)))
@@ -311,39 +320,128 @@ func normalizeAutomaticStoryboardDurations(plan *agentStoryboardPlan, target int
 	}
 }
 
-func validateStoryboardCharacterIDs(plan agentStoryboardPlan, characters []storyboardCharacterCard) error {
-	allowed := make(map[string]bool, len(characters))
-	for _, character := range characters {
-		allowed[character.AssetID] = true
+func normalizeStoryboardCharacterReferences(plan *agentStoryboardPlan, characters []storyboardCharacterCard) {
+	if plan == nil {
+		return
 	}
-	for index, shot := range plan.Shots {
-		for _, assetID := range shot.CharacterIDs {
-			if !allowed[assetID] {
-				return fmt.Errorf("镜头 %d 引用了不存在或非当前版本的角色 assetId：%s", index+1, assetID)
-			}
+	byID := make(map[string]storyboardCharacterCard, len(characters))
+	byName := make(map[string]storyboardCharacterCard, len(characters))
+	for _, character := range characters {
+		character.AssetID = strings.TrimSpace(character.AssetID)
+		character.VersionID = strings.TrimSpace(character.VersionID)
+		character.Name = strings.TrimSpace(character.Name)
+		if character.AssetID != "" && character.VersionID != "" {
+			byID[character.AssetID] = character
+		}
+		nameKey := normalizeStoryboardCharacterName(character.Name)
+		if nameKey == "" {
+			continue
+		}
+		current, exists := byName[nameKey]
+		if !exists || (current.AssetID == "" && character.AssetID != "") {
+			byName[nameKey] = character
 		}
 	}
-	return nil
+	for shotIndex := range plan.Shots {
+		shot := &plan.Shots[shotIndex]
+		references := append(append([]string{}, shot.CharacterIDs...), shot.CharacterNames...)
+		resolvedIDs := make([]string, 0, len(references))
+		resolvedNames := make([]string, 0, len(references))
+		seen := make(map[string]bool, len(references))
+		seenLabels := make(map[string]bool, len(references))
+		labels := make([]string, 0, len(references))
+		for _, rawReference := range references {
+			reference := strings.TrimSpace(rawReference)
+			if reference == "" {
+				continue
+			}
+			if character, ok := byID[reference]; ok {
+				appendStoryboardCharacterID(&resolvedIDs, seen, character.AssetID)
+				appendStoryboardCharacterLabel(&labels, seenLabels, character.Name)
+				continue
+			}
+			if character, ok := byName[normalizeStoryboardCharacterName(reference)]; ok {
+				if character.AssetID != "" && character.VersionID != "" {
+					appendStoryboardCharacterID(&resolvedIDs, seen, character.AssetID)
+				} else {
+					appendStoryboardCharacterName(&resolvedNames, seen, character.Name)
+				}
+				appendStoryboardCharacterLabel(&labels, seenLabels, character.Name)
+				continue
+			}
+			appendStoryboardCharacterName(&resolvedNames, seen, reference)
+			appendStoryboardCharacterLabel(&labels, seenLabels, reference)
+		}
+		shot.CharacterIDs = resolvedIDs
+		shot.CharacterNames = resolvedNames
+		shot.CharacterLabels = labels
+	}
 }
 
 func storyboardRowCharacters(shot agentStoryboardShot, characters []storyboardCharacterCard) []map[string]any {
 	byID := make(map[string]storyboardCharacterCard, len(characters))
 	for _, character := range characters {
-		byID[character.AssetID] = character
+		if strings.TrimSpace(character.AssetID) != "" && strings.TrimSpace(character.VersionID) != "" {
+			byID[strings.TrimSpace(character.AssetID)] = character
+		}
 	}
-	result := make([]map[string]any, 0, len(shot.CharacterIDs))
+	result := make([]map[string]any, 0, len(shot.CharacterIDs)+len(shot.CharacterNames))
+	seenNames := make(map[string]bool, len(shot.CharacterIDs)+len(shot.CharacterNames))
 	for _, assetID := range shot.CharacterIDs {
 		character, ok := byID[assetID]
 		if !ok {
 			continue
 		}
+		seenNames[normalizeStoryboardCharacterName(character.Name)] = true
 		result = append(result, map[string]any{
 			"characterName":      character.Name,
 			"characterAssetId":   character.AssetID,
 			"characterVersionId": character.VersionID,
 		})
 	}
+	for _, name := range shot.CharacterNames {
+		name = strings.TrimSpace(name)
+		nameKey := normalizeStoryboardCharacterName(name)
+		if nameKey == "" || seenNames[nameKey] {
+			continue
+		}
+		seenNames[nameKey] = true
+		result = append(result, map[string]any{"characterName": name})
+	}
 	return result
+}
+
+func appendStoryboardCharacterID(values *[]string, seen map[string]bool, assetID string) {
+	key := "id:" + assetID
+	if seen[key] {
+		return
+	}
+	seen[key] = true
+	*values = append(*values, assetID)
+}
+
+func appendStoryboardCharacterName(values *[]string, seen map[string]bool, name string) {
+	name = strings.TrimSpace(name)
+	key := normalizeStoryboardCharacterName(name)
+	if key == "" || seen["name:"+key] {
+		return
+	}
+	seen["name:"+key] = true
+	*values = append(*values, name)
+}
+
+func appendStoryboardCharacterLabel(values *[]string, seen map[string]bool, name string) {
+	name = strings.TrimSpace(name)
+	key := normalizeStoryboardCharacterName(name)
+	if key == "" || seen[key] {
+		return
+	}
+	seen[key] = true
+	*values = append(*values, name)
+}
+
+func normalizeStoryboardCharacterName(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func storyboardBeatCount(value string) int {
@@ -597,7 +695,7 @@ func storyboardImagePromptValues(projectStyle string, styleGuide string, shot ag
 	negative := defaultString(strings.TrimSpace(shot.Negative), "禁止换脸、服装变化、手部畸形、乱码、风格突变和塑料材质")
 	return map[string]string{
 		"项目视觉":   storyboardProjectVisualSummary(projectStyle, styleGuide),
-		"首帧构图":   compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 360),
+		"首帧构图":   compactPromptText(storyboardCharacterPromptPrefix(shot)+shot.VisualPrompt+"；光影："+shot.Lighting, 360),
 		"表演起始状态": compactPromptText(shot.Performance, 180),
 		"负面要求":   compactPromptText(negative, 140),
 	}
@@ -617,7 +715,7 @@ func storyboardVideoPromptValues(projectStyle string, styleGuide string, shot ag
 	values := map[string]string{
 		"项目视觉":  storyboardProjectVisualSummary(projectStyle, styleGuide),
 		"镜头意图":  compactPromptText(shot.Intent+"；观众视点："+shot.ViewerPOV+"；情绪："+shot.Emotion, 150),
-		"首帧构图":  compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 280),
+		"首帧构图":  compactPromptText(storyboardCharacterPromptPrefix(shot)+shot.VisualPrompt+"；光影："+shot.Lighting, 280),
 		"表演与调度": compactPromptText(shot.Performance, 180),
 		"摄影机":   compactPromptText(strings.TrimSpace(shot.ShotSize)+"；"+camera+"；主运镜："+motion, 220),
 		"时间节拍":  compactPromptText(timeBeats, 240),
@@ -633,6 +731,13 @@ func storyboardVideoPromptValues(projectStyle string, styleGuide string, shot ag
 		values["执行优先级"] = compactPromptText(priority, 140)
 	}
 	return values
+}
+
+func storyboardCharacterPromptPrefix(shot agentStoryboardShot) string {
+	if len(shot.CharacterLabels) == 0 {
+		return ""
+	}
+	return "镜头角色：" + strings.Join(shot.CharacterLabels, "、") + "；"
 }
 
 func buildStoryboardVideoPrompt(projectStyle string, styleGuide string, shot agentStoryboardShot) string {

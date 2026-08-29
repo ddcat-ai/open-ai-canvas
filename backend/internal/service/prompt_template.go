@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 
@@ -89,6 +90,16 @@ func (s *Service) EnsureDefaultPromptTemplates() error {
 			return err
 		}
 		if count > 0 {
+			if definition.Operation == promptOperationStoryboardVideo {
+				active, activeErr := s.repo.ActivePromptTemplate(definition.Operation)
+				if activeErr == nil && active.CreatedBy == "" && strings.HasPrefix(active.Content, legacyStoryboardVideoPromptPreamble) {
+					active.Content = strings.TrimPrefix(active.Content, legacyStoryboardVideoPromptPreamble)
+					active.UpdatedAt = time.Now()
+					if err := s.repo.SavePromptTemplate(active); err != nil {
+						return err
+					}
+				}
+			}
 			continue
 		}
 		if err := s.repo.SavePromptTemplate(&model.PromptTemplate{

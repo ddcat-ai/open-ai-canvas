@@ -82,6 +82,18 @@ func (r *Repository) EnsureVoiceProfiles(profiles []model.VoiceProfile) error {
 	}).Create(&profiles).Error
 }
 
+func (r *Repository) CreateVoiceProfile(profile *model.VoiceProfile) error {
+	return r.db.Create(profile).Error
+}
+
+func (r *Repository) VoiceProfileBySampleResource(userID string, resourceID string) (*model.VoiceProfile, error) {
+	var profile model.VoiceProfile
+	if err := r.db.First(&profile, "user_id = ? AND sample_resource_id = ? AND status = ?", userID, resourceID, "active").Error; err != nil {
+		return nil, err
+	}
+	return &profile, nil
+}
+
 // CreateProjectCharacter 将角色身份、首版本和项目关联放入同一事务。
 func (r *Repository) CreateProjectCharacter(projectID string, asset *model.Asset, version *model.AssetVersion, link *model.ProjectAssetLink) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {

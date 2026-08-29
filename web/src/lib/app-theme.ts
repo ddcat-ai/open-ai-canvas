@@ -197,6 +197,8 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 controlOutline: color.controlFocus,
             },
             Menu: {
+                itemHeight: 40,
+                itemMarginBlock: 2,
                 itemActiveBg: color.menuBg,
                 itemHoverBg: color.menuBg,
                 itemSelectedBg: color.menuBg,
@@ -207,9 +209,9 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             },
             Select: {
                 selectorBg: elevatedBackground,
-                optionHeight: 36,
-                optionPadding: "8px 10px",
-                multipleItemHeight: 24,
+                optionHeight: 40,
+                optionPadding: "8px 12px",
+                multipleItemHeight: 26,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
                 activeOutlineColor: "transparent",

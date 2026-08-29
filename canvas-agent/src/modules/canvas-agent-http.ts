@@ -221,14 +221,52 @@ export function parseAgentSkills(value: unknown) {
         const input = item as Record<string, unknown>;
         const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
         const instruction = typeof input.instruction === "string" ? input.instruction.trim().slice(0, 24_000) : "";
-        if (!name || !instruction) return [];
+        const files = parseAgentSkillFiles(input.files);
+        if (!name || (!instruction && !files.length)) return [];
         return [{
             ...(typeof input.skillId === "string" ? { skillId: input.skillId.trim().slice(0, 120) } : {}),
             name,
             ...(typeof input.description === "string" ? { description: input.description.trim().slice(0, 500) } : {}),
-            instruction,
+            ...(typeof input.version === "string" ? { version: input.version.trim().slice(0, 120) } : {}),
+            ...(files.length ? { files } : { instruction }),
         }];
     });
+}
+
+function parseAgentSkillFiles(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    const files: Array<{ path: string; mimeType?: string; contentBase64: string }> = [];
+    const paths = new Set<string>();
+    let totalBytes = 0;
+    for (const item of value.slice(0, 512)) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+        const input = item as Record<string, unknown>;
+        const filePath = typeof input.path === "string" ? normalizeAgentSkillPath(input.path) : "";
+        const contentBase64 = typeof input.contentBase64 === "string" ? input.contentBase64.trim() : "";
+        if (!filePath || paths.has(filePath) || !validBase64(contentBase64)) return [];
+        const size = Buffer.from(contentBase64, "base64").byteLength;
+        if (size > 8 * 1024 * 1024) return [];
+        totalBytes += size;
+        if (totalBytes > 20 * 1024 * 1024) return [];
+        paths.add(filePath);
+        files.push({
+            path: filePath,
+            ...(typeof input.mimeType === "string" ? { mimeType: input.mimeType.trim().slice(0, 255) } : {}),
+            contentBase64,
+        });
+    }
+    return files.some((file) => file.path === "SKILL.md") ? files : [];
+}
+
+function normalizeAgentSkillPath(value: string) {
+    const normalized = value.trim().replace(/\\/g, "/");
+    const segments = normalized.split("/");
+    if (!normalized || normalized.startsWith("/") || normalized.length > 1000 || segments.some((segment) => !segment || segment === "." || segment === "..") || normalized.includes("\0")) return "";
+    return normalized;
+}
+
+function validBase64(value: string) {
+    return value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(value);
 }
 
 function queryValue(req: Request, key: string) {

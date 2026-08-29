@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, Sparkles, UserRound, Video } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, UserRound, Video, Workflow } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -234,8 +234,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             assetReferences={assetReferences}
             filteredReferences={candidates}
             query={mention.query}
+            cursorOffset={mention.end}
             activeReferenceId={activeIndex >= 0 ? candidates[Math.min(activeIndex, candidates.length - 1)]?.id : undefined}
-            theme={theme}
             preferredWidth={mentionMenuWidth}
             onQueryChange={(query) => setMention((current) => current ? { ...current, query } : current)}
             onClose={closeMention}
@@ -507,14 +507,14 @@ const ASSET_CATEGORY_LABELS: Record<AssetCategory, string> = {
     other: "其他",
 };
 
-function MentionMenu({ anchor, connectedReferences, assetReferences, filteredReferences, query, activeReferenceId, theme, preferredWidth, onQueryChange, onClose, onSelect }: {
+function MentionMenu({ anchor, connectedReferences, assetReferences, filteredReferences, query, cursorOffset, activeReferenceId, preferredWidth, onQueryChange, onClose, onSelect }: {
     anchor: HTMLElement;
     connectedReferences: CanvasResourceReference[];
     assetReferences: CanvasResourceReference[];
     filteredReferences: CanvasResourceReference[];
     query: string;
+    cursorOffset: number;
     activeReferenceId?: string;
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     preferredWidth: number;
     onQueryChange: (query: string) => void;
     onClose: () => void;
@@ -523,14 +523,26 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
     const menuRef = useRef<HTMLDivElement | null>(null);
     const selectedRef = useRef(false);
     const [category, setCategory] = useState<AssetCategory | null>(null);
-    const rect = anchor.getBoundingClientRect();
-    const boundary = anchor.closest(".ant-modal-container")?.getBoundingClientRect() || { left: 8, top: 8, right: window.innerWidth - 8, bottom: window.innerHeight - 8 };
-    const menuWidth = Math.min(preferredWidth, Math.max(0, boundary.right - boundary.left - 16));
-    const maxMenuHeight = Math.min(320, Math.max(0, boundary.bottom - boundary.top - 16));
-    const gap = 6;
-    const left = clamp(rect.left, boundary.left + 8, boundary.right - menuWidth - 8);
-    const showAbove = rect.bottom + gap + maxMenuHeight > boundary.bottom && rect.top - gap - maxMenuHeight >= boundary.top;
-    const top = clamp(showAbove ? rect.top - gap - maxMenuHeight : rect.bottom + gap, boundary.top + 8, boundary.bottom - maxMenuHeight - 8);
+    const [position, setPosition] = useState(() => mentionMenuPosition(anchor, cursorOffset, preferredWidth));
+
+    useLayoutEffect(() => {
+        let frame = 0;
+        const updatePosition = () => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => setPosition(mentionMenuPosition(anchor, cursorOffset, preferredWidth)));
+        };
+        updatePosition();
+        const observer = new ResizeObserver(updatePosition);
+        observer.observe(anchor);
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
+    }, [anchor, cursorOffset, preferredWidth]);
 
     const stopCanvasInteraction = (event: PointerEvent | MouseEvent) => {
         event.stopPropagation();
@@ -566,7 +578,8 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
             ref={menuRef}
             data-canvas-resource-mention-menu="true"
             className="canvas-resource-mention-menu fixed z-[var(--z-tooltip)]"
-            style={{ left, top, width: menuWidth, maxHeight: maxMenuHeight, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+            data-placement={position.showAbove ? "top" : "bottom"}
+            style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.showAbove ? "translateY(-100%)" : undefined }}
             onPointerDown={stopCanvasInteraction}
             onMouseDown={stopCanvasInteraction}
             onClick={(event) => event.stopPropagation()}
@@ -575,7 +588,7 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                 <Search aria-hidden />
                 <input
                     value={query}
-                    placeholder="搜索素材..."
+                    placeholder="搜索节点、素材或技能"
                     aria-label="搜索引用素材"
                     onChange={(event) => onQueryChange(event.target.value)}
                     onPointerDown={(event) => event.stopPropagation()}
@@ -595,7 +608,7 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
             </div>
             <div className="canvas-resource-mention-scroll thin-scrollbar">
                 {query ? (
-                    <MentionReferenceList references={visibleReferences} activeReferenceId={activeReferenceId} theme={theme} onSelect={selectReference} />
+                    <MentionReferenceList references={visibleReferences} activeReferenceId={activeReferenceId} onSelect={selectReference} />
                 ) : category ? (
                     <>
                         <button type="button" className="canvas-resource-mention-back" onClick={() => setCategory(null)}>
@@ -603,25 +616,25 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                             <span>{ASSET_CATEGORY_LABELS[category]}</span>
                             <small>{visibleReferences.length}</small>
                         </button>
-                        <MentionReferenceList references={visibleReferences} activeReferenceId={activeReferenceId} theme={theme} onSelect={selectReference} />
+                        <MentionReferenceList references={visibleReferences} activeReferenceId={activeReferenceId} onSelect={selectReference} />
                     </>
                 ) : (
                     <>
                         {connectedNodes.length ? (
                             <section className="canvas-resource-mention-section">
-                                <h4>已连接节点</h4>
-                                <MentionReferenceList references={connectedNodes} activeReferenceId={activeReferenceId} theme={theme} onSelect={selectReference} />
+                                <h4><span>已连接节点</span><small>{connectedNodes.length}</small></h4>
+                                <MentionReferenceList references={connectedNodes} activeReferenceId={activeReferenceId} onSelect={selectReference} />
                             </section>
                         ) : null}
                         {skillReferences.length ? (
                             <section className="canvas-resource-mention-section">
-                                <h4>技能库</h4>
-                                <MentionReferenceList references={skillReferences} activeReferenceId={activeReferenceId} theme={theme} onSelect={selectReference} />
+                                <h4><span>技能库</span><small>{skillReferences.length}</small></h4>
+                                <MentionReferenceList references={skillReferences} activeReferenceId={activeReferenceId} onSelect={selectReference} />
                             </section>
                         ) : null}
                         {categoryItems.length ? (
                             <section className="canvas-resource-mention-section">
-                                <h4>素材库</h4>
+                                <h4><span>素材库</span><small>{assetReferences.length}</small></h4>
                                 {categoryItems.map((item) => (
                                     <button key={item.value} type="button" className="canvas-resource-mention-folder" onClick={() => setCategory(item.value)}>
                                         <Folder aria-hidden />
@@ -640,14 +653,14 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
     );
 }
 
-function MentionReferenceList({ references, activeReferenceId, theme, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onSelect: (reference: CanvasResourceReference) => void }) {
-    if (!references.length) return <div className="canvas-resource-mention-empty">没有匹配的素材</div>;
+function MentionReferenceList({ references, activeReferenceId, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void }) {
+    if (!references.length) return <div className="canvas-resource-mention-empty">没有匹配的引用</div>;
     return references.map((reference) => (
         <button
             key={reference.id}
             type="button"
-            className="canvas-resource-mention-item"
-            style={{ background: reference.id === activeReferenceId ? theme.toolbar.activeBg : "transparent", color: reference.id === activeReferenceId ? theme.toolbar.activeText : theme.node.text }}
+            className={`canvas-resource-mention-item ${reference.kind === "skill" ? "is-skill" : ""} ${reference.id === activeReferenceId ? "is-active" : ""}`}
+            aria-selected={reference.id === activeReferenceId}
             onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -660,29 +673,31 @@ function MentionReferenceList({ references, activeReferenceId, theme, onSelect }
             }}
         >
             <ReferencePreview reference={reference} />
-            <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium" title={reference.label}>{reference.label}</span>
-                {reference.kind !== "skill" && reference.text && reference.text !== reference.title ? <span className="block truncate opacity-55">{reference.text}</span> : null}
+            <span className="canvas-resource-mention-copy">
+                <span className="canvas-resource-mention-title-row"><strong title={reference.label}>{reference.label}</strong>{reference.kind === "skill" ? <em>技能</em> : null}</span>
+                {reference.kind === "skill" ? (
+                    <span className="canvas-resource-mention-meta"><span>{reference.skill?.description || reference.text || "工作流技能"}</span><small>{reference.skill?.version ? `v${reference.skill.version}` : ""}{reference.skill?.file_count ? ` · ${reference.skill.file_count} 文件` : ""}</small></span>
+                ) : reference.text && reference.text !== reference.title ? <span className="canvas-resource-mention-meta"><span>{reference.text}</span></span> : null}
             </span>
         </button>
     ));
 }
 
 function ReferencePreview({ reference }: { reference: CanvasResourceReference }) {
-    if (reference.kind === "image" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="size-7 rounded-sm object-cover" />;
-    if (reference.kind === "video" && reference.previewUrl) return <video src={reference.previewUrl} className="size-7 rounded-sm bg-black object-cover" muted preload="metadata" />;
-    if (reference.kind === "character" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="size-7 rounded-sm bg-black/5 object-contain" />;
+    if (reference.kind === "image" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="canvas-resource-mention-preview is-image" />;
+    if (reference.kind === "video" && reference.previewUrl) return <video src={reference.previewUrl} className="canvas-resource-mention-preview is-video" muted preload="metadata" />;
+    if (reference.kind === "character" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="canvas-resource-mention-preview is-character" />;
     if (reference.kind === "skill") {
         return (
-            <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-cyan-500/10 text-cyan-600 dark:text-cyan-200">
-                <Sparkles className="size-3.5" />
+            <span className="canvas-resource-mention-preview is-skill">
+                <Workflow aria-hidden />
             </span>
         );
     }
     const Icon = reference.sourceType === CanvasNodeType.Drawing ? Pencil : reference.kind === "character" ? UserRound : reference.kind === "audio" ? Music2 : reference.kind === "video" ? Video : reference.kind === "image" ? ImageIcon : FileText;
     return (
-        <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-black/10">
-            <Icon className="size-3.5" />
+        <span className="canvas-resource-mention-preview is-fallback">
+            <Icon aria-hidden />
         </span>
     );
 }
@@ -821,6 +836,105 @@ function plainTextLength(node: Node): number {
 
 function isMentionElement(node: Node): node is HTMLElement {
     return node instanceof HTMLElement && Boolean(node.dataset.mentionToken);
+}
+
+type MentionAnchorRect = Pick<DOMRect, "left" | "right" | "top" | "bottom" | "width" | "height">;
+
+function mentionMenuPosition(anchor: HTMLElement, cursorOffset: number, preferredWidth: number) {
+    const caret = mentionCaretRect(anchor, cursorOffset);
+    const boundary = anchor.closest(".ant-modal-container")?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const inset = 8;
+    const gap = 8;
+    const availableWidth = Math.max(0, boundary.right - boundary.left - inset * 2);
+    const width = Math.min(preferredWidth, availableWidth);
+    const left = clamp(caret.left, boundary.left + inset, boundary.right - width - inset);
+    const spaceAbove = Math.max(0, caret.top - boundary.top - gap - inset);
+    const spaceBelow = Math.max(0, boundary.bottom - caret.bottom - gap - inset);
+    const showAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(320, showAbove ? spaceAbove : spaceBelow);
+    const top = showAbove ? caret.top - gap : caret.bottom + gap;
+    return { left, top, width, maxHeight, showAbove };
+}
+
+function mentionCaretRect(anchor: HTMLElement, cursorOffset: number): MentionAnchorRect {
+    if (anchor instanceof HTMLTextAreaElement) return textareaCaretRect(anchor, cursorOffset);
+    const point = pointForOffset(anchor, cursorOffset);
+    const range = document.createRange();
+    range.setStart(point.node, point.offset);
+    range.collapse(true);
+    const rangeRect = range.getClientRects()[0] || range.getBoundingClientRect();
+    if (rangeRect && (rangeRect.height || rangeRect.width)) return rangeRect;
+    return fallbackCaretRect(anchor);
+}
+
+function textareaCaretRect(textarea: HTMLTextAreaElement, cursorOffset: number): MentionAnchorRect {
+    const rect = textarea.getBoundingClientRect();
+    const computed = window.getComputedStyle(textarea);
+    const mirror = document.createElement("div");
+    const marker = document.createElement("span");
+    const copiedProperties = [
+        "boxSizing",
+        "borderTopWidth",
+        "borderRightWidth",
+        "borderBottomWidth",
+        "borderLeftWidth",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "fontFamily",
+        "fontSize",
+        "fontStyle",
+        "fontVariant",
+        "fontWeight",
+        "fontStretch",
+        "lineHeight",
+        "letterSpacing",
+        "textAlign",
+        "textIndent",
+        "textTransform",
+        "wordSpacing",
+        "tabSize",
+        "wordBreak",
+        "overflowWrap",
+    ] as const;
+    copiedProperties.forEach((property) => {
+        mirror.style[property] = computed[property];
+    });
+    Object.assign(mirror.style, {
+        position: "fixed",
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: "auto",
+        minHeight: "0",
+        maxHeight: "none",
+        overflow: "hidden",
+        visibility: "hidden",
+        pointerEvents: "none",
+        whiteSpace: "pre-wrap",
+        zIndex: "-1",
+    });
+    mirror.append(document.createTextNode(textarea.value.slice(0, Math.max(0, cursorOffset))));
+    marker.textContent = "\u200b";
+    mirror.append(marker);
+    document.body.append(mirror);
+    const markerRect = marker.getBoundingClientRect();
+    mirror.remove();
+
+    const lineHeight = Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) * 1.4 || 20;
+    const top = clamp(markerRect.top - textarea.scrollTop, rect.top, rect.bottom - lineHeight);
+    const left = clamp(markerRect.left - textarea.scrollLeft, rect.left, rect.right);
+    return { left, right: left, top, bottom: top + lineHeight, width: 0, height: lineHeight };
+}
+
+function fallbackCaretRect(anchor: HTMLElement): MentionAnchorRect {
+    const rect = anchor.getBoundingClientRect();
+    const computed = window.getComputedStyle(anchor);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) * 1.4 || 20;
+    const left = rect.left + Number.parseFloat(computed.paddingLeft || "0");
+    const top = rect.top + Number.parseFloat(computed.paddingTop || "0");
+    return { left, right: left, top, bottom: top + lineHeight, width: 0, height: lineHeight };
 }
 
 function clamp(value: number, min: number, max: number) {

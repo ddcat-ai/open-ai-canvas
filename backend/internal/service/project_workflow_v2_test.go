@@ -19,7 +19,8 @@ func newProjectWorkflowV2TestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
-		&model.Project{}, &model.ProjectUnit{}, &model.CanvasProject{}, &model.Asset{}, &model.AssetVersion{}, &model.ProjectAssetLink{},
+		&model.Project{}, &model.ProjectUnit{}, &model.CanvasProject{}, &model.Asset{}, &model.AssetVersion{}, &model.ProjectAssetLink{}, &model.ProjectAssetCandidate{},
+		&model.AssetRepresentation{},
 		&model.Shot{}, &model.ShotRevision{}, &model.ShotArtifact{}, &model.ShotAssetReference{},
 		&model.WorkflowTemplateVersion{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{}, &model.WorkflowStepTask{},
 		&model.ProductionTaskLink{}, &model.Task{}, &model.Resource{},
@@ -27,6 +28,56 @@ func newProjectWorkflowV2TestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db)}, db
+}
+
+func TestRegisterTaskOutputFromTaskPersistsMediaAssetAndArtifactIdempotently(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	if err := service.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
+		t.Fatal(err)
+	}
+	workflow, err := service.CreateUnitWorkflow("user-1", project.ID, unit.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var videoStep model.WorkflowStepInstance
+	for _, step := range workflow.Steps {
+		if step.StepKey == "video" {
+			videoStep = step
+		}
+	}
+	shot, err := service.CreateProjectShot("user-1", project.ID, CreateProjectShotRequest{UnitID: unit.ID, Title: "SC.01", Description: "人物抬头", DurationMs: 3000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	resource := model.Resource{ID: "resource-video-1", UserID: "user-1", Kind: "video", Status: model.ResourceStatusReady, MimeType: "video/mp4", Size: 1024, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "workflow-video-task-1", UserID: "user-1", ProjectID: project.ID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+		InputJSON:  `{"metadata":{"workflowStepId":"` + videoStep.ID + `","domainProjectId":"` + project.ID + `","unitId":"` + unit.ID + `","shotId":"` + shot.ID + `","artifactType":"video","role":"output"}}`,
+		ResultJSON: `{"mode":"video","video":{"resourceId":"resource-video-1","storageKey":"resource:resource-video-1","mimeType":"video/mp4"}}`, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RegisterTaskOutputFromTask(task); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RegisterTaskOutputFromTask(task); err != nil {
+		t.Fatal(err)
+	}
+	for table, query := range map[string]string{
+		"assets":                "id = 'workflow-asset-workflow-video-task-1'",
+		"project_asset_links":   "asset_id = 'workflow-asset-workflow-video-task-1'",
+		"asset_representations": "task_id = 'workflow-video-task-1' AND role = 'output'",
+		"shot_artifacts":        "task_id = 'workflow-video-task-1' AND type = 'video'",
+	} {
+		var count int64
+		if err := db.Table(table).Where(query).Count(&count).Error; err != nil || count != 1 {
+			t.Fatalf("%s count = %d, error = %v", table, count, err)
+		}
+	}
 }
 
 func seedWorkflowProject(t *testing.T, db *gorm.DB) (model.Project, model.ProjectUnit) {
@@ -141,6 +192,191 @@ func TestCreateShotRevisionInvalidatesExistingArtifacts(t *testing.T) {
 	}
 	if videoStep.Status != model.WorkflowStepStatusPending {
 		t.Fatalf("video step status = %s, want pending", videoStep.Status)
+	}
+}
+
+func TestReplaceProjectUnitShotsCreatesGeneratedAssetReferencesAtomically(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	now := time.Now()
+	asset := model.Asset{ID: "asset-1", UserID: "user-1", Kind: "image", Category: model.AssetCategory("prop"), Status: model.AssetVersionStatus("ready"), PrimaryVersionID: "asset-version-1", Title: "旧信封", CreatedAt: now, UpdatedAt: now}
+	version := model.AssetVersion{ID: "asset-version-1", AssetID: asset.ID, Version: 1, Status: model.AssetVersionStatus("ready"), CreatedAt: now, UpdatedAt: now}
+	link := model.ProjectAssetLink{ID: "project-asset-link-1", ProjectID: project.ID, AssetID: asset.ID, CreatedAt: now}
+	for _, item := range []any{&asset, &version, &link} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	shots, err := service.ReplaceProjectUnitShots("user-1", project.ID, unit.ID, ReplaceProjectUnitShotsRequest{ExpectedShotIDs: []string{}, Shots: []ReplaceProjectUnitShotInput{{
+		CreateProjectShotRequest: CreateProjectShotRequest{Title: "SC.01", Description: "人物拾起信封", DurationMs: 3000, Revision: ShotRevisionInput{PlotDescription: "人物拾起信封"}},
+		AssetVersionIDs:          []string{version.ID, version.ID},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shots) != 1 {
+		t.Fatalf("shot count = %d, want 1", len(shots))
+	}
+	var references []model.ShotAssetReference
+	if err := db.Where("shot_id = ?", shots[0].ID).Find(&references).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(references) != 1 || references[0].AssetVersionID != version.ID || references[0].Role != "reference" {
+		t.Fatalf("references = %+v, want one generated reference", references)
+	}
+	_, err = service.ReplaceProjectUnitShots("user-1", project.ID, unit.ID, ReplaceProjectUnitShotsRequest{ExpectedShotIDs: []string{"stale-shot-id"}, Shots: []ReplaceProjectUnitShotInput{{
+		CreateProjectShotRequest: CreateProjectShotRequest{Title: "SC.02", Description: "并发替换", DurationMs: 3000},
+	}}})
+	if err == nil || err.Error() != "本章分镜已发生变化，请刷新后重新确认" {
+		t.Fatalf("concurrent replacement error = %v", err)
+	}
+
+	_, err = service.ReplaceProjectUnitShots("user-1", project.ID, unit.ID, ReplaceProjectUnitShotsRequest{Shots: []ReplaceProjectUnitShotInput{{
+		CreateProjectShotRequest: CreateProjectShotRequest{Title: "SC.02", Description: "无效资产", DurationMs: 3000},
+		AssetVersionIDs:          []string{"missing-version"},
+	}}})
+	if err == nil {
+		t.Fatal("missing project asset version should reject replacement")
+	}
+	var storedShots int64
+	if err := db.Model(&model.Shot{}).Where("project_id = ? AND unit_id = ?", project.ID, unit.ID).Count(&storedShots).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedShots != 1 {
+		t.Fatalf("stored shots = %d, want original replacement preserved", storedShots)
+	}
+}
+
+func TestUnlinkShotAssetDeletesReferenceAndInvalidatesProduction(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	if err := service.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
+		t.Fatal(err)
+	}
+	workflow, err := service.CreateUnitWorkflow("user-1", project.ID, unit.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shot, err := service.CreateProjectShot("user-1", project.ID, CreateProjectShotRequest{UnitID: unit.ID, Title: "SC.01", Description: "人物走入画面", DurationMs: 3000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.WorkflowStepInstance{}).Where("workflow_instance_id = ? AND step_key IN ?", workflow.Instance.ID, []string{"storyboard", "previz", "video", "delivery"}).Updates(map[string]any{"status": model.WorkflowStepStatusCompleted}).Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	reference := model.ShotAssetReference{ID: "reference-1", ShotID: shot.ID, AssetVersionID: "asset-version-1", Role: "reference", Status: "linked", CreatedAt: now}
+	artifact := model.ShotArtifact{ID: "artifact-unlink-1", ProjectID: project.ID, UnitID: unit.ID, ShotID: shot.ID, Type: "video", Version: 1, Status: "ready", Selected: true, CreatedAt: now, UpdatedAt: now}
+	for _, item := range []any{&reference, &artifact} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := service.UnlinkShotAsset("user-2", project.ID, shot.ID, reference.ID); err == nil {
+		t.Fatal("another user should not unlink the shot asset")
+	}
+	if err := service.UnlinkShotAsset("user-1", project.ID, shot.ID, reference.ID); err != nil {
+		t.Fatal(err)
+	}
+	var referenceCount int64
+	if err := db.Model(&model.ShotAssetReference{}).Where("id = ?", reference.ID).Count(&referenceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if referenceCount != 0 {
+		t.Fatalf("reference count = %d, want 0", referenceCount)
+	}
+	var storedArtifact model.ShotArtifact
+	if err := db.First(&storedArtifact, "id = ?", artifact.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedArtifact.Status != "stale" || storedArtifact.Selected {
+		t.Fatalf("artifact status=%s selected=%v, want stale false", storedArtifact.Status, storedArtifact.Selected)
+	}
+	var storyboardStep model.WorkflowStepInstance
+	if err := db.First(&storyboardStep, "workflow_instance_id = ? AND step_key = ?", workflow.Instance.ID, "storyboard").Error; err != nil {
+		t.Fatal(err)
+	}
+	if storyboardStep.Status != model.WorkflowStepStatusRunning {
+		t.Fatalf("storyboard step status = %s, want running", storyboardStep.Status)
+	}
+	if err := service.UnlinkShotAsset("user-1", project.ID, shot.ID, reference.ID); err == nil {
+		t.Fatal("second unlink should report missing reference")
+	}
+}
+
+func TestDeleteProjectShotCleansRelationsAndCompactsPositions(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	if err := service.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
+		t.Fatal(err)
+	}
+	workflow, err := service.CreateUnitWorkflow("user-1", project.ID, unit.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shots := make([]model.Shot, 0, 3)
+	for index, title := range []string{"SC.01", "SC.02", "SC.03"} {
+		shot, createErr := service.CreateProjectShot("user-1", project.ID, CreateProjectShotRequest{
+			UnitID: unit.ID, Title: title, Description: "镜头画面", Position: index, DurationMs: 3000,
+		})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		shots = append(shots, shot)
+	}
+	if err := db.Model(&model.WorkflowStepInstance{}).Where("workflow_instance_id = ? AND step_key IN ?", workflow.Instance.ID, []string{"storyboard", "previz", "video", "delivery"}).Updates(map[string]any{"status": model.WorkflowStepStatusCompleted}).Error; err != nil {
+		t.Fatal(err)
+	}
+	target := shots[1]
+	now := time.Now()
+	reference := model.ShotAssetReference{ID: "delete-reference-1", ShotID: target.ID, AssetVersionID: "asset-version-1", Role: "reference", Status: "linked", CreatedAt: now}
+	artifact := model.ShotArtifact{ID: "delete-artifact-1", ProjectID: project.ID, UnitID: unit.ID, ShotID: target.ID, RevisionID: target.CurrentRevisionID, Type: "video", Version: 1, Status: "ready", Selected: true, CreatedAt: now, UpdatedAt: now}
+	candidate := model.ProjectAssetCandidate{ID: "delete-candidate-1", ProjectID: project.ID, UnitID: unit.ID, ShotID: target.ID, Name: "雨伞", Category: model.AssetCategory("prop"), Status: "pending_confirmation", DetailsJSON: "{}", CreatedAt: now, UpdatedAt: now}
+	productionLink := model.ProductionTaskLink{ID: "delete-production-link-1", TaskID: "delete-task-1", ProjectID: project.ID, UnitID: unit.ID, ShotID: target.ID, ArtifactType: "video", CreatedAt: now, UpdatedAt: now}
+	for _, item := range []any{&reference, &artifact, &candidate, &productionLink} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := service.DeleteProjectShot("user-2", project.ID, target.ID); err == nil {
+		t.Fatal("another user should not delete the shot")
+	}
+	if err := service.DeleteProjectShot("user-1", project.ID, target.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var remaining []model.Shot
+	if err := db.Where("project_id = ? AND unit_id = ?", project.ID, unit.ID).Order("position asc").Find(&remaining).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 2 || remaining[0].ID != shots[0].ID || remaining[0].Position != 0 || remaining[1].ID != shots[2].ID || remaining[1].Position != 1 {
+		t.Fatalf("remaining shots = %+v, want first and third compacted to positions 0 and 1", remaining)
+	}
+	for name, query := range map[string]*gorm.DB{
+		"shot":            db.Model(&model.Shot{}).Where("id = ?", target.ID),
+		"revision":        db.Model(&model.ShotRevision{}).Where("shot_id = ?", target.ID),
+		"artifact":        db.Model(&model.ShotArtifact{}).Where("shot_id = ?", target.ID),
+		"reference":       db.Model(&model.ShotAssetReference{}).Where("shot_id = ?", target.ID),
+		"candidate":       db.Model(&model.ProjectAssetCandidate{}).Where("shot_id = ?", target.ID),
+		"production link": db.Model(&model.ProductionTaskLink{}).Where("shot_id = ?", target.ID),
+	} {
+		var count int64
+		if err := query.Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%s count = %d, want 0", name, count)
+		}
+	}
+	var storyboardStep model.WorkflowStepInstance
+	if err := db.First(&storyboardStep, "workflow_instance_id = ? AND step_key = ?", workflow.Instance.ID, "storyboard").Error; err != nil {
+		t.Fatal(err)
+	}
+	if storyboardStep.Status != model.WorkflowStepStatusRunning {
+		t.Fatalf("storyboard step status = %s, want running", storyboardStep.Status)
 	}
 }
 

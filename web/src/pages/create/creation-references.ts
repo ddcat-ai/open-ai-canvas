@@ -1,4 +1,4 @@
-import { buildSkillMentionReferences, renderSkillPrompt } from "@/lib/canvas/canvas-skill-mentions";
+import { buildSkillMentionReferences } from "@/services/skill-runtime";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
 import { creationAttachmentKind, type CreationAttachment } from "./creation-assets";
@@ -78,10 +78,6 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
     const mediaMappings: string[] = [];
     const attachmentPositions = new Map(attachments.map((attachment, index) => [attachment.id, index + 1]));
     references.forEach((reference) => {
-        if (reference.kind === "skill" && reference.skill) {
-            contexts.push(renderSkillPrompt(reference.skill));
-            return;
-        }
         if (reference.attachmentId) {
             const position = attachmentPositions.get(reference.attachmentId);
             const kindLabel = reference.kind === "video" ? "视频" : reference.kind === "audio" ? "音频" : reference.kind === "text" ? "文件" : "图片";
@@ -92,12 +88,6 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
 
     if (mediaMappings.length) contexts.push(`【资源对应关系】\n${mediaMappings.join("\n")}`);
     return [...contexts, `【创作要求】\n${visiblePrompt}`].filter(Boolean).join("\n\n");
-}
-
-export function creationReferenceMetadata(references: CreationReference[]) {
-    return {
-        skillIds: references.flatMap((reference) => (reference.skill?.skill_id ? [reference.skill.skill_id] : [])),
-    };
 }
 
 function attachmentReference(attachment: CreationAttachment, index: number): CreationReference {

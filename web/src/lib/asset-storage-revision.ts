@@ -7,10 +7,22 @@ export type AssetStorageDocument = {
     tombstones: { assets: Record<string, number> };
 };
 
+export function normalizeAssetRecord(asset: Asset): Asset {
+    if (Array.isArray(asset.tags) && asset.tags.every((tag) => typeof tag === "string")) return asset;
+    return {
+        ...asset,
+        tags: Array.isArray(asset.tags) ? asset.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    };
+}
+
+function normalizeAssets(assets: Asset[]) {
+    return assets.map(normalizeAssetRecord);
+}
+
 export function parseAssetStorageDocument(value: string | null, fallback: Asset[] = []): AssetStorageDocument {
     if (!value) {
         return {
-            state: { assets: fallback },
+            state: { assets: normalizeAssets(fallback) },
             version: 0,
             storageRevision: 0,
             tombstones: { assets: {} },
@@ -27,7 +39,7 @@ export function parseAssetStorageDocument(value: string | null, fallback: Asset[
     const tombstones =
         rawTombstones && typeof rawTombstones === "object" && !Array.isArray(rawTombstones) ? Object.fromEntries(Object.entries(rawTombstones).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]))) : {};
     return {
-        state: { assets: parsed.state.assets as Asset[] },
+        state: { assets: normalizeAssets(parsed.state.assets as Asset[]) },
         version: typeof parsed.version === "number" ? parsed.version : 0,
         storageRevision: typeof parsed.storageRevision === "number" && Number.isFinite(parsed.storageRevision) ? parsed.storageRevision : 0,
         tombstones: { assets: tombstones },

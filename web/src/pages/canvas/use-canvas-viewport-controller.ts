@@ -92,8 +92,13 @@ export function useCanvasViewportController({
 
     const handleCanvasDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
         event.preventDefault();
-        if (!fitCanvasSelection()) fitCanvasContent();
-    }, [fitCanvasContent, fitCanvasSelection]);
+        event.stopPropagation();
+        setSelectedNodeIds(new Set());
+        setSelectedConnectionId(null);
+        setDialogNodeId(null);
+        setToolbarNodeId(null);
+        setContextMenu({ type: "canvas", x: event.clientX, y: event.clientY, position: screenToCanvas(event.clientX, event.clientY), createOpen: true });
+    }, [screenToCanvas, setContextMenu, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
 
     const selectFocusedNode = useCallback((nodeId: string) => {
         const selection = new Set([nodeId]);

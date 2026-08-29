@@ -22,6 +22,21 @@ export type Skill = {
     skill_name: string;
     description: string;
     instruction?: string;
+    version_id: string;
+    version: string;
+    content_hash: string;
+    file_count: number;
+    total_bytes: number;
+    source_type: "builtin" | "markdown" | "zip" | "github" | string;
+    source_url: string;
+    source_ref: string;
+    source_subdir: string;
+    source_commit: string;
+    sync_status: "synced" | "failed" | "syncing" | string;
+    sync_error?: string;
+    auto_update: boolean;
+    last_checked_at: number;
+    last_synced_at: number;
     status: number;
     markdown_url: string;
     create_time: number;
@@ -67,12 +82,56 @@ export type ListSkillsInput = {
 export type SkillMutationInput = {
     skill_name: string;
     description: string;
-    instruction: string;
+    instruction?: string;
     tag: string;
     is_private: boolean;
     markdown_url: string;
     showcase_media: SkillShowcaseMedia[];
     extra_info: string;
+};
+
+export type SkillPackageFile = {
+    path: string;
+    kind: "markdown" | "code" | "text" | "image" | "video" | "audio" | "binary" | string;
+    mime_type: string;
+    size: number;
+    sha256: string;
+};
+
+export type SkillPackageFileContent = {
+    file: SkillPackageFile;
+    content: string;
+    binary: boolean;
+};
+
+export type SkillPackageBundle = {
+    skill_id: string;
+    name: string;
+    description: string;
+    version_id: string;
+    version: string;
+    content_hash: string;
+    files: Array<{ path: string; mime_type: string; content_base64: string }>;
+};
+
+export type SkillFileSearchResult = { path: string; line: number; snippet: string };
+
+export type InstallSkillUploadInput = {
+    file: File;
+    source_type?: "markdown" | "zip";
+    name?: string;
+    description?: string;
+    tag?: string;
+    is_private?: boolean;
+};
+
+export type InstallGitHubSkillInput = {
+    url: string;
+    ref?: string;
+    subdir?: string;
+    tag?: string;
+    is_private?: boolean;
+    auto_update?: boolean;
 };
 
 
@@ -108,6 +167,46 @@ function invalidateAddedSkillsCache() {
 
 export function createSkill(input: SkillMutationInput) {
     return request<{ skill: Skill }>(api.post("/skills", input)).finally(invalidateAddedSkillsCache);
+}
+
+export function installSkillUpload(input: InstallSkillUploadInput) {
+    const form = new FormData();
+    form.append("file", input.file);
+    if (input.source_type) form.append("source_type", input.source_type);
+    if (input.name) form.append("name", input.name);
+    if (input.description) form.append("description", input.description);
+    if (input.tag) form.append("tag", input.tag);
+    form.append("is_private", String(Boolean(input.is_private)));
+    return request<{ skill: Skill }>(api.post("/skills/install", form)).finally(invalidateAddedSkillsCache);
+}
+
+export function installGitHubSkill(input: InstallGitHubSkillInput) {
+    return request<{ skill: Skill }>(api.post("/skills/install/github", input)).finally(invalidateAddedSkillsCache);
+}
+
+export function listSkillFiles(id: string) {
+    return request<{ files: SkillPackageFile[] }>(api.get(`/skills/${encodeURIComponent(id)}/files`));
+}
+
+export function getSkillFile(id: string, path: string) {
+    return request<{ file: SkillPackageFileContent }>(api.get(`/skills/${encodeURIComponent(id)}/file`, { params: { path } }));
+}
+
+export function getSkillBundle(id: string) {
+    return request<{ bundle: SkillPackageBundle }>(api.get(`/skills/${encodeURIComponent(id)}/bundle`));
+}
+
+export function searchSkillFiles(id: string, query: string) {
+    return request<{ results: SkillFileSearchResult[] }>(api.get(`/skills/${encodeURIComponent(id)}/search`, { params: { q: query } }));
+}
+
+export function syncSkill(id: string) {
+    return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/sync`)).finally(invalidateAddedSkillsCache);
+}
+
+export function skillFileRawURL(id: string, path: string) {
+    const base = String(api.defaults.baseURL || "/api").replace(/\/$/, "");
+    return `${base}/skills/${encodeURIComponent(id)}/file/raw?path=${encodeURIComponent(path)}`;
 }
 
 export function updateSkill(id: string, input: SkillMutationInput) {

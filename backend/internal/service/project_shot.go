@@ -2,10 +2,12 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 type CreateProjectShotRequest struct {
@@ -35,7 +37,13 @@ type ShotRevisionInput struct {
 }
 
 type ReplaceProjectUnitShotsRequest struct {
-	Shots []CreateProjectShotRequest `json:"shots"`
+	Shots           []ReplaceProjectUnitShotInput `json:"shots"`
+	ExpectedShotIDs []string                      `json:"expectedShotIds"`
+}
+
+type ReplaceProjectUnitShotInput struct {
+	CreateProjectShotRequest
+	AssetVersionIDs []string `json:"assetVersionIds"`
 }
 
 type LinkShotAssetRequest struct {
@@ -124,6 +132,7 @@ func (s *Service) ReplaceProjectUnitShots(userID string, projectID string, unitI
 	now := time.Now()
 	shots := make([]model.Shot, 0, len(req.Shots))
 	revisions := make([]model.ShotRevision, 0, len(req.Shots))
+	references := make([]model.ShotAssetReference, 0)
 	for position, input := range req.Shots {
 		title := strings.TrimSpace(input.Title)
 		description := strings.TrimSpace(input.Description)
@@ -138,9 +147,27 @@ func (s *Service) ReplaceProjectUnitShots(userID string, projectID string, unitI
 		revision.Version = 1
 		shots = append(shots, model.Shot{ID: shotID, ProjectID: projectID, UnitID: unitID, CurrentRevisionID: revision.ID, Title: title, Description: revision.PlotDescription, Position: position, DurationMs: revision.DurationMs, Status: "draft", CreatedAt: now, UpdatedAt: now})
 		revisions = append(revisions, revision)
+		seenVersions := make(map[string]bool, len(input.AssetVersionIDs))
+		for _, rawVersionID := range input.AssetVersionIDs {
+			versionID := strings.TrimSpace(rawVersionID)
+			if versionID == "" || seenVersions[versionID] {
+				continue
+			}
+			if len(seenVersions) >= 6 {
+				return nil, BadAuthRequest("单个分镜最多引用 6 个资产版本")
+			}
+			if _, err := s.repo.AssetVersionForProject(projectID, versionID); err != nil {
+				return nil, err
+			}
+			seenVersions[versionID] = true
+			references = append(references, model.ShotAssetReference{ID: newID(), ShotID: shotID, AssetVersionID: versionID, Role: "reference", Status: "linked", CreatedAt: now})
+		}
 	}
 	// 章节级重生成是一个整体写操作，旧镜头与引用必须和新镜头在同一事务中替换。
-	if err := s.repo.ReplaceProjectUnitShots(projectID, unitID, shots, revisions); err != nil {
+	if err := s.repo.ReplaceProjectUnitShots(projectID, unitID, shots, revisions, references, req.ExpectedShotIDs); err != nil {
+		if errors.Is(err, repository.ErrProjectUnitShotsChanged) {
+			return nil, BadAuthRequest("本章分镜已发生变化，请刷新后重新确认")
+		}
 		return nil, err
 	}
 	return shots, nil
@@ -167,6 +194,20 @@ func (s *Service) CreateShotRevision(userID string, projectID string, shotID str
 		return model.Shot{}, model.ShotRevision{}, err
 	}
 	return *shot, revision, nil
+}
+
+func (s *Service) DeleteProjectShot(userID string, projectID string, shotID string) error {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
+		return err
+	}
+	shotID = strings.TrimSpace(shotID)
+	if shotID == "" {
+		return BadAuthRequest("镜头不能为空")
+	}
+	if _, err := s.repo.ShotForProject(projectID, shotID); err != nil {
+		return err
+	}
+	return s.repo.DeleteProjectShot(projectID, shotID, time.Now())
 }
 
 func newShotRevision(userID string, shotID string, input ShotRevisionInput, fallbackDescription string, fallbackDuration int64, now time.Time) (model.ShotRevision, error) {
@@ -230,6 +271,27 @@ func (s *Service) LinkShotAsset(userID string, projectID string, shotID string, 
 		return model.ShotAssetReference{}, err
 	}
 	return reference, nil
+}
+
+func (s *Service) UnlinkShotAsset(userID string, projectID string, shotID string, referenceID string) error {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
+		return err
+	}
+	if _, err := s.repo.ShotForProject(projectID, shotID); err != nil {
+		return err
+	}
+	referenceID = strings.TrimSpace(referenceID)
+	if referenceID == "" {
+		return BadAuthRequest("镜头资产引用不能为空")
+	}
+	deleted, err := s.repo.DeleteShotAssetReferenceAndInvalidate(projectID, shotID, referenceID, time.Now())
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return NotFound("镜头资产引用不存在")
+	}
+	return nil
 }
 
 func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, req CreateAssetCandidatesRequest) ([]model.ProjectAssetCandidate, error) {

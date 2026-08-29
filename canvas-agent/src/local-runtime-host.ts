@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { createServer, type Server } from "node:http";
+import type { Express } from "express";
 
 import {
     CONFIG_DIR,
@@ -25,6 +26,14 @@ export type StartLocalRuntimeOptions = {
     persistConfig?: (config: LocalRuntimeConfig) => void;
 };
 
+export type LocalRuntimeHandle = {
+    app: Express;
+    server: Server;
+    sessions: LocalRuntimeSessionManager;
+    ready: Promise<void>;
+    close: () => Promise<void>;
+};
+
 export function createDefaultLocalRuntimeModules(config: LocalRuntimeConfig): LocalRuntimeModule[] {
     return [
         createCanvasAgentHttpModule(config),
@@ -40,7 +49,7 @@ export function createDefaultLocalRuntimeModules(config: LocalRuntimeConfig): Lo
     ];
 }
 
-export function startLocalRuntime(options: StartLocalRuntimeOptions = {}) {
+export function startLocalRuntime(options: StartLocalRuntimeOptions = {}): LocalRuntimeHandle {
     const config = options.config ?? loadConfig(true);
     const persistConfig = options.persistConfig ?? saveConfig;
     const requestedPort = options.port ?? (

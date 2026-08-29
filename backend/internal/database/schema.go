@@ -46,6 +46,8 @@ func Models() []any {
 		&model.StorageLocation{},
 		&model.UserDailyUploadUsage{},
 		&model.Skill{},
+		&model.SkillVersion{},
+		&model.SkillFile{},
 		&model.UserSkillState{},
 		&model.Resource{},
 		&model.ResourceDeletionJob{},
@@ -105,6 +107,9 @@ func MigrateSchema(db *gorm.DB) error {
 	if err := db.AutoMigrate(Models()...); err != nil {
 		return err
 	}
+	if err := backfillProjectUnitWordCounts(db); err != nil {
+		return err
+	}
 	if err := migrateChannelModelPriceTierSelectors(db); err != nil {
 		return err
 	}
@@ -138,6 +143,22 @@ func MigrateSchema(db *gorm.DB) error {
 		return err
 	}
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error
+}
+
+func backfillProjectUnitWordCounts(db *gorm.DB) error {
+	var units []model.ProjectUnit
+	if err := db.Select("id", "source_text").Where("word_count = 0 AND source_text <> ''").Find(&units).Error; err != nil {
+		return fmt.Errorf("读取待回填章节字数：%w", err)
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, unit := range units {
+			wordCount := model.ProjectUnitWordCount(unit.SourceText)
+			if err := tx.Model(&model.ProjectUnit{}).Where("id = ?", unit.ID).Update("word_count", wordCount).Error; err != nil {
+				return fmt.Errorf("回填章节 %s 字数：%w", unit.ID, err)
+			}
+		}
+		return nil
+	})
 }
 
 // migrateChannelModelPriceTierSelectors upgrades the old video-only unique key to

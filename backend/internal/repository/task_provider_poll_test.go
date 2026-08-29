@@ -48,4 +48,31 @@ func TestDeferredProviderPollKeepsOriginalTaskIdentityWithoutImmediateReclaim(t 
 	}
 }
 
+func TestUpdateTaskProviderProgressIsMonotonic(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:provider-progress?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "task-progress", UserID: "user-1", Type: "canvas_video", Status: model.TaskStatusRunning, Stage: "正在连接上游"}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	for _, progress := range []int{12, 48, 31, 76} {
+		if err := repo.UpdateTaskProviderProgress(task.ID, progress); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stored model.Task
+	if err := db.First(&stored, "id = ?", task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Progress != 76 || stored.Stage != "上游生成中" {
+		t.Fatalf("stored progress = %d, stage = %q", stored.Progress, stored.Stage)
+	}
+}
+
 func ptrTime(value time.Time) *time.Time { return &value }

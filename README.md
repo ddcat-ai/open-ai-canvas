@@ -17,7 +17,10 @@
 
 > 项目仍在快速开发，数据结构和外部接口可能直接调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
-当前版本以仓库根目录 [`VERSION`](VERSION) 为准。
+演示环境：[https://ddcat.pronhubcn.com](https://ddcat.pronhubcn.com)
+
+- 账号：`test`
+- 密码：`test123456`
 
 ## 赞助商
 
@@ -48,6 +51,7 @@
 | <img src="assets/user-fish.png.jpg" alt="fish" width="80"> | fish | [cihai.sea@gmail.com](mailto:cihai.sea@gmail.com) | AI 界热于助人的拖油瓶 |
 | <img src="assets/user-QAyong.jpg" alt="QAyong" width="80"> | QAyong<br><sub>ID：QAyong<br>B站：QAyong</sub> | [2110491559@qq.com](mailto:2110491559@qq.com) | AI 短剧合规，资产确权 |
 | <img src="assets/user-K37ix.jpg" alt="_K37ix." width="80"> | _K37ix. | [2773843782@qq.com](mailto:2773843782@qq.com) | Making things that think |
+| <img src="assets/user-rou.jpg" alt="Rou" width="80"> | Rou | [rou325089@163.com](mailto:rou325089@163.com) | 上善若水 |
 
 ## 交流与反馈
 

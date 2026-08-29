@@ -11,6 +11,7 @@ import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-refer
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
+import { audioFileExtension } from "@/lib/character-voice-formats";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
 
@@ -433,7 +434,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     if (!context.characterReferences.length) return { ...context, referenceImages };
     if (!domainProjectId) throw new Error("角色引用未关联短剧项目，无法解析角色版本");
     const { getProjectCharacter } = await import("@/services/api/projects");
-    const { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
+    const { getResource, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
     const details = await Promise.all(context.characterReferences.map((reference) => getProjectCharacter(domainProjectId, reference.assetId)));
     const remainingBudget = Math.max(0, (referenceLimits?.maxImages ?? 9) - referenceImages.length);
     const selected = details.flatMap((detail) => {
@@ -491,13 +492,17 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     }
     const maxAudios = referenceLimits?.maxAudios ?? 3;
     if (context.referenceAudios.length + voiceSamples.length > maxAudios) throw new Error(`当前模型参考音频容量不足：已连接 ${context.referenceAudios.length} 个音频，角色声音样本还需要 ${voiceSamples.length} 个名额`);
-    const characterVoiceAudios = voiceSamples.map((voice) => ({
-        id: `character-voice-${voice.assetId}`,
-        name: `${voice.characterName}-声音样本.mp3`,
-        type: "audio/mpeg",
-        url: resourceFileUrl(voice.sampleResourceId!),
-        storageKey: resourceStorageKey(voice.sampleResourceId!),
-    } satisfies ReferenceAudio));
+    const characterVoiceAudios = await Promise.all(voiceSamples.map(async (voice) => {
+        const resource = await getResource(voice.sampleResourceId!);
+        const extension = audioFileExtension(resource.mimeType, resource.objectKey);
+        return {
+            id: `character-voice-${voice.assetId}`,
+            name: `${voice.characterName}-声音样本.${extension}`,
+            type: resource.mimeType || "audio/mpeg",
+            url: resourceFileUrl(voice.sampleResourceId!),
+            storageKey: resourceStorageKey(voice.sampleResourceId!),
+        } satisfies ReferenceAudio;
+    }));
     const referenceAudios = [...context.referenceAudios, ...characterVoiceAudios];
     const voiceBlocks = mode === "video" ? resolvedCharacterVoices.map(compileResolvedVoicePrompt) : [];
     return {

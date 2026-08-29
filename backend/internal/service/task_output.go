@@ -41,10 +41,16 @@ type TaskSummary struct {
 }
 
 type TaskClientContext struct {
-	ConversationID string `json:"conversationId"`
-	MessageID      string `json:"messageId"`
-	BatchIndex     int    `json:"batchIndex,omitempty"`
-	BatchCount     int    `json:"batchCount,omitempty"`
+	ConversationID   string `json:"conversationId,omitempty"`
+	MessageID        string `json:"messageId,omitempty"`
+	BatchIndex       int    `json:"batchIndex,omitempty"`
+	BatchCount       int    `json:"batchCount,omitempty"`
+	DomainProjectID  string `json:"domainProjectId,omitempty"`
+	ChapterID        string `json:"chapterId,omitempty"`
+	ChapterOperation string `json:"chapterOperation,omitempty"`
+	ShotID           string `json:"shotId,omitempty"`
+	WorkflowStepID   string `json:"workflowStepId,omitempty"`
+	ArtifactType     string `json:"artifactType,omitempty"`
 }
 
 type TaskBillingSummary struct {
@@ -123,25 +129,51 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 }
 
-// 列表只暴露创作页恢复所需的关联 ID，不下发完整任务输入或其他 metadata。
+// 列表只暴露页面恢复所需的非敏感关联 ID，不下发完整任务输入或其他 metadata。
 func taskClientContext(raw string) *TaskClientContext {
 	var input struct {
 		Metadata struct {
-			Source         string `json:"source"`
-			ConversationID string `json:"conversationId"`
-			MessageID      string `json:"messageId"`
-			BatchIndex     int    `json:"batchIndex"`
-			BatchCount     int    `json:"batchCount"`
+			Source          string `json:"source"`
+			ConversationID  string `json:"conversationId"`
+			MessageID       string `json:"messageId"`
+			BatchIndex      int    `json:"batchIndex"`
+			BatchCount      int    `json:"batchCount"`
+			DomainProjectID string `json:"domainProjectId"`
+			ChapterID       string `json:"chapterId"`
+			Operation       string `json:"operation"`
+			ShotID          string `json:"shotId"`
+			WorkflowStepID  string `json:"workflowStepId"`
+			ArtifactType    string `json:"artifactType"`
 		} `json:"metadata"`
 	}
-	if json.Unmarshal([]byte(raw), &input) != nil || input.Metadata.Source != "create-page" || input.Metadata.ConversationID == "" || input.Metadata.MessageID == "" {
+	if json.Unmarshal([]byte(raw), &input) != nil {
+		return nil
+	}
+	metadata := input.Metadata
+	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
+		return &TaskClientContext{
+			ConversationID: metadata.ConversationID,
+			MessageID:      metadata.MessageID,
+			BatchIndex:     metadata.BatchIndex,
+			BatchCount:     metadata.BatchCount,
+		}
+	}
+	if metadata.ShotID != "" && metadata.WorkflowStepID != "" {
+		return &TaskClientContext{DomainProjectID: metadata.DomainProjectID, ShotID: metadata.ShotID, WorkflowStepID: metadata.WorkflowStepID, ArtifactType: metadata.ArtifactType}
+	}
+	chapterOperation := ""
+	if metadata.Operation == "chapter_character_breakdown" {
+		chapterOperation = "characters"
+	} else if metadata.Source == "short-drama-chapter-storyboard" {
+		chapterOperation = "storyboard"
+	}
+	if chapterOperation == "" || metadata.DomainProjectID == "" || metadata.ChapterID == "" {
 		return nil
 	}
 	return &TaskClientContext{
-		ConversationID: input.Metadata.ConversationID,
-		MessageID:      input.Metadata.MessageID,
-		BatchIndex:     input.Metadata.BatchIndex,
-		BatchCount:     input.Metadata.BatchCount,
+		DomainProjectID:  metadata.DomainProjectID,
+		ChapterID:        metadata.ChapterID,
+		ChapterOperation: chapterOperation,
 	}
 }
 

@@ -13,7 +13,8 @@ import type { AgentAttachment, AgentEmit } from "./types.js";
 type Json = Record<string, unknown>;
 type AgentEvent = Json & { type: string; usage?: unknown };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-export type AgentSkillReference = { skillId?: string; name: string; description?: string; instruction?: string };
+export type AgentSkillFile = { path: string; mimeType?: string; contentBase64: string };
+export type AgentSkillReference = { skillId?: string; name: string; description?: string; version?: string; files?: AgentSkillFile[]; instruction?: string };
 export type CodexSkillInput = { type: "skill"; name: string; path: string };
 type CodexRunOptions = { threadId?: string; cwd?: string; skills?: AgentSkillReference[]; onThreadId?: (threadId: string) => void };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
@@ -471,17 +472,32 @@ export async function writeSkillFiles(skills: AgentSkillReference[]) {
     const usedNames = new Set<string>();
     try {
         for (const skill of skills.slice(0, 8)) {
-            const instruction = String(skill.instruction || "").trim().slice(0, 24_000);
-            if (!instruction) continue;
             const baseName = `canvas-${safeSkillSegment(skill.skillId || skill.name)}`;
             const name = uniqueSkillName(baseName, usedNames);
             usedNames.add(name);
-            const directory = await fs.mkdtemp(path.join(os.tmpdir(), "infinite-canvas-skill-"));
-            directories.push(directory);
+            const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "infinite-canvas-skill-"));
+            directories.push(temporaryRoot);
+            const directory = path.join(temporaryRoot, name);
+            await fs.mkdir(directory, { recursive: true });
+            const packageFiles = Array.isArray(skill.files) ? skill.files : [];
+            if (packageFiles.length) {
+                for (const item of packageFiles) {
+                    const relativePath = safeSkillFilePath(item.path);
+                    const target = path.join(directory, ...relativePath.split("/"));
+                    await fs.mkdir(path.dirname(target), { recursive: true });
+                    await fs.writeFile(target, Buffer.from(item.contentBase64, "base64"));
+                }
+            } else {
+                const instruction = String(skill.instruction || "").trim().slice(0, 24_000);
+                if (!instruction) continue;
+                await fs.writeFile(path.join(directory, "SKILL.md"), skillMarkdown(name, skill.name, skill.description, instruction), "utf8");
+            }
             const file = path.join(directory, "SKILL.md");
-            const description = String(skill.description || skill.name).trim().slice(0, 500).replace(/[\r\n]+/g, " ");
-            const body = [`---`, `name: ${name}`, `description: ${JSON.stringify(description)}`, `---`, ``, `# ${skill.name}`, ``, instruction, ``].join("\n");
-            await fs.writeFile(file, body, "utf8");
+            let entry = await fs.readFile(file, "utf8");
+            if (!hasSkillFrontmatter(entry)) {
+                entry = skillMarkdown(name, skill.name, skill.description, entry);
+                await fs.writeFile(file, entry, "utf8");
+            }
             inputs.push({ type: "skill", name, path: file });
         }
         return { directories, inputs };
@@ -489,6 +505,29 @@ export async function writeSkillFiles(skills: AgentSkillReference[]) {
         await Promise.all(directories.map((directory) => fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)));
         throw error;
     }
+}
+
+function skillMarkdown(name: string, title: string, description: string | undefined, instruction: string) {
+    const summary = String(description || title).trim().slice(0, 500).replace(/[\r\n]+/g, " ");
+    return [`---`, `name: ${name}`, `description: ${JSON.stringify(summary)}`, `---`, ``, `# ${title}`, ``, instruction, ``].join("\n");
+}
+
+function hasSkillFrontmatter(value: string) {
+    const normalized = value.replace(/^\uFEFF/, "");
+    if (!normalized.startsWith("---\n") && !normalized.startsWith("---\r\n")) return false;
+    const end = normalized.indexOf("\n---", 4);
+    if (end < 0) return false;
+    const frontmatter = normalized.slice(0, end);
+    return /^name\s*:/m.test(frontmatter) && /^description\s*:/m.test(frontmatter);
+}
+
+function safeSkillFilePath(value: string) {
+    const normalized = String(value || "").trim().replace(/\\/g, "/");
+    const segments = normalized.split("/");
+    if (!normalized || normalized.startsWith("/") || segments.some((segment) => !segment || segment === "." || segment === "..") || normalized.includes("\0")) {
+        throw new Error(`技能文件路径无效：${normalized || "空路径"}`);
+    }
+    return normalized;
 }
 
 function uniqueSkillName(baseName: string, usedNames: Set<string>) {

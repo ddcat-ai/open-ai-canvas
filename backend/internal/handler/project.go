@@ -697,6 +697,18 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"shot": shot, "revision": revision})
 	})
+	r.DELETE("/projects/:id/shots/:shotId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteProjectShot(user.ID, c.Param("id"), c.Param("shotId")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"deleted": true})
+	})
 	r.POST("/projects/:id/shots/:shotId/assets", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -715,6 +727,18 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"reference": reference})
+	})
+	r.DELETE("/projects/:id/shots/:shotId/assets/:referenceId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.UnlinkShotAsset(user.ID, c.Param("id"), c.Param("shotId"), c.Param("referenceId")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"unlinked": true})
 	})
 	r.POST("/projects/:id/asset-candidates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

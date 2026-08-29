@@ -106,10 +106,62 @@ func TestValidateStoryboardPlanTreatsComplexityAsAdvisory(t *testing.T) {
 		MustHave:     []string{"一", "二", "三", "四"},
 		Motion:       "航拍推进并升降",
 	}}}
-	characters := []storyboardCharacterCard{{AssetID: "a"}, {AssetID: "b"}, {AssetID: "c"}}
+	characters := []storyboardCharacterCard{{AssetID: "a", VersionID: "va", Name: "甲"}, {AssetID: "b", VersionID: "vb", Name: "乙"}, {AssetID: "c", VersionID: "vc", Name: "丙"}}
 
-	if err := validateStoryboardPlan(plan, 0, 0, characters, nil); err != nil {
+	if err := validateStoryboardPlan(&plan, 0, 0, characters, nil); err != nil {
 		t.Fatalf("complexity should be advisory for an otherwise valid plan: %v", err)
+	}
+}
+
+func TestValidateStoryboardContextAcceptsNameOnlyCharacter(t *testing.T) {
+	style := storyboardProjectStyle{PresetID: "style", Title: "都市", Prompt: "写实电影"}
+	characters := []storyboardCharacterCard{{Name: "张天昊", Definition: map[string]any{"role": "主角"}}}
+	if err := validateStoryboardContext(style, characters); err != nil {
+		t.Fatalf("name-only character should be accepted: %v", err)
+	}
+}
+
+func TestValidateStoryboardContextRejectsPartialAssetIdentity(t *testing.T) {
+	style := storyboardProjectStyle{PresetID: "style", Title: "都市", Prompt: "写实电影"}
+	characters := []storyboardCharacterCard{{AssetID: "character-1", Name: "张天昊"}}
+	if err := validateStoryboardContext(style, characters); err == nil {
+		t.Fatal("character with only asset id should be rejected")
+	}
+}
+
+func TestNormalizeStoryboardCharacterReferencesFallsBackToNames(t *testing.T) {
+	plan := agentStoryboardPlan{Shots: []agentStoryboardShot{{CharacterIDs: []string{"character-1", "张振天", "张天昊", "路人甲", "张天昊"}}}}
+	characters := []storyboardCharacterCard{
+		{AssetID: "character-1", VersionID: "version-1", Name: "张振天"},
+		{Name: "张天昊"},
+	}
+
+	if err := validateStoryboardPlan(&plan, 0, 0, characters, nil); err != nil {
+		t.Fatalf("character names should not invalidate the storyboard plan: %v", err)
+	}
+
+	shot := plan.Shots[0]
+	if len(shot.CharacterIDs) != 1 || shot.CharacterIDs[0] != "character-1" {
+		t.Fatalf("confirmed character should stay bound to asset: %#v", shot.CharacterIDs)
+	}
+	if len(shot.CharacterNames) != 2 || shot.CharacterNames[0] != "张天昊" || shot.CharacterNames[1] != "路人甲" {
+		t.Fatalf("pending and unknown characters should fall back to names: %#v", shot.CharacterNames)
+	}
+	if prompt := buildStoryboardImagePrompt("写实电影", "都市夜景", shot); !strings.Contains(prompt, "镜头角色：张振天、张天昊、路人甲") {
+		t.Fatalf("image prompt should keep character names after fallback: %s", prompt)
+	}
+	if prompt := buildStoryboardVideoPrompt("写实电影", "都市夜景", shot); !strings.Contains(prompt, "镜头角色：张振天、张天昊、路人甲") {
+		t.Fatalf("video prompt should keep character names after fallback: %s", prompt)
+	}
+	rows := storyboardRowCharacters(shot, characters)
+	if len(rows) != 3 {
+		t.Fatalf("expected three character references, got %#v", rows)
+	}
+	if rows[0]["characterAssetId"] != "character-1" || rows[1]["characterName"] != "张天昊" || rows[2]["characterName"] != "路人甲" {
+		t.Fatalf("unexpected character rows: %#v", rows)
+	}
+	if _, exists := rows[1]["characterAssetId"]; exists {
+		t.Fatalf("name-only character must not fabricate an asset id: %#v", rows[1])
 	}
 }
 

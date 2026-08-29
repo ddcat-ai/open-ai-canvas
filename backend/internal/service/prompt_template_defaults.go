@@ -14,6 +14,8 @@ const (
 	promptOperationCharacterTurnaround  = "character_turnaround"
 )
 
+const legacyStoryboardVideoPromptPreamble = "生成单一连续镜头的视频执行提示词。一个镜头只保留一个叙事目标、一个主运镜和一条主要动作链；摄影机运动必须有起点、动机和停止点。优先保证角色身份、表演、关键动作和连续性，次要环境效果可以简化。\n\n"
+
 func defaultPromptDefinitions() []PromptOperationDefinition {
 	return []PromptOperationDefinition{
 		{
@@ -50,9 +52,7 @@ func defaultPromptDefinitions() []PromptOperationDefinition {
 			Operation: promptOperationStoryboardVideo, Label: "分镜视频", Category: "生成", OutputType: "text",
 			Description: "把单镜头结构转换为视频模型使用的紧凑执行提示词。",
 			Variables:   []PromptTemplateVariable{{Label: "项目视觉", Placeholder: "{{项目视觉}}"}, {Label: "镜头意图", Placeholder: "{{镜头意图}}"}, {Label: "首帧构图", Placeholder: "{{首帧构图}}"}, {Label: "表演与调度", Placeholder: "{{表演与调度}}"}, {Label: "摄影机", Placeholder: "{{摄影机}}"}, {Label: "时间节拍", Placeholder: "{{时间节拍}}"}, {Label: "运动与结尾", Placeholder: "{{运动与结尾}}"}, {Label: "声音", Placeholder: "{{声音}}"}, {Label: "执行优先级", Placeholder: "{{执行优先级}}"}, {Label: "负面要求", Placeholder: "{{负面要求}}"}},
-			DefaultContent: `生成单一连续镜头的视频执行提示词。一个镜头只保留一个叙事目标、一个主运镜和一条主要动作链；摄影机运动必须有起点、动机和停止点。优先保证角色身份、表演、关键动作和连续性，次要环境效果可以简化。
-
-【项目视觉】
+			DefaultContent: `【项目视觉】
 {{项目视觉}}
 
 【镜头意图】
@@ -145,7 +145,7 @@ const storyboardPlanJSONSchema = `{
           "description": {"type": "string"},
           "durationSeconds": {"type": "integer", "minimum": 1, "maximum": 60},
           "dialogue": {"type": "string"},
-          "characterIds": {"type": "array", "items": {"type": "string"}},
+          "characterIds": {"type": "array", "description": "优先填写当前角色资产 ID；尚未确认资产的角色填写角色名称", "items": {"type": "string"}},
           "narrativeIntent": {"type": "string"},
           "viewerPOV": {"type": "string"},
           "performanceBlocking": {"type": "string"},
@@ -243,7 +243,7 @@ func storyboardExecutionContract(durationRule string, countRule string) string {
 - ` + countRule + `
 - 单镜头最多 2 名主要角色、1 个主运镜、1 条主要动作链、3 个 timeBeats 和 3 个 mustHave；超限必须拆镜或在固定镜头数内重新分配。
 - dialogue 只写本镜头实际念出的台词或简短旁白，字数上限按 1 秒最多约 5 个中文字符计算（至少 24 字）；超长台词/旁白必须拆镜或精简，不得用 dialogue 承载长段叙述。
-- characterIds 只能引用当前角色版本中的 assetId；没有角色时返回空数组。
+- characterIds 优先填写当前角色版本中的 assetId；角色只有名称、尚未确认资产时填写角色名称，服务端会保留名称引用。不要编造 ID；没有角色时返回空数组。
 - assetRefs 只能引用当前画布资产中的 nodeId；不要根据相似名称编造 ID。每镜最多 6 个，priority 越大表示越重要。
 - styleGuide 最多 120 个中文字符；visualPrompt 只描述首帧，videoPrompt 只描述运动和结尾状态。
 - 画幅比例由视频节点参数控制，提示词不得写入具体比例，也不要讨论画幅配置。

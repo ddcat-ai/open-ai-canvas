@@ -24,9 +24,17 @@ export type CanvasResourceReference = {
     mentionToken?: string;
 };
 
+export function canvasSkillMentionToken(skillId: string) {
+    return `@[skill:${skillId}]`;
+}
+
+export function canvasNodeMentionToken(nodeId: string) {
+    return `@[node:${nodeId}]`;
+}
+
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.mentionToken) return reference.mentionToken;
-    if (reference.kind === "skill" && reference.skill?.skill_id) return `@[skill:${reference.skill.skill_id}]`;
+    if (reference.kind === "skill" && reference.skill?.skill_id) return canvasSkillMentionToken(reference.skill.skill_id);
     if (reference.assetId) return `@[asset:${reference.assetId}]`;
     return `@${reference.label}`;
 }
@@ -34,7 +42,7 @@ export function canvasResourceMentionToken(reference: CanvasResourceReference) {
 export function normalizeCanvasNodeMentionTokens(prompt: string, references: CanvasResourceReference[]) {
     return references.reduce((value, reference) => {
         if (!reference.nodeId || reference.assetId || reference.kind === "skill") return value;
-        return value.split(`@[node:${reference.nodeId}]`).join(`@${reference.label}`);
+        return value.split(canvasNodeMentionToken(reference.nodeId)).join(`@${reference.label}`);
     }, prompt);
 }
 

@@ -18,6 +18,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
     const [draftIdea, setDraftIdea] = useState("");
     const [drafting, setDrafting] = useState(false);
     const effectiveConfig = useEffectiveConfig();
+    const isPackageSkill = Boolean(skill && skill.source_type !== "markdown" && skill.source_type !== "builtin" && skill.source_type !== "");
 
     useEffect(() => {
         if (!open) return;
@@ -27,7 +28,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
             instruction: skill?.instruction || "",
             tag: skill?.tag || "creative",
             is_public: skill ? !skill.is_private : true,
-            markdown_url: skill?.markdown_url || "",
+            markdown_url: skill?.markdown_url || skill?.source_url || "",
             showcase_media: skill?.showcase_media || [],
             extra_info: skill?.extra_info || "",
         });
@@ -48,7 +49,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
             const input: SkillMutationInput = {
                 skill_name: values.skill_name,
                 description: values.description,
-                instruction: values.instruction,
+                instruction: values.instruction || "",
                 tag: values.tag,
                 is_private: !values.is_public,
                 markdown_url: values.markdown_url || "",
@@ -97,7 +98,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
 
     return (
         <Drawer className="library-drawer" open={open} size={720} destroyOnHidden maskClosable={!dirty} title={skill ? "编辑技能" : "创建技能"} onClose={requestClose} extra={<Button type="primary" loading={saving} icon={<Save className="size-4" />} onClick={() => form.submit()}>保存技能</Button>}>
-            <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3">
+            {!isPackageSkill ? <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3">
                 <div className="mb-2 flex items-center gap-1.5 text-sm font-medium">
                     <Wand2 className="size-4" />
                     AI 起草
@@ -116,7 +117,7 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
                     <span className="text-xs text-foreground/45">将使用你的文本模型生成一次草稿</span>
                     <Button type="primary" loading={drafting} disabled={!draftIdea.trim()} icon={<Wand2 className="size-4" />} onClick={() => void draftFromIdea()}>生成草稿</Button>
                 </div>
-            </div>
+            </div> : <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3 text-sm leading-6 text-foreground/58">这是多文件技能包。这里仅编辑名称、简介、分类和展示信息；技能正文请更新 ZIP，或在 GitHub 仓库修改后执行同步。</div>}
             <Form form={form} layout="vertical" requiredMark="optional" onFinish={submit} onValuesChange={() => setDirty(true)}>
                 <div className="grid gap-x-4 sm:grid-cols-2">
                     <Form.Item name="skill_name" label="技能名称" rules={[{ required: true, message: "请填写技能名称" }, { max: 80, message: "最多 80 个字符" }]}>
@@ -131,12 +132,12 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
                     <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} maxLength={500} showCount placeholder="说明适用场景、输入条件和最终产出" />
                 </Form.Item>
 
-                <Form.Item name="instruction" label="技能指令" rules={[{ required: true, message: "请填写技能指令" }, { max: 100000, message: "最多 100000 个字符" }]} extra="画布引用该技能时会把这段指令发送给模型。">
+                {!isPackageSkill ? <Form.Item name="instruction" label="技能指令" rules={[{ required: true, message: "请填写技能指令" }, { max: 100000, message: "最多 100000 个字符" }]} extra="单文件技能会作为 SKILL.md 安装，Agent 按任务需要读取。">
                     <Input.TextArea className="font-mono text-xs leading-5" autoSize={{ minRows: 14, maxRows: 28 }} maxLength={100000} showCount placeholder="使用 Markdown 编写角色、约束、流程、检查清单和输出格式" />
-                </Form.Item>
+                </Form.Item> : null}
 
                 <div className="grid gap-x-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-                    <Form.Item name="markdown_url" label="Markdown 地址" rules={[{ type: "url", message: "请输入有效的 HTTP(S) 链接" }]}>
+                    <Form.Item name="markdown_url" label={isPackageSkill ? "来源地址" : "Markdown 地址"} rules={[{ type: "url", message: "请输入有效的 HTTP(S) 链接" }]}>
                         <Input type="url" inputMode="url" spellCheck={false} placeholder="https://example.com/SKILL.md" />
                     </Form.Item>
                     <Form.Item name="is_public" label="公开状态" valuePropName="checked" extra="公开后其他用户可以加入使用。">

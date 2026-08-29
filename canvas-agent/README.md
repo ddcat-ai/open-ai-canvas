@@ -196,7 +196,9 @@ default_tools_approval_mode = "approve"
 
 侧边栏上传或粘贴的图片会先发到本机 Canvas Agent，再由 Canvas Agent 临时写入本机文件并作为 app-server `localImage` 输入传给 Codex；前端会提示附件体积，单次请求体限制为 30MB。
 
-侧边栏 Composer 中显式提及的网页技能不会被拼接进用户 Prompt。网页把技能 bundle 传给本机 Runtime，Runtime 为当前 turn 临时生成受限的 `SKILL.md`，并通过 Codex app-server 的原生 `skill` 输入项加载；技能不会被复制进文本输入，也不会添加 `$skill-name` 伪标记，turn 完成后删除临时文件。未被用户提及的技能不会进入该 turn。
+侧边栏 Composer 中显式提及的网页技能不会被拼接进用户 Prompt。网页只为本轮提及的技能获取 bundle，本机 Runtime 将 `SKILL.md`、`references/`、`scripts/`、`assets/` 等目录完整写入当前 turn 的临时技能目录，并通过 Codex app-server 的原生 `skill` 输入项加载；技能不会被复制进文本输入，也不会添加 `$skill-name` 伪标记，turn 完成后删除整个临时目录。未被用户提及的技能不会传给本机 Runtime。
+
+网页内置在线 Agent 使用另一条渐进式路径：系统上下文只列技能名称、简介、版本和文件数；模型先读取入口 `SKILL.md`，再按入口引用调用文件清单、搜索或单文件读取工具，不会一次性加载整个技能包。
 
 ## Claude Code
 

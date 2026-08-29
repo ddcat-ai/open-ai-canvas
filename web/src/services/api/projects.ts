@@ -1,4 +1,5 @@
 import { apiClient, request } from "@/services/api/request";
+import type { GenerationTask } from "@/services/api/task-center";
 
 const api = apiClient;
 
@@ -10,6 +11,7 @@ export type Project = {
     aspectRatio: string;
     sourceType: string;
     description: string;
+    coverResourceId?: string;
     stylePresetId: string;
     styleProfileJson?: string;
     status: "active" | "archived" | string;
@@ -41,6 +43,7 @@ export type ProjectUnit = {
     kind: "chapter" | "episode" | string;
     title: string;
     sourceText: string;
+    wordCount: number;
     status: "draft" | "ready" | "completed" | string;
     position: number;
     createdAt: string;
@@ -243,7 +246,8 @@ export type ProjectDetail = {
     shotRevisions: ShotRevision[];
     shotArtifacts: ShotArtifact[];
     shotReferences: ShotAssetReference[];
-    assetCandidates: ProjectAssetCandidate[];
+	assetCandidates: ProjectAssetCandidate[];
+	tasks: GenerationTask[];
 };
 
 export function listProjects(): Promise<{ projects: ProjectSummary[] }>;
@@ -288,7 +292,8 @@ function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
         shotRevisions: Array.isArray(detail.shotRevisions) ? detail.shotRevisions : [],
         shotArtifacts: Array.isArray(detail.shotArtifacts) ? detail.shotArtifacts : [],
         shotReferences: Array.isArray(detail.shotReferences) ? detail.shotReferences : [],
-        assetCandidates: Array.isArray(detail.assetCandidates) ? detail.assetCandidates : [],
+		assetCandidates: Array.isArray(detail.assetCandidates) ? detail.assetCandidates : [],
+		tasks: Array.isArray(detail.tasks) ? detail.tasks : [],
     };
 }
 
@@ -296,7 +301,7 @@ export function createProject(input: { name: string; type: string; aspectRatio: 
     return request<{ project: Project }>(api.post("/projects", input));
 }
 
-export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "stylePresetId" | "styleProfileJson" | "status">>) {
+export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "coverResourceId" | "stylePresetId" | "styleProfileJson" | "status">>) {
     return request<{ project: Project }>(api.patch(`/projects/${encodeURIComponent(projectId)}`, input));
 }
 
@@ -396,7 +401,7 @@ export function replaceProjectCharacterRepresentations(projectId: string, assetI
     return request<ProjectCharacterDetail>(api.put(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}/representations`, { representations }));
 }
 
-export function bindProjectCharacterVoice(projectId: string, assetId: string, input: { voiceProfileId: string; instructions?: string }) {
+export function bindProjectCharacterVoice(projectId: string, assetId: string, input: { voiceProfileId?: string; sampleResourceId?: string; voiceName?: string; instructions?: string }) {
     return request<ProjectCharacterDetail>(api.put(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}/voice`, input));
 }
 
@@ -412,12 +417,20 @@ export function saveProjectShot(projectId: string, input: { id?: string; unitId?
     return request<{ shot: ProjectShot }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots`, input));
 }
 
-export function replaceProjectUnitShots(projectId: string, unitId: string, shots: Array<{ title: string; description: string; durationMs: number }>) {
-    return request<{ shots: ProjectShot[] }>(api.put(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}/shots`, { shots }));
+export function deleteProjectShot(projectId: string, shotId: string) {
+    return request<{ deleted: boolean }>(api.delete(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}`));
+}
+
+export function replaceProjectUnitShots(projectId: string, unitId: string, shots: Array<{ title: string; description: string; durationMs: number; revision?: Partial<ShotRevisionInput>; assetVersionIds?: string[] }>, expectedShotIds?: string[]) {
+    return request<{ shots: ProjectShot[] }>(api.put(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}/shots`, { shots, ...(expectedShotIds ? { expectedShotIds } : {}) }));
 }
 
 export function linkShotAsset(projectId: string, shotId: string, input: { assetVersionId: string; role: ShotAssetReference["role"] }) {
     return request<{ reference: ShotAssetReference }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/assets`, input));
+}
+
+export function unlinkShotAsset(projectId: string, shotId: string, referenceId: string) {
+    return request<{ unlinked: boolean }>(api.delete(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/assets/${encodeURIComponent(referenceId)}`));
 }
 
 export function createShotRevision(projectId: string, shotId: string, input: ShotRevisionInput) {

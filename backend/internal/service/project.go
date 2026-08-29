@@ -29,6 +29,7 @@ type UpdateProjectRequest struct {
 	AspectRatio      string  `json:"aspectRatio"`
 	SourceType       string  `json:"sourceType"`
 	Description      *string `json:"description"`
+	CoverResourceID  *string `json:"coverResourceId"`
 	StylePresetID    *string `json:"stylePresetId"`
 	StyleProfileJSON *string `json:"styleProfileJson"`
 	Status           string  `json:"status"`
@@ -90,6 +91,7 @@ type ProjectDetail struct {
 	ShotArtifacts   []model.ShotArtifact          `json:"shotArtifacts"`
 	ShotReferences  []model.ShotAssetReference    `json:"shotReferences"`
 	AssetCandidates []model.ProjectAssetCandidate `json:"assetCandidates"`
+	Tasks           []TaskSummary                 `json:"tasks"`
 }
 
 func (s *Service) ListProjects(userID string) ([]ProjectSummary, error) {
@@ -150,6 +152,13 @@ func (s *Service) ProjectDetail(userID string, id string) (ProjectDetail, error)
 			return ProjectDetail{}, err
 		}
 	}
+	if tasks, tasksErr := s.repo.SuccessfulWorkflowTasksForProject(userID, project.ID); tasksErr == nil {
+		for _, task := range tasks {
+			if err := s.RegisterTaskOutputFromTask(task); err != nil {
+				_ = s.log(userID, task.ID, "error", "项目读取时工作流产物补偿失败", err.Error())
+			}
+		}
+	}
 	// 项目工作台只返回章节摘要，长篇小说正文由单章接口按需读取。
 	units, err := s.repo.ProjectUnitSummaries(project.ID)
 	if err != nil {
@@ -195,7 +204,11 @@ func (s *Service) ProjectDetail(userID string, id string) (ProjectDetail, error)
 	if err != nil {
 		return ProjectDetail{}, err
 	}
-	return ProjectDetail{Project: *project, Units: units, Canvases: canvases, CanvasUnitLinks: canvasUnitLinks, Assets: assets, AssetFolders: assetFolders, Workflows: workflows, Shots: shots, ShotRevisions: shotRevisions, ShotArtifacts: shotArtifacts, ShotReferences: shotReferences, AssetCandidates: candidates}, nil
+	tasks, err := s.TasksWithOptions(userID, TaskListOptions{Limit: 100, ProjectID: project.ID})
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	return ProjectDetail{Project: *project, Units: units, Canvases: canvases, CanvasUnitLinks: canvasUnitLinks, Assets: assets, AssetFolders: assetFolders, Workflows: workflows, Shots: shots, ShotRevisions: shotRevisions, ShotArtifacts: shotArtifacts, ShotReferences: shotReferences, AssetCandidates: candidates, Tasks: tasks}, nil
 }
 
 func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.Project, error) {
@@ -261,6 +274,22 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 	}
 	if req.Description != nil {
 		project.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.CoverResourceID != nil {
+		coverResourceID := strings.TrimSpace(*req.CoverResourceID)
+		if coverResourceID != "" {
+			resource, resourceErr := s.repo.ResourceForUser(userID, coverResourceID)
+			if resourceErr != nil {
+				if errors.Is(resourceErr, gorm.ErrRecordNotFound) {
+					return model.Project{}, BadAuthRequest("项目主图不存在或不属于当前用户")
+				}
+				return model.Project{}, resourceErr
+			}
+			if resource.Status != model.ResourceStatusReady || resource.Kind != "image" {
+				return model.Project{}, BadAuthRequest("项目主图必须是已就绪的图片资源")
+			}
+		}
+		project.CoverResourceID = coverResourceID
 	}
 	if req.StylePresetID != nil {
 		project.StylePresetID = strings.TrimSpace(*req.StylePresetID)
@@ -448,7 +477,7 @@ func newProjectUnit(projectID string, req CreateProjectUnitRequest, position int
 		position = 0
 	}
 	now := time.Now()
-	unit := model.ProjectUnit{ID: newID(), ProjectID: projectID, Kind: kind, Title: title, SourceText: req.SourceText, Status: model.ProjectUnitStatusDraft, Position: position, CreatedAt: now, UpdatedAt: now}
+	unit := model.ProjectUnit{ID: newID(), ProjectID: projectID, Kind: kind, Title: title, SourceText: req.SourceText, WordCount: model.ProjectUnitWordCount(req.SourceText), Status: model.ProjectUnitStatusDraft, Position: position, CreatedAt: now, UpdatedAt: now}
 	return unit, nil
 }
 
@@ -465,6 +494,7 @@ func (s *Service) UpdateProjectUnit(userID string, projectID string, unitID stri
 		unit.Title = title
 	}
 	unit.SourceText = req.SourceText
+	unit.WordCount = model.ProjectUnitWordCount(req.SourceText)
 	if status := model.ProjectUnitStatus(strings.TrimSpace(req.Status)); status != "" {
 		if status != model.ProjectUnitStatusDraft && status != model.ProjectUnitStatusReady && status != model.ProjectUnitStatusCompleted {
 			return model.ProjectUnit{}, BadAuthRequest("不支持的章节状态")

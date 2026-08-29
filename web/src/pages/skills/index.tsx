@@ -3,13 +3,14 @@ import { Boxes, Check, Clapperboard, Heart, Library, LoaderCircle, Megaphone, Mo
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { ListToolbar, PaginationBar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
+import { ListToolbar, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { fallbackSkillCategories, formatSkillCount, groupSkills, skillCategoryLabel } from "@/pages/skills/skill-catalog";
-import { SkillDetailDrawer } from "@/pages/skills/skill-detail-drawer";
+import { SkillDetailModal } from "@/pages/skills/skill-detail-drawer";
 import { SkillEditorDrawer } from "@/pages/skills/skill-editor-drawer";
-import { addSkill, deleteSkill, getSkill, likeSkill, listSkills, removeSkill, unlikeSkill, type Skill, type SkillCategory, type SkillScope, type SkillSort } from "@/services/api/skills";
+import { SkillInstallModal } from "@/pages/skills/skill-install-modal";
+import { addSkill, deleteSkill, getSkill, likeSkill, listSkills, removeSkill, syncSkill, unlikeSkill, type Skill, type SkillCategory, type SkillScope, type SkillSort } from "@/services/api/skills";
 
 const scopeOptions = [
     { label: "技能广场", value: "public", icon: Sparkles },
@@ -64,6 +65,7 @@ export default function SkillsPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [mutatingID, setMutatingID] = useState("");
     const [editorOpen, setEditorOpen] = useState(false);
+    const [installOpen, setInstallOpen] = useState(false);
     const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
 
     const reload = useCallback(() => setReloadKey((value) => value + 1), []);
@@ -163,6 +165,20 @@ export default function SkillsPage() {
         }
     };
 
+    const synchronizeSkill = async (skill: Skill) => {
+        setMutatingID(skill.skill_id);
+        try {
+            const result = await syncSkill(skill.skill_id);
+            patchSkill(result.skill);
+            message.success(result.skill.version_id === skill.version_id ? "已是最新版本" : "已同步最新版本");
+            reload();
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "GitHub 技能同步失败");
+        } finally {
+            setMutatingID("");
+        }
+    };
+
     const confirmDelete = (skill: Skill) => {
         modal.confirm({
             title: `删除“${skill.skill_name}”？`,
@@ -239,7 +255,7 @@ export default function SkillsPage() {
                                         <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
                                     </div>
                                     <div className="library-grid skill-library-grid">
-                                        {groupedSkills[0] === group ? <button type="button" className="library-create-card" onClick={() => void openEditor()}><span className="library-create-cover"><Plus className="size-8" /></span><span className="library-create-title">创建技能</span><span className="library-create-meta">把一套方法变成可复用能力</span></button> : null}
+                                        {groupedSkills[0] === group ? <button type="button" className="library-create-card" onClick={() => setInstallOpen(true)}><span className="library-create-cover"><Plus className="size-8" /></span><span className="library-create-title">安装技能</span><span className="library-create-meta">上传 MD / ZIP 或连接 GitHub</span></button> : null}
                                         {group.skills.map((skill, index) => <SkillCard key={skill.skill_id} skill={skill} categories={categories} loading={mutatingID === skill.skill_id} style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
                                     </div>
                                 </section>
@@ -256,7 +272,7 @@ export default function SkillsPage() {
                         action={filtersActive
                             ? <Button onClick={() => { setSearch(""); setTag("all"); setSort("popular"); setPage(1); }}>清除筛选</Button>
                             : (scope === "created" || scope === "public")
-                              ? <Button type="primary" icon={<Plus className="size-4" />} onClick={() => void openEditor()}>创建技能</Button>
+                              ? <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>
                               : undefined}
                     />
                 )}
@@ -264,7 +280,8 @@ export default function SkillsPage() {
                 <PaginationBar current={page} pageSize={pageSize} total={total} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
             </WorkspacePage>
 
-            <SkillDetailDrawer skill={activeSkill} loading={detailLoading} mutating={Boolean(activeSkill && mutatingID === activeSkill.skill_id)} categories={categories} onClose={() => setActiveSkill(null)} onAdd={(skill) => void toggleAdded(skill)} onLike={(skill) => void toggleLiked(skill)} onEdit={(skill) => void openEditor(skill)} />
+            <SkillDetailModal skill={activeSkill} loading={detailLoading} mutating={Boolean(activeSkill && mutatingID === activeSkill.skill_id)} categories={categories} onClose={() => setActiveSkill(null)} onAdd={(skill) => void toggleAdded(skill)} onLike={(skill) => void toggleLiked(skill)} onEdit={(skill) => void openEditor(skill)} onSync={(skill) => void synchronizeSkill(skill)} />
+            <SkillInstallModal open={installOpen} onClose={() => setInstallOpen(false)} onInstalled={(skill) => { setInstallOpen(false); setActiveSkill(skill); reload(); }} onManualCreate={() => { setInstallOpen(false); void openEditor(); }} />
             <SkillEditorDrawer open={editorOpen} skill={editingSkill} onClose={() => setEditorOpen(false)} onSaved={(skill) => { setEditorOpen(false); setEditingSkill(null); setActiveSkill(skill); reload(); }} />
         </>
     );

@@ -128,6 +128,11 @@ test("task display does not claim a submitted Dreamina receipt is actively gener
     expect(generationTaskStageLabel(officialCompleted)).toBe("官方返回状态：completed");
     expect(generationTaskStatusLabel(generating)).toBe("生成中");
     expect(generationTaskShowsProgress(generating)).toBe(true);
+
+    for (const stage of ["等待队列调度", "后端接管任务", "正在连接上游", "调用生成模型"]) {
+        expect(generationTaskShowsProgress({ ...generating, provider: "managed", stage })).toBe(false);
+    }
+    expect(generationTaskShowsProgress({ ...generating, provider: "managed", stage: "上游生成中" })).toBe(true);
     expect(generationTaskStatusLabel(remoteRunning)).toBe("生成中");
 });
 
@@ -183,6 +188,14 @@ test("Canvas task surfaces route Dreamina uncertainty through shared display sem
     expect(taskCenterSource).toContain("<TaskGridCard");
     expect(createSource).not.toContain('item.generationStage === "submission_unknown"');
     expect(createSource).not.toContain('generationStage === "submission_unknown" ? "cancelled"');
+});
+
+test("Canvas fullscreen video restores large controls instead of keeping the compact node layout", async () => {
+    const playerCSS = await Bun.file(new URL("../src/components/video-player.css", import.meta.url)).text();
+    expect(playerCSS).toContain(".canvas-video-player-compact:not([data-fullscreen])");
+    expect(playerCSS).toContain("--media-fullscreen-button-size: 52px");
+    expect(playerCSS).toContain("--media-slider-track-height: 7px");
+    expect(playerCSS).toContain("min-height: 64px");
 });
 
 test("task center deletion accepts only local Dreamina records", async () => {

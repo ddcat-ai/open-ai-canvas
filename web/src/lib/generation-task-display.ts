@@ -36,6 +36,9 @@ export function generationTaskStageLabel(task: GenerationTaskDisplayTarget) {
 
 export function generationTaskShowsProgress(task: GenerationTaskDisplayTarget) {
     if (isGenerationTaskSubmissionUncertain(task)) return false;
+    // 排队、后端接管和连接供应商都没有真实百分比。只有上游状态响应
+    // 已经写回任务后才显示进度，避免所有图片/视频长期停在同一个假数值。
+    if (["等待队列调度", "后端接管任务", "正在连接上游", "调用生成模型"].includes(task.stage || "")) return false;
     return !(task.provider === "dreamina-cli" && task.status === "running" && (task.stage === "submitting" || task.stage === "submitted"));
 }
 

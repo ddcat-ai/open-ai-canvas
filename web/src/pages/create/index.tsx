@@ -43,7 +43,8 @@ import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { buildCreationMentionReferences, displayCreationPrompt, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { skillRuntime } from "@/services/skill-runtime";
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
@@ -386,7 +387,7 @@ export default function CreatePage() {
                 category: asset.category || "other",
                 kindLabel: asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "图片",
                 asset,
-                searchText: asset.tags.join(" "),
+                searchText: (asset.tags || []).join(" "),
                 disabledReason: mode === "image" && asset.kind !== "image" ? "图片创作仅支持参考图" : undefined,
             })),
         ...externalLibraryItems,
@@ -566,8 +567,22 @@ export default function CreatePage() {
             audioCount: referenceAudios.length,
             characterCount: 0,
         });
-        const expandedPrompt = expandCreationPrompt(text, references, attachments);
-        const referenceMetadata = creationReferenceMetadata(references);
+        const skillReferences = references.flatMap((reference) => (reference.skill ? [reference.skill] : []));
+        let skillExecution: Awaited<ReturnType<typeof skillRuntime.prepare<"creation">>>;
+        try {
+            skillExecution = await skillRuntime.prepare({
+                profile: "creation",
+                prompt: expandCreationPrompt(text, references, attachments),
+                skills: skillReferences,
+                selectedSkillIds: skillReferences.map((skill) => skill.skill_id),
+            });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "技能上下文加载失败");
+            releaseRetryLock();
+            return;
+        }
+        const expandedPrompt = skillExecution.prompt;
+        const referenceMetadata = skillExecution.metadata;
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings, ...retryContext });

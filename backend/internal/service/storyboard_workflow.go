@@ -92,7 +92,7 @@ func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, inp
 		plan, parseErr := parseAgentStoryboardPlan(repairedText)
 		if parseErr == nil {
 			normalizeAutomaticStoryboardDurations(&plan, shotDuration)
-			parseErr = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters, input.CanvasAssets)
+			parseErr = validateStoryboardPlan(&plan, shotDuration, shotCount, input.Characters, input.CanvasAssets)
 		}
 		if parseErr == nil {
 			return plan, nil
@@ -148,7 +148,7 @@ func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, i
 	plan, err := parseAgentStoryboardPlan(text)
 	if err == nil {
 		normalizeAutomaticStoryboardDurations(&plan, shotDuration)
-		err = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters, assets)
+		err = validateStoryboardPlan(&plan, shotDuration, shotCount, input.Characters, assets)
 	}
 	if err != nil {
 		plan, err = s.repairStoryboardPlan(ctx, task, input, config, text, err, shotDuration, shotCount)

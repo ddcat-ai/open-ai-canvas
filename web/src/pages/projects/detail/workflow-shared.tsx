@@ -4,6 +4,7 @@ import { Check, CircleAlert } from "lucide-react";
 import { Link } from "react-router";
 
 import type { ProjectDetail, ProjectShot, ShotArtifact, ShotRevision, WorkflowStep } from "@/services/api/projects";
+import type { TaskStatus } from "@/services/api/task-center";
 
 export type ShortDramaWorkflowStage = "story" | "assets" | "storyboard" | "previz" | "video" | "delivery";
 
@@ -38,11 +39,17 @@ export function MetricCard({ icon, label, value }: { icon: ReactNode; label: str
     return <div className="rounded-xl border border-border/70 bg-surface p-5"><div className="text-foreground/35">{icon}</div><div className="mt-4 text-2xl font-semibold">{value}</div><div className="mt-1 text-xs text-foreground/45">{label}</div></div>;
 }
 
-export function ArtifactStatus({ artifact, compact = false }: { artifact?: ShotArtifact; compact?: boolean }) {
-    if (!artifact) return <Tag className={compact ? "!m-0" : ""}>待生成</Tag>;
-    const color = artifact.status === "ready" ? "green" : artifact.status === "failed" ? "red" : artifact.status === "stale" ? "orange" : "blue";
-    const label = artifact.status === "ready" ? "已生成" : artifact.status === "failed" ? "失败" : artifact.status === "stale" ? "已过期" : "生成中";
-    return <Tag className={compact ? "!m-0" : ""} color={color}>{label}</Tag>;
+export function ArtifactStatus({ artifact, taskStatus, compact = false }: { artifact?: ShotArtifact; taskStatus?: TaskStatus; compact?: boolean }) {
+    const className = `artifact-status-tag ${compact ? "!m-0" : ""}`;
+    if (taskStatus === "queued" || taskStatus === "running" || (taskStatus === "succeeded" && !artifact)) {
+        return <Tag className={`${className} is-running`} color="processing">生成中</Tag>;
+    }
+    if (taskStatus === "failed") return <Tag className={`${className} is-failed`} color="error">生成失败</Tag>;
+    if (!artifact) return <Tag className={`${className} is-pending`}>待生成</Tag>;
+    const color = artifact.status === "ready" ? "success" : artifact.status === "failed" ? "error" : artifact.status === "stale" ? "warning" : "processing";
+    const label = artifact.status === "ready" ? "已生成" : artifact.status === "failed" ? "生成失败" : artifact.status === "stale" ? "已过期" : "生成中";
+    const tone = artifact.status === "ready" ? "ready" : artifact.status === "failed" ? "failed" : artifact.status === "stale" ? "stale" : "running";
+    return <Tag className={`${className} is-${tone}`} color={color}>{label}</Tag>;
 }
 
 export function currentRevision(detail: ProjectDetail, shot?: ProjectShot): ShotRevision | undefined {

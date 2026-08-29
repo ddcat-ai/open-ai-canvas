@@ -253,6 +253,9 @@ export type CanvasNodeMetadata = {
     stylePresetId?: string;
     styleProfileJson?: string;
     styleExecutionPlan?: StyleExecutionPlan;
+    skillIds?: string[];
+    skillVersions?: Array<{ skillId: string; versionId: string; version: string }>;
+    skillFiles?: Array<{ skillId: string; path: string; sha256?: string }>;
     chapterId?: string;
     chapterTitle?: string;
     shotIndex?: number;
@@ -504,6 +507,7 @@ export type ContextMenuState =
           x: number;
           y: number;
           position: Position;
+          createOpen?: boolean;
       }
     | {
           type: "node";

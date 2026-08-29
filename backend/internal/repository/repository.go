@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ var ErrTextReplayClosed = errors.New("text replay task is closed")
 var ErrProjectAssetFolderNotEmpty = errors.New("project asset folder is not empty")
 
 var ErrProjectHasActiveTasks = errors.New("project has active tasks")
+
+var ErrProjectUnitShotsChanged = errors.New("project unit shots changed")
 
 type Repository struct {
 	db *gorm.DB
@@ -459,6 +462,17 @@ func (r *Repository) UpdateTaskProgress(id string, stage string, progress int) e
 	}).Error
 }
 
+// UpdateTaskProviderProgress records upstream-reported progress without allowing
+// a delayed or out-of-order poll response to move the public percentage backwards.
+func (r *Repository) UpdateTaskProviderProgress(id string, progress int) error {
+	progress = max(0, min(100, progress))
+	return r.db.Model(&model.Task{}).Where("id = ? AND status = ?", id, model.TaskStatusRunning).Updates(map[string]any{
+		"stage":      "上游生成中",
+		"progress":   gorm.Expr("CASE WHEN progress < ? THEN ? ELSE progress END", progress, progress),
+		"updated_at": time.Now(),
+	}).Error
+}
+
 func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskStatus, session *model.Session, message *model.Message, results []model.Result) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updated := tx.Model(&model.Task{}).
@@ -603,6 +617,15 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 		query = query.Where("status IN ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning})
 	}
 	err := query.Order("created_at desc").Limit(limit).Find(&tasks).Error
+	return tasks, err
+}
+
+// SuccessfulWorkflowTasksForProject 返回需要补偿工作流产物的成功任务。
+// 不设分页，供项目详情读取时修复浏览器中断造成的历史断点。
+func (r *Repository) SuccessfulWorkflowTasksForProject(userID string, projectID string) ([]model.Task, error) {
+	var tasks []model.Task
+	err := r.db.Where("user_id = ? AND project_id = ? AND status = ?", userID, projectID, model.TaskStatusSucceeded).
+		Order("completed_at asc, created_at asc").Find(&tasks).Error
 	return tasks, err
 }
 
@@ -1106,7 +1129,8 @@ func (r *Repository) CreateProject(project *model.Project) error {
 func (r *Repository) UpdateProject(project *model.Project) error {
 	return r.db.Model(&model.Project{}).Where("id = ? AND user_id = ?", project.ID, project.UserID).Updates(map[string]any{
 		"name": project.Name, "type": project.Type, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
-		"description": project.Description, "style_preset_id": project.StylePresetID, "style_profile_json": project.StyleProfileJSON,
+		"description": project.Description, "cover_resource_id": project.CoverResourceID,
+		"style_preset_id": project.StylePresetID, "style_profile_json": project.StyleProfileJSON,
 		"status": project.Status, "revision": project.Revision, "updated_at": project.UpdatedAt,
 	}).Error
 }
@@ -1214,7 +1238,7 @@ func (r *Repository) ProjectUnits(projectID string) ([]model.ProjectUnit, error)
 
 func (r *Repository) ProjectUnitSummaries(projectID string) ([]model.ProjectUnit, error) {
 	var units []model.ProjectUnit
-	err := r.db.Select("id", "project_id", "kind", "title", "status", "position", "created_at", "updated_at").Where("project_id = ?", projectID).Order("position asc, created_at asc").Find(&units).Error
+	err := r.db.Select("id", "project_id", "kind", "title", "word_count", "status", "position", "created_at", "updated_at").Where("project_id = ?", projectID).Order("position asc, created_at asc").Find(&units).Error
 	return units, err
 }
 
@@ -1265,7 +1289,7 @@ func (r *Repository) ProjectUnit(projectID string, id string) (*model.ProjectUni
 func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkflow bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unit.ID, unit.ProjectID).Updates(map[string]any{
-			"parent_id": unit.ParentID, "title": unit.Title, "source_text": unit.SourceText, "status": unit.Status, "position": unit.Position, "updated_at": unit.UpdatedAt,
+			"parent_id": unit.ParentID, "title": unit.Title, "source_text": unit.SourceText, "word_count": unit.WordCount, "status": unit.Status, "position": unit.Position, "updated_at": unit.UpdatedAt,
 		})
 		if result.Error != nil {
 			return result.Error
@@ -1690,8 +1714,19 @@ func (r *Repository) SaveShotWithRevision(shot *model.Shot, revision *model.Shot
 	})
 }
 
-func (r *Repository) ReplaceProjectUnitShots(projectID string, unitID string, shots []model.Shot, revisions []model.ShotRevision) error {
+func (r *Repository) ReplaceProjectUnitShots(projectID string, unitID string, shots []model.Shot, revisions []model.ShotRevision, references []model.ShotAssetReference, expectedShotIDs []string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if expectedShotIDs != nil {
+			var currentShotIDs []string
+			if err := tx.Model(&model.Shot{}).Where("project_id = ? AND unit_id = ?", projectID, unitID).Order("id asc").Pluck("id", &currentShotIDs).Error; err != nil {
+				return err
+			}
+			expected := append([]string(nil), expectedShotIDs...)
+			sort.Strings(expected)
+			if !slices.Equal(currentShotIDs, expected) {
+				return ErrProjectUnitShotsChanged
+			}
+		}
 		shotIDs := tx.Model(&model.Shot{}).Select("id").Where("project_id = ? AND unit_id = ?", projectID, unitID)
 		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, unitID).Delete(&model.ShotArtifact{}).Error; err != nil {
 			return err
@@ -1716,6 +1751,11 @@ func (r *Repository) ReplaceProjectUnitShots(projectID string, unitID string, sh
 				return err
 			}
 		}
+		if len(references) > 0 {
+			if err := tx.Create(&references).Error; err != nil {
+				return err
+			}
+		}
 		if err := invalidateUnitWorkflowTx(tx, projectID, unitID, "storyboard", time.Now()); err != nil {
 			return err
 		}
@@ -1729,6 +1769,54 @@ func (r *Repository) ShotForProject(projectID string, shotID string) (*model.Sho
 		return nil, err
 	}
 	return &shot, nil
+}
+
+// DeleteProjectShot 原子删除单个镜头的领域关联，并重新压紧同章节镜头顺序。
+func (r *Repository) DeleteProjectShot(projectID string, shotID string, updatedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var shot model.Shot
+		if err := tx.First(&shot, "id = ? AND project_id = ?", shotID, projectID).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND shot_id = ?", projectID, shotID).Delete(&model.ProductionTaskLink{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND shot_id = ?", projectID, shotID).Delete(&model.ShotArtifact{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("shot_id = ?", shotID).Delete(&model.ShotRevision{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("shot_id = ?", shotID).Delete(&model.ShotAssetReference{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND shot_id = ?", projectID, shotID).Delete(&model.ProjectAssetCandidate{}).Error; err != nil {
+			return err
+		}
+		result := tx.Where("id = ? AND project_id = ?", shotID, projectID).Delete(&model.Shot{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		var remaining []model.Shot
+		if err := tx.Select("id", "position").Where("project_id = ? AND unit_id = ?", projectID, shot.UnitID).Order("position asc, created_at asc, id asc").Find(&remaining).Error; err != nil {
+			return err
+		}
+		for position, item := range remaining {
+			if item.Position == position {
+				continue
+			}
+			if err := tx.Model(&model.Shot{}).Where("id = ? AND project_id = ?", item.ID, projectID).Update("position", position).Error; err != nil {
+				return err
+			}
+		}
+		if err := invalidateUnitWorkflowTx(tx, projectID, shot.UnitID, "storyboard", updatedAt); err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": updatedAt}).Error
+	})
 }
 
 func (r *Repository) ProjectShotRevisions(projectID string) ([]model.ShotRevision, error) {
@@ -1804,6 +1892,32 @@ func (r *Repository) UpsertShotAssetReferenceAndInvalidate(projectID string, ref
 		}
 		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": updatedAt}).Error
 	})
+}
+
+func (r *Repository) DeleteShotAssetReferenceAndInvalidate(projectID string, shotID string, referenceID string, updatedAt time.Time) (bool, error) {
+	deleted := false
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("id = ? AND shot_id = ?", referenceID, shotID).Delete(&model.ShotAssetReference{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		deleted = true
+		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		var shot model.Shot
+		if err := tx.First(&shot, "id = ? AND project_id = ?", shotID, projectID).Error; err != nil {
+			return err
+		}
+		if err := invalidateUnitWorkflowTx(tx, projectID, shot.UnitID, "storyboard", updatedAt); err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": updatedAt}).Error
+	})
+	return deleted, err
 }
 
 func invalidateUnitWorkflowTx(tx *gorm.DB, projectID string, unitID string, fromStepKey string, updatedAt time.Time) error {
@@ -2010,19 +2124,45 @@ func (r *Repository) UpdateWorkflowProgress(step *model.WorkflowStepInstance, ne
 // RegisterWorkflowTaskOutput 将成功任务、流程步骤和产物表示写入同一事务，重复回填使用任务与用途唯一键幂等。
 func (r *Repository) RegisterWorkflowTaskOutput(step *model.WorkflowStepInstance, next *model.WorkflowStepInstance, instance *model.WorkflowInstance, projectID string, link *model.WorkflowStepTask, representation *model.AssetRepresentation, productionLink *model.ProductionTaskLink, artifact *model.ShotArtifact) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("workflow_step_id = ? AND task_id = ?", link.WorkflowStepID, link.TaskID).FirstOrCreate(link).Error; err != nil {
+		var existingLink model.WorkflowStepTask
+		if err := tx.Where("workflow_step_id = ? AND task_id = ?", link.WorkflowStepID, link.TaskID).First(&existingLink).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := tx.Create(link).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		if representation != nil {
-			if err := tx.Where("task_id = ? AND role = ?", representation.TaskID, representation.Role).FirstOrCreate(representation).Error; err != nil {
+			var existingRepresentation model.AssetRepresentation
+			if err := tx.Where("task_id = ? AND role = ?", representation.TaskID, representation.Role).First(&existingRepresentation).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				if err := tx.Create(representation).Error; err != nil {
+					return err
+				}
+			} else if err != nil {
 				return err
 			}
 		}
 		if productionLink != nil {
-			if err := tx.Where("task_id = ? AND shot_id = ? AND artifact_type = ?", productionLink.TaskID, productionLink.ShotID, productionLink.ArtifactType).Assign(map[string]any{
-				"project_id": productionLink.ProjectID, "canvas_id": productionLink.CanvasID, "unit_id": productionLink.UnitID, "shot_id": productionLink.ShotID,
-				"workflow_step_id": productionLink.WorkflowStepID, "artifact_type": productionLink.ArtifactType, "updated_at": productionLink.UpdatedAt,
-			}).FirstOrCreate(productionLink).Error; err != nil {
+			var existingProductionLink model.ProductionTaskLink
+			err := tx.Where("task_id = ? AND shot_id = ? AND artifact_type = ?", productionLink.TaskID, productionLink.ShotID, productionLink.ArtifactType).First(&existingProductionLink).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if err := tx.Create(productionLink).Error; err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			} else if err := tx.Model(&existingProductionLink).Updates(map[string]any{
+				"project_id": productionLink.ProjectID, "canvas_id": productionLink.CanvasID, "unit_id": productionLink.UnitID,
+				"workflow_step_id": productionLink.WorkflowStepID, "updated_at": productionLink.UpdatedAt,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		if artifact != nil {
+			var existing model.ShotArtifact
+			if err := tx.Where("task_id = ? AND shot_id = ? AND type = ?", artifact.TaskID, artifact.ShotID, artifact.Type).First(&existing).Error; err == nil {
+				artifact = nil
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
 		}

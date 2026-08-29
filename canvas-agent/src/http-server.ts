@@ -1,3 +1,5 @@
+import type { Express } from "express";
+
 import { CanvasSession } from "./canvas-session.js";
 import { CONFIG_DIR, type LocalRuntimeConfig } from "./config.js";
 import { createLocalRuntimeApp } from "./local-runtime.js";
@@ -21,7 +23,7 @@ type CanvasAgentHttpOptions = {
     dependencies: CanvasAgentHttpDependencies;
 };
 
-export function startHttpServer(options?: CanvasAgentHttpOptions) {
+export function startHttpServer(options?: CanvasAgentHttpOptions): ReturnType<typeof startLocalRuntime> | Express {
     if (!options) return startLocalRuntime();
     return createHttpApp(options.config, options.session, options.dependencies);
 }
@@ -30,7 +32,7 @@ export function createHttpApp(
     config: LocalRuntimeConfig,
     session: CanvasAgentSession = new CanvasSession(),
     dependencies: CanvasAgentHttpDependencies = {},
-) {
+): Express {
     const endpoint = config.url;
     const manager = new LocalRuntimeSessionManager({
         endpoint,

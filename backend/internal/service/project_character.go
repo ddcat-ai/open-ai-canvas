@@ -34,8 +34,10 @@ type ReplaceCharacterRepresentationsRequest struct {
 }
 
 type BindCharacterVoiceRequest struct {
-	VoiceProfileID string `json:"voiceProfileId"`
-	Instructions   string `json:"instructions"`
+	VoiceProfileID   string `json:"voiceProfileId"`
+	SampleResourceID string `json:"sampleResourceId"`
+	VoiceName        string `json:"voiceName"`
+	Instructions     string `json:"instructions"`
 }
 
 type CharacterRepresentationSummary struct {
@@ -153,8 +155,11 @@ func (s *Service) CreateProjectCharacter(userID string, projectID string, req Cr
 
 func (s *Service) ProjectCharacter(userID string, projectID string, assetID string) (ProjectCharacterDetail, error) {
 	asset, err := s.repo.ProjectCharacterAsset(userID, projectID, strings.TrimSpace(assetID))
-	if err != nil {
-		return ProjectCharacterDetail{}, err
+	if err != nil || asset == nil {
+		if err != nil {
+			return ProjectCharacterDetail{}, err
+		}
+		return ProjectCharacterDetail{}, BadAuthRequest("角色资产不可用")
 	}
 	return s.projectCharacterDetail(userID, projectID, asset)
 }
@@ -324,12 +329,42 @@ func (s *Service) reconcileCharacterTurnaroundTasks(userID string, projectID str
 
 func (s *Service) BindProjectCharacterVoice(userID string, projectID string, assetID string, req BindCharacterVoiceRequest) (ProjectCharacterDetail, error) {
 	asset, err := s.repo.ProjectCharacterAsset(userID, projectID, strings.TrimSpace(assetID))
-	if err != nil {
-		return ProjectCharacterDetail{}, err
+	if err != nil || asset == nil {
+		if err != nil {
+			return ProjectCharacterDetail{}, err
+		}
+		return ProjectCharacterDetail{}, BadAuthRequest("角色资产不可用")
 	}
-	profile, err := s.repo.VoiceProfileForUser(userID, strings.TrimSpace(req.VoiceProfileID))
-	if err != nil || profile.Status != "active" {
-		return ProjectCharacterDetail{}, BadAuthRequest("选择的声音素材不可用")
+	var profile *model.VoiceProfile
+	sampleResourceID := strings.TrimSpace(req.SampleResourceID)
+	if sampleResourceID != "" {
+		resource, resourceErr := s.repo.ResourceForUser(userID, sampleResourceID)
+		if resourceErr != nil || resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !isSupportedVoiceSampleMimeType(resource.MimeType) {
+			return ProjectCharacterDetail{}, BadAuthRequest("请选择已上传完成的支持格式音频：MP3、WAV、M4A/AAC、FLAC、OGG/Opus 或 WebM")
+		}
+		var profileErr error
+		profile, profileErr = s.repo.VoiceProfileBySampleResource(userID, sampleResourceID)
+		if profileErr != nil {
+			if !errors.Is(profileErr, gorm.ErrRecordNotFound) {
+				return ProjectCharacterDetail{}, profileErr
+			}
+			voiceName := strings.TrimSpace(req.VoiceName)
+			if voiceName == "" {
+				voiceName = "上传声音 · " + sampleResourceID[:min(8, len(sampleResourceID))]
+			}
+			profile = &model.VoiceProfile{ID: newID(), UserID: userID, Name: voiceName, Provider: "user_upload", VoiceKey: "sample:" + sampleResourceID, Language: "按样本使用", Timbre: "用户上传样本", SampleResourceID: sampleResourceID, CompatibleModelsJSON: "[]", Status: "active", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			if err := s.repo.CreateVoiceProfile(profile); err != nil {
+				return ProjectCharacterDetail{}, err
+			}
+		}
+	} else {
+		profile, err = s.repo.VoiceProfileForUser(userID, strings.TrimSpace(req.VoiceProfileID))
+		if err != nil || profile == nil || profile.Status != "active" {
+			return ProjectCharacterDetail{}, BadAuthRequest("选择的声音素材不可用")
+		}
+	}
+	if profile == nil || strings.TrimSpace(profile.ID) == "" {
+		return ProjectCharacterDetail{}, BadAuthRequest("声音素材不可用，请重新选择")
 	}
 	binding := &model.CharacterVoiceBinding{ID: newID(), VoiceProfileID: profile.ID, Instructions: strings.TrimSpace(req.Instructions), CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, "", nil, binding, false); err != nil {
@@ -338,10 +373,27 @@ func (s *Service) BindProjectCharacterVoice(userID string, projectID string, ass
 	return s.ProjectCharacter(userID, projectID, asset.ID)
 }
 
+func isSupportedVoiceSampleMimeType(value string) bool {
+	mime := strings.ToLower(strings.TrimSpace(strings.SplitN(value, ";", 2)[0]))
+	switch mime {
+	case "audio/mpeg", "audio/mp3", "audio/x-mpeg",
+		"audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "audio/x-pn-wav",
+		"audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac", "audio/aacp",
+		"audio/flac", "audio/x-flac",
+		"audio/ogg", "application/ogg", "audio/opus", "audio/webm":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Service) UnbindProjectCharacterVoice(userID string, projectID string, assetID string) (ProjectCharacterDetail, error) {
 	asset, err := s.repo.ProjectCharacterAsset(userID, projectID, strings.TrimSpace(assetID))
-	if err != nil {
-		return ProjectCharacterDetail{}, err
+	if err != nil || asset == nil {
+		if err != nil {
+			return ProjectCharacterDetail{}, err
+		}
+		return ProjectCharacterDetail{}, BadAuthRequest("角色资产不可用")
 	}
 	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, "", nil, nil, true); err != nil {
 		return ProjectCharacterDetail{}, err
@@ -362,9 +414,15 @@ func (s *Service) createNextCharacterVersion(projectID string, asset *model.Asse
 }
 
 func (s *Service) prepareNextCharacterVersion(asset *model.Asset, name string, definitionJSON string, replacementRepresentations []model.AssetRepresentation, replacementVoice *model.CharacterVoiceBinding, dropVoice bool) (model.Asset, model.AssetVersion, []model.AssetRepresentation, *model.CharacterVoiceBinding, error) {
+	if asset == nil {
+		return model.Asset{}, model.AssetVersion{}, nil, nil, BadAuthRequest("角色资产不可用")
+	}
 	current, err := s.repo.AssetVersion(asset.PrimaryVersionID)
-	if err != nil {
-		return model.Asset{}, model.AssetVersion{}, nil, nil, err
+	if err != nil || current == nil {
+		if err != nil {
+			return model.Asset{}, model.AssetVersion{}, nil, nil, err
+		}
+		return model.Asset{}, model.AssetVersion{}, nil, nil, BadAuthRequest("角色当前版本不可用")
 	}
 	versions, err := s.repo.AssetVersions(asset.ID)
 	if err != nil {
@@ -398,8 +456,10 @@ func (s *Service) prepareNextCharacterVersion(asset *model.Asset, name string, d
 	voice := replacementVoice
 	if voice == nil && !dropVoice {
 		currentVoice, voiceErr := s.repo.CharacterVoiceBinding(current.ID)
-		if voiceErr == nil {
+		if voiceErr == nil && currentVoice != nil {
 			voice = &model.CharacterVoiceBinding{ID: newID(), AssetVersionID: next.ID, VoiceProfileID: currentVoice.VoiceProfileID, Instructions: currentVoice.Instructions, CreatedAt: now, UpdatedAt: now}
+		} else if voiceErr == nil {
+			return model.Asset{}, model.AssetVersion{}, nil, nil, BadAuthRequest("角色声音绑定数据不完整")
 		} else if !errors.Is(voiceErr, gorm.ErrRecordNotFound) {
 			return model.Asset{}, model.AssetVersion{}, nil, nil, voiceErr
 		}
@@ -465,9 +525,9 @@ func (s *Service) characterCard(userID string, asset *model.Asset) (CharacterCar
 	var voice *CharacterVoiceSummary
 	voiceStatus := "missing"
 	binding, bindingErr := s.repo.CharacterVoiceBinding(version.ID)
-	if bindingErr == nil {
+	if bindingErr == nil && binding != nil {
 		profile, profileErr := s.repo.VoiceProfileForUser(userID, binding.VoiceProfileID)
-		if profileErr == nil && profile.Status == "active" {
+		if profileErr == nil && profile != nil && profile.Status == "active" {
 			voice = &CharacterVoiceSummary{Profile: voiceProfileSummary(*profile), Instructions: binding.Instructions}
 			voiceStatus = "ready"
 		} else {

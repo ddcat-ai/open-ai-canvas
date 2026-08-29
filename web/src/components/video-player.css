@@ -11,7 +11,104 @@
     object-fit: contain;
 }
 
-/* 画布节点顶部还有标题和存储状态，隐藏 Vidstack 小布局的顶部控制组避免互相遮挡。 */
-.canvas-video-player-compact .vds-video-layout[data-sm] .vds-controls-group:first-child {
+/* 画布节点顶部还有标题和存储状态，隐藏 Vidstack 小布局的顶部控制组避免互相遮挡；全屏时恢复完整工具栏。 */
+.canvas-video-player-compact:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:first-child {
     display: none;
+}
+
+/* 节点内保持紧凑；全屏使用桌面播放器级别的控制尺寸，不依赖 Vidstack 小布局的默认值。 */
+.canvas-video-player[data-fullscreen],
+.canvas-video-player:fullscreen,
+.canvas-video-player:-webkit-full-screen {
+    --media-fullscreen-button-size: 60px;
+    --media-sm-fullscreen-button-size: 60px;
+    --media-button-size: 60px;
+    --media-button-icon-size: 56%;
+    --media-slider-track-height: 8px;
+    --media-slider-focused-track-height: 11px;
+    --media-slider-thumb-size: 21px;
+    --media-slider-focused-thumb-size: 24px;
+    --video-fullscreen-time-font-size: 18px;
+    --video-sm-time-font-size: 18px;
+    --video-fullscreen-chapter-title-font-size: 17px;
+    --video-sm-chapter-title-font-size: 17px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group {
+    padding-inline: 24px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:nth-last-child(2) {
+    min-height: 64px;
+    margin-bottom: -12px;
+    padding-inline: 28px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:last-child {
+    min-height: 82px;
+    gap: 4px;
+    padding: 8px 24px max(12px, env(safe-area-inset-bottom));
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-time-slider {
+    --media-slider-height: 64px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-button {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-button .vds-icon {
+    width: 34px;
+    height: 34px;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-time {
+    min-width: max-content;
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-chapter-title {
+    font-size: 17px;
+    line-height: 1.3;
+}
+
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls .vds-play-button {
+    margin-bottom: 0;
+    transform: none;
+}
+
+@media screen and (max-width: 599px) {
+    .canvas-video-player[data-fullscreen],
+    .canvas-video-player:fullscreen,
+    .canvas-video-player:-webkit-full-screen {
+        --media-fullscreen-button-size: 52px;
+        --media-sm-fullscreen-button-size: 52px;
+        --media-button-size: 52px;
+        --video-fullscreen-time-font-size: 16px;
+        --video-sm-time-font-size: 16px;
+    }
+
+    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-button {
+        width: 52px;
+        height: 52px;
+        min-width: 52px;
+    }
+
+    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-button .vds-icon {
+        width: 29px;
+        height: 29px;
+    }
+
+    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-time {
+        font-size: 16px;
+    }
+
+    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:last-child {
+        min-height: 72px;
+        padding-inline: 12px;
+    }
 }

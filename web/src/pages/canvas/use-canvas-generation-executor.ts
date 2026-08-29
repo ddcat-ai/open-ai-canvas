@@ -8,11 +8,11 @@ import { canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce }
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
-import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
 import { modelCompatibilityError, modelGroupReferenceLimits, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
+import { skillRuntime } from "@/services/skill-runtime";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
@@ -161,8 +161,14 @@ export function useCanvasGenerationExecutor({
                         return;
                     }
 
-                    const expandedPrompt = promptOnly ? rawGenerationContext.prompt : expandSkillMentions(rawGenerationContext.prompt, addedSkills);
-                    let effectivePrompt = expandedPrompt.trim();
+                    let skillExecution: Awaited<ReturnType<typeof skillRuntime.prepare<"canvas">>>;
+                    try {
+                        skillExecution = await skillRuntime.prepare({ profile: "canvas", prompt: rawGenerationContext.prompt, skills: addedSkills });
+                    } catch (error) {
+                        message.error(error instanceof Error ? error.message : "技能上下文加载失败");
+                        return;
+                    }
+                    let effectivePrompt = skillExecution.prompt.trim();
                     let styleMetadata = {};
                     if (mode === "image") {
                         try {
@@ -278,6 +284,7 @@ export function useCanvasGenerationExecutor({
                         controller,
                         editingTextNode,
                         styleMetadata,
+                        skillMetadata: skillExecution.metadata,
                         taskContext: options?.context,
                         retryContext: options?.retryContext,
                         setNodes,

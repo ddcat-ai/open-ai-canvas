@@ -24,7 +24,9 @@ import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboa
 import { reconcileStoryboardTargetConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
+import type { Skill } from "@/services/api/skills";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
+import { skillRuntime } from "@/services/skill-runtime";
 import { modelDisplayName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import {
     CanvasNodeType,
@@ -36,6 +38,7 @@ import {
 
 type UseCanvasStoryboardOptions = {
     projectId: string;
+    addedSkills: Skill[];
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -51,6 +54,7 @@ const NODE_STATUS_ERROR = "error" as const;
 
 export function useCanvasStoryboard({
     projectId,
+    addedSkills,
     nodesRef,
     connectionsRef,
     setNodes,
@@ -135,13 +139,18 @@ export function useCanvasStoryboard({
             navigateToSettings({ continueCreation: true });
             return;
         }
-        setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined } } : node));
         try {
+            const skillExecution = await skillRuntime.prepare({
+                profile: "shortDrama",
+                prompt: expandedPrompt,
+                skills: addedSkills,
+            });
+            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined, ...skillExecution.metadata } } : node));
             const task = await createGenerationTask({
                 projectId,
                 type: "agent_storyboard_rows",
                 operation: "storyboard_rows",
-                prompt: expandedPrompt,
+                prompt: skillExecution.prompt,
                 model: generationConfig.model,
                 ...(logicalModelIDForConfig(generationConfig) ? { logicalModelId: logicalModelIDForConfig(generationConfig) } : {}),
                 input: {
@@ -152,7 +161,7 @@ export function useCanvasStoryboard({
                     shotDurationSeconds,
                     shotCount: requestedShotCount,
                     config: backendProviderConfig(generationConfig, "text"),
-                    metadata: { nodeId },
+                    metadata: { nodeId, ...skillExecution.metadata },
                 },
             });
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(task), status: NODE_STATUS_LOADING } } : node));
@@ -185,7 +194,7 @@ export function useCanvasStoryboard({
             message.error(details);
             return false;
         }
-    }, [connectionsRef, effectiveConfig, isAiConfigReady, message, nodesRef, projectId, setNodes]);
+    }, [addedSkills, connectionsRef, effectiveConfig, isAiConfigReady, message, nodesRef, projectId, setNodes]);
 
     const ensureScriptImageNodes = useCallback((nodeId: string, rowIds: string[]) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);

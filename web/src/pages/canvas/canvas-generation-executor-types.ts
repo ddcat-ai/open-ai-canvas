@@ -4,6 +4,7 @@ import type { NodeGenerationContext } from "@/components/canvas/canvas-node-gene
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
+import type { SkillRuntimeMetadata } from "@/services/skill-runtime";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
 
 export type CanvasGenerationExecutorDependencies = {
@@ -32,6 +33,7 @@ export type CanvasGenerationExecution = CanvasGenerationExecutorDependencies & {
     controller: AbortController;
     editingTextNode: boolean;
     styleMetadata: { styleProfileJson?: string; styleExecutionPlan?: StyleExecutionPlan };
+    skillMetadata: SkillRuntimeMetadata;
     taskContext?: { conversationId?: string; messageId?: string };
     retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
     registerPendingNodeIds: (nodeIds: string[]) => void;

@@ -23,13 +23,13 @@ import {
     supportsVideoReferenceAudio,
 } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
-import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
+import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtime";
 import type { GenerationTask } from "@/services/api/task-center";
 import { resolveImageUrl } from "@/services/image-storage";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -122,7 +122,22 @@ export function useCanvasGenerationRetry({
                 setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, ...failure } } : item)));
                 return;
             }
-            const context = rawContext ? { ...rawContext, prompt: retryMode === "video" ? rawContext.prompt : expandSkillMentions(rawContext.prompt, addedSkills) } : null;
+            let skillMetadata: SkillRuntimeMetadata = {
+                skillIds: node.metadata?.skillIds || [],
+                skillVersions: node.metadata?.skillVersions || [],
+                skillFiles: node.metadata?.skillFiles || [],
+            };
+            let context = rawContext;
+            if (rawContext) {
+                try {
+                    const skillExecution = await skillRuntime.prepare({ profile: "canvas", prompt: rawContext.prompt, skills: addedSkills });
+                    context = { ...rawContext, prompt: skillExecution.prompt };
+                    skillMetadata = skillExecution.metadata;
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "技能上下文加载失败");
+                    return;
+                }
+            }
             const prompt = (context?.characterReferences.length ? context.prompt : savedImageMetadata?.prompt || context?.prompt || "").trim();
             if (!prompt) {
                 message.warning("找不到提示词，无法重试");
@@ -252,6 +267,7 @@ export function useCanvasGenerationRetry({
                                           watermark: generationConfig.videoWatermark,
                                           ...videoGenerationMetadata,
                                           ...styleMetadata,
+                                          ...skillMetadata,
                                           references: videoContext ? generationReferenceUrls(videoContext) : item.metadata?.references,
                                       },
                                   }
@@ -277,6 +293,7 @@ export function useCanvasGenerationRetry({
                             promptTemplateVariables: node.metadata?.promptTemplateVariables,
                             ...videoGenerationMetadata,
                             ...styleMetadata,
+                            ...skillMetadata,
                         },
                     });
                     return;
@@ -319,7 +336,7 @@ export function useCanvasGenerationRetry({
                             item.id === node.id
                                 ? {
                                       ...item,
-                                      metadata: { ...item.metadata, prompt: providerPrompt, ...generationMetadata, ...styleMetadata, emotionEdit: nextEmotionEdit },
+                                      metadata: { ...item.metadata, prompt: providerPrompt, ...generationMetadata, ...styleMetadata, ...skillMetadata, emotionEdit: nextEmotionEdit },
                                   }
                                 : item,
                         ),
@@ -333,7 +350,7 @@ export function useCanvasGenerationRetry({
                         referenceImages: [editReference, characterReference],
                         mask,
                         signal: controller.signal,
-                        metadata: { retry: true, sourceNodeId: emotionSource.id, edit: "emotion", emotionEditMode: editPlan.mode, emotion: nextEmotionEdit, resolvedCharacterVersions: context?.resolvedCharacterVersions || [], ...styleMetadata },
+                        metadata: { retry: true, sourceNodeId: emotionSource.id, edit: "emotion", emotionEditMode: editPlan.mode, emotion: nextEmotionEdit, resolvedCharacterVersions: context?.resolvedCharacterVersions || [], ...styleMetadata, ...skillMetadata },
                     });
                     return;
                 }
@@ -355,7 +372,7 @@ export function useCanvasGenerationRetry({
                         item.id === node.id
                             ? {
                                   ...item,
-                                  metadata: { ...item.metadata, prompt: mediaPrompt, ...generationMetadata, ...styleMetadata },
+                                  metadata: { ...item.metadata, prompt: mediaPrompt, ...generationMetadata, ...styleMetadata, ...skillMetadata },
                               }
                             : item,
                     ),
@@ -375,6 +392,7 @@ export function useCanvasGenerationRetry({
                         promptTemplateOperation: node.metadata?.promptTemplateOperation,
                         promptTemplateVariables: node.metadata?.promptTemplateVariables,
                         ...styleMetadata,
+                        ...skillMetadata,
                     },
                 });
             } catch (error) {

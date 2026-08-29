@@ -54,4 +54,26 @@ describe("canvas resource mention editor", () => {
         expect(configComposer).not.toContain("result += `@[node:");
         expect(project).not.toContain("removeCanvasResourceMention");
     });
+
+    test("anchors the mention menu to the caret instead of the textarea edge", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+
+        expect(component).toContain("cursorOffset={mention.end}");
+        expect(component).toContain("mentionCaretRect(anchor, cursorOffset)");
+        expect(component).toContain("textareaCaretRect(anchor, cursorOffset)");
+        expect(component).toContain('transform: position.showAbove ? "translateY(-100%)" : undefined');
+        expect(component).toContain('window.addEventListener("scroll", updatePosition, true)');
+    });
+
+    test("renders skill references as descriptive workflow rows", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const css = source("../src/styles/globals.css");
+
+        expect(component).toContain('reference.kind === "skill" ? "is-skill" : ""');
+        expect(component).toContain("reference.skill?.description");
+        expect(component).toContain("reference.skill?.file_count");
+        expect(component).toContain("<Workflow aria-hidden />");
+        expect(css).toContain(".canvas-resource-mention-item.is-skill");
+        expect(css).toContain(".canvas-resource-mention-meta");
+    });
 });

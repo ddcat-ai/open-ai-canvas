@@ -116,9 +116,9 @@ export function CanvasNodeContextMenu({
     }, [categoryOpen, onClose]);
 
     useEffect(() => {
-        setAddOpen(false);
+        setAddOpen(menu.type === "canvas" && Boolean(menu.createOpen));
         setCategoryOpen(false);
-    }, [menu.type, menu.x, menu.y]);
+    }, [menu]);
 
     const runAction = (action: () => void) => {
         action();

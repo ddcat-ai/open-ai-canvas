@@ -1643,6 +1643,7 @@ function InfiniteCanvasPage() {
     const { addScriptRow, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, generateScriptImages, generateScriptRows, generateScriptVideos, removeScriptRow, replaceScriptRows, updateScriptRow } =
         useCanvasStoryboard({
             projectId,
+            addedSkills,
             nodesRef,
             connectionsRef,
             setNodes,

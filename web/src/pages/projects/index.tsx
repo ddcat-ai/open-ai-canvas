@@ -7,6 +7,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { CollectionGrid, ListToolbar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 import { CanvasStylePickerModal, resolveCanvasStylePreset, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { resourceFileUrl } from "@/services/api/resources";
 import { ModelPicker } from "@/components/model-picker";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
@@ -373,7 +374,7 @@ function ProjectRow({ row, onDelete }: { row: ProjectSummary; onDelete: () => vo
     const stage = projectSummaryStage(row);
     const projectStyle = resolveProjectCanvasStyle(row.project.stylePresetId, row.project.styleProfileJson);
     const styleTitle = projectStyle?.title || parseStyleProfile(row.project.styleProfileJson)?.title || resolveCanvasStylePreset(row.project.stylePresetId)?.title || (row.project.stylePresetId ? "自定义画风" : "未设置画风");
-    const coverUrl = projectStyle?.imageUrl;
+    const coverUrl = row.project.coverResourceId ? resourceFileUrl(row.project.coverResourceId) : projectStyle?.imageUrl;
     return (
         <Link to={`/projects/${row.project.id}/overview`} className="library-card project-library-card group">
             <span className="project-library-cover">

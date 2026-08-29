@@ -56,6 +56,9 @@ func main() {
 	if err := svc.EnsureBuiltinSkills(); err != nil {
 		log.Fatal(err)
 	}
+	if err := svc.EnsureSkillPackages(); err != nil {
+		log.Fatal(err)
+	}
 	if summary, err := svc.MigrateLegacyStorage(); err != nil {
 		log.Printf("storage migration skipped after error: %v", err)
 	} else if summary.Backup != "" {

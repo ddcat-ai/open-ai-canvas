@@ -118,6 +118,12 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 
 	task.Stage = "调用生成模型"
 	task.Progress = 35
+	if taskUsesUpstreamReportedProgress(task.Type) {
+		// 图片/视频百分比只能来自供应商状态响应。连接和提交阶段只展示文案，
+		// 不能再用统一的 35% 冒充真实生成进度。
+		task.Stage = "正在连接上游"
+		task.Progress = 0
+	}
 	if err := s.repo.UpdateTaskProgress(task.ID, task.Stage, task.Progress); err != nil {
 		return fmt.Errorf("更新任务进度失败，任务暂未调用上游：%w", err)
 	}
@@ -186,6 +192,10 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 		return terminalErr
 	}
 	return terminal.handleSuccess(task)
+}
+
+func taskUsesUpstreamReportedProgress(taskType string) bool {
+	return taskType == "canvas_image" || taskType == "canvas_video" || strings.HasPrefix(taskType, "video_")
 }
 
 func taskFailureMessage(err error) string {

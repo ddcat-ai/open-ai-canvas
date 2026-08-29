@@ -76,33 +76,74 @@ type UserDailyUploadUsage struct {
 }
 
 type Skill struct {
-	ID                string    `json:"id" gorm:"primaryKey;size:36"`
-	OwnerID           string    `json:"ownerId" gorm:"index;size:36"`
-	AuthorName        string    `json:"authorName" gorm:"size:120;index"`
-	AuthorAvatarURL   string    `json:"authorAvatarUrl" gorm:"size:1000"`
-	Name              string    `json:"name" gorm:"size:80;index"`
-	Description       string    `json:"description" gorm:"size:500"`
-	Instruction       string    `json:"instruction" gorm:"type:text"`
-	Status            int       `json:"status" gorm:"index"`
-	Source            int       `json:"source" gorm:"index"`
-	Tag               string    `json:"tag" gorm:"size:32;index"`
-	SortWeight        int       `json:"sortWeight" gorm:"index"`
-	IsPrivate         bool      `json:"isPrivate" gorm:"index"`
-	MarkdownURL       string    `json:"markdownUrl" gorm:"size:500"`
-	ShowcaseMediaJSON string    `json:"-" gorm:"type:text"`
-	ExtraInfo         string    `json:"extraInfo" gorm:"type:text"`
-	InitialLikeCount  int64     `json:"initialLikeCount"`
-	InitialAddedCount int64     `json:"initialAddedCount"`
-	CreatedAt         time.Time `json:"createdAt" gorm:"index"`
-	UpdatedAt         time.Time `json:"updatedAt" gorm:"index"`
+	ID                string     `json:"id" gorm:"primaryKey;size:36"`
+	OwnerID           string     `json:"ownerId" gorm:"index;size:36"`
+	AuthorName        string     `json:"authorName" gorm:"size:120;index"`
+	AuthorAvatarURL   string     `json:"authorAvatarUrl" gorm:"size:1000"`
+	Name              string     `json:"name" gorm:"size:80;index"`
+	Description       string     `json:"description" gorm:"size:500"`
+	Instruction       string     `json:"instruction" gorm:"type:text"`
+	CurrentVersionID  string     `json:"currentVersionId" gorm:"size:36;index"`
+	VersionLabel      string     `json:"versionLabel" gorm:"size:64"`
+	ContentHash       string     `json:"contentHash" gorm:"size:64;index"`
+	FileCount         int        `json:"fileCount"`
+	TotalBytes        int64      `json:"totalBytes"`
+	SourceType        string     `json:"sourceType" gorm:"size:24;index"`
+	SourceURL         string     `json:"sourceUrl" gorm:"size:1000"`
+	SourceRef         string     `json:"sourceRef" gorm:"size:255"`
+	SourceSubdir      string     `json:"sourceSubdir" gorm:"size:1000"`
+	SourceCommit      string     `json:"sourceCommit" gorm:"size:64"`
+	SyncStatus        string     `json:"syncStatus" gorm:"size:24;index"`
+	SyncError         string     `json:"syncError" gorm:"type:text"`
+	AutoUpdate        bool       `json:"autoUpdate" gorm:"index"`
+	LastCheckedAt     *time.Time `json:"lastCheckedAt"`
+	LastSyncedAt      *time.Time `json:"lastSyncedAt"`
+	Status            int        `json:"status" gorm:"index"`
+	Source            int        `json:"source" gorm:"index"`
+	Tag               string     `json:"tag" gorm:"size:32;index"`
+	SortWeight        int        `json:"sortWeight" gorm:"index"`
+	IsPrivate         bool       `json:"isPrivate" gorm:"index"`
+	MarkdownURL       string     `json:"markdownUrl" gorm:"size:500"`
+	ShowcaseMediaJSON string     `json:"-" gorm:"type:text"`
+	ExtraInfo         string     `json:"extraInfo" gorm:"type:text"`
+	InitialLikeCount  int64      `json:"initialLikeCount"`
+	InitialAddedCount int64      `json:"initialAddedCount"`
+	CreatedAt         time.Time  `json:"createdAt" gorm:"index"`
+	UpdatedAt         time.Time  `json:"updatedAt" gorm:"index"`
+}
+
+type SkillVersion struct {
+	ID           string    `json:"id" gorm:"primaryKey;size:36"`
+	SkillID      string    `json:"skillId" gorm:"size:36;index"`
+	VersionLabel string    `json:"versionLabel" gorm:"size:64"`
+	ContentHash  string    `json:"contentHash" gorm:"size:64;index"`
+	EntryPath    string    `json:"entryPath" gorm:"size:1000"`
+	PackageKey   string    `json:"packageKey" gorm:"size:1000"`
+	FileCount    int       `json:"fileCount"`
+	TotalBytes   int64     `json:"totalBytes"`
+	SourceCommit string    `json:"sourceCommit" gorm:"size:64"`
+	CreatedAt    time.Time `json:"createdAt" gorm:"index"`
+}
+
+type SkillFile struct {
+	ID             string    `json:"id" gorm:"primaryKey;size:36"`
+	SkillVersionID string    `json:"skillVersionId" gorm:"size:36;index;uniqueIndex:idx_skill_version_file_path,priority:1"`
+	Path           string    `json:"path" gorm:"size:1000;uniqueIndex:idx_skill_version_file_path,priority:2"`
+	Kind           string    `json:"kind" gorm:"size:24;index"`
+	MimeType       string    `json:"mimeType" gorm:"size:255"`
+	Size           int64     `json:"size"`
+	SHA256         string    `json:"sha256" gorm:"size:64"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 type UserSkillState struct {
-	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	UserID    string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
-	SkillID   string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
-	Added     bool      `json:"added" gorm:"index"`
-	Liked     bool      `json:"liked" gorm:"index"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID             string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
+	SkillID            string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
+	InstalledVersionID string    `json:"installedVersionId" gorm:"size:36;index"`
+	AutoUpdate         bool      `json:"autoUpdate"`
+	Added              bool      `json:"added" gorm:"index"`
+	Liked              bool      `json:"liked" gorm:"index"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }

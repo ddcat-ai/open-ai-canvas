@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 import { codexInput, writeSkillFiles } from "../src/agents.js";
@@ -24,19 +25,31 @@ test("writeSkillFiles creates Codex-compatible SKILL.md inputs and unique names"
     const prepared = await writeSkillFiles([
         { skillId: "same", name: "第一个技能", description: "first", instruction: "do first" },
         { skillId: "same", name: "第二个技能", description: "second", instruction: "do second" },
+        {
+            skillId: "package",
+            name: "目录技能",
+            description: "package",
+            files: [
+                { path: "SKILL.md", contentBase64: Buffer.from("# 目录技能\n\n按需读取参考文件。", "utf8").toString("base64") },
+                { path: "references/guide.md", contentBase64: Buffer.from("# Guide", "utf8").toString("base64") },
+            ],
+        },
         { skillId: "empty", name: "空技能", instruction: "   " },
     ]);
 
     try {
-        assert.equal(prepared.inputs.length, 2);
-        assert.deepEqual(prepared.inputs.map((item) => item.type), ["skill", "skill"]);
-        assert.deepEqual(prepared.inputs.map((item) => item.name), ["canvas-same", "canvas-same-2"]);
-        for (const item of prepared.inputs) {
+        assert.equal(prepared.inputs.length, 3);
+        assert.deepEqual(prepared.inputs.map((item) => item.type), ["skill", "skill", "skill"]);
+        assert.deepEqual(prepared.inputs.map((item) => item.name), ["canvas-same", "canvas-same-2", "canvas-package"]);
+        for (const item of prepared.inputs.slice(0, 2)) {
             assert.equal(item.path.endsWith("/SKILL.md"), true);
             const body = await fs.readFile(item.path, "utf8");
             assert.match(body, /^---\nname: canvas-same(?:-2)?\ndescription: /);
             assert.match(body, /\n---\n\n#/);
         }
+        const packageInput = prepared.inputs[2];
+        assert.match(await fs.readFile(packageInput.path, "utf8"), /^---\nname: canvas-package\ndescription: /);
+        assert.equal(await fs.readFile(path.join(path.dirname(packageInput.path), "references", "guide.md"), "utf8"), "# Guide");
     } finally {
         await Promise.all(prepared.directories.map((directory) => fs.rm(directory, { recursive: true, force: true })));
     }
@@ -44,14 +57,26 @@ test("writeSkillFiles creates Codex-compatible SKILL.md inputs and unique names"
 
 test("parseAgentSkills validates and bounds browser skill bundles", () => {
     const input = [
-        { skillId: "safe", name: " safe ", description: " desc ", instruction: " instruction " },
+        {
+            skillId: "safe",
+            name: " safe ",
+            description: " desc ",
+            version: " v2 ",
+            files: [
+                { path: "SKILL.md", mimeType: "text/markdown", contentBase64: Buffer.from("# Safe").toString("base64") },
+                { path: "references/a.md", mimeType: "text/markdown", contentBase64: Buffer.from("A").toString("base64") },
+            ],
+        },
+        { skillId: "legacy", name: "legacy", instruction: " instruction " },
         { name: "missing instruction" },
         null,
-        { name: "too long", instruction: "x".repeat(25_000) },
+        { name: "unsafe", files: [{ path: "../SKILL.md", contentBase64: Buffer.from("bad").toString("base64") }] },
     ];
     const parsed = parseAgentSkills(input);
 
     assert.equal(parsed.length, 2);
-    assert.deepEqual(parsed[0], { skillId: "safe", name: "safe", description: "desc", instruction: "instruction" });
-    assert.equal(parsed[1].instruction.length, 24_000);
+    assert.equal(parsed[0].name, "safe");
+    assert.equal(parsed[0].version, "v2");
+    assert.deepEqual(parsed[0].files?.map((file) => file.path), ["SKILL.md", "references/a.md"]);
+    assert.deepEqual(parsed[1], { skillId: "legacy", name: "legacy", instruction: "instruction" });
 });

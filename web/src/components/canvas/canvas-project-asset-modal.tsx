@@ -49,7 +49,7 @@ export function CanvasProjectAssetModal({ open, detail, initialCategory = "all",
             imageStorageKey: coverRepresentation ? `resource:${coverRepresentation.resourceId}` : undefined,
             imageFit: character ? "contain" : "cover",
             description: character ? `${character.character?.visualStatus === "ready" ? "形象就绪" : "形象待完善"} · ${character.character?.voiceStatus === "ready" ? "声音已绑定" : "声音未绑定"}` : project?.previewText,
-            searchText: [media?.tags.join(" ") || "", project?.previewText || ""].join(" "),
+            searchText: [media?.tags?.join(" ") || "", project?.previewText || ""].join(" "),
         };
     }), [items]);
     const pickerItems = useMemo<AssetLibraryPickerItem[]>(() => [...localPickerItems, ...externalAssetSources.items], [externalAssetSources.items, localPickerItems]);

@@ -1,6 +1,19 @@
 package model
 
-import "time"
+import (
+	"html"
+	"regexp"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+var projectUnitHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
+
+func ProjectUnitWordCount(sourceText string) int {
+	plainText := projectUnitHTMLTagPattern.ReplaceAllString(sourceText, "")
+	return utf8.RuneCountInString(strings.TrimSpace(html.UnescapeString(plainText)))
+}
 
 const AssetIDMaxLength = 80
 
@@ -164,6 +177,7 @@ type Project struct {
 	AspectRatio      string        `json:"aspectRatio" gorm:"size:16"`
 	SourceType       string        `json:"sourceType" gorm:"size:32"`
 	Description      string        `json:"description" gorm:"type:text"`
+	CoverResourceID  string        `json:"coverResourceId,omitempty" gorm:"index;size:36"`
 	StylePresetID    string        `json:"stylePresetId" gorm:"size:64"`
 	StyleProfileJSON string        `json:"styleProfileJson" gorm:"type:text"`
 	Status           ProjectStatus `json:"status" gorm:"index;size:24"`
@@ -195,6 +209,7 @@ type ProjectUnit struct {
 	Kind       ProjectUnitKind   `json:"kind" gorm:"index;size:24"`
 	Title      string            `json:"title" gorm:"size:240"`
 	SourceText string            `json:"sourceText" gorm:"type:text"`
+	WordCount  int               `json:"wordCount"`
 	Status     ProjectUnitStatus `json:"status" gorm:"index;size:24"`
 	Position   int               `json:"position"`
 	CreatedAt  time.Time         `json:"createdAt"`

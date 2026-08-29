@@ -34,7 +34,7 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
             category: asset.category || "other",
             kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本",
             asset,
-            searchText: asset.tags.join(" "),
+            searchText: (asset.tags || []).join(" "),
         })),
         ...externalAssetSources.items,
     ], [externalAssetSources.items, insertableAssets]);

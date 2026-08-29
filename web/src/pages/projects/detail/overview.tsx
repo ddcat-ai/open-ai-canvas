@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, CircleAlert, Clock3 } from "lucide-react";
+import { ArrowRight, BookOpenText, CheckCircle2, CircleAlert, Clapperboard, Clock3, Film, PackageCheck, PlaySquare, UsersRound } from "lucide-react";
 import { Link } from "react-router";
 
 import { WorkspaceState } from "@/components/layout/workspace-state";
@@ -17,6 +17,25 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
     const secondaryActions = actions.slice(1);
     const continueTarget = projectContinueTarget(detail);
     const unitStages = projectUnitStages(detail);
+    const firstUnitId = units.slice().sort((left, right) => left.position - right.position)[0]?.id;
+    const workflowHref = (targetStage: string) => firstUnitId ? `/projects/${project.id}/workflow/${firstUnitId}/${targetStage}` : `/projects/${project.id}/chapters`;
+    const readyArtifacts = detail.shotArtifacts.filter((artifact) => artifact.status === "ready");
+    const readyStoryboardCount = new Set(readyArtifacts.filter((artifact) => artifact.type === "storyboard").map((artifact) => artifact.shotId)).size;
+    const readyPrevizCount = new Set(readyArtifacts.filter((artifact) => artifact.type === "action_board").map((artifact) => artifact.shotId)).size;
+    const readyVideoCount = new Set(readyArtifacts.filter((artifact) => artifact.type === "video").map((artifact) => artifact.shotId)).size;
+    const productionSteps = [
+        { id: "story", icon: BookOpenText, label: "剧情章节", description: "导入或编写正文，确认每章叙事目标", metric: `${units.length} 章 · ${formatCompactCount(units.reduce((total, unit) => total + (unit.wordCount || 0), 0))} 字`, href: `/projects/${project.id}/chapters`, complete: units.length > 0 },
+        { id: "assets", icon: UsersRound, label: "角色与资产", description: "确认角色、场景、道具和项目画风", metric: `${detail.assets.length} 项资产`, href: `/projects/${project.id}/assets`, complete: detail.assets.length > 0 },
+        { id: "storyboard", icon: Clapperboard, label: "分镜脚本与画面", description: "拆分镜头并确认构图、对白和时长", metric: `${shots.length} 镜 · ${readyStoryboardCount} 张图`, href: workflowHref("storyboard"), complete: shots.length > 0 },
+        { id: "previz", icon: PlaySquare, label: "动作预演", description: "检查表演节拍、运镜和连续性", metric: `${readyPrevizCount}/${shots.length || 0} 镜`, href: workflowHref("previz"), complete: shots.length > 0 && readyPrevizCount === shots.length },
+        { id: "video", icon: Film, label: "镜头视频", description: "逐镜生成、筛选版本并锁定成片", metric: `${readyVideoCount}/${shots.length || 0} 镜`, href: workflowHref("video"), complete: shots.length > 0 && readyVideoCount === shots.length },
+        { id: "delivery", icon: PackageCheck, label: "交付与打包", description: "检查缺失镜头并整理最终产物", metric: readyVideoCount && readyVideoCount === shots.length ? "可以交付" : `还差 ${Math.max(0, shots.length - readyVideoCount)} 镜`, href: workflowHref("delivery"), complete: shots.length > 0 && readyVideoCount === shots.length },
+    ];
+    const gaps = [
+        units.length === 0 ? "还没有剧情章节" : units.some((unit) => !unit.wordCount) ? `${units.filter((unit) => !unit.wordCount).length} 章还没有正文` : "章节正文已就绪",
+        detail.assetCandidates.some((candidate) => candidate.status === "pending_confirmation") ? `${detail.assetCandidates.filter((candidate) => candidate.status === "pending_confirmation").length} 项资产等待确认` : detail.assets.length ? "项目资产已建立" : "还没有角色与资产",
+        shots.length ? readyVideoCount === shots.length ? "所有镜头视频已生成" : `${shots.length - readyVideoCount} 个镜头尚未生成视频` : "还没有分镜镜头",
+    ];
 
     return (
         <div className="space-y-8">
@@ -66,6 +85,14 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
                 </div>
             </section>
 
+            <section className="project-standard-flow">
+                <div className="project-standard-flow-head"><div><span>标准制作流程</span><h2>从章节到可交付镜头</h2><p>先确认故事与资产，再逐镜完成画面、动作和视频。每个步骤都可直接进入对应工作区。</p></div><Link to={primaryAction.href}>继续当前任务<ArrowRight /></Link></div>
+                <div className="project-standard-flow-track">
+                    {productionSteps.map((step, index) => { const Icon = step.icon; return <Link key={step.id} to={step.href} className={step.complete ? "is-complete" : ""}><span className="project-standard-flow-index">{step.complete ? <CheckCircle2 /> : index + 1}</span><span className="project-standard-flow-icon"><Icon /></span><strong>{step.label}</strong><p>{step.description}</p><em>{step.metric}</em><ArrowRight className="project-standard-flow-arrow" /></Link>; })}
+                </div>
+                <div className="project-standard-flow-footer"><div><strong>当前制作检查</strong>{gaps.map((gap, index) => <span key={gap}><i className={index === 2 && readyVideoCount !== shots.length ? "is-attention" : ""} />{gap}</span>)}</div><div><strong>快速入口</strong><Link to={`/projects/${project.id}/chapters`}>整理章节</Link><Link to={`/projects/${project.id}/assets`}>确认资产</Link><Link to={workflowHref("video")}>继续镜头制作</Link></div></div>
+            </section>
+
             <section>
                 <div className="project-pipeline-head">
                     <div className="min-w-0">
@@ -92,6 +119,10 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
             </section>
         </div>
     );
+}
+
+function formatCompactCount(value: number) {
+    return value >= 10_000 ? `${Math.round(value / 1_000) / 10} 万` : value.toLocaleString("zh-CN");
 }
 
 function ProjectFact({ label, value, attention = false }: { label: string; value: string; attention?: boolean }) {

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"slices"
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
@@ -108,6 +109,9 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 	for _, project := range projects {
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "项目", ID: project.ID, Title: project.Name, PrimaryJSON: project.StyleProfileJSON})
+		if project.CoverResourceID != "" && slices.Contains(resourceIDs, project.CoverResourceID) {
+			snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "项目主图", ID: project.ID, Title: project.Name, ResourceID: project.CoverResourceID})
+		}
 	}
 
 	var styles []model.StyleProfile

@@ -4544,6 +4544,9 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	if metadata.RequestKind != "" {
 		requestKind = metadata.RequestKind
 	}
+	if requestErr == nil && statusCode >= 200 && statusCode < 300 && (requestKind == "create" || requestKind == "poll") && (metadata.Capability == "image" || metadata.Capability == "video") {
+		metadata.Service.syncProviderTaskProgress(metadata.TaskID, responseBody)
+	}
 	apiFormat := "openai"
 	if req.Header.Get("x-goog-api-key") != "" {
 		apiFormat = "gemini"

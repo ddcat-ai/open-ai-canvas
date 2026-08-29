@@ -101,6 +101,22 @@ func (r *Repository) DeleteSkill(id string) error {
 		if err := tx.Delete(&model.UserSkillState{}, "skill_id = ?", id).Error; err != nil {
 			return err
 		}
+		var versions []model.SkillVersion
+		if err := tx.Where("skill_id = ?", id).Find(&versions).Error; err != nil {
+			return err
+		}
+		versionIDs := make([]string, 0, len(versions))
+		for _, version := range versions {
+			versionIDs = append(versionIDs, version.ID)
+		}
+		if len(versionIDs) > 0 {
+			if err := tx.Delete(&model.SkillFile{}, "skill_version_id IN ?", versionIDs).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Delete(&model.SkillVersion{}, "skill_id = ?", id).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&model.Skill{}, "id = ?", id).Error
 	})
 }
@@ -128,7 +144,7 @@ func (r *Repository) UserSkillStatesBySkillIDs(userID string, skillIDs []string)
 func (r *Repository) SetUserSkillAdded(state *model.UserSkillState) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}, {Name: "skill_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"added", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"added", "installed_version_id", "auto_update", "updated_at"}),
 	}).Create(state).Error
 }
 

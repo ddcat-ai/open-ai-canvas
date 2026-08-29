@@ -50,3 +50,31 @@ func TestTaskClientContextRequiresCreatePageMetadata(t *testing.T) {
 		t.Fatalf("unexpected context for non-create-page task: %+v", context)
 	}
 }
+
+func TestTaskClientContextProjectsChapterOperations(t *testing.T) {
+	characters := taskClientContext(`{"metadata":{"domainProjectId":"project-1","chapterId":"chapter-1","operation":"chapter_character_breakdown"}}`)
+	if characters == nil || characters.DomainProjectID != "project-1" || characters.ChapterID != "chapter-1" || characters.ChapterOperation != "characters" {
+		t.Fatalf("character task context was not decoded: %+v", characters)
+	}
+	storyboard := taskClientContext(`{"metadata":{"source":"short-drama-chapter-storyboard","domainProjectId":"project-1","chapterId":"chapter-2"}}`)
+	if storyboard == nil || storyboard.ChapterID != "chapter-2" || storyboard.ChapterOperation != "storyboard" {
+		t.Fatalf("storyboard task context was not decoded: %+v", storyboard)
+	}
+	if context := taskClientContext(`{"metadata":{"domainProjectId":"project-1","chapterId":"chapter-1","operation":"unrelated"}}`); context != nil {
+		t.Fatalf("unexpected context for unrelated project task: %+v", context)
+	}
+}
+
+func TestTaskClientContextProjectsShotWorkflow(t *testing.T) {
+	context := taskClientContext(`{"metadata":{"domainProjectId":"project-1","shotId":"shot-1","workflowStepId":"step-1","artifactType":"video"}}`)
+	if context == nil || context.DomainProjectID != "project-1" || context.ShotID != "shot-1" || context.WorkflowStepID != "step-1" || context.ArtifactType != "video" {
+		t.Fatalf("shot task context was not decoded: %+v", context)
+	}
+}
+
+func TestTaskOutputResourceReadsPersistedMedia(t *testing.T) {
+	id, mediaType := taskOutputResource(`{"mode":"video","video":{"resourceId":"resource-1","storageKey":"resource:resource-1"}}`, "canvas_video")
+	if id != "resource-1" || mediaType != "video" {
+		t.Fatalf("unexpected task output resource: id=%q mediaType=%q", id, mediaType)
+	}
+}

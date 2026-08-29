@@ -26,8 +26,8 @@ import { canvasAgentPostconditionMessage, hashCanvasAgentSnapshot, previewCanvas
 import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
 import { buildLocalAgentSetupCommands, detectLocalAgentSetupPlatform, type LocalAgentSetupPlatform } from "@/lib/canvas/local-agent-setup";
-import { resolveSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
+import { skillRuntime } from "@/services/skill-runtime";
 import { isProjectAgentReadTool, isProjectAgentToolName, runProjectAgentTool } from "@/services/api/project-agent-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
@@ -36,6 +36,7 @@ import { AgentChatEmptyState } from "./canvas-agent-panel-chrome";
 const PANEL_MOTION_SECONDS = 0.5;
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_PAYLOAD_BYTES = 28 * 1024 * 1024;
+const MAX_AGENT_TURN_PAYLOAD_BYTES = 56 * 1024 * 1024;
 type AgentEventPayload = {
     agent?: string;
     type?: string;
@@ -57,7 +58,7 @@ type AgentTurnPayload = {
     canvasId: string;
     threadId?: string;
     attachments: Array<Pick<AgentAttachment, "name" | "type" | "dataUrl">>;
-    skills: Array<{ skillId: string; name: string; description: string; instruction: string }>;
+    skills: Array<{ skillId: string; name: string; description: string; version: string; files: Array<{ path: string; mimeType: string; contentBase64: string }> }>;
 };
 
 export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
@@ -386,11 +387,22 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     const sendPrompt = async (overrideText?: string) => {
         const text = (overrideText ?? prompt).trim();
         const files = attachments;
-        const mentionedSkills = resolveSkillMentions(text, composerSkills);
-        const requestPrompt = promptWithAttachments(text, files);
-        if (!connected || !requestPrompt || sending || waiting) return;
+        if (!connected || !promptWithAttachments(text, files) || sending || waiting) return;
         if (attachmentPayloadBytes(files) > MAX_ATTACHMENT_PAYLOAD_BYTES) {
             addMessage({ role: "error", title: "图片过大", text: "图片附件超过 30MB，请删减后再发送。" });
+            return;
+        }
+        let skillExecution: Awaited<ReturnType<typeof skillRuntime.prepare<"localAgent">>>;
+        try {
+            skillExecution = await skillRuntime.prepare({ profile: "localAgent", prompt: text, skills: composerSkills });
+        } catch (error) {
+            addMessage({ role: "error", title: "技能加载失败", text: error instanceof Error ? error.message : "无法读取技能包" });
+            return;
+        }
+        const requestPrompt = promptWithAttachments(skillExecution.prompt, files);
+        const skillBundles: AgentTurnPayload["skills"] = skillExecution.skills;
+        if (attachmentPayloadBytes(files) + skillBundlePayloadBytes(skillBundles) > MAX_AGENT_TURN_PAYLOAD_BYTES) {
+            addMessage({ role: "error", title: "本轮内容过大", text: "图片与技能包合计超过本地 Agent 单轮限制，请减少附件或只选择一个技能。" });
             return;
         }
         await submitTurn({
@@ -399,7 +411,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             canvasId: snapshotRef.current.projectId,
             threadId: useCanvasAgentStore.getState().activeThreadId || undefined,
             attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
-            skills: mentionedSkills.map((skill) => ({ skillId: skill.skill_id, name: skill.skill_name, description: skill.description, instruction: skill.instruction || skill.description })),
+            skills: skillBundles,
         }, true);
     };
 
@@ -1383,6 +1395,10 @@ function promptWithAttachments(text: string, attachments: AgentAttachment[]) {
 
 function attachmentPayloadBytes(attachments: AgentAttachment[]) {
     return attachments.reduce((total, item) => total + item.dataUrl.length, 0);
+}
+
+function skillBundlePayloadBytes(skills: AgentTurnPayload["skills"]) {
+    return skills.reduce((total, skill) => total + skill.files.reduce((fileTotal, file) => fileTotal + file.contentBase64.length, 0), 0);
 }
 
 function formatBytes(bytes: number) {

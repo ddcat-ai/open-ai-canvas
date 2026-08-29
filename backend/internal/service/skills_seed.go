@@ -71,7 +71,7 @@ func (s *Service) EnsureBuiltinSkills() error {
 			SkillName: definition.SkillName, Description: definition.Description, Instruction: definition.Instruction,
 			Tag: definition.Tag, IsPrivate: definition.IsPrivate, MarkdownURL: definition.MarkdownURL,
 			ShowcaseMedia: definition.ShowcaseMedia, ExtraInfo: definition.ExtraInfo,
-		})
+		}, true)
 		if err != nil {
 			return fmt.Errorf("内置技能 %s 数据无效: %w", id, err)
 		}

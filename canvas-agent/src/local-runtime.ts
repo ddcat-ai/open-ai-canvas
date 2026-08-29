@@ -1,4 +1,4 @@
-import type { Request, RequestHandler, Response } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import express from "express";
 
 import {
@@ -55,14 +55,14 @@ export type CreateLocalRuntimeAppOptions = {
     legacyOrigins?: readonly string[];
 };
 
-export function createLocalRuntimeApp(options: CreateLocalRuntimeAppOptions) {
+export function createLocalRuntimeApp(options: CreateLocalRuntimeAppOptions): Express {
     const modules = validateModules(options.modules);
     const policies = corsPolicies(modules, options.legacyOrigins ?? []);
     const app = express();
     app.disable("x-powered-by");
     app.use(express.raw({
         type: "application/json",
-        limit: "30mb",
+        limit: "64mb",
     }));
     app.use(noStore);
     app.use(exactAuthorityGuard(options.authority));
