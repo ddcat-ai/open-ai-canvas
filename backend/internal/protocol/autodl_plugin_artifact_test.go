@@ -25,7 +25,7 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatalf("loaded adapters = %d", len(adapters))
 	}
 	adapter := adapters[0]
-	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Version != "1.0.3" || adapter.Metadata().Execution != "declarative" {
+	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Version != "1.0.4" || adapter.Metadata().Execution != "declarative" {
 		t.Fatalf("metadata = %#v", adapter.Metadata())
 	}
 	if !adapter.Metadata().RequiresPublicMediaURLs {
