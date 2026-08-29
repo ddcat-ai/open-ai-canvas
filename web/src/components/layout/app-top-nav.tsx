@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
 import { WorkspaceCommandPalette } from "@/components/layout/workspace-command-palette";
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
+import { readWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
@@ -12,7 +13,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
-    const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+    const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const [paletteOpen, setPaletteOpen] = useState(false);
 
     const hideChrome = pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname);
@@ -27,7 +28,16 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
             setMobileSidebarExpanded((current) => !current);
             return;
         }
-        setDesktopSidebarCollapsed((current) => !current);
+        setDesktopSidebarCollapsed((current) => {
+            const next = !current;
+            writeWorkspaceSidebarCollapsed(next);
+            return next;
+        });
+    };
+
+    const expandDesktopSidebar = () => {
+        setDesktopSidebarCollapsed(false);
+        writeWorkspaceSidebarCollapsed(false);
     };
 
     const handleNavClick = () => {
@@ -75,7 +85,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                 collapsed={desktopSidebarCollapsed}
                                 onNavigate={handleNavClick}
                                 onOpenSearch={() => setPaletteOpen(true)}
-                                onExpand={() => setDesktopSidebarCollapsed(false)}
+                                onExpand={expandDesktopSidebar}
                             />
                         </aside>
                     ) : null}

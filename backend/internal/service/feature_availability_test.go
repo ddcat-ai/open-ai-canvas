@@ -136,7 +136,7 @@ func TestCustomChannelTaskInputRequiresFeature(t *testing.T) {
 func TestCreateTaskDoesNotClassifyCustomChannelAsMissingSystemModel(t *testing.T) {
 	svc, _ := newFeatureAvailabilityTestService(t)
 	actor := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
-	if _, err := svc.UpdateFeatureAvailability(actor, FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: false}); err != nil {
+	if _, err := svc.UpdateFeatureAvailability(actor, FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: false, FrontendModelsEnabled: true}); err != nil {
 		t.Fatal(err)
 	}
 

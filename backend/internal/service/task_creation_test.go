@@ -72,6 +72,26 @@ func TestResolveTaskModelSelectionAllowsExplicitSystemChannelWhenFrontendModelsE
 	}
 }
 
+func TestResolveTaskModelSelectionAllowsCustomImageChannelWhenFrontendModelsEnabled(t *testing.T) {
+	input := map[string]any{
+		"mode": "image",
+		"config": map[string]any{
+			"baseUrl":       "https://images.example.com/v1",
+			"apiKey":        "custom-key",
+			"interfaceType": "openai-image",
+			"model":         "custom-image-model",
+		},
+	}
+
+	routed, resolvedInput, err := (&Service{}).resolveTaskModelSelection(input, "", "canvas_image", "image", true)
+	if err != nil {
+		t.Fatalf("resolveTaskModelSelection() error = %v", err)
+	}
+	if routed != nil || resolvedInput["config"] == nil {
+		t.Fatalf("resolveTaskModelSelection() routed = %#v, input = %#v", routed, resolvedInput)
+	}
+}
+
 func TestResolveTaskModelSelectionStillRequiresLogicalModelWithoutExplicitSystemChannel(t *testing.T) {
 	_, _, err := (&Service{}).resolveTaskModelSelection(map[string]any{
 		"mode":   "video",

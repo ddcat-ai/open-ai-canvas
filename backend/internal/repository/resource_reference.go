@@ -161,6 +161,19 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "工作流", ID: step.ID, Title: step.Title, PrimaryJSON: step.PrimaryJSON, SecondaryJSON: step.SecondaryJSON})
 	}
 
+	var shotArtifacts []joinedDocument
+	artifactDocumentQuery := r.db.Table("shot_artifacts").
+		Select("shot_artifacts.id, shots.title, shot_artifacts.metadata_json AS primary_json").
+		Joins("JOIN shots ON shots.id = shot_artifacts.shot_id").
+		Joins("JOIN projects ON projects.id = shots.project_id").
+		Where("projects.user_id = ?", userID)
+	if err := artifactDocumentQuery.Scan(&shotArtifacts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, artifact := range shotArtifacts {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "镜头产物", ID: artifact.ID, Title: artifact.Title, PrimaryJSON: artifact.PrimaryJSON})
+	}
+
 	type joinedRepresentation struct {
 		ID         string
 		Title      string
@@ -185,6 +198,24 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 	for _, voice := range voices {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "声音", ID: voice.ID, Title: voice.Name, ResourceID: voice.SampleResourceID})
+	}
+
+	type joinedShotArtifact struct {
+		ID         string
+		Title      string
+		ResourceID string
+	}
+	var artifacts []joinedShotArtifact
+	if err := r.db.Table("shot_artifacts").
+		Select("shot_artifacts.id, shots.title, shot_artifacts.resource_id").
+		Joins("JOIN shots ON shots.id = shot_artifacts.shot_id").
+		Joins("JOIN projects ON projects.id = shots.project_id").
+		Where("projects.user_id = ? AND shot_artifacts.resource_id IN ?", userID, resourceIDs).
+		Scan(&artifacts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, artifact := range artifacts {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "镜头产物", ID: artifact.ID, Title: artifact.Title, ResourceID: artifact.ResourceID})
 	}
 	return snapshot, nil
 }

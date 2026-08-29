@@ -203,16 +203,56 @@ type CanvasUnitLink struct {
 }
 
 type Shot struct {
-	ID          string    `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID   string    `json:"projectId" gorm:"index;size:36"`
-	UnitID      string    `json:"unitId" gorm:"index;size:36"`
-	Title       string    `json:"title" gorm:"size:240"`
-	Description string    `json:"description" gorm:"type:text"`
-	Position    int       `json:"position"`
-	DurationMs  int64     `json:"durationMs"`
-	Status      string    `json:"status" gorm:"index;size:24"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID                string    `json:"id" gorm:"primaryKey;size:36"`
+	ProjectID         string    `json:"projectId" gorm:"index;size:36"`
+	UnitID            string    `json:"unitId" gorm:"index;size:36"`
+	CurrentRevisionID string    `json:"currentRevisionId,omitempty" gorm:"index;size:36"`
+	Title             string    `json:"title" gorm:"size:240"`
+	Description       string    `json:"description" gorm:"type:text"`
+	Position          int       `json:"position"`
+	DurationMs        int64     `json:"durationMs"`
+	Status            string    `json:"status" gorm:"index;size:24"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+// ShotRevision 保存可复现的分镜脚本版本；Shot 只保留稳定身份、排序和当前版本指针。
+type ShotRevision struct {
+	ID              string    `json:"id" gorm:"primaryKey;size:36"`
+	ShotID          string    `json:"shotId" gorm:"index;size:36;uniqueIndex:idx_shot_revisions_version,priority:1"`
+	Version         int       `json:"version" gorm:"uniqueIndex:idx_shot_revisions_version,priority:2"`
+	PlotDescription string    `json:"plotDescription" gorm:"type:text"`
+	Action          string    `json:"action" gorm:"type:text"`
+	Dialogue        string    `json:"dialogue" gorm:"type:text"`
+	ShotSize        string    `json:"shotSize" gorm:"size:80"`
+	CameraAngle     string    `json:"cameraAngle" gorm:"size:80"`
+	CameraMovement  string    `json:"cameraMovement" gorm:"size:120"`
+	DurationMs      int64     `json:"durationMs"`
+	ImagePrompt     string    `json:"imagePrompt" gorm:"type:text"`
+	VideoPrompt     string    `json:"videoPrompt" gorm:"type:text"`
+	NegativePrompt  string    `json:"negativePrompt" gorm:"type:text"`
+	ContinuityNotes string    `json:"continuityNotes" gorm:"type:text"`
+	ActionBeatsJSON string    `json:"actionBeatsJson" gorm:"type:text"`
+	CreatedBy       string    `json:"createdBy,omitempty" gorm:"index;size:36"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// ShotArtifact 是镜头的版本化生产产物。修改分镜或资产引用时只标记 stale，不删除历史。
+type ShotArtifact struct {
+	ID           string    `json:"id" gorm:"primaryKey;size:36"`
+	ProjectID    string    `json:"projectId" gorm:"index;size:36"`
+	UnitID       string    `json:"unitId" gorm:"index;size:36"`
+	ShotID       string    `json:"shotId" gorm:"index;size:36;uniqueIndex:idx_shot_artifacts_version,priority:1"`
+	RevisionID   string    `json:"revisionId,omitempty" gorm:"index;size:36"`
+	TaskID       string    `json:"taskId,omitempty" gorm:"index;size:36"`
+	Type         string    `json:"type" gorm:"index;size:40;uniqueIndex:idx_shot_artifacts_version,priority:2"`
+	Version      int       `json:"version" gorm:"uniqueIndex:idx_shot_artifacts_version,priority:3"`
+	ResourceID   string    `json:"resourceId,omitempty" gorm:"index;size:36"`
+	Status       string    `json:"status" gorm:"index;size:24"`
+	Selected     bool      `json:"selected" gorm:"index"`
+	MetadataJSON string    `json:"metadataJson" gorm:"type:text"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 type ShotAssetReference struct {
@@ -266,6 +306,20 @@ type WorkflowStepTask struct {
 	WorkflowStepID string    `json:"workflowStepId" gorm:"index;size:36;uniqueIndex:idx_workflow_step_tasks_unique,priority:1"`
 	TaskID         string    `json:"taskId" gorm:"index;size:36;uniqueIndex:idx_workflow_step_tasks_unique,priority:2"`
 	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// ProductionTaskLink 显式区分领域项目、画布和镜头上下文，避免继续复用 Task.ProjectID 表达多种身份。
+type ProductionTaskLink struct {
+	ID             string    `json:"id" gorm:"primaryKey;size:36"`
+	TaskID         string    `json:"taskId" gorm:"index;size:36;uniqueIndex:idx_production_task_context,priority:1"`
+	ProjectID      string    `json:"projectId" gorm:"index;size:36"`
+	CanvasID       string    `json:"canvasId,omitempty" gorm:"index;size:80"`
+	UnitID         string    `json:"unitId,omitempty" gorm:"index;size:36"`
+	ShotID         string    `json:"shotId,omitempty" gorm:"index;size:36;uniqueIndex:idx_production_task_context,priority:2"`
+	WorkflowStepID string    `json:"workflowStepId,omitempty" gorm:"index;size:36"`
+	ArtifactType   string    `json:"artifactType,omitempty" gorm:"index;size:40;uniqueIndex:idx_production_task_context,priority:3"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type CanvasProject struct {

@@ -31,10 +31,13 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.Task{},
 		&model.Session{},
 		&model.Shot{},
+		&model.ShotRevision{},
+		&model.ShotArtifact{},
 		&model.ShotAssetReference{},
 		&model.WorkflowInstance{},
 		&model.WorkflowStepInstance{},
 		&model.WorkflowStepTask{},
+		&model.ProductionTaskLink{},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +63,12 @@ func TestDeleteProjectUnlinksCanvasAndKeepsIndependentRecords(t *testing.T) {
 		&model.ProjectAssetLink{ID: "asset-link-1", ProjectID: project.ID, AssetID: asset.ID},
 		&model.ProjectAssetFolder{ID: "folder-1", ProjectID: project.ID, Name: "角色", NameKey: "角色"},
 		&model.ProjectAssetCandidate{ID: "candidate-1", ProjectID: project.ID, UnitID: "unit-1", Name: "角色", Status: "pending_confirmation"},
+		&model.Shot{ID: "shot-1", ProjectID: project.ID, UnitID: "unit-1", CurrentRevisionID: "revision-1", Title: "镜头一"},
+		&model.ShotRevision{ID: "revision-1", ShotID: "shot-1", Version: 1, PlotDescription: "角色入场"},
+		&model.ShotArtifact{ID: "artifact-1", ProjectID: project.ID, UnitID: "unit-1", ShotID: "shot-1", RevisionID: "revision-1", Type: "storyboard", Version: 1, Status: "ready"},
 		&task,
 		&canvasTask,
+		&model.ProductionTaskLink{ID: "production-link-1", TaskID: task.ID, ProjectID: project.ID, UnitID: "unit-1", ShotID: "shot-1"},
 		&session,
 		&canvasSession,
 	}
@@ -105,6 +112,9 @@ func TestDeleteProjectUnlinksCanvasAndKeepsIndependentRecords(t *testing.T) {
 		{name: "asset link", model: &model.ProjectAssetLink{}, where: "project_id = ?"},
 		{name: "asset folder", model: &model.ProjectAssetFolder{}, where: "project_id = ?"},
 		{name: "asset candidate", model: &model.ProjectAssetCandidate{}, where: "project_id = ?"},
+		{name: "shot", model: &model.Shot{}, where: "project_id = ?"},
+		{name: "shot artifact", model: &model.ShotArtifact{}, where: "project_id = ?"},
+		{name: "production task link", model: &model.ProductionTaskLink{}, where: "project_id = ?"},
 	} {
 		var count int64
 		if err := db.Model(check.model).Where(check.where, project.ID).Count(&count).Error; err != nil {

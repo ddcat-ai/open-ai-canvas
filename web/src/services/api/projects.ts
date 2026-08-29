@@ -128,6 +128,7 @@ export type ProjectShot = {
     id: string;
     projectId: string;
     unitId?: string;
+    currentRevisionId?: string;
     title: string;
     description: string;
     position: number;
@@ -135,6 +136,58 @@ export type ProjectShot = {
     status: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type ShotRevision = {
+    id: string;
+    shotId: string;
+    version: number;
+    plotDescription: string;
+    action: string;
+    dialogue: string;
+    shotSize: string;
+    cameraAngle: string;
+    cameraMovement: string;
+    durationMs: number;
+    imagePrompt: string;
+    videoPrompt: string;
+    negativePrompt: string;
+    continuityNotes: string;
+    actionBeatsJson: string;
+    createdBy?: string;
+    createdAt: string;
+};
+
+export type ShotArtifact = {
+    id: string;
+    projectId: string;
+    unitId?: string;
+    shotId: string;
+    revisionId?: string;
+    taskId?: string;
+    type: "storyboard" | "action_board" | "start_frame" | "end_frame" | "video" | "audio" | "subtitle" | "delivery" | string;
+    version: number;
+    resourceId?: string;
+    status: "pending" | "running" | "ready" | "failed" | "stale" | string;
+    selected: boolean;
+    metadataJson: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ShotRevisionInput = {
+    plotDescription: string;
+    action?: string;
+    dialogue?: string;
+    shotSize?: string;
+    cameraAngle?: string;
+    cameraMovement?: string;
+    durationMs?: number;
+    imagePrompt?: string;
+    videoPrompt?: string;
+    negativePrompt?: string;
+    continuityNotes?: string;
+    actionBeats?: Array<Record<string, unknown>>;
 };
 
 export type ShotAssetReference = {
@@ -187,6 +240,8 @@ export type ProjectDetail = {
     assetFolders: ProjectAssetFolder[];
     workflows: ProjectWorkflow[];
     shots: ProjectShot[];
+    shotRevisions: ShotRevision[];
+    shotArtifacts: ShotArtifact[];
     shotReferences: ShotAssetReference[];
     assetCandidates: ProjectAssetCandidate[];
 };
@@ -198,7 +253,43 @@ export function listProjects(params?: { page: number; pageSize: number }) {
 }
 
 export function getProject(id: string) {
-    return request<ProjectDetail>(api.get(`/projects/${encodeURIComponent(id)}`));
+    return request<ProjectDetail>(api.get(`/projects/${encodeURIComponent(id)}`)).then(normalizeProjectDetail);
+}
+
+function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
+    const workflows = Array.isArray(detail.workflows)
+        ? detail.workflows.map((workflow) => ({
+            ...workflow,
+            steps: Array.isArray(workflow.steps) ? workflow.steps : [],
+        }))
+        : [];
+    const assets = Array.isArray(detail.assets)
+        ? detail.assets.map((asset) => ({
+            ...asset,
+            usages: Array.isArray(asset.usages) ? asset.usages : [],
+            ...(asset.character ? {
+                character: {
+                    ...asset.character,
+                    representations: Array.isArray(asset.character.representations) ? asset.character.representations : [],
+                },
+            } : {}),
+        }))
+        : [];
+
+    return {
+        ...detail,
+        units: Array.isArray(detail.units) ? detail.units : [],
+        canvases: Array.isArray(detail.canvases) ? detail.canvases : [],
+        canvasUnitLinks: Array.isArray(detail.canvasUnitLinks) ? detail.canvasUnitLinks : [],
+        assets,
+        assetFolders: Array.isArray(detail.assetFolders) ? detail.assetFolders : [],
+        workflows,
+        shots: Array.isArray(detail.shots) ? detail.shots : [],
+        shotRevisions: Array.isArray(detail.shotRevisions) ? detail.shotRevisions : [],
+        shotArtifacts: Array.isArray(detail.shotArtifacts) ? detail.shotArtifacts : [],
+        shotReferences: Array.isArray(detail.shotReferences) ? detail.shotReferences : [],
+        assetCandidates: Array.isArray(detail.assetCandidates) ? detail.assetCandidates : [],
+    };
 }
 
 export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string; styleProfileJson?: string }) {
@@ -317,7 +408,7 @@ export function createUnitWorkflow(projectId: string, unitId: string) {
     return request<{ workflow: ProjectWorkflow }>(api.post(`/projects/${encodeURIComponent(projectId)}/workflows`, { unitId }));
 }
 
-export function saveProjectShot(projectId: string, input: { id?: string; unitId?: string; title: string; description?: string; position?: number; durationMs?: number; status?: string }) {
+export function saveProjectShot(projectId: string, input: { id?: string; unitId?: string; title: string; description?: string; position?: number; durationMs?: number; status?: string; revision?: Partial<ShotRevisionInput> }) {
     return request<{ shot: ProjectShot }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots`, input));
 }
 
@@ -327,6 +418,10 @@ export function replaceProjectUnitShots(projectId: string, unitId: string, shots
 
 export function linkShotAsset(projectId: string, shotId: string, input: { assetVersionId: string; role: ShotAssetReference["role"] }) {
     return request<{ reference: ShotAssetReference }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/assets`, input));
+}
+
+export function createShotRevision(projectId: string, shotId: string, input: ShotRevisionInput) {
+    return request<{ shot: ProjectShot; revision: ShotRevision }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/revisions`, input));
 }
 
 export function createProjectAssetCandidates(projectId: string, candidates: Array<{ unitId?: string; shotId?: string; name: string; category: string; details?: Record<string, unknown> }>) {
@@ -341,6 +436,6 @@ export function updateWorkflowStep(projectId: string, stepId: string, input: { s
     return request<{ step: WorkflowStep }>(api.patch(`/projects/${encodeURIComponent(projectId)}/workflow-steps/${encodeURIComponent(stepId)}`, input));
 }
 
-export function registerProjectTaskOutput(projectId: string, stepId: string, input: { taskId: string; assetVersionId?: string; resourceId?: string; mediaType?: string; role?: string; metadataJson?: string; outputJson?: string }) {
+export function registerProjectTaskOutput(projectId: string, stepId: string, input: { taskId: string; canvasId?: string; unitId?: string; shotId?: string; artifactType?: string; assetVersionId?: string; resourceId?: string; mediaType?: string; role?: string; metadataJson?: string; outputJson?: string }) {
     return request<{ step: WorkflowStep }>(api.post(`/projects/${encodeURIComponent(projectId)}/workflow-steps/${encodeURIComponent(stepId)}/task-output`, input));
 }

@@ -678,6 +678,25 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"shots": shots})
 	})
+	r.POST("/projects/:id/shots/:shotId/revisions", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256<<10)
+		var req service.ShotRevisionInput
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		shot, revision, err := svc.CreateShotRevision(user.ID, c.Param("id"), c.Param("shotId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"shot": shot, "revision": revision})
+	})
 	r.POST("/projects/:id/shots/:shotId/assets", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -7,6 +7,19 @@ description: 影策后端核心持久化表与状态边界
 
 后端通过 GORM 管理 SQLite 与 PostgreSQL 表结构。服务启动时由 `backend/internal/database/schema.go` 执行迁移；业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。
 
+## 短剧分镜生产
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `shots` | 保存章节内稳定的镜头身份、排序和当前版本指针 | 不保存完整生成历史；`current_revision_id` 指向当前采用的分镜脚本版本 |
+| `shot_revisions` | 保存画面、动作、台词、景别、机位、运镜、提示词和动作节拍 | 每次编辑创建新版本；历史版本不可被静默覆盖 |
+| `shot_asset_references` | 将镜头绑定到具体资产版本 | 修改引用时只使该镜头的下游产物过期，不影响其他镜头 |
+| `shot_artifacts` | 保存分镜图、动作预演、首尾帧、视频等版本化产物 | `selected` 表示当前采用版本；上游变化后状态转为 `stale`，历史资源继续保留 |
+| `production_task_links` | 显式记录生成任务所属的领域项目、画布、章节、镜头和工作流步骤 | `Task.project_id` 仍兼容画布任务身份，不再用它单独推断短剧领域归属 |
+| `workflow_template_versions` / `workflow_instances` / `workflow_step_instances` | 保存短剧生产模板和项目、章节实例 | 短剧分镜工作流 v2 顺序为剧情、资产、分镜、动作预演、视频、交付 |
+
+短剧项目状态以这些领域表为准。自由画布可以承载探索节点，但画布 metadata 不作为生产完成度、镜头版本或交付可用性的真相源。
+
 ## 模型渠道与目录
 
 | 表 | 用途 | 关键边界 |

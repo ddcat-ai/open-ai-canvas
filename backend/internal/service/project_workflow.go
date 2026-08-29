@@ -12,7 +12,7 @@ import (
 )
 
 const builtinShortDramaWorkflowKey = "short-drama-production"
-const builtinShortDramaWorkflowVersion = 1
+const builtinShortDramaWorkflowVersion = 2
 
 type workflowStepDefinition struct {
 	Key  string `json:"key"`
@@ -20,13 +20,12 @@ type workflowStepDefinition struct {
 }
 
 var builtinShortDramaSteps = []workflowStepDefinition{
-	{Key: "style", Name: "选择画风"},
-	{Key: "story", Name: "输入故事"},
-	{Key: "storyboard", Name: "生成分镜"},
-	{Key: "assets", Name: "准备资产"},
-	{Key: "video", Name: "生成视频"},
-	{Key: "review", Name: "审核与重试"},
-	{Key: "delivery", Name: "合并成片"},
+	{Key: "story", Name: "剧情与章节"},
+	{Key: "assets", Name: "资产拆分"},
+	{Key: "storyboard", Name: "分镜脚本"},
+	{Key: "previz", Name: "黑白动作预演"},
+	{Key: "video", Name: "视频生成"},
+	{Key: "delivery", Name: "交付与打包"},
 }
 
 type ProjectWorkflowDetail struct {
@@ -42,6 +41,10 @@ type UpdateWorkflowStepRequest struct {
 
 type RegisterTaskOutputRequest struct {
 	TaskID         string `json:"taskId"`
+	CanvasID       string `json:"canvasId"`
+	UnitID         string `json:"unitId"`
+	ShotID         string `json:"shotId"`
+	ArtifactType   string `json:"artifactType"`
 	AssetVersionID string `json:"assetVersionId"`
 	ResourceID     string `json:"resourceId"`
 	MediaType      string `json:"mediaType"`
@@ -60,7 +63,7 @@ func (s *Service) EnsureBuiltinProjectWorkflowTemplate() error {
 	if err != nil {
 		return err
 	}
-	template := model.WorkflowTemplateVersion{ID: newID(), TemplateKey: builtinShortDramaWorkflowKey, Name: "短剧标准制作流程", Version: builtinShortDramaWorkflowVersion, DefinitionJSON: string(definition), CreatedAt: time.Now()}
+	template := model.WorkflowTemplateVersion{ID: newID(), TemplateKey: builtinShortDramaWorkflowKey, Name: "短剧分镜工作流", Version: builtinShortDramaWorkflowVersion, DefinitionJSON: string(definition), CreatedAt: time.Now()}
 	return s.repo.CreateWorkflowTemplateVersion(&template)
 }
 
@@ -111,7 +114,7 @@ func (s *Service) ProjectWorkflows(projectID string) ([]ProjectWorkflowDetail, e
 }
 
 func (s *Service) CreateUnitWorkflow(userID string, projectID string, unitID string) (ProjectWorkflowDetail, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return ProjectWorkflowDetail{}, err
 	}
 	if _, err := s.repo.ProjectUnit(projectID, unitID); err != nil {
@@ -121,7 +124,7 @@ func (s *Service) CreateUnitWorkflow(userID string, projectID string, unitID str
 }
 
 func (s *Service) UpdateWorkflowStep(userID string, projectID string, stepID string, req UpdateWorkflowStepRequest) (model.WorkflowStepInstance, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return model.WorkflowStepInstance{}, err
 	}
 	step, err := s.repo.WorkflowStepForProject(projectID, stepID)
@@ -155,6 +158,11 @@ func (s *Service) UpdateWorkflowStep(userID string, projectID string, stepID str
 	if err != nil {
 		return model.WorkflowStepInstance{}, err
 	}
+	if status == model.WorkflowStepStatusCompleted {
+		if err := s.validateWorkflowStepCompletion(projectID, instance, step); err != nil {
+			return model.WorkflowStepInstance{}, err
+		}
+	}
 	instance.Status = model.WorkflowStatusActive
 	instance.Revision++
 	instance.UpdatedAt = now
@@ -180,15 +188,29 @@ func (s *Service) UpdateWorkflowStep(userID string, projectID string, stepID str
 }
 
 func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID string, req RegisterTaskOutputRequest) (model.WorkflowStepInstance, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return model.WorkflowStepInstance{}, err
 	}
 	task, err := s.repo.TaskForUser(userID, strings.TrimSpace(req.TaskID))
 	if err != nil {
 		return model.WorkflowStepInstance{}, err
 	}
+	canvasID := strings.TrimSpace(req.CanvasID)
 	if task.ProjectID != projectID {
-		return model.WorkflowStepInstance{}, BadAuthRequest("任务不属于当前项目")
+		canvas, canvasErr := s.repo.CanvasProjectForUser(userID, task.ProjectID)
+		if canvasErr != nil || canvas.ProjectID != projectID {
+			return model.WorkflowStepInstance{}, BadAuthRequest("任务不属于当前项目")
+		}
+		if canvasID != "" && canvasID != canvas.ID {
+			return model.WorkflowStepInstance{}, BadAuthRequest("任务画布与产物画布不一致")
+		}
+		canvasID = canvas.ID
+	}
+	if canvasID != "" {
+		canvas, canvasErr := s.repo.CanvasProjectForUser(userID, canvasID)
+		if canvasErr != nil || canvas.ProjectID != projectID {
+			return model.WorkflowStepInstance{}, BadAuthRequest("画布不属于当前项目")
+		}
 	}
 	if task.Status != model.TaskStatusSucceeded {
 		return model.WorkflowStepInstance{}, BadAuthRequest("只有成功任务才能登记产物")
@@ -199,6 +221,24 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 	}
 	if step.Status == model.WorkflowStepStatusFailed {
 		return model.WorkflowStepInstance{}, BadAuthRequest("失败步骤不能登记成功产物")
+	}
+	unitID := strings.TrimSpace(req.UnitID)
+	shotID := strings.TrimSpace(req.ShotID)
+	var shot *model.Shot
+	if shotID != "" {
+		shot, err = s.repo.ShotForProject(projectID, shotID)
+		if err != nil {
+			return model.WorkflowStepInstance{}, err
+		}
+		if unitID == "" {
+			unitID = shot.UnitID
+		} else if unitID != shot.UnitID {
+			return model.WorkflowStepInstance{}, BadAuthRequest("镜头不属于指定章节")
+		}
+	} else if unitID != "" {
+		if _, err := s.repo.ProjectUnit(projectID, unitID); err != nil {
+			return model.WorkflowStepInstance{}, err
+		}
 	}
 	if versionID := strings.TrimSpace(req.AssetVersionID); versionID != "" {
 		if _, err := s.repo.AssetVersionForProject(projectID, versionID); err != nil {
@@ -258,10 +298,110 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 		representation = &model.AssetRepresentation{ID: newID(), TaskID: task.ID, AssetVersionID: strings.TrimSpace(req.AssetVersionID), ResourceID: strings.TrimSpace(req.ResourceID), MediaType: strings.TrimSpace(req.MediaType), Role: role, MetadataJSON: metadata, CreatedAt: now}
 	}
 	link := &model.WorkflowStepTask{ID: newID(), WorkflowStepID: step.ID, TaskID: task.ID, CreatedAt: now}
-	if err := s.repo.RegisterWorkflowTaskOutput(step, next, instance, projectID, link, representation); err != nil {
+	artifactType := strings.TrimSpace(req.ArtifactType)
+	if artifactType == "" && shotID != "" && strings.TrimSpace(req.ResourceID) != "" {
+		artifactType = workflowArtifactType(step.StepKey)
+	}
+	productionLink := &model.ProductionTaskLink{ID: newID(), TaskID: task.ID, ProjectID: projectID, CanvasID: canvasID, UnitID: unitID, ShotID: shotID, WorkflowStepID: step.ID, ArtifactType: artifactType, CreatedAt: now, UpdatedAt: now}
+	var artifact *model.ShotArtifact
+	if shot != nil && strings.TrimSpace(req.ResourceID) != "" && artifactType != "" {
+		artifact = &model.ShotArtifact{ID: newID(), ProjectID: projectID, UnitID: shot.UnitID, ShotID: shot.ID, RevisionID: shot.CurrentRevisionID, TaskID: task.ID, Type: artifactType, ResourceID: strings.TrimSpace(req.ResourceID), Status: "ready", Selected: true, MetadataJSON: metadata, CreatedAt: now, UpdatedAt: now}
+	}
+	// 单镜产物成功只代表该镜头完成，不能提前放行整个章节阶段。
+	if shot != nil {
+		step.Status = model.WorkflowStepStatusRunning
+		step.CompletedAt = nil
+		instance.Status = model.WorkflowStatusActive
+		next = nil
+	}
+	if err := s.repo.RegisterWorkflowTaskOutput(step, next, instance, projectID, link, representation, productionLink, artifact); err != nil {
 		return model.WorkflowStepInstance{}, err
 	}
 	return *step, nil
+}
+
+func (s *Service) validateWorkflowStepCompletion(projectID string, instance *model.WorkflowInstance, step *model.WorkflowStepInstance) error {
+	if instance == nil || strings.TrimSpace(instance.UnitID) == "" {
+		return nil
+	}
+	unit, err := s.repo.ProjectUnit(projectID, instance.UnitID)
+	if err != nil {
+		return err
+	}
+	switch step.StepKey {
+	case "story":
+		if strings.TrimSpace(unit.SourceText) == "" {
+			return BadAuthRequest("章节正文为空，不能完成剧情阶段")
+		}
+	case "assets":
+		candidates, candidateErr := s.repo.ProjectAssetCandidates(projectID)
+		if candidateErr != nil {
+			return candidateErr
+		}
+		for _, candidate := range candidates {
+			if candidate.UnitID == instance.UnitID && candidate.Status == "pending_confirmation" {
+				return BadAuthRequest("仍有待确认资产，不能完成资产拆分阶段")
+			}
+		}
+	case "storyboard", "previz", "video", "delivery":
+		shots, shotErr := s.repo.ProjectShots(projectID)
+		if shotErr != nil {
+			return shotErr
+		}
+		unitShots := make([]model.Shot, 0, len(shots))
+		for _, shot := range shots {
+			if shot.UnitID == instance.UnitID {
+				unitShots = append(unitShots, shot)
+			}
+		}
+		if len(unitShots) == 0 {
+			return BadAuthRequest("当前章节还没有分镜，不能完成本阶段")
+		}
+		if step.StepKey == "storyboard" {
+			for _, shot := range unitShots {
+				if strings.TrimSpace(shot.CurrentRevisionID) == "" {
+					return BadAuthRequest("存在没有分镜版本的镜头，不能完成分镜阶段")
+				}
+			}
+			return nil
+		}
+		artifactType := "action_board"
+		if step.StepKey == "video" || step.StepKey == "delivery" {
+			artifactType = "video"
+		}
+		artifacts, artifactErr := s.repo.ProjectShotArtifacts(projectID)
+		if artifactErr != nil {
+			return artifactErr
+		}
+		readyShots := make(map[string]struct{}, len(unitShots))
+		for _, artifact := range artifacts {
+			if artifact.UnitID == instance.UnitID && artifact.Type == artifactType && artifact.Selected && artifact.Status == "ready" {
+				readyShots[artifact.ShotID] = struct{}{}
+			}
+		}
+		if len(readyShots) != len(unitShots) {
+			if artifactType == "action_board" {
+				return BadAuthRequest("仍有镜头缺少已通过的动作预演，不能完成本阶段")
+			}
+			return BadAuthRequest("仍有镜头缺少可交付视频，不能完成本阶段")
+		}
+	}
+	return nil
+}
+
+func workflowArtifactType(stepKey string) string {
+	switch strings.TrimSpace(stepKey) {
+	case "storyboard":
+		return "storyboard"
+	case "previz":
+		return "action_board"
+	case "video":
+		return "video"
+	case "delivery":
+		return "delivery"
+	default:
+		return ""
+	}
 }
 
 func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
@@ -278,6 +418,10 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 	var input struct {
 		WorkflowStepID  string         `json:"workflowStepId"`
 		DomainProjectID string         `json:"domainProjectId"`
+		CanvasID        string         `json:"canvasId"`
+		UnitID          string         `json:"unitId"`
+		ShotID          string         `json:"shotId"`
+		ArtifactType    string         `json:"artifactType"`
 		AssetVersionID  string         `json:"assetVersionId"`
 		ResourceID      string         `json:"resourceId"`
 		MediaType       string         `json:"mediaType"`
@@ -296,6 +440,18 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 		}
 		if input.AssetVersionID == "" {
 			input.AssetVersionID, _ = input.Metadata["assetVersionId"].(string)
+		}
+		if input.CanvasID == "" {
+			input.CanvasID, _ = input.Metadata["canvasId"].(string)
+		}
+		if input.UnitID == "" {
+			input.UnitID, _ = input.Metadata["unitId"].(string)
+		}
+		if input.ShotID == "" {
+			input.ShotID, _ = input.Metadata["shotId"].(string)
+		}
+		if input.ArtifactType == "" {
+			input.ArtifactType, _ = input.Metadata["artifactType"].(string)
 		}
 		if input.ResourceID == "" {
 			input.ResourceID, _ = input.Metadata["resourceId"].(string)
@@ -319,7 +475,7 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 	if projectID == "" {
 		return errors.New("任务未提供短剧项目 ID，无法登记产物")
 	}
-	_, err = s.RegisterTaskOutput(task.UserID, projectID, input.WorkflowStepID, RegisterTaskOutputRequest{TaskID: task.ID, AssetVersionID: input.AssetVersionID, ResourceID: input.ResourceID, MediaType: input.MediaType, Role: input.Role, OutputJSON: task.ResultJSON})
+	_, err = s.RegisterTaskOutput(task.UserID, projectID, input.WorkflowStepID, RegisterTaskOutputRequest{TaskID: task.ID, CanvasID: input.CanvasID, UnitID: input.UnitID, ShotID: input.ShotID, ArtifactType: input.ArtifactType, AssetVersionID: input.AssetVersionID, ResourceID: input.ResourceID, MediaType: input.MediaType, Role: input.Role, OutputJSON: task.ResultJSON})
 	return err
 }
 

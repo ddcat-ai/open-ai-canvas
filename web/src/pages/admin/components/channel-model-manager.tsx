@@ -13,6 +13,7 @@ import { modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, m
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
+import { defaultPriceTier, legacyPriceTierToForm, priceTierResolutionFromForm, priceTierToForm, priceTierVideoSecondsFromForm, skuSelectorFromForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 import { AdminPageFrame } from "./admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
 
@@ -28,23 +29,6 @@ type FormValues = {
     priceTiers: PriceTierFormValues[];
     enabled: boolean;
     capabilityConfig?: ModelCapabilityConfig;
-};
-
-type PriceTierFormValues = {
-    operation: string;
-    quality: string;
-    size: string;
-    resolution: string;
-    videoSeconds: number;
-    imageCount: number;
-    providerModelKey?: string;
-    billingMode: ChannelModel["billingMode"];
-    unitPrice: number;
-    inputTokenPrice: number;
-    outputTokenPrice: number;
-    cachedTokenPrice: number;
-    priceConfigured: boolean;
-    enabled: boolean;
 };
 
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
@@ -69,6 +53,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const providerModelKey = Form.useWatch("providerModelKey", form) || "";
     const capabilityConfig = Form.useWatch("capabilityConfig", form);
     const modelEnabled = Form.useWatch("enabled", form) !== false;
+    const priceTiers = Form.useWatch("priceTiers", form) || [];
+    const hasDefaultPriceTier = priceTiers.some((tier) => tier.matchMode === "default");
 
     const reload = async () => {
         if (!channel) return;
@@ -84,7 +70,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     useEffect(() => {
         void reload();
-        void fetchPluginProviderCatalog("admin.system-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
+        void fetchPluginProviderCatalog("admin.system-channel")
+            .then(setAvailableProtocols)
+            .catch(() => setAvailableProtocols([]));
         setEditing(null);
         setEditorOpen(false);
         setKeyword("");
@@ -161,8 +149,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 protocol: values.protocol,
                 priceTiers: values.priceTiers.map((tier) => ({
                     selector: skuSelectorFromForm(values.capability, tier),
-                    resolution: values.capability === "video" ? tier.resolution || "*" : "*",
-                    videoSeconds: values.capability === "video" ? Number(tier.videoSeconds || 0) : 0,
+                    resolution: priceTierResolutionFromForm(values.capability, tier),
+                    videoSeconds: priceTierVideoSecondsFromForm(values.capability, tier),
                     providerModelKey: tier.providerModelKey?.trim() || upstreamModel,
                     billingMode: tier.billingMode,
                     unitPriceMicrocredits: Math.round((tier.unitPrice || 0) * 1_000_000),
@@ -550,7 +538,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     ) : null}
 
                     <section className="admin-form-section admin-model-editor-section">
-                        <SectionHeading title="规格价格档" description="按请求条件匹配上游模型与计费规则。" />
+                        <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
                         <div className="admin-model-editor-section-content">
                             <Form.List
                                 name="priceTiers"
@@ -558,6 +546,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                                     {
                                         validator: async (_, value) => {
                                             if (!value?.length) throw new Error("请至少配置一个价格档");
+                                            if (value.filter((tier: PriceTierFormValues) => tier.matchMode === "default").length > 1) throw new Error("只能配置一个所有规格统一价格");
                                         },
                                     },
                                 ]}
@@ -576,8 +565,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                                                 onRemove={() => remove(field.name)}
                                             />
                                         ))}
-                                        <Button className="admin-model-editor-add-tier" type="dashed" block icon={<Plus className="size-4" />} onClick={() => add(defaultPriceTier())}>
-                                            新增价格档
+                                        <Button className="admin-model-editor-add-tier" type="dashed" block icon={<Plus className="size-4" />} onClick={() => add(defaultPriceTier(hasDefaultPriceTier ? "advanced" : "default"))}>
+                                            {hasDefaultPriceTier ? "新增规格价格" : "新增统一默认价格"}
                                         </Button>
                                         <Form.ErrorList errors={errors} />
                                     </div>
@@ -630,6 +619,9 @@ function PriceTierFields({
     onRemove: () => void;
 }) {
     const billingMode = Form.useWatch(["priceTiers", index, "billingMode"], form) || "fixed_request";
+    const matchMode = Form.useWatch(["priceTiers", index, "matchMode"], form) || "default";
+    const priceConfigured = Form.useWatch(["priceTiers", index, "priceConfigured"], form) !== false;
+    const tierEnabled = Form.useWatch(["priceTiers", index, "enabled"], form) !== false;
     const video = capabilityConfig?.video;
     const resolutionOptions = video?.resolutions || [];
     const durationOptions = video?.duration.selection === "enum" ? video.duration.values || [] : [];
@@ -640,8 +632,8 @@ function PriceTierFields({
         <div className="admin-price-tier-card">
             <div className="admin-price-tier-card-header">
                 <div>
-                    <div className="text-sm font-medium">价格档 {ordinal}</div>
-                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/45">请求按以下条件命中后，使用本档模型与价格。</div>
+                    <div className="text-sm font-medium">{matchMode === "default" ? "默认价格" : `规格价格 ${ordinal}`}</div>
+                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/45">{matchMode === "default" ? "匹配所有生成请求，保存后即可供用户使用。" : "精确条件优先于默认价格。"}</div>
                 </div>
                 <Button type="text" danger aria-label={`删除价格档 ${ordinal}`} icon={<Trash2 className="size-3.5" />} onClick={onRemove}>
                     删除
@@ -650,48 +642,61 @@ function PriceTierFields({
             <div className="admin-price-tier-card-body">
                 <div className="admin-price-tier-block admin-price-tier-match-block">
                     <div className="admin-price-tier-block-title">
-                        <span>01</span> 匹配条件
+                        <span>01</span> 价格适用范围
                     </div>
-                    <div className="admin-price-tier-match-grid">
-                        <Form.Item className="mb-0" name={[index, "operation"]} label="生成方式" rules={[{ required: true, message: "请选择生成方式" }]}>
-                            <Select options={operationOptions(capability)} />
-                        </Form.Item>
-                        {isVideo ? (
-                            <Form.Item className="mb-0" name={[index, "resolution"]} label="分辨率" rules={[{ required: true, message: "请选择分辨率" }]}>
-                                <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
+                    <Form.Item className="mb-3" name={[index, "matchMode"]} label="定价方式" rules={[{ required: true }]}>
+                        <Segmented
+                            block
+                            options={[
+                                { label: "所有规格统一价格", value: "default" },
+                                { label: "按规格定价", value: "advanced" },
+                            ]}
+                        />
+                    </Form.Item>
+                    {matchMode === "default" ? (
+                        <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2.5 text-xs leading-5 text-foreground/60">用户选择任意生成方式、质量和尺寸时，都使用这档价格。新增规格价格后，精确规则优先，默认价格负责兜底。</div>
+                    ) : (
+                        <div className="admin-price-tier-match-grid">
+                            <Form.Item className="mb-0" name={[index, "operation"]} label="生成方式" rules={[{ required: true, message: "请选择生成方式" }]}>
+                                <Select options={operationOptions(capability)} />
                             </Form.Item>
-                        ) : null}
-                        {isVideo ? (
-                            <Form.Item className="mb-0" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
-                                {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} />}
+                            {isVideo ? (
+                                <Form.Item className="mb-0" name={[index, "resolution"]} label="分辨率" rules={[{ required: true, message: "请选择分辨率" }]}>
+                                    <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
+                                </Form.Item>
+                            ) : null}
+                            {isVideo ? (
+                                <Form.Item className="mb-0" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
+                                    {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} />}
+                                </Form.Item>
+                            ) : null}
+                            {isVideo ? (
+                                <Form.Item className="mb-0" name={[index, "imageCount"]} label="参考图数量" rules={[{ required: true, message: "请输入参考图数量" }]}>
+                                    <InputNumber className="w-full" min={0} max={9} precision={0} placeholder="0 表示任意数量" />
+                                </Form.Item>
+                            ) : null}
+                            {isImage ? (
+                                <Form.Item className="mb-0" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
+                                    <Select
+                                        options={[
+                                            { label: "任意质量", value: "*" },
+                                            { label: "1K", value: "1k" },
+                                            { label: "2K", value: "2k" },
+                                            { label: "4K", value: "4k" },
+                                        ]}
+                                    />
+                                </Form.Item>
+                            ) : null}
+                            {isImage ? (
+                                <Form.Item className="mb-0" name={[index, "size"]} label="画幅/尺寸">
+                                    <Input placeholder="任意，或 1:1、16:9、1024x1024" />
+                                </Form.Item>
+                            ) : null}
+                            <Form.Item className="admin-price-tier-upstream mb-0" name={[index, "providerModelKey"]} label="命中后使用的上游模型 ID">
+                                <Input placeholder="留空则使用模型默认上游 ID" />
                             </Form.Item>
-                        ) : null}
-                        {isVideo ? (
-                            <Form.Item className="mb-0" name={[index, "imageCount"]} label="参考图数量" rules={[{ required: true, message: "请输入参考图数量" }]}>
-                                <InputNumber className="w-full" min={0} max={9} precision={0} placeholder="0 表示任意数量" />
-                            </Form.Item>
-                        ) : null}
-                        {isImage ? (
-                            <Form.Item className="mb-0" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
-                                <Select
-                                    options={[
-                                        { label: "任意质量", value: "*" },
-                                        { label: "1K", value: "1k" },
-                                        { label: "2K", value: "2k" },
-                                        { label: "4K", value: "4k" },
-                                    ]}
-                                />
-                            </Form.Item>
-                        ) : null}
-                        {isImage ? (
-                            <Form.Item className="mb-0" name={[index, "size"]} label="画幅/尺寸">
-                                <Input placeholder="任意，或 1:1、16:9、1024x1024" />
-                            </Form.Item>
-                        ) : null}
-                        <Form.Item className="admin-price-tier-upstream mb-0" name={[index, "providerModelKey"]} label="命中后使用的上游模型 ID">
-                            <Input placeholder="留空则使用模型默认上游 ID" />
-                        </Form.Item>
-                    </div>
+                        </div>
+                    )}
                 </div>
                 <div className="admin-price-tier-block admin-price-tier-billing-block">
                     <div className="admin-price-tier-block-title">
@@ -731,24 +736,26 @@ function PriceTierFields({
                                 <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
                             </Form.Item>
                         )}
-                        <div className="admin-price-tier-controls flex items-center gap-6">
+                        <div className="admin-price-tier-controls">
+                            <Form.Item name={[index, "priceConfigured"]} hidden valuePropName="checked">
+                                <Switch />
+                            </Form.Item>
+                            <Form.Item name={[index, "enabled"]} hidden valuePropName="checked">
+                                <Switch />
+                            </Form.Item>
                             <div className="admin-price-tier-toggle">
                                 <div>
-                                    <strong>价格已配置</strong>
-                                    <span>允许按此价格计费</span>
+                                    <strong>可供用户使用</strong>
+                                    <span>关闭后保留配置，但用户请求不再匹配这档价格</span>
                                 </div>
-                                <Form.Item name={[index, "priceConfigured"]} noStyle valuePropName="checked">
-                                    <Switch aria-label="价格已配置" />
-                                </Form.Item>
-                            </div>
-                            <div className="admin-price-tier-toggle">
-                                <div>
-                                    <strong>启用价格档</strong>
-                                    <span>允许参与请求匹配</span>
-                                </div>
-                                <Form.Item name={[index, "enabled"]} noStyle valuePropName="checked">
-                                    <Switch aria-label="启用价格档" />
-                                </Form.Item>
+                                <Switch
+                                    aria-label="可供用户使用"
+                                    checked={priceConfigured && tierEnabled}
+                                    onChange={(checked) => {
+                                        form.setFieldValue(["priceTiers", index, "priceConfigured"], checked);
+                                        form.setFieldValue(["priceTiers", index, "enabled"], checked);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
@@ -756,63 +763,6 @@ function PriceTierFields({
             </div>
         </div>
     );
-}
-
-function defaultPriceTier(): PriceTierFormValues {
-    return {
-        operation: "*",
-        quality: "*",
-        size: "*",
-        resolution: "*",
-        videoSeconds: 0,
-        imageCount: 0,
-        providerModelKey: "",
-        billingMode: "fixed_request",
-        unitPrice: 0,
-        inputTokenPrice: 0,
-        outputTokenPrice: 0,
-        cachedTokenPrice: 0,
-        priceConfigured: true,
-        enabled: true,
-    };
-}
-
-function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
-    return {
-        operation: tier.selector?.operation || "*",
-        quality: tier.selector?.quality || "*",
-        size: tier.selector?.size || "*",
-        resolution: tier.resolution || "*",
-        videoSeconds: tier.videoSeconds || 0,
-        imageCount: Number(tier.selector?.imageCount || 0),
-        providerModelKey: tier.providerModelKey || "",
-        billingMode: tier.billingMode,
-        unitPrice: tier.unitPriceMicrocredits / 1_000_000,
-        inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
-        outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
-        cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
-        priceConfigured: tier.priceConfigured,
-        enabled: tier.enabled,
-    };
-}
-
-function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
-    return {
-        operation: "*",
-        quality: "*",
-        size: "*",
-        resolution: "*",
-        videoSeconds: 0,
-        imageCount: 0,
-        providerModelKey: item.providerModelKey || "",
-        billingMode: item.billingMode,
-        unitPrice: item.unitPriceMicrocredits / 1_000_000,
-        inputTokenPrice: item.inputTokenPriceMicrocredits / 1_000_000,
-        outputTokenPrice: item.outputTokenPriceMicrocredits / 1_000_000,
-        cachedTokenPrice: item.cachedTokenPriceMicrocredits / 1_000_000,
-        priceConfigured: item.priceConfigured,
-        enabled: item.enabled,
-    };
 }
 
 function billingSummary(item: ChannelModel) {
@@ -853,21 +803,6 @@ function operationOptions(capability: EditableCapability | undefined) {
 
 function operationLabel(operation: string) {
     return ({ text_to_image: "文生图", image_to_image: "图生图", text_to_video: "文生视频", image_to_video: "图生视频", video_to_video: "视频生视频", text_generation: "文本生成" } as Record<string, string>)[operation] || operation;
-}
-
-function skuSelectorFromForm(capability: EditableCapability, tier: PriceTierFormValues) {
-    const selector: Record<string, string> = {};
-    if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
-    if (capability === "video") {
-        if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
-        if (Number(tier.videoSeconds) > 0) selector.videoSeconds = String(Number(tier.videoSeconds));
-        if (Number(tier.imageCount) > 0) selector.imageCount = String(Number(tier.imageCount));
-    }
-    if (capability === "image") {
-        if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
-        if (tier.size && tier.size !== "*") selector.size = tier.size;
-    }
-    return selector;
 }
 
 function formatCredits(value: number) {

@@ -9,13 +9,29 @@ import (
 )
 
 type CreateProjectShotRequest struct {
-	ID          string `json:"id"`
-	UnitID      string `json:"unitId"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Position    int    `json:"position"`
-	DurationMs  int64  `json:"durationMs"`
-	Status      string `json:"status"`
+	ID          string            `json:"id"`
+	UnitID      string            `json:"unitId"`
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Position    int               `json:"position"`
+	DurationMs  int64             `json:"durationMs"`
+	Status      string            `json:"status"`
+	Revision    ShotRevisionInput `json:"revision"`
+}
+
+type ShotRevisionInput struct {
+	PlotDescription string           `json:"plotDescription"`
+	Action          string           `json:"action"`
+	Dialogue        string           `json:"dialogue"`
+	ShotSize        string           `json:"shotSize"`
+	CameraAngle     string           `json:"cameraAngle"`
+	CameraMovement  string           `json:"cameraMovement"`
+	DurationMs      int64            `json:"durationMs"`
+	ImagePrompt     string           `json:"imagePrompt"`
+	VideoPrompt     string           `json:"videoPrompt"`
+	NegativePrompt  string           `json:"negativePrompt"`
+	ContinuityNotes string           `json:"continuityNotes"`
+	ActionBeats     []map[string]any `json:"actionBeats"`
 }
 
 type ReplaceProjectUnitShotsRequest struct {
@@ -40,7 +56,7 @@ type CreateAssetCandidatesRequest struct {
 }
 
 func (s *Service) CreateProjectShot(userID string, projectID string, req CreateProjectShotRequest) (model.Shot, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return model.Shot{}, err
 	}
 	unitID := strings.TrimSpace(req.UnitID)
@@ -70,6 +86,9 @@ func (s *Service) CreateProjectShot(userID string, projectID string, req CreateP
 		if err != nil {
 			return model.Shot{}, err
 		}
+		if unitID == "" {
+			unitID = existing.UnitID
+		}
 		if status == "" {
 			status = existing.Status
 		}
@@ -78,18 +97,21 @@ func (s *Service) CreateProjectShot(userID string, projectID string, req CreateP
 	if !validShotStatus(status) {
 		return model.Shot{}, BadAuthRequest("不支持的镜头状态")
 	}
-	shot := model.Shot{ID: shotID, ProjectID: projectID, UnitID: unitID, Title: title, Description: strings.TrimSpace(req.Description), Position: req.Position, DurationMs: req.DurationMs, Status: status, CreatedAt: now, UpdatedAt: time.Now()}
-	if err := s.repo.SaveShot(&shot, create); err != nil {
+	updatedAt := time.Now()
+	description := strings.TrimSpace(req.Description)
+	revision, err := newShotRevision(userID, shotID, req.Revision, description, req.DurationMs, updatedAt)
+	if err != nil {
 		return model.Shot{}, err
 	}
-	if err := s.repo.BumpProjectRevision(projectID); err != nil {
+	shot := model.Shot{ID: shotID, ProjectID: projectID, UnitID: unitID, CurrentRevisionID: revision.ID, Title: title, Description: revision.PlotDescription, Position: req.Position, DurationMs: revision.DurationMs, Status: status, CreatedAt: now, UpdatedAt: updatedAt}
+	if err := s.repo.SaveShotWithRevision(&shot, &revision, create); err != nil {
 		return model.Shot{}, err
 	}
 	return shot, nil
 }
 
 func (s *Service) ReplaceProjectUnitShots(userID string, projectID string, unitID string, req ReplaceProjectUnitShotsRequest) ([]model.Shot, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return nil, err
 	}
 	unitID = strings.TrimSpace(unitID)
@@ -101,19 +123,81 @@ func (s *Service) ReplaceProjectUnitShots(userID string, projectID string, unitI
 	}
 	now := time.Now()
 	shots := make([]model.Shot, 0, len(req.Shots))
+	revisions := make([]model.ShotRevision, 0, len(req.Shots))
 	for position, input := range req.Shots {
 		title := strings.TrimSpace(input.Title)
 		description := strings.TrimSpace(input.Description)
 		if title == "" || description == "" || input.DurationMs < 0 {
 			return nil, BadAuthRequest("分镜标题、描述或时长无效")
 		}
-		shots = append(shots, model.Shot{ID: newID(), ProjectID: projectID, UnitID: unitID, Title: title, Description: description, Position: position, DurationMs: input.DurationMs, Status: "draft", CreatedAt: now, UpdatedAt: now})
+		shotID := newID()
+		revision, err := newShotRevision(userID, shotID, input.Revision, description, input.DurationMs, now)
+		if err != nil {
+			return nil, err
+		}
+		revision.Version = 1
+		shots = append(shots, model.Shot{ID: shotID, ProjectID: projectID, UnitID: unitID, CurrentRevisionID: revision.ID, Title: title, Description: revision.PlotDescription, Position: position, DurationMs: revision.DurationMs, Status: "draft", CreatedAt: now, UpdatedAt: now})
+		revisions = append(revisions, revision)
 	}
 	// 章节级重生成是一个整体写操作，旧镜头与引用必须和新镜头在同一事务中替换。
-	if err := s.repo.ReplaceProjectUnitShots(projectID, unitID, shots); err != nil {
+	if err := s.repo.ReplaceProjectUnitShots(projectID, unitID, shots, revisions); err != nil {
 		return nil, err
 	}
 	return shots, nil
+}
+
+func (s *Service) CreateShotRevision(userID string, projectID string, shotID string, input ShotRevisionInput) (model.Shot, model.ShotRevision, error) {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
+		return model.Shot{}, model.ShotRevision{}, err
+	}
+	shot, err := s.repo.ShotForProject(projectID, strings.TrimSpace(shotID))
+	if err != nil {
+		return model.Shot{}, model.ShotRevision{}, err
+	}
+	now := time.Now()
+	revision, err := newShotRevision(userID, shot.ID, input, shot.Description, shot.DurationMs, now)
+	if err != nil {
+		return model.Shot{}, model.ShotRevision{}, err
+	}
+	shot.Description = revision.PlotDescription
+	shot.DurationMs = revision.DurationMs
+	shot.Status = "draft"
+	shot.UpdatedAt = now
+	if err := s.repo.SaveShotWithRevision(shot, &revision, false); err != nil {
+		return model.Shot{}, model.ShotRevision{}, err
+	}
+	return *shot, revision, nil
+}
+
+func newShotRevision(userID string, shotID string, input ShotRevisionInput, fallbackDescription string, fallbackDuration int64, now time.Time) (model.ShotRevision, error) {
+	plotDescription := strings.TrimSpace(input.PlotDescription)
+	if plotDescription == "" {
+		plotDescription = strings.TrimSpace(fallbackDescription)
+	}
+	if plotDescription == "" {
+		return model.ShotRevision{}, BadAuthRequest("镜头画面描述不能为空")
+	}
+	durationMs := input.DurationMs
+	if durationMs == 0 {
+		durationMs = fallbackDuration
+	}
+	if durationMs < 0 {
+		return model.ShotRevision{}, BadAuthRequest("镜头时长不能为负数")
+	}
+	actionBeatsJSON := "[]"
+	if input.ActionBeats != nil {
+		encoded, err := json.Marshal(input.ActionBeats)
+		if err != nil {
+			return model.ShotRevision{}, BadAuthRequest("动作节拍格式无效")
+		}
+		actionBeatsJSON = string(encoded)
+	}
+	return model.ShotRevision{
+		ID: newID(), ShotID: shotID, PlotDescription: plotDescription, Action: strings.TrimSpace(input.Action), Dialogue: strings.TrimSpace(input.Dialogue),
+		ShotSize: strings.TrimSpace(input.ShotSize), CameraAngle: strings.TrimSpace(input.CameraAngle), CameraMovement: strings.TrimSpace(input.CameraMovement), DurationMs: durationMs,
+		ImagePrompt: strings.TrimSpace(input.ImagePrompt), VideoPrompt: strings.TrimSpace(input.VideoPrompt), NegativePrompt: strings.TrimSpace(input.NegativePrompt),
+		ContinuityNotes: strings.TrimSpace(input.ContinuityNotes), ActionBeatsJSON: actionBeatsJSON, CreatedBy: userID, CreatedAt: now,
+	}, nil
 }
 
 func validShotStatus(status string) bool {
@@ -126,7 +210,7 @@ func validShotStatus(status string) bool {
 }
 
 func (s *Service) LinkShotAsset(userID string, projectID string, shotID string, req LinkShotAssetRequest) (model.ShotAssetReference, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return model.ShotAssetReference{}, err
 	}
 	if _, err := s.repo.ShotForProject(projectID, shotID); err != nil {
@@ -140,18 +224,16 @@ func (s *Service) LinkShotAsset(userID string, projectID string, shotID string, 
 	if !validShotAssetRole(role) {
 		return model.ShotAssetReference{}, BadAuthRequest("不支持的镜头素材用途")
 	}
-	reference := model.ShotAssetReference{ID: newID(), ShotID: shotID, AssetVersionID: versionID, Role: role, Status: "linked", CreatedAt: time.Now()}
-	if err := s.repo.UpsertShotAssetReference(&reference); err != nil {
-		return model.ShotAssetReference{}, err
-	}
-	if err := s.repo.BumpProjectRevision(projectID); err != nil {
+	now := time.Now()
+	reference := model.ShotAssetReference{ID: newID(), ShotID: shotID, AssetVersionID: versionID, Role: role, Status: "linked", CreatedAt: now}
+	if err := s.repo.UpsertShotAssetReferenceAndInvalidate(projectID, &reference, now); err != nil {
 		return model.ShotAssetReference{}, err
 	}
 	return reference, nil
 }
 
 func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, req CreateAssetCandidatesRequest) ([]model.ProjectAssetCandidate, error) {
-	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
 		return nil, err
 	}
 	if len(req.Candidates) == 0 || len(req.Candidates) > 100 {
