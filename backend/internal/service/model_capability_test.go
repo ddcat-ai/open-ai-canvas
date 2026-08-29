@@ -237,6 +237,25 @@ func TestNormalizeVideoCapabilityAllowsOmittedResolution(t *testing.T) {
 	}
 }
 
+func TestNormalizeVideoCapabilityAllowsOmittedRatio(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("autodl-comfyui", "minimax_h3_lightx2v_no_pic").Video
+	profile.Ratios = nil
+	profile.DefaultRatio = ""
+	profile.Resolutions = []string{"480p竖", "480p横"}
+	profile.DefaultResolution = "480p竖"
+
+	result, err := NormalizeModelCapabilityConfig("video", "autodl-comfyui", &ModelCapabilityConfig{Version: 1, Video: profile})
+	if err != nil {
+		t.Fatalf("NormalizeModelCapabilityConfig() error = %v", err)
+	}
+	if result.Video == nil || len(result.Video.Ratios) != 0 || result.Video.DefaultRatio != "" {
+		t.Fatalf("normalized video ratios = %#v", result.Video)
+	}
+	if err := validateVideoTask(result.Video, canvasGenerationInput{Config: providerConfig{Model: "minimax_h3_lightx2v_no_pic", VideoSeconds: "6", VQuality: "480p竖"}}); err != nil {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}
+
 func TestCapabilitySpecFromModelCapabilityConfigProjectsImageSizeOnce(t *testing.T) {
 	config := &ModelCapabilityConfig{
 		Version: 1,

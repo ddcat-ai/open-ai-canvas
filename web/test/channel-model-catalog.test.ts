@@ -8,7 +8,7 @@ import { CanvasVideoSettingsPopover } from "../src/components/canvas/canvas-vide
 import { VideoSettingsPanel } from "../src/components/video-settings-panel";
 import { canvasThemes } from "../src/lib/canvas-theme";
 import { mergeFetchedChannelModelCosts, type ChannelModelCatalogItem } from "../src/lib/channel-model-catalog";
-import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
+import { defaultModelCapabilityConfig, pluginWorkflowCapabilityConfig } from "../src/lib/model-capabilities";
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
 import { fetchChannelModels } from "../src/services/api/image";
 import { createVideoGenerationTask } from "../src/services/api/video";
@@ -62,6 +62,27 @@ function formEntries(body: unknown) {
 }
 
 describe("public channel model catalog", () => {
+    test("projects Manifest video workflow parameters without inventing a size capability", () => {
+        const profile = pluginWorkflowCapabilityConfig("autodl-comfyui", {
+            id: "minimax_h3_lightx2v_no_pic",
+            label: "MiniMax H3 文生视频",
+            providerId: "autodl-comfyui",
+            capability: "video",
+            parameters: [
+                { name: "prompt", type: "string", required: true, mapping: "prompt" },
+                { name: "duration", type: "integer", mapping: "duration" },
+                { name: "resolution", type: "string", mapping: "resolution", values: ["480p竖", "480p横"] },
+            ],
+            defaults: { duration: 5, resolution: "480p竖" },
+        })!.video!;
+
+        expect(profile.ratios).toEqual([]);
+        expect(profile.defaultRatio).toBe("");
+        expect(profile.resolutions).toEqual(["480p竖", "480p横"]);
+        expect(profile.defaultResolution).toBe("480p竖");
+        expect(profile.duration).toEqual({ selection: "enum", values: [5], default: 5 });
+    });
+
     test("preserves six public capabilities without expanding compatibility IDs", async () => {
         axios.post = (async () => ({
             data: {
@@ -241,6 +262,35 @@ describe("public channel model catalog", () => {
 
         expect(html).toContain("16:9 · 10s");
         expect(html).not.toContain("720P");
+    });
+
+    test("does not show size controls when the video capability declares no ratios", () => {
+        const config = configForCatalog([omniCatalog], { videoSeconds: "10", size: "16:9", vquality: "1080" });
+        const profile = config.channels[0]!.modelCosts![0]!.capabilityConfig!.video!;
+        profile.ratios = [];
+        profile.defaultRatio = "";
+        profile.resolutions = ["1080p"];
+        profile.defaultResolution = "1080p";
+
+        const summaryHtml = renderToStaticMarkup(React.createElement(CanvasVideoSettingsPopover, { config, onConfigChange: () => undefined }));
+        const panelHtml = renderToStaticMarkup(React.createElement(VideoSettingsPanel, { config, onConfigChange: () => undefined, theme: canvasThemes.dark }));
+
+        expect(summaryHtml).toContain("1080P · 10s");
+        expect(summaryHtml).not.toContain("16:9");
+        expect(panelHtml).not.toContain("尺寸");
+    });
+
+    test("shows dimensions derived from the selected video resolution and ratio", () => {
+        const config = configForCatalog([omniCatalog], { videoSeconds: "10", size: "16:9", vquality: "1080" });
+        const profile = config.channels[0]!.modelCosts![0]!.capabilityConfig!.video!;
+        profile.resolutions = ["720p", "1080p", "2160p"];
+        profile.defaultResolution = "720p";
+
+        const panelHtml = renderToStaticMarkup(React.createElement(VideoSettingsPanel, { config, onConfigChange: () => undefined, theme: canvasThemes.dark }));
+
+        expect(panelHtml).toContain("1920");
+        expect(panelHtml).toContain("1080");
+        expect(panelHtml).not.toContain("1280");
     });
 
     test("shows the public display name in channel model settings instead of only the internal ID", () => {

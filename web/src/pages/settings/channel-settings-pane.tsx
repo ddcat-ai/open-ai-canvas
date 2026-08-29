@@ -8,7 +8,7 @@ import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
 import { desktopLocalChannelFormState, desktopLocalChannelPayloadValue, DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL } from "@/lib/desktop-local-channel";
 import { fetchChannelModels } from "@/services/api/image";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
+import { pluginWorkflowCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import {
     createModelChannel,
@@ -84,7 +84,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                   protocol: provider.value,
                   billingMode: "fixed_request" as const,
                   unitPriceMicrocredits: 0,
-                  capabilityConfig: workflow.capability === "image" || workflow.capability === "video" ? defaultModelCapabilityConfig(provider.value, workflow.id) : undefined,
+                  capabilityConfig: pluginWorkflowCapabilityConfig(provider.value, workflow),
                   defaultOptions: workflow.defaults,
               }))
             : channel.modelCosts;

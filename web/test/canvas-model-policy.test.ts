@@ -151,6 +151,31 @@ describe("逻辑模型选择", () => {
         expect(defaults.size).toBe("16:9");
     });
 
+    test("不支持画幅的视频模型不会继续提交旧的全局尺寸", () => {
+        const model = "autodl-channel::minimax_h3_lightx2v_no_pic";
+        const profile = defaultModelCapabilityConfig("autodl-comfyui", "minimax_h3_lightx2v_no_pic");
+        profile.video!.ratios = [];
+        profile.video!.defaultRatio = "";
+        profile.video!.resolutions = ["480p竖", "480p横"];
+        profile.video!.defaultResolution = "480p竖";
+        const config: AiConfig = {
+            ...defaultConfig,
+            size: "16:9",
+            vquality: "720",
+            channels: [{ id: "autodl-channel", name: "AutoDL", baseUrl: "https://autodl.art", apiKey: "system", apiFormat: "openai", scope: "system", models: ["minimax_h3_lightx2v_no_pic"], modelCosts: [{ model: "minimax_h3_lightx2v_no_pic", capability: "video", protocol: "autodl-comfyui", billingMode: "fixed_request", unitPriceMicrocredits: 1, capabilityConfig: profile }] }],
+            models: [model],
+            videoModels: [model],
+            videoModel: model,
+            model,
+        };
+        const videoNode = { ...node("video", CanvasNodeType.Video), metadata: { model, generationMode: "video" as const } };
+
+        const generationConfig = buildGenerationConfig(config, videoNode, "video");
+
+        expect(generationConfig.size).toBe("");
+        expect(generationConfig.vquality).toBe("480p竖");
+    });
+
     test("后台标注的视频模型不因内部标识缺少视频关键词而回退", () => {
         const config = policyConfig();
         const selectedModel = config.videoModels[0]!;

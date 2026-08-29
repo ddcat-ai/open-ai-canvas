@@ -38,3 +38,29 @@ export function formatVideoResolutionLabel(value: string | number | undefined) {
     if (/^\d+$/.test(normalized)) return `${normalized}P`;
     return normalized.replace(/^(\d+)p/i, "$1P");
 }
+
+export function videoDimensionsForRatioAndResolution(ratio: string | undefined, resolution: string | number | undefined) {
+    const ratioMatch = String(ratio || "")
+        .trim()
+        .toLowerCase()
+        .replace("×", "x")
+        .match(/^(\d+(?:\.\d+)?)(?::|x)(\d+(?:\.\d+)?)$/);
+    if (!ratioMatch) return undefined;
+
+    const ratioWidth = Number(ratioMatch[1]);
+    const ratioHeight = Number(ratioMatch[2]);
+    if (!Number.isFinite(ratioWidth) || !Number.isFinite(ratioHeight) || ratioWidth <= 0 || ratioHeight <= 0) return undefined;
+
+    const normalizedResolution = normalizeVideoResolution(resolution);
+    const resolutionMatch = normalizedResolution.match(/^(\d+)(?:p)?/i);
+    const shortEdge = Number(resolutionMatch?.[1]);
+    if (!Number.isFinite(shortEdge) || shortEdge <= 0) return undefined;
+
+    const aspect = ratioWidth / ratioHeight;
+    if (aspect >= 1) return { width: evenDimension(shortEdge * aspect), height: shortEdge };
+    return { width: shortEdge, height: evenDimension(shortEdge / aspect) };
+}
+
+function evenDimension(value: number) {
+    return Math.max(2, Math.round(value / 2) * 2);
+}
