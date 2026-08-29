@@ -1,6 +1,6 @@
-import { App, Button, Form, Input, Modal, Select } from "antd";
+import { App, Button, Form, Input, Modal, Select, Switch, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Plus, Search } from "lucide-react";
+import { Pin, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
@@ -20,6 +20,7 @@ type AnnouncementFormValues = {
     title: string;
     content: string;
     level: AnnouncementLevel;
+    pinned: boolean;
 };
 
 const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
@@ -71,13 +72,13 @@ export default function AdminAnnouncementsPanel() {
 
     const openPublishModal = () => {
         setEditingAnnouncement(null);
-        form.setFieldsValue({ title: "", content: "", level: "info" });
+        form.setFieldsValue({ title: "", content: "", level: "info", pinned: false });
         setModalOpen(true);
     };
 
     const openEditModal = (announcement: SystemAnnouncement) => {
         setEditingAnnouncement(announcement);
-        form.setFieldsValue({ title: announcement.title, content: announcement.content, level: announcement.level });
+        form.setFieldsValue({ title: announcement.title, content: announcement.content, level: announcement.level, pinned: announcement.pinned });
         setModalOpen(true);
     };
 
@@ -85,7 +86,7 @@ export default function AdminAnnouncementsPanel() {
         const values = await form.validateFields();
         setPublishing(true);
         try {
-            const input = { title: values.title.trim(), content: values.content.trim(), level: values.level };
+            const input = { title: values.title.trim(), content: values.content.trim(), level: values.level, pinned: Boolean(values.pinned) };
             if (editingAnnouncement) await updateAdminAnnouncement(editingAnnouncement.id, input);
             else await createAdminAnnouncement(input);
             setModalOpen(false);
@@ -124,6 +125,12 @@ export default function AdminAnnouncementsPanel() {
                     <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-foreground/50">{announcement.content}</div>
                 </div>
             ),
+        },
+        {
+            title: "置顶",
+            dataIndex: "pinned",
+            width: 90,
+            render: (pinned: boolean) => pinned ? <Tag color="gold" icon={<Pin className="size-3" />}>置顶</Tag> : <span className="text-foreground/35">--</span>,
         },
         {
             title: "级别",
@@ -181,6 +188,9 @@ export default function AdminAnnouncementsPanel() {
                     </Form.Item>
                     <Form.Item name="level" label="公告级别" rules={[{ required: true, message: "请选择公告级别" }]}>
                         <Select options={levelOptions} />
+                    </Form.Item>
+                    <Form.Item name="pinned" label="展示方式" valuePropName="checked" extra="置顶公告会优先展示。">
+                        <Switch checkedChildren="置顶" unCheckedChildren="普通" />
                     </Form.Item>
                     <Form.Item name="content" label="公告正文" rules={[{ required: true, whitespace: true, message: "请填写公告正文" }, { max: 4000, message: "正文不能超过 4000 个字符" }]}>
                         <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder="填写服务状态、影响范围和用户需要采取的操作" />

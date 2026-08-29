@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Modal } from "antd";
-import { Bell, BellOff, CircleAlert, Info, ShieldAlert, Wrench } from "lucide-react";
+import { Bell, BellOff, CircleAlert, Info, Pin, ShieldAlert, Wrench } from "lucide-react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
@@ -108,6 +108,7 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <h3 className="text-[var(--fs-body-lg)] font-semibold leading-6 tracking-normal text-foreground sm:text-base">{announcement.title}</h3>
                     <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
+                    {announcement.pinned ? <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-amber-500"><Pin className="size-3" />置顶</span> : null}
                 </div>
                 <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[var(--fs-body-lg)]" />
                 <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">{relativeTime(announcement.publishedAt)} · {formatDateTime(announcement.publishedAt)}</time>

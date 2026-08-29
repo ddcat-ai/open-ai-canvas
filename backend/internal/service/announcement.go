@@ -15,6 +15,7 @@ type CreateAnnouncementRequest struct {
 	Title   string                  `json:"title"`
 	Content string                  `json:"content"`
 	Level   model.AnnouncementLevel `json:"level"`
+	Pinned  bool                    `json:"pinned"`
 }
 
 type UpdateAnnouncementRequest = CreateAnnouncementRequest
@@ -57,6 +58,7 @@ func (s *Service) CreateAnnouncement(actor *model.User, req CreateAnnouncementRe
 		Title:       title,
 		Content:     content,
 		Level:       level,
+		Pinned:      req.Pinned,
 		Status:      model.AnnouncementStatusActive,
 		CreatedBy:   actor.ID,
 		PublishedAt: now,
@@ -88,6 +90,7 @@ func (s *Service) UpdateAnnouncement(actor *model.User, id string, req UpdateAnn
 	announcement.Title = title
 	announcement.Content = content
 	announcement.Level = level
+	announcement.Pinned = req.Pinned
 	announcement.Status = model.AnnouncementStatusActive
 	announcement.ClosedAt = nil
 	announcement.PublishedAt = now

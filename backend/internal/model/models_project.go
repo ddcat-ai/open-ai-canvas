@@ -374,6 +374,7 @@ type Announcement struct {
 	Title       string             `json:"title" gorm:"size:120"`
 	Content     string             `json:"content" gorm:"type:text"`
 	Level       AnnouncementLevel  `json:"level" gorm:"index;size:24"`
+	Pinned      bool               `json:"pinned" gorm:"index"`
 	Status      AnnouncementStatus `json:"status" gorm:"index;size:24;index:idx_announcements_status_published,priority:1"`
 	CreatedBy   string             `json:"createdBy" gorm:"index;size:36"`
 	PublishedAt time.Time          `json:"publishedAt" gorm:"index:idx_announcements_status_published,priority:2"`

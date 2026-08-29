@@ -8,6 +8,7 @@ export type SystemAnnouncement = {
     title: string;
     content: string;
     level: AnnouncementLevel;
+    pinned: boolean;
     status: AnnouncementStatus;
     createdBy: string;
     publishedAt: string;
@@ -42,11 +43,11 @@ export function listAdminAnnouncements(params: AdminAnnouncementListParams = {})
     return request<{ announcements: SystemAnnouncement[]; total: number; page: number; limit: number }>(api.get("/admin/announcements", { params }));
 }
 
-export function createAdminAnnouncement(input: { title: string; content: string; level: AnnouncementLevel }) {
+export function createAdminAnnouncement(input: { title: string; content: string; level: AnnouncementLevel; pinned: boolean }) {
     return request<{ announcement: SystemAnnouncement }>(api.post("/admin/announcements", input));
 }
 
-export function updateAdminAnnouncement(id: string, input: { title: string; content: string; level: AnnouncementLevel }) {
+export function updateAdminAnnouncement(id: string, input: { title: string; content: string; level: AnnouncementLevel; pinned: boolean }) {
     return request<{ announcement: SystemAnnouncement }>(api.patch(`/admin/announcements/${encodeURIComponent(id)}`, input));
 }
 

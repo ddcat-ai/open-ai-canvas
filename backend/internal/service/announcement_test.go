@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
@@ -97,11 +98,11 @@ func TestAnnouncementUpdateRepublishesAndResetsReads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, err := svc.UpdateAnnouncement(admin, announcement.ID, UpdateAnnouncementRequest{Title: "新标题", Content: "新正文", Level: model.AnnouncementLevelWarning})
+	updated, err := svc.UpdateAnnouncement(admin, announcement.ID, UpdateAnnouncementRequest{Title: "新标题", Content: "新正文", Level: model.AnnouncementLevelWarning, Pinned: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Status != model.AnnouncementStatusActive || updated.ClosedAt != nil || updated.Title != "新标题" || updated.Content != "新正文" || updated.Level != model.AnnouncementLevelWarning {
+	if updated.Status != model.AnnouncementStatusActive || updated.ClosedAt != nil || updated.Title != "新标题" || updated.Content != "新正文" || updated.Level != model.AnnouncementLevelWarning || !updated.Pinned {
 		t.Fatalf("updated announcement = %+v", updated)
 	}
 	feed, err := svc.UserAnnouncements(user)
@@ -110,6 +111,51 @@ func TestAnnouncementUpdateRepublishesAndResetsReads(t *testing.T) {
 	}
 	if len(feed.Announcements) != 1 || feed.UnreadCount != 1 || feed.Announcements[0].Content != "新正文" {
 		t.Fatalf("feed after republish = %+v, want one unread updated announcement", feed)
+	}
+}
+
+func TestPinnedAnnouncementsAreReturnedBeforeNewerRegularAnnouncements(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&model.User{}, &model.Announcement{}, &model.UserAnnouncementRead{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir())
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := &model.User{ID: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
+
+	pinned, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "置顶", Content: "置顶公告", Level: model.AnnouncementLevelWarning, Pinned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	regular, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "普通", Content: "较新的普通公告", Level: model.AnnouncementLevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Announcement{}).Where("id = ?", pinned.ID).Update("published_at", regular.PublishedAt.Add(-time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	feed, err := svc.UserAnnouncements(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Announcements) != 2 || feed.Announcements[0].ID != pinned.ID || !feed.Announcements[0].Pinned {
+		t.Fatalf("feed = %+v, want pinned announcement first", feed.Announcements)
+	}
+	page, err := svc.AdminAnnouncementPage(admin, AdminListQuery{Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Announcements) != 2 || page.Announcements[0].ID != pinned.ID {
+		t.Fatalf("admin page = %+v, want pinned announcement first", page.Announcements)
 	}
 }
 
