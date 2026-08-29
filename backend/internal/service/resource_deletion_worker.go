@@ -13,10 +13,16 @@ const resourceDeletionLease = 2 * time.Minute
 func (s *Service) startResourceDeletionWorker() {
 	go func() {
 		s.drainResourceDeletionJobs(32)
+		s.cleanupStaleAnnouncementImageDrafts()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+		lastDraftCleanup := time.Now()
 		for range ticker.C {
 			s.drainResourceDeletionJobs(32)
+			if time.Since(lastDraftCleanup) >= time.Hour {
+				s.cleanupStaleAnnouncementImageDrafts()
+				lastDraftCleanup = time.Now()
+			}
 		}
 	}()
 }

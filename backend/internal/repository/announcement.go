@@ -60,29 +60,6 @@ func (r *Repository) CloseAnnouncement(id string, closedAt time.Time) (bool, err
 	return result.RowsAffected == 1, result.Error
 }
 
-func (r *Repository) UpdateAnnouncement(announcement *model.Announcement) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.Announcement{}).Where("id = ?", announcement.ID).Updates(map[string]any{
-			"title":        announcement.Title,
-			"content":      announcement.Content,
-			"level":        announcement.Level,
-			"pinned":       announcement.Pinned,
-			"status":       announcement.Status,
-			"published_at": announcement.PublishedAt,
-			"closed_at":    announcement.ClosedAt,
-			"updated_at":   announcement.UpdatedAt,
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		// 重新发布同一公告必须清除旧已读记录，否则用户看不到新的内容提醒。
-		return tx.Where("announcement_id = ?", announcement.ID).Delete(&model.UserAnnouncementRead{}).Error
-	})
-}
-
 func (r *Repository) MarkAnnouncementsRead(userID string, announcementIDs []string, readAt time.Time) error {
 	if len(announcementIDs) == 0 {
 		return nil

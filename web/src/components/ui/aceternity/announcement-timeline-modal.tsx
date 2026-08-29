@@ -1,10 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Modal } from "antd";
+import { Image as AntImage, Modal } from "antd";
 import { Bell, BellOff, CircleAlert, Info, Pin, ShieldAlert, Wrench } from "lucide-react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
-import type { AnnouncementLevel, SystemAnnouncement } from "@/services/api/announcements";
+import { announcementImageUrl, type AnnouncementLevel, type SystemAnnouncement } from "@/services/api/announcements";
 
 type AnnouncementTimelineModalProps = {
     open: boolean;
@@ -110,6 +110,7 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
                     <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
                     {announcement.pinned ? <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-amber-500"><Pin className="size-3" />置顶</span> : null}
                 </div>
+                {announcement.imageUrl ? <AntImage src={announcementImageUrl(announcement)} alt={`${announcement.title} 配图`} preview className="mt-3 max-h-36 w-56 max-w-full rounded-lg border border-border/70 bg-muted/20 object-contain p-1" /> : null}
                 <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[var(--fs-body-lg)]" />
                 <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">{relativeTime(announcement.publishedAt)} · {formatDateTime(announcement.publishedAt)}</time>
             </div>

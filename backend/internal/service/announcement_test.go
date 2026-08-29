@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -159,6 +160,97 @@ func TestPinnedAnnouncementsAreReturnedBeforeNewerRegularAnnouncements(t *testin
 	}
 }
 
+func TestAnnouncementImageDraftIsConsumedWhenAnnouncementIsCreated(t *testing.T) {
+	svc, db := newAnnouncementImageTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	resource := createAnnouncementImageDraft(t, db, admin.ID, "image-draft")
+
+	announcement, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{
+		Title: "带图公告", Content: "公告正文", ImageResourceID: resource.ID, Level: model.AnnouncementLevelInfo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if announcement.ImageResourceID != resource.ID || announcement.ImageURL != "/api/announcements/"+announcement.ID+"/image" {
+		t.Fatalf("announcement image = %+v", announcement)
+	}
+	var draftCount int64
+	if err := db.Model(&model.AnnouncementImageDraft{}).Where("resource_id = ?", resource.ID).Count(&draftCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if draftCount != 0 {
+		t.Fatalf("draft count = %d, want 0", draftCount)
+	}
+}
+
+func TestAnnouncementImageReplacementQueuesOldResourceDeletionAtomically(t *testing.T) {
+	svc, db := newAnnouncementImageTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	oldResource := createAnnouncementImageDraft(t, db, admin.ID, "old-image")
+	announcement, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{
+		Title: "旧公告", Content: "旧正文", ImageResourceID: oldResource.ID, Level: model.AnnouncementLevelInfo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newResource := createAnnouncementImageDraft(t, db, admin.ID, "new-image")
+
+	updated, err := svc.UpdateAnnouncement(admin, announcement.ID, UpdateAnnouncementRequest{
+		Title: "新公告", Content: "新正文", ImageResourceID: newResource.ID, Level: model.AnnouncementLevelWarning, Pinned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ImageResourceID != newResource.ID || updated.ImageURL == "" {
+		t.Fatalf("updated announcement = %+v", updated)
+	}
+	var oldResourceCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", oldResource.ID).Count(&oldResourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if oldResourceCount != 0 {
+		t.Fatalf("old resource count = %d, want 0", oldResourceCount)
+	}
+	var deletionJobs []model.ResourceDeletionJob
+	if err := db.Where("resource_id = ?", oldResource.ID).Find(&deletionJobs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(deletionJobs) != 1 || deletionJobs[0].ObjectKey != oldResource.ObjectKey {
+		t.Fatalf("deletion jobs = %+v", deletionJobs)
+	}
+	var draftCount int64
+	if err := db.Model(&model.AnnouncementImageDraft{}).Where("resource_id = ?", newResource.ID).Count(&draftCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if draftCount != 0 {
+		t.Fatalf("new image draft count = %d, want 0", draftCount)
+	}
+}
+
+func TestDiscardAnnouncementImageDraftRemovesRecordAndQueuesDeletion(t *testing.T) {
+	svc, db := newAnnouncementImageTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	resource := createAnnouncementImageDraft(t, db, admin.ID, "cancelled-image")
+
+	if err := svc.DiscardAnnouncementImage(admin, resource.ID); err != nil {
+		t.Fatal(err)
+	}
+	var resourceCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if resourceCount != 0 {
+		t.Fatalf("resource count = %d, want 0", resourceCount)
+	}
+	var jobCount int64
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if jobCount != 1 {
+		t.Fatalf("deletion job count = %d, want 1", jobCount)
+	}
+}
+
 func TestAnnouncementPublishRejectsInvalidInput(t *testing.T) {
 	svc := &Service{}
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -168,4 +260,37 @@ func TestAnnouncementPublishRejectsInvalidInput(t *testing.T) {
 	if _, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "标题", Content: "正文", Level: "unknown"}); err == nil {
 		t.Fatal("expected invalid level to be rejected")
 	}
+}
+
+func newAnnouncementImageTestService(t *testing.T) (*Service, *gorm.DB) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(database.Models()...); err != nil {
+		t.Fatal(err)
+	}
+	return New(repository.New(db), t.TempDir()), db
+}
+
+func createAnnouncementImageDraft(t *testing.T, db *gorm.DB, userID string, id string) *model.Resource {
+	t.Helper()
+	resource := &model.Resource{
+		ID: id, UserID: userID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local",
+		ObjectKey: "users/" + userID + "/image/" + id + ".png", MimeType: "image/png", Size: 128,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := db.Create(resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AnnouncementImageDraft{ResourceID: resource.ID, UserID: userID, CreatedAt: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	return resource
 }
