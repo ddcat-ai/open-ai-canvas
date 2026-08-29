@@ -1,4 +1,5 @@
-import { Fragment, createElement, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
 
@@ -7,72 +8,32 @@ type AnnouncementContentProps = {
     className?: string;
 };
 
-const elementMap = {
-    a: "a",
-    b: "strong",
-    blockquote: "blockquote",
-    br: "br",
-    code: "code",
-    del: "del",
-    div: "div",
-    em: "em",
-    i: "em",
-    li: "li",
-    mark: "mark",
-    ol: "ol",
-    p: "p",
-    s: "s",
-    strong: "strong",
-    u: "u",
-    ul: "ul",
-} as const;
-
-const ignoredTags = new Set(["iframe", "object", "script", "style", "svg", "template"]);
-
 /**
- * 公告由管理员输入但会在所有用户页面展示，因此只将受控标签转换成 React 节点，避免直接注入 HTML。
+ * 公告由管理员输入但会在所有用户页面展示，因此不启用原始 HTML，避免直接注入 HTML。
  * 链接强制新窗口打开，并且只允许 http/https 协议。
  */
 export function AnnouncementContent({ content, className }: AnnouncementContentProps) {
-    return <div className={cn("whitespace-pre-wrap break-words", className)}>{parseAnnouncementContent(content)}</div>;
+    return (
+        <div className={cn("break-words [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-600/40 [&_a]:underline-offset-2 [&_a]:transition [&_a]:hover:text-blue-700 dark:[&_a]:text-blue-400 dark:[&_a]:decoration-blue-400/50 dark:[&_a]:hover:text-blue-300 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_ol]:my-2 [&_p]:my-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-2 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:my-2", className)}>
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                skipHtml
+                components={{
+                    a: ({ children, href }) => {
+                        const safeURL = safeHref(href);
+                        return safeURL ? <a href={safeURL} target="_blank" rel="noopener noreferrer">{children}</a> : <>{children}</>;
+                    },
+                    table: ({ children }) => <div className="overflow-x-auto"><table>{children}</table></div>,
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+    );
 }
 
-function parseAnnouncementContent(content: string): ReactNode {
-    if (typeof DOMParser === "undefined") return content;
-
-    const document = new DOMParser().parseFromString(content, "text/html");
-    return Array.from(document.body.childNodes).map((node, index) => renderNode(node, `announcement-${index}`));
-}
-
-function renderNode(node: ChildNode, key: string): ReactNode {
-    if (node.nodeType === Node.TEXT_NODE) {
-        return <Fragment key={key}>{node.textContent}</Fragment>;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return null;
-
-    const element = node as HTMLElement;
-    const tag = element.tagName.toLowerCase();
-    if (ignoredTags.has(tag)) return null;
-
-    const children = Array.from(element.childNodes).map((child, index) => renderNode(child, `${key}-${index}`));
-    if (!(tag in elementMap)) return <Fragment key={key}>{children}</Fragment>;
-
-    if (tag === "a") {
-        const href = safeHref(element.getAttribute("href"));
-        if (!href) return <Fragment key={key}>{children}</Fragment>;
-        return (
-            <a key={key} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition hover:text-blue-700 dark:text-blue-400 dark:decoration-blue-400/50 dark:hover:text-blue-300">
-                {children}
-            </a>
-        );
-    }
-
-    const component = elementMap[tag as keyof typeof elementMap];
-    return createElement(component, { key }, children);
-}
-
-function safeHref(value: string | null) {
-    if (!value) return null;
+function safeHref(value?: string) {
+    if (!value || typeof window === "undefined") return null;
     try {
         const url = new URL(value, window.location.href);
         return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
