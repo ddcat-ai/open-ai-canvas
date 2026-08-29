@@ -13921,73 +13921,381 @@ html:not(.dark) .creation-history-drawer-root {
     .library-drawer .ant-drawer-body { padding: 18px; }
 }
 
-/* 工作台首页设计系统落地：颜色/字体/间距/形状统一走 token */
-.app-home-workbench {
-    --home-card-radius: var(--r-md);
+/* ===== 工作台首页 · 创作仪表盘（欢迎区 + 统计卡 + 活跃度/素材图表 + 最近项目表格） ===== */
+.app-home-dashboard {
     --home-panel-radius: var(--r-lg);
+    --home-panel-surface: var(--workspace-surface-strong);
+    --home-panel-border: var(--workspace-border);
     --home-title-fs: var(--fs-title);
     --home-section-fs: var(--fs-heading-lg);
 }
 
-.app-home-workbench h1,
-.app-home-workbench h2,
-.app-home-workbench h3 {
+.app-home-dashboard h1,
+.app-home-dashboard h2,
+.app-home-dashboard h3 {
     letter-spacing: 0;
     text-wrap: balance;
 }
 
-.app-home-workbench h1 { font-size: var(--home-title-fs); }
-.app-home-workbench h2 { font-size: var(--home-section-fs); }
-.app-home-workbench h3 { font-size: var(--fs-heading); }
+.app-home-dashboard h1 { font-size: var(--home-title-fs); }
+.app-home-dashboard h2 { font-size: var(--home-section-fs); }
+.app-home-dashboard h3 { font-size: var(--fs-heading); }
 
-.app-home-timeline {
+/* 面板外壳：卡片、图表、表格共用 */
+.home-panel {
     border-radius: var(--home-panel-radius);
-    border-color: var(--workspace-border);
-    background: var(--workspace-surface-strong);
-    box-shadow: var(--elevation-card), var(--elevation-hairline);
+    border: 1px solid var(--home-panel-border);
+    background: var(--home-panel-surface);
+    box-shadow: var(--elevation-card);
 }
 
-.app-home-timeline {
-    border-color: var(--workspace-border);
+.home-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    padding: 16px 18px 4px;
 }
 
-/* 方案 1：模板工作台式深浅主题卡片 */
-html:not(.dark) .app-home-workbench {
-    --home-card-bg: #fafafa;
-    --home-card-border: rgba(17, 17, 17, 0.08);
+.app-home-dashboard .home-panel-title { font-size: var(--fs-heading-lg); font-weight: 620; }
+.home-panel-sub { margin-top: 3px; font-size: var(--fs-tiny); color: color-mix(in srgb, var(--foreground) 42%, transparent); }
+.home-panel-body { padding: 8px 12px 14px; }
+.home-panel-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 18px 14px;
+    border-top: 1px solid var(--home-panel-border);
 }
 
-.dark .app-home-workbench {
-    --home-card-bg: #1f1f1f;
-    --home-card-border: rgba(255, 255, 255, 0.1);
+/* 欢迎区 */
+.home-welcome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px 24px;
+    padding: 6px 0 22px;
 }
 
-.app-home-quick-create-card {
-    background: var(--home-card-bg);
-    border-color: var(--home-card-border);
-    box-shadow: var(--elevation-card), var(--elevation-hairline);
+.home-welcome-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
 }
 
-.app-home-quick-create-card:hover {
+.app-home-dashboard .home-welcome-title {
+    margin-top: 10px;
+    font-size: clamp(24px, 2.4vw, 30px);
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+}
+
+.home-welcome-sub {
+    margin-top: 8px;
+    max-width: 620px;
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.home-welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 统计卡 */
+.home-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.home-stat-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+    border-radius: var(--home-panel-radius);
+    border: 1px solid var(--home-panel-border);
+    background: var(--home-panel-surface);
+    box-shadow: var(--elevation-card);
+    padding: 16px 18px 15px;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out, transform 200ms ease-out;
+}
+
+.home-stat-card:hover {
     border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+    box-shadow: var(--elevation-card-hover);
+    transform: translateY(-2px);
 }
 
-.app-workflow-card {
-    border-radius: var(--home-card-radius);
-    border-color: var(--home-card-border);
-    background: var(--home-card-bg);
-    box-shadow: var(--elevation-card), var(--elevation-hairline);
-    transition: transform 240ms var(--motion-ease-out), border-color 240ms ease-out, box-shadow 240ms var(--motion-ease-out);
+.home-stat-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
-.app-workflow-card:hover {
-    border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
-    box-shadow: var(--elevation-card-hover), var(--elevation-hairline);
-    transform: translateY(-4px);
+.home-stat-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-accent) 7%, transparent);
+    color: var(--workspace-accent);
 }
 
-.app-home-template-rail {
-    border-color: var(--workspace-border);
+.home-stat-value {
+    font-size: 26px;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-stat-label { margin-top: 8px; font-size: var(--fs-label); font-weight: 520; color: color-mix(in srgb, var(--foreground) 62%, transparent); }
+.home-stat-hint {
+    margin-top: 3px;
+    overflow: hidden;
+    font-size: var(--fs-tiny);
+    line-height: 1.5;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 图表区 */
+.home-charts-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+@media (min-width: 1024px) {
+    .home-charts-grid { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.9fr); }
+}
+
+.home-chart-empty {
+    display: grid;
+    min-height: 220px;
+    place-items: center;
+    padding: 20px;
+    text-align: center;
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+
+.home-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    text-align: center;
+}
+
+.home-donut-center strong {
+    display: block;
+    font-size: 22px;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-donut-center span { margin-top: 4px; font-size: var(--fs-tiny); color: color-mix(in srgb, var(--foreground) 45%, transparent); }
+
+.home-donut-legend {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 6px;
+}
+
+.home-donut-legend li {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    font-size: var(--fs-label);
+}
+
+.home-donut-legend i { width: 8px; height: 8px; border-radius: 999px; }
+.home-donut-legend em { font-style: normal; color: color-mix(in srgb, var(--foreground) 45%, transparent); font-variant-numeric: tabular-nums; }
+
+/* 最近项目表格 */
+.home-lower-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+@media (min-width: 1024px) {
+    .home-lower-grid { grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.85fr); }
+}
+
+.home-side-stack {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+}
+
+.home-recent-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px 10px;
+    border-bottom: 1px solid var(--home-panel-border);
+}
+
+.home-recent-search { max-width: 260px; }
+.home-recent-scroll { overflow-x: auto; }
+.home-recent-table { min-width: 680px; }
+
+.home-recent-col-head,
+.home-recent-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px 150px 104px 20px;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 18px;
+}
+
+.home-recent-col-head {
+    border-bottom: 1px solid var(--home-panel-border);
+    font-size: var(--fs-tiny);
+    font-weight: 540;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.home-recent-row {
+    padding-block: 11px;
+    transition: background-color 150ms ease-out;
+}
+
+.home-recent-row + .home-recent-row { border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent); }
+.home-recent-row:hover { background: color-mix(in srgb, var(--workspace-accent) 4%, transparent); }
+
+.home-stage-pill {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: var(--fs-tiny);
+    font-weight: 520;
+    font-style: normal;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-progress-track {
+    display: block;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.home-progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+}
+
+.home-recent-empty {
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    padding: 40px 20px;
+    text-align: center;
+}
+
+/* 快捷创建与工作流 */
+.home-quick-create { display: flex; flex-direction: column; padding-top: 4px; }
+
+.home-quick-item {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 16px;
+    gap: 12px;
+    align-items: center;
+    border-radius: var(--r-md);
+    padding: 10px;
+    text-align: left;
+    transition: background-color 150ms ease-out;
+}
+
+.home-quick-item:hover { background: color-mix(in srgb, var(--workspace-accent) 5%, transparent); }
+
+.home-quick-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-accent) 7%, transparent);
+    color: var(--workspace-accent);
+}
+
+.home-quick-title { font-size: var(--fs-body); font-weight: 560; }
+.home-quick-desc { margin-top: 2px; font-size: var(--fs-tiny); color: color-mix(in srgb, var(--foreground) 44%, transparent); }
+
+.home-workflow { display: flex; flex-direction: column; padding-top: 2px; }
+
+.home-workflow-step {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 10px;
+    border-radius: var(--r-md);
+    padding: 8px 10px;
+    transition: background-color 150ms ease-out;
+}
+
+.home-workflow-step:hover { background: color-mix(in srgb, var(--workspace-accent) 5%, transparent); }
+
+.home-workflow-num {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--workspace-accent) 8%, transparent);
+    color: var(--workspace-accent);
+    font-size: var(--fs-tiny);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-workflow-title { font-size: var(--fs-body); font-weight: 560; }
+.home-workflow-desc { margin-top: 1px; font-size: var(--fs-tiny); color: color-mix(in srgb, var(--foreground) 44%, transparent); }
+
+.home-workflow-hint {
+    margin-top: 10px;
+    padding: 10px 10px 2px;
+    border-top: 1px dashed var(--home-panel-border);
+    font-size: var(--fs-tiny);
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
 }
 
 /* ===== 创作页 · 分镜工作台（方案 B · 分镜台） ===== */
