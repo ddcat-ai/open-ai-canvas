@@ -5,6 +5,7 @@ import {
     BellRing,
     CloudUpload,
     Coins,
+    Database,
     FileClock,
     HardDrive,
     Home,
@@ -57,6 +58,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
             { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
         ],
     },
     {

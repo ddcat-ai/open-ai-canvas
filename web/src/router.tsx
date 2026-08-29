@@ -12,6 +12,7 @@ import RouteErrorPage from "@/pages/route-error";
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
+const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
 const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
 const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
 const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
@@ -171,6 +172,7 @@ export const router = createBrowserRouter([
                     { path: "prompt-templates", element: deferred(<StoryboardPromptsPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: deferred(<AnnouncementsPage />) },
+                    { path: "resources", element: deferred(<StorageResourcesPage />) },
                     { path: "credit-operations", element: deferred(<CreditOperationsPage />) },
                     { path: "redemption-codes", element: deferred(<RedemptionCodesPage />) },
                     { path: "logs", element: deferred(<LogsPage />) },

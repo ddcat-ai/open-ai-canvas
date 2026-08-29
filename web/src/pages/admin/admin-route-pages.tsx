@@ -9,6 +9,7 @@ const CreditOperationsPanel = lazy(() => import("./components/credit-operations-
 const AccessSettingsPanel = lazy(() => import("./components/access-settings-panel"));
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
+const StorageResourcesPanel = lazy(() => import("./components/storage-resources-panel"));
 
 function PageFallback({ label }: { label: string }) {
     return <div className="py-16 text-center text-sm text-foreground/50">正在读取{label}...</div>;
@@ -38,4 +39,8 @@ export function EmailSettingsPage() {
 
 export function FeatureAvailabilityPage() {
     return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道、插件与计费模式" scroll><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
+}
+
+export function StorageResourcesPage() {
+    return <AdminPageFrame title="存储资源" description="只读查看资源记录、容量分布与文件预览" scroll><Suspense fallback={<PageFallback label="存储资源" />}><StorageResourcesPanel /></Suspense></AdminPageFrame>;
 }
