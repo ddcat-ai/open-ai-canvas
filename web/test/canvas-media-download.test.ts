@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { buildImageGenerationNodeTitle } from "@/lib/canvas/canvas-generation-title";
 import { buildCanvasMediaDownloadFileName, canvasMediaFileExtension } from "@/lib/canvas/canvas-media-download";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -38,5 +39,34 @@ describe("canvas media download", () => {
 
     test("MIME 类型不明确时从远程资源 URL 识别扩展名", () => {
         expect(canvasMediaFileExtension(mediaNode({ metadata: { content: "https://example.com/result.jpeg?token=hidden", mimeType: "image/*" } }))).toBe("jpg");
+    });
+});
+
+describe("generated image title", () => {
+    test("普通节点继续使用提示词摘要", () => {
+        expect(buildImageGenerationNodeTitle("一座云层中的未来城市", mediaNode({ title: "原图" }))).toBe("一座云层中的未来城市");
+    });
+
+    test("快捷键复制节点生成后保留 copy 序号", () => {
+        const source = mediaNode({ title: "未来城市_copy2", metadata: { copiedFromNodeId: "source" } });
+        expect(buildImageGenerationNodeTitle("未来城市", source)).toBe("未来城市_copy2");
+    });
+
+    test("参数变体生成后保留版本字母", () => {
+        const source = mediaNode({ title: "未来城市 · C", metadata: { versionOfNodeId: "source", versionLabel: "C" } });
+        expect(buildImageGenerationNodeTitle("未来城市", source)).toBe("未来城市 · C");
+    });
+
+    test("复制变体和批量输出使用互不重复的标题", () => {
+        const source = mediaNode({ title: "未来城市_copy1 · B", metadata: { copiedFromNodeId: "source", versionOfNodeId: "source", versionLabel: "B" } });
+        expect([0, 1].map((index) => buildImageGenerationNodeTitle("未来城市", source, index, 2))).toEqual(["未来城市_copy1 · B · 1", "未来城市_copy1 · B · 2"]);
+    });
+
+    test("下载文件名继承 copy 和版本标识，不再互相重复", () => {
+        const now = new Date(2026, 7, 29, 12);
+        const copy = mediaNode({ title: buildImageGenerationNodeTitle("未来城市", mediaNode({ title: "未来城市_copy1", metadata: { copiedFromNodeId: "source" } })) });
+        const variant = mediaNode({ title: buildImageGenerationNodeTitle("未来城市", mediaNode({ title: "未来城市 · C", metadata: { versionOfNodeId: "source", versionLabel: "C" } })) });
+        expect(buildCanvasMediaDownloadFileName("自由画布", copy, now)).toBe("自由画布_未来城市_copy1_20260829.png");
+        expect(buildCanvasMediaDownloadFileName("自由画布", variant, now)).toBe("自由画布_未来城市 · C_20260829.png");
     });
 });
