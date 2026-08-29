@@ -176,7 +176,7 @@ func TestAutoDLPluginPackageInstallsThroughUploadRuntime(t *testing.T) {
 			t.Fatal("legacy AutoDL provider ID leaked into administrator catalog")
 		}
 	}
-	if autoDL == nil || len(autoDL.Workflows) != 1 {
+	if autoDL == nil || len(autoDL.Workflows) == 0 {
 		t.Fatalf("AutoDL administrator catalog = %#v", catalog)
 	}
 }

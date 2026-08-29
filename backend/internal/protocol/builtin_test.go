@@ -372,7 +372,7 @@ func TestDeclarativeManifestKeepsLegacyVideoResolutionTransformCompatible(t *tes
 		"768P横": "768p横",
 	}
 	for input, expected := range tests {
-		if actual := applyManifestTransform(input, "video-resolution"); actual != expected {
+		if actual := applyManifestTransform(input, "video-resolution", GenerationRequest{}); actual != expected {
 			t.Errorf("legacy video resolution transform %q = %#v, want %q", input, actual, expected)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -440,10 +441,38 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}
 }
 
+var (
+	manifestMDImageRegex   = regexp.MustCompile(`!\[[^\]]*\]\(([^)\s]+)\)`)
+	manifestHTMLVideoRegex = regexp.MustCompile(`(?i)<video[^>]+src=['"]([^'"]+)['"]`)
+)
+
 func mediaPathValues(payload map[string]any, path string) []string {
 	value := pathValue(payload, path)
 	if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
-		return []string{strings.TrimSpace(text)}
+		trimmed := strings.TrimSpace(text)
+		if matches := manifestMDImageRegex.FindAllStringSubmatch(trimmed, -1); len(matches) > 0 {
+			var res []string
+			for _, m := range matches {
+				if len(m) > 1 && m[1] != "" {
+					res = append(res, m[1])
+				}
+			}
+			if len(res) > 0 {
+				return res
+			}
+		}
+		if matches := manifestHTMLVideoRegex.FindAllStringSubmatch(trimmed, -1); len(matches) > 0 {
+			var res []string
+			for _, m := range matches {
+				if len(m) > 1 && m[1] != "" {
+					res = append(res, m[1])
+				}
+			}
+			if len(res) > 0 {
+				return res
+			}
+		}
+		return []string{trimmed}
 	}
 	items, ok := value.([]any)
 	if !ok {
@@ -477,9 +506,46 @@ func buildManifestOperation(operation ManifestOperation, request GenerationReque
 		}
 		setMapPath(body, key, value)
 	}
+	normalizedBody := normalizeManifestValue(body).(map[string]any)
 	path := strings.ReplaceAll(operation.Path, "{{taskId}}", url.PathEscape(taskID))
 	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
-	return RequestSpec{Method: strings.ToUpper(operation.Method), Path: path, ContentType: defaultValue(operation.ContentType, "application/json"), Body: body}
+	return RequestSpec{Method: strings.ToUpper(operation.Method), Path: path, ContentType: defaultValue(operation.ContentType, "application/json"), Body: normalizedBody}
+}
+
+func normalizeManifestValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		if len(v) == 0 {
+			return v
+		}
+		isSequential := true
+		for i := 0; i < len(v); i++ {
+			if _, ok := v[strconv.Itoa(i)]; !ok {
+				isSequential = false
+				break
+			}
+		}
+		if isSequential {
+			arr := make([]any, len(v))
+			for i := 0; i < len(v); i++ {
+				arr[i] = normalizeManifestValue(v[strconv.Itoa(i)])
+			}
+			return arr
+		}
+		res := make(map[string]any, len(v))
+		for k, val := range v {
+			res[k] = normalizeManifestValue(val)
+		}
+		return res
+	case []any:
+		arr := make([]any, len(v))
+		for i, val := range v {
+			arr[i] = normalizeManifestValue(val)
+		}
+		return arr
+	default:
+		return value
+	}
 }
 
 func manifestExpressionValue(expression string, request GenerationRequest, taskID string) any {
@@ -501,7 +567,10 @@ func manifestExpressionValue(expression string, request GenerationRequest, taskI
 		value = source
 	}
 	for _, transform := range transforms {
-		value = applyManifestTransform(value, transform)
+		value = applyManifestTransform(value, transform, request)
+		if value == nil {
+			break
+		}
 	}
 	return value
 }
@@ -510,9 +579,40 @@ func manifestExpressionValue(expression string, request GenerationRequest, taskI
 // platform request. It lets uploaded manifests address media items by index
 // without exposing Go structs or adding provider-specific host code.
 func manifestRequestValues(request GenerationRequest) map[string]any {
+	userContent := make([]any, 0)
+	if strings.TrimSpace(request.Prompt) != "" {
+		userContent = append(userContent, map[string]any{"type": "text", "text": request.Prompt})
+	}
+	for _, img := range request.Images {
+		val := defaultValue(img.URL, img.DataURL)
+		if val != "" {
+			userContent = append(userContent, map[string]any{"type": "image_url", "image_url": map[string]any{"url": val}})
+		}
+	}
+	for _, vid := range request.Videos {
+		val := defaultValue(vid.URL, vid.DataURL)
+		if val != "" {
+			userContent = append(userContent, map[string]any{"type": "video_url", "video_url": map[string]any{"url": val}})
+		}
+	}
+	for _, aud := range request.Audios {
+		val := defaultValue(aud.URL, aud.DataURL)
+		if val != "" {
+			userContent = append(userContent, map[string]any{"type": "audio_url", "audio_url": map[string]any{"url": val}})
+		}
+	}
+	messages := make([]any, 0)
+	if len(userContent) > 0 {
+		messages = append(messages, map[string]any{
+			"role":    "user",
+			"content": userContent,
+		})
+	}
+
 	return map[string]any{
 		"model":         request.Model,
 		"prompt":        request.Prompt,
+		"messages":      messages,
 		"images":        manifestMediaValues(request.Images),
 		"videos":        manifestMediaValues(request.Videos),
 		"audios":        manifestMediaValues(request.Audios),
@@ -528,6 +628,14 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 	}
 }
 
+func manifestModelID(request GenerationRequest) string {
+	modelID := strings.TrimSpace(request.Model)
+	if separator := strings.LastIndex(modelID, "::"); separator >= 0 {
+		modelID = modelID[separator+2:]
+	}
+	return strings.ToLower(modelID)
+}
+
 func manifestMediaValues(values []MediaReference) []any {
 	result := make([]any, 0, len(values))
 	for _, value := range values {
@@ -541,9 +649,90 @@ func manifestMediaValues(values []MediaReference) []any {
 	return result
 }
 
-func applyManifestTransform(value any, transform string) any {
+func applyManifestTransform(value any, transform string, request GenerationRequest) any {
 	transform = strings.ToLower(strings.TrimSpace(transform))
+	if transform == "bool" || transform == "boolean" {
+		switch v := value.(type) {
+		case bool:
+			return v
+		case string:
+			s := strings.ToLower(strings.TrimSpace(v))
+			return s == "true" || s == "1" || s == "yes"
+		case int, int64, float64:
+			return v != 0
+		default:
+			return false
+		}
+	}
+	if transform == "int" || transform == "integer" {
+		switch v := value.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		case string:
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				return n
+			}
+			return 0
+		default:
+			return 0
+		}
+	}
+	if transform == "omit_zero" {
+		switch v := value.(type) {
+		case int:
+			if v == 0 {
+				return nil
+			}
+		case int64:
+			if v == 0 {
+				return nil
+			}
+		case float64:
+			if v == 0 {
+				return nil
+			}
+		case string:
+			if strings.TrimSpace(v) == "0" || strings.TrimSpace(v) == "" {
+				return nil
+			}
+		}
+	}
+	cleanModel := manifestModelID(request)
+	if strings.HasPrefix(transform, "omit_unless_model_contains:") {
+		needle := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(transform, "omit_unless_model_contains:")))
+		if needle == "" || !strings.Contains(cleanModel, needle) {
+			return nil
+		}
+	}
+	if strings.HasPrefix(transform, "omit_if_model_contains:") {
+		needle := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(transform, "omit_if_model_contains:")))
+		if needle != "" && strings.Contains(cleanModel, needle) {
+			return nil
+		}
+	}
+	if strings.HasPrefix(transform, "omit_unless_model_equals:") {
+		target := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(transform, "omit_unless_model_equals:")))
+		if target == "" || cleanModel != target {
+			return nil
+		}
+	}
+	if strings.HasPrefix(transform, "omit_if_model_equals:") {
+		target := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(transform, "omit_if_model_equals:")))
+		if target != "" && cleanModel == target {
+			return nil
+		}
+	}
 	text, ok := value.(string)
+	if transform == "omit_empty" && (!ok || strings.TrimSpace(text) == "") {
+		return nil
+	}
+	if transform == "omit_auto" && (!ok || strings.TrimSpace(text) == "" || strings.EqualFold(strings.TrimSpace(text), "auto") || strings.EqualFold(strings.TrimSpace(text), "default")) {
+		return nil
+	}
 	if !ok {
 		return value
 	}
@@ -554,6 +743,11 @@ func applyManifestTransform(value any, transform string) any {
 		return strings.ToLower(text)
 	case "upper", "uppercase":
 		return strings.ToUpper(text)
+	case "resolution_p":
+		if regexp.MustCompile(`^\d+$`).MatchString(strings.TrimSpace(text)) {
+			return strings.TrimSpace(text) + "p"
+		}
+		return text
 	case "video-resolution", "video_resolution", "videoresolution":
 		// Compatibility for already-installed 1.0.1 manifests. New plugins
 		// should declare exact enum values and use generic string transforms.

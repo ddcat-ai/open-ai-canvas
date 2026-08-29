@@ -1,11 +1,11 @@
 {
   "apiVersion": "yingce.plugin/v1",
   "id": "autodl-comfyui",
-  "name": "AutoDL ComfyUI 视频",
-  "version": "1.0.2",
+  "name": "AutoDL ComfyUI 视频与音频",
+  "version": "1.0.3",
   "author": "影策社区",
-  "description": "通过 AutoDL.Art ComfyUI 工作流 API 接入异步视频生成。",
-  "documentation": "# AutoDL ComfyUI 视频\n\n## 接口\n\n创建任务：`POST /api/v1/comfyui/comfyui_workflow/{workflow_id}`。清单把渠道中的模型字段作为 `workflow_id`，因此每个 ComfyUI 工作流都可以通过工作流贡献加入，不需要修改宿主代码。\n\n查询任务：`GET /api/v1/comfyui/comfyui_workflow/result/{task_id}`。\n\n## 工作流\n\n示例 `minimax_h3_lightx2v_no_pic` 作为 MiniMax H3 文生视频入口，默认时长为 5 秒、分辨率为 `768p竖`。支持 `480p竖`、`768p竖`、`480p横`、`768p横`。上传后可以在渠道中直接选择该工作流；新增工作流只需扩展本清单。\n\n## 请求与鉴权\n\n创建请求为 JSON，发送 `prompt`、`duration`、`resolution`，并按存在的参考图片发送 `ref_image_0` 至 `ref_image_8`。分辨率选项由画布按工作流声明完整保留，插件在发送前仅统一转换为小写；`768p竖`、`768p横` 等值不会被宿主折叠为通用数字档位。参考图片由宿主转换为短期签名公网 URL。AutoDL Token 在渠道密钥字段中配置，宿主以后端出站请求发送 `Authorization: Bearer <token>`；清单不包含密钥。\n\n## 状态与结果\n\n`QUEUED` 和 `RUNNING` 映射为统一任务的排队与处理中，`SUCCESS` 和 `completed` 映射为成功，`FAILED` 映射为失败。错误响应的 `code` 和 `msg` 会保留为任务错误。成功结果从 `data.results[].url` 读取为视频地址。AutoDL 地址是短期地址，清单标记为临时结果，宿主会在完成时下载并保存到影策资源存储。\n\n官方文档：[AutoDL ComfyUI API](https://autodl.art/docs/comfyui_api/)。",
+  "description": "通过 AutoDL.Art ComfyUI 工作流 API 接入异步视频与音频生成，支持 H3 视频系列及 IndexTTS 语音工作流。",
+  "documentation": "# AutoDL ComfyUI 工作流\n\n## 接口\n\n- 创建任务：`POST /api/v1/comfyui/comfyui_workflow/{workflow_id}`\n- 查询结果：`GET /api/v1/comfyui/comfyui_workflow/result/{task_id}`\n\n## 鉴权\n\n在渠道密钥中配置 AutoDL ComfyUI 令牌（Authorization: <TOKEN>）。\n\n## 工作流清单（8 个工作流）\n\n1. `minimax_h3_image_audio_to_video_v2_15s` - H3 多图多音频生视频 15 秒\n2. `minimax_h3_lightx2v_v5_15s` - H3 多图生视频 15 秒\n3. `minimax_h3_image_audio_to_video_v2` - H3 多图多音频生视频\n4. `minimax_h3_image_audio_to_video` - H3 图生视频音频同步\n5. `minimax_h3_lightx2v_v5` - H3 多图参考生视频\n6. `minimax_h3_lightx2v_no_pic` - H3 文生视频\n7. `minimax_h3_lightx2v` - H3 首尾帧生成视频\n8. `indextts2-v1` - IndexTTS2 语音\n",
   "permissions": [
     "generation.run",
     "media.read"
@@ -17,7 +17,7 @@
         "type": "secret",
         "label": "AutoDL Token",
         "required": true,
-        "description": "填写 AutoDL Token；仅保存到渠道密钥配置。"
+        "description": "填写 AutoDL 大模型令牌管理中创建的 ComfyUI 分组 Token。"
       }
     ]
   },
@@ -38,7 +38,7 @@
         "baseUrl": "https://autodl.art",
         "requiresPublicMediaUrls": true,
         "auth": {
-          "type": "bearer",
+          "type": "header",
           "field": "apiKey",
           "header": "Authorization"
         },
@@ -54,13 +54,13 @@
             "name": "duration",
             "type": "integer",
             "mapping": "duration",
-            "description": "视频时长，单位由工作流决定。"
+            "description": "视频时长（秒）。"
           },
           {
             "name": "resolution",
             "type": "string",
             "mapping": "resolution",
-            "description": "工作流支持的分辨率档位。"
+            "description": "输出分辨率档位，如 480p竖、768p竖、1080p竖、480p横、768p横、1080p横、480p(1:1)、768p(1:1) 等。"
           }
         ],
         "create": {
@@ -68,18 +68,24 @@
           "path": "/api/v1/comfyui/comfyui_workflow/{{model}}",
           "contentType": "application/json",
           "fields": {
-            "prompt": "request.prompt",
-            "duration": "request.duration",
+            "prompt": "request.prompt|omit_if_model_equals:minimax_h3_image_audio_to_video",
+            "duration": "request.duration|omit_if_model_equals:minimax_h3_image_audio_to_video",
+            "audio_duration": "request.duration|omit_unless_model_equals:minimax_h3_image_audio_to_video",
             "resolution": "request.resolution|lower",
-            "ref_image_0": "request.images.0.url",
-            "ref_image_1": "request.images.1.url",
-            "ref_image_2": "request.images.2.url",
-            "ref_image_3": "request.images.3.url",
-            "ref_image_4": "request.images.4.url",
-            "ref_image_5": "request.images.5.url",
-            "ref_image_6": "request.images.6.url",
-            "ref_image_7": "request.images.7.url",
-            "ref_image_8": "request.images.8.url"
+            "ref_image_0": "request.images.0.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_1": "request.images.1.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_2": "request.images.2.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_3": "request.images.3.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_4": "request.images.4.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_5": "request.images.5.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_6": "request.images.6.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_7": "request.images.7.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "ref_image_8": "request.images.8.url|omit_if_model_equals:minimax_h3_lightx2v|omit_if_model_equals:minimax_h3_b99_002|omit_if_model_equals:minimax_h3_image_audio_to_video|omit_if_model_contains:no_pic|omit_if_model_contains:b99_001",
+            "first_frame": "request.images.0.url|omit_if_model_contains:v5|omit_if_model_contains:no_pic|omit_if_model_contains:image_audio_to_video|omit_if_model_contains:b99_001|omit_if_model_contains:b99_003",
+            "last_frame": "request.images.1.url|omit_if_model_contains:v5|omit_if_model_contains:no_pic|omit_if_model_contains:image_audio_to_video|omit_if_model_contains:b99_001|omit_if_model_contains:b99_003",
+            "ref_audio_0": "request.audios.0.url|omit_unless_model_contains:image_audio_to_video",
+            "ref_audio_1": "request.audios.1.url|omit_unless_model_contains:image_audio_to_video_v2",
+            "ref_audio_2": "request.audios.2.url|omit_unless_model_contains:image_audio_to_video_v2"
           }
         },
         "poll": {
@@ -106,44 +112,200 @@
           "resultKind": "video",
           "resultEphemeral": true
         }
+      },
+      {
+        "id": "autodl-comfyui-audio",
+        "label": "AutoDL ComfyUI 语音",
+        "capabilities": [
+          "audio"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "https://autodl.art",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "header",
+          "field": "apiKey",
+          "header": "Authorization"
+        },
+        "parameters": [
+          {
+            "name": "prompt_text",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt_text",
+            "description": "语音合成文本。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/v1/comfyui/comfyui_workflow/{{model}}",
+          "contentType": "application/json",
+          "fields": {
+            "prompt_text": "request.prompt",
+            "prompt_simple": "request.audios.0.url",
+            "emo_control_method": "与音色参考音频相同"
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/v1/comfyui/comfyui_workflow/result/{{taskId}}"
+        },
+        "response": {
+          "taskIdPaths": [
+            "data.task_id"
+          ],
+          "statusPaths": [
+            "data.status"
+          ],
+          "errorPaths": [
+            "code"
+          ],
+          "messagePaths": [
+            "data.message",
+            "msg"
+          ],
+          "resultPaths": [
+            "data.results"
+          ],
+          "resultKind": "audio",
+          "resultEphemeral": true
+        }
       }
     ],
     "workflows": [
       {
-        "id": "minimax_h3_lightx2v_no_pic",
-        "label": "MiniMax H3 文生视频",
+        "id": "minimax_h3_b99_002",
+        "label": "H3 首尾帧生成视频",
         "providerId": "autodl-comfyui",
         "capability": "video",
         "parameters": [
-          {
-            "name": "prompt",
-            "type": "string",
-            "required": true,
-            "mapping": "prompt"
-          },
-          {
-            "name": "duration",
-            "type": "integer",
-            "mapping": "duration",
-            "description": "视频时长。"
-          },
-          {
-            "name": "resolution",
-            "type": "string",
-            "mapping": "resolution",
-            "values": [
-              "480p竖",
-              "768p竖",
-              "480p横",
-              "768p横"
-            ],
-            "description": "输出分辨率档位。"
-          }
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["736p竖", "736p横", "736p(1:1)"] }
         ],
-        "defaults": {
-          "duration": 5,
-          "resolution": "768p竖"
-        }
+        "defaults": { "duration": 5, "resolution": "736p竖" }
+      },
+      {
+        "id": "minimax_h3_b99_001",
+        "label": "H3 文生视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["736p竖", "736p横", "736p(1:1)"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "736p竖" }
+      },
+      {
+        "id": "minimax_h3_b99_003_12s",
+        "label": "H3 多图生视频 12 秒",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~12 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["736p竖", "736p横", "736p(1:1)"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "736p竖" }
+      },
+      {
+        "id": "minimax_h3_image_audio_to_video_v2_15s",
+        "label": "H3 多图多音频生视频 15 秒",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "480p横", "768p横"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_lightx2v_v5_15s",
+        "label": "H3 多图生视频 15 秒",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "480p横", "768p横", "480p(1:1)", "768p(1:1)"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_image_audio_to_video_v2",
+        "label": "H3 多图多音频生视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~10 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "1080p竖", "480p横", "768p横", "1080p横"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_image_audio_to_video",
+        "label": "H3 图生视频音频同步",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "audio_duration", "type": "integer", "mapping": "duration", "description": "音频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "1080p竖", "480p横", "768p横", "1080p横"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_lightx2v_v5",
+        "label": "H3 多图参考生视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~10 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "1080p竖", "480p横", "768p横", "1080p横", "480p(1:1)", "768p(1:1)", "1080p(1:1)"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_lightx2v_no_pic",
+        "label": "H3 文生视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "480p横", "768p横"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "minimax_h3_lightx2v",
+        "label": "H3 首尾帧生成视频",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt" },
+          { "name": "duration", "type": "integer", "mapping": "duration", "description": "视频时长 1~15 秒" },
+          { "name": "resolution", "type": "string", "mapping": "resolution", "values": ["480p竖", "768p竖", "480p横", "768p横"] }
+        ],
+        "defaults": { "duration": 5, "resolution": "768p竖" }
+      },
+      {
+        "id": "indextts2-v1",
+        "label": "IndexTTS2 语音",
+        "providerId": "autodl-comfyui-audio",
+        "capability": "audio",
+        "parameters": [
+          { "name": "prompt_text", "type": "string", "required": true, "mapping": "prompt" }
+        ],
+        "defaults": {}
       }
     ]
   }

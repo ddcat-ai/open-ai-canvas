@@ -94,7 +94,7 @@ func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Tim
 		return "", BadAuthRequest("资源尚未上传完成")
 	}
 	if resource.Provider == "local" {
-		return s.signedPublicResourceURL(resource.ID, expiresAt)
+		return s.signedPublicResourceURL(resource, expiresAt)
 	}
 	setting, err := s.ossSettingForResource(resource.UserID, resource)
 	if err != nil {
@@ -104,7 +104,7 @@ func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Tim
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
 	if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
-		return s.signedHTTPSPublicResourceURL(resource.ID, expiresAt)
+		return s.signedHTTPSPublicResourceURL(resource, expiresAt)
 	}
 	return signedOSSObjectURL(setting, resource.ObjectKey, expiresAt)
 }
@@ -156,7 +156,7 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		}
 		if options.ForceDirect {
 			if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
-				redirectURL, err := s.signedHTTPSPublicResourceURL(resource.ID, time.Now().Add(directResourceURLTTL))
+				redirectURL, err := s.signedHTTPSPublicResourceURL(resource, time.Now().Add(directResourceURLTTL))
 				if err != nil {
 					return nil, err
 				}
@@ -172,17 +172,28 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	return &ResourceDelivery{Resource: resource}, nil
 }
 
-func (s *Service) signedPublicResourceURL(resourceID string, expiresAt time.Time) (string, error) {
+func (s *Service) signedPublicResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
+	if resource == nil {
+		return "", errors.New("资源不存在")
+	}
 	baseURL, err := s.publicResourceBaseURL()
 	if err != nil {
 		return "", err
 	}
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
-	signature, err := s.signPublicResource(resourceID, expires)
+	signature, err := s.signPublicResource(resource.ID, expires)
 	if err != nil {
 		return "", err
 	}
-	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/api/public/resources/" + url.PathEscape(resourceID) + "/file"
+	ext := resourceFileExtension(resource.ObjectKey, resource.MimeType, resource.Kind)
+	filename := resource.ID
+	if ext != "" {
+		if !strings.HasPrefix(ext, ".") {
+			ext = "." + ext
+		}
+		filename += ext
+	}
+	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/api/public/resources/" + url.PathEscape(resource.ID) + "/file/" + url.PathEscape(filename)
 	query := baseURL.Query()
 	query.Set("expires", expires)
 	query.Set("signature", signature)
@@ -190,7 +201,7 @@ func (s *Service) signedPublicResourceURL(resourceID string, expiresAt time.Time
 	return baseURL.String(), nil
 }
 
-func (s *Service) signedHTTPSPublicResourceURL(resourceID string, expiresAt time.Time) (string, error) {
+func (s *Service) signedHTTPSPublicResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
 	baseURL, err := s.publicResourceBaseURL()
 	if err != nil {
 		return "", err
@@ -198,7 +209,7 @@ func (s *Service) signedHTTPSPublicResourceURL(resourceID string, expiresAt time
 	if baseURL.Scheme != "https" {
 		return "", BadAuthRequest("私网或 HTTP S3 用于上游资源时，服务器公开访问地址必须使用 HTTPS")
 	}
-	return s.signedPublicResourceURL(resourceID, expiresAt)
+	return s.signedPublicResourceURL(resource, expiresAt)
 }
 
 func (s *Service) verifyPublicResourceSignature(resourceID string, expires string, signature string) error {

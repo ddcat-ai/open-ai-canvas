@@ -718,7 +718,7 @@ func TestHydrateNewAPIChannel1ResourceUsesSignedLocalURL(t *testing.T) {
 	if err := svc.hydrateProviderMedia("user-1", &media, true); err != nil {
 		t.Fatalf("hydrateProviderMedia() error = %v", err)
 	}
-	if !strings.HasPrefix(media.URL, server.URL+"/api/public/resources/resource-local/file?") || !strings.Contains(media.URL, "signature=") || media.DataURL != "" {
+	if !strings.HasPrefix(media.URL, server.URL+"/api/public/resources/resource-local/file/resource-local.png?") || !strings.Contains(media.URL, "signature=") || media.DataURL != "" {
 		t.Fatalf("media = %#v", media)
 	}
 	stored, err := svc.repo.Resource("resource-local")
