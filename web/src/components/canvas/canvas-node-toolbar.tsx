@@ -40,12 +40,12 @@ type CanvasNodeToolbarProps = {
     onSuperResolve: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
-    onExtractVideoLastFrame: (node: CanvasNodeData) => void;
+    onExtractVideoFrames: (node: CanvasNodeData) => void;
     onExtractAudioFromVideo: (node: CanvasNodeData) => void;
-    onTrimVideoRegenerate: (node: CanvasNodeData) => void;
+    onTrimVideoSegments: (node: CanvasNodeData) => void;
     onSubtitles: (node: CanvasNodeData) => void;
     onTimeline: (node: CanvasNodeData) => void;
-    extractingVideoFrame: boolean;
+    extractingVideoFrames: boolean;
     extractingAudio: boolean;
     trimmingVideo: boolean;
     onReversePrompt: (node: CanvasNodeData) => void;
@@ -103,12 +103,12 @@ export function CanvasNodeToolbar({
     onSuperResolve,
     onAngle,
     onViewImage,
-    onExtractVideoLastFrame,
+    onExtractVideoFrames,
     onExtractAudioFromVideo,
-    onTrimVideoRegenerate,
+    onTrimVideoSegments,
     onSubtitles,
     onTimeline,
-    extractingVideoFrame,
+    extractingVideoFrames,
     extractingAudio,
     trimmingVideo,
     onReversePrompt,
@@ -201,7 +201,7 @@ export function CanvasNodeToolbar({
         onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeUpload: onUpload, onNodeDownload: onDownload,
         onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
         onNodeSplit: onSplit, onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
-        onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeExtractAudioFromVideo: onExtractAudioFromVideo, onNodeTrimVideoRegenerate: onTrimVideoRegenerate, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
+        onNodeExtractVideoFrames: onExtractVideoFrames, onNodeExtractAudioFromVideo: onExtractAudioFromVideo, onNodeTrimVideoSegments: onTrimVideoSegments, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
         onNodeSubtitles: onSubtitles, onNodeTimeline: onTimeline, onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
@@ -216,7 +216,7 @@ export function CanvasNodeToolbar({
         canRedo: false,
         node,
         nodeMetadata: node.metadata,
-        extractingVideoFrame,
+        extractingVideoFrames,
         extractingAudio,
         trimmingVideo,
         mergingVideos: false,
@@ -249,9 +249,9 @@ export function CanvasNodeToolbar({
     const imageEditTools = takeTools(["maskEdit", "crop", "split"]);
     const imagePortraitTools = takeTools(["emotion", "portraitTexture"]).map((tool) => tool.id === "emotion" ? { ...tool, label: "人物情绪" } : tool);
     const imageAngleTool = toolById.get("angle");
-    const videoTools = takeTools(["delete", "download", "subtitles", "timeline", "extractLastFrame", "extractAudio", "trimRegenerate", "uploadVideo"]).map((tool) => {
-        if (tool.id === "extractLastFrame") return { ...tool, label: "尾帧截取" };
-        if (tool.id === "trimRegenerate") return { ...tool, label: "截取重生成" };
+    const videoTools = takeTools(["delete", "download", "subtitles", "timeline", "extractFrames", "extractAudio", "trimRegenerate", "uploadVideo"]).map((tool) => {
+        if (tool.id === "extractFrames") return { ...tool, label: "提取画面" };
+        if (tool.id === "trimRegenerate") return { ...tool, label: "截取片段" };
         return tool;
     });
     const genericTools = takeTools(isAudio ? ["delete", "download", "timeline", "uploadAudio"] : isEditableText ? ["delete", "edit", "editText", "generateImage", "saveAsset"] : ["delete", "info", "config"]);

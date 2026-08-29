@@ -23,7 +23,7 @@ const settingsMockContext: ToolContext = {
     isProjectLinked: false,
     canUndo: false,
     canRedo: false,
-    extractingVideoFrame: false,
+    extractingVideoFrames: false,
     extractingAudio: false,
     trimmingVideo: false,
     mergingVideos: false,

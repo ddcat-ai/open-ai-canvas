@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
@@ -63,17 +63,17 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         run: (ctx) => ctx.handlers.onNodeRetry(ctx.node!),
     },
     {
-        id: "extractLastFrame",
+        id: "extractFrames",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => ctx.extractingVideoFrame ? "正在截取尾帧" : "截取尾帧",
-        displayLabel: (ctx) => ctx.extractingVideoFrame ? "截取中" : "尾帧",
-        icon: (ctx) => ctx.extractingVideoFrame ? <LoaderCircle className="size-3.5 animate-spin" /> : <GalleryHorizontalEnd className="size-3.5" />,
+        label: (ctx) => ctx.extractingVideoFrames ? "正在提取视频画面" : "提取一个或多个视频画面",
+        displayLabel: (ctx) => ctx.extractingVideoFrames ? "提取中" : "提取画面",
+        icon: (ctx) => ctx.extractingVideoFrames ? <LoaderCircle className="size-3.5 animate-spin" /> : <Images className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 40,
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
-        disabled: (ctx) => ctx.extractingVideoFrame,
-        run: (ctx) => ctx.handlers.onNodeExtractVideoLastFrame(ctx.node!),
+        disabled: (ctx) => ctx.extractingVideoFrames,
+        run: (ctx) => ctx.handlers.onNodeExtractVideoFrames(ctx.node!),
     },
     {
         id: "extractAudio",
@@ -92,14 +92,14 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "trimRegenerate",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => ctx.trimmingVideo ? "正在截取片段" : "按段截取并重生成",
-        displayLabel: (ctx) => ctx.trimmingVideo ? "截取中" : "截取重生成",
+        label: (ctx) => ctx.trimmingVideo ? "正在截取片段" : "截取一个或多个视频片段",
+        displayLabel: (ctx) => ctx.trimmingVideo ? "截取中" : "截取片段",
         icon: (ctx) => ctx.trimmingVideo ? <LoaderCircle className="size-3.5 animate-spin" /> : <Scissors className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 44,
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
         disabled: (ctx) => ctx.extractingAudio || ctx.trimmingVideo,
-        run: (ctx) => ctx.handlers.onNodeTrimVideoRegenerate(ctx.node!),
+        run: (ctx) => ctx.handlers.onNodeTrimVideoSegments(ctx.node!),
     },
     {
         id: "saveAsset",

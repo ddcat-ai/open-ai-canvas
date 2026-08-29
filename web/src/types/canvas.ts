@@ -320,6 +320,8 @@ export type CanvasNodeMetadata = {
     videoCameraMovePrompt?: string;
     videoStartFrameNodeId?: string;
     videoEndFrameNodeId?: string;
+    videoFrameSourceNodeId?: string;
+    videoFrameTimeMs?: number;
     versionOfNodeId?: string;
     versionLabel?: string;
     versionPrimary?: boolean;

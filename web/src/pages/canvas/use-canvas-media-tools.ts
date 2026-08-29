@@ -8,6 +8,7 @@ import type { CanvasImageSplitParams } from "@/components/canvas/canvas-node-spl
 import type { CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import type { CanvasImageEmotionPayload } from "@/components/canvas/canvas-node-emotion-panel";
+import type { CanvasVideoFrameParams } from "@/components/canvas/canvas-video-frame-dialog";
 import type { CanvasVideoSegmentParams } from "@/components/canvas/canvas-video-segment-dialog";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "@/lib/canvas/canvas-image-data";
@@ -25,7 +26,8 @@ import {
 import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
-import { captureVideoLastFrame } from "@/lib/canvas/canvas-video-frame";
+import { captureVideoFrames } from "@/lib/canvas/canvas-video-frame";
+import { buildVideoFrameNodes } from "@/lib/canvas/canvas-video-frame-nodes";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { extractVideoAudio, trimVideoSegment } from "@/lib/canvas/canvas-video-segment";
 import { generationErrorMessage } from "@/lib/generation-error";
@@ -59,8 +61,6 @@ type UseCanvasMediaToolsOptions = {
     startGenerationRequest: (targetNodeId: string, originNodeId: string, runningId?: string, controller?: AbortController) => AbortController;
     finishGenerationRequest: (targetNodeId: string, controller: AbortController) => void;
     bindGenerationTask: (targetNodeId: string, task: GenerationTask) => void;
-    /** 创建空视频节点后触发既有生成执行器（由页面层接线），用于“截取片段后调用视频模型重生成” */
-    onGenerateVideoNode?: (nodeId: string, mode: "video", prompt: string) => Promise<void> | void;
 };
 
 const NODE_STATUS_LOADING = "loading" as const;
@@ -92,12 +92,11 @@ export function useCanvasMediaTools({
     startGenerationRequest,
     finishGenerationRequest,
     bindGenerationTask,
-    onGenerateVideoNode,
 }: UseCanvasMediaToolsOptions) {
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
-    const extractingVideoFrameNodeIdRef = useRef<string | null>(null);
+    const extractingVideoFramesNodeIdRef = useRef<string | null>(null);
     const mergeVideoRunningRef = useRef(false);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [annotationNodeId, setAnnotationNodeId] = useState<string | null>(null);
@@ -106,7 +105,8 @@ export function useCanvasMediaTools({
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [emotionNodeId, setEmotionNodeId] = useState<string | null>(null);
-    const [extractingVideoFrameNodeId, setExtractingVideoFrameNodeId] = useState<string | null>(null);
+    const [frameDialogNodeId, setFrameDialogNodeId] = useState<string | null>(null);
+    const [extractingVideoFramesNodeId, setExtractingVideoFramesNodeId] = useState<string | null>(null);
     const [mergeVideoProgress, setMergeVideoProgress] = useState<MergeVideoProgress | null>(null);
     const [segmentDialogNodeId, setSegmentDialogNodeId] = useState<string | null>(null);
     const [segmentDialogMode, setSegmentDialogMode] = useState<"audio" | "video" | null>(null);
@@ -200,45 +200,69 @@ export function useCanvasMediaTools({
         message.success("标注图片已保存为新节点");
     }, [message, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const extractVideoLastFrame = useCallback(async (node: CanvasNodeData) => {
+    const openVideoFrameExtractor = useCallback((node: CanvasNodeData) => {
+        if (!node.metadata?.content) {
+            message.warning("视频节点为空，无法提取画面");
+            return;
+        }
+        if (extractingVideoFramesNodeIdRef.current) return;
+        setHoveredNodeId(null);
+        setToolbarNodeId(null);
+        setFrameDialogNodeId(node.id);
+    }, [message, setHoveredNodeId, setToolbarNodeId]);
+
+    const closeFrameDialog = useCallback(() => {
+        if (extractingVideoFramesNodeIdRef.current) return;
+        setFrameDialogNodeId(null);
+    }, []);
+
+    const extractVideoFrames = useCallback(async (node: CanvasNodeData, params: CanvasVideoFrameParams) => {
         const content = node.metadata?.content;
-        if (!content || extractingVideoFrameNodeIdRef.current) return;
-        const progress = startUploadStatus("截取视频尾帧", "读取视频资源");
-        extractingVideoFrameNodeIdRef.current = node.id;
-        setExtractingVideoFrameNodeId(node.id);
+        if (!content || extractingVideoFramesNodeIdRef.current || !params.timesMs.length) return;
+        const progress = startUploadStatus("提取视频画面", "读取视频资源", params.timesMs.length + 2);
+        extractingVideoFramesNodeIdRef.current = node.id;
+        setExtractingVideoFramesNodeId(node.id);
+        setFrameDialogNodeId(null);
         try {
             const storedBlob = node.metadata?.storageKey ? await getMediaBlob(node.metadata.storageKey).catch(() => null) : null;
-            progress.update("定位并绘制最后一帧", 2);
-            const frameBlob = await captureVideoLastFrame(storedBlob || content);
-            progress.update("保存尾帧图片并创建节点", 3);
-            const image = await uploadImage(frameBlob);
-            const size = fitNodeSize(image.width, image.height, node.width, node.height);
-            const childId = nanoid();
-            const child: CanvasNodeData = {
-                id: childId,
-                type: CanvasNodeType.Image,
-                title: `尾帧 · ${node.title || "视频"}`,
-                position: { x: node.position.x + node.width + 96, y: node.position.y },
-                width: size.width,
-                height: size.height,
-                metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt, workflowKind: node.metadata?.workflowKind, workflowTitle: node.metadata?.workflowTitle, shotIndex: node.metadata?.shotIndex },
-            };
-            setNodes((current) => [...current, child]);
-            setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
-            setSelectedNodeIds(new Set([childId]));
+            progress.update("定位并绘制所选画面", 2);
+            const captured = await captureVideoFrames(storedBlob || content, params.timesMs);
+            const uploadedFrames = [];
+            const uploadFailures: string[] = [];
+            for (let index = 0; index < captured.frames.length; index += 1) {
+                const frame = captured.frames[index];
+                try {
+                    progress.update(`保存画面（${index + 1}/${captured.frames.length}）`, index + 3);
+                    uploadedFrames.push({ timeMs: frame.timeMs, image: await uploadImage(frame.blob) });
+                } catch (error) {
+                    uploadFailures.push(error instanceof Error ? error.message : "画面图片上传失败");
+                }
+            }
+            const frameNodes = buildVideoFrameNodes(node, uploadedFrames);
+            if (!frameNodes.length) throw new Error(uploadFailures[0] || "画面图片保存失败");
+            const links = frameNodes.map((frameNode) => ({ id: nanoid(), fromNodeId: node.id, toNodeId: frameNode.id }));
+            const nextNodes = [...nodesRef.current, ...frameNodes];
+            const nextConnections = [...connectionsRef.current, ...links];
+            const selection = new Set(frameNodes.map((frameNode) => frameNode.id));
+            nodesRef.current = nextNodes;
+            connectionsRef.current = nextConnections;
+            selectedNodeIdsRef.current = selection;
+            setNodes(nextNodes);
+            setConnections(nextConnections);
+            setSelectedNodeIds(selection);
             setSelectedConnectionId(null);
-            setHoveredNodeId(null);
-            setToolbarNodeId(null);
-            progress.done("尾帧图片已创建");
+            const failedCount = captured.failures.length + uploadFailures.length;
+            progress.done(failedCount ? `已提取 ${frameNodes.length} 帧，${failedCount} 帧失败` : `已提取 ${frameNodes.length} 帧并创建图片节点`);
+            if (failedCount) message.warning(`${failedCount} 个时间点提取失败，其余画面已创建`);
         } catch (error) {
-            const details = error instanceof Error ? error.message : "尾帧截取失败";
+            const details = error instanceof Error ? error.message : "视频画面提取失败";
             progress.fail(details);
             message.error(details);
         } finally {
-            extractingVideoFrameNodeIdRef.current = null;
-            setExtractingVideoFrameNodeId(null);
+            extractingVideoFramesNodeIdRef.current = null;
+            setExtractingVideoFramesNodeId(null);
         }
-    }, [message, setConnections, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId, startUploadStatus]);
+    }, [connectionsRef, message, nodesRef, selectedNodeIdsRef, setConnections, setNodes, setSelectedConnectionId, setSelectedNodeIds, startUploadStatus]);
 
     const extractAudioFromVideo = useCallback((node: CanvasNodeData) => {
         if (!node.metadata?.content) {
@@ -252,7 +276,7 @@ export function useCanvasMediaTools({
         setSegmentDialogMode("audio");
     }, [message, setHoveredNodeId, setToolbarNodeId]);
 
-    const trimVideoAndRegenerate = useCallback((node: CanvasNodeData) => {
+    const openVideoSegmentExtractor = useCallback((node: CanvasNodeData) => {
         if (!node.metadata?.content) {
             message.warning("视频节点为空，无法截取片段");
             return;
@@ -305,23 +329,26 @@ export function useCanvasMediaTools({
         }
     }, [domainProjectId, message, projectId, setConnections, setSelectedConnectionId, setSelectedNodeIds, setNodes, startUploadStatus]);
 
-    // 按段截取视频：FFmpeg 批量截取 → 每段创建片段节点与空结果节点 → 调用视频模型逐段重生成。
-    const runTrimVideoAndRegenerate = useCallback(async (node: CanvasNodeData, params: CanvasVideoSegmentParams) => {
+    // 按段截取视频：默认只创建片段节点；用户明确选择时再附带创建待生成节点，生成任务仍由用户手动发起。
+    const runTrimVideoSegments = useCallback(async (node: CanvasNodeData, params: CanvasVideoSegmentParams) => {
         const segments = params.segments || [];
         if (!segments.length) {
             message.warning("请至少添加一个截取片段");
             return;
         }
-        const generationConfig = buildGenerationConfig(effectiveConfig, node, "video");
-        const selectedConfig = { ...generationConfig, model: params.model || generationConfig.model };
-        const batchError = validateVideoSegmentBatch(selectedConfig, segments, params.operation);
-        if (batchError) {
-            message.warning(batchError);
-            return;
+        const createsGenerationNodes = params.action === "create-generation-nodes";
+        const generationConfig = createsGenerationNodes ? buildGenerationConfig(effectiveConfig, node, "video") : null;
+        const selectedConfig = generationConfig ? { ...generationConfig, model: params.model || generationConfig.model } : null;
+        if (selectedConfig) {
+            const batchError = validateVideoSegmentBatch(selectedConfig, segments, params.operation);
+            if (batchError) {
+                message.warning(batchError);
+                return;
+            }
         }
         const progress = startUploadStatus("截取视频片段", "加载 FFmpeg", segments.length * 4);
         try {
-            const prepared: Array<{ segmentNode: CanvasNodeData; targetNode: CanvasNodeData }> = [];
+            const prepared: Array<{ segmentNode: CanvasNodeData; targetNode?: CanvasNodeData }> = [];
             const failedSegments: string[] = [];
             const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const baseX = node.position.x + node.width + 96;
@@ -354,16 +381,17 @@ export function useCanvasMediaTools({
                         height: size.height,
                         metadata: { ...videoMetadata(uploaded), prompt: `从「${sourceNode?.title || node.title || "视频"}」截取的片段 ${index + 1}`, status: NODE_STATUS_SUCCESS },
                     };
-                    const targetId = nanoid();
-                    const targetNode: CanvasNodeData = {
-                        id: targetId,
-                        type: CanvasNodeType.Video,
-                        title: `重生成 ${index + 1} · ${sourceNode?.title || node.title || "视频"}`,
-                        position: { x: segmentNode.position.x + size.width + 96, y: segmentNode.position.y + (size.height - spec.height) / 2 },
-                        width: spec.width,
-                        height: spec.height,
-                        metadata: { prompt: effectivePrompt, status: "idle", generationMode: "video", model: selectedConfig.model, videoEditOperation: params.operation, seconds: generationConfig.videoSeconds, size: generationConfig.size },
-                    };
+                    const targetNode: CanvasNodeData | undefined = selectedConfig && generationConfig
+                        ? {
+                            id: nanoid(),
+                            type: CanvasNodeType.Video,
+                            title: `待生成 ${index + 1} · ${sourceNode?.title || node.title || "视频"}`,
+                            position: { x: segmentNode.position.x + size.width + 96, y: segmentNode.position.y + (size.height - spec.height) / 2 },
+                            width: spec.width,
+                            height: spec.height,
+                            metadata: { prompt: effectivePrompt, status: "idle", generationMode: "video", model: selectedConfig.model, videoEditOperation: params.operation, seconds: generationConfig.videoSeconds, size: generationConfig.size },
+                        }
+                        : undefined;
                     prepared.push({ segmentNode, targetNode });
                 } catch (segmentError) {
                     failedSegments.push(segmentError instanceof Error ? segmentError.message : "视频截取失败");
@@ -371,46 +399,41 @@ export function useCanvasMediaTools({
             }
             if (!prepared.length) throw new Error(failedSegments[0] || "视频截取失败");
             const segmentNodes = prepared.map((item) => item.segmentNode);
-            const targetNodes = prepared.map((item) => item.targetNode);
-            // 先同步 ref 再 setState，保证生成执行器能立即读到新节点与连接。
+            const targetNodes = prepared.flatMap((item) => item.targetNode ? [item.targetNode] : []);
             const nextNodes = [...nodesRef.current, ...segmentNodes, ...targetNodes];
             const nextConnections = [
                 ...connectionsRef.current,
                 ...prepared.flatMap((item) => [
                     { id: nanoid(), fromNodeId: node.id, toNodeId: item.segmentNode.id },
-                    { id: nanoid(), fromNodeId: item.segmentNode.id, toNodeId: item.targetNode.id },
+                    ...(item.targetNode ? [{ id: nanoid(), fromNodeId: item.segmentNode.id, toNodeId: item.targetNode.id }] : []),
                 ]),
             ];
             nodesRef.current = nextNodes;
             connectionsRef.current = nextConnections;
             setNodes(nextNodes);
             setConnections(nextConnections);
-            setSelectedNodeIds(new Set(targetNodes.map((item) => item.id)));
+            const selectedNodes = targetNodes.length ? targetNodes : segmentNodes;
+            const selection = new Set(selectedNodes.map((item) => item.id));
+            selectedNodeIdsRef.current = selection;
+            setSelectedNodeIds(selection);
             setSelectedConnectionId(null);
-            progress.update("创建生成任务", segments.length * 4);
-            progress.done(`已截取 ${prepared.length}/${segments.length} 段，正在调用视频模型重新生成`);
+            progress.done(targetNodes.length ? `已截取 ${prepared.length}/${segments.length} 段并创建待生成节点` : `已截取 ${prepared.length}/${segments.length} 段视频`);
             segmentNodes.forEach((segmentNode) => {
                 void ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: segmentNode, source: "canvas-manual" })
                     .then((result) => setNodes((current) => current.map((item) => (item.id === segmentNode.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item))))
-                    .catch((assetError) => message.warning(`片段已截取并开始重生成，但素材库写入失败：${assetError instanceof Error ? assetError.message : "未知错误"}`));
+                    .catch((assetError) => message.warning(`片段已截取，但素材库写入失败：${assetError instanceof Error ? assetError.message : "未知错误"}`));
             });
-            // 任务提交瞬时打满后端会触发限流；先错峰提交，后续可替换为批次调度的容量控制。
-            for (let index = 0; index < targetNodes.length; index += 1) {
-                const targetNode = targetNodes[index];
-                void onGenerateVideoNode?.(targetNode.id, "video", effectivePrompt);
-                if (index + 1 < targetNodes.length) await new Promise((resolve) => setTimeout(resolve, 300));
-            }
-            if (failedSegments.length) message.warning(`${failedSegments.length} 段截取失败，已为其余 ${prepared.length} 段创建生成任务`);
+            if (failedSegments.length) message.warning(`${failedSegments.length} 段截取失败，其余 ${prepared.length} 段已创建`);
         } catch (error) {
             const details = error instanceof Error ? error.message : "视频截取失败";
             progress.fail(details);
             message.error(details);
         }
-    }, [connectionsRef, domainProjectId, effectiveConfig, message, nodesRef, onGenerateVideoNode, projectId, setConnections, setSelectedConnectionId, setSelectedNodeIds, setNodes, startUploadStatus]);
+    }, [connectionsRef, domainProjectId, effectiveConfig, message, nodesRef, projectId, selectedNodeIdsRef, setConnections, setSelectedConnectionId, setSelectedNodeIds, setNodes, startUploadStatus]);
 
     const handleSegmentConfirm = useCallback(async (node: CanvasNodeData, params: CanvasVideoSegmentParams) => {
         if (segmentRunningRef.current || !node.metadata?.content) return;
-        if (params.mode === "video") {
+        if (params.mode === "video" && params.action === "create-generation-nodes") {
             const generationConfig = buildGenerationConfig(effectiveConfig, node, "video");
             const selectedConfig = { ...generationConfig, model: params.model || generationConfig.model };
             const batchError = validateVideoSegmentBatch(selectedConfig, params.segments || [], params.operation);
@@ -424,13 +447,13 @@ export function useCanvasMediaTools({
         setSegmentDialogNodeId(null);
         setSegmentDialogMode(null);
         try {
-            if (params.mode === "video") await runTrimVideoAndRegenerate(node, params);
+            if (params.mode === "video") await runTrimVideoSegments(node, params);
             else await runExtractVideoAudio(node, params);
         } finally {
             segmentRunningRef.current = false;
             setSegmentRunningMode(null);
         }
-    }, [effectiveConfig, message, runExtractVideoAudio, runTrimVideoAndRegenerate]);
+    }, [effectiveConfig, message, runExtractVideoAudio, runTrimVideoSegments]);
 
     const mergeVideosByIds = useCallback(async (videoNodeIds: string[]) => {
         if (mergeVideoRunningRef.current) return;
@@ -683,10 +706,12 @@ export function useCanvasMediaTools({
         openPortraitTextureEditor,
         cropImageNode,
         cropNodeId,
+        closeFrameDialog,
         closeSegmentDialog,
         extractAudioFromVideo,
-        extractVideoLastFrame,
-        extractingVideoFrameNodeId,
+        extractVideoFrames,
+        extractingVideoFramesNodeId,
+        frameDialogNodeId,
         handleSegmentConfirm,
         generateAngleNode,
         maskEditImageNode,
@@ -698,6 +723,7 @@ export function useCanvasMediaTools({
         segmentDialogMode,
         segmentDialogNodeId,
         segmentRunningMode,
+        setFrameDialogNodeId,
         setSegmentDialogNodeId,
         setAngleNodeId,
         generateEmotionNode,
@@ -709,7 +735,8 @@ export function useCanvasMediaTools({
         setUpscaleNodeId,
         splitImageNode,
         splitNodeId,
-        trimVideoAndRegenerate,
+        openVideoFrameExtractor,
+        openVideoSegmentExtractor,
         upscaleImageNode,
         upscaleNodeId,
     };

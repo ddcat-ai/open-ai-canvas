@@ -15,7 +15,7 @@ export function listVideoReferenceModels(config: AiConfig): string[] {
 export function videoReferenceRegenerationError(config: AiConfig): string {
     const videoProfile = modelCapabilityConfigFor(config, config.model).video;
     if (!videoProfile || videoProfile.references.maxVideos < 1) {
-        return "当前所选视频模型不支持参考视频，无法使用截取重生成。请选择支持参考视频的模型，或在设置中配置 Seedance / Agent Plan / NewAPI 渠道。";
+        return "当前所选视频模型不支持参考视频，无法为片段创建待生成节点。请选择支持参考视频的模型，或在设置中配置 Seedance / Agent Plan / NewAPI 渠道。";
     }
     if (!videoProfile.operations.length) return "当前视频模型没有可用的视频生成模式";
     return "";
