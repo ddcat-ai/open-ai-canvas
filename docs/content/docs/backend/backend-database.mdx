@@ -33,6 +33,34 @@ description: 影策后端核心持久化表与状态边界
 
 短剧项目状态以这些领域表为准。自由画布可以承载探索节点，但画布 metadata 不作为生产完成度、镜头版本或交付可用性的真相源。
 
+### 长篇项目读取边界
+
+短剧工作台不再通过单个项目详情响应下载全部章节正文、镜头历史、产物、画布和资产。读取按页面职责拆分：
+
+| 接口 | 返回范围 |
+| --- | --- |
+| `GET /api/projects/:id/core` | 项目基础设置，不包含业务集合 |
+| `GET /api/projects/:id/overview` | 项目聚合计数与前 8 个章节进度 |
+| `GET /api/projects/:id/units` | 全部章节摘要与字数，不包含正文 |
+| `GET /api/projects/:id/units/:unitId` | 单章正文 |
+| `GET /api/projects/:id/units/:unitId/workspace` | 当前章节的镜头、版本、产物、引用、候选、相关任务和已绑定资产 |
+| `GET /api/projects/:id/canvases` | 项目画布与当前页章节关联，使用 `page`、`page_size` |
+| `GET /api/projects/:id/assets` | 项目资产分页、分类/目录计数，支持分类、媒体类型、目录和关键词筛选 |
+| `GET /api/projects/:id/asset-candidates` | 资产候选分页，支持章节、状态和分类筛选 |
+
+旧 `GET /api/projects/:id` 暂时保留给尚未迁移的调用方；短剧工作台页面不得重新依赖该整包接口。
+
+面向上千章、上万镜头的数据量，迁移会建立以下组合索引：
+
+- `idx_project_units_project_position`：章节按项目和位置读取。
+- `idx_shots_project_unit_position`：当前章节镜头按位置读取。
+- `idx_shot_artifacts_project_unit`：当前章节产物读取。
+- `idx_canvas_unit_links_project_unit`：章节关联画布聚合。
+- `idx_canvas_projects_user_project_updated`：项目画布倒序分页。
+- `idx_project_asset_links_project_folder_position`：项目目录资产分页与排序。
+- `idx_project_asset_candidates_project_unit_status`、`idx_project_asset_candidates_project_status_category`：章节候选和待确认分类队列。
+- `idx_tasks_user_project_created`：项目任务恢复读取。
+
 ## 模型渠道与目录
 
 | 表 | 用途 | 关键边界 |

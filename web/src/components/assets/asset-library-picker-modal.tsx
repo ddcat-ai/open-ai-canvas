@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard } from "@/components/assets/asset-library-card";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { cn } from "@/lib/utils";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import type { Asset } from "@/stores/use-asset-store";
@@ -47,6 +48,8 @@ type Props = {
     emptyTitle?: string;
     emptyDescription?: string;
     footerNote?: string;
+    loading?: boolean;
+    pagination?: { current: number; pageSize: number; total: number; onChange: (page: number, pageSize: number) => void };
     folderActionLabel?: string;
     folderActionSource?: "local" | "all";
     upload?: {
@@ -79,6 +82,8 @@ export function AssetLibraryPickerModal({
     emptyTitle = "这个分类还没有素材",
     emptyDescription = "换个分类后再试。",
     footerNote,
+    loading = false,
+    pagination,
     folderActionLabel = "将文件夹放到画布",
     folderActionSource = "all",
     upload,
@@ -123,10 +128,10 @@ export function AssetLibraryPickerModal({
             return !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
     }, [category, folderId, keyword, sourceItems]);
-    const selectedIds = useMemo(
-        () => allItems.filter((item) => !item.disabledReason && selected.has(item.id)).map((item) => item.id),
-        [allItems, selected],
-    );
+    const selectedIds = useMemo(() => Array.from(selected).filter((id) => {
+        const item = allItems.find((entry) => entry.id === id);
+        return !item?.disabledReason;
+    }), [allItems, selected]);
 
     useEffect(() => {
         if (!open) return;
@@ -272,7 +277,7 @@ export function AssetLibraryPickerModal({
                         </div>
                     </div>
                     <label className="asset-picker-search"><Search aria-hidden /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索素材名称或标签" aria-label="搜索素材" /></label>
-                    <span className="asset-picker-count">已选 {selectedIds.length} · {visibleItems.length} 个素材</span>
+                    <span className="asset-picker-count">已选 {selectedIds.length} · {pagination ? pagination.total : visibleItems.length} 个素材</span>
                 </header>
                 <div className="asset-picker-body">
                     <nav className="asset-picker-categories" aria-label="素材分类">
@@ -285,12 +290,15 @@ export function AssetLibraryPickerModal({
                     </nav>
                     <div className="asset-picker-grid-wrap">
                         <div className="asset-picker-grid">
-                            {visibleItems.length ? visibleItems.map((item) => (
+                            {loading ? (
+                                <div className="asset-picker-empty"><LoaderCircle className="animate-spin" /><strong>正在读取素材</strong><span>素材会按页加载，不会一次下载整个项目库。</span></div>
+                            ) : visibleItems.length ? visibleItems.map((item) => (
                                 <PickerCard key={item.id} item={item} selected={selected.has(item.id)} onToggle={() => toggle(item)} />
                             )) : (
                                 <div className="asset-picker-empty"><FolderOpen /><strong>{emptyTitle}</strong><span>{activeUpload ? "换个分类，或从底部上传一份新素材。" : emptyDescription}</span></div>
                             )}
                         </div>
+                        {pagination ? <PaginationBar alwaysShow current={pagination.current} pageSize={pagination.pageSize} total={pagination.total} itemLabel="项" pageSizeOptions={[20, 40, 80]} onChange={pagination.onChange} /> : null}
                     </div>
                 </div>
                 <footer className={cn("asset-picker-footer", !activeUpload && "is-compact")}>

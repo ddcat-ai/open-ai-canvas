@@ -239,6 +239,7 @@ export type ProjectDetail = {
     units: ProjectUnit[];
     canvases: ProjectCanvas[];
     canvasUnitLinks: CanvasUnitLink[];
+    unitCanvasCounts?: Record<string, number>;
     assets: ProjectAsset[];
     assetFolders: ProjectAssetFolder[];
     workflows: ProjectWorkflow[];
@@ -250,6 +251,72 @@ export type ProjectDetail = {
 	tasks: GenerationTask[];
 };
 
+export type ProjectCore = { project: Project };
+
+export type ProjectOverviewMetrics = {
+    unitCount: number;
+    completedUnitCount: number;
+    totalWordCount: number;
+    unitsWithoutText: number;
+    unitsWithoutShots: number;
+    canvasCount: number;
+    assetCount: number;
+    shotCount: number;
+    pendingCandidateCount: number;
+    readyStoryboardCount: number;
+    readyPrevizCount: number;
+    readyVideoCount: number;
+    staleArtifactCount: number;
+};
+
+export type ProjectOverviewUnit = {
+    unit: ProjectUnit;
+    shotCount: number;
+    candidateCount: number;
+    canvasCount: number;
+};
+
+export type ProjectOverview = { metrics: ProjectOverviewMetrics; units: ProjectOverviewUnit[] };
+
+export type ProjectUnitWorkspace = {
+    unit: ProjectUnit;
+    workflows: ProjectWorkflow[];
+    shots: ProjectShot[];
+    shotRevisions: ShotRevision[];
+    shotArtifacts: ShotArtifact[];
+    shotReferences: ShotAssetReference[];
+    assetCandidates: ProjectAssetCandidate[];
+    assets: ProjectAsset[];
+    tasks: GenerationTask[];
+};
+
+export type ProjectCanvasPage = {
+    canvases: ProjectCanvas[];
+    canvasUnitLinks: CanvasUnitLink[];
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
+
+export type ProjectAssetPage = {
+    assets: ProjectAsset[];
+    categoryCounts: Record<string, number>;
+    folderCounts: Record<string, number>;
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
+
+export type ProjectAssetCandidatePage = {
+    candidates: ProjectAssetCandidate[];
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
+
 export function listProjects(): Promise<{ projects: ProjectSummary[] }>;
 export function listProjects(params: { page: number; pageSize: number }): Promise<ProjectListPage>;
 export function listProjects(params?: { page: number; pageSize: number }) {
@@ -258,6 +325,52 @@ export function listProjects(params?: { page: number; pageSize: number }) {
 
 export function getProject(id: string) {
     return request<ProjectDetail>(api.get(`/projects/${encodeURIComponent(id)}`)).then(normalizeProjectDetail);
+}
+
+export function getProjectCore(id: string) {
+    return request<ProjectCore>(api.get(`/projects/${encodeURIComponent(id)}/core`));
+}
+
+export function listProjectUnits(projectId: string) {
+    return request<{ units: ProjectUnit[]; canvasCounts: Record<string, number> }>(api.get(`/projects/${encodeURIComponent(projectId)}/units`));
+}
+
+export function getProjectOverview(projectId: string) {
+    return request<ProjectOverview>(api.get(`/projects/${encodeURIComponent(projectId)}/overview`));
+}
+
+export function getProjectUnitWorkspace(projectId: string, unitId: string) {
+    return request<ProjectUnitWorkspace>(api.get(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}/workspace`));
+}
+
+export function listProjectCanvases(projectId: string, page = 1, pageSize = 40) {
+    return request<ProjectCanvasPage>(api.get(`/projects/${encodeURIComponent(projectId)}/canvases`, { params: { page, page_size: pageSize } }));
+}
+
+export function listProjectAssetsPage(projectId: string, options: { page?: number; pageSize?: number; category?: string; mediaType?: string; status?: string; folderId?: string; query?: string } = {}) {
+    return request<ProjectAssetPage>(api.get(`/projects/${encodeURIComponent(projectId)}/assets`, { params: {
+        page: options.page || 1,
+        page_size: options.pageSize || 40,
+        category: options.category || undefined,
+        media_type: options.mediaType || undefined,
+        status: options.status || undefined,
+        folder_id: options.folderId,
+        q: options.query || undefined,
+    } }));
+}
+
+export function listProjectAssets(projectId: string) {
+    return request<{ assets: ProjectAsset[] }>(api.get(`/projects/${encodeURIComponent(projectId)}/assets`));
+}
+
+export function listProjectAssetCandidates(projectId: string, options: { page?: number; pageSize?: number; unitId?: string; status?: string; category?: string } = {}) {
+    return request<ProjectAssetCandidatePage>(api.get(`/projects/${encodeURIComponent(projectId)}/asset-candidates`, { params: {
+        page: options.page || 1,
+        page_size: options.pageSize || 100,
+        unit_id: options.unitId || undefined,
+        status: options.status || undefined,
+        category: options.category || undefined,
+    } }));
 }
 
 function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
@@ -285,6 +398,7 @@ function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
         units: Array.isArray(detail.units) ? detail.units : [],
         canvases: Array.isArray(detail.canvases) ? detail.canvases : [],
         canvasUnitLinks: Array.isArray(detail.canvasUnitLinks) ? detail.canvasUnitLinks : [],
+        unitCanvasCounts: detail.unitCanvasCounts || {},
         assets,
         assetFolders: Array.isArray(detail.assetFolders) ? detail.assetFolders : [],
         workflows,

@@ -95,6 +95,36 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, detail)
 	})
+	r.GET("/projects/:id/core", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		core, err := svc.ProjectCore(user.ID, c.Param("id"))
+		if err != nil {
+			if service.IsProjectNotFound(err) {
+				fail(c, http.StatusNotFound, err)
+				return
+			}
+			failService(c, err)
+			return
+		}
+		ok(c, core)
+	})
+	r.GET("/projects/:id/overview", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		overview, err := svc.ProjectOverview(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, overview)
+	})
 	r.PATCH("/projects/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -157,6 +187,19 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"unit": unit})
 	})
+	r.GET("/projects/:id/units", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		units, err := svc.ProjectUnitSummaries(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, units)
+	})
 	r.GET("/projects/:id/units/:unitId", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -173,6 +216,19 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"unit": unit})
+	})
+	r.GET("/projects/:id/units/:unitId/workspace", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		workspace, err := svc.ProjectUnitWorkspace(user.ID, c.Param("id"), c.Param("unitId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, workspace)
 	})
 	r.POST("/projects/:id/units/import", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -318,10 +374,58 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"canvasId": c.Param("canvasId")})
 	})
+	r.GET("/projects/:id/canvases", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, err := parsePositiveQueryInt(c.Query("page"), 1)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		pageSize, err := parsePositiveQueryInt(c.Query("page_size"), 40)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.ProjectCanvasesPage(user.ID, c.Param("id"), page, pageSize)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.GET("/projects/:id/assets", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
+			return
+		}
+		pageParam, hasPage := c.GetQuery("page")
+		pageSizeParam, hasPageSize := c.GetQuery("page_size")
+		if hasPage || hasPageSize {
+			page, pageErr := parsePositiveQueryInt(pageParam, 1)
+			if pageErr != nil {
+				fail(c, http.StatusBadRequest, pageErr)
+				return
+			}
+			pageSize, pageSizeErr := parsePositiveQueryInt(pageSizeParam, 40)
+			if pageSizeErr != nil {
+				fail(c, http.StatusBadRequest, pageSizeErr)
+				return
+			}
+			var folderID *string
+			if value, present := c.GetQuery("folder_id"); present {
+				folderID = &value
+			}
+			assets, pageErr := svc.ProjectAssetsPage(user.ID, c.Param("id"), page, pageSize, c.Query("category"), c.Query("media_type"), c.Query("status"), folderID, c.Query("q"))
+			if pageErr != nil {
+				failService(c, pageErr)
+				return
+			}
+			ok(c, assets)
 			return
 		}
 		assets, err := svc.FilterProjectAssets(user.ID, c.Param("id"), service.ProjectAssetFilter{Category: c.Query("category"), MediaType: c.Query("mediaType"), Status: c.Query("status"), Usage: c.Query("usage")})
@@ -758,6 +862,29 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"candidates": candidates})
+	})
+	r.GET("/projects/:id/asset-candidates", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, err := parsePositiveQueryInt(c.Query("page"), 1)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		pageSize, err := parsePositiveQueryInt(c.Query("page_size"), 100)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.ProjectAssetCandidatesPage(user.ID, c.Param("id"), page, pageSize, c.Query("unit_id"), c.Query("status"), c.Query("category"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
 	})
 	r.POST("/projects/:id/asset-candidates/:candidateId/confirm", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

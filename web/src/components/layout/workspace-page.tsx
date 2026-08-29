@@ -106,6 +106,7 @@ export function PaginationBar({
     onChange,
     pageSizeOptions = [20, 50, 100],
     alwaysShow = false,
+    itemLabel = "条",
 }: {
     current: number;
     pageSize: number;
@@ -113,6 +114,7 @@ export function PaginationBar({
     onChange: (page: number, pageSize: number) => void;
     pageSizeOptions?: number[];
     alwaysShow?: boolean;
+    itemLabel?: string;
 }) {
     if (!alwaysShow && total <= pageSize && current === 1) return null;
     const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -121,8 +123,8 @@ export function PaginationBar({
     const items = pageItems(current, pages);
     return (
         <div className="app-pagination-bar admin-pagination-bar mt-4 flex min-h-10 min-w-0 items-center justify-end gap-2 px-2 py-1.5">
-            <span className="admin-pagination-total">{total === 0 ? "共 0 条" : `${start}-${end} / 共 ${total} 条`}</span>
-            <Select size="small" value={pageSize} className="app-pagination-size" options={pageSizeOptions.map((size) => ({ value: size, label: `${size} 条/页` }))} onChange={(value) => onChange(1, Number(value))} />
+            <span className="admin-pagination-total">{total === 0 ? `共 0 ${itemLabel}` : `${start}-${end} / 共 ${total} ${itemLabel}`}</span>
+            <Select size="small" value={pageSize} className="app-pagination-size" options={pageSizeOptions.map((size) => ({ value: size, label: `${size} ${itemLabel}/页` }))} onChange={(value) => onChange(1, Number(value))} />
             <div className="app-pagination-pages" role="navigation" aria-label="分页">
                 <button type="button" className="app-pagination-btn app-pagination-prev" disabled={current <= 1} aria-label="上一页" onClick={() => onChange(current - 1, pageSize)}>
                     <ChevronLeft className="size-4" />

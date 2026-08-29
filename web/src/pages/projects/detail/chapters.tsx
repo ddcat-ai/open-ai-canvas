@@ -49,7 +49,7 @@ import { useNavigate, useParams } from "react-router";
 
 import { SkillRuntimePicker, useSkillRuntimeCatalog } from "@/components/skills/skill-runtime-picker";
 import { ModelPicker } from "@/components/model-picker";
-import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
+import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { normalizeCharacterName } from "@/lib/canvas/canvas-character-reference";
 import { decodeNovelText, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
@@ -58,7 +58,6 @@ import {
     createProjectAssetCandidates,
     createProjectUnit,
     deleteProjectUnit,
-    getProjectUnit,
     importProjectUnits,
     replaceProjectUnitShots,
     reorderProjectUnits,
@@ -77,6 +76,11 @@ const CHAPTER_ROW_HEIGHT = 62;
 const MAX_NOVEL_IMPORT_CHAPTERS = 2500;
 type ChapterOperationKind = "characters" | "storyboard";
 type ChapterOperation = { startedAt: number; taskId?: string };
+
+function formatChapterListCount(value: number) {
+    if (value < 10_000) return formatCount(value);
+    return new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
 
 export default function ProjectChaptersView({ detail, refreshProject }: ProjectDetailViewProps) {
     const { message, modal } = App.useApp();
@@ -115,11 +119,6 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         return orderedIds.map((id) => byId.get(id)).filter((unit): unit is ProjectUnit => Boolean(unit));
     }, [detail.units, orderedIds]);
     const selectedUnitSummary = detail.units.find((unit) => unit.id === selectedId) || orderedUnits[0];
-    const selectedUnitQuery = useQuery({
-        queryKey: ["project-unit", detail.project.id, selectedId],
-        queryFn: () => getProjectUnit(detail.project.id, selectedId),
-        enabled: Boolean(selectedId),
-    });
     const chapterTasksQuery = useQuery({
         queryKey: ["project-chapter-generation-tasks", detail.project.id],
         queryFn: () => listGenerationTasks(100, { projectId: detail.project.id }),
@@ -129,9 +128,9 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         }) ? 2_000 : false,
         refetchOnWindowFocus: true,
     });
-    const selectedUnit = selectedUnitQuery.data?.unit || selectedUnitSummary;
+    const selectedUnit = selectedUnitSummary;
     const chapterNumberById = useMemo(() => new Map(orderedUnits.map((unit, index) => [unit.id, index + 1])), [orderedUnits]);
-    const canvasCountByUnitId = useMemo(() => detail.canvasUnitLinks.reduce<Map<string, number>>((result, link) => result.set(link.unitId, (result.get(link.unitId) || 0) + 1), new Map()), [detail.canvasUnitLinks]);
+    const canvasCountByUnitId = useMemo(() => new Map(Object.entries(detail.unitCanvasCounts || {}).map(([unitId, count]) => [unitId, Number(count)])), [detail.unitCanvasCounts]);
     const storyboardImpact = useMemo(() => chapterStoryboardReplaceImpact(detail, selectedUnit?.id || ""), [detail, selectedUnit?.id]);
     const serverChapterOperations = useMemo(() => {
         const operations = new Map<string, ChapterOperation>();
@@ -204,14 +203,29 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     }, [runningOperationCount]);
 
     const saveMutation = useMutation({
-        mutationFn: () => selectedUnitQuery.data?.unit
-            ? updateProjectUnit(detail.project.id, selectedUnitQuery.data.unit.id, {
+        mutationFn: () => selectedUnit
+            ? updateProjectUnit(detail.project.id, selectedUnit.id, {
                 title: draftTitle.trim(),
                 sourceText: draftHtml,
                 status: stripHtml(draftHtml) ? "ready" : "draft",
             })
             : Promise.reject(new Error("请选择章节")),
-        onSuccess: ({ unit }) => { queryClient.setQueryData(["project-unit", detail.project.id, unit.id], { unit }); setDirty(false); refreshProject(); message.success("章节已保存"); },
+        onSuccess: ({ unit }) => {
+            queryClient.setQueryData(["project-unit", detail.project.id, unit.id], { unit });
+            queryClient.setQueryData<{ units: ProjectDetail["units"]; canvasCounts: Record<string, number> }>(["project", detail.project.id, "units"], (current) => current ? {
+                ...current,
+                units: current.units.map((item) => item.id === unit.id ? {
+                    ...item,
+                    title: unit.title,
+                    wordCount: unit.wordCount,
+                    status: unit.status,
+                    updatedAt: unit.updatedAt,
+                } : item),
+            } : current);
+            setDirty(false);
+            refreshProject();
+            message.success("章节已保存");
+        },
         onError: (error) => message.error(error instanceof Error ? error.message : "章节保存失败"),
     });
     const createMutation = useMutation({
@@ -257,7 +271,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
             CharacterCount,
             Placeholder.configure({ placeholder: "从这一章开始写下故事……" }),
         ],
-        content: selectedUnitQuery.data?.unit.sourceText || "",
+        content: selectedUnit?.sourceText || "",
         editorProps: { attributes: { class: "project-chapter-editor focus:outline-none" } },
         onUpdate: ({ editor: nextEditor }) => { setDraftHtml(nextEditor.getHTML()); setDirty(true); },
     });
@@ -270,19 +284,19 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     }, [selectedUnitSummary?.id]);
 
     useEffect(() => {
-        const loadedUnit = selectedUnitQuery.data?.unit;
+        const loadedUnit = selectedUnit;
         if (!loadedUnit || !editor) return;
         setDraftTitle(loadedUnit.title);
         setDraftHtml(loadedUnit.sourceText || "");
         setDirty(false);
         editor.commands.setContent(loadedUnit.sourceText || "", { emitUpdate: false });
         // 只在切换章节时装载服务端内容，避免项目刷新覆盖当前未保存正文。
-    }, [editor, selectedUnitQuery.data?.unit]);
+    }, [editor, selectedUnit?.id]);
 
     const wordCount = useMemo(() => editor?.storage.characterCount?.characters?.() || stripHtml(draftHtml).length || 0, [draftHtml, editor]);
     const chapterCanvasCount = (unitId: string) => canvasCountByUnitId.get(unitId) || 0;
     const chapterAnalysisInput = (textModel: string) => {
-        const unit = selectedUnitQuery.data?.unit;
+        const unit = selectedUnit;
         if (!unit) throw new Error("章节正文尚未加载完成");
         if (dirty) throw new Error("请先保存当前章节，再运行 AI 分析");
         const sourceText = editor?.getText().trim() || stripHtml(unit.sourceText);
@@ -378,7 +392,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         }
     };
     const createStoryboard = async () => {
-        const unit = selectedUnitQuery.data?.unit;
+        const unit = selectedUnit;
         if (!unit) return message.warning("章节正文尚未加载完成");
         if (dirty) return message.warning("请先保存当前章节，再生成分镜");
         if (detail.project.status === "archived") return message.warning("项目已归档，请先在项目设置中恢复");
@@ -522,7 +536,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     };
 
     return (
-        <div className="grid h-full min-h-0 min-w-0 w-full grid-rows-[minmax(180px,34vh)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[232px_minmax(0,1fr)] lg:grid-rows-1">
+        <div className="grid h-full min-h-0 min-w-0 w-full grid-rows-[minmax(180px,34vh)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1">
             <aside className="flex min-h-0 min-w-0 w-full flex-col border-b border-border/70 bg-background/28 lg:border-b-0 lg:border-r">
                 <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/70 px-2.5">
                     <div className="text-xs font-medium text-foreground/55">章节 <span className="ml-1 tabular-nums text-foreground/35">{detail.units.length.toLocaleString("zh-CN")}</span></div>
@@ -547,19 +561,21 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                                 const unit = visibleUnits[virtualItem.index];
                                 if (!unit) return null;
                                 const chapterNumber = chapterNumberById.get(unit.id) || virtualItem.index + 1;
+                                const displayedWordCount = dirty && selectedUnit?.id === unit.id ? wordCount : unit.wordCount || 0;
+                                const chapterMeta = `${statusLabel(unit.status)} · ${formatCount(displayedWordCount)} 字 · ${chapterCanvasCount(unit.id)} 画布`;
                                 return (
                                     <div key={unit.id} className="absolute left-0 top-0 w-full" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}>
-                                        <div draggable={!dirty && !reorderMutation.isPending && !deferredSearchQuery} onDragStart={(event) => { setDraggedId(unit.id); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event) => { if (deferredSearchQuery) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={() => moveChapter(unit.id)} onDragEnd={() => setDraggedId("")} className={`group flex h-[58px] items-start rounded-lg border px-0.5 transition-colors duration-100 ${unit.id === selectedUnit?.id ? "border-border/90 bg-surface-active" : "border-transparent hover:border-border/60 hover:bg-surface-hover"} ${draggedId === unit.id ? "opacity-45" : ""}`}>
+                                        <div draggable={!dirty && !reorderMutation.isPending && !deferredSearchQuery} onDragStart={(event) => { setDraggedId(unit.id); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event) => { if (deferredSearchQuery) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={() => moveChapter(unit.id)} onDragEnd={() => setDraggedId("")} className={`group relative flex h-[58px] items-start rounded-lg border px-0.5 transition-colors duration-100 ${unit.id === selectedUnit?.id ? "border-border/90 bg-surface-active" : "border-transparent hover:border-border/60 hover:bg-surface-hover"} ${draggedId === unit.id ? "opacity-45" : ""}`}>
                                             <button type="button" disabled={Boolean(deferredSearchQuery)} className="mt-3.5 grid size-6 shrink-0 cursor-grab place-items-center text-foreground/22 active:cursor-grabbing disabled:cursor-default disabled:opacity-35" aria-label={`拖动第 ${chapterNumber} 章排序`}><GripVertical className="size-3.5" /></button>
-                                            <button type="button" onClick={() => selectChapter(unit.id)} className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pr-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]">
+                                            <button type="button" onClick={() => selectChapter(unit.id)} className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pr-14 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]">
                                                 <span className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-md px-1 text-[var(--fs-tiny)] font-semibold tabular-nums ${unit.id === selectedUnit?.id ? "bg-[var(--workspace-accent-soft)] text-[var(--workspace-accent)]" : "bg-foreground/[.035] text-foreground/35"}`}>{String(chapterNumber).padStart(Math.max(2, String(orderedUnits.length).length), "0")}</span>
-                                                <span className="min-w-0 flex-1"><span className={`block truncate text-[var(--fs-body)] ${unit.id === selectedUnit?.id ? "font-semibold text-foreground" : "font-medium text-foreground/68"}`}>{unit.title}</span><span className="mt-1 flex items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38"><span>{statusLabel(unit.status)}</span><span>·</span><span className="tabular-nums">{formatCount(unit.wordCount || 0)} 字</span><span>·</span><span className="tabular-nums">{chapterCanvasCount(unit.id)} 画布</span></span></span>
+                                                <span className="min-w-0 flex-1 overflow-hidden"><span className={`block truncate text-[var(--fs-body)] ${unit.id === selectedUnit?.id ? "font-semibold text-foreground" : "font-medium text-foreground/68"}`}>{unit.title}</span><span title={chapterMeta} className="mt-1 block truncate whitespace-nowrap text-[var(--fs-tiny)] tabular-nums text-foreground/38">{statusLabel(unit.status)} · {formatChapterListCount(displayedWordCount)} 字 · {chapterCanvasCount(unit.id)} 画布</span></span>
                                             </button>
                                             <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "move", icon: <MoveVertical className="size-3.5" />, label: "移动到…" }], onClick: () => { setMoveTargetId(unit.id); setMovePosition(chapterNumber); } }}>
-                                                <button type="button" className="mt-3.5 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100" aria-label={`${unit.title}更多操作`}><MoreHorizontal className="size-3.5" /></button>
+                                                <button type="button" className="absolute right-7 top-1/2 z-[1] grid size-6 -translate-y-1/2 place-items-center rounded text-foreground/28 opacity-0 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100" aria-label={`${unit.title}更多操作`}><MoreHorizontal className="size-3.5" /></button>
                                             </Dropdown>
                                             <Popconfirm title="删除此章节？" description="章节内容及关联制作记录将被删除，已关联的画布不会删除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true, loading: deleteMutation.isPending }} onConfirm={() => deleteMutation.mutate(unit.id)}>
-                                                <button type="button" className="mr-1 mt-3.5 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`删除${unit.title}`}><Trash2 className="size-3.5" /></button>
+                                                <button type="button" className="absolute right-1 top-1/2 z-[1] grid size-6 -translate-y-1/2 place-items-center rounded text-foreground/28 opacity-0 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`删除${unit.title}`}><Trash2 className="size-3.5" /></button>
                                             </Popconfirm>
                                         </div>
                                     </div>
@@ -576,18 +592,18 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                         <header className="flex shrink-0 flex-wrap items-start gap-3 border-b border-border/70 px-4 py-3">
                             <div className="min-w-0 flex-1">
                                 <div className="mb-1 text-[var(--fs-tiny)] font-medium tabular-nums text-foreground/38">第 {String(orderedUnits.findIndex((unit) => unit.id === selectedUnit.id) + 1).padStart(2, "0")} 章</div>
-                                <Input variant="borderless" value={draftTitle} disabled={!selectedUnitQuery.data?.unit} onChange={(event) => { setDraftTitle(event.target.value); setDirty(true); }} className="!h-auto !px-0 !py-0 !text-xl !font-semibold !leading-tight disabled:!cursor-wait disabled:!text-foreground" placeholder="章节标题" />
+                                <Input variant="borderless" value={draftTitle} disabled={!selectedUnit} onChange={(event) => { setDraftTitle(event.target.value); setDirty(true); }} className="!h-auto !px-0 !py-0 !text-xl !font-semibold !leading-tight disabled:!cursor-wait disabled:!text-foreground" placeholder="章节标题" />
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38"><span>{dirty ? "有未保存修改" : `保存于 ${formatTime(selectedUnit.updatedAt)}`}</span><span>·</span><span>{formatCount(wordCount)} 字</span><span>·</span><span>{chapterCanvasCount(selectedUnit.id)} 个画布</span></div>
                             </div>
                             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || Boolean(characterOperation)} loading={Boolean(characterOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setCharacterExtractOpen(true); }} aria-label={characterOperation ? `提取角色，已运行 ${formatOperationElapsed(characterOperation.startedAt, operationNow)}` : "提取角色"}>{characterOperation ? `提取角色（已运行${formatOperationElapsed(characterOperation.startedAt, operationNow)}）` : charactersGenerated ? "提取角色（已生成）" : "提取角色"}</Button>
-                                <Button size="small" type="primary" icon={<Clapperboard className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || Boolean(storyboardOperation)} loading={Boolean(storyboardOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setSelectedSkillIds([]); setStoryboardOpen(true); }} aria-label={storyboardOperation ? `生成到分镜制作，已运行 ${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}` : "生成到分镜制作"}>{storyboardOperation ? `生成到分镜制作（已运行${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}）` : storyboardGenerated ? "生成到分镜制作（已生成）" : "生成到分镜制作"}</Button>
-                                <Button size="small" type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || !dirty || !draftTitle.trim() || saveMutation.isPending} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存" : "已保存"}</Button>
+                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnit || dirty || Boolean(characterOperation)} loading={Boolean(characterOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setCharacterExtractOpen(true); }} aria-label={characterOperation ? `提取角色，已运行 ${formatOperationElapsed(characterOperation.startedAt, operationNow)}` : "提取角色"}>{characterOperation ? `提取角色（已运行${formatOperationElapsed(characterOperation.startedAt, operationNow)}）` : charactersGenerated ? "提取角色（已生成）" : "提取角色"}</Button>
+                                <Button size="small" type="primary" icon={<Clapperboard className="size-3.5" />} disabled={!selectedUnit || dirty || Boolean(storyboardOperation)} loading={Boolean(storyboardOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setSelectedSkillIds([]); setStoryboardOpen(true); }} aria-label={storyboardOperation ? `生成到分镜制作，已运行 ${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}` : "生成到分镜制作"}>{storyboardOperation ? `生成到分镜制作（已运行${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}）` : storyboardGenerated ? "生成到分镜制作（已生成）" : "生成到分镜制作"}</Button>
+                                <Button size="small" type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!selectedUnit || !dirty || !draftTitle.trim() || saveMutation.isPending} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存" : "已保存"}</Button>
                             </div>
                         </header>
                         <EditorToolbar editor={editor} />
                         <div className="project-chapter-editor-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-foreground/[.012]">
-                            {selectedUnitQuery.isLoading ? <WorkspaceState icon="loading" compact className="h-full" title="正在读取章节正文" description="正文准备完成后会自动显示。" /> : selectedUnitQuery.isError ? <WorkspaceErrorState compact title="章节正文读取失败" description={selectedUnitQuery.error instanceof Error ? selectedUnitQuery.error.message : "请检查网络连接后重试。"} onRetry={() => void selectedUnitQuery.refetch()} /> : <div className="project-chapter-editor-wrap min-h-full"><EditorContent editor={editor} /></div>}
+                            <div className="project-chapter-editor-wrap min-h-full"><EditorContent editor={editor} /></div>
                         </div>
                     </div>
                 ) : <WorkspaceState icon="projects" compact className="h-full" title="请选择章节" description="从左侧章节列表选择一章开始编辑。" />}

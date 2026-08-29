@@ -83,7 +83,7 @@ export default function AssetsPage() {
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
     const [categoryFilter, setCategoryFilter] = useState<AssetCategory | "all">("all");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
+    const [pageSize, setPageSize] = useState(35);
     const [editingAsset, setEditingAsset] = useState<LibraryAsset | null>(null);
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null);
@@ -366,7 +366,7 @@ export default function AssetsPage() {
                                         ))}
                                     </CollectionGrid>
                                 )}
-                                <PaginationBar current={page} pageSize={pageSize} total={filteredAssets.length} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                                <PaginationBar current={page} pageSize={pageSize} total={filteredAssets.length} pageSizeOptions={[35, 70, 105]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
                             </>
                         )}
                     </section>

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Popconfirm, Select, Tooltip } from "antd";
 import { Link2, Unlink, X } from "lucide-react";
 
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { linkCanvasUnit, unlinkCanvasProject, unlinkCanvasUnit } from "@/services/api/projects";
+import { linkCanvasUnit, listProjectCanvases, unlinkCanvasProject, unlinkCanvasUnit } from "@/services/api/projects";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 
 import { type ProjectDetailViewProps } from "./shared";
@@ -13,7 +14,18 @@ import { type ProjectDetailViewProps } from "./shared";
 export default function ProjectCanvasesView({ detail, refreshProject }: ProjectDetailViewProps) {
     const { message } = App.useApp();
     const [linkingCanvasId, setLinkingCanvasId] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(40);
     const localCanvases = useCanvasStore((state) => state.projects);
+    const canvasesQuery = useQuery({
+        queryKey: ["project", detail.project.id, "canvases", page, pageSize],
+        queryFn: () => listProjectCanvases(detail.project.id, page, pageSize),
+    });
+    useEffect(() => {
+        if (!canvasesQuery.data) return;
+        const lastPage = Math.max(1, Math.ceil(canvasesQuery.data.total / pageSize));
+        if (page > lastPage) setPage(lastPage);
+    }, [canvasesQuery.data, page, pageSize]);
     const linkMutation = useMutation({
         mutationFn: ({ canvasId, unitId }: { canvasId: string; unitId: string }) => linkCanvasUnit(detail.project.id, { canvasId, unitId, role: "storyboard" }),
         onSuccess: () => { setLinkingCanvasId(""); refreshProject(); message.success("画布已关联章节"); },
@@ -34,16 +46,18 @@ export default function ProjectCanvasesView({ detail, refreshProject }: ProjectD
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "解除项目关系失败"),
     });
-    const linksByCanvas = useMemo(() => detail.canvasUnitLinks.reduce<Record<string, typeof detail.canvasUnitLinks>>((result, link) => { (result[link.canvasId] ||= []).push(link); return result; }, {}), [detail.canvasUnitLinks]);
-    const canvases = useMemo(() => detail.canvases.map((canvas) => {
+    const canvasUnitLinks = canvasesQuery.data?.canvasUnitLinks || [];
+    const linksByCanvas = useMemo(() => canvasUnitLinks.reduce<Record<string, typeof canvasUnitLinks>>((result, link) => { (result[link.canvasId] ||= []).push(link); return result; }, {}), [canvasUnitLinks]);
+    const canvases = useMemo(() => (canvasesQuery.data?.canvases || []).map((canvas) => {
         const local = localCanvases.find((item) => item.id === canvas.id && item.projectId === detail.project.id);
         if (!local || Date.parse(local.updatedAt) < Date.parse(canvas.updatedAt)) return canvas;
         return { ...canvas, title: local.title, updatedAt: local.updatedAt };
-    }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), [detail.canvases, detail.project.id, localCanvases]);
+    }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), [canvasesQuery.data?.canvases, detail.project.id, localCanvases]);
 
     return (
         <div>
-            {canvases.length ? (
+            {canvasesQuery.isLoading ? <WorkspaceState icon="canvas" title="正在读取项目画布" description="按页加载画布摘要与章节关联。" /> : canvases.length ? (
+                <>
                 <div className="project-library-grid library-grid">
                     {canvases.map((canvas) => {
                         const links = linksByCanvas[canvas.id] || [];
@@ -76,6 +90,8 @@ export default function ProjectCanvasesView({ detail, refreshProject }: ProjectD
                         );
                     })}
                 </div>
+                <PaginationBar current={page} pageSize={pageSize} total={canvasesQuery.data?.total || 0} itemLabel="张" pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                </>
             ) : <WorkspaceState icon="canvas" title="还没有项目画布" description="使用右上角的新建画布开始创作。" />}
         </div>
     );

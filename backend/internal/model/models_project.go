@@ -85,10 +85,10 @@ type Asset struct {
 
 type ProjectAssetLink struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:1"`
+	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:1;index:idx_project_asset_links_project_folder_position,priority:1"`
 	AssetID   string    `json:"assetId" gorm:"index;size:80;uniqueIndex:idx_project_asset_links_unique,priority:2"`
-	FolderID  string    `json:"folderId,omitempty" gorm:"index;size:36"`
-	Position  int       `json:"position" gorm:"index"`
+	FolderID  string    `json:"folderId,omitempty" gorm:"index;size:36;index:idx_project_asset_links_project_folder_position,priority:2"`
+	Position  int       `json:"position" gorm:"index;index:idx_project_asset_links_project_folder_position,priority:3"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -108,12 +108,12 @@ type ProjectAssetFolder struct {
 
 type ProjectAssetCandidate struct {
 	ID              string        `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID       string        `json:"projectId" gorm:"index;size:36"`
-	UnitID          string        `json:"unitId,omitempty" gorm:"index;size:36"`
+	ProjectID       string        `json:"projectId" gorm:"index;size:36;index:idx_project_asset_candidates_project_unit_status,priority:1;index:idx_project_asset_candidates_project_status_category,priority:1"`
+	UnitID          string        `json:"unitId,omitempty" gorm:"index;size:36;index:idx_project_asset_candidates_project_unit_status,priority:2"`
 	ShotID          string        `json:"shotId,omitempty" gorm:"index;size:36"`
 	Name            string        `json:"name" gorm:"size:240"`
-	Category        AssetCategory `json:"category" gorm:"index;size:32"`
-	Status          string        `json:"status" gorm:"index;size:32"`
+	Category        AssetCategory `json:"category" gorm:"index;size:32;index:idx_project_asset_candidates_project_status_category,priority:3"`
+	Status          string        `json:"status" gorm:"index;size:32;index:idx_project_asset_candidates_project_unit_status,priority:3;index:idx_project_asset_candidates_project_status_category,priority:2"`
 	DetailsJSON     string        `json:"detailsJson" gorm:"type:text"`
 	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:80"`
 	CreatedAt       time.Time     `json:"createdAt"`
@@ -204,35 +204,35 @@ type StyleProfile struct {
 
 type ProjectUnit struct {
 	ID         string            `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID  string            `json:"projectId" gorm:"index;size:36"`
+	ProjectID  string            `json:"projectId" gorm:"index;size:36;index:idx_project_units_project_position,priority:1"`
 	ParentID   string            `json:"parentId,omitempty" gorm:"index;size:36"`
 	Kind       ProjectUnitKind   `json:"kind" gorm:"index;size:24"`
 	Title      string            `json:"title" gorm:"size:240"`
 	SourceText string            `json:"sourceText" gorm:"type:text"`
 	WordCount  int               `json:"wordCount"`
 	Status     ProjectUnitStatus `json:"status" gorm:"index;size:24"`
-	Position   int               `json:"position"`
+	Position   int               `json:"position" gorm:"index:idx_project_units_project_position,priority:2"`
 	CreatedAt  time.Time         `json:"createdAt"`
 	UpdatedAt  time.Time         `json:"updatedAt"`
 }
 
 type CanvasUnitLink struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:1"`
+	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:1;index:idx_canvas_unit_links_project_unit,priority:1"`
 	CanvasID  string    `json:"canvasId" gorm:"index;size:80;uniqueIndex:idx_canvas_unit_links_unique,priority:2"`
-	UnitID    string    `json:"unitId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:3"`
+	UnitID    string    `json:"unitId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:3;index:idx_canvas_unit_links_project_unit,priority:2"`
 	Role      string    `json:"role" gorm:"size:32"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
 type Shot struct {
 	ID                string    `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID         string    `json:"projectId" gorm:"index;size:36"`
-	UnitID            string    `json:"unitId" gorm:"index;size:36"`
+	ProjectID         string    `json:"projectId" gorm:"index;size:36;index:idx_shots_project_unit_position,priority:1"`
+	UnitID            string    `json:"unitId" gorm:"index;size:36;index:idx_shots_project_unit_position,priority:2"`
 	CurrentRevisionID string    `json:"currentRevisionId,omitempty" gorm:"index;size:36"`
 	Title             string    `json:"title" gorm:"size:240"`
 	Description       string    `json:"description" gorm:"type:text"`
-	Position          int       `json:"position"`
+	Position          int       `json:"position" gorm:"index:idx_shots_project_unit_position,priority:3"`
 	DurationMs        int64     `json:"durationMs"`
 	Status            string    `json:"status" gorm:"index;size:24"`
 	CreatedAt         time.Time `json:"createdAt"`
@@ -263,8 +263,8 @@ type ShotRevision struct {
 // ShotArtifact 是镜头的版本化生产产物。修改分镜或资产引用时只标记 stale，不删除历史。
 type ShotArtifact struct {
 	ID           string    `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID    string    `json:"projectId" gorm:"index;size:36"`
-	UnitID       string    `json:"unitId" gorm:"index;size:36"`
+	ProjectID    string    `json:"projectId" gorm:"index;size:36;index:idx_shot_artifacts_project_unit,priority:1"`
+	UnitID       string    `json:"unitId" gorm:"index;size:36;index:idx_shot_artifacts_project_unit,priority:2"`
 	ShotID       string    `json:"shotId" gorm:"index;size:36;uniqueIndex:idx_shot_artifacts_version,priority:1"`
 	RevisionID   string    `json:"revisionId,omitempty" gorm:"index;size:36"`
 	TaskID       string    `json:"taskId,omitempty" gorm:"index;size:36"`
@@ -347,12 +347,12 @@ type ProductionTaskLink struct {
 
 type CanvasProject struct {
 	ID          string    `json:"id" gorm:"primaryKey;size:80"`
-	UserID      string    `json:"userId" gorm:"index;size:36;index:idx_canvas_projects_user_updated,priority:1"`
-	ProjectID   string    `json:"projectId,omitempty" gorm:"index;size:36"`
+	UserID      string    `json:"userId" gorm:"index;size:36;index:idx_canvas_projects_user_updated,priority:1;index:idx_canvas_projects_user_project_updated,priority:1"`
+	ProjectID   string    `json:"projectId,omitempty" gorm:"index;size:36;index:idx_canvas_projects_user_project_updated,priority:2"`
 	Title       string    `json:"title" gorm:"size:240"`
 	PayloadJSON string    `json:"payloadJson" gorm:"type:text"`
 	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt" gorm:"index:idx_canvas_projects_user_updated,priority:2"`
+	UpdatedAt   time.Time `json:"updatedAt" gorm:"index:idx_canvas_projects_user_updated,priority:2;index:idx_canvas_projects_user_project_updated,priority:3"`
 }
 
 type CanvasShare struct {

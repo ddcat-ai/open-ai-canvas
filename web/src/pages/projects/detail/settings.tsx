@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Input, Modal, Select } from "antd";
 import { Archive, Check, Eye, FolderOpen, Image as ImageIcon, Palette, Pencil, Save, ShieldAlert, Trash2 } from "lucide-react";
 
@@ -7,7 +7,7 @@ import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/componen
 import { CanvasStyleDetailModal, CanvasStylePickerModal, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { createStyleProfileSnapshot, parseStyleProfile, resolveStyleExecutionPlan, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
-import { updateProject } from "@/services/api/projects";
+import { listProjectAssetsPage, updateProject } from "@/services/api/projects";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
@@ -31,6 +31,14 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
     const [styleEditorRequested, setStyleEditorRequested] = useState(false);
     const [archiveOpen, setArchiveOpen] = useState(false);
     const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+    const [coverPage, setCoverPage] = useState(1);
+    const [coverPageSize, setCoverPageSize] = useState(40);
+    const coverAssetsQuery = useQuery({
+        queryKey: ["project", project.id, "assets", "cover-picker", coverPage, coverPageSize],
+        queryFn: () => listProjectAssetsPage(project.id, { page: coverPage, pageSize: coverPageSize, mediaType: "image" }),
+        enabled: coverPickerOpen,
+    });
+    const projectCoverAssets = coverAssetsQuery.data?.assets || [];
     useEffect(() => { setName(project.name); setDescription(project.description || ""); setAspectRatio(project.aspectRatio); setSourceType(project.sourceType); setStylePresetId(project.stylePresetId || ""); setStyleProfileJson(project.styleProfileJson || ""); }, [project]);
     const dirty = useMemo(() => name.trim() !== project.name || description !== (project.description || "") || aspectRatio !== project.aspectRatio || sourceType !== project.sourceType || stylePresetId !== (project.stylePresetId || "") || styleProfileJson !== (project.styleProfileJson || ""), [aspectRatio, description, name, project, sourceType, stylePresetId, styleProfileJson]);
     const selectedStyle = useMemo(() => resolveProjectCanvasStyle(stylePresetId, styleProfileJson), [stylePresetId, styleProfileJson]);
@@ -55,7 +63,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
             seenResourceIds.add(resourceId);
             result.push({ id: asset.id, title: asset.title, category: "image", kindLabel: "图片", asset, description: asset.note || "个人素材库", searchText: (asset.tags || []).join(" ") });
         }
-        for (const asset of detail.assets) {
+        for (const asset of projectCoverAssets) {
             if (asset.mediaType !== "image") continue;
             const resourceId = resourceIdFromStorageKey(asset.storageKey);
             if (!resourceId || seenResourceIds.has(resourceId)) continue;
@@ -66,18 +74,22 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
             result.unshift({ id: `current:${project.coverResourceId}`, title: "当前项目主图", category: "image", kindLabel: "当前主图", imageUrl: resourceFileUrl(project.coverResourceId) });
         }
         return result;
-    }, [detail.assets, personalAssets, project.coverResourceId]);
+    }, [personalAssets, project.coverResourceId, projectCoverAssets]);
     const coverResourceByItemId = useMemo(() => new Map(coverPickerItems.flatMap((item) => {
         if (item.id.startsWith("current:")) return [[item.id, item.id.slice("current:".length)] as const];
         if (item.id.startsWith("project:")) {
-            const asset = detail.assets.find((entry) => `project:${entry.id}` === item.id);
+            const asset = projectCoverAssets.find((entry) => `project:${entry.id}` === item.id);
             const resourceId = resourceIdFromStorageKey(asset?.storageKey);
             return resourceId ? [[item.id, resourceId] as const] : [];
         }
         const asset = personalAssets.find((entry) => entry.id === item.id);
         const resourceId = asset?.kind === "image" ? resourceIdFromStorageKey(asset.data.storageKey) : "";
         return resourceId ? [[item.id, resourceId] as const] : [];
-    })), [coverPickerItems, detail.assets, personalAssets]);
+    })), [coverPickerItems, personalAssets, projectCoverAssets]);
+    const coverResourceByItemIdRef = useRef(new Map<string, string>());
+    useEffect(() => {
+        for (const [itemId, resourceId] of coverResourceByItemId) coverResourceByItemIdRef.current.set(itemId, resourceId);
+    }, [coverResourceByItemId]);
     const currentCoverItemId = coverPickerItems.find((item) => coverResourceByItemId.get(item.id) === project.coverResourceId)?.id;
     const saveMutation = useMutation({ mutationFn: () => updateProject(project.id, { name: name.trim(), description, aspectRatio, sourceType, stylePresetId, styleProfileJson }), onSuccess: () => { refreshProject(); message.success("项目设置已保存"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目设置保存失败") });
     const archiveMutation = useMutation({ mutationFn: () => updateProject(project.id, { status: project.status === "archived" ? "active" : "archived" }), onSuccess: () => { setArchiveOpen(false); refreshProject(); message.success(project.status === "archived" ? "项目已恢复" : "项目已归档"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目状态更新失败") });
@@ -102,7 +114,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
                 <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-surface-active p-3 sm:flex-row sm:items-center">
                     {project.coverResourceId ? <img src={resourceFileUrl(project.coverResourceId)} alt={`${project.name}项目主图`} className="aspect-video w-full shrink-0 rounded-md bg-foreground/5 object-cover sm:w-52" /> : <span className="grid aspect-video w-full shrink-0 place-items-center rounded-md bg-foreground/5 text-foreground/30 sm:w-52"><ImageIcon className="size-6" /></span>}
                     <div className="min-w-0 flex-1"><div className="text-sm font-medium">{project.coverResourceId ? "已设置项目主图" : "尚未设置项目主图"}</div><p className="mt-1 text-xs leading-5 text-foreground/48">从个人素材库或项目素材库选择，也可以在选择窗口中上传一张新图片。</p></div>
-                    <div className="flex shrink-0 gap-2"><Button icon={<FolderOpen className="size-3.5" />} onClick={() => setCoverPickerOpen(true)}>{project.coverResourceId ? "替换主图" : "设置主图"}</Button>{project.coverResourceId ? <Button danger type="text" icon={<Trash2 className="size-3.5" />} loading={coverMutation.isPending} onClick={() => coverMutation.mutate("")}>移除</Button> : null}</div>
+                    <div className="flex shrink-0 gap-2"><Button icon={<FolderOpen className="size-3.5" />} onClick={() => { setCoverPage(1); setCoverPickerOpen(true); }}>{project.coverResourceId ? "替换主图" : "设置主图"}</Button>{project.coverResourceId ? <Button danger type="text" icon={<Trash2 className="size-3.5" />} loading={coverMutation.isPending} onClick={() => coverMutation.mutate("")}>移除</Button> : null}</div>
                 </div>
             </section>
 
@@ -141,6 +153,8 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
                 confirmLabel={() => "设为项目主图"}
                 emptyTitle="素材库还没有图片"
                 emptyDescription="可以从底部上传一张新图片，上传后会自动选中。"
+                loading={coverAssetsQuery.isLoading}
+                pagination={{ current: coverPage, pageSize: coverPageSize, total: coverAssetsQuery.data?.total || 0, onChange: (nextPage, nextPageSize) => { setCoverPage(nextPageSize !== coverPageSize ? 1 : nextPage); setCoverPageSize(nextPageSize); } }}
                 upload={{ accept: "image/png,image/jpeg,image/webp,image/avif", description: "支持 PNG、JPG、WebP、AVIF", onUpload: async (files) => {
                     const file = Array.from(files)[0];
                     if (!file?.type.startsWith("image/")) throw new Error("请选择图片文件");
@@ -153,7 +167,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
                 onClose={() => setCoverPickerOpen(false)}
                 onConfirm={async (ids) => {
                     const id = ids[0];
-                    let resourceId = coverResourceByItemId.get(id);
+                    let resourceId = coverResourceByItemIdRef.current.get(id);
                     if (!resourceId) {
                         const asset = useAssetStore.getState().assets.find((entry) => entry.id === id);
                         resourceId = asset?.kind === "image" ? resourceIdFromStorageKey(asset.data.storageKey) : "";
