@@ -25,7 +25,7 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatalf("loaded adapters = %d", len(adapters))
 	}
 	adapter := adapters[0]
-	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Version != "1.0.1" || adapter.Metadata().Execution != "declarative" {
+	if adapter.Metadata().ID != "autodl-comfyui" || adapter.Metadata().Version != "1.0.3" || adapter.Metadata().Execution != "declarative" {
 		t.Fatalf("metadata = %#v", adapter.Metadata())
 	}
 	if !adapter.Metadata().RequiresPublicMediaURLs {
@@ -42,7 +42,7 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatalf("create spec = %#v", create)
 	}
 	body, ok := create.Body.(map[string]any)
-	if !ok || body["prompt"] != "a cinematic test" || body["duration"] != 3 || body["resolution"] != "768p" || body["ref_image_0"] != "https://cdn.example/reference.png" {
+	if !ok || body["prompt"] != "a cinematic test" || body["duration"] != 3 || body["resolution"] != "768p横" || body["ref_image_0"] != "https://cdn.example/reference.png" {
 		t.Fatalf("create body = %#v", create.Body)
 	}
 	if _, exists := body["ref_image_1"]; exists {
@@ -72,5 +72,40 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 	}
 	if _, err := json.Marshal(completed); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAutoDLPluginMapsCanvas720pTo768p(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapters, err := LoadInstalledProviders(pkg.ManifestRaw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create, err := adapters[0].BuildCreate(context.Background(), RequestContext{BaseURL: "https://autodl.art", Request: GenerationRequest{
+		Model: "minimax_h3_image_audio_to_video_v2", Prompt: "test", Duration: 4, Resolution: "720p",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, ok := create.Body.(map[string]any)
+	if !ok || body["resolution"] != "768p横" {
+		t.Fatalf("720p mapping = %#v", create.Body)
+	}
+	portrait, err := adapters[0].BuildCreate(context.Background(), RequestContext{BaseURL: "https://autodl.art", Request: GenerationRequest{
+		Model: "minimax_h3_image_audio_to_video_v2", Prompt: "test", Duration: 4, Resolution: "720p", AspectRatio: "9:16",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	portraitBody, ok := portrait.Body.(map[string]any)
+	if !ok || portraitBody["resolution"] != "768p竖" {
+		t.Fatalf("portrait 720p mapping = %#v", portrait.Body)
 	}
 }
