@@ -319,11 +319,11 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
 
 export function inferVideoOperation(input: ModelInputSummary) {
     const visualInputCount = input.imageCount + input.characterCount;
-    // 纯音频参考使用独立能力；音频与图片、角色或视频组合时属于全模态参考，
-    // 不能把组合请求误路由到只支持 audio_to_video 的细分模型。
-    if (input.audioCount > 0) return visualInputCount > 0 || input.videoCount > 0 ? "reference_to_video" : "audio_to_video";
+    // 图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
+    // 提升为全模态参考；纯音频输入才使用独立的 audio_to_video 能力。
     if (input.videoCount > 0 || visualInputCount > 2) return "reference_to_video";
     if (visualInputCount > 0) return "image_to_video";
+    if (input.audioCount > 0) return "audio_to_video";
     return "text_to_video";
 }
 

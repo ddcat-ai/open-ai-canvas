@@ -1325,7 +1325,7 @@ test("remote image video and audio references keep Backend parity without Dreami
                 referenceAudios: [{ id: "remote-image-audio-audio-0001", name: "reference.mp3", type: "audio/mpeg", url: "", storageKey: "resource:remote-image-audio-audio-0001" }],
             },
             result: { mode: "video", video: { dataUrl: "opaque://video", storageKey: "resource:remote-image-audio-output" } },
-            operation: "reference_to_video",
+            operation: "image_to_video",
         },
         {
             mode: "audio" as const,

@@ -32,6 +32,31 @@ function connection(fromNodeId: string): CanvasConnection {
 }
 
 describe("canvas node generation position mentions", () => {
+    test("已有图片节点显式引用自身时作为图生图参考图提交", () => {
+        const source = node("image-self", CanvasNodeType.Image, "data:image/png;base64,a");
+        source.metadata.composerContent = "将 @图片1 图片变清晰";
+
+        const context = buildNodeGenerationContext(source.id, [source], [], source.metadata.composerContent, []);
+
+        expect(context.referenceImages.map((image) => image.id)).toEqual([source.id]);
+        expect(context.imageCount).toBe(1);
+        expect(context.prompt).toBe("将 图片1 图片变清晰");
+    });
+
+    test("已有图片节点未显式引用自身时不自动退化为图生图", () => {
+        const source = node("image-self", CanvasNodeType.Image, "data:image/png;base64,a");
+        const context = buildNodeGenerationContext(source.id, [source], [], "生成一个新的构图", []);
+
+        expect(context.referenceImages).toEqual([]);
+        expect(context.imageCount).toBe(0);
+        expect(context.prompt).toBe("生成一个新的构图");
+    });
+
+    test("无法解析的画布引用会阻止静默降级为文生图", () => {
+        const target = targetNode();
+        expect(() => buildNodeGenerationContext(target.id, [target], [], "将 @图片1 图片变清晰", [])).toThrow("@图片1 没有对应的画布资源");
+    });
+
     test("同一个 @图片1 在换线后自动指向新的第一张图片", () => {
         const target = targetNode();
         const imageA = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");

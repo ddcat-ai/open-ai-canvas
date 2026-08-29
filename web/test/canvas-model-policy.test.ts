@@ -216,8 +216,24 @@ describe("逻辑模型选择", () => {
 
     test("音频仅在单独参考时归类为音频生视频", () => {
         expect(inferVideoOperation({ textCount: 1, imageCount: 0, videoCount: 0, audioCount: 1, characterCount: 0 })).toBe("audio_to_video");
-        expect(inferVideoOperation({ textCount: 1, imageCount: 1, videoCount: 0, audioCount: 1, characterCount: 0 })).toBe("reference_to_video");
+        expect(inferVideoOperation({ textCount: 1, imageCount: 1, videoCount: 0, audioCount: 1, characterCount: 0 })).toBe("image_to_video");
         expect(inferVideoOperation({ textCount: 1, imageCount: 0, videoCount: 1, audioCount: 1, characterCount: 0 })).toBe("reference_to_video");
+    });
+
+    test("图片加音频可匹配支持图生视频和参考音频的模型", () => {
+        const config = policyConfig();
+        const imageModel = "relay::cinema-image";
+        const imageCost = config.channels[0]?.modelCosts?.find((item) => item.model === "cinema-image");
+        if (!imageCost?.capabilityConfig?.video) throw new Error("缺少图生视频能力配置");
+        imageCost.capabilityConfig.video.references.maxAudios = 1;
+        const requirements = {
+            capability: "video" as const,
+            input: { textCount: 0, imageCount: 1, videoCount: 0, audioCount: 1, characterCount: 0 },
+            videoSeconds: "6",
+        };
+
+        expect(modelCompatibilityError(config, imageModel, requirements)).toBe("");
+        expect(resolveCompatibleModel(config, "relay::cinema-text", requirements)).toBe(imageModel);
     });
 
     test("逻辑视频模型将 720 与 720p 视为同一分辨率", () => {
