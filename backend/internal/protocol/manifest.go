@@ -501,7 +501,7 @@ func manifestExpressionValue(expression string, request GenerationRequest, taskI
 		value = source
 	}
 	for _, transform := range transforms {
-		value = applyManifestTransform(value, transform)
+		value = applyManifestTransform(value, transform, request)
 	}
 	return value
 }
@@ -541,7 +541,7 @@ func manifestMediaValues(values []MediaReference) []any {
 	return result
 }
 
-func applyManifestTransform(value any, transform string) any {
+func applyManifestTransform(value any, transform string, requests ...GenerationRequest) any {
 	transform = strings.ToLower(strings.TrimSpace(transform))
 	text, ok := value.(string)
 	if !ok {
@@ -556,6 +556,12 @@ func applyManifestTransform(value any, transform string) any {
 		return strings.ToUpper(text)
 	case "video-resolution", "video_resolution", "videoresolution":
 		return normalizeManifestVideoResolution(text)
+	case "autodl-resolution", "autodl_resolution", "autodlresolution":
+		aspectRatio := ""
+		if len(requests) > 0 {
+			aspectRatio = requests[0].AspectRatio
+		}
+		return normalizeAutoDLVideoResolution(text, aspectRatio)
 	default:
 		return value
 	}
@@ -572,6 +578,37 @@ func normalizeManifestVideoResolution(value string) string {
 		}
 	}
 	return normalized + "p"
+}
+
+func normalizeAutoDLVideoResolution(value string, aspectRatios ...string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return ""
+	}
+	if strings.HasSuffix(normalized, "竖") || strings.HasSuffix(normalized, "横") {
+		return normalized
+	}
+	// Canvas uses the generic 720p tier, while MiniMax H3 AutoDL workflows
+	// expose 768p as the corresponding supported tier.
+	orientation := "横"
+	if len(aspectRatios) > 0 {
+		ratio := strings.TrimSpace(aspectRatios[0])
+		if ratio == "9:16" || ratio == "3:4" {
+			orientation = "竖"
+		}
+	}
+	if normalized == "720" || normalized == "720p" {
+		return "768p" + orientation
+	}
+	if strings.HasSuffix(normalized, "p") {
+		return normalized + orientation
+	}
+	for _, char := range normalized {
+		if char < '0' || char > '9' {
+			return normalized
+		}
+	}
+	return normalized + "p" + orientation
 }
 
 func pathValue(payload map[string]any, path string) any {
