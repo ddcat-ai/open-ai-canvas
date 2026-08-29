@@ -15,7 +15,7 @@ import { type ChannelHeader, type ModelChannel } from "@/stores/use-config-store
 import { useUserStore } from "@/stores/use-user-store";
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
+import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { ChannelModelManager } from "../components/channel-model-manager";
 
 type ChannelFormValues = { name: string; baseUrl: string; allowLocalChannel?: boolean; apiKey?: string; secretKey?: string; headers?: ChannelHeader[]; useGlobalConcurrency?: boolean; concurrencyLimit?: number; enabled?: boolean };
@@ -190,11 +190,11 @@ export default function ChannelsPage() {
 
     const columns: ColumnsType<ModelChannel> = [
         { title: "渠道", dataIndex: "name", render: (_, channel) => <div><div className="font-medium">{channel.name}</div><div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div></div> },
-        { title: "模型", dataIndex: "models", width: 100, render: (models: string[]) => `${models?.length || 0} 个` },
-        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, render: (value: number) => value > 0 ? value : <span className="text-foreground/45">跟随系统</span> },
-        { title: "凭证", width: 130, render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
-        { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <AdminStatusBadge label={enabled !== false ? "已启用" : "已停用"} tone={enabled !== false ? "success" : "neutral"} /> },
-        { title: "操作", width: 250, align: "right", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }, { key: "delete", label: "删除渠道", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" }, onClick: () => removeChannel(channel) }]} /> },
+        { title: "模型", dataIndex: "models", width: 100, align: "center", render: (models: string[]) => `${models?.length || 0} 个` },
+        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, align: "center", render: (value: number) => value > 0 ? value : <span className="text-foreground/45">跟随系统</span> },
+        { title: "凭证", width: 130, align: "center", render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
+        { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (enabled) => <AdminStatusBadge label={enabled !== false ? "已启用" : "已停用"} tone={enabled !== false ? "success" : "neutral"} /> },
+        { title: "操作", width: 250, align: "center", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }, { key: "delete", label: "删除渠道", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" }, onClick: () => removeChannel(channel) }]} /> },
     ];
 
     if (managingChannel) {
@@ -205,8 +205,7 @@ export default function ChannelsPage() {
         <AdminPageFrame title="系统渠道" description="渠道、模型与售价" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>}>
             <AdminDataTable
                 toolbar={<Input id="admin-channel-search" aria-label="搜索系统渠道" autoComplete="off" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索渠道名称或地址" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />}
-                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "enabled" ? "已启用" : "已停用"}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}</>}
-                toolbarFilters={<Select className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />}
+                toolbarFilters={<Select aria-label="筛选渠道状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />}
                 toolbarActive={hasFilters}
                 onReset={() => updateUrl({ filter: "", status: "all", page: 1 })}
                 skeletonColumns={6}
@@ -220,7 +219,7 @@ export default function ChannelsPage() {
                 open={drawerOpen}
                 width={760}
                 onCancel={closeDrawer}
-                maskClosable={!saving}
+                mask={{ closable: !saving }}
                 destroyOnHidden
                 footer={<div className="flex justify-end gap-2"><Button onClick={closeDrawer}>取消</Button><Button type="primary" loading={saving} onClick={() => void save()}>保存</Button></div>}
             >

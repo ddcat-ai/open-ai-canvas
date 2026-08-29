@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select, Tabs, Tag, Tooltip } from "antd";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { App, Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Select, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { BarChart3, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart3, CircleDollarSign, Clock3, Gauge, Pencil, Plus, RefreshCw, Settings2, Trash2, UsersRound, Workflow } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useSearchParams } from "react-router";
 
@@ -20,7 +20,7 @@ import {
     type AnalyticsFilters,
     type ModelPricing,
 } from "@/services/api/auth";
-import { AdminDataTable, AdminExportButton, AdminFilterChip, AdminRowActions, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { AdminDataTable, AdminExportButton, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
 type Props = {
     users: AdminReferenceData["users"];
@@ -39,6 +39,9 @@ type PricingFormValues = {
     perMedia?: number;
     perVideoSecond?: number;
 };
+
+type TrendMetric = "volume" | "quality" | "activity";
+type AnalysisTab = "models" | "users" | "failures";
 
 const capabilityOptions = [
     { label: "文本", value: "text" },
@@ -67,6 +70,9 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [userPage, setUserPage] = useState(1);
     const [failurePage, setFailurePage] = useState(1);
     const [pricingPage, setPricingPage] = useState(1);
+    const [trendMetric, setTrendMetric] = useState<TrendMetric>("volume");
+    const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("models");
+    const [pricingWorkspaceOpen, setPricingWorkspaceOpen] = useState(false);
     const [form] = Form.useForm<PricingFormValues>();
     const analyticsPageSize = 20;
 
@@ -203,7 +209,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 <div>
                     <div className="font-medium">{value}</div>
                     <div className="mt-1">
-                        <Tag variant="filled">{capabilityLabel(row.capability)}</Tag>
+                        <Tag className="admin-analytics-capability-tag">{capabilityLabel(row.capability)}</Tag>
                     </div>
                 </div>
             ),
@@ -291,18 +297,35 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     ];
 
     const trend = data?.trend || [];
-    const hasTrendActivity = trend.some((item) => item.tasks > 0 || item.requests > 0);
     const currentTrend = trend[trend.length - 1];
     const previousTrend = trend[trend.length - 2];
     const modelRows = data?.models || [];
     const userRows = data?.users || [];
     const failureRows = data?.failures || [];
     const pricingRows = pricings;
+    const failureTotal = failureRows.reduce((sum, item) => sum + item.count, 0);
+    const topFailure = failureRows.reduce<AdminAnalytics["failures"][number] | undefined>((current, item) => (!current || item.count > current.count ? item : current), undefined);
+    const pricedModelCount = modelRows.filter((item) => item.costAvailable).length;
+    const trendHasData = trendMetric === "volume" ? trend.some((item) => item.tasks > 0 || item.requests > 0) : trendMetric === "quality" ? trend.some((item) => item.requests > 0) : trend.some((item) => item.activeUsers > 0);
+    const trendTitle = trendMetric === "volume" ? "任务与请求趋势" : trendMetric === "quality" ? "请求质量趋势" : "用户活跃趋势";
+    const rangePreset = resolveRangePreset(range);
     const pageRows = <T,>(rows: T[], page: number) => rows.slice((page - 1) * analyticsPageSize, page * analyticsPageSize);
 
+    const applyRangePreset = (preset: "7d" | "30d" | "month") => {
+        const end = dayjs();
+        const start = preset === "7d" ? end.subtract(6, "day") : preset === "30d" ? end.subtract(29, "day") : end.startOf("month");
+        setRange([start, end]);
+    };
+
+    const openAnalysis = (tab: AnalysisTab) => {
+        setAnalysisTab(tab);
+        window.requestAnimationFrame(() => document.getElementById("admin-analytics-analysis")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+    };
+
     return (
-        <div className="space-y-5">
+        <div className="admin-analytics-panel space-y-5">
             <ListToolbar
+                className="admin-analytics-toolbar"
                 active={Boolean(userId || model || channelId || capability)}
                 activeFilters={
                     <>
@@ -320,6 +343,10 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 }}
                 trailing={
                     <>
+                        <div className="admin-analytics-range-picker" role="group" aria-label="时间范围">
+                            <span className="sr-only">时间范围</span>
+                            <DatePicker.RangePicker allowClear={false} value={range} onChange={(value) => value?.[0] && value?.[1] && setRange([value[0], value[1]])} />
+                        </div>
                         <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
                             刷新
                         </Button>
@@ -343,136 +370,216 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     </>
                 }
             >
-                <div>
-                    <div className="mb-1 text-xs text-foreground/55">时间范围</div>
-                    <DatePicker.RangePicker allowClear={false} value={range} onChange={(value) => value?.[0] && value?.[1] && setRange([value[0], value[1]])} />
+                <div className="admin-analytics-range-presets" role="group" aria-label="快捷时间范围">
+                    {(
+                        [
+                            ["7d", "7 天"],
+                            ["30d", "30 天"],
+                            ["month", "本月"],
+                        ] as const
+                    ).map(([value, label]) => (
+                        <button key={value} type="button" className={rangePreset === value ? "is-active" : undefined} aria-pressed={rangePreset === value} onClick={() => applyRangePreset(value)}>
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </ListToolbar>
 
-            <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 xl:grid-cols-4">
-                <AdminStatTile
+            <section className="admin-analytics-health-grid" aria-label="运营健康指标">
+                <AnalyticsHealthCard
+                    icon={<UsersRound className="size-4" />}
                     label="活跃用户"
                     value={data ? formatNumber(data.kpi.activeUsers) : "--"}
                     trend={formatCountDelta(currentTrend?.activeUsers, previousTrend?.activeUsers)}
                     detail={data ? `DAU ${formatNumber(data.kpi.dau)} · WAU ${formatNumber(data.kpi.wau)} · MAU ${formatNumber(data.kpi.mau)}` : undefined}
                 />
-                <AdminStatTile label="上游请求" value={data ? formatNumber(data.kpi.upstreamRequests) : "--"} trend={formatCountDelta(currentTrend?.requests, previousTrend?.requests)} detail="当前统计范围" />
-                <AdminStatTile
+                <AnalyticsHealthCard
+                    icon={<Workflow className="size-4" />}
                     label="生成任务"
                     value={data ? formatNumber(data.kpi.generationTasks) : "--"}
                     trend={formatCountDelta(currentTrend?.tasks, previousTrend?.tasks)}
-                    detail={data ? `队列 ${formatNumber(data.kpi.currentQueuedTasks)}` : undefined}
+                    detail={data ? `上游请求 ${formatNumber(data.kpi.upstreamRequests)} · 队列 ${formatNumber(data.kpi.currentQueuedTasks)}` : undefined}
                 />
-                <AdminStatTile
-                    label="请求成功率"
+                <AnalyticsHealthCard
+                    icon={<Gauge className="size-4" />}
+                    label="服务质量"
                     value={data ? percent(data.kpi.successRate) : "--"}
                     trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate)}
                     detail={data ? `P95 ${formatDuration(data.kpi.p95DurationMs)}` : undefined}
+                    tone={data && data.kpi.successRate < 90 ? "warning" : "success"}
                 />
-            </div>
-            <div className="grid gap-x-4 gap-y-2 border-b border-border pb-4 text-xs text-foreground/55 sm:grid-cols-3">
-                <div>
-                    当前队列 <span className="ml-1 font-medium text-foreground">{data ? formatNumber(data.kpi.currentQueuedTasks) : "--"}</span>
-                </div>
-                <div>
-                    P95 耗时 <span className="ml-1 font-medium text-foreground">{data ? formatDuration(data.kpi.p95DurationMs) : "--"}</span>
-                </div>
-                <div>
-                    估算费用 <span className="ml-1 font-medium text-foreground">{data ? formatCost(data.kpi.estimatedCostMicros, data.kpi.currency, data.kpi.costAvailable) : "--"}</span>
-                </div>
-            </div>
-
-            <section className="admin-analytics-trend-section">
-                <div className="mb-3">
-                    <h3 className="text-sm font-medium">使用趋势</h3>
-                    <p className="text-xs text-foreground/50">生成任务与真实上游请求分开统计，成功率按上游请求计算。</p>
-                </div>
-                {hasTrendActivity ? (
-                    <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={data?.trend || []} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
-                                <CartesianGrid stroke="currentColor" className="text-foreground/10" vertical={false} />
-                                <XAxis dataKey="day" tickFormatter={(value) => value.slice(5)} tick={{ fontSize: 11 }} />
-                                <YAxis yAxisId="count" allowDecimals={false} tick={{ fontSize: 11 }} />
-                                <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
-                                <ChartTooltip labelFormatter={(value) => `日期 ${value}`} />
-                                <Legend wrapperStyle={{ fontSize: 12 }} />
-                                <Area yAxisId="count" type="monotone" dataKey="tasks" name="生成任务" stroke="var(--admin-chart-primary)" fill="var(--admin-chart-primary)" fillOpacity={0.1} />
-                                <Area yAxisId="count" type="monotone" dataKey="requests" name="上游请求" stroke="var(--admin-chart-secondary)" fill="var(--admin-chart-secondary)" fillOpacity={0.08} />
-                                <Line yAxisId="rate" type="monotone" dataKey="requestSuccessRate" name="成功率" stroke="var(--admin-chart-warning)" dot={false} strokeWidth={2} />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <div className="admin-analytics-empty-chart">
-                        <span>
-                            <BarChart3 className="size-5" />
-                        </span>
-                        <div className="font-medium">当前范围暂无使用数据</div>
-                        <p>可以调整时间范围或筛选条件后重新查看。</p>
-                    </div>
-                )}
+                <AnalyticsHealthCard
+                    icon={<CircleDollarSign className="size-4" />}
+                    label="估算费用"
+                    value={data ? (data.kpi.costAvailable ? formatCost(data.kpi.estimatedCostMicros, data.kpi.currency, true) : "待配置") : "--"}
+                    detail={data ? (data.kpi.costAvailable ? `${pricedModelCount}/${modelRows.length} 个模型可估算` : "价格未完整配置，暂不能汇总") : undefined}
+                    tone={data?.kpi.costAvailable ? "neutral" : "warning"}
+                />
             </section>
 
-            <Tabs
-                items={[
-                    {
-                        key: "models",
-                        label: "模型分析",
-                        children: (
-                            <AdminDataTable
-                                table={{ rowKey: (row) => `${row.model}:${row.capability}`, size: "small", loading, columns: modelColumns, dataSource: pageRows(modelRows, modelPage), pagination: false, scroll: { x: 1250 } }}
-                                empty={<AdminTableEmpty />}
-                                skeletonColumns={9}
-                                footer={<PaginationBar alwaysShow current={modelPage} pageSize={analyticsPageSize} total={modelRows.length} onChange={(page) => setModelPage(page)} pageSizeOptions={[analyticsPageSize]} />}
-                            />
-                        ),
-                    },
-                    {
-                        key: "users",
-                        label: "用户活动",
-                        children: (
-                            <AdminDataTable
-                                table={{ rowKey: "userId", size: "small", loading, columns: userColumns, dataSource: pageRows(userRows, userPage), pagination: false, scroll: { x: 900 } }}
-                                empty={<AdminTableEmpty />}
-                                skeletonColumns={7}
-                                footer={<PaginationBar alwaysShow current={userPage} pageSize={analyticsPageSize} total={userRows.length} onChange={(page) => setUserPage(page)} pageSizeOptions={[analyticsPageSize]} />}
-                            />
-                        ),
-                    },
-                    {
-                        key: "failures",
-                        label: `异常定位${data?.failures.length ? ` (${data.failures.reduce((sum, item) => sum + item.count, 0)})` : ""}`,
-                        children: (
-                            <AdminDataTable
-                                table={{ rowKey: (row) => `${row.type}:${row.model}`, size: "small", loading, columns: failureColumns, dataSource: pageRows(failureRows, failurePage), pagination: false, scroll: { x: 900 } }}
-                                empty={<AdminTableEmpty />}
-                                skeletonColumns={5}
-                                footer={<PaginationBar alwaysShow current={failurePage} pageSize={analyticsPageSize} total={failureRows.length} onChange={(page) => setFailurePage(page)} pageSizeOptions={[analyticsPageSize]} />}
-                            />
-                        ),
-                    },
-                    {
-                        key: "pricing",
-                        label: "模型价格",
-                        children: (
-                            <div>
-                                <div className="mb-3 flex items-center justify-end">
-                                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openPricing()}>
-                                        新增价格
-                                    </Button>
-                                </div>
+            <div className="admin-analytics-overview-grid">
+                <section className="admin-analytics-trend-section" aria-labelledby="admin-analytics-trend-title">
+                    <div className="admin-analytics-section-heading">
+                        <div>
+                            <h2 id="admin-analytics-trend-title">{trendTitle}</h2>
+                            <p>{trendMetric === "volume" ? "生成任务与真实上游请求分开统计。" : trendMetric === "quality" ? "成功率按真实上游请求计算。" : "活跃用户按自然日去重统计。"}</p>
+                        </div>
+                        <div className="admin-analytics-trend-switch" role="group" aria-label="趋势指标">
+                            {(
+                                [
+                                    ["volume", "用量"],
+                                    ["quality", "质量"],
+                                    ["activity", "活跃"],
+                                ] as const
+                            ).map(([value, label]) => (
+                                <button key={value} type="button" className={trendMetric === value ? "is-active" : undefined} aria-pressed={trendMetric === value} onClick={() => setTrendMetric(value)}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    {trendHasData ? (
+                        <div className="admin-analytics-chart" role="img" aria-label={`${trendTitle}图`}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ComposedChart data={data?.trend || []} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+                                    <CartesianGrid stroke="currentColor" className="text-foreground/10" vertical={false} />
+                                    <XAxis dataKey="day" tickFormatter={(value) => value.slice(5)} tick={{ fontSize: 11 }} />
+                                    {trendMetric === "quality" ? <YAxis yAxisId="primary" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} /> : <YAxis yAxisId="primary" allowDecimals={false} tick={{ fontSize: 11 }} />}
+                                    <ChartTooltip labelFormatter={(value) => `日期 ${value}`} />
+                                    {trendMetric === "volume" ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null}
+                                    {trendMetric === "volume" ? (
+                                        <>
+                                            <Area yAxisId="primary" type="monotone" dataKey="tasks" name="生成任务" stroke="var(--admin-chart-primary)" fill="var(--admin-chart-primary)" fillOpacity={0.1} />
+                                            <Area yAxisId="primary" type="monotone" dataKey="requests" name="上游请求" stroke="var(--admin-chart-secondary)" fill="var(--admin-chart-secondary)" fillOpacity={0.08} />
+                                        </>
+                                    ) : null}
+                                    {trendMetric === "quality" ? <Line yAxisId="primary" type="monotone" dataKey="requestSuccessRate" name="成功率" stroke="var(--admin-chart-warning)" dot={false} strokeWidth={2} /> : null}
+                                    {trendMetric === "activity" ? <Area yAxisId="primary" type="monotone" dataKey="activeUsers" name="活跃用户" stroke="var(--admin-chart-primary)" fill="var(--admin-chart-primary)" fillOpacity={0.1} /> : null}
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="admin-analytics-empty-chart">
+                            <span>
+                                <BarChart3 className="size-5" />
+                            </span>
+                            <div className="font-medium">当前范围暂无{trendMetric === "quality" ? "质量" : trendMetric === "activity" ? "活跃" : "使用"}数据</div>
+                            <p>可以调整时间范围或筛选条件后重新查看。</p>
+                        </div>
+                    )}
+                </section>
+
+                <aside className="admin-analytics-attention" aria-labelledby="admin-analytics-attention-title">
+                    <div className="admin-analytics-attention-heading">
+                        <div>
+                            <h2 id="admin-analytics-attention-title">需要关注</h2>
+                            <p>优先展示可能需要处理的运行状态。</p>
+                        </div>
+                        <AdminStatusBadge label={failureTotal > 0 ? `${formatNumber(failureTotal)} 次异常` : "运行平稳"} tone={failureTotal > 0 ? "warning" : "success"} />
+                    </div>
+                    <div className="admin-analytics-attention-list">
+                        <AnalyticsAttentionItem
+                            icon={<AlertTriangle className="size-4" />}
+                            label="异常请求"
+                            value={data ? formatNumber(failureTotal) : "--"}
+                            description={topFailure ? `${topFailure.type} · ${topFailure.model}` : "当前范围未记录异常"}
+                            tone={failureTotal > 0 ? "warning" : "success"}
+                            onClick={failureTotal > 0 ? () => openAnalysis("failures") : undefined}
+                        />
+                        <AnalyticsAttentionItem
+                            icon={<Clock3 className="size-4" />}
+                            label="当前队列"
+                            value={data ? formatNumber(data.kpi.currentQueuedTasks) : "--"}
+                            description={data?.kpi.currentQueuedTasks ? "存在等待执行的生成任务" : "没有排队中的生成任务"}
+                            tone={data?.kpi.currentQueuedTasks ? "warning" : "success"}
+                        />
+                        <AnalyticsAttentionItem
+                            icon={<CircleDollarSign className="size-4" />}
+                            label="费用可估算模型"
+                            value={data ? `${pricedModelCount}/${modelRows.length}` : "--"}
+                            description={data?.kpi.costAvailable ? "当前范围费用可以汇总" : "仍有调用无法完成费用估算"}
+                            tone={data?.kpi.costAvailable ? "success" : "warning"}
+                            onClick={() => setPricingWorkspaceOpen(true)}
+                        />
+                    </div>
+                </aside>
+            </div>
+
+            <section id="admin-analytics-analysis" className="admin-analytics-analysis-section">
+                <div className="admin-analytics-analysis-heading">
+                    <div>
+                        <h2>深度分析</h2>
+                        <p>按模型、用户或异常类型继续核对当前统计范围。</p>
+                    </div>
+                    <Button icon={<Settings2 className="size-4" />} onClick={() => setPricingWorkspaceOpen(true)}>
+                        模型价格配置
+                    </Button>
+                </div>
+                <Tabs
+                    activeKey={analysisTab}
+                    onChange={(key) => setAnalysisTab(key as AnalysisTab)}
+                    className="admin-analytics-tabs"
+                    items={[
+                        {
+                            key: "models",
+                            label: "模型分析",
+                            children: (
                                 <AdminDataTable
-                                    table={{ rowKey: "id", size: "small", loading, columns: pricingColumns, dataSource: pageRows(pricingRows, pricingPage), pagination: false, scroll: { x: 980 } }}
+                                    table={{ rowKey: (row) => `${row.model}:${row.capability}`, size: "small", loading, columns: modelColumns, dataSource: pageRows(modelRows, modelPage), pagination: false, scroll: { x: 1250 } }}
+                                    empty={<AdminTableEmpty />}
+                                    skeletonColumns={9}
+                                    footer={<PaginationBar alwaysShow current={modelPage} pageSize={analyticsPageSize} total={modelRows.length} onChange={(page) => setModelPage(page)} pageSizeOptions={[analyticsPageSize]} />}
+                                />
+                            ),
+                        },
+                        {
+                            key: "users",
+                            label: "用户活动",
+                            children: (
+                                <AdminDataTable
+                                    table={{ rowKey: "userId", size: "small", loading, columns: userColumns, dataSource: pageRows(userRows, userPage), pagination: false, scroll: { x: 900 } }}
+                                    empty={<AdminTableEmpty />}
+                                    skeletonColumns={7}
+                                    footer={<PaginationBar alwaysShow current={userPage} pageSize={analyticsPageSize} total={userRows.length} onChange={(page) => setUserPage(page)} pageSizeOptions={[analyticsPageSize]} />}
+                                />
+                            ),
+                        },
+                        {
+                            key: "failures",
+                            label: `异常定位${data?.failures.length ? ` (${data.failures.reduce((sum, item) => sum + item.count, 0)})` : ""}`,
+                            children: (
+                                <AdminDataTable
+                                    table={{ rowKey: (row) => `${row.type}:${row.model}`, size: "small", loading, columns: failureColumns, dataSource: pageRows(failureRows, failurePage), pagination: false, scroll: { x: 900 } }}
                                     empty={<AdminTableEmpty />}
                                     skeletonColumns={5}
-                                    footer={<PaginationBar alwaysShow current={pricingPage} pageSize={analyticsPageSize} total={pricingRows.length} onChange={(page) => setPricingPage(page)} pageSizeOptions={[analyticsPageSize]} />}
+                                    footer={<PaginationBar alwaysShow current={failurePage} pageSize={analyticsPageSize} total={failureRows.length} onChange={(page) => setFailurePage(page)} pageSizeOptions={[analyticsPageSize]} />}
                                 />
-                            </div>
-                        ),
-                    },
-                ]}
-            />
+                            ),
+                        },
+                    ]}
+                />
+            </section>
+
+            <Drawer
+                rootClassName="admin-secondary-drawer admin-analytics-pricing-drawer"
+                title="模型价格配置"
+                open={pricingWorkspaceOpen}
+                width="min(1120px, calc(100vw - 48px))"
+                onClose={() => setPricingWorkspaceOpen(false)}
+                extra={
+                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openPricing()}>
+                        新增价格
+                    </Button>
+                }
+            >
+                <p className="admin-analytics-pricing-description">价格只影响后续调用的费用快照，历史统计不会被重新计算。</p>
+                <AdminDataTable
+                    table={{ rowKey: "id", size: "small", loading, columns: pricingColumns, dataSource: pageRows(pricingRows, pricingPage), pagination: false, scroll: { x: 980 } }}
+                    empty={<AdminTableEmpty title="暂无模型价格" description="新增价格后，后续调用才能形成可汇总的费用快照。" />}
+                    skeletonColumns={5}
+                    footer={<PaginationBar alwaysShow current={pricingPage} pageSize={analyticsPageSize} total={pricingRows.length} onChange={(page) => setPricingPage(page)} pageSizeOptions={[analyticsPageSize]} />}
+                />
+            </Drawer>
 
             <Modal title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={760}>
                 <Form form={form} layout="vertical" requiredMark={false}>
@@ -502,6 +609,47 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     );
 }
 
+function AnalyticsHealthCard({ icon, label, value, trend, detail, tone = "neutral" }: { icon: ReactNode; label: string; value: ReactNode; trend?: { value: string; tone?: AdminStatusTone }; detail?: string; tone?: AdminStatusTone }) {
+    return (
+        <article className="admin-analytics-health-card" data-tone={tone}>
+            <div className="admin-analytics-health-card-heading">
+                <span aria-hidden="true">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div className="admin-analytics-health-card-value">{value}</div>
+            <div className="admin-analytics-health-card-meta">
+                {trend ? <AdminStatusBadge label={trend.value} tone={trend.tone || "neutral"} /> : null}
+                {detail ? <span>{detail}</span> : null}
+            </div>
+        </article>
+    );
+}
+
+function AnalyticsAttentionItem({ icon, label, value, description, tone = "neutral", onClick }: { icon: ReactNode; label: string; value: ReactNode; description: string; tone?: AdminStatusTone; onClick?: () => void }) {
+    const content = (
+        <>
+            <span className="admin-analytics-attention-icon" aria-hidden="true">
+                {icon}
+            </span>
+            <span className="admin-analytics-attention-copy">
+                <span className="admin-analytics-attention-label">{label}</span>
+                <span className="admin-analytics-attention-description">{description}</span>
+            </span>
+            <strong>{value}</strong>
+        </>
+    );
+
+    return onClick ? (
+        <button type="button" className="admin-analytics-attention-item is-action" data-tone={tone} onClick={onClick}>
+            {content}
+        </button>
+    ) : (
+        <div className="admin-analytics-attention-item" data-tone={tone}>
+            {content}
+        </div>
+    );
+}
+
 function FilterSelect({
     label,
     value,
@@ -524,7 +672,7 @@ function FilterSelect({
     return (
         <div>
             <div className="mb-1 text-xs text-foreground/55">{label}</div>
-            <Select allowClear showSearch optionFilterProp="label" filterOption={filterOption} loading={loading} placeholder="全部" value={value} onChange={onChange} onSearch={onSearch} options={options} style={{ width }} />
+            <Select aria-label={`${label}筛选`} allowClear showSearch optionFilterProp="label" filterOption={filterOption} loading={loading} placeholder="全部" value={value} onChange={onChange} onSearch={onSearch} options={options} style={{ width }} />
         </div>
     );
 }
@@ -559,14 +707,14 @@ function formatCountDelta(current?: number, previous?: number) {
     const delta = current - previous;
     const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
     const value = previous === 0 ? formatNumber(Math.abs(delta)) : `${Math.abs((delta / previous) * 100).toFixed(1)}%`;
-    return { value: `${direction} ${value}`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
+    return { value: `较前一日 ${direction} ${value}`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
 }
 
 function formatRateDelta(current?: number, previous?: number) {
     if (current === undefined || previous === undefined) return undefined;
     const delta = current - previous;
     const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-    return { value: `${direction} ${Math.abs(delta).toFixed(1)}pp`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
+    return { value: `较前一日 ${direction} ${Math.abs(delta).toFixed(1)}pp`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
 }
 
 function formatCost(micros: number, currency?: string, available?: boolean) {
@@ -594,4 +742,13 @@ function filterDate(value: string | null, fallback: Dayjs) {
     if (!value) return fallback;
     const parsed = dayjs(value);
     return parsed.isValid() ? parsed : fallback;
+}
+
+function resolveRangePreset(range: [Dayjs, Dayjs]): "7d" | "30d" | "month" | undefined {
+    const end = dayjs();
+    if (!range[1].isSame(end, "day")) return undefined;
+    if (range[0].isSame(end.startOf("month"), "day")) return "month";
+    if (range[0].isSame(end.subtract(6, "day"), "day")) return "7d";
+    if (range[0].isSame(end.subtract(29, "day"), "day")) return "30d";
+    return undefined;
 }

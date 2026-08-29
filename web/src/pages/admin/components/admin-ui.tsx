@@ -176,7 +176,7 @@ export function AdminTableSkeleton({ rows = 8, columns = 6 }: { rows?: number; c
 export function AdminBatchBar({ count, onClear, children }: { count: number; onClear: () => void; children: ReactNode }) {
     if (count <= 0) return null;
     return (
-        <div className="sticky top-0 z-20 mt-3 flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+        <div className="admin-batch-bar sticky top-0 z-20 mt-3 flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
             <div className="flex items-center gap-2 text-sm font-medium">
                 <CheckSquare2 className="size-4 text-foreground/60" />
                 已选择 {count} 项
@@ -293,8 +293,8 @@ export function SettingsSectionCard({
     const isStacked = layout === "stacked";
     return (
         <section className={cn("admin-settings-section", isStacked ? "is-stacked" : "lg:grid lg:grid-cols-4", className)}>
-            <div className={cn("admin-settings-section-summary flex flex-wrap items-start justify-between gap-3 px-4 py-4", isStacked ? "" : "lg:col-span-1 lg:block")}>
-                <div className="flex min-w-0 items-start gap-3">
+            <div className={cn("admin-settings-section-summary flex flex-wrap items-start justify-between gap-3 px-4 py-4", icon && "has-icon", isStacked ? "" : "lg:col-span-1 lg:block")}>
+                <div className="admin-settings-section-summary-main flex min-w-0 items-start gap-3">
                     {icon ? <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/40">{icon}</span> : null}
                     <div className="min-w-0">
                         <h2 className="text-sm font-semibold leading-5">{title}</h2>
@@ -302,7 +302,7 @@ export function SettingsSectionCard({
                     </div>
                 </div>
                 {status ? (
-                    <div className={cn("shrink-0", isStacked ? "" : "lg:mt-4")}>
+                    <div className={cn("admin-settings-section-status shrink-0", isStacked ? "" : "lg:mt-4")}>
                         {isStatusConfig(status) ? (
                             <AdminStatusBadge label={status.label} tone={status.color === "success" ? "success" : status.color === "warning" ? "warning" : status.color === "error" ? "error" : status.color === "blue" ? "info" : "neutral"} />
                         ) : (

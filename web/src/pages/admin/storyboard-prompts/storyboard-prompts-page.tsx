@@ -15,7 +15,7 @@ import {
     type PromptTemplate,
 } from "@/services/api/auth";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
+import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 
 type PromptFormValues = { name: string; enabled?: boolean };
 type DraftBaseline = { operation: string; name: string; enabled: boolean; content: string };
@@ -167,19 +167,18 @@ export default function StoryboardPromptsPage() {
     const columns: ColumnsType<PromptTemplate> = [
         { title: "模板类型", dataIndex: "operation", width: 180, render: (operation: string) => { const definition = definitionByOperation.get(operation); return <div><div className="font-medium">{definition?.label || operation}</div><div className="mt-1 text-xs text-foreground/45">{definition?.category || "--"}</div></div>; } },
         { title: "版本", dataIndex: "name", render: (_, template) => <div><div className="font-medium">{template.name}</div><div className="mt-1 text-xs text-foreground/45">v{template.version} · {template.content.length} 字符</div></div> },
-        { title: "输出", dataIndex: "outputType", width: 120, render: (outputType: string, template) => <span className="inline-flex items-center gap-1.5 text-xs text-foreground/65">{outputType === "json" ? <FileJson className="size-3.5" /> : <FileText className="size-3.5" />}{outputType === "json" ? definitionByOperation.get(template.operation)?.schemaKey || "JSON" : "文本"}</span> },
-        { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <AdminStatusBadge label={enabled ? "启用中" : "历史版"} tone={enabled ? "success" : "neutral"} /> },
-        { title: "更新时间", dataIndex: "updatedAt", width: 180, render: formatTime },
-        { title: "操作", width: 230, align: "right", render: (_, template) => <AdminRowActions primary={{ label: "基于此版本新建", icon: <Copy className="size-3.5" />, onClick: () => openDrawer(template) }} actions={[{ key: "activate", label: "启用版本", icon: <Power className="size-3.5" />, disabled: template.enabled, confirm: { title: "启用这个提示词版本？", description: "只会替换同类型的当前版本，其他模板类型不受影响。", okText: "确认启用" }, onClick: () => activate(template) }, { key: "delete", label: "删除版本", icon: <Trash2 className="size-3.5" />, danger: true, disabled: template.enabled, confirm: { title: "删除这个历史版本？", description: "删除后不可恢复，启用中的版本不能删除。", okText: "确认删除" }, onClick: () => remove(template) }]} /> },
+        { title: "输出", dataIndex: "outputType", width: 120, align: "center", render: (outputType: string, template) => <span className="inline-flex items-center gap-1.5 text-xs text-foreground/65">{outputType === "json" ? <FileJson className="size-3.5" /> : <FileText className="size-3.5" />}{outputType === "json" ? definitionByOperation.get(template.operation)?.schemaKey || "JSON" : "文本"}</span> },
+        { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (enabled) => <AdminStatusBadge label={enabled ? "启用中" : "历史版"} tone={enabled ? "success" : "neutral"} /> },
+        { title: "更新时间", dataIndex: "updatedAt", width: 180, align: "center", render: formatTime },
+        { title: "操作", width: 310, align: "center", render: (_, template) => <AdminRowActions visibleActionCount={2} primary={{ label: "基于此版本新建", icon: <Copy className="size-3.5" />, onClick: () => openDrawer(template) }} actions={[{ key: "activate", label: "启用版本", icon: <Power className="size-3.5" />, disabled: template.enabled, confirm: { title: "启用这个提示词版本？", description: "只会替换同类型的当前版本，其他模板类型不受影响。", okText: "确认启用" }, onClick: () => activate(template) }, { key: "delete", label: "删除版本", icon: <Trash2 className="size-3.5" />, danger: true, disabled: template.enabled, confirm: { title: "删除这个历史版本？", description: "删除后不可恢复，启用中的版本不能删除。", okText: "确认删除" }, onClick: () => remove(template) }]} /> },
     ];
 
     return (
         <AdminPageFrame title="提示词模板" description="平台创作策略与版本管理" actions={<Button type="primary" icon={<Plus className="size-4" />} disabled={!definitions.length} onClick={() => openDrawer()}>新建版本</Button>}>
             <AdminDataTable
-                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索模板或内容" onChange={(event) => updateUrl({ filter: event.target.value })} />}
-                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "" })} /> : null}{operationFilter !== "all" ? <AdminFilterChip label={`类型：${definitions.find((item) => item.operation === operationFilter)?.label || operationFilter}`} onRemove={() => updateUrl({ operation: "all" })} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "enabled" ? "启用中" : "历史版本"}`} onRemove={() => updateUrl({ status: "all" })} /> : null}</>}
+                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} aria-label="搜索提示词模板" placeholder="搜索模板或内容" onChange={(event) => updateUrl({ filter: event.target.value })} />}
                 toolbarActive={hasFilters}
-                toolbarFilters={<><Select className="w-40" value={operationFilter} onChange={(value) => updateUrl({ operation: value })} options={[{ label: "全部类型", value: "all" }, ...definitions.map((item) => ({ label: item.label, value: item.operation }))]} /><Select className="w-32" value={status} onChange={(value) => updateUrl({ status: value })} options={[{ label: "全部状态", value: "all" }, { label: "启用中", value: "enabled" }, { label: "历史版本", value: "disabled" }]} /></>}
+                toolbarFilters={<><Select aria-label="筛选提示词类型" className="w-40" value={operationFilter} onChange={(value) => updateUrl({ operation: value })} options={[{ label: "全部类型", value: "all" }, ...definitions.map((item) => ({ label: item.label, value: item.operation }))]} /><Select aria-label="筛选提示词状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value })} options={[{ label: "全部状态", value: "all" }, { label: "启用中", value: "enabled" }, { label: "历史版本", value: "disabled" }]} /></>}
                 onReset={() => updateUrl({ filter: "", operation: "all", status: "all" })}
                 table={{ className: "app-data-table", size: "small", rowKey: "id", loading, pagination: false, columns, dataSource: paginatedTemplates, scroll: { x: 1120 }, expandable: { expandedRowRender: (template) => <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-xs leading-5 text-foreground/75">{template.content}</pre> } }}
                 empty={<AdminTableEmpty filtered={hasFilters} />}
@@ -193,7 +192,7 @@ export default function StoryboardPromptsPage() {
                 onClose={closeDrawer}
                 rootClassName="admin-drawer"
                 closable={false}
-                maskClosable={false}
+                mask={{ closable: false }}
                 keyboard={false}
                 destroyOnHidden
                 styles={{ body: { padding: 0 } }}

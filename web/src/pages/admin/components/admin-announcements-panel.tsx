@@ -1,35 +1,34 @@
-import { App, Button, Form, Input, Modal, Select, Segmented, Switch, Tag } from "antd";
-import type { FormInstance } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { App, Button, Drawer, Form, Input, Modal, Select } from "antd";
+import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Pin, Plus, Search, Upload, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { PencilLine, Plus, RefreshCw, Search, Send } from "lucide-react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import {
-    announcementImageUrl,
-    closeAdminAnnouncement,
-    createAdminAnnouncement,
-    discardAdminAnnouncementImage,
-    listAdminAnnouncements,
-    uploadAdminAnnouncementImage,
-    updateAdminAnnouncement,
-    type AnnouncementLevel,
-    type AnnouncementStatus,
-    type SystemAnnouncement,
-} from "@/services/api/announcements";
-import { resourceFileUrl } from "@/services/api/resources";
-import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { ApiError } from "@/services/api/request";
+import { closeAdminAnnouncement, createAdminAnnouncement, listAdminAnnouncements, updateAdminAnnouncement, type AnnouncementLevel, type AnnouncementStatus, type SystemAnnouncement } from "@/services/api/announcements";
+import { clearAnnouncementPendingReview, readAnnouncementPendingReview, writeAnnouncementPendingReview, type AnnouncementPendingReview } from "./admin-announcement-safety";
+import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 type AnnouncementFormValues = {
     title: string;
     content: string;
-    imageResourceId?: string;
     level: AnnouncementLevel;
-    pinned: boolean;
 };
 
+type PendingAnnouncement =
+    | (AnnouncementFormValues & { mode: "create" })
+    | (AnnouncementFormValues & {
+          mode: "update";
+          id: string;
+          previousStatus: AnnouncementStatus;
+          previousPublishedAt: string;
+          previousTitle: string;
+      });
+
+const DEFAULT_ANNOUNCEMENT: AnnouncementFormValues = { title: "", content: "", level: "info" };
 const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
     { value: "info", label: "平台通知" },
     { value: "success", label: "状态恢复" },
@@ -37,14 +36,26 @@ const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
     { value: "critical", label: "重要通知" },
 ];
 
-const levelMeta: Record<AnnouncementLevel, { label: string; tone: "info" | "success" | "warning" | "error" }> = {
-    info: { label: "平台通知", tone: "info" },
-    success: { label: "状态恢复", tone: "success" },
-    warning: { label: "服务提醒", tone: "warning" },
-    critical: { label: "重要通知", tone: "error" },
+const levelMeta: Record<AnnouncementLevel, { label: string; tone: "info" | "success" | "warning" | "error"; guidance: string }> = {
+    info: { label: "平台通知", tone: "info", guidance: "常规功能、活动或规则说明。" },
+    success: { label: "状态恢复", tone: "success", guidance: "此前受影响的服务已经恢复。" },
+    warning: { label: "服务提醒", tone: "warning", guidance: "可能影响使用，需要用户留意。" },
+    critical: { label: "重要通知", tone: "error", guidance: "高优先级事件或必须执行的操作。" },
 };
 
-export default function AdminAnnouncementsPanel() {
+export default function AdminAnnouncementsPanel({
+    publishOpen,
+    publishBlocked,
+    publishReturnFocus,
+    onPublishOpenChange,
+    onPublishBlockedChange,
+}: {
+    publishOpen: boolean;
+    publishBlocked: boolean;
+    publishReturnFocus: HTMLElement | null;
+    onPublishOpenChange: (open: boolean) => void;
+    onPublishBlockedChange: (blocked: boolean) => void;
+}) {
     const { message } = App.useApp();
     const [form] = Form.useForm<AnnouncementFormValues>();
     const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
@@ -54,295 +65,875 @@ export default function AdminAnnouncementsPanel() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [modalOpen, setModalOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState("");
     const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncement | null>(null);
-    const [publishing, setPublishing] = useState(false);
-    const [closingId, setClosingId] = useState("");
-    const [imagePreviewUrl, setImagePreviewUrl] = useState("");
-    const [draftImageResourceId, setDraftImageResourceId] = useState("");
-    const [imageUploading, setImageUploading] = useState(false);
-    const [editorMode, setEditorMode] = useState<"edit" | "preview">("edit");
-    const imageInputRef = useRef<HTMLInputElement | null>(null);
+    const [pendingSave, setPendingSave] = useState<PendingAnnouncement | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [closingIds, setClosingIds] = useState<Set<string>>(() => new Set());
+    const [pendingReview, setPendingReview] = useState<AnnouncementPendingReview | null>(() => readAnnouncementPendingReview());
+    const [uncertainListReady, setUncertainListReady] = useState(false);
+    const [reconciliationLoading, setReconciliationLoading] = useState(false);
+    const [reconciliationSummary, setReconciliationSummary] = useState("");
+    const [listRefreshNonce, setListRefreshNonce] = useState(0);
+    const listRequestRef = useRef(0);
+    const reconciliationRequestRef = useRef(0);
+    const saveInFlightRef = useRef(false);
+    const closeInFlightRef = useRef(new Set<string>());
+    const writeBlockedRef = useRef(publishBlocked);
+    const editorReturnFocusRef = useRef<HTMLElement | null>(null);
+    writeBlockedRef.current = publishBlocked;
+    const watchedTitle = Form.useWatch("title", form);
+    const watchedContent = Form.useWatch("content", form);
+    const watchedLevel = Form.useWatch("level", form);
 
-    const reload = useCallback(async () => {
+    const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; status?: "all" | AnnouncementStatus }) => {
+        const requestId = ++listRequestRef.current;
+        const queryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
+        const queryStatus = queryOverride?.status ?? status;
         setLoading(true);
+        setListError("");
+        setAnnouncements([]);
+        setTotal(0);
         try {
-            const data = await listAdminAnnouncements({ keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, limit: pageSize });
-            setAnnouncements(data.announcements || []);
-            setTotal(data.total || 0);
+            const data = assertAnnouncementListResult(
+                await listAdminAnnouncements({
+                    keyword: queryKeyword || undefined,
+                    status: queryStatus === "all" ? undefined : queryStatus,
+                    page: targetPage,
+                    limit: targetPageSize,
+                }),
+                targetPage,
+                targetPageSize,
+            );
+            if (requestId !== listRequestRef.current) return false;
+            const lastPage = Math.max(1, Math.ceil(data.total / targetPageSize));
+            if (targetPage > lastPage) {
+                setPage(lastPage);
+                return true;
+            }
+            setAnnouncements(data.announcements);
+            setTotal(data.total);
+            return true;
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取公告列表失败");
+            if (requestId === listRequestRef.current) {
+                const detail = error instanceof Error ? error.message : "读取公告列表失败";
+                setListError(detail);
+                message.error(detail);
+            }
+            return false;
         } finally {
-            setLoading(false);
+            if (requestId === listRequestRef.current) setLoading(false);
         }
-    }, [debouncedKeyword, message, page, pageSize, status]);
+    };
 
     useEffect(() => {
-        void reload();
-    }, [reload]);
+        const reconciliationRequestId = ++reconciliationRequestRef.current;
+        const shouldReconcile = publishBlocked && Boolean(pendingReview) && page === 1 && !debouncedKeyword.trim() && status === "all";
+        if (!shouldReconcile) setReconciliationLoading(false);
+        void (async () => {
+            const loaded = await reload(page, pageSize);
+            if (!shouldReconcile || !pendingReview) return;
+            setUncertainListReady(false);
+            if (!loaded || reconciliationRequestId !== reconciliationRequestRef.current) return;
+            setReconciliationLoading(true);
+            setReconciliationSummary("正在定位待核对公告…");
+            try {
+                const summary = await inspectPendingReview(pendingReview);
+                if (reconciliationRequestId !== reconciliationRequestRef.current) return;
+                setReconciliationSummary(summary);
+                setUncertainListReady(true);
+            } catch (error) {
+                if (reconciliationRequestId !== reconciliationRequestRef.current) return;
+                setReconciliationSummary(error instanceof Error ? `自动核对失败：${error.message}` : "自动核对失败，请重新刷新。");
+            } finally {
+                if (reconciliationRequestId === reconciliationRequestRef.current) setReconciliationLoading(false);
+            }
+        })();
+    }, [debouncedKeyword, listRefreshNonce, page, pageSize, pendingReview, publishBlocked, status]);
 
-    const openPublishModal = () => {
+    useEffect(() => {
+        if (!publishOpen) return;
+        if (publishReturnFocus) editorReturnFocusRef.current = publishReturnFocus;
         setEditingAnnouncement(null);
-        form.setFieldsValue({ title: "", content: "", imageResourceId: "", level: "info", pinned: false });
-        setImagePreviewUrl("");
-        setDraftImageResourceId("");
-        setEditorMode("edit");
-        setModalOpen(true);
+        form.setFieldsValue(DEFAULT_ANNOUNCEMENT);
+    }, [form, publishOpen, publishReturnFocus]);
+
+    const editorOpen = publishOpen || Boolean(editingAnnouncement);
+    const closeEditor = () => {
+        if (saving || pendingSave) return;
+        onPublishOpenChange(false);
+        setEditingAnnouncement(null);
+        form.resetFields();
     };
 
-    const openEditModal = (announcement: SystemAnnouncement) => {
+    const openEditDrawer = (announcement: SystemAnnouncement) => {
+        if (publishBlocked || !isKnownAnnouncementStatus(announcement.status)) return;
+        if (document.activeElement instanceof HTMLElement) editorReturnFocusRef.current = document.activeElement;
+        onPublishOpenChange(false);
         setEditingAnnouncement(announcement);
-        form.setFieldsValue({ title: announcement.title, content: announcement.content, imageResourceId: announcement.imageResourceId || "", level: announcement.level, pinned: announcement.pinned });
-        setImagePreviewUrl(announcementImageUrl(announcement));
-        setDraftImageResourceId("");
-        setEditorMode("edit");
-        setModalOpen(true);
+        form.setFieldsValue({ title: announcement.title, content: announcement.content, level: announcement.level });
     };
 
-    const discardDraftImage = async () => {
-        if (!draftImageResourceId) return;
-        await discardAdminAnnouncementImage(draftImageResourceId);
-        setDraftImageResourceId("");
-    };
-
-    const uploadAnnouncementImage = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        event.target.value = "";
-        if (!file) return;
-        if (!file.type.startsWith("image/")) {
-            message.warning("公告配图必须是图片文件");
+    const previewSave = (values: AnnouncementFormValues) => {
+        if (writeBlockedRef.current) {
+            message.warning("请先完成上一次公告操作的核对");
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            message.warning("公告配图不能超过 10MB");
+        const normalized: AnnouncementFormValues = { title: values.title.trim(), content: values.content.trim(), level: values.level };
+        if (editingAnnouncement) {
+            setPendingSave({
+                ...normalized,
+                mode: "update",
+                id: editingAnnouncement.id,
+                previousStatus: editingAnnouncement.status,
+                previousPublishedAt: editingAnnouncement.publishedAt,
+                previousTitle: editingAnnouncement.title,
+            });
+        } else {
+            setPendingSave({ ...normalized, mode: "create" });
+        }
+    };
+
+    const saveAnnouncement = async () => {
+        if (!pendingSave || saveInFlightRef.current) return;
+        if (writeBlockedRef.current) {
+            message.warning("请先完成上一次公告操作的核对");
             return;
         }
-        setImageUploading(true);
+        saveInFlightRef.current = true;
+        setSaving(true);
+        const isUpdate = pendingSave.mode === "update";
+        const requestedAt = new Date().toISOString();
         try {
-            if (draftImageResourceId) await discardDraftImage();
-            const { resource } = await uploadAdminAnnouncementImage(file);
-            form.setFieldValue("imageResourceId", resource.id);
-            setDraftImageResourceId(resource.id);
-            setImagePreviewUrl(resourceFileUrl(resource.id));
-            message.success("公告配图已上传");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "公告配图上传失败");
-        } finally {
-            setImageUploading(false);
-        }
-    };
-
-    const clearAnnouncementImage = async () => {
-        setImageUploading(true);
-        try {
-            await discardDraftImage();
-            form.setFieldValue("imageResourceId", "");
-            setImagePreviewUrl("");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "公告配图清理失败");
-        } finally {
-            setImageUploading(false);
-        }
-    };
-
-    const closeEditor = async () => {
-        setImageUploading(true);
-        try {
-            await discardDraftImage();
-            setModalOpen(false);
+            const input = { title: pendingSave.title, content: pendingSave.content, level: pendingSave.level, pinned: false };
+            const result = isUpdate ? await updateAdminAnnouncement(pendingSave.id, input) : await createAdminAnnouncement(input);
+            assertAnnouncementMutationResult(result, "active", isUpdate ? pendingSave.id : undefined, input);
+            setPendingSave(null);
             setEditingAnnouncement(null);
-            setImagePreviewUrl("");
+            onPublishOpenChange(false);
             form.resetFields();
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "公告配图草稿清理失败，请重试");
-        } finally {
-            setImageUploading(false);
-        }
-    };
-
-    const publish = async () => {
-        const values = await form.validateFields();
-        setPublishing(true);
-        try {
-            const input = { title: values.title.trim(), content: values.content.trim(), imageResourceId: values.imageResourceId?.trim() || "", level: values.level, pinned: Boolean(values.pinned) };
-            if (editingAnnouncement) await updateAdminAnnouncement(editingAnnouncement.id, input);
-            else await createAdminAnnouncement(input);
-            setDraftImageResourceId("");
-            setModalOpen(false);
-            setEditingAnnouncement(null);
+            setKeyword("");
+            setStatus("all");
             setPage(1);
-            await reload();
-            message.success(editingAnnouncement ? "公告已更新并重新发布" : "公告已发布");
+            setListRefreshNonce((value) => value + 1);
+            message.success(isUpdate ? "公告已更新并重新发布" : "公告已发布");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : editingAnnouncement ? "更新公告失败" : "发布公告失败");
+            const detail = error instanceof Error ? error.message : isUpdate ? "重新发布公告失败" : "发布公告失败";
+            if (isMutationResultUncertain(error)) {
+                writeBlockedRef.current = true;
+                setPendingSave(null);
+                setEditingAnnouncement(null);
+                onPublishOpenChange(false);
+                form.resetFields();
+                onPublishBlockedChange(true);
+                setKeyword("");
+                setStatus("all");
+                setPage(1);
+                setUncertainListReady(false);
+                const notice = `上一次${isUpdate ? "重新发布" : "发布"}请求的结果暂时无法确认：${detail}。系统已切换到未筛选列表，请核对最新发布时间与内容。核对完成前，公告写操作已暂停。`;
+                const review: AnnouncementPendingReview = {
+                    operation: isUpdate ? "update" : "create",
+                    targetId: isUpdate ? pendingSave.id : undefined,
+                    previousTitle: isUpdate ? pendingSave.previousTitle : undefined,
+                    title: pendingSave.title,
+                    content: pendingSave.content,
+                    level: pendingSave.level,
+                    notice,
+                    requestedAt,
+                };
+                setPendingReview(review);
+                setReconciliationSummary("");
+                writeAnnouncementPendingReview(review);
+                setListRefreshNonce((value) => value + 1);
+                message.warning({ content: "公告发布结果待核对，系统没有自动重试。请检查完整列表后再继续。", duration: 7 });
+            } else {
+                message.error(detail);
+            }
         } finally {
-            setPublishing(false);
+            saveInFlightRef.current = false;
+            setSaving(false);
         }
     };
 
     const closeAnnouncement = async (announcement: SystemAnnouncement) => {
-        setClosingId(announcement.id);
+        if (closeInFlightRef.current.has(announcement.id)) return;
+        if (writeBlockedRef.current) {
+            message.warning("请先完成上一次公告操作的核对");
+            return;
+        }
+        closeInFlightRef.current.add(announcement.id);
+        setClosingIds((current) => new Set(current).add(announcement.id));
+        let reconciliationRequired = false;
+        const requestedAt = new Date().toISOString();
         try {
-            await closeAdminAnnouncement(announcement.id);
-            await reload();
+            const result = await closeAdminAnnouncement(announcement.id);
+            assertAnnouncementMutationResult(result, "closed", announcement.id, announcement);
             message.success("公告已关闭");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "关闭公告失败");
+            const detail = error instanceof Error ? error.message : "关闭公告失败";
+            if (isMutationResultUncertain(error)) {
+                writeBlockedRef.current = true;
+                reconciliationRequired = true;
+                onPublishBlockedChange(true);
+                setKeyword("");
+                setStatus("all");
+                setPage(1);
+                setUncertainListReady(false);
+                const notice = `上一次关闭请求的结果暂时无法确认：${detail}。系统已切换到未筛选列表，请核对该公告的最新状态。核对完成前，公告写操作已暂停。`;
+                const review: AnnouncementPendingReview = {
+                    operation: "close",
+                    targetId: announcement.id,
+                    title: announcement.title,
+                    content: announcement.content,
+                    level: announcement.level,
+                    notice,
+                    requestedAt,
+                };
+                setPendingReview(review);
+                setReconciliationSummary("");
+                writeAnnouncementPendingReview(review);
+                setListRefreshNonce((value) => value + 1);
+                message.warning({ content: "公告关闭结果待核对，系统没有自动重试。", duration: 7 });
+            } else message.error(detail);
         } finally {
-            setClosingId("");
+            if (!reconciliationRequired) setListRefreshNonce((value) => value + 1);
+            closeInFlightRef.current.delete(announcement.id);
+            setClosingIds((current) => {
+                const next = new Set(current);
+                next.delete(announcement.id);
+                return next;
+            });
         }
     };
 
     const columns: ColumnsType<SystemAnnouncement> = [
         {
-            title: "公告内容",
+            title: "公告",
             dataIndex: "title",
-            minWidth: 360,
+            width: 330,
             render: (_, announcement) => (
-                <div className="flex min-w-0 items-center gap-3 py-0.5">
-                    {announcement.imageUrl ? <img src={announcementImageUrl(announcement)} alt="" loading="lazy" decoding="async" className="size-14 shrink-0 rounded-md border border-border/70 bg-muted/20 object-contain p-0.5" /> : null}
-                    <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>{announcement.title}</div>
-                        <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-foreground/50">{announcement.content}</div>
+                <div className="min-w-0 py-0.5">
+                    <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>
+                        {announcement.title}
                     </div>
+                    <AnnouncementContent content={announcement.content} className="admin-announcement-list-content mt-1 text-xs leading-5 text-foreground/50" />
                 </div>
             ),
         },
         {
-            title: "置顶",
-            dataIndex: "pinned",
-            width: 90,
-            render: (pinned: boolean) => pinned ? <Tag color="gold" icon={<Pin className="size-3" />}>置顶</Tag> : <span className="text-foreground/35">--</span>,
-        },
-        {
-            title: "级别",
+            title: "类型",
             dataIndex: "level",
-            width: 120,
-            render: (level: AnnouncementLevel) => {
-                const meta = levelMeta[level] || levelMeta.info;
-                return <AdminStatusBadge label={meta.label} tone={meta.tone} />;
-            },
+            width: 105,
+            align: "center",
+            render: renderAnnouncementLevel,
         },
         {
-            title: "状态",
-            dataIndex: "status",
-            width: 100,
-            render: (value: AnnouncementStatus) => <AdminStatusBadge label={value === "active" ? "发布中" : "已关闭"} tone={value === "active" ? "success" : "neutral"} />,
-        },
-        {
-            title: "发布时间",
-            dataIndex: "publishedAt",
-            width: 170,
-            render: formatDateTime,
-        },
-        {
-            title: "关闭时间",
-            dataIndex: "closedAt",
-            width: 170,
-            render: (value?: string) => value ? formatDateTime(value) : "--",
+            title: "发布状态",
+            width: 225,
+            align: "center",
+            render: (_, announcement) => <AnnouncementLifecycle announcement={announcement} />,
         },
         {
             title: "操作",
             key: "actions",
-            width: 160,
-            render: (_, announcement) => <AdminRowActions primary={{ label: "编辑", onClick: () => openEditModal(announcement) }} actions={announcement.status === "active" ? [{ key: "close", label: "关闭", danger: true, disabled: closingId === announcement.id, onClick: () => void closeAnnouncement(announcement), confirm: { title: "关闭这条公告？", description: "关闭后用户公告中心将不再展示，历史记录会保留。", okText: "关闭公告" } }] : []} />,
-        },
-    ];
-
-    return (
-        <>
-            <AdminDataTable
-                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />}
-                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "active" ? "发布中" : "已关闭"}`} onRemove={() => { setStatus("all"); setPage(1); }} /> : null}</>}
-                toolbarActive={Boolean(keyword || status !== "all")}
-                toolbarFilters={<Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "发布中", value: "active" }, { label: "已关闭", value: "closed" }]} />}
-                onReset={() => { setKeyword(""); setStatus("all"); setPage(1); }}
-                trailing={<Button type="primary" size="small" icon={<Plus className="size-4" />} onClick={openPublishModal}>发布公告</Button>}
-                table={{ rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: announcements, scroll: { x: 1020 } }}
-                empty={<AdminTableEmpty filtered={Boolean(keyword || status !== "all")} title="暂无公告" />}
-                footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
-            />
-
-            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={760} centered okText={editorMode === "preview" ? (editingAnnouncement ? "确认并重新发布" : "确认并发布") : "请先预览"} cancelText="取消" confirmLoading={publishing} okButtonProps={{ disabled: imageUploading || editorMode !== "preview" }} cancelButtonProps={{ disabled: imageUploading }} onOk={() => void publish()} onCancel={() => void closeEditor()} destroyOnHidden>
-                <div className="flex justify-end border-b border-border/70 pb-3 pt-3">
-                    <Segmented
-                        value={editorMode}
-                        onChange={(value) => setEditorMode(value as "edit" | "preview")}
-                        options={[
-                            { value: "edit", label: <span className="inline-flex items-center gap-1.5"><Pencil className="size-3.5" />编辑</span> },
-                            { value: "preview", label: <span className="inline-flex items-center gap-1.5"><Eye className="size-3.5" />预览</span> },
-                        ]}
+            width: 200,
+            align: "center",
+            render: (_, announcement) => (
+                <div className="flex justify-center">
+                    <AdminRowActions
+                        primary={{
+                            label: !isKnownAnnouncementStatus(announcement.status) ? "状态待核对" : announcement.status === "closed" ? "重新发布" : "编辑发布",
+                            icon: announcement.status === "closed" ? <RefreshCw className="size-3.5" /> : <PencilLine className="size-3.5" />,
+                            disabled: publishBlocked || closingIds.has(announcement.id) || !isKnownAnnouncementStatus(announcement.status),
+                            onClick: () => openEditDrawer(announcement),
+                        }}
+                        actions={
+                            announcement.status === "active"
+                                ? [
+                                      {
+                                          key: "close",
+                                          label: "关闭公告",
+                                          danger: true,
+                                          disabled: publishBlocked || closingIds.has(announcement.id),
+                                          confirm: {
+                                              title: `关闭“${announcement.title}”？`,
+                                              description: "关闭后服务端将不再下发该公告；已打开的页面会在下一次同步后移除（通常 5 分钟内），历史记录仍会保留。",
+                                              okText: "确认关闭",
+                                          },
+                                          onClick: () => closeAnnouncement(announcement),
+                                      },
+                                  ]
+                                : []
+                        }
                     />
                 </div>
-                {editorMode === "preview" ? <AnnouncementDraftPreview form={form} imagePreviewUrl={imagePreviewUrl} /> : null}
-                <Form form={form} layout="vertical" className={editorMode === "preview" ? "hidden" : "pt-4"} requiredMark={false}>
-                    <Form.Item name="title" label="公告标题" rules={[{ required: true, whitespace: true, message: "请填写公告标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
-                        <Input maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />
-                    </Form.Item>
-                    <Form.Item name="level" label="公告级别" rules={[{ required: true, message: "请选择公告级别" }]}>
-                        <Select options={levelOptions} />
-                    </Form.Item>
-                    <Form.Item name="pinned" label="展示方式" valuePropName="checked" extra="置顶公告会优先展示。">
-                        <Switch checkedChildren="置顶" unCheckedChildren="普通" />
-                    </Form.Item>
-                    <Form.Item name="imageResourceId" hidden><Input /></Form.Item>
-                    <Form.Item label="公告配图" extra="可选，真实图片文件不超过 10MB；取消、替换或移除时会回收未发布草稿。">
-                        <div className="space-y-2">
-                            {imagePreviewUrl ? (
-                                <div className="relative flex min-h-28 items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/20 p-2">
-                                    <img src={imagePreviewUrl} alt="公告配图预览" className="max-h-44 w-full object-contain" />
-                                    <Button type="text" size="small" danger disabled={imageUploading} icon={<X className="size-3.5" />} className="!absolute right-1 top-1 !size-7 !min-w-7 !p-0" onClick={() => void clearAnnouncementImage()} aria-label="移除公告配图" title="移除公告配图" />
-                                </div>
-                            ) : <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border/80 bg-muted/10 text-xs text-foreground/45">暂未添加配图</div>}
-                            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void uploadAnnouncementImage(event)} />
-                            <Button icon={<Upload className="size-3.5" />} loading={imageUploading} onClick={() => imageInputRef.current?.click()}>
-                                {imagePreviewUrl ? "更换配图" : "上传配图"}
-                            </Button>
+            ),
+        },
+    ];
+    const hasFilters = Boolean(keyword.trim() || status !== "all");
+
+    return (
+        <div className="admin-announcements flex min-h-0 flex-1 flex-col">
+            {pendingReview ? (
+                <div className="admin-announcement-uncertain-notice" role="alert">
+                    <div className="admin-announcement-uncertain-copy">
+                        <strong>公告结果待核对</strong>
+                        <p>{pendingReview.notice}</p>
+                        <dl className="admin-announcement-review-target">
+                            <div>
+                                <dt>待核对操作</dt>
+                                <dd>{formatPendingReviewOperation(pendingReview.operation)}</dd>
+                            </div>
+                            <div>
+                                <dt>公告标题</dt>
+                                <dd>{pendingReview.title}</dd>
+                            </div>
+                            <div>
+                                <dt>目标 ID</dt>
+                                <dd>{pendingReview.targetId || "新公告（响应中未取得 ID）"}</dd>
+                            </div>
+                            <div>
+                                <dt>请求时间</dt>
+                                <dd>{formatDateTime(pendingReview.requestedAt)}</dd>
+                            </div>
+                            <div className="is-wide">
+                                <dt>请求正文</dt>
+                                <dd>
+                                    <AnnouncementContent content={pendingReview.content} className="admin-announcement-review-content" />
+                                </dd>
+                            </div>
+                            <div className="is-wide" aria-live="polite">
+                                <dt>自动定位结果</dt>
+                                <dd>{reconciliationSummary || "刷新完整列表后将自动定位待核对记录。"}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div className="admin-announcement-uncertain-actions">
+                        <Button
+                            loading={loading || reconciliationLoading}
+                            onClick={() => {
+                                setKeyword("");
+                                setStatus("all");
+                                setPage(1);
+                                setUncertainListReady(false);
+                                setReconciliationSummary("");
+                                setListRefreshNonce((value) => value + 1);
+                            }}
+                        >
+                            刷新完整列表
+                        </Button>
+                        <Button
+                            type="primary"
+                            disabled={!uncertainListReady || loading || reconciliationLoading}
+                            onClick={() => {
+                                setPendingReview(null);
+                                setUncertainListReady(false);
+                                setReconciliationSummary("");
+                                clearAnnouncementPendingReview();
+                                onPublishBlockedChange(false);
+                                message.success("已恢复公告发布操作");
+                            }}
+                        >
+                            我已核对，恢复发布
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
+            <section className="flex min-h-0 flex-1" aria-label="系统公告列表">
+                <AdminDataTable
+                    toolbar={
+                        <Input
+                            allowClear
+                            disabled={publishBlocked}
+                            aria-label="搜索系统公告"
+                            className="app-list-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索公告标题或正文"
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                        />
+                    }
+                    toolbarActive={hasFilters}
+                    toolbarFilters={
+                        <Select<"all" | AnnouncementStatus>
+                            aria-label="按公告状态筛选"
+                            className="admin-announcement-status-filter w-32"
+                            disabled={publishBlocked}
+                            value={status}
+                            onChange={(value) => {
+                                setStatus(value);
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: "全部状态", value: "all" },
+                                { label: "发布中", value: "active" },
+                                { label: "已关闭", value: "closed" },
+                            ]}
+                        />
+                    }
+                    onReset={() => {
+                        setKeyword("");
+                        setStatus("all");
+                        setPage(1);
+                    }}
+                    trailing={
+                        <Button
+                            type="text"
+                            size="small"
+                            icon={<RefreshCw className="size-3.5" />}
+                            loading={loading || reconciliationLoading}
+                            onClick={() => {
+                                if (publishBlocked) {
+                                    setUncertainListReady(false);
+                                    setReconciliationSummary("");
+                                    setListRefreshNonce((value) => value + 1);
+                                } else void reload();
+                            }}
+                        >
+                            刷新
+                        </Button>
+                    }
+                    table={{ rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: announcements }}
+                    empty={
+                        <AdminTableEmpty
+                            filtered={hasFilters}
+                            title={listError ? "公告读取失败" : !hasFilters ? "暂无系统公告" : undefined}
+                            description={listError || (!hasFilters ? "发布后的公告会在这里展示状态和历史记录。" : undefined)}
+                            action={
+                                !listError && !hasFilters && !publishBlocked ? (
+                                    <Button
+                                        type="primary"
+                                        icon={<Plus className="size-4" />}
+                                        onClick={(event) => {
+                                            editorReturnFocusRef.current = event.currentTarget;
+                                            onPublishOpenChange(true);
+                                        }}
+                                    >
+                                        发布首条公告
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
+                    }
+                    footer={
+                        <PaginationBar
+                            alwaysShow
+                            current={page}
+                            pageSize={pageSize}
+                            total={total}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                                setPageSize(nextPageSize);
+                            }}
+                        />
+                    }
+                />
+            </section>
+
+            <AnnouncementEditor
+                open={editorOpen}
+                editingAnnouncement={editingAnnouncement}
+                form={form}
+                pending={pendingSave}
+                saving={saving}
+                publishBlocked={publishBlocked}
+                returnFocusElement={editorReturnFocusRef.current || publishReturnFocus}
+                watchedTitle={watchedTitle}
+                watchedContent={watchedContent}
+                watchedLevel={watchedLevel}
+                onClose={closeEditor}
+                onPreview={previewSave}
+                onPendingChange={setPendingSave}
+                onConfirm={() => void saveAnnouncement()}
+            />
+        </div>
+    );
+}
+
+function AnnouncementEditor({
+    open,
+    editingAnnouncement,
+    form,
+    pending,
+    saving,
+    publishBlocked,
+    returnFocusElement,
+    watchedTitle,
+    watchedContent,
+    watchedLevel,
+    onClose,
+    onPreview,
+    onPendingChange,
+    onConfirm,
+}: {
+    open: boolean;
+    editingAnnouncement: SystemAnnouncement | null;
+    form: ReturnType<typeof Form.useForm<AnnouncementFormValues>>[0];
+    pending: PendingAnnouncement | null;
+    saving: boolean;
+    publishBlocked: boolean;
+    returnFocusElement: HTMLElement | null;
+    watchedTitle?: string;
+    watchedContent?: string;
+    watchedLevel?: AnnouncementLevel;
+    onClose: () => void;
+    onPreview: (values: AnnouncementFormValues) => void;
+    onPendingChange: (pending: PendingAnnouncement | null) => void;
+    onConfirm: () => void;
+}) {
+    const previewMeta = levelMeta[watchedLevel || "info"] || levelMeta.info;
+    const titleInputRef = useRef<InputRef>(null);
+    const activeOverlay = pending ? "modal" : open ? "drawer" : null;
+    useAnnouncementOverlayFocus(activeOverlay, titleInputRef, returnFocusElement);
+    return (
+        <>
+            <Drawer
+                title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"}
+                open={open && !pending}
+                size="min(680px, 100vw)"
+                onClose={onClose}
+                rootClassName="admin-drawer admin-announcement-drawer"
+                forceRender
+                afterOpenChange={(isOpen) => {
+                    if (!isOpen) return;
+                    document.querySelector<HTMLElement>(".admin-announcement-drawer .ant-drawer-body")?.scrollTo({ top: 0 });
+                    titleInputRef.current?.focus({ cursor: "end" });
+                }}
+                mask={{ closable: !saving && !pending }}
+                keyboard={!saving && !pending}
+                closable={!saving && !pending}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button disabled={saving || Boolean(pending)} onClick={onClose}>
+                            取消
+                        </Button>
+                        <Button type="primary" loading={saving} disabled={publishBlocked || Boolean(pending)} icon={<Send className="size-4" />} onClick={() => form.submit()}>
+                            核对并继续
+                        </Button>
+                    </div>
+                }
+            >
+                <div className={`admin-announcement-editor-intro${editingAnnouncement ? " is-warning" : ""}`}>
+                    <strong>{editingAnnouncement ? "保存会重新向全体用户发布" : "发布成功后会进入用户公告中心"}</strong>
+                    <p>{editingAnnouncement ? "无论当前公告是否已关闭，保存都会刷新发布时间、恢复为发布中，并清除所有用户的旧已读状态。" : "已打开的页面会在下一次同步后看到（通常 5 分钟内）；请写清影响范围、所需操作和预计恢复时间。"}</p>
+                </div>
+                <Form form={form} layout="vertical" requiredMark={false} disabled={publishBlocked} initialValues={DEFAULT_ANNOUNCEMENT} scrollToFirstError={{ focus: true, block: "center" }} onFinish={onPreview}>
+                    <section className="admin-announcement-editor-section">
+                        <div className="admin-announcement-editor-section-heading">
+                            <h2>公告内容</h2>
+                            <p>支持换行以及链接、强调、列表等受控 HTML；Markdown 不会被解析。</p>
                         </div>
-                    </Form.Item>
-                    <Form.Item
-                        name="content"
-                        label="公告正文（支持 Markdown）"
-                        extra="支持标题、加粗、列表、链接、引用和表格；不支持原始 HTML。"
-                        rules={[{ required: true, whitespace: true, message: "请填写公告正文" }, { max: 4000, message: "正文不能超过 4000 个字符" }]}
-                    >
-                        <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder="填写服务状态、影响范围和用户需要采取的操作，可使用 Markdown 语法" />
-                    </Form.Item>
+                        <div className="admin-announcement-form-grid">
+                            <Form.Item
+                                name="title"
+                                label="公告标题"
+                                rules={[
+                                    { required: true, whitespace: true, message: "请填写公告标题" },
+                                    { max: 120, message: "标题不能超过 120 个字符" },
+                                ]}
+                            >
+                                <Input ref={titleInputRef} maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />
+                            </Form.Item>
+                            <Form.Item name="level" label="公告类型" extra={previewMeta.guidance} rules={[{ required: true, message: "请选择公告类型" }]}>
+                                <Select aria-label="选择公告类型" options={levelOptions} />
+                            </Form.Item>
+                        </div>
+                        <Form.Item
+                            name="content"
+                            label="公告正文"
+                            rules={[
+                                { required: true, whitespace: true, message: "请填写公告正文" },
+                                { max: 4000, message: "正文不能超过 4000 个字符" },
+                            ]}
+                        >
+                            <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 7, maxRows: 14 }} placeholder="填写服务状态、影响范围和用户需要采取的操作" />
+                        </Form.Item>
+                    </section>
+
+                    <section className="admin-announcement-preview" data-level={watchedLevel || "info"} aria-label="用户端公告预览">
+                        <div className="admin-announcement-preview-heading">
+                            <span>用户端预览</span>
+                            <AdminStatusBadge label={previewMeta.label} tone={previewMeta.tone} />
+                        </div>
+                        <h3>{watchedTitle?.trim() || "公告标题将在这里显示"}</h3>
+                        {watchedContent?.trim() ? <AnnouncementContent content={watchedContent.trim()} className="admin-announcement-preview-content" /> : <p className="admin-announcement-preview-placeholder">公告正文将在这里显示。</p>}
+                    </section>
                 </Form>
+            </Drawer>
+
+            <Modal
+                title={pending?.mode === "update" ? "确认编辑并重新发布" : "确认发布系统公告"}
+                open={Boolean(pending)}
+                okText={pending?.mode === "update" ? "确认重新发布" : "确认发布"}
+                cancelText="返回修改"
+                onCancel={() => {
+                    if (!saving) onPendingChange(null);
+                }}
+                onOk={onConfirm}
+                confirmLoading={saving}
+                mask={{ closable: !saving }}
+                closable={!saving}
+                keyboard={!saving}
+                destroyOnHidden
+                rootClassName="admin-modal-root admin-announcement-confirm-modal"
+                okButtonProps={{ danger: pending?.level === "critical", disabled: publishBlocked }}
+            >
+                {pending ? (
+                    <div className="admin-operation-confirmation">
+                        <p className="admin-operation-confirmation-copy">
+                            {pending.mode === "update"
+                                ? `这会把公告重新置为发布中、刷新发布时间，并清除所有用户对 ${formatDateTime(pending.previousPublishedAt)} 版本的已读记录。`
+                                : "确认后公告会进入所有用户的公告中心并计入未读提醒；已打开的页面会在下一次同步后看到（通常 5 分钟内）。"}
+                        </p>
+                        <dl className="admin-operation-confirmation-grid">
+                            <div>
+                                <dt>操作</dt>
+                                <dd>{pending.mode === "update" ? (pending.previousStatus === "closed" ? "重新开启并发布" : "更新并重新发布") : "发布新公告"}</dd>
+                            </div>
+                            <div>
+                                <dt>公告类型</dt>
+                                <dd>{(levelMeta[pending.level] || levelMeta.info).label}</dd>
+                            </div>
+                            <div className="is-wide">
+                                <dt>公告标题</dt>
+                                <dd>{pending.title}</dd>
+                            </div>
+                            <div className="is-wide">
+                                <dt>公告正文</dt>
+                                <dd>
+                                    <AnnouncementContent content={pending.content} className="admin-announcement-confirm-content" />
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                ) : null}
             </Modal>
         </>
     );
 }
 
-function AnnouncementDraftPreview({ form, imagePreviewUrl }: { form: FormInstance<AnnouncementFormValues>; imagePreviewUrl: string }) {
-    const title = Form.useWatch("title", form) || "未填写标题";
-    const content = Form.useWatch("content", form) || "暂未填写公告正文";
-    const level = Form.useWatch("level", form) || "info";
-    const pinned = Form.useWatch("pinned", form);
-    const meta = levelMeta[level as AnnouncementLevel] || levelMeta.info;
+function useAnnouncementOverlayFocus(activeOverlay: "drawer" | "modal" | null, titleInputRef: { current: InputRef | null }, returnFocusElement: HTMLElement | null) {
+    const previousOverlayRef = useRef<typeof activeOverlay>(null);
+    const returnFocusRef = useRef<HTMLElement | null>(returnFocusElement);
+    if (returnFocusElement) returnFocusRef.current = returnFocusElement;
 
+    useEffect(() => {
+        const previousOverlay = previousOverlayRef.current;
+        previousOverlayRef.current = activeOverlay;
+        if (!activeOverlay) {
+            if (!previousOverlay) return;
+            const restoreFocus = () => {
+                const activeElement = document.activeElement;
+                if (activeElement === document.body || activeElement === null || activeElement?.closest(".admin-announcement-drawer, .admin-announcement-confirm-modal")) resolveAnnouncementReturnFocus(returnFocusRef.current)?.focus();
+            };
+            const frame = window.requestAnimationFrame(restoreFocus);
+            const transitionFallback = window.setTimeout(restoreFocus, 360);
+            return () => {
+                window.cancelAnimationFrame(frame);
+                window.clearTimeout(transitionFallback);
+            };
+        }
+
+        const selector = activeOverlay === "modal" ? ".admin-announcement-confirm-modal" : ".admin-announcement-drawer";
+        const focusOverlay = () => {
+            const root = findVisibleOverlay(selector);
+            if (!root) return;
+            if (activeOverlay === "drawer") {
+                root.querySelector<HTMLElement>(".ant-drawer-body")?.scrollTo({ top: 0 });
+                titleInputRef.current?.focus({ cursor: "end" });
+                return;
+            }
+            if (!root.contains(document.activeElement)) getOverlayFocusableElements(root)[0]?.focus();
+        };
+        const frame = window.requestAnimationFrame(focusOverlay);
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Tab") return;
+            const root = findVisibleOverlay(selector);
+            if (!root) return;
+            const focusableElements = getOverlayFocusableElements(root);
+            if (!focusableElements.length) {
+                event.preventDefault();
+                root.focus();
+                return;
+            }
+            const activeElement = document.activeElement as HTMLElement | null;
+            const currentIndex = activeElement ? focusableElements.indexOf(activeElement) : -1;
+            if (event.shiftKey && currentIndex <= 0) {
+                event.preventDefault();
+                focusableElements[focusableElements.length - 1]?.focus();
+            } else if (!event.shiftKey && (currentIndex < 0 || currentIndex === focusableElements.length - 1)) {
+                event.preventDefault();
+                focusableElements[0]?.focus();
+            }
+        };
+        document.addEventListener("keydown", handleKeyDown, true);
+        return () => {
+            window.cancelAnimationFrame(frame);
+            document.removeEventListener("keydown", handleKeyDown, true);
+        };
+    }, [activeOverlay, titleInputRef]);
+}
+
+function resolveAnnouncementReturnFocus(preferred: HTMLElement | null) {
+    if (preferred?.isConnected && !(preferred instanceof HTMLButtonElement && preferred.disabled)) return preferred;
+    const publishTrigger = document.getElementById("admin-announcement-publish-trigger");
+    if (publishTrigger instanceof HTMLElement && !(publishTrigger instanceof HTMLButtonElement && publishTrigger.disabled)) return publishTrigger;
+    return document.querySelector<HTMLElement>(".admin-announcement-uncertain-actions button:not(:disabled)");
+}
+
+function findVisibleOverlay(selector: string) {
+    return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) => element.getClientRects().length > 0) || null;
+}
+
+function getOverlayFocusableElements(root: HTMLElement) {
+    const selector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(root.querySelectorAll<HTMLElement>(selector)).filter((element) => {
+        if (element.getAttribute("aria-hidden") === "true" || element.closest('[aria-hidden="true"]')) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 1 && rect.height > 1 && window.getComputedStyle(element).visibility !== "hidden";
+    });
+}
+
+function AnnouncementLifecycle({ announcement }: { announcement: SystemAnnouncement }) {
+    const active = announcement.status === "active";
+    const closed = announcement.status === "closed";
     return (
-        <div className="min-h-80 py-5">
-            <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
-                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-                    <div className="flex items-center gap-2">
-                        <AdminStatusBadge label={meta.label} tone={meta.tone} />
-                        {pinned ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-500"><Pin className="size-3" />置顶</span> : null}
-                    </div>
-                    <span className="text-xs text-foreground/40">预览效果</span>
-                </div>
-                <div className="p-5">
-                    <h2 className="text-lg font-semibold leading-7 text-foreground">{title}</h2>
-                    {imagePreviewUrl ? <img src={imagePreviewUrl} alt="公告配图预览" className="mt-4 max-h-56 w-full rounded-lg border border-border/70 bg-muted/20 object-contain p-1" /> : null}
-                    <AnnouncementContent content={content} className="mt-3 text-sm leading-6 text-foreground/75" />
-                </div>
-            </div>
+        <div className="admin-announcement-lifecycle">
+            <AdminStatusBadge label={active ? "发布中" : closed ? "已关闭" : "未知状态"} tone={active ? "success" : "neutral"} />
+            <span>发布 {formatDateTime(announcement.publishedAt)}</span>
+            {closed ? <span>关闭 {formatDateTime(announcement.closedAt)}</span> : null}
         </div>
     );
 }
 
-function formatDateTime(value: string) {
+function renderAnnouncementLevel(level: AnnouncementLevel) {
+    const meta = levelMeta[level] || levelMeta.info;
+    return <AdminStatusBadge label={meta.label} tone={meta.tone} />;
+}
+
+function isMutationResultUncertain(error: unknown) {
+    if (!(error instanceof ApiError)) return true;
+    return error.status === undefined || error.retryable || error.status >= 500;
+}
+
+function assertAnnouncementMutationResult(result: unknown, expectedStatus: AnnouncementStatus, expectedId: string | undefined, expectedContent: Pick<SystemAnnouncement, "title" | "content" | "level">) {
+    const announcement = (result as { announcement?: Partial<SystemAnnouncement> } | null)?.announcement;
+    const publishedAt = announcement?.publishedAt;
+    const closedAt = announcement?.closedAt;
+    const validPublishedAt = typeof publishedAt === "string" && !Number.isNaN(new Date(publishedAt).getTime());
+    const validClosedAt = expectedStatus === "closed" ? typeof closedAt === "string" && !Number.isNaN(new Date(closedAt).getTime()) : closedAt === null || closedAt === undefined;
+    const contentMatches = announcement?.title === expectedContent.title && announcement?.content === expectedContent.content && announcement?.level === expectedContent.level;
+    if (!announcement || typeof announcement.id !== "string" || !announcement.id || (expectedId && announcement.id !== expectedId) || announcement.status !== expectedStatus || !validPublishedAt || !validClosedAt || !contentMatches) {
+        throw new Error("服务返回的公告状态不完整，无法确认操作结果");
+    }
+}
+
+function assertAnnouncementListResult(result: unknown, expectedPage: number, expectedLimit: number) {
+    if (!isRecord(result) || !Array.isArray(result.announcements) || !Number.isInteger(result.total) || (result.total as number) < 0 || result.page !== expectedPage || result.limit !== expectedLimit) {
+        throw new Error("公告列表返回格式不完整");
+    }
+    const announcements = result.announcements.map((value) => normalizeAnnouncementListItem(value));
+    if ((result.total as number) < announcements.length) throw new Error("公告列表总数与当前页数据不一致");
+    return { announcements, total: result.total as number, page: expectedPage, limit: expectedLimit };
+}
+
+function normalizeAnnouncementListItem(value: unknown): SystemAnnouncement {
+    if (
+        !isRecord(value) ||
+        typeof value.id !== "string" ||
+        !value.id ||
+        typeof value.title !== "string" ||
+        typeof value.content !== "string" ||
+        !isKnownAnnouncementLevel(value.level) ||
+        !isKnownAnnouncementStatus(value.status) ||
+        typeof value.createdBy !== "string" ||
+        !isValidDateTimeString(value.publishedAt) ||
+        !isValidDateTimeString(value.createdAt) ||
+        !isValidDateTimeString(value.updatedAt) ||
+        (value.closedAt !== null && value.closedAt !== undefined && !isValidDateTimeString(value.closedAt))
+    ) {
+        throw new Error("公告列表包含无法识别的记录");
+    }
+    return {
+        id: value.id,
+        title: value.title,
+        content: value.content,
+        level: value.level,
+        pinned: value.pinned === true,
+        status: value.status,
+        createdBy: value.createdBy,
+        publishedAt: value.publishedAt as string,
+        closedAt: typeof value.closedAt === "string" ? value.closedAt : undefined,
+        createdAt: value.createdAt as string,
+        updatedAt: value.updatedAt as string,
+    };
+}
+
+async function inspectPendingReview(review: AnnouncementPendingReview) {
+    const queryTitles = Array.from(new Set([review.title, review.previousTitle].filter((value): value is string => Boolean(value?.trim()))));
+    const candidates = new Map<string, SystemAnnouncement>();
+    for (const title of queryTitles) {
+        let targetPage = 1;
+        while (targetPage <= 50) {
+            const data = assertAnnouncementListResult(await listAdminAnnouncements({ keyword: title, page: targetPage, limit: 100 }), targetPage, 100);
+            data.announcements.forEach((announcement) => candidates.set(announcement.id, announcement));
+            if (targetPage >= Math.max(1, Math.ceil(data.total / data.limit))) break;
+            if (targetPage === 50) throw new Error("同名匹配记录过多，无法安全定位目标；请稍后重试。");
+            targetPage += 1;
+        }
+    }
+
+    const records = Array.from(candidates.values());
+    if (review.targetId) {
+        const target = records.find((announcement) => announcement.id === review.targetId);
+        if (!target) return `按请求前后标题检索后，未找到目标 ID ${review.targetId}。该请求可能未生效，请结合完整列表再人工确认。`;
+        const contentMatches = target.title === review.title && target.content === review.content && target.level === review.level;
+        const expectedStatus: AnnouncementStatus = review.operation === "close" ? "closed" : "active";
+        const statusMatches = target.status === expectedStatus;
+        return `已定位目标 ID ${target.id}：当前为${target.status === "active" ? "发布中" : "已关闭"}，标题、正文与类型${contentMatches ? "与请求一致" : "与请求不一致"}，${statusMatches ? "状态符合预期" : "状态不符合预期"}。`;
+    }
+
+    const requestedAt = new Date(review.requestedAt).getTime();
+    const matchingRecords = records.filter(
+        (announcement) => announcement.title === review.title && announcement.content === review.content && announcement.level === review.level && new Date(announcement.publishedAt).getTime() >= requestedAt - 5 * 60_000,
+    );
+    if (!matchingRecords.length) return "未找到请求时间附近与标题、正文和类型完全一致的新公告；该发布请求可能未生效。";
+    const resultSummary = matchingRecords
+        .slice(0, 3)
+        .map((announcement) => `${announcement.id} · ${formatDateTime(announcement.publishedAt)} · ${announcement.status === "active" ? "发布中" : "已关闭"}`)
+        .join("；");
+    return `找到 ${matchingRecords.length} 条与请求内容完全一致的近期记录：${resultSummary}${matchingRecords.length > 3 ? "；其余记录请在列表中核对" : ""}。`;
+}
+
+function formatPendingReviewOperation(operation: AnnouncementPendingReview["operation"]) {
+    if (operation === "create") return "发布新公告";
+    if (operation === "update") return "编辑并重新发布";
+    return "关闭公告";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object";
+}
+
+function isValidDateTimeString(value: unknown): value is string {
+    return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+}
+
+function isKnownAnnouncementLevel(value: unknown): value is AnnouncementLevel {
+    return value === "info" || value === "success" || value === "warning" || value === "critical";
+}
+
+function isKnownAnnouncementStatus(value: unknown): value is AnnouncementStatus {
+    return value === "active" || value === "closed";
+}
+
+function formatDateTime(value?: string | null) {
+    if (!value) return "--";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "--";
     return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date).replaceAll("/", "-");

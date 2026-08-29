@@ -1,38 +1,136 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { App, Button, Form, Input, Select, Switch } from "antd";
-import { ChevronDown, KeyRound, LockKeyhole, ShieldCheck, UserPlus } from "lucide-react";
+import { App, Button, Form, Input, Select, Skeleton, Switch } from "antd";
+import { AlertTriangle, BadgeCheck, ChevronDown, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useBlocker } from "react-router";
 
-import {
-    getAdminLinuxDOSetting,
-    getAdminRegistrationSetting,
-    updateAdminLinuxDOSetting,
-    updateAdminRegistrationSetting,
-    type LinuxDOSetting,
-    type RegistrationSetting,
-} from "@/services/api/wallet";
-import { configuredSecretText, SettingsSectionCard } from "./admin-ui";
+import { cn } from "@/lib/utils";
+import { getAdminLinuxDOSetting, getAdminRegistrationSetting, updateAdminLinuxDOSetting, updateAdminRegistrationSetting, type LinuxDOSetting, type RegistrationSetting } from "@/services/api/wallet";
+import { AdminStatTile, AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
 type LinuxDOFormValues = Omit<LinuxDOSetting, "hasClientSecret" | "updatedAt">;
 
 export default function AccessSettingsPanel() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [linuxdo, setLinuxdo] = useState<LinuxDOSetting | null>(null);
     const [registration, setRegistration] = useState<RegistrationSetting | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [savingLinuxDO, setSavingLinuxDO] = useState(false);
     const [savingRegistration, setSavingRegistration] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
+    const [loadError, setLoadError] = useState("");
+    const [saveError, setSaveError] = useState("");
     const [form] = Form.useForm<LinuxDOFormValues>();
+    const requestVersionRef = useRef(0);
+    const navigationConfirmOpenRef = useRef(false);
+    const navigationTriggerRef = useRef<HTMLElement | null>(null);
 
-    useEffect(() => {
-        void Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting()])
-            .then(([linuxdoData, registrationData]) => {
+    const load = useCallback(
+        async (initial = false, announce = false) => {
+            const requestVersion = ++requestVersionRef.current;
+            if (initial) setLoading(true);
+            else setRefreshing(true);
+            setLoadError("");
+            try {
+                const [linuxdoData, registrationData] = await Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting()]);
+                if (requestVersion !== requestVersionRef.current) return;
                 setLinuxdo(linuxdoData.setting);
                 setRegistration(registrationData.setting);
-                form.setFieldsValue({ ...linuxdoData.setting, clientSecret: "" });
-            })
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取登录配置失败"))
-            .finally(() => setLoading(false));
-    }, [form, message]);
+                setDirty(false);
+                setSaveError("");
+                if (announce) message.success("已重新读取当前登录与注册配置");
+            } catch (error) {
+                if (requestVersion !== requestVersionRef.current) return;
+                const errorMessage = error instanceof Error ? error.message : "读取登录与注册配置失败";
+                setLoadError(errorMessage);
+                if (!initial) message.error(errorMessage);
+            } finally {
+                if (requestVersion === requestVersionRef.current) {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }
+        },
+        [form, message],
+    );
+
+    useEffect(() => {
+        void load(true);
+        return () => {
+            requestVersionRef.current += 1;
+        };
+    }, [load]);
+
+    useEffect(() => {
+        if (loading || !linuxdo || !registration) return;
+        form.setFieldsValue(toLinuxDOFormValues(linuxdo));
+        setDraftLinuxDOEnabled(linuxdo.enabled);
+    }, [form, linuxdo, loading, registration]);
+
+    const blocker = useBlocker(dirty && !savingLinuxDO);
+
+    useEffect(() => {
+        const beforeUnload = (event: BeforeUnloadEvent) => {
+            if (!dirty || savingLinuxDO) return;
+            event.preventDefault();
+        };
+        window.addEventListener("beforeunload", beforeUnload);
+        return () => window.removeEventListener("beforeunload", beforeUnload);
+    }, [dirty, savingLinuxDO]);
+
+    useEffect(() => {
+        if (blocker.state !== "blocked" || navigationConfirmOpenRef.current) return;
+        navigationConfirmOpenRef.current = true;
+        navigationTriggerRef.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+        modal.confirm({
+            title: "放弃 Linux.do 登录调整？",
+            content: "当前表单有尚未保存的调整，离开后这些内容会丢失。用户注册状态不受影响。",
+            okText: "放弃并离开",
+            cancelText: "继续编辑",
+            okButtonProps: { danger: true },
+            onOk: () => {
+                navigationConfirmOpenRef.current = false;
+                navigationTriggerRef.current = null;
+                blocker.proceed();
+            },
+            onCancel: () => {
+                navigationConfirmOpenRef.current = false;
+                blocker.reset();
+                window.requestAnimationFrame(() => {
+                    const fallback = document.querySelector<HTMLButtonElement>(".admin-access-command-actions button");
+                    const target = navigationTriggerRef.current?.isConnected ? navigationTriggerRef.current : fallback;
+                    target?.focus();
+                    navigationTriggerRef.current = null;
+                });
+            },
+        });
+    }, [blocker, modal]);
+
+    const resetLinuxDODraft = () => {
+        if (!linuxdo || savingLinuxDO) return;
+        form.setFieldsValue(toLinuxDOFormValues(linuxdo));
+        form.setFields([]);
+        setDraftLinuxDOEnabled(linuxdo.enabled);
+        setDirty(false);
+        setSaveError("");
+        message.info("已撤销 Linux.do 登录的未保存调整");
+    };
+
+    const requestRefresh = () => {
+        if (!dirty) {
+            void load(false, true);
+            return;
+        }
+        modal.confirm({
+            title: "放弃调整并重新读取？",
+            content: "重新读取会丢弃当前 Linux.do 表单中的未保存内容，并以服务端配置为准。",
+            okText: "放弃并刷新",
+            cancelText: "继续编辑",
+            okButtonProps: { danger: true },
+            onOk: () => load(false, true),
+        });
+    };
 
     const toggleRegistration = async (enabled: boolean) => {
         setSavingRegistration(true);
@@ -41,132 +139,406 @@ export default function AccessSettingsPanel() {
             setRegistration(data.setting);
             message.success(enabled ? "用户注册已开启" : "用户注册已关闭");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新注册设置失败");
+            const errorMessage = error instanceof Error ? error.message : "更新注册设置失败";
+            message.error(errorMessage);
+            throw error;
         } finally {
             setSavingRegistration(false);
         }
     };
 
-    const saveLinuxDO = async () => {
-        const values = await form.validateFields();
-        if (values.enabled && !values.clientSecret?.trim() && !linuxdo?.hasClientSecret) {
-            message.error("启用 Linux.do 登录前请填写 Client Secret");
-            return;
-        }
+    const requestRegistrationChange = (enabled: boolean) => {
+        if (!registration || enabled === registration.enabled || savingRegistration) return;
+        void toggleRegistration(enabled).catch(() => undefined);
+    };
+
+    const saveLinuxDO = async (values: LinuxDOFormValues) => {
+        const expected = normalizeLinuxDOFormValues(values);
         setSavingLinuxDO(true);
+        setSaveError("");
         try {
-            const data = await updateAdminLinuxDOSetting({ ...values, clientSecret: values.clientSecret?.trim() || "" });
-            setLinuxdo(data.setting);
-            form.setFieldsValue({ ...data.setting, clientSecret: "" });
+            const result = await updateAdminLinuxDOSetting(expected);
+            if (!linuxDOResponseMatches(result.setting, expected)) throw new Error("服务端返回的 Linux.do 配置与本次保存内容不一致，请重新读取后核对");
+            setLinuxdo(result.setting);
+            setDirty(false);
             message.success("Linux.do 登录配置已保存");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存 Linux.do 配置失败");
+            const errorMessage = error instanceof Error ? error.message : "保存 Linux.do 配置失败";
+            setSaveError(`${errorMessage}。未自动重试，请重新读取当前配置后再决定是否保存。`);
+            message.error(errorMessage);
+            throw error;
         } finally {
             setSavingLinuxDO(false);
         }
     };
 
+    const submitLinuxDOSave = async () => {
+        let values: LinuxDOFormValues;
+        try {
+            values = await form.validateFields();
+        } catch {
+            return;
+        }
+        const validationError = validateLinuxDODraft(values, linuxdo);
+        if (validationError) {
+            message.error(validationError);
+            return;
+        }
+        try {
+            await saveLinuxDO(values);
+        } catch {
+            // 保存错误已在 saveLinuxDO 中就地提示。
+        }
+    };
+
+    const toggleLinuxDO = async (enabled: boolean) => {
+        if (!linuxdo || savingLinuxDO || enabled === linuxdo.enabled) return;
+        const values = (enabled ? { ...form.getFieldsValue(true), enabled } : { ...toLinuxDOFormValues(linuxdo), enabled, clientSecret: "" }) as LinuxDOFormValues;
+        const validationError = validateLinuxDODraft(values, linuxdo);
+        if (validationError) {
+            form.setFieldValue("enabled", linuxdo.enabled);
+            setDraftLinuxDOEnabled(linuxdo.enabled);
+            message.error(validationError);
+            return;
+        }
+        form.setFieldValue("enabled", enabled);
+        setDraftLinuxDOEnabled(enabled);
+        try {
+            await saveLinuxDO(values);
+        } catch {
+            form.setFieldValue("enabled", linuxdo.enabled);
+            setDraftLinuxDOEnabled(linuxdo.enabled);
+        }
+    };
+
+    if (loading && (!linuxdo || !registration)) {
+        return (
+            <div className="admin-settings-stack admin-access-settings" aria-label="正在读取登录与注册配置" role="status">
+                <div className="admin-access-command-bar">
+                    <Skeleton active title={{ width: 180 }} paragraph={false} />
+                </div>
+                <div className="admin-access-overview">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="admin-stat-tile">
+                            <Skeleton active title={{ width: 96 }} paragraph={{ rows: 1 }} />
+                        </div>
+                    ))}
+                </div>
+                <div className="admin-access-loading-card">
+                    <Skeleton active paragraph={{ rows: 6 }} />
+                </div>
+            </div>
+        );
+    }
+
+    if (!linuxdo || !registration) {
+        return (
+            <div className="admin-settings-stack admin-access-settings">
+                <div className="admin-access-load-error" role="alert">
+                    <span className="admin-access-load-error-icon">
+                        <AlertTriangle className="size-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                        <h2>无法读取登录与注册配置</h2>
+                        <p>{loadError || "当前没有可显示的配置，请稍后重试。"}</p>
+                    </div>
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} onClick={() => void load(false, true)}>
+                        重新读取
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    const configuredEndpointCount = [linuxdo.authorizationUrl, linuxdo.tokenUrl, linuxdo.userInfoUrl, linuxdo.redirectUrl].filter((value) => value?.trim()).length;
 
     return (
-        <div className="space-y-4 pt-4">
-            <SettingsSectionCard
-                icon={<UserPlus className="size-4" />}
-                title="用户注册"
-                description="控制新用户能否创建账号，不影响已有账号登录。"
-                status={{ label: registration?.enabled ? "已开放" : "已关闭", color: registration?.enabled ? "success" : "default" }}
-            >
-                <div className="flex min-h-20 items-center justify-between gap-5 px-5 py-4">
-                    <div className="min-w-0">
-                        <h3 className="text-sm font-medium">开放新用户注册</h3>
-                        <p className="mt-1 text-xs leading-5 text-foreground/55">关闭后，本地注册和未绑定账号的 Linux.do 首次登录都会被拒绝。</p>
-                    </div>
-                    <Switch checked={registration?.enabled === true} loading={loading || savingRegistration} onChange={(checked) => void toggleRegistration(checked)} aria-label="开放新用户注册" />
-                </div>
-            </SettingsSectionCard>
-
-            <SettingsSectionCard
-                icon={<KeyRound className="size-4" />}
-                title="Linux.do 单点登录"
-                description="连接 Linux.do OAuth，让用户使用社区账号登录。"
-                status={{ label: linuxdo?.enabled ? "运行中" : "未启用", color: linuxdo?.enabled ? "success" : "default" }}
-                footer={<><span className="text-xs text-foreground/45">Client Secret 加密保存，接口不会回显明文。</span><Button type="primary" loading={savingLinuxDO} onClick={() => void saveLinuxDO()}>保存登录配置</Button></>}
-            >
-                <Form form={form} layout="vertical" requiredMark={false} disabled={loading}>
+        <div className="admin-settings-stack admin-access-settings">
+            <div className={cn("admin-access-command-bar", dirty && "is-dirty")}>
+                <div className="admin-access-command-copy" aria-live="polite">
+                    <span className="admin-access-command-icon">
+                        <ShieldCheck className="size-4" aria-hidden="true" />
+                    </span>
                     <div>
-                        <div className="grid gap-x-5 gap-y-1 border-b border-border p-5 md:grid-cols-2">
-                            <div className="md:col-span-2">
-                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="登录状态与应用凭据" />
-                            </div>
-                            <Form.Item name="enabled" label="启用 Linux.do 登录" valuePropName="checked" extra="启用后，登录与注册页面会显示 Linux.do 入口。">
-                                <Switch />
-                            </Form.Item>
-                            <Form.Item name="clientAuthMethod" label="Token 请求鉴权方式" rules={[{ required: true, message: "请选择鉴权方式" }]} extra="Linux.do 应用未特别要求时使用 Client Secret Post。">
-                                <Select options={[{ label: "Client Secret Post（推荐）", value: "client_secret_post" }, { label: "Client Secret Basic", value: "client_secret_basic" }]} />
-                            </Form.Item>
-                            <Form.Item name="clientId" label="Client ID">
-                                <Input autoComplete="off" placeholder="Linux.do OAuth 应用的 Client ID" />
-                            </Form.Item>
-                            <Form.Item name="clientSecret" label={linuxdo?.hasClientSecret ? `Client Secret（${configuredSecretText}）` : "Client Secret"}>
-                                <Input.Password autoComplete="new-password" placeholder={linuxdo?.hasClientSecret ? "留空保留原密钥" : "Linux.do OAuth 应用的 Client Secret"} />
-                            </Form.Item>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <strong>{dirty ? "Linux.do 有调整待保存" : "登录与注册状态已同步"}</strong>
+                            <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                         </div>
+                        <p>{dirty ? "当前表单参数只在本页暂存；入口开关切换后立即保存。" : "注册策略与 Linux.do 配置分别读取、分别保存。"}</p>
+                    </div>
+                </div>
+                <div className="admin-access-command-actions">
+                    {dirty ? (
+                        <Button icon={<RotateCcw className="size-4" />} disabled={savingLinuxDO} onClick={resetLinuxDODraft}>
+                            撤销调整
+                        </Button>
+                    ) : null}
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration} onClick={requestRefresh}>
+                        刷新状态
+                    </Button>
+                </div>
+            </div>
 
-                        <div className="grid gap-x-5 gap-y-1 border-b border-border p-5 md:grid-cols-2">
-                            <div className="md:col-span-2">
-                                <FormSectionTitle icon={<LockKeyhole className="size-4" />} title="OAuth 地址" />
+            {loadError || saveError ? (
+                <div className="admin-access-inline-alert" role="alert">
+                    <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+                    <span>{saveError || `${loadError}。页面仍显示上一次成功读取的配置。`}</span>
+                </div>
+            ) : null}
+
+            <div className="admin-access-overview" aria-label="登录与注册配置概览">
+                <AdminStatTile label="新用户注册" value={registration.enabled ? "已开放" : "已关闭"} detail={formatSettingTime(registration.updatedAt, "使用部署默认值")} />
+                <AdminStatTile label="Linux.do 登录" value={draftLinuxDOEnabled ? "启用" : "停用"} detail={dirty ? "暂存状态预览" : "影响登录页第三方入口"} />
+                <AdminStatTile label="应用密钥" value={linuxdo.hasClientSecret ? "已配置" : "未配置"} detail="Client Secret 仅保存在服务端" />
+                <AdminStatTile label="OAuth 端点" value={`${configuredEndpointCount}/4`} detail={configuredEndpointCount === 4 ? "授权、Token、资料与回调齐全" : "启用前需要补全端点"} />
+            </div>
+
+            <div id="admin-access-registration" className="admin-settings-anchor">
+                <SettingsSectionCard
+                    className="admin-access-section admin-access-registration-section"
+                    icon={<UserPlus className="size-4" aria-hidden="true" />}
+                    title="用户注册策略"
+                    description="控制新用户能否创建账号，不影响已有账号登录。"
+                    status={<AdminStatusBadge label={registration.enabled ? "已开放" : "已关闭"} tone={registration.enabled ? "success" : "neutral"} />}
+                >
+                    <div className="admin-access-registration-policy">
+                        <span className="admin-access-policy-icon">
+                            <UsersRound className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="admin-access-policy-copy">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <strong>允许创建新账号</strong>
+                                <AdminStatusBadge label="切换即保存" tone="info" />
                             </div>
-                            <Form.Item name="authorizationUrl" label="授权地址">
-                                <Input inputMode="url" placeholder="https://connect.linux.do/oauth2/authorize" />
-                            </Form.Item>
-                            <Form.Item name="tokenUrl" label="Token 地址">
-                                <Input inputMode="url" placeholder="https://connect.linux.do/oauth2/token" />
-                            </Form.Item>
-                            <Form.Item name="userInfoUrl" label="用户资料地址">
-                                <Input inputMode="url" placeholder="https://connect.linux.do/api/user" />
-                            </Form.Item>
-                            <Form.Item name="redirectUrl" label="本站回调地址" extra="此地址必须与 Linux.do OAuth 应用中登记的回调地址完全一致；推荐使用 /oauth/linuxdo/callback。">
-                                <Input inputMode="url" placeholder="https://你的域名/oauth/linuxdo/callback" />
-                            </Form.Item>
-                            <Form.Item name="scopes" label="授权范围（Scopes）" className="md:col-span-2" extra="通常使用 openid、profile、email；按 Linux.do 应用实际授权范围填写。">
-                                <Select mode="tags" tokenSeparators={[",", " "]} placeholder="输入后按回车添加" />
-                            </Form.Item>
+                            <p>关闭后，本地注册和未绑定账号的 Linux.do 首次登录都会被拒绝；已有账号及已绑定身份仍可继续登录。</p>
+                            <span>{formatSettingTime(registration.updatedAt, "当前来自部署环境默认值")}</span>
                         </div>
+                        <Switch checked={registration.enabled} loading={savingRegistration} disabled={loading || refreshing || savingLinuxDO} onChange={requestRegistrationChange} aria-label="允许创建新账号，切换后立即生效" />
+                    </div>
+                </SettingsSectionCard>
+            </div>
 
-                        <details className="group">
-                            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                                <div>
-                                    <div className="text-sm font-medium">高级：Linux.do 返回字段对应关系</div>
-                                    <p className="mt-1 text-xs leading-5 text-foreground/55">告诉系统从 Linux.do 用户资料响应的哪些字段读取本地账号信息，支持 `data.user.id` 这类嵌套路径。</p>
+            <div id="admin-access-linuxdo" className="admin-settings-anchor">
+                <SettingsSectionCard
+                    className="admin-access-section admin-access-linuxdo-section"
+                    icon={<KeyRound className="size-4" aria-hidden="true" />}
+                    title="Linux.do 单点登录"
+                    description="连接 Linux.do OAuth，并明确管理入口状态、服务端凭据、端点与用户字段映射。"
+                    status={<AdminStatusBadge label={draftLinuxDOEnabled ? (dirty ? "待启用" : "运行中") : dirty && linuxdo.enabled ? "待停用" : "未启用"} tone={dirty ? "warning" : draftLinuxDOEnabled ? "success" : "neutral"} />}
+                    footer={
+                        <>
+                            <div className="admin-access-footer-note">
+                                <BadgeCheck className="size-4" aria-hidden="true" />
+                                <span>{formatSettingTime(linuxdo.updatedAt, "尚未保存 Linux.do 管理配置")} · Client Secret 加密保存且不回显明文</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {dirty ? (
+                                    <Button icon={<RotateCcw className="size-4" />} disabled={savingLinuxDO} onClick={resetLinuxDODraft}>
+                                        撤销
+                                    </Button>
+                                ) : null}
+                                <Button type="primary" icon={<Save className="size-4" />} loading={savingLinuxDO} disabled={!dirty || loading || refreshing} onClick={() => void submitLinuxDOSave()}>
+                                    保存修改
+                                </Button>
+                            </div>
+                        </>
+                    }
+                >
+                    <Form
+                        form={form}
+                        layout="vertical"
+                        requiredMark={false}
+                        disabled={loading || refreshing || savingLinuxDO}
+                        onValuesChange={() => {
+                            const values = form.getFieldsValue(true);
+                            setDraftLinuxDOEnabled(Boolean(values.enabled));
+                            setDirty(hasLinuxDOChanges(values, linuxdo));
+                            setSaveError("");
+                        }}
+                    >
+                        <div className="admin-access-form-section">
+                            <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="入口状态与应用凭据" description="入口开关切换后立即保存；应用凭据与连接参数点击保存修改后生效。" />
+                            <div className="admin-access-form-grid is-credentials">
+                                <div className="admin-access-switch-field">
+                                    <div>
+                                        <label>启用 Linux.do 登录</label>
+                                        <p>启用后，登录与注册页面会展示 Linux.do 入口。</p>
+                                    </div>
+                                    <Form.Item noStyle name="enabled" valuePropName="checked">
+                                        <Switch aria-label="启用 Linux.do 登录，切换后立即保存" onChange={(checked) => void toggleLinuxDO(checked)} />
+                                    </Form.Item>
                                 </div>
-                                <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" />
+                                <Form.Item name="clientAuthMethod" label="Token 请求鉴权方式" rules={[{ required: true, message: "请选择鉴权方式" }]} extra="应用未特别要求时使用 Client Secret Post。">
+                                    <Select
+                                        options={[
+                                            { label: "Client Secret Post（推荐）", value: "client_secret_post" },
+                                            { label: "Client Secret Basic", value: "client_secret_basic" },
+                                        ]}
+                                    />
+                                </Form.Item>
+                                <Form.Item name="clientId" label="Client ID">
+                                    <Input autoComplete="off" placeholder="Linux.do OAuth 应用的 Client ID" />
+                                </Form.Item>
+                                <Form.Item name="clientSecret" label={linuxdo.hasClientSecret ? `Client Secret（${configuredSecretText}）` : "Client Secret"}>
+                                    <Input.Password autoComplete="new-password" placeholder={linuxdo.hasClientSecret ? "留空保留原密钥" : "Linux.do OAuth 应用的 Client Secret"} />
+                                </Form.Item>
+                            </div>
+                        </div>
+
+                        <div className="admin-access-form-section">
+                            <FormSectionTitle icon={<Globe2 className="size-4" />} title="OAuth 连接地址" description="授权、Token 和用户资料端点必须使用 HTTPS；本地回环回调可使用 HTTP。" />
+                            <div className="admin-access-form-grid">
+                                <Form.Item name="authorizationUrl" label="授权地址">
+                                    <Input inputMode="url" placeholder="https://connect.linux.do/oauth2/authorize" />
+                                </Form.Item>
+                                <Form.Item name="tokenUrl" label="Token 地址">
+                                    <Input inputMode="url" placeholder="https://connect.linux.do/oauth2/token" />
+                                </Form.Item>
+                                <Form.Item name="userInfoUrl" label="用户资料地址">
+                                    <Input inputMode="url" placeholder="https://connect.linux.do/api/user" />
+                                </Form.Item>
+                                <Form.Item name="redirectUrl" label="本站回调地址" extra="必须与 Linux.do OAuth 应用登记值完全一致；推荐使用 /oauth/linuxdo/callback。">
+                                    <Input inputMode="url" placeholder="https://你的域名/oauth/linuxdo/callback" />
+                                </Form.Item>
+                                <Form.Item name="scopes" label="授权范围（Scopes）" className="admin-access-form-span-full" extra="通常使用 openid、profile、email；按 Linux.do 应用实际授权范围填写。">
+                                    <Select mode="tags" tokenSeparators={[",", " "]} placeholder="输入后按回车添加" />
+                                </Form.Item>
+                            </div>
+                        </div>
+
+                        <details className="admin-access-advanced group">
+                            <summary>
+                                <span className="admin-access-advanced-icon">
+                                    <LockKeyhole className="size-4" aria-hidden="true" />
+                                </span>
+                                <span>
+                                    <strong>高级：用户资料字段映射</strong>
+                                    <small>指定从 Linux.do 响应中读取本地账号信息的字段路径。</small>
+                                </span>
+                                <AdminStatusBadge label="通常无需修改" tone="neutral" />
+                                <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
                             </summary>
-                            <div className="grid gap-x-5 gap-y-1 border-t border-border bg-muted/15 p-5 md:grid-cols-2">
-                                <Form.Item name="subjectField" label="唯一用户 ID 字段" extra="账号绑定的唯一依据，必须长期稳定。Linux.do 常见值为 id。">
+                            <div className="admin-access-form-grid is-mapping">
+                                <Form.Item name="subjectField" label="唯一用户 ID 字段" extra="账号绑定的唯一依据，必须长期稳定。">
                                     <Input placeholder="id" />
                                 </Form.Item>
-                                <Form.Item name="usernameField" label="用户名字段" extra="用于生成本站用户名。Linux.do 常见值为 username。">
+                                <Form.Item name="usernameField" label="用户名字段" extra="用于生成本站用户名。">
                                     <Input placeholder="username" />
                                 </Form.Item>
-                                <Form.Item name="displayNameField" label="显示名称字段" extra="显示在用户菜单中的名称，常见值为 name。">
+                                <Form.Item name="displayNameField" label="显示名称字段" extra="显示在用户菜单中的名称。">
                                     <Input placeholder="name" />
                                 </Form.Item>
-                                <Form.Item name="emailField" label="邮箱字段" extra="没有或无效时允许留空，常见值为 email。">
+                                <Form.Item name="emailField" label="邮箱字段" extra="没有或无效时允许留空。">
                                     <Input placeholder="email" />
                                 </Form.Item>
-                                <Form.Item name="avatarField" label="头像地址字段" extra="用户头像 URL，常见值为 avatar_url。">
+                                <Form.Item name="avatarField" label="头像地址字段" extra="支持 data.user.avatar_url 这类嵌套路径。">
                                     <Input placeholder="avatar_url" />
                                 </Form.Item>
                             </div>
                         </details>
-                    </div>
-
-                </Form>
-            </SettingsSectionCard>
-
+                    </Form>
+                </SettingsSectionCard>
+            </div>
         </div>
     );
 }
 
-function FormSectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
-    return <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground/85">{icon}{title}</div>;
+function FormSectionTitle({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+    return (
+        <div className="admin-access-form-section-heading">
+            <span>{icon}</span>
+            <div>
+                <h3>{title}</h3>
+                <p>{description}</p>
+            </div>
+        </div>
+    );
+}
+
+function toLinuxDOFormValues(setting: LinuxDOSetting): LinuxDOFormValues {
+    return {
+        enabled: setting.enabled,
+        clientId: setting.clientId,
+        clientSecret: "",
+        authorizationUrl: setting.authorizationUrl,
+        tokenUrl: setting.tokenUrl,
+        userInfoUrl: setting.userInfoUrl,
+        redirectUrl: setting.redirectUrl,
+        scopes: setting.scopes || [],
+        clientAuthMethod: setting.clientAuthMethod,
+        subjectField: setting.subjectField,
+        usernameField: setting.usernameField,
+        displayNameField: setting.displayNameField,
+        emailField: setting.emailField,
+        avatarField: setting.avatarField,
+    };
+}
+
+function normalizeLinuxDOFormValues(values: LinuxDOFormValues): LinuxDOFormValues {
+    return {
+        enabled: Boolean(values.enabled),
+        clientId: values.clientId?.trim() || "",
+        clientSecret: values.clientSecret?.trim() || "",
+        authorizationUrl: values.authorizationUrl?.trim() || "",
+        tokenUrl: values.tokenUrl?.trim() || "",
+        userInfoUrl: values.userInfoUrl?.trim() || "",
+        redirectUrl: values.redirectUrl?.trim() || "",
+        scopes: [...new Set((values.scopes || []).map((value) => value.trim()).filter(Boolean))],
+        clientAuthMethod: values.clientAuthMethod || "client_secret_post",
+        subjectField: values.subjectField?.trim() || "id",
+        usernameField: values.usernameField?.trim() || "username",
+        displayNameField: values.displayNameField?.trim() || "name",
+        emailField: values.emailField?.trim() || "email",
+        avatarField: values.avatarField?.trim() || "avatar_url",
+    };
+}
+
+function hasLinuxDOChanges(values: LinuxDOFormValues, setting: LinuxDOSetting | null) {
+    if (!setting) return false;
+    const draft = normalizeLinuxDOFormValues(values);
+    const saved = normalizeLinuxDOFormValues(toLinuxDOFormValues(setting));
+    if (draft.clientSecret) return true;
+    return (Object.keys(saved) as Array<keyof LinuxDOFormValues>).some((key) => key !== "clientSecret" && JSON.stringify(draft[key]) !== JSON.stringify(saved[key]));
+}
+
+function validateLinuxDODraft(values: LinuxDOFormValues, setting: LinuxDOSetting | null) {
+    const draft = normalizeLinuxDOFormValues(values);
+    if (!draft.enabled) return "";
+    if (!draft.clientId || (!draft.clientSecret && !setting?.hasClientSecret) || !draft.authorizationUrl || !draft.tokenUrl || !draft.userInfoUrl || !draft.redirectUrl) return "启用 Linux.do 登录前请完整填写 Client、端点和回调配置";
+    for (const value of [draft.authorizationUrl, draft.tokenUrl, draft.userInfoUrl]) if (!isValidURL(value, true)) return "Linux.do 授权、Token 和用户资料地址必须是有效的 HTTPS URL";
+    if (!isValidRedirectURL(draft.redirectUrl)) return "Linux.do 回调地址必须使用 HTTPS，本地回环地址可使用 HTTP";
+    return "";
+}
+
+function linuxDOResponseMatches(setting: LinuxDOSetting, expected: LinuxDOFormValues) {
+    const actual = normalizeLinuxDOFormValues(toLinuxDOFormValues(setting));
+    const fields: Array<keyof LinuxDOFormValues> = ["enabled", "clientId", "authorizationUrl", "tokenUrl", "userInfoUrl", "redirectUrl", "scopes", "clientAuthMethod", "subjectField", "usernameField", "displayNameField", "emailField", "avatarField"];
+    if (expected.clientSecret && !setting.hasClientSecret) return false;
+    return fields.every((key) => JSON.stringify(actual[key]) === JSON.stringify(expected[key]));
+}
+
+function isValidURL(value: string, requireHTTPS = false) {
+    try {
+        const parsed = new URL(value);
+        return Boolean(parsed.host) && (!requireHTTPS || parsed.protocol === "https:");
+    } catch {
+        return false;
+    }
+}
+
+function isValidRedirectURL(value: string) {
+    try {
+        const parsed = new URL(value);
+        if (parsed.protocol === "https:" && parsed.host) return true;
+        return parsed.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
+function formatSettingTime(value: string | undefined, fallback: string) {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return fallback;
+    return `更新于 ${date.toLocaleString("zh-CN", { hour12: false })}`;
 }

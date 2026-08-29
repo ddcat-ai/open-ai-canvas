@@ -21,6 +21,6 @@ describe("plugin state switches", () => {
         expect(userPage).toContain('className="plugin-state-switch"');
         expect(userPage).toContain('enabled ? "已启用" : "已停用"');
         expect(adminPage).toContain('className="plugin-state-switch"');
-        expect(adminPage).toContain('available ? "平台开放" : "平台停用"');
+        expect(adminPage).toContain('label={available ? "已开放" : "已停用"}');
     });
 });

@@ -335,7 +335,7 @@ export default function LogicalModelsPage() {
                 open={editingModel !== undefined}
                 size="min(1120px, 100vw)"
                 destroyOnHidden
-                maskClosable={!saving}
+                mask={{ closable: !saving }}
                 onClose={() => !saving && setEditingModel(undefined)}
                 rootClassName="admin-drawer"
                 footer={
