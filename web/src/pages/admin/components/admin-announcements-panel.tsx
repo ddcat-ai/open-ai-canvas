@@ -1,9 +1,11 @@
-import { App, Button, Form, Input, Modal, Select, Switch, Tag } from "antd";
+import { App, Button, Form, Input, Modal, Select, Segmented, Switch, Tag } from "antd";
+import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Pin, Plus, Search, Upload, X } from "lucide-react";
+import { Eye, Pencil, Pin, Plus, Search, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
+import { AnnouncementContent } from "@/components/ui/announcement-content";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
     announcementImageUrl,
@@ -60,6 +62,7 @@ export default function AdminAnnouncementsPanel() {
     const [imagePreviewUrl, setImagePreviewUrl] = useState("");
     const [draftImageResourceId, setDraftImageResourceId] = useState("");
     const [imageUploading, setImageUploading] = useState(false);
+    const [editorMode, setEditorMode] = useState<"edit" | "preview">("edit");
     const imageInputRef = useRef<HTMLInputElement | null>(null);
 
     const reload = useCallback(async () => {
@@ -84,6 +87,7 @@ export default function AdminAnnouncementsPanel() {
         form.setFieldsValue({ title: "", content: "", imageResourceId: "", level: "info", pinned: false });
         setImagePreviewUrl("");
         setDraftImageResourceId("");
+        setEditorMode("edit");
         setModalOpen(true);
     };
 
@@ -92,6 +96,7 @@ export default function AdminAnnouncementsPanel() {
         form.setFieldsValue({ title: announcement.title, content: announcement.content, imageResourceId: announcement.imageResourceId || "", level: announcement.level, pinned: announcement.pinned });
         setImagePreviewUrl(announcementImageUrl(announcement));
         setDraftImageResourceId("");
+        setEditorMode("edit");
         setModalOpen(true);
     };
 
@@ -259,8 +264,19 @@ export default function AdminAnnouncementsPanel() {
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
             />
 
-            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={760} centered okText={editingAnnouncement ? "保存并重新发布" : "立即发布"} cancelText="取消" confirmLoading={publishing} okButtonProps={{ disabled: imageUploading }} cancelButtonProps={{ disabled: imageUploading }} onOk={() => void publish()} onCancel={() => void closeEditor()} destroyOnHidden>
-                <Form form={form} layout="vertical" className="pt-3" requiredMark={false}>
+            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={760} centered okText={editorMode === "preview" ? (editingAnnouncement ? "确认并重新发布" : "确认并发布") : "请先预览"} cancelText="取消" confirmLoading={publishing} okButtonProps={{ disabled: imageUploading || editorMode !== "preview" }} cancelButtonProps={{ disabled: imageUploading }} onOk={() => void publish()} onCancel={() => void closeEditor()} destroyOnHidden>
+                <div className="flex justify-end border-b border-border/70 pb-3 pt-3">
+                    <Segmented
+                        value={editorMode}
+                        onChange={(value) => setEditorMode(value as "edit" | "preview")}
+                        options={[
+                            { value: "edit", label: <span className="inline-flex items-center gap-1.5"><Pencil className="size-3.5" />编辑</span> },
+                            { value: "preview", label: <span className="inline-flex items-center gap-1.5"><Eye className="size-3.5" />预览</span> },
+                        ]}
+                    />
+                </div>
+                {editorMode === "preview" ? <AnnouncementDraftPreview form={form} imagePreviewUrl={imagePreviewUrl} /> : null}
+                <Form form={form} layout="vertical" className={editorMode === "preview" ? "hidden" : "pt-4"} requiredMark={false}>
                     <Form.Item name="title" label="公告标题" rules={[{ required: true, whitespace: true, message: "请填写公告标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
                         <Input maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />
                     </Form.Item>
@@ -285,12 +301,44 @@ export default function AdminAnnouncementsPanel() {
                             </Button>
                         </div>
                     </Form.Item>
-                    <Form.Item name="content" label="公告正文" rules={[{ required: true, whitespace: true, message: "请填写公告正文" }, { max: 4000, message: "正文不能超过 4000 个字符" }]}>
-                        <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder="填写服务状态、影响范围和用户需要采取的操作" />
+                    <Form.Item
+                        name="content"
+                        label="公告正文（支持 Markdown）"
+                        extra="支持标题、加粗、列表、链接、引用和表格；不支持原始 HTML。"
+                        rules={[{ required: true, whitespace: true, message: "请填写公告正文" }, { max: 4000, message: "正文不能超过 4000 个字符" }]}
+                    >
+                        <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder="填写服务状态、影响范围和用户需要采取的操作，可使用 Markdown 语法" />
                     </Form.Item>
                 </Form>
             </Modal>
         </>
+    );
+}
+
+function AnnouncementDraftPreview({ form, imagePreviewUrl }: { form: FormInstance<AnnouncementFormValues>; imagePreviewUrl: string }) {
+    const title = Form.useWatch("title", form) || "未填写标题";
+    const content = Form.useWatch("content", form) || "暂未填写公告正文";
+    const level = Form.useWatch("level", form) || "info";
+    const pinned = Form.useWatch("pinned", form);
+    const meta = levelMeta[level as AnnouncementLevel] || levelMeta.info;
+
+    return (
+        <div className="min-h-80 py-5">
+            <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
+                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+                    <div className="flex items-center gap-2">
+                        <AdminStatusBadge label={meta.label} tone={meta.tone} />
+                        {pinned ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-500"><Pin className="size-3" />置顶</span> : null}
+                    </div>
+                    <span className="text-xs text-foreground/40">预览效果</span>
+                </div>
+                <div className="p-5">
+                    <h2 className="text-lg font-semibold leading-7 text-foreground">{title}</h2>
+                    {imagePreviewUrl ? <img src={imagePreviewUrl} alt="公告配图预览" className="mt-4 max-h-56 w-full rounded-lg border border-border/70 bg-muted/20 object-contain p-1" /> : null}
+                    <AnnouncementContent content={content} className="mt-3 text-sm leading-6 text-foreground/75" />
+                </div>
+            </div>
+        </div>
     );
 }
 
