@@ -1,6 +1,6 @@
 import { App, Button, Input, Modal, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Download, Eye, Search } from "lucide-react";
+import { Download, Eye, Search, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -9,18 +9,19 @@ import { PaginationBar } from "@/components/layout/workspace-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
     adminResourceFileUrl,
+    deleteAdminResources,
     downloadAdminResource,
     getAdminStorageStats,
     listAdminResources,
     type AdminStorageResource,
     type AdminStorageStats,
 } from "@/services/api/admin-storage";
-import { AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 const pageSizes = [20, 50, 100];
 
 export default function StorageResourcesPanel() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
     const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file"]);
@@ -37,6 +38,9 @@ export default function StorageResourcesPanel() {
     const [loading, setLoading] = useState(true);
     const [previewing, setPreviewing] = useState<AdminStorageResource | null>(null);
     const [downloadingId, setDownloadingId] = useState("");
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [deleting, setDeleting] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
     const requestSequence = useRef(0);
     const hasFilters = Boolean(keyword || userId || kind !== "all" || status !== "all" || provider !== "all");
 
@@ -62,7 +66,7 @@ export default function StorageResourcesPanel() {
                 message.error(error instanceof Error ? error.message : "读取存储统计失败");
             });
         return () => controller.abort();
-    }, []);
+    }, [refreshKey]);
 
     useEffect(() => {
         const sequence = ++requestSequence.current;
@@ -89,7 +93,7 @@ export default function StorageResourcesPanel() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => controller.abort();
-    }, [debouncedKeyword, debouncedUserId, kind, status, provider, page, pageSize]);
+    }, [debouncedKeyword, debouncedUserId, kind, status, provider, page, pageSize, refreshKey]);
 
     const columns = useMemo<ColumnsType<AdminStorageResource>>(() => [
         { title: "资源", width: 260, render: (_, resource) => <div className="min-w-0"><div className="truncate font-medium text-foreground/85" title={resource.objectKey}>{fileName(resource.objectKey) || resource.id}</div><div className="admin-monospace truncate text-foreground/42" title={resource.id}>{resource.id}</div></div> },
@@ -100,8 +104,8 @@ export default function StorageResourcesPanel() {
         { title: "大小", dataIndex: "size", width: 110, render: (value) => <span className="tabular-nums">{formatBytes(value)}</span> },
         { title: "规格", width: 135, render: (_, resource) => resourceDimensions(resource) },
         { title: "创建时间", dataIndex: "createdAt", width: 170, render: formatTime },
-        { title: "操作", width: 154, align: "right", fixed: "right", render: (_, resource) => <div className="flex justify-end gap-1"><Button type="text" size="small" icon={<Eye className="size-3.5" />} disabled={resource.status !== "ready"} onClick={() => setPreviewing(resource)}>预览</Button><Button type="text" size="small" icon={<Download className="size-3.5" />} loading={downloadingId === resource.id} disabled={resource.status !== "ready"} onClick={() => void download(resource)}>下载</Button></div> },
-    ], [downloadingId]);
+        { title: "操作", width: 220, align: "right", fixed: "right", render: (_, resource) => <div className="flex justify-end gap-1"><Button type="text" size="small" icon={<Eye className="size-3.5" />} disabled={resource.status !== "ready"} onClick={() => setPreviewing(resource)}>预览</Button><Button type="text" size="small" icon={<Download className="size-3.5" />} loading={downloadingId === resource.id} disabled={resource.status !== "ready"} onClick={() => void download(resource)}>下载</Button><Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} disabled={deleting} onClick={() => confirmDelete([resource.id])}>删除</Button></div> },
+    ], [downloadingId, deleting]);
 
     const download = async (resource: AdminStorageResource) => {
         setDownloadingId(resource.id);
@@ -113,6 +117,38 @@ export default function StorageResourcesPanel() {
         } finally {
             setDownloadingId("");
         }
+    };
+
+    const confirmDelete = (resourceIds: string[]) => {
+        const uniqueIds = Array.from(new Set(resourceIds));
+        modal.confirm({
+            title: uniqueIds.length > 1 ? `删除选中的 ${uniqueIds.length} 个资源？` : "删除这个资源？",
+            content: "系统会先批量检查公告、素材、画布、项目、工作流和镜头产物引用。仍被引用的资源会保留；无引用资源的记录、清理任务和审计事件会在同一事务提交。",
+            okText: uniqueIds.length > 1 ? "检查并删除" : "确认删除",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                setDeleting(true);
+                try {
+                    const result = await deleteAdminResources(uniqueIds);
+                    setSelectedIds([]);
+                    setRefreshKey((value) => value + 1);
+                    if (result.deleted.length > 0) message.success(`已删除 ${result.deleted.length} 个资源`);
+                    if (result.blocked.length > 0) {
+                        modal.warning({
+                            title: result.deleted.length > 0 ? "部分资源未删除" : "资源未删除",
+                            content: <DeleteBlockedSummary blocked={result.blocked} />,
+                            okText: "知道了",
+                        });
+                    }
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "删除资源失败");
+                    throw error;
+                } finally {
+                    setDeleting(false);
+                }
+            },
+        });
     };
 
     return (
@@ -129,14 +165,29 @@ export default function StorageResourcesPanel() {
                 toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}{userId ? <AdminFilterChip label={`用户：${userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}{kind !== "all" ? <AdminFilterChip label={`类型：${kindLabel(kind)}`} onRemove={() => updateUrl({ kind: "all", page: 1 })} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${statusLabel(status)}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}{provider !== "all" ? <AdminFilterChip label={`存储：${providerLabel(provider)}`} onRemove={() => updateUrl({ provider: "all", page: 1 })} /> : null}</>}
                 toolbarActive={hasFilters}
                 onReset={() => updateUrl({ filter: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
+                batchActions={<AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}><Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => confirmDelete(selectedIds)}>批量删除</Button></AdminBatchBar>}
                 skeletonColumns={9}
-                table={{ className: "app-data-table", size: "small", rowKey: "id", loading, columns, dataSource: resources, pagination: false, scroll: { x: 1320 } }}
+                table={{ className: "app-data-table", size: "small", rowKey: "id", loading, columns, dataSource: resources, rowSelection: { selectedRowKeys: selectedIds, preserveSelectedRowKeys: true, onChange: (keys) => { const next = keys.map(String); if (next.length > 100) message.warning("单次最多选择 100 个资源"); setSelectedIds(next.slice(0, 100)); } }, pagination: false, scroll: { x: 1390 } }}
                 empty={<AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "暂无资源记录"} description={hasFilters ? undefined : "资源上传或生成后会显示在这里。"} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
             <Modal title={previewing ? fileName(previewing.objectKey) || "资源预览" : "资源预览"} open={Boolean(previewing)} width={880} onCancel={() => setPreviewing(null)} footer={previewing ? <Button icon={<Download className="size-4" />} loading={downloadingId === previewing.id} onClick={() => void download(previewing)}>下载原文件</Button> : null} destroyOnHidden>
                 {previewing ? <ResourcePreview resource={previewing} /> : null}
             </Modal>
+        </div>
+    );
+}
+
+function DeleteBlockedSummary({ blocked }: { blocked: Array<{ id: string; reason: string; references: Array<{ kind: string; id: string; title: string }> }> }) {
+    return (
+        <div className="max-h-72 space-y-3 overflow-y-auto pr-1 text-sm">
+            {blocked.map((item) => (
+                <div key={item.id} className="rounded-md border border-border px-3 py-2">
+                    <div className="admin-monospace break-all text-foreground/75">{item.id}</div>
+                    <div className="mt-1 text-foreground/55">{item.reason}</div>
+                    {item.references.length > 0 ? <div className="mt-1 text-xs text-foreground/45">{item.references.slice(0, 4).map((reference) => `${reference.kind}「${reference.title || reference.id}」`).join("、")}{item.references.length > 4 ? ` 等 ${item.references.length} 处` : ""}</div> : null}
+                </div>
+            ))}
         </div>
     );
 }

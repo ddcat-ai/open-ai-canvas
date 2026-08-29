@@ -54,6 +54,23 @@ export type AdminResourceQuery = {
     limit?: number;
 };
 
+export type AdminResourceReference = {
+    kind: string;
+    id: string;
+    title: string;
+};
+
+export type AdminResourceDeleteBlocked = {
+    id: string;
+    reason: string;
+    references: AdminResourceReference[];
+};
+
+export type AdminResourceDeleteResult = {
+    deleted: string[];
+    blocked: AdminResourceDeleteBlocked[];
+};
+
 export async function listAdminResources(query: AdminResourceQuery, signal?: AbortSignal) {
     return request<AdminResourcePage>(apiClient.get("/admin/resources", { params: compactApiParams(query), signal }));
 }
@@ -61,6 +78,10 @@ export async function listAdminResources(query: AdminResourceQuery, signal?: Abo
 export async function getAdminStorageStats(signal?: AbortSignal) {
     const result = await request<{ stats: AdminStorageStats }>(apiClient.get("/admin/storage/stats", { signal }));
     return result.stats;
+}
+
+export function deleteAdminResources(resourceIds: string[]) {
+    return request<AdminResourceDeleteResult>(apiClient.post("/admin/resources/delete", { resourceIds }));
 }
 
 export function adminResourceFileUrl(id: string, download = false) {
