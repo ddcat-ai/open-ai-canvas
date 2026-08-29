@@ -1,0 +1,241 @@
+# AutoDL 官方插件与可配置工作流目录设计
+
+> 状态：设计提案，尚未实施。
+>
+> 目标：将 AutoDL ComfyUI API 做成随 open-ai-canvas 发布的官方可选插件；由管理员启用插件并维护可用工作流目录，普通用户仅配置自己的 Token 并选择已启用的工作流。
+
+## 1. 背景与问题
+
+当前 `autodl-comfyui` 以 `.yingce-plugin` 自定义插件包的形式安装。它已经可以声明工作流、调用任务、轮询结果和保存视频，但存在以下限制：
+
+- 每个部署实例都要手动上传插件，版本和工作流列表容易不一致。
+- 上传自定义插件后默认会启用，不符合“官方功能默认关闭、管理员按需开启”的预期。
+- AutoDL 的 ComfyUI API 按 `workflow_id` 调用，不是通用 OpenAI 模型目录接口；使用通用“拉取模型”会得到非预期响应。
+- AutoDL 页面中的不同工作流有不同的参数、时长、分辨率及参考素材要求。只保存工作流 ID 会导致界面可选但请求失败。
+
+本设计将“AutoDL 调用框架”与“工作流目录”分离：前者由项目统一维护，后者由管理员在后台按需导入和启用。
+
+## 2. 目标与非目标
+
+### 2.1 目标
+
+- AutoDL 是内置、可信、可停用但不可卸载的官方插件。
+- 初次部署默认停用；管理员在“管理后台 → 插件管理”启用后才对用户可见。
+- 用户在“设置 → 个人渠道”填写自己的 AutoDL Token，并从已启用工作流中选择模型。
+- 管理员可新增、导入、编辑、停用工作流定义，而不需要重新构建或上传整个插件。
+- 每个工作流都有独立参数约束，提交前在本地校验时长、分辨率与参考图/音频数量。
+- 调用目标、鉴权方式和轮询协议保持受控，工作流配置不能把服务端请求导向任意地址。
+
+### 2.2 非目标
+
+- 不上传或托管实际的 ComfyUI 图文件；AutoDL 的工作流仍由 AutoDL 托管。
+- 不自动抓取或爬取 AutoDL 网站上的全部工作流。
+- 不允许工作流定义指定任意 Base URL、HTTP Method、鉴权头或脚本。
+- 第一阶段不允许普通用户修改全局工作流目录。
+
+## 3. 总体架构
+
+```text
+官方内置 AutoDL Provider（默认停用）
+  ├─ 固定：autodl.art 请求地址、Bearer Token、异步轮询、结果下载
+  ├─ 固定：公网参考素材检查、出站请求安全边界、审计日志
+  └─ 读取：工作流目录
+          ├─ 官方种子工作流（随版本发布）
+          └─ 管理员导入的工作流定义（数据库持久化）
+                    ↓
+              个人渠道模型下拉列表
+                    ↓
+          用户 Token + 所选工作流 + 画布参数
+```
+
+## 4. 权限与使用流程
+
+| 操作 | 平台管理员 | 普通用户 |
+| --- | --- | --- |
+| 启用或停用 AutoDL 官方插件 | 可以 | 不可以 |
+| 导入、编辑、删除全局工作流 | 可以 | 不可以 |
+| 启用或停用某个工作流 | 可以 | 不可以 |
+| 查看已启用工作流 | 可以 | 可以 |
+| 配置个人 AutoDL Token | 可以 | 可以 |
+| 在个人渠道选择工作流 | 可以 | 可以 |
+
+用户使用路径：
+
+1. 管理员在“插件管理”启用 **AutoDL ComfyUI 视频**。
+2. 管理员在该插件的“工作流目录”导入并启用已验证的工作流。
+3. 用户前往“设置 → 个人渠道”，新建或编辑 AutoDL 渠道。
+4. 用户填写 `https://autodl.art` 和自己的 AutoDL Token。
+5. 用户从模型下拉列表选择工作流；不展示通用“拉取模型”入口。
+6. 用户在画布发起生成；系统按已选工作流规则校验参数后调用 AutoDL。
+
+## 5. 工作流定义
+
+工作流定义是受限 JSON 数据，而不是可执行插件代码。建议格式如下：
+
+```json
+{
+  "id": "minimax_h3_image_audio_to_video_v2_15s",
+  "name": "MiniMax H3 图像音频生视频 15 秒",
+  "description": "支持最多 9 张参考图和 3 段参考音频。",
+  "capability": "video",
+  "enabled": true,
+  "duration": { "min": 1, "max": 15, "default": 5 },
+  "resolution": {
+    "values": ["480p竖", "768p竖", "480p横", "768p横"],
+    "default": "768p竖",
+    "aspectRatioMapping": true
+  },
+  "inputs": {
+    "prompt": { "required": true, "minLength": 1, "maxLength": 10000 },
+    "seed": { "type": "integer", "required": false },
+    "refImages": { "max": 9, "acceptedTypes": ["image"] },
+    "refAudios": { "max": 3, "acceptedTypes": ["audio"] }
+  },
+  "source": { "kind": "autodl-comfyui", "workflowId": "minimax_h3_image_audio_to_video_v2_15s" }
+}
+```
+
+### 5.1 必填校验
+
+- `id` / `workflowId`：只允许小写字母、数字、下划线和短横线；两者必须一致或明确建立映射。
+- `capability`：首版仅允许 `video`。
+- `duration`：整数、最小值不小于 1、最大值不超过产品允许上限，且默认值必须在区间内。
+- `resolution.values`：仅允许该工作流已验证的 AutoDL 字符串，例如 `768p竖`，不得把 `720p` 当作 AutoDL 原始值保存。
+- `refImages` / `refAudios`：数量必须有明确上限；请求中的媒体 URL 必须是公网可访问地址。
+- 不接受自定义 URL、请求头、脚本、模板表达式或响应路径。
+
+### 5.2 分辨率映射
+
+画布可沿用通用尺寸输入，但插件发送前必须转换为当前工作流接受的值：
+
+| 画布输入 | 画幅 | AutoDL 请求值 |
+| --- | --- | --- |
+| `720p` | `9:16` / `3:4` | `768p竖` |
+| `720p` | `16:9` / `4:3` | `768p横` |
+| `768p竖` | 任意 | `768p竖` |
+| `768p横` | 任意 | `768p横` |
+
+每个工作流目录条目应覆盖通用映射；若工作流只支持部分尺寸，目录值优先。
+
+## 6. 数据与接口设计
+
+建议新增持久化实体 `plugin_workflows`：
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 内部主键 |
+| `plugin_id` | 固定为 `autodl-comfyui` |
+| `workflow_id` | AutoDL 工作流 ID，唯一 |
+| `definition` | 经 Schema 校验后的 JSON |
+| `scope` | 首版固定 `platform` |
+| `enabled` | 是否可供个人渠道选择 |
+| `source` | `seed` / `imported` |
+| `version` | 工作流定义版本 |
+| `created_by` / `updated_by` | 管理员审计信息 |
+| `created_at` / `updated_at` | 时间戳 |
+
+建议接口：
+
+```text
+GET    /api/admin/plugins/autodl-comfyui/workflows
+POST   /api/admin/plugins/autodl-comfyui/workflows/import
+PATCH  /api/admin/plugins/autodl-comfyui/workflows/{workflowId}
+DELETE /api/admin/plugins/autodl-comfyui/workflows/{workflowId}
+
+GET    /api/plugins/autodl-comfyui/workflows          # 仅返回已启用的可选项
+```
+
+个人渠道模型列表不应请求 AutoDL 的通用模型 API；应读取最后一个接口返回的已启用目录。
+
+## 7. 安全、存储与错误体验
+
+### 7.1 密钥边界
+
+- AutoDL Token 只存在用户的个人渠道密钥字段中。
+- 工作流目录、插件包、审计日志和前端接口均不得返回 Token。
+- 管理员导入工作流定义时不需要、也不允许填写 Token。
+
+### 7.2 参考素材
+
+AutoDL 会从 URL 拉取参考图片和音频。因此：
+
+- 必须在生成前检查素材 URL 是否可被外网访问。
+- 本地存储素材未配置 `CANVAS_PUBLIC_BASE_URL` 时，应在提交前给出可操作错误。
+- 使用七牛、S3、R2 等对象存储时，应使用可下载的公网域名；旧的本地存储素材需要重新上传。
+
+### 7.3 失败提示
+
+应区分以下错误：
+
+- 插件未启用：提示管理员前往插件管理启用 AutoDL。
+- 工作流已停用：提示用户在个人渠道改选可用工作流。
+- 参数不兼容：明确指出工作流、字段、收到值与允许范围。
+- 参考素材不可访问：提示配置对象存储公网访问地址或重新上传素材。
+- AutoDL 业务错误：保留 AutoDL 返回的 `code`、`msg` 和请求关联 ID，但不得泄露 Token。
+
+## 8. 迁移策略
+
+已手动上传 `autodl-comfyui.yingce-plugin` 的实例升级时，需要避免出现同名的“上传版”和“内置版”。
+
+1. 启动迁移检测旧上传插件 ID `autodl-comfyui`。
+2. 将其已启用/停用状态迁移至内置插件；默认不意外改变管理员原有选择。
+3. 保留现有个人渠道中 Provider ID、Base URL 和密钥引用，避免要求用户重新填写 Token。
+4. 将旧插件 manifest 内已知工作流导入为 `source=imported` 的目录项。
+5. 迁移成功后移除旧上传包记录；迁移失败时不删除原记录，并输出管理员可诊断错误。
+
+## 9. 分阶段实施
+
+### 阶段 1：官方 Provider 框架
+
+- 将 AutoDL 注册为内置声明式插件，默认停用。
+- 管理后台插件管理可启停。
+- 关闭时，用户侧 Provider 和工作流不可见，也不能提交。
+- 保留现有三个已验证工作流作为种子目录。
+
+验收：新部署无需上传插件；管理员开启后才能配置 AutoDL 个人渠道。
+
+### 阶段 2：工作流目录后台管理
+
+- 建表、Schema 校验、导入、编辑、启停、审计日志。
+- 后台 UI 增加“工作流目录”页和 JSON 导入入口。
+- 已被渠道选择的工作流禁止硬删除，改为停用或软删除。
+
+验收：管理员可不发布新程序而新增一条已验证工作流。
+
+### 阶段 3：个人渠道模型选择
+
+- Provider 选中 AutoDL 后，模型列表读取工作流目录。
+- 不显示“拉取模型”。
+- 模型项显示能力、时长范围、尺寸及参考素材支持情况。
+
+验收：用户无需手填工作流 ID，即可选择已启用工作流。
+
+### 阶段 4：参数与生成体验
+
+- 按工作流执行时长、分辨率、参考素材数量校验。
+- 画布根据所选工作流收窄可用参数。
+- 增加对象存储/公网 URL 的前置诊断。
+
+验收：`_v2` 拒绝超过 10 秒；`_15s` 可接受 15 秒；9:16 的 `720p` 正确转换为 `768p竖`。
+
+### 阶段 5：可选的个人私有目录
+
+在全局目录稳定后，再考虑允许用户创建 `scope=user` 的私有工作流。私有条目仅创建者可见，仍使用同一 Schema、安全校验和固定请求目标，不允许影响公共目录。
+
+## 10. 建议的提交拆分
+
+1. `feat(plugins): bundle AutoDL provider disabled by default`
+2. `feat(autodl): persist and validate workflow catalog`
+3. `feat(autodl): manage workflow catalog in admin plugin settings`
+4. `feat(channels): select AutoDL workflows from plugin catalog`
+5. `fix(autodl): enforce workflow-specific request constraints`
+6. `docs(autodl): document admin enablement and personal-channel setup`
+
+每个提交都应包含对应后端测试；涉及管理后台或个人渠道界面的提交应补充截图与手动验收步骤。
+
+## 11. 当前待确认事项
+
+- 官方插件初始种子目录是否只包含现有三个工作流，还是另行维护一份审核后的工作流清单。
+- 工作流定义是否允许管理员在后台直接填写，还是只允许导入 JSON；建议同时支持，但都走同一 Schema 校验。
+- 工作流停用后，正在运行的历史任务是否继续轮询；建议继续轮询和保存结果，但禁止新建任务。
+- AutoDL 后续若正式提供“工作流目录 API”，可新增受控同步功能；在此之前不以页面爬取作为生产依赖。
