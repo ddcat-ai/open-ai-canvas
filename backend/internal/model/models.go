@@ -17,6 +17,10 @@ type ResourceDeletionStatus string
 type BillingStatus string
 type CreditLedgerType string
 type RedeemCodeStatus string
+type PaymentOrderStatus string
+type PaymentEventStatus string
+type PaymentChannelVersionStatus string
+type PaymentReconciliationStatus string
 type AnnouncementStatus string
 type AnnouncementLevel string
 type ProjectStatus string
@@ -119,6 +123,28 @@ const (
 	CreditLedgerAdminAdjust  CreditLedgerType = "admin_adjustment"
 	CreditLedgerSignupBonus  CreditLedgerType = "signup_bonus"
 	CreditLedgerCheckinBonus CreditLedgerType = "checkin_bonus"
+	CreditLedgerRecharge     CreditLedgerType = "recharge"
+
+	PaymentOrderCreated   PaymentOrderStatus = "created"
+	PaymentOrderPending   PaymentOrderStatus = "pending"
+	PaymentOrderClosing   PaymentOrderStatus = "closing"
+	PaymentOrderSucceeded PaymentOrderStatus = "succeeded"
+	PaymentOrderClosed    PaymentOrderStatus = "closed"
+	PaymentOrderFailed    PaymentOrderStatus = "failed"
+	PaymentOrderException PaymentOrderStatus = "exception"
+
+	PaymentEventPending   PaymentEventStatus = "pending"
+	PaymentEventProcessed PaymentEventStatus = "processed"
+	PaymentEventIgnored   PaymentEventStatus = "ignored"
+	PaymentEventFailed    PaymentEventStatus = "failed"
+
+	PaymentChannelVersionActive   PaymentChannelVersionStatus = "active"
+	PaymentChannelVersionArchived PaymentChannelVersionStatus = "archived"
+
+	PaymentReconciliationPending   PaymentReconciliationStatus = "pending"
+	PaymentReconciliationRunning   PaymentReconciliationStatus = "running"
+	PaymentReconciliationCompleted PaymentReconciliationStatus = "completed"
+	PaymentReconciliationFailed    PaymentReconciliationStatus = "failed"
 
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"

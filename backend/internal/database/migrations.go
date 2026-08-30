@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
+
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 2
+const CurrentSchemaVersion int64 = 3
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
+const paymentRechargeSchemaChecksum = "sha256:payment-recharge-schema-v3-20260831"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -40,10 +43,24 @@ type migration struct {
 var schemaMigrations = []migration{
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
+	{version: 3, name: "payment_recharge_schema", checksum: paymentRechargeSchemaChecksum, apply: migrateSchemaV3},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
 	return tx.Exec("CREATE INDEX IF NOT EXISTS idx_schema_migrations_applied_at ON schema_migrations (applied_at)").Error
+}
+
+func migrateSchemaV3(tx *gorm.DB) error {
+	return tx.AutoMigrate(
+		&model.CreditLedgerEntry{},
+		&model.PaymentChannel{},
+		&model.PaymentChannelVersion{},
+		&model.CreditRechargeProduct{},
+		&model.PaymentOrder{},
+		&model.PaymentEvent{},
+		&model.PaymentReconciliationRun{},
+		&model.PaymentReconciliationDifference{},
+	)
 }
 
 func MigrateSchema(db *gorm.DB) error {

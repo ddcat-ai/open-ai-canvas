@@ -54,6 +54,8 @@ type Service struct {
 	workers                    *workerRuntime
 	updateManager              UpdateManager
 	mailSender                 func(emailSettingValue, string, string, string) error
+	paymentProviderMu          sync.Mutex
+	paymentProviders           map[string]paymentProvider
 }
 
 const taskWorkerConcurrency = 3
@@ -108,7 +110,7 @@ func New(repo *repository.Repository, dataDir string) *Service {
 func NewWithRuntimeCapabilities(repo *repository.Repository, dataDir string, capabilities RuntimeCapabilities) *Service {
 	coordinator, err := newRuntimeCoordinator(repo.Dialect())
 	pluginRuntime, pluginRuntimeErr := newPluginRuntime(dataDir)
-	service := &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeStorageTests: make(map[string]bool), activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, pluginRuntime: pluginRuntime, pluginRuntimeErr: pluginRuntimeErr, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time)}
+	service := &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeStorageTests: make(map[string]bool), activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, pluginRuntime: pluginRuntime, pluginRuntimeErr: pluginRuntimeErr, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time), paymentProviders: make(map[string]paymentProvider)}
 	service.taskBillingCoordinator = newTaskBillingCoordinator(service.repo)
 	service.taskTerminalCoordinator = newTaskTerminalCoordinator(service)
 	service.taskRouteExecutor = newTaskRouteExecutor(service)
@@ -136,6 +138,7 @@ func (s *Service) StartWorker() {
 	s.taskWorker().start(ctx)
 	s.startResourceDeletionWorker(ctx)
 	s.startSkillSyncWorker(ctx)
+	s.startPaymentWorker(ctx)
 }
 
 func (s *Service) BeginDrain() { s.backgroundWorkers().beginDrain() }

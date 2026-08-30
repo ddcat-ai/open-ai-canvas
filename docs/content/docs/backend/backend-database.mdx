@@ -15,7 +15,28 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 2。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引，用于验证在线更新中的顺序迁移、事务提交和版本健康检查。
+当前结构版本为 3。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 新增支付渠道、凭据版本、充值套餐、支付订单、回调事件和对账表，并为积分流水增加 `payment_order_id`。迁移继续用于验证在线更新中的顺序执行、事务提交和版本健康检查。
+
+## 多渠道支付与积分充值
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `payment_channels` | 保存支付提供方、支付方式和渠道运营配置 | 启用、默认渠道、通知基础地址和 5–120 分钟订单有效期可由管理员修改；用户按渠道 ID 下单，新订单会保存渠道与有效期快照；当前实现微信 Native |
+| `payment_channel_versions` | 保存不可变的商户身份和验签凭据版本 | 商户私钥与 APIv3 密钥使用设置密钥 AES-GCM 加密；接口不回传明文；历史订单固定引用创建时版本 |
+| `credit_recharge_products` | 保存管理员配置的充值套餐 | 金额使用人民币分，积分使用微积分；上下架或改价不回写历史订单 |
+| `payment_orders` | 保存现金支付订单、套餐快照、二维码和微信交易状态 | `out_trade_no`、用户幂等键和微信交易号唯一；状态只允许从创建/待支付/关单核对进入成功、关闭、失败或异常 |
+| `payment_events` | 保存微信支付回调的持久化 inbox | 回调先验签解密再按微信事件 ID 去重；只保留到账核验字段，不保存付款人身份信息 |
+| `payment_reconciliation_runs` | 保存按商户号和账单日期执行的交易账单对账 | 每日任务与管理员手动任务共用唯一范围；记录账单 SHA-256、微信/本地订单数和差异数 |
+| `payment_reconciliation_differences` | 保存逐笔对账差异 | 仅保存订单号、交易号、金额、状态和差异说明；不保存包含用户标识的原始微信账单 |
+| `credit_ledger_entries` | 保存积分资金账本 | 微信充值使用 `recharge` 类型和 `payment_order_id`；`wechatpay:<mchid>:<transaction_id>` 作为唯一外部入账键 |
+
+支付成功处理在同一个数据库事务中更新 `payment_orders`、`credit_accounts` 和 `credit_ledger_entries`。回调重复投递、前端主动查单、后台人工查单和服务重启恢复都共用这条入账路径，因此不会重复增加积分。
+
+订单有效期来自 `payment_channels.order_expire_minutes`，默认建议 15 分钟。订单过期后后台恢复任务先调用微信查单：`SUCCESS` 立即入账，`NOTPAY` 才调用关单；网络不确定或 `USERPAYING` 状态保留并重试，不凭本地倒计时直接判定未支付。渠道停用只阻止新订单，历史回调仍按原凭据版本处理。
+
+该功能不提供退款 API、自动退款任务或后台退款按钮。若商户在微信平台外部人工退款，当前系统不会自动扣回已到账积分，应作为运营异常人工核对。
+
+后台每天北京时间 10:15 后申请昨日 `ALL` 交易账单。账单下载前校验微信签名，下载后按申请接口返回的 SHA-256 摘要校验完整性，再按商户订单号、微信交易号和订单金额与本地成功订单比对。若账单出现商户平台外部退款，只记录 `external_refund` 异常供人工核对；原始账单不落库，对账不执行退款或自动扣减积分。
 
 ## 账号认证与密码找回
 
