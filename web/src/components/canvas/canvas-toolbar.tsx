@@ -1,19 +1,20 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Segmented, Switch } from "antd";
-import { CircleDot, Grid2x2, Moon, Palette, Sun, Square, Info } from "lucide-react";
+import { Switch } from "antd";
+import { Palette, Info } from "lucide-react";
 
-import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { FloatingDock } from "@/components/ui/aceternity/floating-dock";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
+import { CanvasAppearanceControls } from "@/components/canvas/canvas-appearance-controls";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
+import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
 import { ToolbarSettingsModal } from "@/components/canvas/toolbars/toolbar-settings-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
-import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
-import { defaultToolbarPrefs, readToolbarPrefs, resolveAddNodeMenuCommands, resolveToolbarEntries, type AddNodeMenuCommand, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
+import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { canvasThemes, type CanvasBackgroundMode, type CanvasTheme } from "@/lib/canvas-theme";
+import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarEntries, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { usePluginStore } from "@/stores/use-plugin-store";
 import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
@@ -24,6 +25,7 @@ export function CanvasToolbar({
     isProjectLinked,
     canUndo,
     canRedo,
+    appearance,
     backgroundMode,
     showImageInfo,
     onAddImage,
@@ -44,6 +46,8 @@ export function CanvasToolbar({
     onDelete,
     onClear,
     onDeselect,
+    onAppearanceChange,
+    onSaveAppearanceDefault,
     onBackgroundModeChange,
     onShowImageInfoChange,
     onOpenMyAssets,
@@ -56,6 +60,7 @@ export function CanvasToolbar({
     isProjectLinked: boolean;
     canUndo: boolean;
     canRedo: boolean;
+    appearance: CanvasAppearance;
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
     onAddImage: () => void;
@@ -76,6 +81,8 @@ export function CanvasToolbar({
     onDelete: () => void;
     onClear: () => void;
     onDeselect: () => void;
+    onAppearanceChange: (appearance: CanvasAppearance) => void;
+    onSaveAppearanceDefault: (appearance: CanvasAppearance) => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
     onOpenMyAssets: () => void;
@@ -84,9 +91,6 @@ export function CanvasToolbar({
     const rootRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useThemeStore((state) => state.theme);
-    const installations = usePluginStore((state) => state.installations);
-    const pluginStates = usePluginStore((state) => state.pluginStates);
-    const setTheme = useThemeStore((state) => state.setTheme);
     const theme = canvasThemes[colorTheme];
     const [addOpen, setAddOpen] = useState(false);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
@@ -111,6 +115,8 @@ export function CanvasToolbar({
         const closeFloatingPanels = (event: PointerEvent) => {
             const target = event.target instanceof Node ? event.target : null;
             if (target && rootRef.current?.contains(target)) return;
+            const element = event.target instanceof Element ? event.target : null;
+            if (element?.closest(".ant-color-picker,.ant-popover")) return;
             setAddOpen(false);
             setAppearanceOpen(false);
         };
@@ -174,21 +180,10 @@ export function CanvasToolbar({
         handlers,
     };
 
-    const enabledPluginIds = new Set(installations.filter((item) => pluginStates[item.manifest.id]?.effectiveEnabled ?? item.enabled).map((item) => item.manifest.id));
-
     const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
 
-    // 解析添加节点菜单命令——onClick 绑定到 runAddAction 以在执行后关闭面板
-    const addNodeCommands = resolveAddNodeMenuCommands({ ...ctx, enabledPluginIds });
-    const toCommand = (cmd: AddNodeMenuCommand): CanvasCreateCommand => ({
-        id: cmd.id,
-        label: cmd.label,
-        icon: cmd.icon,
-        badge: cmd.badge,
-        section: cmd.section,
-        onClick: () => runAddAction(() => cmd.run(ctx)),
-    });
-    const createCommands = addNodeCommands.map(toCommand);
+    // 中央空白起点与主工具栏共用同一份命令解析，避免素材类型和插件节点逐渐分叉。
+    const createCommands = useCanvasCreateCommands(ctx, runAddAction);
 
     return (
         <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] z-[var(--z-toolbar)] flex justify-center">
@@ -206,25 +201,10 @@ export function CanvasToolbar({
 
             <AnimatePresence>
                 {appearanceOpen ? (
-                    <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[224px] max-w-[calc(100vw-24px)]" style={{ left: panelX || "50%", transformOrigin: "bottom center", x: "-50%" }}>
+                    <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[320px] max-w-[calc(100vw-24px)]" style={{ left: panelX || "50%", transformOrigin: "bottom center", x: "-50%" }}>
                         <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item }} onWheel={(event) => event.stopPropagation()}>
                             <PanelHeading icon={<Palette className="size-4" />} title="画布外观" subtitle="调整整个创作空间" theme={theme} />
-                            <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">主题模式</div>
-                            <div className="mt-1 grid grid-cols-2 gap-1 rounded-[var(--dock-item-radius-labeled)] border p-1" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                                <CanvasThemeButton colorTheme={colorTheme} targetTheme="light" onThemeChange={setTheme}><Sun className="size-3.5" />浅色</CanvasThemeButton>
-                                <CanvasThemeButton colorTheme={colorTheme} targetTheme="dark" onThemeChange={setTheme}><Moon className="size-3.5" />深色</CanvasThemeButton>
-                            </div>
-                            <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">空间网格</div>
-                            <Segmented
-                                className="mt-1 w-full !rounded-[var(--dock-item-radius-labeled)] !p-0.5 [&_.ant-segmented-group]:!flex [&_.ant-segmented-item]:!min-h-7 [&_.ant-segmented-item]:!flex-1 [&_.ant-segmented-item-label]:!min-h-7 [&_.ant-segmented-item-label]:!text-[var(--fs-tiny)] [&_.ant-segmented-item-label]:!leading-7"
-                                value={backgroundMode}
-                                onChange={(value) => onBackgroundModeChange(value as CanvasBackgroundMode)}
-                                options={[
-                                    { value: "dots", label: <span className="inline-flex items-center gap-1.5"><CircleDot className="size-3.5" />点</span> },
-                                    { value: "lines", label: <span className="inline-flex items-center gap-1.5"><Grid2x2 className="size-3.5" />线</span> },
-                                    { value: "blank", label: <span className="inline-flex items-center gap-1.5"><Square className="size-3.5" />空白</span> },
-                                ]}
-                            />
+                            <CanvasAppearanceControls appearance={appearance} backgroundMode={backgroundMode} colorTheme={colorTheme} theme={theme} onAppearanceChange={onAppearanceChange} onSaveAppearanceDefault={onSaveAppearanceDefault} onBackgroundModeChange={onBackgroundModeChange} />
                             <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                                 <span className="inline-flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] font-semibold"><Info className="size-3" />图片信息</span>
                                 <Switch size="small" checked={showImageInfo} onChange={onShowImageInfoChange} />
@@ -259,24 +239,6 @@ function PanelHeading({ icon, title, subtitle, theme }: { icon: ReactNode; title
             <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75 [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>{icon}</span>
             <span className="min-w-0"><span className="block text-xs font-semibold">{title}</span><span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{subtitle}</span></span>
         </div>
-    );
-}
-
-function CanvasThemeButton({ colorTheme, targetTheme, onThemeChange, children }: { colorTheme: CanvasColorTheme; targetTheme: CanvasColorTheme; onThemeChange: (theme: CanvasColorTheme) => void; children: ReactNode }) {
-    const theme = canvasThemes[colorTheme];
-    const active = colorTheme === targetTheme;
-    return (
-        <AnimatedThemeToggler
-            theme={colorTheme}
-            targetTheme={targetTheme}
-            onThemeChange={onThemeChange}
-            className="inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-xs font-semibold transition-colors"
-            style={active ? { background: theme.node.text, color: theme.node.panel } : { color: theme.toolbar.item }}
-            aria-label={`切换到${targetTheme === "dark" ? "深色" : "浅色"}主题`}
-            title={`切换到${targetTheme === "dark" ? "深色" : "浅色"}主题`}
-        >
-            {children}
-        </AnimatedThemeToggler>
     );
 }
 

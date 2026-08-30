@@ -1,8 +1,9 @@
-import { Fragment, type CSSProperties, type ReactNode } from "react";
-import { Dropdown } from "antd";
+import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
+import { Dropdown, Popover } from "antd";
 import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronUp, Clapperboard, FolderKanban, Images, MoreHorizontal, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -23,9 +24,10 @@ export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFi
     );
 }
 
-export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUpload, onAddText, onAddScript }: {
+export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onStartFreeform, onUpload, onAddText, onAddScript }: {
     onCreatePipeline: () => void;
     onOpenAgent: () => void;
+    onStartFreeform: () => void;
     onUpload: () => void;
     onAddText: () => void;
     onAddScript: () => void;
@@ -39,7 +41,7 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUp
                     <h2 className="text-lg font-semibold">从哪里开始？</h2>
                     <p className="mt-1 text-sm" style={{ color: theme.node.muted }}>选择一条主路径，之后仍可随时切换。</p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-3">
                     <PathCard
                         icon={<Clapperboard className="size-5" />}
                         title="自己创作"
@@ -59,6 +61,16 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUp
                         theme={theme}
                         focusStyle={focusStyle}
                         onClick={onOpenAgent}
+                    />
+                    <PathCard
+                        icon={<Plus className="size-5" />}
+                        title="自由空白画布"
+                        description="不预设流程，自由添加文本、图片、音频和视频。"
+                        action="从空白画布开始"
+                        accent={theme.node.muted}
+                        theme={theme}
+                        focusStyle={focusStyle}
+                        onClick={onStartFreeform}
                     />
                 </div>
                 <div className="mt-3 flex justify-center">
@@ -82,16 +94,39 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUp
     );
 }
 
-export function CanvasFreeformEmptyState({ onUpload, onAddText }: { onUpload: () => void; onAddText: () => void }) {
+export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateCommand[] }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const [createOpen, setCreateOpen] = useState(false);
+    const createCommands = commands.map((command) => ({
+        ...command,
+        onClick: () => {
+            setCreateOpen(false);
+            command.onClick();
+        },
+    }));
     return (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-20 pt-24">
-            <div className="pointer-events-auto w-full max-w-[440px] rounded-lg border p-4 shadow-sm backdrop-blur" data-canvas-no-zoom style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
-                <div className="text-center"><h2 className="text-base font-semibold">从空白画布开始</h2><p className="mt-1 text-xs" style={{ color: theme.node.muted }}>添加文本或导入已有素材。</p></div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button type="button" onClick={onAddText} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border text-sm font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Type className="size-4" />新建文本</button>
-                    <button type="button" onClick={onUpload} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border text-sm font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Upload className="size-4" />导入素材</button>
-                </div>
+            <div className="pointer-events-auto flex min-h-[260px] w-full max-w-[520px] flex-col items-center justify-center rounded-2xl border border-dashed px-8 py-10 text-center backdrop-blur" data-canvas-no-zoom style={{ background: theme.node.fill, borderColor: theme.node.edge, boxShadow: theme.node.shadow, color: theme.node.text }}>
+                <h2 className="text-base font-semibold">自由空白画布</h2>
+                <p className="mt-1 text-xs" style={{ color: theme.node.muted }}>不预设流程，从任意一种素材开始创作。</p>
+                <Popover
+                    arrow={false}
+                    open={createOpen}
+                    onOpenChange={setCreateOpen}
+                    placement="bottom"
+                    trigger="click"
+                    content={<div className="w-[420px] max-w-[calc(100vw-48px)] p-1" onWheel={(event) => event.stopPropagation()}><CanvasCreateMenu commands={createCommands} /></div>}
+                >
+                    <button
+                        type="button"
+                        aria-label="添加第一项"
+                        className="mt-7 grid size-14 place-items-center rounded-full border outline-none transition-transform hover:scale-105 focus-visible:ring-2 motion-reduce:transition-none motion-reduce:hover:scale-100"
+                        style={{ background: theme.toolbar.panel, borderColor: theme.node.edge, color: theme.node.text, boxShadow: theme.node.shadow, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                    >
+                        <Plus className="size-6" />
+                    </button>
+                </Popover>
+                <p className="mt-4 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>点击 + 添加文本、图片、视频、音频或导入素材</p>
             </div>
         </div>
     );

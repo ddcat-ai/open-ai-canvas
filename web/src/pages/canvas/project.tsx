@@ -12,6 +12,7 @@ import { uploadImage } from "@/services/image-storage";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
+import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, normalizeCanvasAppearance, resolveCanvasAppearance, writeCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
@@ -55,6 +56,7 @@ import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
+import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
@@ -71,6 +73,7 @@ import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
 import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
+import { resolveCanvasEmptyStateKind } from "@/lib/canvas/canvas-starter";
 import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { createCanvasNode, getInputSummary, isHiddenBatchChild, persistCanvasWorkspaceMode, readCanvasWorkspaceMode } from "@/lib/canvas/canvas-project-domain";
 import { stampCanvasNodeChanges } from "@/lib/canvas/canvas-node-timestamps";
@@ -215,7 +218,9 @@ function InfiniteCanvasPage() {
     const assets = useAssetStore((state) => state.assets);
     const assetsHydrated = useAssetStore((state) => state.hydrated);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const colorTheme = useThemeStore((state) => state.theme);
+    const setTheme = useThemeStore((state) => state.setTheme);
+    const theme = canvasThemes[colorTheme];
     const defaultDrawingEngine = useUserStore((state) => state.drawingEngine.defaultEngine);
     const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
     const directorOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "");
@@ -244,6 +249,7 @@ function InfiniteCanvasPage() {
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
+    const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("lines");
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("move");
@@ -335,18 +341,32 @@ function InfiniteCanvasPage() {
         });
     }, [canvasStorageScope, projectId]);
 
+    const resolvedCanvasAppearance = useMemo(() => resolveCanvasAppearance(canvasAppearance, colorTheme), [canvasAppearance, colorTheme]);
+    const applyCanvasAppearance = useCallback((next: CanvasAppearance) => {
+        const fallback = canvasAppearanceBaseTheme(next, colorTheme);
+        const normalized = normalizeCanvasAppearance(next, fallback);
+        setCanvasAppearance(normalized);
+        setTheme(canvasAppearanceBaseTheme(normalized, fallback));
+    }, [colorTheme, setTheme]);
+    const saveCanvasAppearanceDefault = useCallback((next: CanvasAppearance) => {
+        writeCanvasAppearanceDefault({ appearance: next, backgroundMode });
+        message.success("已保存为当前账号在本机的新建画布默认外观");
+    }, [backgroundMode, message]);
+
     const { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas } = useCanvasHistory({
         projectLoaded,
         nodes,
         connections,
         chatSessions,
         activeChatId,
+        canvasAppearance,
         backgroundMode,
         showImageInfo,
         setNodes,
         setConnections,
         setChatSessions,
         setActiveChatId,
+        applyCanvasAppearance,
         setBackgroundMode,
         setShowImageInfo,
         setSelectedNodeIds,
@@ -368,6 +388,7 @@ function InfiniteCanvasPage() {
         connections,
         chatSessions,
         activeChatId,
+        canvasAppearance,
         backgroundMode,
         showImageInfo,
         viewport,
@@ -379,6 +400,7 @@ function InfiniteCanvasPage() {
         setConnections,
         setChatSessions,
         setActiveChatId,
+        setCanvasAppearance,
         setBackgroundMode,
         setShowImageInfo,
         setViewport,
@@ -1944,20 +1966,47 @@ function InfiniteCanvasPage() {
         }
         focusCanvasNode(styleNode.id);
     }, [focusCanvasNode, message, nodesRef]);
-    const emptyCanvasState = nodes.length ? null : !shortDramaEnabled ? (
-        <CanvasFreeformEmptyState onUpload={() => handleUploadRequest()} onAddText={() => createNode(CanvasNodeType.Text)} />
-    ) : currentProject?.projectId ? (
+    const freeformCreateCommands = useCanvasCreateCommands({
+        workspaceMode,
+        isProjectLinked: Boolean(shortDramaEnabled && currentProject?.projectId),
+        handlers: {
+            onAddText: () => createNode(CanvasNodeType.Text),
+            onAddImage: () => createNode(CanvasNodeType.Image),
+            onAddVideo: () => createNode(CanvasNodeType.Video),
+            onAddAudio: () => createNode(CanvasNodeType.Audio),
+            onAddScript: () => createNode(CanvasNodeType.Script),
+            onAddFrame: () => createNode(CanvasNodeType.Frame),
+            onAddFolder: createFolder,
+            onAddDrawing: () => createNode(CanvasNodeType.Drawing),
+            onAddWorkflow: () => createNode(CanvasNodeType.Config),
+            onAddExtensionNode: (type) => createNode(type),
+            onChooseStyle: () => setStylePickerOpen(true),
+            onOpenDirector: () => setDirectorTemplateRequest({}),
+            onUpload: () => handleUploadRequest(),
+            onOpenMyAssets: () => openCanvasAssetLibrary(),
+            onOpenProjectCharacters: () => openProjectAssets("character"),
+        },
+    });
+    const emptyStateKind = resolveCanvasEmptyStateKind({
+        nodeCount: nodes.length,
+        shortDramaEnabled,
+        isProjectLinked: Boolean(currentProject?.projectId),
+        starterMode: currentProject?.starterMode,
+    });
+    const emptyCanvasState = emptyStateKind === "freeform" ? (
+        <CanvasFreeformEmptyState commands={freeformCreateCommands} />
+    ) : emptyStateKind === "linked" ? (
         <CanvasLinkedProjectEmptyState
-            projectName={linkedProjectQuery.data?.project.name || currentProject.title}
+            projectName={linkedProjectQuery.data?.project.name || currentProject?.title || "项目画布"}
             hasChapter={Boolean(linkedProjectQuery.data?.units.length)}
             onAddFirstChapter={() => {
                 const first = linkedProjectQuery.data?.units.slice().sort((left, right) => left.position - right.position)[0];
-                if (first) void handleProjectChapterInsert({ id: first.id, projectId: currentProject.projectId!, title: first.title, position: first.position });
+                if (first) void handleProjectChapterInsert({ id: first.id, projectId: linkedProjectId, title: first.title, position: first.position });
             }}
             onOpenAssets={() => openProjectAssets()}
             onAddText={() => createNode(CanvasNodeType.Text)}
         />
-    ) : (
+    ) : emptyStateKind === "guided" ? (
         <CanvasShortDramaEmptyState
             onCreatePipeline={createShortDramaPipeline}
             onOpenAgent={() => {
@@ -1965,11 +2014,12 @@ function InfiniteCanvasPage() {
                 setAgentMode("online");
                 openAgent("online");
             }}
+            onStartFreeform={() => updateProject(projectId, { starterMode: "freeform" })}
             onUpload={() => handleUploadRequest()}
             onAddText={() => createNode(CanvasNodeType.Text)}
             onAddScript={() => createNode(CanvasNodeType.Script)}
         />
-    );
+    ) : null;
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
@@ -1980,7 +2030,7 @@ function InfiniteCanvasPage() {
             >
                 跳转到画布主内容
             </a>
-            <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: theme.canvas.background, color: theme.node.text }}>
+            <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: resolvedCanvasAppearance.background, color: theme.node.text }}>
                 {!focusMode && shortDramaEnabled && currentProject?.projectId ? (
                     <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} />
                 ) : null}
@@ -2078,6 +2128,7 @@ function InfiniteCanvasPage() {
                             <InfiniteCanvas
                                 containerRef={containerRef}
                                 viewport={viewport}
+                                appearance={canvasAppearance}
                                 backgroundMode={backgroundMode}
                                 graphicsLayer={
                                     <CanvasLeaferGraphicsLayer
@@ -2217,6 +2268,7 @@ function InfiniteCanvasPage() {
                                     isProjectLinked={Boolean(shortDramaEnabled && currentProject?.projectId)}
                                     canUndo={historyState.canUndo}
                                     canRedo={historyState.canRedo}
+                                    appearance={canvasAppearance}
                                     backgroundMode={backgroundMode}
                                     showImageInfo={showImageInfo}
                                     onAddImage={() => createNode(CanvasNodeType.Image)}
@@ -2237,6 +2289,8 @@ function InfiniteCanvasPage() {
                                     onDelete={() => deleteNodes(new Set(selectedNodeIds))}
                                     onClear={() => setClearConfirmOpen(true)}
                                     onDeselect={deselectCanvas}
+                                    onAppearanceChange={applyCanvasAppearance}
+                                    onSaveAppearanceDefault={saveCanvasAppearanceDefault}
                                     onBackgroundModeChange={setBackgroundMode}
                                     onShowImageInfoChange={setShowImageInfo}
                                     onOpenMyAssets={() => {
