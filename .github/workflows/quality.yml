@@ -51,14 +51,20 @@ jobs:
         run: |
           changed_files=()
           repo_prefix="$(git rev-parse --show-prefix)"
+          comparison_base="$BASE_SHA"
+          if [[ -n "${GITHUB_BASE_REF:-}" ]] \
+            && git show-ref --verify --quiet "refs/remotes/origin/${GITHUB_BASE_REF}"; then
+            comparison_base="$(git merge-base "origin/${GITHUB_BASE_REF}" "$GITHUB_SHA")"
+          fi
+          echo "Formatting comparison base: $comparison_base"
           while IFS= read -r -d '' file; do
             case "$file" in
               *.css|*.html|*.json|*.js|*.jsx|*.md|*.mdx|*.mjs|*.cjs|*.ts|*.tsx|*.yaml|*.yml)
                 base_path="${repo_prefix}${file}"
-                if git cat-file -e "$BASE_SHA:$base_path" 2>/dev/null \
+                if git cat-file -e "$comparison_base:$base_path" 2>/dev/null \
                   && ! diff -q \
-                    <(git show "$BASE_SHA:$base_path") \
-                    <(git show "$BASE_SHA:$base_path" | bunx prettier --ignore-path /dev/null --stdin-filepath "$file") \
+                    <(git show "$comparison_base:$base_path") \
+                    <(git show "$comparison_base:$base_path" | bunx prettier --ignore-path /dev/null --stdin-filepath "$file") \
                     >/dev/null; then
                   echo "Skipping legacy unformatted file: $file"
                   continue
@@ -66,7 +72,7 @@ jobs:
                 changed_files+=("$file")
                 ;;
             esac
-          done < <(git diff --relative --name-only --diff-filter=ACMR -z "$BASE_SHA" "$GITHUB_SHA" -- .)
+          done < <(git diff --relative --name-only --diff-filter=ACMR -z "$comparison_base" "$GITHUB_SHA" -- .)
           if (( ${#changed_files[@]} > 0 )); then
             bunx prettier --check "${changed_files[@]}"
           else
