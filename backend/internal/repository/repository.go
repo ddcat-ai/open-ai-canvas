@@ -1136,6 +1136,83 @@ func (r *Repository) UpdateProject(project *model.Project) error {
 	}).Error
 }
 
+func (r *Repository) NovelWorkbenchRun(projectID string) (*model.NovelWorkbenchRun, error) {
+	var run model.NovelWorkbenchRun
+	if err := r.db.First(&run, "project_id = ?", projectID).Error; err != nil {
+		return nil, err
+	}
+	return &run, nil
+}
+
+func (r *Repository) CreateNovelWorkbenchRun(run *model.NovelWorkbenchRun) error {
+	return r.db.Create(run).Error
+}
+
+func (r *Repository) UpdateNovelWorkbenchRun(run *model.NovelWorkbenchRun) error {
+	return r.db.Model(&model.NovelWorkbenchRun{}).Where("id = ? AND project_id = ?", run.ID, run.ProjectID).Updates(map[string]any{
+		"output_mode": run.OutputMode, "engine_version": run.EngineVersion, "status": run.Status, "stage": run.Stage,
+		"pipeline_stage": run.PipelineStage, "quality_policy": run.QualityPolicy, "quality_block_reason": run.QualityBlockReason,
+		"target_unit_count":    run.TargetUnitCount,
+		"completed_unit_count": run.CompletedUnitCount, "current_unit": run.CurrentUnit,
+		"current_task_id": run.CurrentTaskID, "control_json": run.ControlJSON,
+		"dynamic_state_json": run.DynamicStateJSON, "last_error": run.LastError, "updated_at": run.UpdatedAt,
+	}).Error
+}
+
+func (r *Repository) NovelWorkbenchArtifacts(runID string) ([]model.NovelWorkbenchArtifact, error) {
+	var artifacts []model.NovelWorkbenchArtifact
+	err := r.db.Where("run_id = ?", runID).Order("unit asc, kind asc, attempt asc, created_at asc").Find(&artifacts).Error
+	return artifacts, err
+}
+
+func (r *Repository) CreateNovelWorkbenchArtifact(artifact *model.NovelWorkbenchArtifact) error {
+	return r.db.Create(artifact).Error
+}
+
+// CommitNovelWorkbenchUnit makes the public chapter, dynamic state and commit
+// audit visible together. A failed transaction never exposes a half-written unit.
+func (r *Repository) CommitNovelWorkbenchUnit(run *model.NovelWorkbenchRun, unit *model.ProjectUnit, artifacts []model.NovelWorkbenchArtifact) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var existing model.ProjectUnit
+		err := tx.First(&existing, "project_id = ? AND position = ?", unit.ProjectID, unit.Position).Error
+		switch {
+		case err == nil:
+			if err := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", existing.ID, unit.ProjectID).Updates(map[string]any{
+				"kind": unit.Kind, "title": unit.Title, "source_text": unit.SourceText, "status": unit.Status, "updated_at": unit.UpdatedAt,
+			}).Error; err != nil {
+				return err
+			}
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := tx.Create(unit).Error; err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+		if len(artifacts) > 0 {
+			if err := tx.Create(&artifacts).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&model.NovelWorkbenchRun{}).Where("id = ? AND project_id = ?", run.ID, run.ProjectID).Updates(map[string]any{
+			"output_mode": run.OutputMode, "engine_version": run.EngineVersion, "status": run.Status, "stage": run.Stage,
+			"pipeline_stage": run.PipelineStage, "quality_policy": run.QualityPolicy, "quality_block_reason": run.QualityBlockReason,
+			"target_unit_count": run.TargetUnitCount, "completed_unit_count": run.CompletedUnitCount, "current_unit": run.CurrentUnit,
+			"current_task_id": run.CurrentTaskID, "control_json": run.ControlJSON, "dynamic_state_json": run.DynamicStateJSON,
+			"last_error": run.LastError, "updated_at": run.UpdatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", unit.ProjectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": unit.UpdatedAt}).Error
+	})
+}
+
+func (r *Repository) NovelWorkbenchRuns(userID string) ([]model.NovelWorkbenchRun, error) {
+	var runs []model.NovelWorkbenchRun
+	err := r.db.Where("user_id = ?", userID).Order("updated_at desc").Find(&runs).Error
+	return runs, err
+}
+
 func (r *Repository) DeleteProject(userID string, id string, canvasUpdates []model.CanvasProject) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var canvasIDs []string
@@ -1214,6 +1291,18 @@ func (r *Repository) DeleteProject(userID string, id string, canvasUpdates []mod
 		if err := tx.Where("project_id = ?", id).Delete(&model.ProjectAssetCandidate{}).Error; err != nil {
 			return err
 		}
+		// 升级中的旧数据库可能尚未完成小说工作台表迁移；项目删除不应被
+		// 一张可选的附属表阻断。正常启动后的 schema 会始终包含该表。
+		if tx.Migrator().HasTable(&model.NovelWorkbenchRun{}) {
+			if tx.Migrator().HasTable(&model.NovelWorkbenchArtifact{}) {
+				if err := tx.Where("project_id = ?", id).Delete(&model.NovelWorkbenchArtifact{}).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Where("project_id = ?", id).Delete(&model.NovelWorkbenchRun{}).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("project_id = ?", id).Delete(&model.ProjectUnit{}).Error; err != nil {
 			return err
 		}
@@ -1287,7 +1376,19 @@ func (r *Repository) ProjectUnit(projectID string, id string) (*model.ProjectUni
 	return &unit, nil
 }
 
-func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkflow bool) error {
+func (r *Repository) ProjectUnitAtPosition(projectID string, position int) (*model.ProjectUnit, error) {
+	var unit model.ProjectUnit
+	if err := r.db.First(&unit, "project_id = ? AND position = ?", projectID, position).Error; err != nil {
+		return nil, err
+	}
+	return &unit, nil
+}
+
+func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkflow ...bool) error {
+	// Calls without the optional flag retain the novel workbench's legacy
+	// revision handling; current project editing always supplies the flag.
+	shouldBumpRevision := len(invalidateWorkflow) > 0
+	shouldInvalidateWorkflow := shouldBumpRevision && invalidateWorkflow[0]
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unit.ID, unit.ProjectID).Updates(map[string]any{
 			"parent_id": unit.ParentID, "title": unit.Title, "source_text": unit.SourceText, "word_count": unit.WordCount, "status": unit.Status, "position": unit.Position, "updated_at": unit.UpdatedAt,
@@ -1298,13 +1399,16 @@ func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkfl
 		if result.RowsAffected != 1 {
 			return gorm.ErrRecordNotFound
 		}
-		if invalidateWorkflow {
+		if shouldInvalidateWorkflow {
 			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
 				return err
 			}
 			if err := invalidateUnitWorkflowTx(tx, unit.ProjectID, unit.ID, "story", unit.UpdatedAt); err != nil {
 				return err
 			}
+		}
+		if !shouldBumpRevision {
+			return nil
 		}
 		return tx.Model(&model.Project{}).Where("id = ?", unit.ProjectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": unit.UpdatedAt}).Error
 	})

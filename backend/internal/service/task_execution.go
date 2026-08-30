@@ -33,6 +33,9 @@ func (s *Service) processTask(ctx context.Context, task model.Task) (map[string]
 	if task.Type == "agent_storyboard" {
 		return s.processAgentStoryboardTask(ctx, task)
 	}
+	if task.Type == novelWorkbenchTaskType {
+		return s.processNovelWorkbenchTask(ctx, task)
+	}
 	if strings.HasPrefix(task.Type, "video_") {
 		if !canRunProviderTask(task) {
 			return nil, nil, errors.New("视频任务缺少可执行的模型配置")

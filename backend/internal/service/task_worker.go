@@ -187,9 +187,17 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 		_, terminalErr := terminal.handleResultPersistenceFailure(task, fmt.Errorf("序列化画布操作失败：%w", err))
 		return terminalErr
 	}
+	protectedInput := task.InputJSON
 	if err := s.saveTaskCompletionWithinStorageQuota(task, resultJSON, opsJSON, len(canvasOps) > 0); err != nil {
 		_, terminalErr := terminal.handleResultPersistenceFailure(task, err)
 		return terminalErr
+	}
+	if task.Type == novelWorkbenchTaskType {
+		if err := s.scheduleNovelWorkbenchContinuation(*task, protectedInput, result); err != nil {
+			// 当前单元已经可靠落库。续写排队失败只让工作台进入可恢复状态，
+			// 不能将已经成功的当前任务错误标记为失败。
+			_ = s.log(task.UserID, task.ID, "error", "小说工作台续写排队失败", err.Error())
+		}
 	}
 	return terminal.handleSuccess(task)
 }
@@ -209,6 +217,10 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	switch {
 	case taskType == "agent_storyboard" || taskType == "agent_storyboard_rows":
 		return time.Duration(policy.StoryboardTimeoutMinutes) * time.Minute
+	case taskType == novelWorkbenchTaskType:
+		// 小说工作台把总控档案和每个单元拆为独立任务；单个任务沿用文本超时，
+		// 长篇连续创作不会因此占住一个长时间不释放的 worker。
+		return time.Duration(policy.TextTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_video") || strings.HasPrefix(taskType, "video_"):
 		return max(time.Duration(policy.VideoTimeoutMinutes)*time.Minute, 5*time.Minute)
 	case strings.HasPrefix(taskType, "canvas_image"):

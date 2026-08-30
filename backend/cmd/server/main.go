@@ -109,6 +109,7 @@ func main() {
 	projectAPI := api.Group("")
 	projectAPI.Use(handler.RequireFeature(svc, service.FeatureShortDrama))
 	handler.RegisterProjectRoutes(projectAPI, svc)
+	handler.RegisterNovelWorkbenchRoutes(projectAPI, svc)
 	handler.RegisterCanvasShareRoutes(api, svc)
 	r.NoRoute(handler.SystemProxyNoRouteHandler(svc))
 

@@ -188,6 +188,46 @@ type Project struct {
 	UpdatedAt         time.Time     `json:"updatedAt" gorm:"index"`
 }
 
+// NovelWorkbenchRun 保存小说工作台的长程创作状态。项目正文仍落在
+// ProjectUnit 中；这里仅保存总控档案、单元控制信息和可恢复的连续性状态。
+type NovelWorkbenchRun struct {
+	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID             string    `json:"userId" gorm:"index;size:36"`
+	ProjectID          string    `json:"projectId" gorm:"uniqueIndex;size:36"`
+	OutputMode         string    `json:"outputMode" gorm:"index;size:24"`
+	EngineVersion      int       `json:"engineVersion"`
+	Status             string    `json:"status" gorm:"index;size:24"`
+	Stage              string    `json:"stage" gorm:"index;size:32"`
+	PipelineStage      string    `json:"pipelineStage,omitempty" gorm:"index;size:32"`
+	QualityPolicy      string    `json:"qualityPolicy,omitempty" gorm:"size:48"`
+	QualityBlockReason string    `json:"qualityBlockReason,omitempty" gorm:"type:text"`
+	TargetUnitCount    int       `json:"targetUnitCount"`
+	CompletedUnitCount int       `json:"completedUnitCount"`
+	CurrentUnit        int       `json:"currentUnit"`
+	CurrentTaskID      string    `json:"currentTaskId,omitempty" gorm:"index;size:36"`
+	ControlJSON        string    `json:"-" gorm:"type:text"`
+	DynamicStateJSON   string    `json:"-" gorm:"type:text"`
+	LastError          string    `json:"lastError,omitempty" gorm:"type:text"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt" gorm:"index"`
+}
+
+// NovelWorkbenchArtifact 保存创作控制系统的可审计产物。正文仍然只写入
+// ProjectUnit；控制卡、审稿报告和提交记录在这里按单元独立留档。
+type NovelWorkbenchArtifact struct {
+	ID          string    `json:"id" gorm:"primaryKey;size:36"`
+	RunID       string    `json:"runId" gorm:"index;size:36;index:idx_novel_workbench_artifacts_run_unit,priority:1"`
+	ProjectID   string    `json:"projectId" gorm:"index;size:36"`
+	Unit        int       `json:"unit" gorm:"index:idx_novel_workbench_artifacts_run_unit,priority:2"`
+	Kind        string    `json:"kind" gorm:"index;size:48;index:idx_novel_workbench_artifacts_run_unit,priority:3"`
+	Attempt     int       `json:"attempt"`
+	Version     int       `json:"version"`
+	ContentJSON string    `json:"contentJson" gorm:"type:text"`
+	Prompt      string    `json:"prompt,omitempty" gorm:"type:text"`
+	CreatedAt   time.Time `json:"createdAt" gorm:"index"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 // StyleProfile 是用户可持续编辑的风格源；项目只保存应用当时的 JSON 快照，避免源对象更新污染历史生成。
 type StyleProfile struct {
 	ID          string     `json:"id" gorm:"primaryKey;size:36"`

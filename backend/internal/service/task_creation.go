@@ -262,7 +262,7 @@ func (s *Service) createTextReplayTask(userID string, req CreateTaskRequest, nor
 // 其他任务类型必须是已实现的执行分支，避免未知类型落入假成功工作流。
 func validateTaskType(taskType string) error {
 	switch taskType {
-	case "text", "agent_storyboard", "agent_storyboard_rows", "canvas_text", "canvas_image", "canvas_video", "canvas_audio":
+	case "text", "agent_storyboard", "agent_storyboard_rows", "novel_workbench", "canvas_text", "canvas_image", "canvas_video", "canvas_audio":
 		return nil
 	}
 	if strings.HasPrefix(taskType, "video_") && strings.TrimPrefix(taskType, "video_") != "" {

@@ -60,6 +60,7 @@ const statusLabels: Record<string, string> = {
 const sourceTypeLabels: Record<string, string> = {
     blank: "空白开始",
     novel: "导入小说",
+    "novel-workbench": "小说工作台",
     text: "粘贴文本",
 };
 

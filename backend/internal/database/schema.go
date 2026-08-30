@@ -61,6 +61,8 @@ func Models() []any {
 		&model.VoiceProfile{},
 		&model.CharacterVoiceBinding{},
 		&model.Project{},
+		&model.NovelWorkbenchRun{},
+		&model.NovelWorkbenchArtifact{},
 		&model.StyleProfile{},
 		&model.ProjectUnit{},
 		&model.CanvasUnitLink{},
