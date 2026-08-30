@@ -21,6 +21,16 @@ import { logicalModelIDForConfig, modelDisplayName, useEffectiveConfig } from "@
 
 type ControlView = "canon" | "roadmap" | "ledger" | "units" | "audit";
 
+type ControlCardAuditEntry = {
+    artifact: NovelWorkbenchArtifact;
+    audit: Record<string, unknown>;
+};
+
+type RepairPacketEntry = {
+    artifact: NovelWorkbenchArtifact;
+    packet: Record<string, unknown>;
+};
+
 const viewOptions = [
     {
         value: "canon",
@@ -63,7 +73,7 @@ const viewOptions = [
         label: (
             <span className="inline-flex items-center gap-1.5">
                 <ShieldCheck className="size-3.5" />
-                提示词审计
+                创作审计
             </span>
         ),
     },
@@ -122,13 +132,14 @@ export default function NovelControlPage() {
     const v2 = (run.engineVersion || 0) >= 2;
     const active = run.status === "queued" || run.status === "running";
     const qualityBlocked = run.status === "failed" && run.pipelineStage === "quality_blocked";
+    const compiledControl = run.qualityPolicy?.startsWith("compiled-control") === true;
     const docs = control.documents;
     return (
         <WorkspacePage className="library-page" grid>
             <PageHeader
                 title={control.title || project.name}
                 description={v2 ? "创作控制台：所有正文均在控制档案、独立审稿与硬规则通过后提交" : "旧版工作流项目，可重建为强控制版本"}
-                meta={v2 ? <Tag color={qualityBlocked ? "error" : "success"}>{qualityBlocked ? "质量拦截" : `V${run.engineVersion} 强控制`}</Tag> : <Tag color="warning">旧版</Tag>}
+                meta={v2 ? <Tag color={qualityBlocked ? "error" : "success"}>{qualityBlocked ? "质量拦截" : compiledControl ? "编译式强控" : `V${run.engineVersion} 强控制`}</Tag> : <Tag color="warning">旧版</Tag>}
                 actions={
                     <>
                         <Button icon={<ArrowLeft className="size-3.5" />} onClick={() => navigate("/novels")}>
@@ -174,7 +185,7 @@ export default function NovelControlPage() {
                     {view === "roadmap" ? <RoadmapView docs={docs} artifacts={artifacts} /> : null}
                     {view === "ledger" ? <LedgerView docs={docs} state={dynamicState} /> : null}
                     {view === "units" ? <UnitReviewView artifacts={artifacts} /> : null}
-                    {view === "audit" ? <PromptAuditView artifacts={artifacts} /> : null}
+                    {view === "audit" ? <ControlAuditView artifacts={artifacts} /> : null}
                 </>
             ) : (
                 <LegacyView control={control} />
@@ -374,9 +385,13 @@ function UnitReviewView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] }) 
     const reviews = artifacts.filter((item) => item.kind === "review_report");
     const cards = artifacts.filter((item) => item.kind === "control_card");
     const contracts = artifacts.filter((item) => item.kind === "episode_contract");
+    const specs = artifacts.filter((item) => item.kind === "episode_spec");
+    const deltas = artifacts.filter((item) => item.kind === "creative_delta");
     const committed = artifacts.filter((item) => item.kind === "commit_record");
     const blocks = artifacts.filter((item) => item.kind === "quality_block");
-    const units = Array.from(new Set([...reviews, ...cards, ...contracts, ...committed, ...blocks].map((item) => item.unit)))
+    const audits = controlCardAuditEntries(artifacts);
+    const repairs = repairPacketEntries(artifacts);
+    const units = Array.from(new Set([...reviews, ...cards, ...contracts, ...specs, ...deltas, ...committed, ...blocks, ...audits.map((item) => item.artifact), ...repairs.map((item) => item.artifact)].map((item) => item.unit)))
         .filter((unit) => unit > 0)
         .sort((a, b) => a - b);
     return (
@@ -387,7 +402,7 @@ function UnitReviewView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] }) 
                         items={units.map((unit) => ({
                             key: String(unit),
                             label: `第 ${unit} 单元 · ${reviewStatus(reviews.filter((item) => item.unit === unit))}`,
-                            children: <UnitArtifacts unit={unit} contracts={contracts} cards={cards} reviews={reviews} commits={committed} blocks={blocks} />,
+                            children: <UnitArtifacts unit={unit} contracts={contracts} specs={specs} deltas={deltas} cards={cards} reviews={reviews} commits={committed} blocks={blocks} audits={audits} repairs={repairs} />,
                         }))}
                     />
                 ) : (
@@ -401,39 +416,65 @@ function UnitReviewView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] }) 
 function UnitArtifacts({
     unit,
     contracts,
+    specs,
+    deltas,
     cards,
     reviews,
     commits,
     blocks,
+    audits,
+    repairs,
 }: {
     unit: number;
     contracts: NovelWorkbenchArtifact[];
+    specs: NovelWorkbenchArtifact[];
+    deltas: NovelWorkbenchArtifact[];
     cards: NovelWorkbenchArtifact[];
     reviews: NovelWorkbenchArtifact[];
     commits: NovelWorkbenchArtifact[];
     blocks: NovelWorkbenchArtifact[];
+    audits: ControlCardAuditEntry[];
+    repairs: RepairPacketEntry[];
 }) {
     const contract = parseArtifact(contracts.find((item) => item.unit === unit));
+    const spec = parseArtifact(specs.find((item) => item.unit === unit));
+    const delta = parseArtifact(deltas.find((item) => item.unit === unit));
     const card = parseArtifact(cards.find((item) => item.unit === unit));
     const reviewData = parseArtifact(reviews.filter((item) => item.unit === unit).at(-1));
     const review = reviewData?.review || reviewData;
     const commit = parseArtifact(commits.find((item) => item.unit === unit));
     const block = parseArtifact(blocks.filter((item) => item.unit === unit).at(-1));
+    const unitAudits = audits.filter((item) => item.artifact.unit === unit);
+    const unitRepairs = repairs.filter((item) => item.artifact.unit === unit);
     return (
         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
             <ArtifactObject title="创作契约" value={contract} />
+            {spec ? <ArtifactObject title="编译单元规格" value={spec} /> : null}
+            {delta ? <ArtifactObject title="创意增量" value={delta} /> : null}
             <ArtifactObject title="控制卡" value={card} />
             <ArtifactObject title="审稿报告" value={review} />
             <ArtifactObject title="提交记录" value={commit} />
             {block ? <ArtifactObject title="质量拦截记录" value={block} /> : null}
+            {unitAudits.length ? <ControlCardAuditDetails entries={unitAudits} /> : null}
+            {unitRepairs.length ? <RepairPacketDetails entries={unitRepairs} /> : null}
         </div>
     );
 }
 
-function PromptAuditView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] }) {
+function ControlAuditView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] }) {
+    const controlCardAudits = controlCardAuditEntries(artifacts);
+    const repairs = repairPacketEntries(artifacts);
     const promptArtifacts = artifacts.filter((item) => item.prompt?.trim());
     return (
-        <section className="mt-4">
+        <div className="mt-4 grid gap-4">
+            <ControlSection title="控制卡决策审计" icon={<ShieldCheck className="size-4" />}>
+                <p className="mb-4 text-sm leading-6 text-foreground/65">每轮控制卡都会记录冻结契约、证据声明的分类与处理、验证链和响应指纹。被拒绝的轮次保留原始输出；通过后若移除了纯背景重复声明，也会明确显示。</p>
+                {controlCardAudits.length ? <ControlCardAuditDetails entries={controlCardAudits} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="首个控制卡生成后会显示验证与规范化记录" />}
+            </ControlSection>
+            <ControlSection title="定向返修单" icon={<FileCheck2 className="size-4" />}>
+                <p className="mb-4 text-sm leading-6 text-foreground/65">每次自动返修都会先固定失败规则、受影响 ID、必须修复项和不可改项。模型只会收到对应单据，不会重新猜测状态机。</p>
+                {repairs.length ? <RepairPacketDetails entries={repairs} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未发生需要返修的单元" />}
+            </ControlSection>
             <ControlSection title="提示词审计" icon={<ShieldCheck className="size-4" />}>
                 {promptArtifacts.length ? (
                     <Collapse
@@ -447,7 +488,228 @@ function PromptAuditView({ artifacts }: { artifacts: NovelWorkbenchArtifact[] })
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="生成后会保存写手、审稿与返修提示词" />
                 )}
             </ControlSection>
-        </section>
+        </div>
+    );
+}
+
+function ControlCardAuditDetails({ entries }: { entries: ControlCardAuditEntry[] }) {
+    return (
+        <div className="min-w-0 xl:col-span-2 2xl:col-span-4">
+            <Collapse
+                items={entries.map(({ artifact, audit }) => {
+                    const outcome = textValue(audit.outcome) || (artifact.kind === "control_card_rejected" ? "rejected" : "accepted");
+                    const attempt = numberValue(audit.attempt) || artifact.attempt || 1;
+                    const validationError = textValue(audit.validationError);
+                    return {
+                        key: artifact.id,
+                        label: (
+                            <span className="inline-flex max-w-full flex-wrap items-center gap-2">
+                                <span>
+                                    第 {artifact.unit} 单元 · 第 {attempt} 轮
+                                </span>
+                                <Tag color={controlCardAuditOutcomeColor(outcome)}>{controlCardAuditOutcomeLabel(outcome)}</Tag>
+                                {validationError ? <span className="max-w-full text-xs text-rose-600 dark:text-rose-300">{validationError}</span> : null}
+                            </span>
+                        ),
+                        children: <ControlCardAuditDetail audit={audit} />,
+                    };
+                })}
+            />
+        </div>
+    );
+}
+
+function RepairPacketDetails({ entries }: { entries: RepairPacketEntry[] }) {
+    return (
+        <div className="min-w-0 xl:col-span-2 2xl:col-span-4">
+            <Collapse
+                items={entries.map(({ artifact, packet }) => {
+                    const stage = textValue(packet.stage) || artifact.kind;
+                    const attempt = numberValue(packet.attempt) || artifact.attempt || 1;
+                    const failure = textValue(packet.failure) || "未记录具体失败原因";
+                    return {
+                        key: artifact.id,
+                        label: (
+                            <span className="inline-flex max-w-full flex-wrap items-center gap-2">
+                                <span>
+                                    第 {artifact.unit} 单元 · 第 {attempt} 轮
+                                </span>
+                                <Tag color={repairFailureColor(textValue(packet.failureClass))}>{repairStageLabel(stage)}</Tag>
+                                <span className="max-w-full text-xs text-rose-600 dark:text-rose-300">{failure}</span>
+                            </span>
+                        ),
+                        children: <RepairPacketDetail packet={packet} />,
+                    };
+                })}
+            />
+        </div>
+    );
+}
+
+function RepairPacketDetail({ packet }: { packet: Record<string, unknown> }) {
+    const affectedIDs = arrayStringValue(packet.affectedIds);
+    const requiredFix = arrayStringValue(packet.requiredFix);
+    const warnings = arrayStringValue(packet.warnings);
+    const preserve = arrayStringValue(packet.preserve);
+    return (
+        <div className="space-y-4">
+            <div className="grid gap-3 text-xs sm:grid-cols-3">
+                <AuditFact label="失败类型" value={repairFailureLabel(textValue(packet.failureClass))} />
+                <AuditFact label="失败代码" value={textValue(packet.failureCode) || "未分类"} />
+                <AuditFact label="失败阶段" value={repairStageLabel(textValue(packet.stage))} />
+            </div>
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">本次失败</h3>
+                <p className="rounded-md border border-rose-400/20 bg-rose-400/[0.05] p-3 text-xs leading-6 text-rose-700 dark:text-rose-200">{textValue(packet.failure) || "未记录具体失败原因"}</p>
+            </div>
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">受影响 ID</h3>
+                <div className="flex flex-wrap gap-1">
+                    {affectedIDs.map((id) => (
+                        <Tag key={id} color="blue">
+                            {id}
+                        </Tag>
+                    ))}
+                    {!affectedIDs.length ? <span className="text-xs text-foreground/45">本次为格式或整体叙事问题，没有特定 ID</span> : null}
+                </div>
+            </div>
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">必须修复</h3>
+                <ul className="space-y-1 text-xs leading-6 text-foreground/70">
+                    {requiredFix.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                </ul>
+            </div>
+            {warnings.length ? (
+                <div>
+                    <h3 className="mb-2 text-xs font-medium text-foreground/55">审稿提示（不触发返修）</h3>
+                    <ul className="space-y-1 text-xs leading-6 text-foreground/55">
+                        {warnings.map((item, index) => (
+                            <li key={`${item}-${index}`}>{item}</li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">不可改动</h3>
+                <ul className="space-y-1 text-xs leading-6 text-foreground/55">
+                    {preserve.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+}
+
+function ControlCardAuditDetail({ audit }: { audit: Record<string, unknown> }) {
+    const validations = recordArrayValue(audit.validations);
+    const decisions = recordArrayValue(audit.evidenceDecisions);
+    const contract = recordValue(audit.contract);
+    const fingerprint = textValue(audit.rawResponseSha256);
+    const relevantLedgerIDs = arrayStringValue(contract?.relevantLedgerIds);
+    const requiredIntroductions = arrayStringValue(contract?.requiredIntroductionIds);
+    const requiredPayoffs = arrayStringValue(contract?.requiredPayoffIds);
+    return (
+        <div className="space-y-4">
+            <div className="grid gap-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+                <AuditFact label="审计规则" value={textValue(audit.ruleset) || "未记录"} />
+                <AuditFact label="响应指纹" value={fingerprint ? `${fingerprint.slice(0, 16)}...` : "未记录"} title={fingerprint} />
+                <AuditFact label="证据声明" value={`${numberValue(audit.inputEvidenceClaimCount)} → ${numberValue(audit.outputEvidenceClaimCount)}`} />
+                <AuditFact label="路线" value={textValue(contract?.roadmapId) || "未记录"} />
+            </div>
+
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">冻结契约上下文</h3>
+                <div className="flex flex-wrap gap-1">
+                    {requiredIntroductions.map((id) => (
+                        <Tag key={`intro-${id}`} color="blue">
+                            引入 {id}
+                        </Tag>
+                    ))}
+                    {requiredPayoffs.map((id) => (
+                        <Tag key={`payoff-${id}`} color="green">
+                            回收 {id}
+                        </Tag>
+                    ))}
+                    {relevantLedgerIDs.map((id) => (
+                        <Tag key={`relevant-${id}`}>{id}</Tag>
+                    ))}
+                    {!requiredIntroductions.length && !requiredPayoffs.length && !relevantLedgerIDs.length ? <span className="text-xs text-foreground/45">本轮未记录账本上下文</span> : null}
+                </div>
+            </div>
+
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">验证链</h3>
+                {validations.length ? (
+                    <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10">
+                        {validations.map((validation, index) => {
+                            const passed = validation.passed === true;
+                            const detail = textValue(validation.detail);
+                            return (
+                                <div className="flex flex-wrap items-start gap-2 p-3 text-xs" key={`${textValue(validation.stage)}-${index}`}>
+                                    <Tag color={passed ? "green" : "red"}>{passed ? "通过" : "拦截"}</Tag>
+                                    <span className="font-medium text-foreground/75">{controlCardAuditStageLabel(textValue(validation.stage))}</span>
+                                    {detail ? <span className={passed ? "text-foreground/55" : "text-rose-600 dark:text-rose-300"}>{detail}</span> : null}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <span className="text-xs text-foreground/45">该记录来自旧版，未保存分阶段验证结果</span>
+                )}
+            </div>
+
+            <div>
+                <h3 className="mb-2 text-xs font-medium text-foreground/55">证据声明决策</h3>
+                {decisions.length ? (
+                    <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10">
+                        {decisions.map((decision, index) => {
+                            const action = textValue(decision.action) || "retained";
+                            const requestedLevel = textValue(decision.requestedLevel);
+                            const priorLevel = textValue(decision.priorLevel);
+                            return (
+                                <div className="p-3 text-xs" key={`${textValue(decision.evidenceId)}-${index}`}>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <code className="text-foreground/70">{textValue(decision.evidenceId) || "缺失 ID"}</code>
+                                        <Tag color={controlCardAuditActionColor(action)}>{controlCardAuditActionLabel(action)}</Tag>
+                                        <Tag>{controlCardAuditClassificationLabel(textValue(decision.classification))}</Tag>
+                                        {requestedLevel || priorLevel ? (
+                                            <span className="text-foreground/50">
+                                                等级：{priorLevel || "未知"} → {requestedLevel || "未知"}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <p className="mt-2 leading-5 text-foreground/65">{textValue(decision.reason) || "未记录处理原因"}</p>
+                                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-foreground/45">
+                                        <span>账本存在：{booleanLabel(decision.knownLedger)}</span>
+                                        <span>账本锚点：{booleanLabel(decision.requiredAnchor)}</span>
+                                        <span>知情使用：{booleanLabel(decision.usedByKnowledge)}</span>
+                                        <span>本集相关：{booleanLabel(decision.relevantToUnit)}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <span className="text-xs text-foreground/45">本轮没有证据声明，或该记录来自旧版</span>
+                )}
+            </div>
+
+            <ArtifactObject title="审计原始记录" value={audit} />
+        </div>
+    );
+}
+
+function AuditFact({ label, value, title }: { label: string; value: string; title?: string }) {
+    return (
+        <div className="min-w-0 rounded-md bg-foreground/[0.035] px-3 py-2">
+            <div className="text-[11px] text-foreground/48">{label}</div>
+            <div className="mt-1 truncate font-medium text-foreground/75" title={title || value}>
+                {value}
+            </div>
+        </div>
     );
 }
 
@@ -493,6 +755,181 @@ function ArtifactObject({ title, value }: { title: string; value: unknown }) {
     );
 }
 
+function controlCardAuditEntries(artifacts: NovelWorkbenchArtifact[]) {
+    const entries = artifacts.flatMap((artifact): ControlCardAuditEntry[] => {
+        const payload = parseArtifact(artifact);
+        if (!payload) return [];
+        if (artifact.kind === "control_card_audit") return [{ artifact, audit: payload }];
+        if (artifact.kind === "control_card_rejected") {
+            const audit = recordValue(payload.audit);
+            return audit ? [{ artifact, audit }] : [];
+        }
+        if (artifact.kind !== "control_card_normalized") return [];
+
+        const removedEvidenceIDs = arrayStringValue(payload.removedEvidenceIds);
+        return [
+            {
+                artifact,
+                audit: {
+                    schemaVersion: 0,
+                    unit: artifact.unit,
+                    attempt: artifact.attempt,
+                    outcome: "accepted_with_normalization",
+                    ruleset: "legacy-normalization",
+                    inputEvidenceClaimCount: removedEvidenceIDs.length,
+                    outputEvidenceClaimCount: 0,
+                    evidenceDecisions: removedEvidenceIDs.map((evidenceId) => ({
+                        evidenceId,
+                        classification: "unused_stable_context",
+                        action: "removed",
+                        reason: textValue(payload.reason) || "旧版已移除冗余背景证据声明。",
+                    })),
+                    validations: [{ stage: "legacy_normalization", passed: true, detail: "旧版记录未保存完整验证链。" }],
+                },
+            },
+        ];
+    });
+    return entries.sort((left, right) => {
+        const unitDifference = left.artifact.unit - right.artifact.unit;
+        if (unitDifference !== 0) return unitDifference;
+        const attemptDifference = (numberValue(left.audit.attempt) || left.artifact.attempt) - (numberValue(right.audit.attempt) || right.artifact.attempt);
+        if (attemptDifference !== 0) return attemptDifference;
+        return left.artifact.createdAt.localeCompare(right.artifact.createdAt);
+    });
+}
+
+function repairPacketEntries(artifacts: NovelWorkbenchArtifact[]) {
+    return artifacts
+        .flatMap((artifact): RepairPacketEntry[] => {
+            const payload = parseArtifact(artifact);
+            const packet = recordValue(payload?.repairPacket);
+            return packet ? [{ artifact, packet }] : [];
+        })
+        .sort((left, right) => {
+            const unitDifference = left.artifact.unit - right.artifact.unit;
+            if (unitDifference !== 0) return unitDifference;
+            const attemptDifference = (numberValue(left.packet.attempt) || left.artifact.attempt) - (numberValue(right.packet.attempt) || right.artifact.attempt);
+            if (attemptDifference !== 0) return attemptDifference;
+            return left.artifact.createdAt.localeCompare(right.artifact.createdAt);
+        });
+}
+
+function recordValue(value: unknown) {
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function recordArrayValue(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(recordValue(item))) : [];
+}
+
+function textValue(value: unknown) {
+    return typeof value === "string" ? value.trim() : value === undefined || value === null ? "" : String(value);
+}
+
+function numberValue(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function booleanLabel(value: unknown) {
+    return value === true ? "是" : "否";
+}
+
+function controlCardAuditOutcomeLabel(outcome: string) {
+    return (
+        (
+            {
+                accepted: "通过",
+                accepted_with_normalization: "规范化后通过",
+                compiled: "系统编译通过",
+                rejected: "已拦截",
+            } as Record<string, string>
+        )[outcome] || outcome
+    );
+}
+
+function controlCardAuditOutcomeColor(outcome: string) {
+    return outcome === "accepted" || outcome === "compiled" ? "green" : outcome === "accepted_with_normalization" ? "gold" : "red";
+}
+
+function controlCardAuditActionLabel(action: string) {
+    return action === "removed" ? "自动移除" : "保留校验";
+}
+
+function controlCardAuditActionColor(action: string) {
+    return action === "removed" ? "gold" : "blue";
+}
+
+function controlCardAuditClassificationLabel(classification: string) {
+    return (
+        (
+            {
+                required_anchor: "账本锚点",
+                knowledge_backed_context: "知情背景",
+                unused_stable_context: "冗余背景",
+                out_of_scope: "超出本集范围",
+                unknown_ledger: "未知账本",
+                unestablished_context: "未成立事实",
+                background_progression: "背景越级",
+                missing_id: "缺少 ID",
+                normalization_unavailable: "规范化不可用",
+            } as Record<string, string>
+        )[classification] ||
+        classification ||
+        "未分类"
+    );
+}
+
+function controlCardAuditStageLabel(stage: string) {
+    return (
+        (
+            {
+                json_decode: "JSON 解析",
+                compiled_episode_spec: "编译单元规格",
+                creative_delta: "创意增量",
+                evidence_scope_normalization: "证据范围规范化",
+                control_card: "控制卡结构",
+                episode_contract: "创作契约",
+                fact_contract: "事实契约",
+                legacy_normalization: "旧版规范化",
+            } as Record<string, string>
+        )[stage] ||
+        stage ||
+        "未命名阶段"
+    );
+}
+
+function repairStageLabel(stage: string) {
+    return (
+        (
+            {
+                creative_delta: "创意增量",
+                draft: "正文起草",
+                review: "独立审稿",
+            } as Record<string, string>
+        )[stage] ||
+        stage ||
+        "返修"
+    );
+}
+
+function repairFailureLabel(failureClass: string) {
+    return (
+        (
+            {
+                format: "格式问题",
+                structural: "结构/状态问题",
+                narrative: "正文/审稿问题",
+            } as Record<string, string>
+        )[failureClass] ||
+        failureClass ||
+        "未分类"
+    );
+}
+
+function repairFailureColor(failureClass: string) {
+    return failureClass === "narrative" ? "gold" : failureClass === "format" ? "blue" : "red";
+}
+
 function currentRoadmap(state: NovelWorkbenchDynamicState) {
     return state.currentRoadmapTitle || state.currentArc || "";
 }
@@ -522,8 +959,13 @@ function artifactLabel(kind: string) {
                 control_canon: "控制档案",
                 plan_preview: "计划预演",
                 episode_contract: "创作契约",
+                episode_spec: "编译单元规格",
+                creative_delta: "创意增量",
+                creative_delta_rejected: "创意增量返修",
                 control_card: "控制卡",
+                control_card_audit: "控制卡决策审计",
                 control_card_rejected: "控制卡修复",
+                control_card_normalized: "控制卡规范化",
                 draft_rejected: "写手返修",
                 draft_accepted: "通过正文",
                 review_report: "独立审稿",

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,23 +17,24 @@ import (
 )
 
 const (
-	novelWorkbenchV2EngineVersion       = 2
-	novelWorkbenchV2QualityPolicy       = "scene-truth-contract-three-pass"
-	novelWorkbenchV2ContractVersion     = 2
-	novelWorkbenchV2PlanVersion         = 1
-	novelWorkbenchV2MaxLedgerActions    = 3
-	novelWorkbenchV2PipelineBootstrap   = "bootstrap"
-	novelWorkbenchV2PipelinePrepare     = "prepare"
-	novelWorkbenchV2PipelineDraft       = "draft"
-	novelWorkbenchV2PipelineReview      = "review"
-	novelWorkbenchV2PipelineRepair      = "repair"
-	novelWorkbenchV2PipelineCommit      = "commit"
-	novelWorkbenchV2PipelineBlocked     = "quality_blocked"
-	novelWorkbenchV2BlockClassStructure = "structure"
-	novelWorkbenchV2BlockClassNarrative = "narrative"
-	novelWorkbenchStatusArchived        = "archived"
-	novelWorkbenchV2MaxRepairAttempts   = 3
-	novelWorkbenchV2MaxDraftAttempts    = 1 + novelWorkbenchV2MaxRepairAttempts
+	novelWorkbenchV2EngineVersion           = 2
+	novelWorkbenchV2QualityPolicy           = "compiled-control-v3"
+	novelWorkbenchV2ContractVersion         = 2
+	novelWorkbenchV2PlanVersion             = 1
+	novelWorkbenchV2ControlCardAuditVersion = 1
+	novelWorkbenchV2MaxLedgerActions        = 3
+	novelWorkbenchV2PipelineBootstrap       = "bootstrap"
+	novelWorkbenchV2PipelinePrepare         = "prepare"
+	novelWorkbenchV2PipelineDraft           = "draft"
+	novelWorkbenchV2PipelineReview          = "review"
+	novelWorkbenchV2PipelineRepair          = "repair"
+	novelWorkbenchV2PipelineCommit          = "commit"
+	novelWorkbenchV2PipelineBlocked         = "quality_blocked"
+	novelWorkbenchV2BlockClassStructure     = "structure"
+	novelWorkbenchV2BlockClassNarrative     = "narrative"
+	novelWorkbenchStatusArchived            = "archived"
+	novelWorkbenchV2MaxRepairAttempts       = 1
+	novelWorkbenchV2MaxDraftAttempts        = 1 + novelWorkbenchV2MaxRepairAttempts
 )
 
 var novelWorkbenchV2QualitySignals = []string{
@@ -153,23 +155,34 @@ type novelWorkbenchV2WritingLog struct {
 }
 
 type novelWorkbenchV2State struct {
-	CompletedUnit       int                        `json:"completedUnit"`
-	CurrentRoadmapID    string                     `json:"currentRoadmapId"`
-	CurrentRoadmapTitle string                     `json:"currentRoadmapTitle"`
-	LastUnitSummary     string                     `json:"lastUnitSummary"`
-	NextUnitBridge      string                     `json:"nextUnitBridge"`
-	CharacterStates     map[string]string          `json:"characterStates"`
-	CharacterLocations  map[string]string          `json:"characterLocations"`
-	CharacterKnowledge  map[string][]string        `json:"characterKnowledge"`
-	RelationshipStates  map[string]string          `json:"relationshipStates"`
-	PlotlineStates      map[string]string          `json:"plotlineStates"`
-	ForeshadowStates    map[string]string          `json:"foreshadowStates"`
-	PromiseStates       map[string]string          `json:"promiseStates"`
-	EvidenceLevels      map[string]string          `json:"evidenceLevels"`
-	ForeshadowStartedAt map[string]int             `json:"foreshadowStartedAt"`
-	PromiseStartedAt    map[string]int             `json:"promiseStartedAt"`
-	OpenDebtIDs         []string                   `json:"openDebtIds"`
-	AuditTrail          []novelWorkbenchAuditEntry `json:"auditTrail"`
+	CompletedUnit       int                                      `json:"completedUnit"`
+	CurrentRoadmapID    string                                   `json:"currentRoadmapId"`
+	CurrentRoadmapTitle string                                   `json:"currentRoadmapTitle"`
+	LastUnitSummary     string                                   `json:"lastUnitSummary"`
+	NextUnitBridge      string                                   `json:"nextUnitBridge"`
+	NarrativeFacts      map[string]novelWorkbenchV2NarrativeFact `json:"narrativeFacts"`
+	CharacterStates     map[string]string                        `json:"characterStates"`
+	CharacterLocations  map[string]string                        `json:"characterLocations"`
+	CharacterKnowledge  map[string][]string                      `json:"characterKnowledge"`
+	RelationshipStates  map[string]string                        `json:"relationshipStates"`
+	PlotlineStates      map[string]string                        `json:"plotlineStates"`
+	ForeshadowStates    map[string]string                        `json:"foreshadowStates"`
+	PromiseStates       map[string]string                        `json:"promiseStates"`
+	EvidenceLevels      map[string]string                        `json:"evidenceLevels"`
+	ForeshadowStartedAt map[string]int                           `json:"foreshadowStartedAt"`
+	PromiseStartedAt    map[string]int                           `json:"promiseStartedAt"`
+	OpenDebtIDs         []string                                 `json:"openDebtIds"`
+	AuditTrail          []novelWorkbenchAuditEntry               `json:"auditTrail"`
+}
+
+// novelWorkbenchV2NarrativeFact is a compiler-owned cross-unit result. It
+// records an approved roadmap outcome without asking prose generation to
+// invent a new state transition or writeback shape.
+type novelWorkbenchV2NarrativeFact struct {
+	ID              string `json:"id"`
+	Statement       string `json:"statement"`
+	Status          string `json:"status"`
+	EstablishedUnit int    `json:"establishedUnit"`
 }
 
 type novelWorkbenchV2BootstrapOutput struct {
@@ -214,8 +227,8 @@ type novelWorkbenchV2CharacterPlacement struct {
 	LocationID     string `json:"locationId"`
 	LocationDetail string `json:"locationDetail,omitempty"`
 	Presence       string `json:"presence"`
-	FromLocationID string `json:"fromLocationId"`
-	MovementCause  string `json:"movementCause"`
+	FromLocationID string `json:"fromLocationId,omitempty"`
+	MovementCause  string `json:"movementCause,omitempty"`
 }
 
 type novelWorkbenchV2KnowledgeAccess struct {
@@ -299,6 +312,60 @@ type novelWorkbenchV2QualityBlockRecord struct {
 	Contract *novelWorkbenchV2EpisodeContract `json:"contract,omitempty"`
 }
 
+// novelWorkbenchV2ControlCardAuditRecord makes local guard decisions visible
+// after the fact. It intentionally stores a response fingerprint rather than
+// duplicating accepted model output; the accepted normalized card remains the
+// canonical artifact, and rejected attempts retain their raw response.
+type novelWorkbenchV2ControlCardAuditRecord struct {
+	SchemaVersion            int                                             `json:"schemaVersion"`
+	Unit                     int                                             `json:"unit"`
+	Attempt                  int                                             `json:"attempt"`
+	Outcome                  string                                          `json:"outcome"`
+	Ruleset                  string                                          `json:"ruleset"`
+	RawResponseSHA256        string                                          `json:"rawResponseSha256"`
+	InputEvidenceClaimCount  int                                             `json:"inputEvidenceClaimCount"`
+	OutputEvidenceClaimCount int                                             `json:"outputEvidenceClaimCount"`
+	Contract                 novelWorkbenchV2ControlCardAuditContract        `json:"contract"`
+	EvidenceDecisions        []novelWorkbenchV2ControlCardEvidenceAuditEntry `json:"evidenceDecisions,omitempty"`
+	Validations              []novelWorkbenchV2ControlCardAuditValidation    `json:"validations"`
+	ValidationError          string                                          `json:"validationError,omitempty"`
+}
+
+type novelWorkbenchV2ControlCardAuditContract struct {
+	RoadmapID               string                      `json:"roadmapId"`
+	RequiredIntroductionIDs []string                    `json:"requiredIntroductionIds"`
+	RequiredPayoffIDs       []string                    `json:"requiredPayoffIds"`
+	RelevantLedgerIDs       []string                    `json:"relevantLedgerIds"`
+	RequiredCharacterIDs    []string                    `json:"requiredCharacterIds"`
+	StateLocks              []novelWorkbenchV2StateLock `json:"stateLocks"`
+	OpenDebtIDs             []string                    `json:"openDebtIds"`
+}
+
+type novelWorkbenchV2ControlCardEvidenceAuditEntry struct {
+	EvidenceID      string `json:"evidenceId"`
+	RequestedLevel  string `json:"requestedLevel"`
+	PriorLevel      string `json:"priorLevel"`
+	Classification  string `json:"classification"`
+	Action          string `json:"action"`
+	Reason          string `json:"reason"`
+	KnownLedger     bool   `json:"knownLedger"`
+	RequiredAnchor  bool   `json:"requiredAnchor"`
+	UsedByKnowledge bool   `json:"usedByKnowledge"`
+	RelevantToUnit  bool   `json:"relevantToUnit"`
+}
+
+type novelWorkbenchV2ControlCardAuditValidation struct {
+	Stage  string `json:"stage"`
+	Passed bool   `json:"passed"`
+	Detail string `json:"detail,omitempty"`
+}
+
+type novelWorkbenchV2ControlCardEvidenceNormalization struct {
+	InputEvidenceClaimCount  int                                             `json:"inputEvidenceClaimCount"`
+	OutputEvidenceClaimCount int                                             `json:"outputEvidenceClaimCount"`
+	EvidenceDecisions        []novelWorkbenchV2ControlCardEvidenceAuditEntry `json:"evidenceDecisions"`
+}
+
 // novelWorkbenchV2EpisodeWorkPackage deliberately excludes unrelated future
 // roadmaps and ledgers. It keeps a unit prompt focused while leaving the
 // complete canonical archive in durable storage for deterministic validation.
@@ -326,6 +393,7 @@ type novelWorkbenchV2StateTransition struct {
 }
 
 type novelWorkbenchV2Writeback struct {
+	NarrativeFacts      []novelWorkbenchV2NarrativeFact   `json:"narrativeFacts"`
 	CharacterChanges    []novelWorkbenchV2StateTransition `json:"characterChanges"`
 	LocationChanges     []novelWorkbenchV2LocationChange  `json:"locationChanges"`
 	KnowledgeGrants     []novelWorkbenchV2KnowledgeGrant  `json:"knowledgeGrants"`
@@ -401,6 +469,7 @@ func newNovelWorkbenchV2Control(brief novelWorkbenchBrief) novelWorkbenchV2Contr
 
 func newNovelWorkbenchV2State() novelWorkbenchV2State {
 	return novelWorkbenchV2State{
+		NarrativeFacts:      map[string]novelWorkbenchV2NarrativeFact{},
 		CharacterStates:     map[string]string{},
 		CharacterLocations:  map[string]string{},
 		CharacterKnowledge:  map[string][]string{},
@@ -443,6 +512,9 @@ func decodeNovelWorkbenchV2State(raw string) (novelWorkbenchV2State, error) {
 }
 
 func normalizeNovelWorkbenchV2State(state novelWorkbenchV2State) novelWorkbenchV2State {
+	if state.NarrativeFacts == nil {
+		state.NarrativeFacts = map[string]novelWorkbenchV2NarrativeFact{}
+	}
 	if state.CharacterStates == nil {
 		state.CharacterStates = map[string]string{}
 	}
@@ -571,21 +643,27 @@ func (s *Service) processNovelWorkbenchV2Bootstrap(ctx context.Context, task mod
 			return nil, generateErr
 		}
 		raw = stringValue(generated["text"])
-		validationErr = decodeNovelWorkbenchV2JSONObject(raw, &output)
+		// JSON omission means "zero value" for this attempt, not "reuse the
+		// previous draft's value". Reusing a struct here lets repair drafts
+		// inherit fields that the model deliberately removed.
+		candidate := novelWorkbenchV2BootstrapOutput{}
+		validationErr = decodeNovelWorkbenchV2JSONObject(raw, &candidate)
 		if validationErr == nil {
-			validationErr = validateNovelWorkbenchV2Bootstrap(&output, control.Brief)
+			validationErr = validateNovelWorkbenchV2Bootstrap(&candidate, control.Brief)
 		}
 		if validationErr == nil {
+			output = candidate
 			break
 		}
-		if err := s.createNovelWorkbenchV2Artifact(run, 0, "bootstrap_attempt", attempt, map[string]any{"raw": raw, "error": validationErr.Error()}, prompt); err != nil {
+		repairPacket := newNovelWorkbenchV2RepairPacket("bootstrap", attempt, validationErr, control, novelWorkbenchV2EpisodeContract{}, nil, nil)
+		if err := s.createNovelWorkbenchV2Artifact(run, 0, "bootstrap_attempt", attempt, map[string]any{"raw": raw, "error": validationErr.Error(), "repairPacket": repairPacket}, prompt); err != nil {
 			return nil, err
 		}
 		if attempt < novelWorkbenchV2MaxDraftAttempts {
 			if err := s.updateNovelWorkbenchV2Progress(run, task.ID, novelWorkbenchV2PipelineRepair, fmt.Sprintf("修复控制档案（第 %d/%d 轮）", attempt, novelWorkbenchV2MaxDraftAttempts-1), 40+attempt*12); err != nil {
 				return nil, err
 			}
-			prompt = buildNovelWorkbenchV2BootstrapRepairPrompt(control.Brief, raw, validationErr)
+			prompt = buildNovelWorkbenchV2BootstrapRepairPromptWithPacket(control.Brief, raw, repairPacket)
 		}
 	}
 	if validationErr != nil {
@@ -684,12 +762,50 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 	if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "episode_contract", 0, contract, ""); err != nil {
 		return nil, err
 	}
-	card, cardPrompt, cardErr := s.generateNovelWorkbenchV2ControlCard(ctx, run, task, control, state, roadmap, contract, input.Unit, resolvedConfig)
-	if cardErr != nil {
-		if blockErr := s.blockNovelWorkbenchV2WithRecord(run, task.ID, novelWorkbenchV2BlockClassStructure, "control_card", input.Unit, fmt.Sprintf("控制卡未通过：%v", cardErr), &contract); blockErr != nil {
+	spec, specErr := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, input.Unit)
+	if specErr != nil {
+		if blockErr := s.blockNovelWorkbenchV2WithRecord(run, task.ID, novelWorkbenchV2BlockClassStructure, "compiled_spec", input.Unit, fmt.Sprintf("编译式控制卡无法建立：%v", specErr), &contract); blockErr != nil {
 			return nil, blockErr
 		}
-		return map[string]interface{}{"projectId": run.ProjectID, "blocked": true, "reason": run.QualityBlockReason}, nil
+		return map[string]interface{}{"projectId": run.ProjectID, "unit": input.Unit, "blocked": true, "reason": run.QualityBlockReason}, nil
+	}
+	if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "episode_spec", 0, spec, ""); err != nil {
+		return nil, err
+	}
+	if err := s.updateNovelWorkbenchV2Progress(run, task.ID, novelWorkbenchV2PipelinePrepare, fmt.Sprintf("第 %d 单元：生成创意增量", input.Unit), 20); err != nil {
+		return nil, err
+	}
+	delta, cardPrompt, cardErr := s.generateNovelWorkbenchV2CreativeDelta(ctx, run, task, control, state, roadmap, spec, resolvedConfig)
+	if cardErr != nil {
+		if blockErr := s.blockNovelWorkbenchV2WithRecord(run, task.ID, novelWorkbenchV2BlockClassStructure, "creative_delta", input.Unit, fmt.Sprintf("创意增量未通过：%v", cardErr), &contract); blockErr != nil {
+			return nil, blockErr
+		}
+		return map[string]interface{}{"projectId": run.ProjectID, "unit": input.Unit, "blocked": true, "reason": run.QualityBlockReason}, nil
+	}
+	card := spec.controlCard(delta)
+	if cardValidationErr := validateNovelWorkbenchV2ControlCard(&card, control, roadmap, input.Unit); cardValidationErr != nil {
+		return nil, fmt.Errorf("编译控制卡在提交前校验失败：%w", cardValidationErr)
+	}
+	if cardValidationErr := validateNovelWorkbenchV2EpisodeContractCard(contract, card); cardValidationErr != nil {
+		return nil, fmt.Errorf("编译控制卡创作契约校验失败：%w", cardValidationErr)
+	}
+	if cardValidationErr := validateNovelWorkbenchV2FactContract(control, state, contract, &card); cardValidationErr != nil {
+		return nil, fmt.Errorf("编译控制卡事实契约校验失败：%w", cardValidationErr)
+	}
+	compiledAudit := newNovelWorkbenchV2ControlCardAuditRecord(cardPrompt, input.Unit, 1, contract, novelWorkbenchV2ControlCardEvidenceNormalization{}, []novelWorkbenchV2ControlCardAuditValidation{
+		{Stage: "compiled_episode_spec", Passed: true, Detail: "稳定 ID、事实契约和写回模板由系统编译。"},
+		{Stage: "creative_delta", Passed: true, Detail: "模型仅提供本集戏剧节拍与因果表达。"},
+		{Stage: "control_card", Passed: true},
+		{Stage: "episode_contract", Passed: true},
+		{Stage: "fact_contract", Passed: true},
+	}, nil)
+	compiledAudit.Outcome = "compiled"
+	compiledAudit.Ruleset = "compiled-control-v3"
+	if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "creative_delta", 1, delta, cardPrompt); err != nil {
+		return nil, err
+	}
+	if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "control_card_audit", 1, compiledAudit, ""); err != nil {
+		return nil, err
 	}
 	if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "control_card", 0, card, cardPrompt); err != nil {
 		return nil, err
@@ -700,28 +816,29 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 	var acceptedAttempt int
 	var acceptedWriterPrompt string
 	var previousRaw string
-	var repairContext string
-	for attempt := 1; attempt <= novelWorkbenchV2MaxDraftAttempts; attempt++ {
+	var lastRepairPacket novelWorkbenchV2RepairPacket
+	for attempt := 1; attempt <= novelWorkbenchV2MaxProseAttempts; attempt++ {
 		pipeline := novelWorkbenchV2PipelineDraft
-		stage := fmt.Sprintf("第 %d 单元：起草（第 %d/%d 轮）", input.Unit, attempt, novelWorkbenchV2MaxDraftAttempts)
+		stage := fmt.Sprintf("第 %d 单元：起草（第 %d/%d 轮）", input.Unit, attempt, novelWorkbenchV2MaxProseAttempts)
 		if attempt > 1 {
 			pipeline = novelWorkbenchV2PipelineRepair
-			stage = fmt.Sprintf("第 %d 单元：自动返修（第 %d/%d 轮）", input.Unit, attempt-1, novelWorkbenchV2MaxDraftAttempts-1)
+			stage = fmt.Sprintf("第 %d 单元：定向返修（第 %d/%d 轮）", input.Unit, attempt-1, novelWorkbenchV2MaxProseAttempts-1)
 		}
-		if err := s.updateNovelWorkbenchV2Progress(run, task.ID, pipeline, stage, 26+(attempt-1)*20); err != nil {
+		if err := s.updateNovelWorkbenchV2Progress(run, task.ID, pipeline, stage, 28+(attempt-1)*26); err != nil {
 			return nil, err
 		}
-		writerPrompt := buildNovelWorkbenchV2WriterPromptWithContract(control, state, roadmap, contract, card, input.Unit)
+		writerPrompt := buildNovelWorkbenchV2CompiledWriterPrompt(control, state, roadmap, spec, card)
 		if attempt > 1 {
-			writerPrompt = buildNovelWorkbenchV2RepairPromptWithContract(control, state, roadmap, contract, card, input.Unit, previousRaw, repairContext)
+			writerPrompt = buildNovelWorkbenchV2CompiledRepairPrompt(control, state, roadmap, spec, card, previousRaw, lastRepairPacket)
 		}
 		generated, generateErr := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: writerPrompt, Config: resolvedConfig, StreamText: true, MaxOutputTokens: novelWorkbenchUnitTokenLimit(control.Brief.TargetUnitLength)})
 		if generateErr != nil {
 			return nil, generateErr
 		}
 		previousRaw = stringValue(generated["text"])
-		var output novelWorkbenchV2UnitOutput
-		validationErr := decodeNovelWorkbenchV2JSONObject(previousRaw, &output)
+		var draft novelWorkbenchV2DraftContent
+		validationErr := decodeNovelWorkbenchV2JSONObject(previousRaw, &draft)
+		output := spec.materializeOutput(draft, card)
 		if validationErr == nil {
 			validationErr = validateNovelWorkbenchV2Unit(&output, control, state, card, input.Unit)
 		}
@@ -729,14 +846,14 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 			validationErr = validateNovelWorkbenchV2EpisodeContractExecution(contract, output.Writeback)
 		}
 		if validationErr != nil {
-			repairContext = validationErr.Error()
-			if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "draft_rejected", attempt, map[string]any{"raw": previousRaw, "error": repairContext}, writerPrompt); err != nil {
+			lastRepairPacket = newNovelWorkbenchV2RepairPacket("draft", attempt, validationErr, control, contract, &card, nil)
+			if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "draft_rejected", attempt, map[string]any{"raw": previousRaw, "error": validationErr.Error(), "repairPacket": lastRepairPacket, "compiledWriteback": output.Writeback}, writerPrompt); err != nil {
 				return nil, err
 			}
 			continue
 		}
 
-		if err := s.updateNovelWorkbenchV2Progress(run, task.ID, novelWorkbenchV2PipelineReview, fmt.Sprintf("第 %d 单元：独立审稿（第 %d/%d 轮）", input.Unit, attempt, novelWorkbenchV2MaxDraftAttempts), 40+(attempt-1)*20); err != nil {
+		if err := s.updateNovelWorkbenchV2Progress(run, task.ID, novelWorkbenchV2PipelineReview, fmt.Sprintf("第 %d 单元：独立审稿（第 %d/%d 轮）", input.Unit, attempt, novelWorkbenchV2MaxProseAttempts), 48+(attempt-1)*26); err != nil {
 			return nil, err
 		}
 		reviewPrompt := buildNovelWorkbenchV2ReviewPromptWithContract(control, state, roadmap, contract, card, output, input.Unit)
@@ -760,7 +877,18 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 		if reviewValidationErr == nil {
 			qualityErr = validateNovelWorkbenchV2Quality(review, input.Unit)
 		}
-		if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "review_report", attempt, map[string]any{"raw": reviewRaw, "review": review, "discardedInvalidReferenceIds": discardedReviewReferenceIDs, "reviewValidationError": errorText(reviewValidationErr), "hardValidationError": errorText(hardErr), "qualityError": errorText(qualityErr)}, reviewPrompt); err != nil {
+		var repairPacket *novelWorkbenchV2RepairPacket
+		if reviewValidationErr != nil || hardErr != nil || qualityErr != nil {
+			repairErr := errors.New(strings.Join(nonEmptyStrings(errorText(reviewValidationErr), errorText(hardErr), errorText(qualityErr), novelWorkbenchV2ReviewRepairContext(review)), "\n"))
+			packet := newNovelWorkbenchV2RepairPacket("review", attempt, repairErr, control, contract, &card, &review)
+			repairPacket = &packet
+			lastRepairPacket = packet
+		}
+		reviewRecord := map[string]any{"raw": reviewRaw, "review": review, "discardedInvalidReferenceIds": discardedReviewReferenceIDs, "reviewValidationError": errorText(reviewValidationErr), "hardValidationError": errorText(hardErr), "qualityError": errorText(qualityErr)}
+		if repairPacket != nil {
+			reviewRecord["repairPacket"] = *repairPacket
+		}
+		if err := s.createNovelWorkbenchV2Artifact(run, input.Unit, "review_report", attempt, reviewRecord, reviewPrompt); err != nil {
 			return nil, err
 		}
 		if reviewValidationErr == nil && hardErr == nil && qualityErr == nil {
@@ -768,10 +896,10 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 			acceptedWriterPrompt = writerPrompt
 			break
 		}
-		repairContext = strings.Join(nonEmptyStrings(errorText(reviewValidationErr), errorText(hardErr), errorText(qualityErr), novelWorkbenchV2ReviewRepairContext(review)), "\n")
 	}
 	if acceptedAttempt == 0 {
-		if err := s.blockNovelWorkbenchV2WithRecord(run, task.ID, novelWorkbenchV2BlockClassNarrative, "review", input.Unit, fmt.Sprintf("第 %d 单元初稿加 %d 轮自动返修后仍未通过：%s", input.Unit, novelWorkbenchV2MaxRepairAttempts, repairContext), &contract); err != nil {
+		reason := firstNonEmptyString(lastRepairPacket.Failure, "未得到可提交的正文。")
+		if err := s.blockNovelWorkbenchV2WithRecord(run, task.ID, novelWorkbenchV2BlockClassNarrative, "review", input.Unit, fmt.Sprintf("第 %d 单元初稿加 %d 轮定向返修后仍未通过：%s", input.Unit, novelWorkbenchV2MaxProseAttempts-1, reason), &contract); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"projectId": run.ProjectID, "unit": input.Unit, "blocked": true, "reason": run.QualityBlockReason}, nil
@@ -849,38 +977,63 @@ func (s *Service) processNovelWorkbenchV2Unit(ctx context.Context, task model.Ta
 
 func (s *Service) generateNovelWorkbenchV2ControlCard(ctx context.Context, run *model.NovelWorkbenchRun, task model.Task, control novelWorkbenchV2Control, state novelWorkbenchV2State, roadmap novelWorkbenchV2Roadmap, contract novelWorkbenchV2EpisodeContract, unit int, resolvedConfig providerConfig) (novelWorkbenchV2ControlCard, string, error) {
 	prompt := buildNovelWorkbenchV2ControlCardPromptWithContract(control, state, roadmap, contract, unit, run.QualityBlockReason)
-	var card novelWorkbenchV2ControlCard
+	var lastCard novelWorkbenchV2ControlCard
 	var validationErr error
 	for attempt := 1; attempt <= novelWorkbenchV2MaxDraftAttempts; attempt++ {
 		generated, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: prompt, Config: resolvedConfig, StreamText: true, MaxOutputTokens: 4_000})
 		if err != nil {
-			return card, prompt, err
+			return lastCard, prompt, err
 		}
 		raw := stringValue(generated["text"])
-		validationErr = decodeNovelWorkbenchV2JSONObject(raw, &card)
+		// Each repair response is a complete replacement, not a patch. Decode
+		// into a fresh value so omitted optional fields cannot leak from a
+		// rejected earlier card into this candidate.
+		candidate := novelWorkbenchV2ControlCard{}
+		validationErr = decodeNovelWorkbenchV2JSONObject(raw, &candidate)
+		validations := []novelWorkbenchV2ControlCardAuditValidation{novelWorkbenchV2ControlCardAuditValidationForError("json_decode", validationErr)}
+		normalization := novelWorkbenchV2ControlCardEvidenceNormalization{}
 		if validationErr == nil {
-			validationErr = validateNovelWorkbenchV2ControlCard(&card, control, roadmap, unit)
+			normalization = normalizeNovelWorkbenchV2DecorativeEvidenceClaims(control, state, contract, &candidate)
+			normalizationDetail := "未发现需要移除的冗余背景证据声明"
+			if normalization.OutputEvidenceClaimCount < normalization.InputEvidenceClaimCount {
+				normalizationDetail = fmt.Sprintf("移除了 %d 条未被本单元使用、且未推进证据等级的冗余背景证据声明", normalization.InputEvidenceClaimCount-normalization.OutputEvidenceClaimCount)
+			}
+			validations = append(validations, novelWorkbenchV2ControlCardAuditValidation{Stage: "evidence_scope_normalization", Passed: true, Detail: normalizationDetail})
+		}
+		lastCard = candidate
+		if validationErr == nil {
+			validationErr = validateNovelWorkbenchV2ControlCard(&candidate, control, roadmap, unit)
+			validations = append(validations, novelWorkbenchV2ControlCardAuditValidationForError("control_card", validationErr))
 		}
 		if validationErr == nil {
-			validationErr = validateNovelWorkbenchV2EpisodeContractCard(contract, card)
+			validationErr = validateNovelWorkbenchV2EpisodeContractCard(contract, candidate)
+			validations = append(validations, novelWorkbenchV2ControlCardAuditValidationForError("episode_contract", validationErr))
 		}
 		if validationErr == nil {
-			validationErr = validateNovelWorkbenchV2FactContract(control, state, contract, &card)
+			validationErr = validateNovelWorkbenchV2FactContract(control, state, contract, &candidate)
+			validations = append(validations, novelWorkbenchV2ControlCardAuditValidationForError("fact_contract", validationErr))
 		}
+		audit := newNovelWorkbenchV2ControlCardAuditRecord(raw, unit, attempt, contract, normalization, validations, validationErr)
 		if validationErr == nil {
-			return card, prompt, nil
+			if err := s.createNovelWorkbenchV2Artifact(run, unit, "control_card_audit", attempt, audit, ""); err != nil {
+				return lastCard, prompt, err
+			}
+			return candidate, prompt, nil
 		}
-		if err := s.createNovelWorkbenchV2Artifact(run, unit, "control_card_rejected", attempt, map[string]any{"raw": raw, "error": validationErr.Error(), "contract": contract}, prompt); err != nil {
-			return card, prompt, err
+		repairPacket := newNovelWorkbenchV2RepairPacket("control_card", attempt, validationErr, control, contract, &candidate, nil)
+		if err := s.createNovelWorkbenchV2Artifact(run, unit, "control_card_rejected", attempt, map[string]any{"raw": raw, "error": validationErr.Error(), "contract": contract, "audit": audit, "repairPacket": repairPacket}, prompt); err != nil {
+			return lastCard, prompt, err
 		}
 		if attempt < novelWorkbenchV2MaxDraftAttempts {
 			if err := s.updateNovelWorkbenchV2Progress(run, task.ID, novelWorkbenchV2PipelineRepair, fmt.Sprintf("第 %d 单元：修复控制卡（第 %d/%d 轮）", unit, attempt, novelWorkbenchV2MaxDraftAttempts-1), 18+attempt*2); err != nil {
-				return card, prompt, err
+				return lastCard, prompt, err
 			}
 			prompt = buildNovelWorkbenchV2ControlCardRepairPromptWithContract(control, state, roadmap, contract, unit, raw, validationErr)
+			packetJSON, _ := json.Marshal(repairPacket)
+			prompt += "\n\n本次失败单：" + string(packetJSON)
 		}
 	}
-	return card, prompt, validationErr
+	return lastCard, prompt, validationErr
 }
 
 func decodeNovelWorkbenchV2JSONObject(raw string, target any) error {
@@ -1609,6 +1762,13 @@ func compileNovelWorkbenchV2EpisodeContract(control novelWorkbenchV2Control, sta
 		OpenDebtIDs:           []string{},
 		PriorUnitBridge:       strings.TrimSpace(state.NextUnitBridge),
 	}
+	if contract.PriorUnitBridge != "" {
+		contract.StateLocks = append(contract.StateLocks, novelWorkbenchV2StateLock{
+			ID:    fmt.Sprintf("bridge_unit_%d", state.CompletedUnit),
+			Kind:  "prior_unit_bridge",
+			State: contract.PriorUnitBridge,
+		})
+	}
 	relevant := map[string]struct{}{}
 	characters := map[string]struct{}{}
 	addActionOwners := func(action novelWorkbenchV2LedgerAction) {
@@ -1629,10 +1789,10 @@ func compileNovelWorkbenchV2EpisodeContract(control novelWorkbenchV2Control, sta
 			addActionOwners(action)
 		}
 		if status != "paid" && (status != "planned" || item.IntroducedByUnit <= roadmap.EndUnit || item.PayoffByUnit <= roadmap.EndUnit) {
+			// Relevant ledger context belongs in the work package, but it must
+			// not make every future owner a mandatory on-screen participant.
+			// Only an action due in this unit creates a hard cast requirement.
 			relevant[item.ID] = struct{}{}
-			for _, ownerID := range item.OwnerIDs {
-				characters[ownerID] = struct{}{}
-			}
 		}
 	}
 	for _, item := range control.Documents.ForeshadowLedger {
@@ -1671,6 +1831,7 @@ func compileNovelWorkbenchV2EpisodeContract(control novelWorkbenchV2Control, sta
 func validateNovelWorkbenchV2EpisodeContractCard(contract novelWorkbenchV2EpisodeContract, card novelWorkbenchV2ControlCard) error {
 	introduce := novelWorkbenchV2IDSet(card.IntroduceIDs)
 	payoff := novelWorkbenchV2IDSet(card.PayoffIDs)
+	characters := novelWorkbenchV2IDSet(card.RequiredCharacterIDs)
 	for _, action := range contract.RequiredIntroductions {
 		if _, exists := introduce[action.ID]; !exists {
 			return fmt.Errorf("本集创作契约要求引入 %s，但控制卡未列入 introduceIds", action.ID)
@@ -1679,6 +1840,11 @@ func validateNovelWorkbenchV2EpisodeContractCard(contract novelWorkbenchV2Episod
 	for _, action := range contract.RequiredPayoffs {
 		if _, exists := payoff[action.ID]; !exists {
 			return fmt.Errorf("本集创作契约要求回收 %s，但控制卡未列入 payoffIds", action.ID)
+		}
+	}
+	for _, characterID := range contract.RequiredCharacterIDs {
+		if _, exists := characters[characterID]; !exists {
+			return fmt.Errorf("本集创作契约要求角色 %s，但控制卡未列入 requiredCharacterIds", characterID)
 		}
 	}
 	return nil
@@ -1700,6 +1866,173 @@ func novelWorkbenchV2FactContractLedgerIDs(card novelWorkbenchV2ControlCard, kno
 	return ids
 }
 
+func novelWorkbenchV2FactContractKnowledgeLedgerIDs(card novelWorkbenchV2ControlCard, known novelWorkbenchV2KnownIDs) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, access := range card.FactContract.KnowledgeAccess {
+		for _, group := range [][]string{access.FactIDs, access.SourceIDs} {
+			for _, raw := range group {
+				id := normalizeNovelWorkbenchV2ID(raw)
+				if _, exists := known.foreshadows[id]; exists {
+					ids[id] = struct{}{}
+				}
+				if _, exists := known.promises[id]; exists {
+					ids[id] = struct{}{}
+				}
+			}
+		}
+	}
+	return ids
+}
+
+// normalizeNovelWorkbenchV2DecorativeEvidenceClaims removes a model habit
+// that has no story effect: restating every open ledger item as an evidence
+// claim even when the item is not used by this unit. A claim that could change
+// state, is unknown, or is used for a character decision is left for strict
+// validation below. Every decision is retained for the control-card audit so
+// the normalizer is observable rather than a silent mutation.
+func normalizeNovelWorkbenchV2DecorativeEvidenceClaims(control novelWorkbenchV2Control, state novelWorkbenchV2State, contract novelWorkbenchV2EpisodeContract, card *novelWorkbenchV2ControlCard) novelWorkbenchV2ControlCardEvidenceNormalization {
+	normalization := novelWorkbenchV2ControlCardEvidenceNormalization{}
+	if card == nil {
+		return normalization
+	}
+	normalization.InputEvidenceClaimCount = len(card.FactContract.EvidenceClaims)
+	normalization.OutputEvidenceClaimCount = normalization.InputEvidenceClaimCount
+	if normalization.InputEvidenceClaimCount == 0 {
+		return normalization
+	}
+	known, err := novelWorkbenchV2KnownIDsForControl(control)
+	if err != nil {
+		for _, claim := range card.FactContract.EvidenceClaims {
+			normalization.EvidenceDecisions = append(normalization.EvidenceDecisions, novelWorkbenchV2ControlCardEvidenceAuditEntry{
+				EvidenceID:     normalizeNovelWorkbenchV2ID(claim.EvidenceID),
+				RequestedLevel: strings.ToLower(strings.TrimSpace(claim.Level)),
+				Classification: "normalization_unavailable",
+				Action:         "retained",
+				Reason:         "控制档案 ID 索引不可用，保留给严格校验处理。",
+			})
+		}
+		return normalization
+	}
+	anchored := novelWorkbenchV2FactContractLedgerIDs(*card, known)
+	usedForKnowledge := novelWorkbenchV2FactContractKnowledgeLedgerIDs(*card, known)
+	relevant := novelWorkbenchV2FactContractReferenceSet(contract.RelevantLedgerIDs)
+	state = normalizeNovelWorkbenchV2State(state)
+	filtered := make([]novelWorkbenchV2EvidenceClaim, 0, normalization.InputEvidenceClaimCount)
+	for _, claim := range card.FactContract.EvidenceClaims {
+		id := normalizeNovelWorkbenchV2ID(claim.EvidenceID)
+		priorLevel := novelWorkbenchV2EffectiveEvidenceLevel(control, state, id)
+		decision := novelWorkbenchV2ControlCardEvidenceAuditEntry{
+			EvidenceID:      id,
+			RequestedLevel:  strings.ToLower(strings.TrimSpace(claim.Level)),
+			PriorLevel:      priorLevel,
+			Action:          "retained",
+			KnownLedger:     novelWorkbenchV2KnownLedgerID(known, id),
+			RequiredAnchor:  novelWorkbenchV2IDInSet(anchored, id),
+			UsedByKnowledge: novelWorkbenchV2IDInSet(usedForKnowledge, id),
+			RelevantToUnit:  novelWorkbenchV2IDInSet(relevant, id),
+		}
+		switch {
+		case id == "":
+			decision.Classification = "missing_id"
+			decision.Reason = "证据声明缺少稳定 ID，保留给严格校验拦截。"
+		case !decision.KnownLedger:
+			decision.Classification = "unknown_ledger"
+			decision.Reason = "证据声明引用了控制档案中不存在的账本 ID，保留给严格校验拦截。"
+		case decision.RequiredAnchor:
+			decision.Classification = "required_anchor"
+			decision.Reason = "该证据是反转、引入或回收锚点，必须保留并接受证据链校验。"
+		case decision.UsedByKnowledge:
+			decision.Classification = "knowledge_backed_context"
+			decision.Reason = "本集 knowledgeAccess 实际使用该事实，必须保留并校验知情与证据等级。"
+		case !decision.RelevantToUnit:
+			decision.Classification = "out_of_scope"
+			decision.Reason = "该证据不在冻结的 relevantLedgerIds 内，保留给严格校验拦截。"
+		case novelWorkbenchV2EvidenceLevelRank(priorLevel) < 1:
+			decision.Classification = "unestablished_context"
+			decision.Reason = "该证据尚未在既有状态中成立，不能当作可静默忽略的背景信息。"
+		case novelWorkbenchV2EvidenceLevelRank(decision.RequestedLevel) != novelWorkbenchV2EvidenceLevelRank(priorLevel):
+			decision.Classification = "background_progression"
+			decision.Reason = "该声明改变了证据等级，必须作为明确锚点或知情事实接受严格校验。"
+		default:
+			decision.Classification = "unused_stable_context"
+			decision.Action = "removed"
+			decision.Reason = "该证据已成立、属于本集相关背景、未被人物知情使用且未推进等级，移除以避免模型把账本上下文误写成行动锚点。"
+			normalization.EvidenceDecisions = append(normalization.EvidenceDecisions, decision)
+			continue
+		}
+		normalization.EvidenceDecisions = append(normalization.EvidenceDecisions, decision)
+		filtered = append(filtered, claim)
+	}
+	normalization.OutputEvidenceClaimCount = len(filtered)
+	if normalization.OutputEvidenceClaimCount != normalization.InputEvidenceClaimCount {
+		card.FactContract.EvidenceClaims = filtered
+	}
+	return normalization
+}
+
+func novelWorkbenchV2KnownLedgerID(known novelWorkbenchV2KnownIDs, id string) bool {
+	if _, exists := known.foreshadows[id]; exists {
+		return true
+	}
+	_, exists := known.promises[id]
+	return exists
+}
+
+func novelWorkbenchV2IDInSet(set map[string]struct{}, id string) bool {
+	_, exists := set[id]
+	return exists
+}
+
+func newNovelWorkbenchV2ControlCardAuditRecord(raw string, unit int, attempt int, contract novelWorkbenchV2EpisodeContract, normalization novelWorkbenchV2ControlCardEvidenceNormalization, validations []novelWorkbenchV2ControlCardAuditValidation, validationErr error) novelWorkbenchV2ControlCardAuditRecord {
+	digest := sha256.Sum256([]byte(raw))
+	outcome := "accepted"
+	if validationErr != nil {
+		outcome = "rejected"
+	} else if normalization.OutputEvidenceClaimCount < normalization.InputEvidenceClaimCount {
+		outcome = "accepted_with_normalization"
+	}
+	return novelWorkbenchV2ControlCardAuditRecord{
+		SchemaVersion:            novelWorkbenchV2ControlCardAuditVersion,
+		Unit:                     unit,
+		Attempt:                  attempt,
+		Outcome:                  outcome,
+		Ruleset:                  "fact-contract-evidence-v1",
+		RawResponseSHA256:        fmt.Sprintf("%x", digest),
+		InputEvidenceClaimCount:  normalization.InputEvidenceClaimCount,
+		OutputEvidenceClaimCount: normalization.OutputEvidenceClaimCount,
+		Contract: novelWorkbenchV2ControlCardAuditContract{
+			RoadmapID:               contract.RoadmapID,
+			RequiredIntroductionIDs: novelWorkbenchV2LedgerActionIDs(contract.RequiredIntroductions),
+			RequiredPayoffIDs:       novelWorkbenchV2LedgerActionIDs(contract.RequiredPayoffs),
+			RelevantLedgerIDs:       append([]string(nil), contract.RelevantLedgerIDs...),
+			RequiredCharacterIDs:    append([]string(nil), contract.RequiredCharacterIDs...),
+			StateLocks:              append([]novelWorkbenchV2StateLock(nil), contract.StateLocks...),
+			OpenDebtIDs:             append([]string(nil), contract.OpenDebtIDs...),
+		},
+		EvidenceDecisions: normalization.EvidenceDecisions,
+		Validations:       validations,
+		ValidationError:   errorText(validationErr),
+	}
+}
+
+func novelWorkbenchV2LedgerActionIDs(actions []novelWorkbenchV2LedgerAction) []string {
+	ids := make([]string, 0, len(actions))
+	for _, action := range actions {
+		if id := normalizeNovelWorkbenchV2ID(action.ID); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func novelWorkbenchV2ControlCardAuditValidationForError(stage string, err error) novelWorkbenchV2ControlCardAuditValidation {
+	if err == nil {
+		return novelWorkbenchV2ControlCardAuditValidation{Stage: stage, Passed: true}
+	}
+	return novelWorkbenchV2ControlCardAuditValidation{Stage: stage, Passed: false, Detail: err.Error()}
+}
+
 func novelWorkbenchV2FactContractReferenceSet(values []string) map[string]struct{} {
 	set := map[string]struct{}{}
 	for _, raw := range values {
@@ -1713,7 +2046,7 @@ func novelWorkbenchV2FactContractReferenceSet(values []string) map[string]struct
 func novelWorkbenchV2FactContractHasAllKinds(links []novelWorkbenchV2EvidenceLink, required ...string) bool {
 	present := map[string]struct{}{}
 	for _, link := range links {
-		present[strings.ToLower(strings.TrimSpace(link.Kind))] = struct{}{}
+		present[novelWorkbenchV2CanonicalEvidenceLinkKind(link.Kind)] = struct{}{}
 	}
 	for _, kind := range required {
 		if _, exists := present[kind]; !exists {
@@ -1726,11 +2059,33 @@ func novelWorkbenchV2FactContractHasAllKinds(links []novelWorkbenchV2EvidenceLin
 func novelWorkbenchV2EvidenceLinkKindCount(links []novelWorkbenchV2EvidenceLink) int {
 	kinds := map[string]struct{}{}
 	for _, link := range links {
-		if kind := strings.ToLower(strings.TrimSpace(link.Kind)); kind != "" {
+		if kind := novelWorkbenchV2CanonicalEvidenceLinkKind(link.Kind); kind != "" {
 			kinds[kind] = struct{}{}
 		}
 	}
 	return len(kinds)
+}
+
+// novelWorkbenchV2CanonicalEvidenceLinkKind accepts a small set of common
+// model synonyms while preserving a closed evidence-chain vocabulary. Unknown
+// values still fail validation instead of silently becoming a new rule type.
+func novelWorkbenchV2CanonicalEvidenceLinkKind(value string) string {
+	kind := strings.ToLower(strings.TrimSpace(value))
+	kind = strings.NewReplacer("-", "_", " ", "_").Replace(kind)
+	switch kind {
+	case "discovery", "discover", "recovery", "physical_recovery", "physicalrecovery", "collection", "seizure", "found", "finding", "retrieve", "retrieval", "发现", "取回", "搜获", "缴获":
+		return "discovery"
+	case "origin", "source", "provenance", "来源", "出处":
+		return "origin"
+	case "custody", "chain_of_custody", "chainofcustody", "handover", "hand_over", "transfer", "interception", "intercept", "possession", "preservation", "sealed", "交接", "保管", "封存", "截获":
+		return "custody"
+	case "verification", "verify", "validation", "authentication", "鉴定", "核验", "验证", "比对", "检验":
+		return "verification"
+	case "testimony", "witness", "statement", "deposition", "证词", "证言", "供述", "目击":
+		return "testimony"
+	default:
+		return kind
+	}
 }
 
 func validateNovelWorkbenchV2FactContract(control novelWorkbenchV2Control, state novelWorkbenchV2State, contract novelWorkbenchV2EpisodeContract, card *novelWorkbenchV2ControlCard) error {
@@ -1856,6 +2211,8 @@ func validateNovelWorkbenchV2FactContract(control novelWorkbenchV2Control, state
 	}
 
 	requiredEvidence := novelWorkbenchV2FactContractLedgerIDs(*card, known)
+	knowledgeEvidence := novelWorkbenchV2FactContractKnowledgeLedgerIDs(*card, known)
+	relevantEvidence := novelWorkbenchV2FactContractReferenceSet(contract.RelevantLedgerIDs)
 	evidenceClaims := map[string]novelWorkbenchV2EvidenceClaim{}
 	allowedLinkKinds := map[string]struct{}{"discovery": {}, "origin": {}, "custody": {}, "verification": {}, "testimony": {}}
 	for index := range card.FactContract.EvidenceClaims {
@@ -1864,8 +2221,10 @@ func validateNovelWorkbenchV2FactContract(control novelWorkbenchV2Control, state
 		claim.Level = strings.ToLower(strings.TrimSpace(claim.Level))
 		claim.AllowedConclusion = strings.TrimSpace(claim.AllowedConclusion)
 		claim.ProhibitedConclusion = strings.TrimSpace(claim.ProhibitedConclusion)
-		if _, exists := requiredEvidence[claim.EvidenceID]; !exists {
-			return fmt.Errorf("事实契约证据 %s 必须是控制卡反转、引入或回收的账本锚点", claim.EvidenceID)
+		if _, exists := known.foreshadows[claim.EvidenceID]; !exists {
+			if _, exists := known.promises[claim.EvidenceID]; !exists {
+				return fmt.Errorf("事实契约证据引用不存在的账本 ID %s", claim.EvidenceID)
+			}
 		}
 		if _, exists := evidenceClaims[claim.EvidenceID]; exists {
 			return fmt.Errorf("事实契约重复声明证据 %s", claim.EvidenceID)
@@ -1873,6 +2232,18 @@ func validateNovelWorkbenchV2FactContract(control novelWorkbenchV2Control, state
 		priorLevel := novelWorkbenchV2EffectiveEvidenceLevel(control, state, claim.EvidenceID)
 		priorRank := novelWorkbenchV2EvidenceLevelRank(priorLevel)
 		targetRank := novelWorkbenchV2EvidenceLevelRank(claim.Level)
+		_, anchored := requiredEvidence[claim.EvidenceID]
+		if !anchored {
+			if _, used := knowledgeEvidence[claim.EvidenceID]; !used {
+				return fmt.Errorf("事实契约证据 %s 必须是控制卡反转、引入或回收的账本锚点，或被本集 knowledgeAccess 实际使用", claim.EvidenceID)
+			}
+			if _, relevant := relevantEvidence[claim.EvidenceID]; !relevant {
+				return fmt.Errorf("事实契约背景证据 %s 不在本集相关账本范围内", claim.EvidenceID)
+			}
+			if targetRank != priorRank {
+				return fmt.Errorf("事实契约背景证据 %s 不能在未列为反转、引入或回收锚点时变更证据等级", claim.EvidenceID)
+			}
+		}
 		if targetRank < 1 || targetRank < priorRank || targetRank > priorRank+1 {
 			return fmt.Errorf("事实契约证据 %s 不能从 %s 跳到 %s", claim.EvidenceID, priorLevel, claim.Level)
 		}
@@ -1884,7 +2255,7 @@ func validateNovelWorkbenchV2FactContract(control novelWorkbenchV2Control, state
 		}
 		for linkIndex := range claim.Links {
 			link := &claim.Links[linkIndex]
-			link.Kind = strings.ToLower(strings.TrimSpace(link.Kind))
+			link.Kind = novelWorkbenchV2CanonicalEvidenceLinkKind(link.Kind)
 			link.Description = strings.TrimSpace(link.Description)
 			link.ReferenceIDs = normalizeNovelWorkbenchV2IDs(link.ReferenceIDs)
 			if _, exists := allowedLinkKinds[link.Kind]; !exists {
@@ -2068,6 +2439,7 @@ func validateNovelWorkbenchV2EpisodeContractExecution(contract novelWorkbenchV2E
 }
 
 func buildNovelWorkbenchV2EpisodeWorkPackage(control novelWorkbenchV2Control, state novelWorkbenchV2State, roadmap novelWorkbenchV2Roadmap, contract novelWorkbenchV2EpisodeContract) novelWorkbenchV2EpisodeWorkPackage {
+	scopedRoadmap := novelWorkbenchV2ScopedRoadmap(control, state, roadmap, contract)
 	relevant := map[string]struct{}{}
 	for _, id := range contract.RelevantLedgerIDs {
 		relevant[id] = struct{}{}
@@ -2094,7 +2466,7 @@ func buildNovelWorkbenchV2EpisodeWorkPackage(control novelWorkbenchV2Control, st
 		WorldRules:       append([]string{}, control.Documents.Worldbuilding.Rules...),
 		WorldConstraints: append([]string{}, control.Documents.Worldbuilding.Constraints...),
 		StyleGuide:       control.Documents.StyleGuide,
-		Roadmap:          roadmap,
+		Roadmap:          scopedRoadmap,
 		Contract:         contract,
 		RelevantLedger:   ledger,
 		CastBible:        append([]novelWorkbenchV2Character{}, control.Documents.CastBible...),
@@ -2340,6 +2712,9 @@ func validateNovelWorkbenchV2Writeback(control novelWorkbenchV2Control, state no
 	if err != nil {
 		return err
 	}
+	if err := validateNovelWorkbenchV2NarrativeFacts(writeback.NarrativeFacts, state.NarrativeFacts, unit); err != nil {
+		return err
+	}
 	if err := validateNovelWorkbenchV2StateTransitions("角色", writeback.CharacterChanges, state.CharacterStates, known.characters, nil); err != nil {
 		return err
 	}
@@ -2355,6 +2730,30 @@ func validateNovelWorkbenchV2Writeback(control novelWorkbenchV2Control, state no
 	}
 	if err := validateNovelWorkbenchV2LedgerTransitions("读者承诺", writeback.PromiseChanges, state.PromiseStates, state.PromiseStartedAt, known.promises, unit); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateNovelWorkbenchV2NarrativeFacts(facts []novelWorkbenchV2NarrativeFact, existing map[string]novelWorkbenchV2NarrativeFact, unit int) error {
+	seen := map[string]struct{}{}
+	for _, fact := range facts {
+		id := normalizeNovelWorkbenchV2ID(fact.ID)
+		if id == "" || len([]rune(strings.TrimSpace(fact.Statement))) < 8 {
+			return errors.New("编译叙事事实缺少稳定 ID 或明确陈述")
+		}
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("编译叙事事实重复记录 %s", id)
+		}
+		if _, exists := existing[id]; exists {
+			return fmt.Errorf("编译叙事事实 %s 已存在，不能重复提交", id)
+		}
+		if fact.EstablishedUnit != unit {
+			return fmt.Errorf("编译叙事事实 %s 必须在第 %d 单元提交", id, unit)
+		}
+		if strings.ToLower(strings.TrimSpace(fact.Status)) != "active" {
+			return fmt.Errorf("编译叙事事实 %s 的状态必须为 active", id)
+		}
+		seen[id] = struct{}{}
 	}
 	return nil
 }
@@ -2459,12 +2858,9 @@ func validateNovelWorkbenchV2Review(review *novelWorkbenchV2ReviewReport, contro
 }
 
 func validateNovelWorkbenchV2Quality(review novelWorkbenchV2ReviewReport, unit int) error {
-	if !review.OverallPass {
-		return errors.New("独立审稿未通过")
-	}
 	for _, issue := range review.BlockingIssues {
 		if strings.EqualFold(strings.TrimSpace(issue.Severity), "blocker") || strings.EqualFold(strings.TrimSpace(issue.Severity), "fatal") {
-			return fmt.Errorf("审稿拦截：%s", firstNonEmptyString(strings.TrimSpace(issue.Evidence), strings.TrimSpace(issue.Code)))
+			return fmt.Errorf("审稿拦截 [%s]：%s", firstNonEmptyString(strings.TrimSpace(issue.Code), "REVIEW_BLOCKER"), firstNonEmptyString(strings.TrimSpace(issue.Evidence), "独立审稿指出该项无法提交"))
 		}
 	}
 	criticalMinimum := 6
@@ -2486,6 +2882,9 @@ func validateNovelWorkbenchV2Quality(review novelWorkbenchV2ReviewReport, unit i
 		if strongCount < 8 {
 			return errors.New("首发三单元门禁要求至少 8 项质量信号达到 7 分")
 		}
+	}
+	if !review.OverallPass {
+		return errors.New("独立审稿未通过，但未提供可执行 blocker 或量化质量原因")
 	}
 	return nil
 }
@@ -2543,6 +2942,13 @@ func applyNovelWorkbenchV2Writeback(control novelWorkbenchV2Control, state novel
 		if state.PromiseStates[id] == "introduced" {
 			state.PromiseStartedAt[id] = unit
 		}
+	}
+	for _, fact := range output.Writeback.NarrativeFacts {
+		id := normalizeNovelWorkbenchV2ID(fact.ID)
+		fact.ID = id
+		fact.Statement = strings.TrimSpace(fact.Statement)
+		fact.Status = strings.ToLower(strings.TrimSpace(fact.Status))
+		state.NarrativeFacts[id] = fact
 	}
 	state.CompletedUnit = unit
 	state.CurrentRoadmapID = roadmap.ID
@@ -2668,12 +3074,18 @@ func buildNovelWorkbenchV2BootstrapPrompt(brief novelWorkbenchBrief) string {
 }
 
 func buildNovelWorkbenchV2BootstrapRepairPrompt(brief novelWorkbenchBrief, raw string, validationErr error) string {
-	return fmt.Sprintf(`把下面的创作控制档案修复成合法 JSON。不得删除已有的原创冲突和人物动力，但必须解决校验问题。所有 id 必须保持唯一且可引用；路线图必须连续覆盖第 1 到第 %d 单元；伏笔和读者承诺必须有可执行的引入与回收期限。只输出 JSON。
+	packet := novelWorkbenchV2RepairPacket{SchemaVersion: novelWorkbenchV2CompiledControlVersion, Stage: "bootstrap", Attempt: 1, FailureClass: "structural", FailureCode: "VALIDATION_FAILED", Failure: errorText(validationErr), RequiredFix: []string{errorText(validationErr)}, Preserve: []string{"保留已有的原创冲突和人物动力。"}}
+	return buildNovelWorkbenchV2BootstrapRepairPromptWithPacket(brief, raw, packet)
+}
 
-校验问题：%s
+func buildNovelWorkbenchV2BootstrapRepairPromptWithPacket(brief novelWorkbenchBrief, raw string, packet novelWorkbenchV2RepairPacket) string {
+	packetJSON, _ := json.Marshal(packet)
+	return fmt.Sprintf(`把下面的创作控制档案修复成合法 JSON。不得删除已有的原创冲突和人物动力，只处理本次失败单中列出的校验问题。所有 id 必须保持唯一且可引用；路线图必须连续覆盖第 1 到第 %d 单元；伏笔和读者承诺必须有可执行的引入与回收期限。严格保持失败单的 preserve，不要为了通过校验而删掉核心冲突、人物动力或既有账本。只输出 JSON。
+
+本次失败单：%s
 
 原始输出：
-%s`, brief.TargetUnitCount, validationErr.Error(), raw)
+%s`, brief.TargetUnitCount, string(packetJSON), raw)
 }
 
 func buildNovelWorkbenchV2ControlCardPrompt(control novelWorkbenchV2Control, state novelWorkbenchV2State, roadmap novelWorkbenchV2Roadmap, unit int, previousQualityBlock string) string {
@@ -2707,16 +3119,17 @@ func buildNovelWorkbenchV2ControlCardPromptWithContract(control novelWorkbenchV2
 本集工作包（仅含当前创作所需的已冻结事实）：%s
 历史质量上下文：%s
 
-只能使用工作包中已有的稳定 ID。创作契约 requiredIntroductions 的每个 ID 必须出现在 introduceIds；requiredPayoffs 的每个 ID 必须出现在 payoffIds。它们都必须设计为正文中可见的动作、信息或关系变化，不能只在 writeback 中声明。除契约明确要求外，introduceIds 和 payoffIds 只列出本单元实际写入并更新的伏笔/承诺 ID；不要凭空回收未引入的线索。
+	只能使用工作包中已有的稳定 ID。创作契约 requiredIntroductions 的每个 ID 必须出现在 introduceIds；requiredPayoffs 的每个 ID 必须出现在 payoffIds。它们都必须设计为正文中可见的动作、信息或关系变化，不能只在 writeback 中声明。除契约明确要求外，introduceIds 和 payoffIds 只列出本单元实际写入并更新的伏笔/承诺 ID；不要凭空回收未引入的线索。工作包与契约中的 relevantLedgerIds 只是可参考的开放线索索引，不是要求你逐条写入本集 evidenceClaims 的清单。
+创作契约 requiredCharacterIds 仅列系统在本集必须完成的账本动作所属角色，必须包含在控制卡 requiredCharacterIds。控制卡还应列出本集实际需要行动、知情或地点约束的角色，但不要把只存在于远期账本上下文的人物全部抄入。
 causalSpine 必须至少四步，按顺序写出：已被画面建立的前置事实、主角基于该事实的主动选择、对手因可见的自身利益或风险而不得不作出的反应、可被当场验证的阶段结果。每一步必须能被拍出来，且下一步只能由上一步触发。
 reversalAnchorIds 必须列出反转所依赖的已有稳定 ID。不得为让反转成立而新增未建档的秘密、旧物、程序、身份、动机或长期悬案；普通道具可以出现，但不能承担新的未追踪谜团。
 factContract 是写正文前的事实边界，必须完整输出：
-1. characterPlacements 必须对 requiredCharacterIds 的每一位角色各写一项；presence 只能是 on_screen、off_screen 或 unknown。locationId 必须使用上方可用地点锚点中的稳定 ID；如需“祖祠外门”等镜头细节，填入 locationDetail。若动态状态或 stateLocks 已含 loc_ 地点，locationId 必须保持一致；只有真的在本集完成移动时，才写 fromLocationId 和至少一句可拍摄的 movementCause。
+	1. characterPlacements 必须对 requiredCharacterIds 的每一位角色各写一项；presence 只能是 on_screen、off_screen 或 unknown。locationId 必须使用上方可用地点锚点中的稳定 ID；如需“祖祠外门”等镜头细节，填入 locationDetail。若动态状态或 stateLocks 已含 loc_ 地点，locationId 必须保持一致；没有实际移动时，必须完全省略 fromLocationId 和 movementCause 两个键。只有真的在本集完成移动时，才同时写 fromLocationId 和至少一句可拍摄的 movementCause。
 2. knowledgeAccess 只列本集需要用来做关键判断、指控、推理或行动的既有长线事实。factIds 和 sourceIds 只能用伏笔/读者承诺 ID；角色此前不知道该事实时，必须 acquireInUnit=true，并写出本集可见的获得来源。没有来源的“突然知道”禁止出现。
-3. evidenceClaims 必须覆盖所有属于伏笔/读者承诺的 reversalAnchorIds、introduceIds 和 payoffIds。level 只能是 lead、corroborated、proven，且每次最多升一级。lead 只能得出有限线索；corroborated 至少两条不同类型的链路；proven 必须同时有 origin、custody、verification 三类可见链路。allowedConclusion 与 prohibitedConclusion 必须明确，禁止把线索直接写成定罪或身份真相。
+	3. evidenceClaims 必须覆盖所有属于伏笔/读者承诺的 reversalAnchorIds、introduceIds 和 payoffIds，且只写这些本集锚点。已经在前集成立的相关线索，只有当它确实列入本集 knowledgeAccess 供角色作关键判断时，才可额外写入 evidenceClaims，并且必须保持当前证据等级，不能借背景线索暗中升级。不要把所有 relevantLedgerIds 或开放债务逐条复制进 evidenceClaims。level 只能是 lead、corroborated、proven，且锚点每次最多升一级。links[].kind 只能是 discovery、origin、custody、verification、testimony：physical_recovery、recovery、发现或取回统一写 discovery；interception、transfer、交接或保管统一写 custody，禁止自造新枚举。lead 只能得出有限线索；corroborated 至少两条不同类型的链路；proven 必须同时有 origin、custody、verification 三类可见链路。allowedConclusion 与 prohibitedConclusion 必须明确，禁止把线索直接写成定罪或身份真相。
 
 只输出 JSON：
-{"unit":%d,"roadmapId":"%s","mission":"","openingHook":"","coreConflict":"","escalation":"","reversal":"","closingHook":"","nextDebt":"","narrativeBeats":[""],"causalSpine":[""],"reversalAnchorIds":[""],"requiredCharacterIds":[""],"requiredRelationshipIds":[""],"introduceIds":[""],"payoffIds":[""],"factContract":{"characterPlacements":[{"characterId":"char_","locationId":"loc_","locationDetail":"祖祠外门","presence":"on_screen","fromLocationId":"","movementCause":""}],"knowledgeAccess":[{"characterId":"char_","factIds":["foreshadow_"],"source":"","sourceIds":["foreshadow_"],"acquireInUnit":false}],"evidenceClaims":[{"evidenceId":"foreshadow_","level":"lead","links":[{"kind":"discovery","description":"","referenceIds":["foreshadow_"]}],"allowedConclusion":"","prohibitedConclusion":""}]}}`,
+{"unit":%d,"roadmapId":"%s","mission":"","openingHook":"","coreConflict":"","escalation":"","reversal":"","closingHook":"","nextDebt":"","narrativeBeats":[""],"causalSpine":[""],"reversalAnchorIds":[""],"requiredCharacterIds":[""],"requiredRelationshipIds":[""],"introduceIds":[""],"payoffIds":[""],"factContract":{"characterPlacements":[{"characterId":"char_","locationId":"loc_","locationDetail":"祖祠外门","presence":"on_screen"}],"knowledgeAccess":[{"characterId":"char_","factIds":["foreshadow_"],"source":"","sourceIds":["foreshadow_"],"acquireInUnit":false}],"evidenceClaims":[{"evidenceId":"foreshadow_","level":"lead","links":[{"kind":"discovery","description":"","referenceIds":["foreshadow_"]}],"allowedConclusion":"","prohibitedConclusion":""}]}}`,
 		unit, modeInstruction, string(contractJSON), workPackageJSON, priorBlockInstruction, unit, roadmap.ID)
 }
 
@@ -2738,7 +3151,7 @@ func buildNovelWorkbenchV2ControlCardRepairPromptWithContract(control novelWorkb
 	}
 	contractJSON, _ := json.Marshal(contract)
 	stateJSON, _ := json.Marshal(normalizeNovelWorkbenchV2State(state))
-	return fmt.Sprintf(`修复第 %d 单元控制卡为合法 JSON。必须绑定路线图 %s，只能引用以下已有 ID：%s。characterPlacements.locationId 只能使用这些地点锚点：%s；“祖祠外门”等自然语言方位写入 locationDetail，不能充当 locationId。本集创作契约为：%s。当前动态状态为：%s。contract.requiredIntroductions 必须全部列入 introduceIds，contract.requiredPayoffs 必须全部列入 payoffIds。不得将未引入的伏笔/承诺写入 payoffIds。causalSpine 必须至少四步：前置事实、主角主动选择、对手有利益动机的反应、可见验证结果。reversalAnchorIds 必须列出反转使用的已有稳定 ID，不能用未建档秘密或新悬案补因果。factContract 必须完整保留：每名 requiredCharacter 都有地点/在场声明；已锁定 loc_ 地点不得凭空改变；越知必须以本集可见来源和 sourceIds 获得；每个账本锚点都要声明不越级的证据等级、可见链路、允许与禁止结论。校验错误：%s
+	return fmt.Sprintf(`修复第 %d 单元控制卡为合法 JSON。必须绑定路线图 %s，只能引用以下已有 ID：%s。characterPlacements.locationId 只能使用这些地点锚点：%s；“祖祠外门”等自然语言方位写入 locationDetail，不能充当 locationId。本集创作契约为：%s。当前动态状态为：%s。contract.requiredIntroductions 必须全部列入 introduceIds，contract.requiredPayoffs 必须全部列入 payoffIds，contract.requiredCharacterIds 必须全部列入 requiredCharacterIds；只在远期账本中出现但本集没有到期动作的角色不应被强行列入。不得将未引入的伏笔/承诺写入 payoffIds。causalSpine 必须至少四步：前置事实、主角主动选择、对手有利益动机的反应、可见验证结果。reversalAnchorIds 必须列出反转使用的已有稳定 ID，不能用未建档秘密或新悬案补因果。relevantLedgerIds 只是本集可参考的开放线索，绝不是要逐条复制到 evidenceClaims。factContract 必须完整保留：每名 requiredCharacter 都有地点/在场声明；已锁定 loc_ 地点不得凭空改变。角色未移动时，必须从 JSON 中完全删除 fromLocationId 和 movementCause；只有确实变更地点时才能同时填写两者。越知必须以本集可见来源和 sourceIds 获得；evidenceClaims 只保留反转、引入、回收锚点。已成立的背景线索只有在 knowledgeAccess 中被本集角色实际使用时才可列入，且不得改变它的证据等级。每个账本锚点都要声明不越级的证据等级、可见链路、允许与禁止结论。links[].kind 只能是 discovery、origin、custody、verification、testimony；physical_recovery/recovery 写 discovery，interception/transfer 写 custody，禁止自造枚举。校验错误：%s
 
 原始控制卡：
 %s
@@ -2800,6 +3213,7 @@ func buildNovelWorkbenchV2ReviewPromptWithContract(control novelWorkbenchV2Contr
 	workPackageJSON := novelWorkbenchV2EpisodeWorkPackageJSON(control, state, roadmap, contract)
 	contractJSON, _ := json.Marshal(contract)
 	cardJSON, _ := json.Marshal(card)
+	persistenceJSON, _ := json.Marshal(compileNovelWorkbenchV2PersistenceContract(state, novelWorkbenchV2ScopedRoadmap(control, state, roadmap, contract), unit))
 	outputJSON, _ := json.Marshal(output)
 	knownIDs := novelWorkbenchV2StableIDList(control)
 	contentLength := len([]rune(strings.TrimSpace(output.Content)))
@@ -2808,6 +3222,7 @@ func buildNovelWorkbenchV2ReviewPromptWithContract(control novelWorkbenchV2Contr
 本集创作契约（由系统确定）：%s
 本集工作包（已冻结的相关事实）：%s
 本单元控制卡：%s
+持久事实合同（由编译器确定）：%s
 候选正文与写回：%s
 
 可引用的稳定 ID：%s
@@ -2816,11 +3231,13 @@ referenceIds 与每个问题的 referenceId 只能使用上面清单中的稳定
 逐项以 0 到 10 分评分：antiAi（去模板感）、storyLogic（因果）、stateGuard（状态一致）、emotion（情绪）、blockbuster（爽点/戏剧性）、visiblePayoff（可见回报）、readerPull（追读）、titleHook（标题/钩子）、characterVoice（人物声线）、domainTranslation（类型表达）、novelty（新鲜感）、continuity（前后连续）。只有你认为可提交才 overallPass=true。blockingIssues 只放会阻止提交的问题，severity 使用 blocker 或 warning，引用已知 id 时填写 referenceId。
 篇幅与节奏审查：用户目标约 %d 字、单集目标时长约 %d 秒，候选正文约 %d 字。没有固定的字数上下限，数字不能单独作为提交条件。必须结合控制卡要求、场景数、对白与动作密度、信息推进、情绪蓄力和结尾钩子判断本集能否承载目标时长与观看节奏。仅有轻微字数偏差时，以 UNIT_PACING_LENGTH_NOTE warning 记录，overallPass 仍可为 true。只有正文因明显注水、过度稀薄或过度压缩而无法完成当前单元的节奏和戏剧功能时，才可用 UNIT_PACING_LENGTH_MISMATCH blocker；evidence 必须指出具体表现，repairAction 必须说明需调整的场景、动作、对白或信息功能，不能只要求压缩或扩写到某个字数。
 必须逐项核验控制卡 causalSpine：前置事实、主角选择、对手的自利反应、现场验证是否都已在正文中被可见地建立；任何关键动作若缺乏上一步的明确动机，视为 storyLogic blocker。必须逐项核验创作契约 requiredIntroductions 与 requiredPayoffs：不得只在 writeback 中伪造状态，正文必须给出可被读者识别的线索或兑现；缺失时为 blocker。任何新增长期谜团、证据、秘密或债务，若无法绑定控制卡 reversalAnchorIds、introduceIds 或 payoffIds 中的稳定 ID，视为 blocker，不得因其“增加悬念”放行。
+必须逐项核验持久事实合同：requiredFacts 是本集唯一允许新增并跨集生效的结果，正文必须以可见行动兑现；activeFacts 与 frozenContinuity 必须保持连续。若正文声称合同未列出的长期权限、释放或拘押、地点转场、具体时间安排、物件交接、关系承诺或证据结论已经生效，必须给出 UNCOMPILED_PERSISTENT_FACT blocker；repairAction 只能要求删去该持久结论、改为当场未决，或收束为合同已列的 requiredFacts，绝不能要求补写或修改 writeback。frozenContinuity 含有角色受限、封锁或未解决行动压力时，正文若改变它，必须先写清可见触发、过程和后果。
+候选中的 writeback 全部由编译器生成，不是主笔输出，也不是审稿人可要求补齐的字段。不得使用 ARCHIVAL_WRITEBACK_OMISSION，不得要求作者补写状态、ID、地点变更或账本迁移；只检查编译器已经给出的 writeback 是否与本集 requiredFacts、factContract 和账本动作相符，任何额外持久结果一律按 UNCOMPILED_PERSISTENT_FACT 审核正文。
 必须逐项核验 factContract：角色不得在未写出移动的情况下离开已锁定地点；off_screen 角色不得被写成现场动作或明确声源。关键角色的判断、指控与行动是否只使用 knowledgeAccess 中已知或本集可见获得的信息；否则为 TEMPORAL_KNOWLEDGE_BREACH blocker。证据是否严格停在 evidenceClaims.allowedConclusion，且每一级都能在正文看见 links 所需的来源、保管/传递、核验或证词；把 lead 当作身份、作者、收件人或罪责证明，或跳过中间链路，均为 EVIDENCE_CHAIN_GAP blocker。
 
 只输出 JSON：
 {"unit":%d,"overallPass":false,"signals":{"antiAi":0,"storyLogic":0,"stateGuard":0,"emotion":0,"blockbuster":0,"visiblePayoff":0,"readerPull":0,"titleHook":0,"characterVoice":0,"domainTranslation":0,"novelty":0,"continuity":0},"blockingIssues":[{"code":"","severity":"blocker","referenceId":"","evidence":"","repairAction":""}],"warnings":[{"code":"","severity":"warning","referenceId":"","evidence":"","repairAction":""}],"referenceIds":[""],"verdict":""}`,
-		unit, string(contractJSON), workPackageJSON, string(cardJSON), string(outputJSON), knownIDs, control.Brief.TargetUnitLength, control.Brief.UnitDurationSeconds, contentLength, unit)
+		unit, string(contractJSON), workPackageJSON, string(cardJSON), string(persistenceJSON), string(outputJSON), knownIDs, control.Brief.TargetUnitLength, control.Brief.UnitDurationSeconds, contentLength, unit)
 }
 
 func novelWorkbenchV2StableIDList(control novelWorkbenchV2Control) string {
@@ -2900,15 +3317,17 @@ func novelWorkbenchV2RelevantStateLocks(state novelWorkbenchV2State, card novelW
 }
 
 func novelWorkbenchV2ReviewRepairContext(review novelWorkbenchV2ReviewReport) string {
-	lines := make([]string, 0, len(review.BlockingIssues)+len(review.Warnings)+1)
+	lines := make([]string, 0, len(review.BlockingIssues)+1)
 	for _, issue := range review.BlockingIssues {
-		lines = append(lines, fmt.Sprintf("blocker [%s]\n问题：%s\n修复动作：%s", strings.TrimSpace(issue.Code), strings.TrimSpace(issue.Evidence), strings.TrimSpace(issue.RepairAction)))
+		severity := strings.ToLower(strings.TrimSpace(issue.Severity))
+		if severity == "" || severity == "blocker" || severity == "fatal" {
+			lines = append(lines, fmt.Sprintf("blocker [%s]\n问题：%s\n修复动作：%s", strings.TrimSpace(issue.Code), strings.TrimSpace(issue.Evidence), strings.TrimSpace(issue.RepairAction)))
+		}
 	}
-	for _, issue := range review.Warnings {
-		lines = append(lines, fmt.Sprintf("warning [%s]\n问题：%s\n建议：%s", strings.TrimSpace(issue.Code), strings.TrimSpace(issue.Evidence), strings.TrimSpace(issue.RepairAction)))
-	}
-	if verdict := strings.TrimSpace(review.Verdict); verdict != "" {
-		lines = append(lines, "审稿结论："+verdict)
+	if len(lines) > 0 {
+		if verdict := strings.TrimSpace(review.Verdict); verdict != "" {
+			lines = append(lines, "审稿结论："+verdict)
+		}
 	}
 	return strings.Join(lines, "\n\n")
 }

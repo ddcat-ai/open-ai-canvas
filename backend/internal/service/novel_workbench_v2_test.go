@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -53,9 +54,10 @@ func TestNovelWorkbenchV2EnforcesControlCardAndDeadlines(t *testing.T) {
 	}
 	card := novelWorkbenchV2ControlCard{
 		Unit: 1, RoadmapID: roadmap.ID, Mission: "让主角被迫进局", OpeningHook: "婚书被撕", CoreConflict: "主角无法自证", Escalation: "证人倒戈", Reversal: "印章出现", ClosingHook: "敌人拿走印章", NextDebt: "找回印章",
-		CausalSpine:       []string{"侯爷当众撕毁婚书，印章裂纹已被众人看见。", "沈宁主动拿出印章要求当场核验。", "侯爷担心裂纹暴露伪造，夺走印章阻止核验。", "沈宁确认侯爷惧怕印章并获得追查目标。"},
-		ReversalAnchorIDs: []string{"foreshadow_seal"},
-		IntroduceIDs:      []string{"foreshadow_seal", "promise_identity"},
+		CausalSpine:          []string{"侯爷当众撕毁婚书，印章裂纹已被众人看见。", "沈宁主动拿出印章要求当场核验。", "侯爷担心裂纹暴露伪造，夺走印章阻止核验。", "沈宁确认侯爷惧怕印章并获得追查目标。"},
+		ReversalAnchorIDs:    []string{"foreshadow_seal"},
+		RequiredCharacterIDs: []string{"char_hero"},
+		IntroduceIDs:         []string{"foreshadow_seal", "promise_identity"},
 	}
 	if err := validateNovelWorkbenchV2ControlCard(&card, control, roadmap, 1); err != nil {
 		t.Fatalf("valid screenplay card rejected: %v", err)
@@ -118,13 +120,42 @@ func TestNovelWorkbenchV2CompilesPlanPreviewAndEpisodeContract(t *testing.T) {
 	if got := strings.Join([]string{contract.RequiredIntroductions[0].ID, contract.RequiredIntroductions[1].ID}, ","); got != "foreshadow_seal,promise_identity" || len(contract.RequiredPayoffs) != 0 {
 		t.Fatalf("unit one contract = %#v", contract)
 	}
+	if got := strings.Join(contract.RequiredCharacterIDs, ","); got != "char_hero" {
+		t.Fatalf("unit one required cast = %q", got)
+	}
 	card := novelWorkbenchV2ControlCard{IntroduceIDs: []string{"foreshadow_seal"}}
 	if err := validateNovelWorkbenchV2EpisodeContractCard(contract, card); err == nil || !strings.Contains(err.Error(), "promise_identity") {
 		t.Fatalf("missing contract action should be rejected, got %v", err)
 	}
 	card.IntroduceIDs = append(card.IntroduceIDs, "promise_identity")
+	if err := validateNovelWorkbenchV2EpisodeContractCard(contract, card); err == nil || !strings.Contains(err.Error(), "char_hero") {
+		t.Fatalf("missing due action owner should be rejected, got %v", err)
+	}
+	card.RequiredCharacterIDs = []string{"char_hero"}
 	if err := validateNovelWorkbenchV2EpisodeContractCard(contract, card); err != nil {
 		t.Fatalf("complete contract card rejected: %v", err)
+	}
+}
+
+func TestNovelWorkbenchV2EpisodeContractKeepsContextualLedgerOwnersOutOfRequiredCast(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	state.CompletedUnit = 1
+	state.ForeshadowStates["foreshadow_seal"] = "introduced"
+	state.PromiseStates["promise_identity"] = "introduced"
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 2)
+	if !ok {
+		t.Fatal("missing unit two roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 2)
+	if err != nil {
+		t.Fatalf("compile unit two contract: %v", err)
+	}
+	if got := strings.Join(contract.RelevantLedgerIDs, ","); got != "foreshadow_seal,promise_identity" {
+		t.Fatalf("unit two relevant ledger = %q", got)
+	}
+	if len(contract.RequiredIntroductions) != 0 || len(contract.RequiredPayoffs) != 0 || len(contract.RequiredCharacterIDs) != 0 {
+		t.Fatalf("context-only ledger owners must not become a required cast: %#v", contract)
 	}
 }
 
@@ -229,9 +260,265 @@ func TestNovelWorkbenchV2ReviewPromptMakesLengthAnEditorialDecision(t *testing.T
 	card := novelWorkbenchV2ControlCard{Unit: 1, RoadmapID: "arc_entry"}
 	output := novelWorkbenchV2UnitOutput{Unit: 1, Title: "首集", Content: strings.Repeat("正文", 700), Summary: "测试摘要"}
 	prompt := buildNovelWorkbenchV2ReviewPrompt(control, state, card, output, 1)
-	for _, expected := range []string{"没有固定的字数上下限", "UNIT_PACING_LENGTH_NOTE", "UNIT_PACING_LENGTH_MISMATCH", "不能只要求压缩或扩写到某个字数"} {
+	for _, expected := range []string{"没有固定的字数上下限", "UNIT_PACING_LENGTH_NOTE", "UNIT_PACING_LENGTH_MISMATCH", "不能只要求压缩或扩写到某个字数", "UNCOMPILED_PERSISTENT_FACT", "不得使用 ARCHIVAL_WRITEBACK_OMISSION", "不得要求作者补写状态"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("review prompt missing %q", expected)
+		}
+	}
+}
+
+func TestNovelWorkbenchV2CompiledEpisodeOwnsFactAndWritebackState(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	control.Documents.Worldbuilding.Locations = []string{"loc_ancestral_hall：祖祠", "loc_west_courtyard：西院"}
+	state := initialNovelWorkbenchV2State(control)
+	state.CharacterLocations["char_hero"] = "loc_ancestral_hall"
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, 1)
+	if err != nil {
+		t.Fatalf("compiled episode spec failed: %v", err)
+	}
+	card := spec.controlCard(novelWorkbenchV2CreativeDelta{
+		OpeningHook:  "祖祠大门将落锁，沈宁被迫当众亮出印章。",
+		CoreConflict: "沈宁必须在众人逼迫下守住印章线索。",
+		Escalation:   "侯爷命人夺印，试图截断当场核验。",
+		Reversal:     "印章裂纹让侯爷的反应暴露出破绽。",
+		ClosingHook:  "侯爷带走印章，沈宁只剩追查去向的机会。",
+		NextDebt:     "沈宁必须在侯爷销毁印章前找到证人。",
+		CausalSpine: []string{
+			"祖祠封门压力已经落在沈宁身上，众人都在逼她交物。",
+			"沈宁主动亮出印章并要求当场核验，拒绝继续退让。",
+			"侯爷为掩盖夺权风险命人夺印，切断核验机会。",
+			"印章裂纹留下可见破绽，沈宁获得下一步追查压力。",
+		},
+	})
+	for _, placement := range card.FactContract.CharacterPlacements {
+		if placement.CharacterID == "char_hero" && (placement.LocationID != "loc_ancestral_hall" || placement.FromLocationID != "" || placement.MovementCause != "") {
+			t.Fatalf("compiler must retain the current location without inventing movement: %#v", placement)
+		}
+	}
+	output := spec.materializeOutput(novelWorkbenchV2DraftContent{
+		Title:   "裂纹",
+		Content: strings.Repeat("沈宁在祖祠中主动亮出印章，逼侯爷当众回应；侯爷夺印离场，裂纹留下新的追查方向。", 24),
+		Summary: "沈宁亮出印章，侯爷夺印，追查压力落下。",
+	}, card)
+	if err := validateNovelWorkbenchV2Unit(&output, control, state, card, 1); err != nil {
+		t.Fatalf("compiled output rejected: %v", err)
+	}
+	if err := validateNovelWorkbenchV2EpisodeContractExecution(contract, output.Writeback); err != nil {
+		t.Fatalf("compiled writeback missed contract action: %v", err)
+	}
+	if len(output.Writeback.LocationChanges) != 0 {
+		t.Fatalf("writer must not own location changes: %#v", output.Writeback.LocationChanges)
+	}
+	if len(output.Writeback.ForeshadowChanges) != 1 || output.Writeback.ForeshadowChanges[0].From != "planned" || output.Writeback.ForeshadowChanges[0].To != "introduced" {
+		t.Fatalf("compiled foreshadow transition = %#v", output.Writeback.ForeshadowChanges)
+	}
+}
+
+func TestNovelWorkbenchV2CompiledPersistenceContractOwnsArcResult(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	state.NextUnitBridge = "祖祠封门仍未解除，沈宁必须先创造可见的脱困过程。"
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, 1)
+	if err != nil {
+		t.Fatalf("compiled episode spec failed: %v", err)
+	}
+	if len(spec.PersistenceContract.FrozenContinuity) != 1 || !strings.Contains(spec.PersistenceContract.FrozenContinuity[0], "封门") {
+		t.Fatalf("prior bridge was not frozen: %#v", spec.PersistenceContract)
+	}
+	if len(spec.PersistenceContract.RequiredFacts) != 1 || !strings.Contains(spec.PersistenceContract.RequiredFacts[0].Statement, "印章线索") {
+		t.Fatalf("compiled arc result missing: %#v", spec.PersistenceContract.RequiredFacts)
+	}
+	card := spec.controlCard(novelWorkbenchV2CreativeDelta{})
+	output := spec.materializeOutput(novelWorkbenchV2DraftContent{
+		Title:   "入局",
+		Content: strings.Repeat("封门石压下时，沈宁以印章裂纹迫使侯爷公开交出线索，众人亲眼看见她取得追查资格。", 24),
+		Summary: "沈宁在封门压力下取得印章线索。",
+	}, card)
+	if err := validateNovelWorkbenchV2Writeback(control, state, output.Writeback, 1); err != nil {
+		t.Fatalf("compiler-owned persistence writeback rejected: %v", err)
+	}
+	nextState, err := applyNovelWorkbenchV2Writeback(control, state, roadmap, card, 1, output.Title, output)
+	if err != nil {
+		t.Fatalf("compiled persistence commit failed: %v", err)
+	}
+	factID := spec.PersistenceContract.RequiredFacts[0].ID
+	if got := nextState.NarrativeFacts[factID]; got.Statement != spec.PersistenceContract.RequiredFacts[0].Statement || got.EstablishedUnit != 1 {
+		t.Fatalf("persistence result was not committed: %#v", got)
+	}
+}
+
+func TestNovelWorkbenchV2ReviewPacketSeparatesBlockersFromWarnings(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := spec.controlCard(novelWorkbenchV2CreativeDelta{})
+	review := novelWorkbenchV2ReviewReport{
+		BlockingIssues: []novelWorkbenchV2ReviewIssue{{Code: "UNCOMPILED_PERSISTENT_FACT", Severity: "blocker", ReferenceID: "foreshadow_seal", Evidence: "正文把未授权的三日权限写成已生效", RepairAction: "删除该权限结论，改为当场未决。"}},
+		Warnings:       []novelWorkbenchV2ReviewIssue{{Code: "UNIT_PACING_LENGTH_NOTE", Severity: "warning", Evidence: "程序解释略多", RepairAction: "可压缩重复台词。"}},
+	}
+	packet := newNovelWorkbenchV2RepairPacket("review", 1, errors.New("独立审稿未通过"), control, contract, &card, &review)
+	if packet.FailureCode != "UNCOMPILED_PERSISTENT_FACT" || !strings.Contains(packet.Failure, "未授权的三日权限") {
+		t.Fatalf("primary blocker was not preserved: %#v", packet)
+	}
+	if strings.Contains(strings.Join(packet.RequiredFix, "\n"), "压缩重复台词") || !strings.Contains(strings.Join(packet.Warnings, "\n"), "压缩重复台词") {
+		t.Fatalf("warning must remain advisory: %#v", packet)
+	}
+}
+
+func TestNovelWorkbenchV2RepairPacketPreservesFrozenState(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := spec.controlCard(novelWorkbenchV2CreativeDelta{})
+	packet := newNovelWorkbenchV2RepairPacket("draft", 1, errors.New("伏笔 foreshadow_seal 的原状态应为 planned，实际为 unseen"), control, contract, &card, nil)
+	if packet.FailureCode != "STATE_TRANSITION_CONFLICT" || !strings.Contains(packet.Failure, "foreshadow_seal") {
+		t.Fatalf("repair packet lost the exact failure: %#v", packet)
+	}
+	if !strings.Contains(strings.Join(packet.AffectedIDs, ","), "foreshadow_seal") || len(packet.RequiredFix) == 0 || len(packet.Preserve) == 0 {
+		t.Fatalf("repair packet is not actionable: %#v", packet)
+	}
+}
+
+func TestNovelWorkbenchV2CompiledVisibleLedgerDoesNotCrossLedgerNamespaces(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	if novelWorkbenchV2CompiledLedgerVisible(control, state, "foreshadow_seal") {
+		t.Fatal("a planned foreshadow must not become visible because the promise ledger lacks that ID")
+	}
+	state.ForeshadowStates["foreshadow_seal"] = "introduced"
+	if !novelWorkbenchV2CompiledLedgerVisible(control, state, "foreshadow_seal") {
+		t.Fatal("an introduced foreshadow must be visible to the compiled episode spec")
+	}
+	if novelWorkbenchV2CompiledLedgerVisible(control, state, "promise_identity") {
+		t.Fatal("a planned reader promise must not become visible because the foreshadow ledger lacks that ID")
+	}
+}
+
+func TestNovelWorkbenchV2ScopesFutureArcActionsOutOfCurrentWorkOrder(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	control.Documents.ForeshadowLedger = append(control.Documents.ForeshadowLedger, novelWorkbenchV2LedgerItem{ID: "foreshadow_future", Description: "尚未到期的未来线索", IntroducedByUnit: 3, PayoffByUnit: 5, OwnerIDs: []string{"char_hero"}})
+	state := initialNovelWorkbenchV2State(control)
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	roadmap.KeyTurn = "未来线索在本弧段末尾揭开。"
+	roadmap.ExitDebt = "主角立刻追查未来线索。"
+	roadmap.PlannedIntroductions = append(roadmap.PlannedIntroductions, "foreshadow_future", "char_enemy")
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scoped := novelWorkbenchV2ScopedRoadmap(control, state, roadmap, contract)
+	if scoped.KeyTurn == roadmap.KeyTurn || scoped.ExitDebt == roadmap.ExitDebt {
+		t.Fatalf("future arc turn leaked into current unit: %#v", scoped)
+	}
+	if strings.Contains(strings.Join(scoped.PlannedIntroductions, ","), "foreshadow_future") || strings.Contains(strings.Join(scoped.PlannedIntroductions, ","), "char_enemy") {
+		t.Fatalf("future actions leaked into current work package: %#v", scoped.PlannedIntroductions)
+	}
+}
+
+func TestNovelWorkbenchV2CompiledSpecHandlesSparseLegacyState(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	state.CompletedUnit = 1
+	state.ForeshadowStates["foreshadow_seal"] = "introduced"
+	state.PromiseStates["promise_identity"] = "introduced"
+	state.ForeshadowStartedAt["foreshadow_seal"] = 1
+	state.PromiseStartedAt["promise_identity"] = 1
+	state.EvidenceLevels = nil
+	state.CharacterLocations = nil
+	state.CharacterKnowledge = nil
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 2)
+	if !ok {
+		t.Fatal("missing unit two roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contract.RequiredIntroductions) != 0 || len(contract.RequiredPayoffs) != 0 {
+		t.Fatalf("unit two should use an established context anchor only: %#v", contract)
+	}
+	spec, err := compileNovelWorkbenchV2EpisodeSpec(control, state, roadmap, contract, 2)
+	if err != nil {
+		t.Fatalf("sparse legacy state must compile: %v", err)
+	}
+	card := spec.controlCard(novelWorkbenchV2CreativeDelta{})
+	if !novelWorkbenchV2IDInList(card.ReversalAnchorIDs, "foreshadow_seal") {
+		t.Fatalf("compiled spec did not retain established anchor: %#v", card.ReversalAnchorIDs)
+	}
+	if err := validateNovelWorkbenchV2FactContract(control, state, contract, &card); err != nil {
+		t.Fatalf("compiled sparse fact contract rejected: %v", err)
+	}
+}
+
+func TestNovelWorkbenchV2CompiledContextAnchorPrefersNewestEstablishedFact(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	state.ForeshadowStates["foreshadow_seal"] = "introduced"
+	state.PromiseStates["promise_identity"] = "introduced"
+	state.ForeshadowStartedAt["foreshadow_seal"] = 1
+	state.PromiseStartedAt["promise_identity"] = 4
+	anchor := novelWorkbenchV2CompiledContextAnchor(control, state, []string{"foreshadow_seal", "promise_identity"})
+	if anchor != "promise_identity" {
+		t.Fatalf("context anchor = %q, want newest established fact", anchor)
+	}
+}
+
+func TestNovelWorkbenchV2BootstrapRepairPromptCarriesFailurePacket(t *testing.T) {
+	packet := novelWorkbenchV2RepairPacket{
+		SchemaVersion: novelWorkbenchV2CompiledControlVersion,
+		Stage:         "bootstrap",
+		Attempt:       1,
+		FailureClass:  "structural",
+		FailureCode:   "VALIDATION_FAILED",
+		Failure:       "路线图缺少连续覆盖",
+		RequiredFix:   []string{"补齐缺失单元的路线图覆盖。"},
+		Preserve:      []string{"保留原创冲突和人物动力。"},
+	}
+	prompt := buildNovelWorkbenchV2BootstrapRepairPromptWithPacket(novelWorkbenchBrief{TargetUnitCount: 12}, "{}", packet)
+	for _, expected := range []string{"本次失败单", "VALIDATION_FAILED", "路线图缺少连续覆盖", "保留原创冲突和人物动力"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("bootstrap repair prompt omitted %q: %s", expected, prompt)
 		}
 	}
 }
@@ -244,9 +531,19 @@ func TestNovelWorkbenchV2ControlCardPromptCarriesCausalRulesAndPriorBlock(t *tes
 		t.Fatal("missing unit one roadmap")
 	}
 	prompt := buildNovelWorkbenchV2ControlCardPrompt(control, state, roadmap, 1, "blocker: 反派动作没有因果")
-	for _, expected := range []string{"causalSpine 必须至少四步", "reversalAnchorIds 必须列出", "可用地点锚点", "locationDetail", "blocker: 反派动作没有因果"} {
+	for _, expected := range []string{"causalSpine 必须至少四步", "reversalAnchorIds 必须列出", "可用地点锚点", "locationDetail", "physical_recovery", "interception", "blocker: 反派动作没有因果"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("control card prompt missing %q", expected)
+		}
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repairPrompt := buildNovelWorkbenchV2ControlCardRepairPromptWithContract(control, state, roadmap, contract, 1, "{}", errors.New("无效链路类型"))
+	for _, expected := range []string{"contract.requiredCharacterIds", "physical_recovery/recovery", "interception/transfer"} {
+		if !strings.Contains(repairPrompt, expected) {
+			t.Fatalf("control card repair prompt missing %q", expected)
 		}
 	}
 }
@@ -460,6 +757,58 @@ func TestNovelWorkbenchV2FactContractRequiresCustodyForProof(t *testing.T) {
 	}
 	if err := validateNovelWorkbenchV2FactContract(control, state, contract, &card); err == nil || !strings.Contains(err.Error(), "来源、交接链和核验") {
 		t.Fatalf("proof without custody chain should be rejected, got %v", err)
+	}
+}
+
+func TestNovelWorkbenchV2FactContractCanonicalizesEvidenceLinkKinds(t *testing.T) {
+	control := newNovelWorkbenchV2TestControl(5)
+	state := initialNovelWorkbenchV2State(control)
+	roadmap, ok := novelWorkbenchV2RoadmapForUnit(control.Documents.ChapterRoadmap, 1)
+	if !ok {
+		t.Fatal("missing unit one roadmap")
+	}
+	contract, err := compileNovelWorkbenchV2EpisodeContract(control, state, roadmap, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCard := func() novelWorkbenchV2ControlCard {
+		card := novelWorkbenchV2ControlCard{
+			Unit: 1, RoadmapID: roadmap.ID, Mission: "主角守住现场", OpeningHook: "婚书被撕", CoreConflict: "主角无法自证", Escalation: "对手逼迫交物", Reversal: "裂纹印章出现", ClosingHook: "门锁落下", NextDebt: "查明印章来源",
+			CausalSpine:          []string{"婚书被撕，印章裂纹已被看见。", "沈宁主动亮出印章要求核验。", "侯爷担心伪造暴露而夺走印章。", "沈宁确认侯爷惧怕印章并留下追查目标。"},
+			ReversalAnchorIDs:    []string{"foreshadow_seal"},
+			RequiredCharacterIDs: []string{"char_hero"},
+			IntroduceIDs:         []string{"foreshadow_seal", "promise_identity"},
+		}
+		card.FactContract = novelWorkbenchV2TestFactContract(card.RequiredCharacterIDs, card.ReversalAnchorIDs, card.IntroduceIDs, card.PayoffIDs)
+		return card
+	}
+	for _, test := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "physical recovery", input: "physical_recovery", want: "discovery"},
+		{name: "interception", input: "interception", want: "custody"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			card := newCard()
+			for index := range card.FactContract.EvidenceClaims {
+				if card.FactContract.EvidenceClaims[index].EvidenceID == "foreshadow_seal" {
+					card.FactContract.EvidenceClaims[index].Links[0].Kind = test.input
+				}
+			}
+			if err := validateNovelWorkbenchV2FactContract(control, state, contract, &card); err != nil {
+				t.Fatalf("%s should be normalized: %v", test.input, err)
+			}
+			if got := card.FactContract.EvidenceClaims[0].Links[0].Kind; got != test.want {
+				t.Fatalf("%s normalized to %q, want %q", test.input, got, test.want)
+			}
+		})
+	}
+	card := newCard()
+	card.FactContract.EvidenceClaims[0].Links[0].Kind = "invented_chain"
+	if err := validateNovelWorkbenchV2FactContract(control, state, contract, &card); err == nil || !strings.Contains(err.Error(), "无效链路类型") {
+		t.Fatalf("unknown link kind must remain blocked, got %v", err)
 	}
 }
 

@@ -10,12 +10,12 @@ export type NovelWorkbenchRun = {
     userId: string;
     projectId: string;
     outputMode: NovelWorkbenchMode | string;
-	engineVersion?: number;
+    engineVersion?: number;
     status: "queued" | "running" | "paused" | "completed" | "failed" | string;
     stage: string;
-	pipelineStage?: string;
-	qualityPolicy?: string;
-	qualityBlockReason?: string;
+    pipelineStage?: string;
+    qualityPolicy?: string;
+    qualityBlockReason?: string;
     targetUnitCount: number;
     completedUnitCount: number;
     currentUnit: number;
@@ -39,47 +39,47 @@ export type NovelWorkbenchArc = {
 };
 
 export type NovelWorkbenchControl = {
-	engineVersion?: number;
+    engineVersion?: number;
     title?: string;
     logline?: string;
     arcs?: NovelWorkbenchArc[];
-	brief?: Record<string, unknown>;
-	documents?: NovelWorkbenchControlDocuments;
+    brief?: Record<string, unknown>;
+    documents?: NovelWorkbenchControlDocuments;
 };
 
 export type NovelWorkbenchLedgerItem = {
-	id: string;
-	description: string;
-	introducedByUnit: number;
-	payoffByUnit: number;
-	ownerIds: string[];
+    id: string;
+    description: string;
+    introducedByUnit: number;
+    payoffByUnit: number;
+    ownerIds: string[];
 };
 
 export type NovelWorkbenchRoadmapEntry = {
-	id: string;
-	title: string;
-	startUnit: number;
-	endUnit: number;
-	mission: string;
-	escalation: string;
-	keyTurn: string;
-	exitDebt: string;
-	plannedIntroductions: string[];
-	plannedPayoffs: string[];
+    id: string;
+    title: string;
+    startUnit: number;
+    endUnit: number;
+    mission: string;
+    escalation: string;
+    keyTurn: string;
+    exitDebt: string;
+    plannedIntroductions: string[];
+    plannedPayoffs: string[];
 };
 
 export type NovelWorkbenchControlDocuments = {
-	projectOverview?: Record<string, unknown>;
-	themeAndProposition?: Record<string, unknown>;
-	worldbuilding?: Record<string, unknown>;
-	castBible?: Array<Record<string, unknown>>;
-	relationshipMap?: Array<Record<string, unknown>>;
-	mainPlotlines?: Array<Record<string, unknown>>;
-	foreshadowLedger?: NovelWorkbenchLedgerItem[];
-	readerPromiseLedger?: NovelWorkbenchLedgerItem[];
-	chapterRoadmap?: NovelWorkbenchRoadmapEntry[];
-	styleGuide?: Record<string, unknown>;
-	writingLog?: Array<Record<string, unknown>>;
+    projectOverview?: Record<string, unknown>;
+    themeAndProposition?: Record<string, unknown>;
+    worldbuilding?: Record<string, unknown>;
+    castBible?: Array<Record<string, unknown>>;
+    relationshipMap?: Array<Record<string, unknown>>;
+    mainPlotlines?: Array<Record<string, unknown>>;
+    foreshadowLedger?: NovelWorkbenchLedgerItem[];
+    readerPromiseLedger?: NovelWorkbenchLedgerItem[];
+    chapterRoadmap?: NovelWorkbenchRoadmapEntry[];
+    styleGuide?: Record<string, unknown>;
+    writingLog?: Array<Record<string, unknown>>;
 };
 
 export type NovelWorkbenchDynamicState = {
@@ -87,28 +87,29 @@ export type NovelWorkbenchDynamicState = {
     currentArc: string;
     lastUnitSummary: string;
     nextUnitBridge: string;
-	currentRoadmapId?: string;
-	currentRoadmapTitle?: string;
-	openDebtIds?: string[];
-	characterStates?: Record<string, string>;
-	relationshipStates?: Record<string, string>;
-	plotlineStates?: Record<string, string>;
-	foreshadowStates?: Record<string, string>;
-	promiseStates?: Record<string, string>;
+    narrativeFacts?: Record<string, { id: string; statement: string; status: string; establishedUnit: number }>;
+    currentRoadmapId?: string;
+    currentRoadmapTitle?: string;
+    openDebtIds?: string[];
+    characterStates?: Record<string, string>;
+    relationshipStates?: Record<string, string>;
+    plotlineStates?: Record<string, string>;
+    foreshadowStates?: Record<string, string>;
+    promiseStates?: Record<string, string>;
 };
 
 export type NovelWorkbenchArtifact = {
-	id: string;
-	runId: string;
-	projectId: string;
-	unit: number;
-	kind: string;
-	attempt: number;
-	version: number;
-	contentJson: string;
-	prompt?: string;
-	createdAt: string;
-	updatedAt: string;
+    id: string;
+    runId: string;
+    projectId: string;
+    unit: number;
+    kind: string;
+    attempt: number;
+    version: number;
+    contentJson: string;
+    prompt?: string;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type NovelWorkbenchRunSummary = {
@@ -124,7 +125,7 @@ export type NovelWorkbenchRunDetail = {
     project: Project;
     control: NovelWorkbenchControl;
     dynamicState: NovelWorkbenchDynamicState;
-	artifacts: NovelWorkbenchArtifact[];
+    artifacts: NovelWorkbenchArtifact[];
 };
 
 export type StartNovelWorkbenchInput = {
@@ -171,5 +172,5 @@ export function resumeNovelWorkbench(projectId: string, input: ResumeNovelWorkbe
 }
 
 export function rebuildNovelWorkbench(projectId: string, input: ResumeNovelWorkbenchInput) {
-	return request<{ project: Project; run: NovelWorkbenchRun; task?: { id: string } }>(api.post(`/novel-workbench/runs/${encodeURIComponent(projectId)}/rebuild`, input));
+    return request<{ project: Project; run: NovelWorkbenchRun; task?: { id: string } }>(api.post(`/novel-workbench/runs/${encodeURIComponent(projectId)}/rebuild`, input));
 }
