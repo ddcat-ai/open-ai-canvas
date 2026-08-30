@@ -193,8 +193,8 @@ test("Canvas task surfaces route Dreamina uncertainty through shared display sem
 test("Canvas fullscreen video restores large controls instead of keeping the compact node layout", async () => {
     const playerCSS = await Bun.file(new URL("../src/components/video-player.css", import.meta.url)).text();
     expect(playerCSS).toContain(".canvas-video-player-compact:not([data-fullscreen])");
-    expect(playerCSS).toContain("--media-fullscreen-button-size: 52px");
-    expect(playerCSS).toContain("--media-slider-track-height: 7px");
+    expect(playerCSS).toContain("--media-fullscreen-button-size: 60px");
+    expect(playerCSS).toContain("--media-slider-track-height: 8px");
     expect(playerCSS).toContain("min-height: 64px");
 });
 

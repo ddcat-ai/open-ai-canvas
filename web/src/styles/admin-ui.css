@@ -1,6 +1,6 @@
-/* Admin settings workspace — Batch 069
- * Keep the nine PC configuration entries on one reading model:
- * primary configuration flow on the left, compact server summary on the right.
+/* Admin settings workspace
+ * Keep status actions in the sticky top command bar. Configuration summaries remain
+ * full-width document content so they never become a detached side panel while scrolling.
  */
 :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
     :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)
@@ -20,156 +20,6 @@
     :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)
     .admin-stat-tile-detail {
     margin-top: 5px;
-}
-
-@media (min-width: 1600px) {
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings) {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 344px;
-        align-items: start;
-        gap: 16px;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(
-            .admin-drawing-command-bar,
-            .admin-runtime-policy-command-bar,
-            .admin-access-command-bar,
-            .admin-email-command-bar,
-            .admin-storage-command-bar,
-            .admin-ark-command-bar,
-            .admin-intercept-command-bar,
-            .admin-third-party-command-bar,
-            .admin-drawing-inline-alert,
-            .admin-runtime-policy-inline-alert,
-            .admin-access-inline-alert,
-            .admin-email-inline-alert,
-            .admin-storage-inline-alert,
-            .admin-ark-inline-alert,
-            .admin-intercept-inline-alert,
-            .admin-third-party-inline-alert,
-            .admin-drawing-load-error,
-            .admin-runtime-policy-load-error,
-            .admin-access-load-error,
-            .admin-email-load-error,
-            .admin-storage-load-error,
-            .admin-ark-load-error,
-            .admin-intercept-load-error,
-            .admin-third-party-load-error
-        ) {
-        grid-column: 1 / -1;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview) {
-        position: sticky;
-        top: 78px;
-        z-index: 8;
-        grid-column: 2;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-self: start;
-        box-shadow: var(--admin-card-shadow);
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)::before {
-        grid-column: 1 / -1;
-        border-bottom: 1px solid var(--admin-divider);
-        background: var(--admin-layer-2);
-        padding: 11px 14px;
-        color: var(--admin-text-secondary);
-        content: "配置摘要";
-        font-size: 12px;
-        font-weight: 650;
-        letter-spacing: 0.04em;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)
-        .admin-stat-tile {
-        min-height: 82px;
-        padding: 13px 14px;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)
-        .admin-stat-tile:nth-child(odd) {
-        border-left: 0;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        > :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview)
-        .admin-stat-tile:nth-child(n + 3) {
-        border-top: 1px solid var(--admin-divider);
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings) > .admin-settings-anchor {
-        grid-column: 1;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings) .admin-settings-section:not(.is-stacked) {
-        grid-template-columns: 264px repeat(3, minmax(0, 1fr));
-        border-color: color-mix(in srgb, var(--foreground) 15%, transparent);
-        border-radius: 12px;
-        box-shadow: none;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        .admin-settings-section:not(.is-stacked)
-        .admin-settings-section-summary {
-        background: var(--admin-layer-1);
-        padding: 18px;
-    }
-
-    :is(.admin-drawing-settings, .admin-runtime-policy, .admin-access-settings, .admin-email-settings, .admin-storage-settings, .admin-ark-settings, .admin-intercept-settings, .admin-third-party-settings)
-        .admin-settings-section:not(.is-stacked)
-        .admin-settings-section-content {
-        background: var(--admin-layer-1);
-    }
-
-    .admin-feature-availability {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
-        align-items: start;
-        gap: 16px;
-    }
-
-    .admin-feature-availability > :is(.admin-feature-command-bar, .admin-feature-inline-alert, .admin-feature-load-error) {
-        grid-column: 1 / -1;
-    }
-
-    .admin-feature-availability > .admin-feature-board {
-        grid-column: 1;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .admin-feature-availability > .admin-feature-board .admin-feature-domain:last-child {
-        grid-column: 1 / -1;
-    }
-
-    .admin-feature-availability > .admin-feature-detail {
-        position: sticky;
-        top: 78px;
-        grid-column: 2;
-        align-self: start;
-        border-color: color-mix(in srgb, var(--foreground) 15%, transparent);
-        box-shadow: none;
-    }
-
-    .admin-feature-availability > .admin-feature-detail .admin-feature-detail-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .admin-feature-availability > .admin-feature-detail .admin-feature-detail-cell {
-        border-left: 0;
-        border-top: 1px solid var(--admin-divider);
-    }
-}
-
-@media (min-width: 1600px) and (prefers-reduced-motion: reduce) {
-    :is(.admin-drawing-overview, .admin-runtime-policy-overview, .admin-access-overview, .admin-email-overview, .admin-storage-overview, .admin-ark-overview, .admin-intercept-overview, .admin-third-party-overview, .admin-feature-detail) {
-        scroll-behavior: auto;
-    }
 }
 
 /* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */
@@ -791,6 +641,33 @@
     flex: 0 1 360px;
 }
 
+.admin-storage-resource-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-storage-resource-filters > *,
+.admin-storage-resource-filters .app-list-search {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
+}
+
+@media (min-width: 640px) {
+    .admin-storage-resource-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .admin-storage-resource-filters {
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr);
+    }
+}
+
 .admin-filter-toggle {
     display: inline-flex;
     flex: 0 0 auto;
@@ -1315,9 +1192,7 @@
 .admin-feature-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-feature-command-copy,
@@ -1464,6 +1339,10 @@
         box-shadow 160ms ease;
 }
 
+.admin-feature-board-row.is-source {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .admin-feature-board-row:last-child {
     border-bottom: 0;
 }
@@ -1474,7 +1353,7 @@
 }
 
 .admin-feature-board-row.is-selected {
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--admin-text-primary) 64%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-text-primary) 24%, transparent);
 }
 
 .admin-feature-board-row.is-dirty {
@@ -1482,7 +1361,7 @@
 }
 
 .admin-feature-board-row.is-dirty.is-selected {
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 74%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 54%, transparent);
 }
 
 .admin-feature-board-row.is-readonly {
@@ -1672,9 +1551,7 @@
 .admin-feature-detail.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 4%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 70%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-feature-detail-header {
@@ -1855,9 +1732,7 @@
 .admin-access-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-access-command-copy,
@@ -2239,9 +2114,7 @@
 .admin-email-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-email-command-copy,
@@ -2540,9 +2413,7 @@
 .admin-storage-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-storage-command-copy,
@@ -2645,7 +2516,7 @@
 
 .admin-storage-mode-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
 }
 
@@ -2671,15 +2542,6 @@
         transform 180ms ease;
 }
 
-.admin-storage-mode-choice::before {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: transparent;
-    content: "";
-    transition: background-color 180ms ease;
-}
-
 .admin-storage-mode-choice:hover {
     border-color: color-mix(in srgb, var(--foreground) 22%, var(--admin-card-border));
     background: var(--admin-layer-3);
@@ -2695,10 +2557,6 @@
     border-color: color-mix(in srgb, var(--foreground) 30%, var(--admin-card-border));
     background: var(--admin-layer-1);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.admin-storage-mode-choice.is-selected::before {
-    background: color-mix(in srgb, var(--foreground) 76%, transparent);
 }
 
 .admin-storage-mode-choice:disabled {
@@ -2954,9 +2812,7 @@
 .admin-ark-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-ark-command-copy,
@@ -3229,6 +3085,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 18px;
+    padding: 18px 20px 4px;
 }
 
 .admin-ark-form-grid .ant-form-item {
@@ -3345,9 +3202,7 @@
 .admin-intercept-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-intercept-command-copy,
@@ -3600,7 +3455,7 @@
 
 .admin-intercept-rule-row.has-duplicate {
     background: color-mix(in srgb, var(--admin-status-warning) 5%, var(--admin-layer-1));
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 66%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 38%, transparent);
 }
 
 .admin-intercept-rule-index {
@@ -3881,9 +3736,7 @@
 .admin-drawing-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-drawing-command-copy {
@@ -3986,7 +3839,7 @@
 
 .admin-drawing-engine-choice {
     min-width: 0;
-    min-height: 156px;
+    min-height: 118px;
     border: 1px solid var(--admin-card-border);
     border-radius: 9px;
     background: color-mix(in srgb, var(--admin-layer-2) 48%, var(--admin-layer-1));
@@ -4015,7 +3868,7 @@
 .admin-drawing-engine-choice.is-selected {
     border-color: color-mix(in srgb, var(--admin-status-info) 52%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-info) 6%, var(--admin-layer-1));
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--admin-status-info) 70%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-info) 16%, transparent);
 }
 
 .admin-drawing-engine-choice.is-unavailable:not(.is-selected) {
@@ -4082,18 +3935,17 @@
 
 .admin-drawing-license-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-    gap: 14px;
-    padding: 14px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px 20px 4px;
 }
 
 .admin-drawing-license-field,
 .admin-drawing-license-note {
     min-width: 0;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--admin-layer-2) 48%, var(--admin-layer-1));
-    padding: 15px;
+}
+
+.admin-drawing-license-field {
+    max-width: 820px;
 }
 
 .admin-drawing-license-field label {
@@ -4255,9 +4107,7 @@
 .admin-runtime-policy-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-runtime-policy-command-copy {
@@ -4611,9 +4461,7 @@
 .admin-third-party-command-bar.is-dirty {
     border-color: color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
     background: color-mix(in srgb, var(--admin-status-warning) 6%, var(--admin-layer-1));
-    box-shadow:
-        inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent),
-        var(--admin-card-shadow);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-warning) 24%, transparent);
 }
 
 .admin-third-party-command-copy,
@@ -5075,6 +4923,296 @@
     text-align: right;
 }
 
+/* Task-first settings hierarchy: the page action is primary; sync metadata stays quiet. */
+:is(.admin-feature-command-bar, .admin-drawing-command-bar, .admin-access-command-bar, .admin-email-command-bar, .admin-storage-command-bar, .admin-ark-command-bar, .admin-intercept-command-bar, .admin-third-party-command-bar) {
+    position: static;
+    min-height: 42px;
+    border: 0;
+    border-bottom: 1px solid var(--admin-divider);
+    border-radius: 0;
+    background: transparent;
+    padding: 0 0 10px;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+:is(.admin-feature-command-bar, .admin-drawing-command-bar, .admin-access-command-bar, .admin-email-command-bar, .admin-storage-command-bar, .admin-ark-command-bar, .admin-intercept-command-bar, .admin-third-party-command-bar).is-dirty {
+    border-color: color-mix(in srgb, var(--admin-status-warning) 42%, var(--admin-divider));
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(.admin-feature-command-icon, .admin-drawing-command-icon, .admin-access-command-icon, .admin-email-command-icon, .admin-storage-command-icon, .admin-ark-command-icon, .admin-intercept-command-icon, .admin-third-party-command-icon) {
+    display: none;
+}
+
+:is(.admin-feature-command-copy, .admin-drawing-command-copy, .admin-access-command-copy, .admin-email-command-copy, .admin-storage-command-copy, .admin-ark-command-copy, .admin-intercept-command-copy, .admin-third-party-command-copy) {
+    gap: 0;
+}
+
+:is(.admin-feature-command-copy, .admin-drawing-command-copy, .admin-access-command-copy, .admin-email-command-copy, .admin-storage-command-copy, .admin-ark-command-copy, .admin-intercept-command-copy, .admin-third-party-command-copy) strong {
+    font-size: 12px;
+}
+
+:is(.admin-feature-command-copy, .admin-drawing-command-copy, .admin-access-command-copy, .admin-email-command-copy, .admin-storage-command-copy, .admin-ark-command-copy, .admin-intercept-command-copy, .admin-third-party-command-copy) p {
+    margin-top: 1px;
+    font-size: 10px;
+}
+
+.admin-storage-mode-section,
+.admin-email-delivery-section,
+.admin-access-registration-section,
+.admin-access-linuxdo-section,
+.admin-intercept-policy-section,
+.admin-third-party-credential-section {
+    border-color: color-mix(in srgb, var(--foreground) 22%, var(--admin-card-border)) !important;
+}
+
+.admin-storage-mode-section > .admin-settings-section-summary,
+.admin-email-delivery-section > .admin-settings-section-summary,
+.admin-access-registration-section > .admin-settings-section-summary,
+.admin-access-linuxdo-section > .admin-settings-section-summary,
+.admin-intercept-policy-section > .admin-settings-section-summary,
+.admin-third-party-credential-section > .admin-settings-section-summary {
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
+}
+
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary h2 {
+    font-size: 16px;
+    letter-spacing: -0.01em;
+}
+
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary p {
+    max-width: 760px;
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.admin-storage-mode-grid {
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+
+.admin-storage-mode-choice {
+    min-height: 132px;
+    padding: 16px;
+}
+
+.admin-storage-mode-choice.is-selected {
+    border-color: color-mix(in srgb, var(--admin-status-info) 72%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-status-info) 9%, var(--admin-layer-1));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-status-info) 44%, transparent);
+}
+
+.admin-storage-mode-choice.is-selected .admin-storage-mode-copy {
+    padding-right: 74px;
+}
+
+.admin-storage-mode-meta {
+    align-self: end;
+    grid-column: 2;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.admin-storage-mode-selected {
+    position: absolute;
+    top: 13px;
+    right: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--admin-status-info) 18%, var(--admin-layer-1));
+    padding: 4px 7px;
+    color: color-mix(in srgb, var(--admin-status-info) 82%, var(--admin-text-primary));
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.admin-access-provider-toggle {
+    display: flex;
+    min-height: 116px;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+}
+
+.admin-third-party-credential-panel {
+    max-width: 820px;
+    padding: 18px 20px 20px;
+}
+
+.admin-third-party-credential-panel .admin-third-party-field-label {
+    margin: 0 0 7px;
+}
+
+.admin-third-party-access-section .admin-third-party-policy-control {
+    min-height: 112px;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 18px 20px;
+}
+
+.admin-third-party-access-section .admin-third-party-flow {
+    margin: 0;
+    border-top: 1px solid var(--admin-divider);
+    background: color-mix(in srgb, var(--admin-layer-2) 42%, var(--admin-layer-1));
+    padding: 13px 20px 15px;
+}
+
+.admin-third-party-test-card .admin-third-party-test-controls {
+    padding: 18px 20px 14px;
+}
+
+.admin-third-party-test-card .admin-third-party-test-note {
+    padding: 11px 20px 13px;
+}
+
+.admin-feature-board {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.admin-feature-domain:last-child {
+    grid-column: auto;
+}
+
+.admin-feature-domain-header {
+    min-height: 72px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
+    padding: 14px 18px;
+}
+
+.admin-feature-domain-header h2 {
+    font-size: 15px;
+}
+
+.admin-feature-domain-header p {
+    margin-top: 4px;
+    font-size: 11px;
+}
+
+.admin-feature-board-row {
+    min-height: 78px;
+    grid-template-columns: minmax(0, 1fr) 132px;
+}
+
+.admin-feature-board-row-copy {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 15px 16px;
+}
+
+.admin-feature-board-row-name {
+    flex: 1 1 auto;
+}
+
+.admin-feature-board-row-name strong {
+    overflow: visible;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.admin-feature-board-row-name > span,
+.admin-feature-board-row-name > em {
+    display: block;
+    max-width: 760px;
+    font-style: normal;
+    line-height: 1.55;
+}
+
+.admin-feature-board-row-name > span {
+    margin-top: 4px;
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+}
+
+.admin-feature-board-row-name > em {
+    margin-top: 6px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+}
+
+.admin-feature-board-row-name > em.is-warning {
+    color: color-mix(in srgb, var(--admin-status-warning) 78%, var(--admin-text-primary));
+}
+
+.admin-feature-board-row-control,
+.admin-feature-board-runtime-status {
+    min-width: 132px;
+    align-items: flex-end;
+    justify-content: center;
+    flex-direction: column;
+    padding: 15px 16px;
+}
+
+.admin-feature-board-row-control > span,
+.admin-feature-board-runtime-status > span {
+    font-size: 10px;
+}
+
+.admin-feature-board-row.is-dependent .admin-feature-board-row-copy {
+    padding-left: 36px;
+}
+
+.admin-feature-board-row.is-dependent .admin-feature-board-row-copy::before {
+    position: absolute;
+    top: 22px;
+    left: 17px;
+    color: var(--admin-text-muted);
+    content: "↳";
+    font-size: 14px;
+}
+
+.admin-feature-board-source-selector {
+    width: 216px;
+    margin-right: 16px;
+}
+
+.admin-feature-board-source-selector button {
+    min-height: 34px;
+    font-size: 11px;
+}
+
+.admin-feature-runtime-note {
+    display: flex;
+    min-height: 56px;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid var(--admin-divider);
+    background: color-mix(in srgb, var(--admin-layer-0) 18%, var(--admin-layer-1));
+    padding: 11px 16px;
+    color: var(--admin-text-muted);
+}
+
+.admin-feature-runtime-note > div {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-feature-runtime-note strong {
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.admin-feature-runtime-note span {
+    font-size: 10px;
+    line-height: 1.45;
+}
+
 @media (max-width: 1279px) {
     .admin-third-party-overview {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5215,6 +5353,16 @@
         justify-content: flex-start;
     }
 
+    .admin-third-party-command-bar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-third-party-command-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .admin-intercept-overview {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -5280,6 +5428,7 @@
     .admin-storage-command-bar,
     .admin-ark-command-bar,
     .admin-intercept-command-bar,
+    .admin-third-party-command-bar,
     .admin-runtime-policy-command-bar {
         align-items: center;
         flex-direction: row;
@@ -5290,9 +5439,85 @@
     .admin-storage-command-actions,
     .admin-ark-command-actions,
     .admin-intercept-command-actions,
+    .admin-third-party-command-actions,
     .admin-runtime-policy-command-actions {
         width: auto;
         justify-content: flex-end;
+    }
+}
+
+@media (max-width: 720px) {
+    .admin-intercept-policy-control,
+    .admin-third-party-policy-control {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .admin-intercept-policy-switch,
+    .admin-third-party-policy-switch {
+        align-self: flex-start;
+    }
+
+    .admin-intercept-rule-header {
+        display: none;
+    }
+
+    .admin-intercept-rule-row {
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .admin-intercept-rule-index {
+        grid-row: 1 / span 2;
+    }
+
+    .admin-intercept-rule-actions {
+        grid-column: 2;
+        justify-content: flex-end;
+    }
+
+    .admin-intercept-preview-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-third-party-provider {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-third-party-provider-tags {
+        justify-content: flex-start;
+    }
+
+    .admin-third-party-credential-panel,
+    .admin-third-party-access-section .admin-third-party-policy-control,
+    .admin-third-party-test-card .admin-third-party-test-controls {
+        padding-inline: 16px;
+    }
+
+    .admin-third-party-access-section .admin-third-party-flow {
+        align-items: stretch;
+        flex-direction: column;
+        padding-inline: 16px;
+    }
+
+    .admin-third-party-flow > span[aria-hidden="true"] {
+        align-self: center;
+        transform: rotate(90deg);
+    }
+
+    .admin-third-party-test-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .admin-third-party-test-controls > .ant-btn {
+        width: 100%;
+    }
+
+    .admin-third-party-footer {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 
@@ -8241,16 +8466,16 @@
 
     .admin-settings-section:not(.is-stacked) {
         max-width: 1440px;
-        grid-template-columns: clamp(220px, 18vw, 280px) repeat(3, minmax(0, 1fr));
         border: 1px solid var(--admin-card-border);
     }
 
     .admin-settings-section:not(.is-stacked) .admin-settings-section-summary {
         padding: 20px;
+        border-bottom: 1px solid var(--admin-divider);
     }
 
     .admin-settings-section:not(.is-stacked) .admin-settings-section-content {
-        border-left: 1px solid var(--admin-divider);
+        border-left: 0;
     }
 
     .admin-settings-section-content .ant-form-item {
@@ -8312,11 +8537,11 @@
 
 @media (max-width: 1599px) {
     .admin-feature-board {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .admin-feature-domain:last-child {
-        grid-column: 1 / -1;
+        grid-column: auto;
     }
 }
 
@@ -8337,6 +8562,57 @@
         min-height: auto;
         border-top: 1px solid var(--admin-divider);
         border-left: 0;
+    }
+}
+
+@media (max-width: 639px) {
+    .admin-storage-mode-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-storage-mode-choice {
+        min-height: 118px;
+    }
+
+    .admin-access-provider-toggle,
+    .admin-email-delivery-policy,
+    .admin-access-registration-policy {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .admin-access-provider-toggle > .ant-form-item,
+    .admin-email-delivery-policy > .ant-switch,
+    .admin-access-registration-policy > .ant-switch {
+        margin-left: auto;
+    }
+
+    .admin-feature-board-row,
+    .admin-feature-board-row.is-source {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-feature-board-row-control {
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        flex-direction: row;
+        border-top: 1px solid var(--admin-divider);
+        padding: 10px 16px;
+    }
+
+    .admin-feature-board-source-selector {
+        width: auto;
+        margin: 0 16px 14px;
+    }
+
+    .admin-feature-runtime-note {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .admin-feature-runtime-note .admin-status-badge {
+        margin-left: 26px;
     }
 }
 
@@ -8423,6 +8699,7 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
     .admin-page-actions {
         width: 100%;
         flex: 1 1 auto;
+        justify-content: flex-end;
     }
 
     .admin-list-toolbar {

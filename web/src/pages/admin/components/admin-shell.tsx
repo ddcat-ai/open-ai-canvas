@@ -9,6 +9,7 @@ import {
     ChevronDown,
     CloudUpload,
     Coins,
+    Database,
     FileClock,
     HardDrive,
     Home,
@@ -62,6 +63,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
             { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
         ],
     },
     {
@@ -76,15 +78,15 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
-            { path: "/admin/settings/features", label: "功能开放", description: "菜单、渠道与积分模式", icon: <ToggleLeft className="size-4" /> },
+            { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
-            { path: "/admin/settings/access", label: "登录与注册", description: "注册策略与 Linux.do", icon: <ShieldCheck className="size-4" /> },
-            { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码 SMTP", icon: <Mail className="size-4" /> },
+            { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
+            { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
             { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
             { path: "/admin/settings/ark-private-assets", label: "方舟素材库", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" /> },
-            { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "替换用户可见的上游异常", icon: <ShieldAlert className="size-4" /> },
-            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "集中维护第三方平台凭证", icon: <KeyRound className="size-4" /> },
+            { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" /> },
+            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" /> },
         ],
     },
 ];
@@ -167,8 +169,9 @@ export function AdminShell() {
 export function AdminPageFrame({ title, description, actions, back, scroll = false, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; scroll?: boolean; children: ReactNode }) {
     const location = useLocation();
     const currentSection = adminNavigation.find((section) => section.items.some((item) => isAdminNavigationPath(location.pathname, item.path)));
-    const sectionLabel = currentSection?.label ?? "管理后台";
-    const sectionPath = currentSection?.items[0]?.path ?? "/admin";
+    const currentItem = currentSection?.items.find((item) => isAdminNavigationPath(location.pathname, item.path));
+    const sectionLabel = back ? (currentItem?.label ?? currentSection?.label ?? "管理后台") : (currentSection?.label ?? "管理后台");
+    const sectionPath = back ? (currentItem?.path ?? currentSection?.items[0]?.path ?? "/admin") : (currentSection?.items[0]?.path ?? "/admin");
 
     return (
         <WorkspacePage scroll={scroll} fluid className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>

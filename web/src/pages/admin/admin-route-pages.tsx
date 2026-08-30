@@ -87,7 +87,7 @@ export function CreditOperationsPage() {
 
 export function AccessSettingsPage() {
     return (
-        <AdminPageFrame title="登录与注册" description="注册策略与 Linux.do" scroll>
+        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口" scroll>
             <Suspense fallback={<PageFallback label="登录与注册配置" />}>
                 <AccessSettingsPanel />
             </Suspense>
@@ -97,7 +97,7 @@ export function AccessSettingsPage() {
 
 export function EmailSettingsPage() {
     return (
-        <AdminPageFrame title="邮件服务" description="注册验证码 SMTP" scroll>
+        <AdminPageFrame title="邮件服务" description="先决定是否发送注册验证码，再配置 SMTP" scroll>
             <Suspense fallback={<PageFallback label="邮件配置" />}>
                 <EmailSettingsPanel />
             </Suspense>
@@ -107,7 +107,7 @@ export function EmailSettingsPage() {
 
 export function FeatureAvailabilityPage() {
     return (
-        <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道、插件与计费模式" scroll>
+        <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
             <Suspense fallback={<PageFallback label="功能开放配置" />}>
                 <FeatureAvailabilityPanel />
             </Suspense>

@@ -348,6 +348,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             title: "操作",
             width: 190,
             align: "center",
+            fixed: "right",
             render: (_, order) =>
                 !canResolveBillingOrder(order) ? (
                     <span className="text-xs text-foreground/45">处理完成</span>

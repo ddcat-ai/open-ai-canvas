@@ -1,21 +1,35 @@
-import { useEffect, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, Modal, Select } from "antd";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { App, Button, Drawer, Form, Input, Modal, Select, Switch } from "antd";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PencilLine, Plus, RefreshCw, Search, Send } from "lucide-react";
+import { PencilLine, Pin, Plus, RefreshCw, Search, Send, Upload, X } from "lucide-react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { closeAdminAnnouncement, createAdminAnnouncement, listAdminAnnouncements, updateAdminAnnouncement, type AnnouncementLevel, type AnnouncementStatus, type SystemAnnouncement } from "@/services/api/announcements";
+import {
+    announcementImageUrl,
+    closeAdminAnnouncement,
+    createAdminAnnouncement,
+    discardAdminAnnouncementImage,
+    listAdminAnnouncements,
+    updateAdminAnnouncement,
+    uploadAdminAnnouncementImage,
+    type AnnouncementLevel,
+    type AnnouncementStatus,
+    type SystemAnnouncement,
+} from "@/services/api/announcements";
+import { resourceFileUrl } from "@/services/api/resources";
 import { clearAnnouncementPendingReview, readAnnouncementPendingReview, writeAnnouncementPendingReview, type AnnouncementPendingReview } from "./admin-announcement-safety";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 type AnnouncementFormValues = {
     title: string;
     content: string;
+    imageResourceId?: string;
     level: AnnouncementLevel;
+    pinned: boolean;
 };
 
 type PendingAnnouncement =
@@ -28,7 +42,7 @@ type PendingAnnouncement =
           previousTitle: string;
       });
 
-const DEFAULT_ANNOUNCEMENT: AnnouncementFormValues = { title: "", content: "", level: "info" };
+const DEFAULT_ANNOUNCEMENT: AnnouncementFormValues = { title: "", content: "", imageResourceId: "", level: "info", pinned: false };
 const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
     { value: "info", label: "平台通知" },
     { value: "success", label: "状态恢复" },
@@ -70,6 +84,9 @@ export default function AdminAnnouncementsPanel({
     const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncement | null>(null);
     const [pendingSave, setPendingSave] = useState<PendingAnnouncement | null>(null);
     const [saving, setSaving] = useState(false);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+    const [draftImageResourceId, setDraftImageResourceId] = useState("");
+    const [imageUploading, setImageUploading] = useState(false);
     const [closingIds, setClosingIds] = useState<Set<string>>(() => new Set());
     const [pendingReview, setPendingReview] = useState<AnnouncementPendingReview | null>(() => readAnnouncementPendingReview());
     const [uncertainListReady, setUncertainListReady] = useState(false);
@@ -82,10 +99,12 @@ export default function AdminAnnouncementsPanel({
     const closeInFlightRef = useRef(new Set<string>());
     const writeBlockedRef = useRef(publishBlocked);
     const editorReturnFocusRef = useRef<HTMLElement | null>(null);
+    const imageInputRef = useRef<HTMLInputElement | null>(null);
     writeBlockedRef.current = publishBlocked;
     const watchedTitle = Form.useWatch("title", form);
     const watchedContent = Form.useWatch("content", form);
     const watchedLevel = Form.useWatch("level", form);
+    const watchedPinned = Form.useWatch("pinned", form);
 
     const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; status?: "all" | AnnouncementStatus }) => {
         const requestId = ++listRequestRef.current;
@@ -157,14 +176,71 @@ export default function AdminAnnouncementsPanel({
         if (publishReturnFocus) editorReturnFocusRef.current = publishReturnFocus;
         setEditingAnnouncement(null);
         form.setFieldsValue(DEFAULT_ANNOUNCEMENT);
+        setImagePreviewUrl("");
+        setDraftImageResourceId("");
     }, [form, publishOpen, publishReturnFocus]);
 
     const editorOpen = publishOpen || Boolean(editingAnnouncement);
-    const closeEditor = () => {
-        if (saving || pendingSave) return;
-        onPublishOpenChange(false);
-        setEditingAnnouncement(null);
-        form.resetFields();
+    const discardDraftImage = async () => {
+        if (!draftImageResourceId) return;
+        await discardAdminAnnouncementImage(draftImageResourceId);
+        setDraftImageResourceId("");
+    };
+
+    const uploadAnnouncementImage = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+            message.warning("公告配图必须是图片文件");
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            message.warning("公告配图不能超过 10MB");
+            return;
+        }
+        setImageUploading(true);
+        try {
+            if (draftImageResourceId) await discardDraftImage();
+            const { resource } = await uploadAdminAnnouncementImage(file);
+            form.setFieldValue("imageResourceId", resource.id);
+            setDraftImageResourceId(resource.id);
+            setImagePreviewUrl(resourceFileUrl(resource.id));
+            message.success("公告配图已上传");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "公告配图上传失败");
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
+    const clearAnnouncementImage = async () => {
+        setImageUploading(true);
+        try {
+            await discardDraftImage();
+            form.setFieldValue("imageResourceId", "");
+            setImagePreviewUrl("");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "公告配图清理失败");
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
+    const closeEditor = async () => {
+        if (saving || pendingSave || imageUploading) return;
+        setImageUploading(true);
+        try {
+            await discardDraftImage();
+            onPublishOpenChange(false);
+            setEditingAnnouncement(null);
+            setImagePreviewUrl("");
+            form.resetFields();
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "公告配图草稿清理失败，请重试");
+        } finally {
+            setImageUploading(false);
+        }
     };
 
     const openEditDrawer = (announcement: SystemAnnouncement) => {
@@ -172,7 +248,15 @@ export default function AdminAnnouncementsPanel({
         if (document.activeElement instanceof HTMLElement) editorReturnFocusRef.current = document.activeElement;
         onPublishOpenChange(false);
         setEditingAnnouncement(announcement);
-        form.setFieldsValue({ title: announcement.title, content: announcement.content, level: announcement.level });
+        form.setFieldsValue({
+            title: announcement.title,
+            content: announcement.content,
+            imageResourceId: announcement.imageResourceId || "",
+            level: announcement.level,
+            pinned: announcement.pinned,
+        });
+        setImagePreviewUrl(announcementImageUrl(announcement));
+        setDraftImageResourceId("");
     };
 
     const previewSave = (values: AnnouncementFormValues) => {
@@ -180,7 +264,13 @@ export default function AdminAnnouncementsPanel({
             message.warning("请先完成上一次公告操作的核对");
             return;
         }
-        const normalized: AnnouncementFormValues = { title: values.title.trim(), content: values.content.trim(), level: values.level };
+        const normalized: AnnouncementFormValues = {
+            title: values.title.trim(),
+            content: values.content.trim(),
+            imageResourceId: values.imageResourceId?.trim() || "",
+            level: values.level,
+            pinned: Boolean(values.pinned),
+        };
         if (editingAnnouncement) {
             setPendingSave({
                 ...normalized,
@@ -206,9 +296,17 @@ export default function AdminAnnouncementsPanel({
         const isUpdate = pendingSave.mode === "update";
         const requestedAt = new Date().toISOString();
         try {
-            const input = { title: pendingSave.title, content: pendingSave.content, level: pendingSave.level, pinned: false };
+            const input = {
+                title: pendingSave.title,
+                content: pendingSave.content,
+                imageResourceId: pendingSave.imageResourceId?.trim() || "",
+                level: pendingSave.level,
+                pinned: pendingSave.pinned,
+            };
             const result = isUpdate ? await updateAdminAnnouncement(pendingSave.id, input) : await createAdminAnnouncement(input);
             assertAnnouncementMutationResult(result, "active", isUpdate ? pendingSave.id : undefined, input);
+            setDraftImageResourceId("");
+            setImagePreviewUrl("");
             setPendingSave(null);
             setEditingAnnouncement(null);
             onPublishOpenChange(false);
@@ -226,6 +324,8 @@ export default function AdminAnnouncementsPanel({
                 setEditingAnnouncement(null);
                 onPublishOpenChange(false);
                 form.resetFields();
+                setDraftImageResourceId("");
+                setImagePreviewUrl("");
                 onPublishBlockedChange(true);
                 setKeyword("");
                 setStatus("all");
@@ -238,7 +338,9 @@ export default function AdminAnnouncementsPanel({
                     previousTitle: isUpdate ? pendingSave.previousTitle : undefined,
                     title: pendingSave.title,
                     content: pendingSave.content,
+                    imageResourceId: pendingSave.imageResourceId,
                     level: pendingSave.level,
+                    pinned: pendingSave.pinned,
                     notice,
                     requestedAt,
                 };
@@ -311,15 +413,25 @@ export default function AdminAnnouncementsPanel({
         {
             title: "公告",
             dataIndex: "title",
-            width: 330,
+            width: 390,
             render: (_, announcement) => (
-                <div className="min-w-0 py-0.5">
-                    <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>
-                        {announcement.title}
+                <div className="flex min-w-0 items-center gap-3 py-0.5">
+                    {announcement.imageUrl ? <img src={announcementImageUrl(announcement)} alt="" loading="lazy" decoding="async" className="size-12 shrink-0 rounded-md border border-border/70 bg-muted/20 object-contain p-0.5" /> : null}
+                    <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>
+                            {announcement.title}
+                        </div>
+                        <AnnouncementContent content={announcement.content} className="admin-announcement-list-content mt-1 text-xs leading-5 text-foreground/50" />
                     </div>
-                    <AnnouncementContent content={announcement.content} className="admin-announcement-list-content mt-1 text-xs leading-5 text-foreground/50" />
                 </div>
             ),
+        },
+        {
+            title: "展示",
+            dataIndex: "pinned",
+            width: 90,
+            align: "center",
+            render: (pinned: boolean) => (pinned ? <AdminStatusBadge label="置顶" tone="warning" /> : <span className="text-xs text-foreground/35">普通</span>),
         },
         {
             title: "类型",
@@ -546,9 +658,15 @@ export default function AdminAnnouncementsPanel({
                 watchedTitle={watchedTitle}
                 watchedContent={watchedContent}
                 watchedLevel={watchedLevel}
+                watchedPinned={watchedPinned}
+                imagePreviewUrl={imagePreviewUrl}
+                imageUploading={imageUploading}
+                imageInputRef={imageInputRef}
                 onClose={closeEditor}
                 onPreview={previewSave}
                 onPendingChange={setPendingSave}
+                onUploadImage={uploadAnnouncementImage}
+                onClearImage={() => void clearAnnouncementImage()}
                 onConfirm={() => void saveAnnouncement()}
             />
         </div>
@@ -566,9 +684,15 @@ function AnnouncementEditor({
     watchedTitle,
     watchedContent,
     watchedLevel,
+    watchedPinned,
+    imagePreviewUrl,
+    imageUploading,
+    imageInputRef,
     onClose,
     onPreview,
     onPendingChange,
+    onUploadImage,
+    onClearImage,
     onConfirm,
 }: {
     open: boolean;
@@ -581,9 +705,15 @@ function AnnouncementEditor({
     watchedTitle?: string;
     watchedContent?: string;
     watchedLevel?: AnnouncementLevel;
+    watchedPinned?: boolean;
+    imagePreviewUrl: string;
+    imageUploading: boolean;
+    imageInputRef: { current: HTMLInputElement | null };
     onClose: () => void;
     onPreview: (values: AnnouncementFormValues) => void;
     onPendingChange: (pending: PendingAnnouncement | null) => void;
+    onUploadImage: (event: ChangeEvent<HTMLInputElement>) => void;
+    onClearImage: () => void;
     onConfirm: () => void;
 }) {
     const previewMeta = levelMeta[watchedLevel || "info"] || levelMeta.info;
@@ -609,10 +739,10 @@ function AnnouncementEditor({
                 closable={!saving && !pending}
                 footer={
                     <div className="flex justify-end gap-2">
-                        <Button disabled={saving || Boolean(pending)} onClick={onClose}>
+                        <Button disabled={saving || imageUploading || Boolean(pending)} onClick={onClose}>
                             取消
                         </Button>
-                        <Button type="primary" loading={saving} disabled={publishBlocked || Boolean(pending)} icon={<Send className="size-4" />} onClick={() => form.submit()}>
+                        <Button type="primary" loading={saving} disabled={publishBlocked || imageUploading || Boolean(pending)} icon={<Send className="size-4" />} onClick={() => form.submit()}>
                             核对并继续
                         </Button>
                     </div>
@@ -643,6 +773,38 @@ function AnnouncementEditor({
                                 <Select aria-label="选择公告类型" options={levelOptions} />
                             </Form.Item>
                         </div>
+                        <Form.Item name="pinned" label="展示方式" valuePropName="checked" extra="置顶公告会优先于普通公告展示。">
+                            <Switch checkedChildren="置顶" unCheckedChildren="普通" />
+                        </Form.Item>
+                        <Form.Item name="imageResourceId" hidden>
+                            <Input />
+                        </Form.Item>
+                        <Form.Item label="公告配图" extra="可选，图片文件不超过 10MB；取消、替换或移除时会回收未发布草稿。">
+                            <div className="space-y-2">
+                                {imagePreviewUrl ? (
+                                    <div className="relative flex min-h-28 items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/20 p-2">
+                                        <img src={imagePreviewUrl} alt="公告配图预览" className="max-h-44 w-full object-contain" />
+                                        <Button
+                                            type="text"
+                                            size="small"
+                                            danger
+                                            disabled={imageUploading}
+                                            icon={<X className="size-3.5" />}
+                                            className="!absolute right-1 top-1 !size-7 !min-w-7 !p-0"
+                                            onClick={onClearImage}
+                                            aria-label="移除公告配图"
+                                            title="移除公告配图"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border/80 bg-muted/10 text-xs text-foreground/45">暂未添加配图</div>
+                                )}
+                                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onUploadImage} />
+                                <Button icon={<Upload className="size-3.5" />} loading={imageUploading} onClick={() => imageInputRef.current?.click()}>
+                                    {imagePreviewUrl ? "更换配图" : "上传配图"}
+                                </Button>
+                            </div>
+                        </Form.Item>
                         <Form.Item
                             name="content"
                             label="公告正文"
@@ -658,9 +820,18 @@ function AnnouncementEditor({
                     <section className="admin-announcement-preview" data-level={watchedLevel || "info"} aria-label="用户端公告预览">
                         <div className="admin-announcement-preview-heading">
                             <span>用户端预览</span>
-                            <AdminStatusBadge label={previewMeta.label} tone={previewMeta.tone} />
+                            <div className="flex items-center gap-2">
+                                <AdminStatusBadge label={previewMeta.label} tone={previewMeta.tone} />
+                                {watchedPinned ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-500">
+                                        <Pin className="size-3" />
+                                        置顶
+                                    </span>
+                                ) : null}
+                            </div>
                         </div>
                         <h3>{watchedTitle?.trim() || "公告标题将在这里显示"}</h3>
+                        {imagePreviewUrl ? <img src={imagePreviewUrl} alt="公告配图预览" className="mt-4 max-h-56 w-full rounded-lg border border-border/70 bg-muted/20 object-contain p-1" /> : null}
                         {watchedContent?.trim() ? <AnnouncementContent content={watchedContent.trim()} className="admin-announcement-preview-content" /> : <p className="admin-announcement-preview-placeholder">公告正文将在这里显示。</p>}
                     </section>
                 </Form>
@@ -698,6 +869,14 @@ function AnnouncementEditor({
                             <div>
                                 <dt>公告类型</dt>
                                 <dd>{(levelMeta[pending.level] || levelMeta.info).label}</dd>
+                            </div>
+                            <div>
+                                <dt>展示方式</dt>
+                                <dd>{pending.pinned ? "置顶" : "普通"}</dd>
+                            </div>
+                            <div>
+                                <dt>公告配图</dt>
+                                <dd>{pending.imageResourceId ? "已配置" : "无配图"}</dd>
                             </div>
                             <div className="is-wide">
                                 <dt>公告标题</dt>
@@ -821,13 +1000,23 @@ function isMutationResultUncertain(error: unknown) {
     return error.status === undefined || error.retryable || error.status >= 500;
 }
 
-function assertAnnouncementMutationResult(result: unknown, expectedStatus: AnnouncementStatus, expectedId: string | undefined, expectedContent: Pick<SystemAnnouncement, "title" | "content" | "level">) {
+function assertAnnouncementMutationResult(
+    result: unknown,
+    expectedStatus: AnnouncementStatus,
+    expectedId: string | undefined,
+    expectedContent: Pick<SystemAnnouncement, "title" | "content" | "level" | "pinned"> & Pick<Partial<SystemAnnouncement>, "imageResourceId">,
+) {
     const announcement = (result as { announcement?: Partial<SystemAnnouncement> } | null)?.announcement;
     const publishedAt = announcement?.publishedAt;
     const closedAt = announcement?.closedAt;
     const validPublishedAt = typeof publishedAt === "string" && !Number.isNaN(new Date(publishedAt).getTime());
     const validClosedAt = expectedStatus === "closed" ? typeof closedAt === "string" && !Number.isNaN(new Date(closedAt).getTime()) : closedAt === null || closedAt === undefined;
-    const contentMatches = announcement?.title === expectedContent.title && announcement?.content === expectedContent.content && announcement?.level === expectedContent.level;
+    const contentMatches =
+        announcement?.title === expectedContent.title &&
+        announcement?.content === expectedContent.content &&
+        announcement?.level === expectedContent.level &&
+        announcement?.pinned === expectedContent.pinned &&
+        (announcement?.imageResourceId || "") === (expectedContent.imageResourceId || "");
     if (!announcement || typeof announcement.id !== "string" || !announcement.id || (expectedId && announcement.id !== expectedId) || announcement.status !== expectedStatus || !validPublishedAt || !validClosedAt || !contentMatches) {
         throw new Error("服务返回的公告状态不完整，无法确认操作结果");
     }
@@ -851,6 +1040,9 @@ function normalizeAnnouncementListItem(value: unknown): SystemAnnouncement {
         typeof value.content !== "string" ||
         !isKnownAnnouncementLevel(value.level) ||
         !isKnownAnnouncementStatus(value.status) ||
+        typeof value.pinned !== "boolean" ||
+        (value.imageResourceId !== null && value.imageResourceId !== undefined && typeof value.imageResourceId !== "string") ||
+        (value.imageUrl !== null && value.imageUrl !== undefined && typeof value.imageUrl !== "string") ||
         typeof value.createdBy !== "string" ||
         !isValidDateTimeString(value.publishedAt) ||
         !isValidDateTimeString(value.createdAt) ||
@@ -863,8 +1055,10 @@ function normalizeAnnouncementListItem(value: unknown): SystemAnnouncement {
         id: value.id,
         title: value.title,
         content: value.content,
+        imageResourceId: typeof value.imageResourceId === "string" ? value.imageResourceId : undefined,
+        imageUrl: typeof value.imageUrl === "string" ? value.imageUrl : undefined,
         level: value.level,
-        pinned: value.pinned === true,
+        pinned: value.pinned,
         status: value.status,
         createdBy: value.createdBy,
         publishedAt: value.publishedAt as string,
@@ -892,7 +1086,12 @@ async function inspectPendingReview(review: AnnouncementPendingReview) {
     if (review.targetId) {
         const target = records.find((announcement) => announcement.id === review.targetId);
         if (!target) return `按请求前后标题检索后，未找到目标 ID ${review.targetId}。该请求可能未生效，请结合完整列表再人工确认。`;
-        const contentMatches = target.title === review.title && target.content === review.content && target.level === review.level;
+        const contentMatches =
+            target.title === review.title &&
+            target.content === review.content &&
+            target.level === review.level &&
+            (review.pinned === undefined || target.pinned === review.pinned) &&
+            (review.imageResourceId === undefined || (target.imageResourceId || "") === review.imageResourceId);
         const expectedStatus: AnnouncementStatus = review.operation === "close" ? "closed" : "active";
         const statusMatches = target.status === expectedStatus;
         return `已定位目标 ID ${target.id}：当前为${target.status === "active" ? "发布中" : "已关闭"}，标题、正文与类型${contentMatches ? "与请求一致" : "与请求不一致"}，${statusMatches ? "状态符合预期" : "状态不符合预期"}。`;
@@ -900,7 +1099,13 @@ async function inspectPendingReview(review: AnnouncementPendingReview) {
 
     const requestedAt = new Date(review.requestedAt).getTime();
     const matchingRecords = records.filter(
-        (announcement) => announcement.title === review.title && announcement.content === review.content && announcement.level === review.level && new Date(announcement.publishedAt).getTime() >= requestedAt - 5 * 60_000,
+        (announcement) =>
+            announcement.title === review.title &&
+            announcement.content === review.content &&
+            announcement.level === review.level &&
+            (review.pinned === undefined || announcement.pinned === review.pinned) &&
+            (review.imageResourceId === undefined || (announcement.imageResourceId || "") === review.imageResourceId) &&
+            new Date(announcement.publishedAt).getTime() >= requestedAt - 5 * 60_000,
     );
     if (!matchingRecords.length) return "未找到请求时间附近与标题、正文和类型完全一致的新公告；该发布请求可能未生效。";
     const resultSummary = matchingRecords

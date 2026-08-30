@@ -93,6 +93,9 @@ type ApiCallLog struct {
 	TaskID              string        `json:"taskId,omitempty" gorm:"index;size:36"`
 	TaskStatus          TaskStatus    `json:"taskStatus,omitempty" gorm:"-"`
 	BillingOrderID      string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
+	BillingStatus       BillingStatus `json:"billingStatus,omitempty" gorm:"-"`
+	BillingAmount       int64         `json:"billingAmountMicrocredits" gorm:"-"`
+	BillingAvailable    bool          `json:"billingAvailable" gorm:"-"`
 	Source              string        `json:"source" gorm:"index;size:64"`
 	Capability          string        `json:"capability" gorm:"index;size:32"`
 	Operation           string        `json:"operation" gorm:"size:64"`

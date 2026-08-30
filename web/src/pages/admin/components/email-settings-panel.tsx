@@ -5,7 +5,7 @@ import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
-import { AdminStatTile, AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
+import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
 type EmailFormValues = Pick<EmailSetting, "enabled" | "host" | "port" | "username" | "password" | "encryption" | "fromEmail" | "fromName">;
 
@@ -171,39 +171,17 @@ export default function EmailSettingsPanel() {
         }
     };
 
-    const toggleEnabled = async (enabled: boolean) => {
-        if (!setting || saving || enabled === setting.enabled) return;
-        const values = (enabled ? { ...form.getFieldsValue(true), enabled } : { ...toEmailFormValues(setting), enabled, password: "" }) as EmailFormValues;
-        const validationError = validateEmailDraft(values, setting);
-        if (validationError) {
-            form.setFieldValue("enabled", setting.enabled);
-            setDraftEnabled(setting.enabled);
-            message.error(validationError);
-            return;
-        }
+    const toggleEnabled = (enabled: boolean) => {
+        if (!setting || saving) return;
         form.setFieldValue("enabled", enabled);
         setDraftEnabled(enabled);
-        try {
-            await save(values);
-        } catch {
-            form.setFieldValue("enabled", setting.enabled);
-            setDraftEnabled(setting.enabled);
-        }
+        setDirty(hasEmailChanges({ ...form.getFieldsValue(true), enabled }, setting));
+        setSaveError("");
     };
 
     if (loading && !setting) {
         return (
             <div className="admin-settings-stack admin-email-settings" aria-label="正在读取邮件服务配置" role="status">
-                <div className="admin-email-command-bar">
-                    <Skeleton active title={{ width: 180 }} paragraph={false} />
-                </div>
-                <div className="admin-email-overview">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                        <div key={index} className="admin-stat-tile">
-                            <Skeleton active title={{ width: 96 }} paragraph={{ rows: 1 }} />
-                        </div>
-                    ))}
-                </div>
                 <div className="admin-email-loading-card">
                     <Skeleton active paragraph={{ rows: 7 }} />
                 </div>
@@ -231,10 +209,7 @@ export default function EmailSettingsPanel() {
     }
 
     const currentValues = normalizeEmailFormValues(form.getFieldsValue(true));
-    const connectionConfigured = Boolean((dirty ? currentValues.host : setting.host) && (dirty ? currentValues.port : setting.port));
-    const authenticationConfigured = Boolean(dirty ? currentValues.username : setting.username);
-    const senderConfigured = Boolean(dirty ? currentValues.fromEmail : setting.fromEmail);
-    const currentEncryption = dirty ? currentValues.encryption : setting.encryption;
+    const smtpReady = Boolean(currentValues.host && currentValues.port && currentValues.fromEmail);
 
     return (
         <div className="admin-settings-stack admin-email-settings">
@@ -244,11 +219,8 @@ export default function EmailSettingsPanel() {
                         <MailCheck className="size-4" aria-hidden="true" />
                     </span>
                     <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <strong>{dirty ? "邮件服务有调整待保存" : "邮件服务配置已同步"}</strong>
-                            <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
-                        </div>
-                        <p>{dirty ? "启用状态、SMTP 连接和发件身份只在本页暂存，核对保存后才会生效。" : "当前页面展示服务端生效值；读取和保存都不会触发测试邮件。"}</p>
+                        <strong>{dirty ? "有未保存的邮件调整" : `注册验证码：${setting.enabled ? "已启用" : "未启用"}`}</strong>
+                        <p>{dirty ? "完成当前配置后保存生效。" : formatSettingTime(setting.updatedAt, "使用系统默认值")}</p>
                     </div>
                 </div>
                 <div className="admin-email-command-actions">
@@ -270,20 +242,33 @@ export default function EmailSettingsPanel() {
                 </div>
             ) : null}
 
-            <div className="admin-email-overview" aria-label="邮件服务配置概览">
-                <AdminStatTile label="注册邮件" value={draftEnabled ? "启用" : "停用"} detail={dirty ? "暂存状态预览" : formatSettingTime(setting.updatedAt, "使用系统默认值")} />
-                <AdminStatTile label="SMTP 服务器" value={connectionConfigured ? "已配置" : "未配置"} detail={connectionConfigured ? `${dirty ? currentValues.host : setting.host}:${dirty ? currentValues.port : setting.port}` : "启用前需要主机与端口"} />
-                <AdminStatTile label="连接安全" value={encryptionLabel(currentEncryption)} detail={authenticationConfigured ? "使用 SMTP 账号验证" : "未使用 SMTP 账号验证"} />
-                <AdminStatTile label="发件身份" value={senderConfigured ? "已配置" : "未配置"} detail={senderConfigured ? (dirty ? currentValues.fromEmail : setting.fromEmail) : "启用前需要发件邮箱"} />
-            </div>
-
             <div id="admin-email-delivery" className="admin-settings-anchor">
                 <SettingsSectionCard
                     className="admin-email-section admin-email-delivery-section"
                     icon={<Send className="size-4" aria-hidden="true" />}
-                    title="注册验证码投递"
-                    description="控制注册流程是否通过 SMTP 发送邮箱验证码，调整会随整张表单一起保存。"
+                    title="1. 是否发送注册邮箱验证码"
+                    description="这是邮件服务的主开关。关闭时不需要配置 SMTP；开启后再填写连接与发件信息。"
                     status={<AdminStatusBadge label={draftEnabled ? (dirty && !setting.enabled ? "待启用" : "已启用") : dirty && setting.enabled ? "待停用" : "未启用"} tone={dirty ? "warning" : draftEnabled ? "success" : "neutral"} />}
+                    footer={
+                        !draftEnabled ? (
+                            <>
+                                <div className="admin-email-footer-note">
+                                    <BadgeCheck className="size-4" aria-hidden="true" />
+                                    <span>关闭后，普通邮箱注册不再要求邮箱验证码。</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {dirty ? (
+                                        <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
+                                            撤销
+                                        </Button>
+                                    ) : null}
+                                    <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
+                                        保存设置
+                                    </Button>
+                                </div>
+                            </>
+                        ) : undefined
+                    }
                 >
                     <div className="admin-email-delivery-policy">
                         <span className="admin-email-policy-icon">
@@ -292,131 +277,133 @@ export default function EmailSettingsPanel() {
                         <div className="admin-email-policy-copy">
                             <div className="flex flex-wrap items-center gap-2">
                                 <strong>发送注册邮箱验证码</strong>
-                                <AdminStatusBadge label="切换即保存" tone="info" />
+                                <AdminStatusBadge label="保存后生效" tone="info" />
                             </div>
                             <p>启用后，普通邮箱注册需要获取并校验 6 位验证码；邮件发送失败时不会创建可用验证码。</p>
                             <span>关闭只停止后续验证码邮件，不改变新用户注册开关，也不影响已有账号。</span>
                         </div>
-                        <Switch checked={draftEnabled} disabled={loading || refreshing || saving} aria-label="发送注册邮箱验证码，切换后立即保存" onChange={(checked) => void toggleEnabled(checked)} />
+                        <Switch checked={draftEnabled} disabled={loading || refreshing || saving} aria-label="发送注册邮箱验证码" onChange={toggleEnabled} />
                     </div>
                 </SettingsSectionCard>
             </div>
 
-            <div id="admin-email-smtp" className="admin-settings-anchor">
-                <SettingsSectionCard
-                    className="admin-email-section admin-email-configuration-section"
-                    icon={<Server className="size-4" aria-hidden="true" />}
-                    title="SMTP 连接与发件身份"
-                    description="配置邮件服务器、身份验证与邮件中的发件人信息；页面不会主动探测或发送邮件。"
-                    status={<AdminStatusBadge label={dirty ? "有调整" : setting.host && setting.fromEmail ? "已配置" : "待配置"} tone={dirty ? "warning" : setting.host && setting.fromEmail ? "success" : "neutral"} />}
-                    footer={
-                        <>
-                            <div className="admin-email-footer-note">
-                                <BadgeCheck className="size-4" aria-hidden="true" />
-                                <span>{formatSettingTime(setting.updatedAt, "尚未保存邮件管理配置")} · SMTP 密码由服务端加密保存且不回显明文</span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {dirty ? (
-                                    <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
-                                        撤销
+            {draftEnabled ? (
+                <div id="admin-email-smtp" className="admin-settings-anchor">
+                    <SettingsSectionCard
+                        className="admin-email-section admin-email-configuration-section"
+                        icon={<Server className="size-4" aria-hidden="true" />}
+                        title="2. 配置 SMTP 连接与发件身份"
+                        description="填写邮件服务器、身份验证和发件人信息。保存不会主动探测或发送测试邮件。"
+                        status={<AdminStatusBadge label={dirty ? "待保存" : smtpReady ? "已配置" : "待配置"} tone={dirty ? "warning" : smtpReady ? "success" : "neutral"} />}
+                        footer={
+                            <>
+                                <div className="admin-email-footer-note">
+                                    <BadgeCheck className="size-4" aria-hidden="true" />
+                                    <span>SMTP 密码由服务端加密保存且不回显明文</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {dirty ? (
+                                        <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
+                                            撤销
+                                        </Button>
+                                    ) : null}
+                                    <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
+                                        保存并启用
                                     </Button>
-                                ) : null}
-                                <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
-                                    保存修改
-                                </Button>
-                            </div>
-                        </>
-                    }
-                >
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        requiredMark={false}
-                        disabled={loading || refreshing || saving}
-                        onValuesChange={() => {
-                            const values = form.getFieldsValue(true);
-                            setDraftEnabled(Boolean(values.enabled));
-                            setDirty(hasEmailChanges(values, setting));
-                            setSaveError("");
-                        }}
+                                </div>
+                            </>
+                        }
                     >
-                        <Form.Item name="enabled" valuePropName="checked" hidden>
-                            <Switch />
-                        </Form.Item>
+                        <Form
+                            form={form}
+                            layout="vertical"
+                            requiredMark={false}
+                            disabled={loading || refreshing || saving}
+                            onValuesChange={() => {
+                                const values = form.getFieldsValue(true);
+                                setDraftEnabled(Boolean(values.enabled));
+                                setDirty(hasEmailChanges(values, setting));
+                                setSaveError("");
+                            }}
+                        >
+                            <Form.Item name="enabled" valuePropName="checked" hidden>
+                                <Switch />
+                            </Form.Item>
 
-                        <div className="admin-email-form-section">
-                            <FormSectionTitle icon={<Server className="size-4" />} title="服务器连接" description="填写 SMTP 主机、端口和传输加密；STARTTLS 通常使用 587，直接 TLS 通常使用 465。" />
-                            <div className="admin-email-form-grid is-connection">
-                                <Form.Item name="host" label="SMTP 主机" extra="仅填写主机名或 IP，不包含协议和端口。">
-                                    <Input autoComplete="off" placeholder="smtp.example.com" />
-                                </Form.Item>
-                                <Form.Item
-                                    name="port"
-                                    label="SMTP 端口"
-                                    rules={[
-                                        {
-                                            validator: (_, value: number | null | undefined) => (!draftEnabled || (Number(value) >= 1 && Number(value) <= 65535) ? Promise.resolve() : Promise.reject(new Error("请输入 1 至 65535 的端口"))),
-                                        },
-                                    ]}
-                                >
-                                    <InputNumber min={1} max={65535} precision={0} placeholder="587" controls={false} />
-                                </Form.Item>
-                                <Form.Item name="encryption" label="连接加密" rules={[{ required: true, message: "请选择连接加密方式" }]}>
-                                    <Select
-                                        options={[
-                                            { label: "STARTTLS（推荐，通常 587）", value: "starttls" },
-                                            { label: "直接 TLS（通常 465）", value: "tls" },
-                                            { label: "无加密（仅限可信网络）", value: "none" },
+                            <div className="admin-email-form-section">
+                                <FormSectionTitle icon={<Server className="size-4" />} title="服务器连接" description="填写 SMTP 主机、端口和传输加密；STARTTLS 通常使用 587，直接 TLS 通常使用 465。" />
+                                <div className="admin-email-form-grid is-connection">
+                                    <Form.Item name="host" label="SMTP 主机" extra="仅填写主机名或 IP，不包含协议和端口。">
+                                        <Input autoComplete="off" placeholder="smtp.example.com" />
+                                    </Form.Item>
+                                    <Form.Item
+                                        name="port"
+                                        label="SMTP 端口"
+                                        rules={[
+                                            {
+                                                validator: (_, value: number | null | undefined) => (!draftEnabled || (Number(value) >= 1 && Number(value) <= 65535) ? Promise.resolve() : Promise.reject(new Error("请输入 1 至 65535 的端口"))),
+                                            },
                                         ]}
-                                    />
-                                </Form.Item>
+                                    >
+                                        <InputNumber min={1} max={65535} precision={0} placeholder="587" controls={false} />
+                                    </Form.Item>
+                                    <Form.Item name="encryption" label="连接加密" rules={[{ required: true, message: "请选择连接加密方式" }]}>
+                                        <Select
+                                            options={[
+                                                { label: "STARTTLS（推荐，通常 587）", value: "starttls" },
+                                                { label: "直接 TLS（通常 465）", value: "tls" },
+                                                { label: "无加密（仅限可信网络）", value: "none" },
+                                            ]}
+                                        />
+                                    </Form.Item>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="admin-email-form-section">
-                            <FormSectionTitle icon={<KeyRound className="size-4" />} title="SMTP 身份验证" description="服务器要求登录时填写账号和密码；密码留空会保留服务端已配置值。" />
-                            <div className="admin-email-form-grid">
-                                <Form.Item name="username" label="SMTP 用户名" extra="通常是完整邮箱地址；无需验证的服务器可留空。">
-                                    <Input autoComplete="off" placeholder="mailer@example.com" />
-                                </Form.Item>
-                                <Form.Item name="password" label={setting.hasPassword ? `SMTP 密码（${configuredSecretText}）` : "SMTP 密码"} extra="只在需要新增或替换密码时填写。">
-                                    <Input.Password autoComplete="new-password" placeholder={setting.hasPassword ? "留空保留原密码" : "SMTP 密码或服务商授权码"} />
-                                </Form.Item>
+                            <div className="admin-email-form-section">
+                                <FormSectionTitle icon={<KeyRound className="size-4" />} title="SMTP 身份验证" description="服务器要求登录时填写账号和密码；密码留空会保留服务端已配置值。" />
+                                <div className="admin-email-form-grid">
+                                    <Form.Item name="username" label="SMTP 用户名" extra="通常是完整邮箱地址；无需验证的服务器可留空。">
+                                        <Input autoComplete="off" placeholder="mailer@example.com" />
+                                    </Form.Item>
+                                    <Form.Item name="password" label={setting.hasPassword ? `SMTP 密码（${configuredSecretText}）` : "SMTP 密码"} extra="只在需要新增或替换密码时填写。">
+                                        <Input.Password autoComplete="new-password" placeholder={setting.hasPassword ? "留空保留原密码" : "SMTP 密码或服务商授权码"} />
+                                    </Form.Item>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="admin-email-form-section">
-                            <FormSectionTitle icon={<AtSign className="size-4" />} title="发件人身份" description="这组名称和地址会显示在注册验证码邮件的 From 信息中。" />
-                            <div className="admin-email-form-grid">
-                                <Form.Item
-                                    name="fromEmail"
-                                    label="发件邮箱"
-                                    rules={[
-                                        {
-                                            validator: (_, value: string | undefined) => (!draftEnabled || !value || isValidEmail(value.trim()) ? Promise.resolve() : Promise.reject(new Error("请输入有效的发件邮箱"))),
-                                        },
-                                    ]}
-                                    extra="通常需要与 SMTP 账号或服务商验证域名一致。"
-                                >
-                                    <Input autoComplete="off" inputMode="email" placeholder="noreply@example.com" />
-                                </Form.Item>
-                                <Form.Item
-                                    name="fromName"
-                                    label="发件人名称"
-                                    rules={[
-                                        {
-                                            validator: (_, value: string | undefined) => (!draftEnabled || !value || !/[\r\n]/.test(value) ? Promise.resolve() : Promise.reject(new Error("发件人名称不能包含换行"))),
-                                        },
-                                    ]}
-                                    extra="留空时服务端使用“影策”。"
-                                >
-                                    <Input placeholder="影策" />
-                                </Form.Item>
+                            <div className="admin-email-form-section">
+                                <FormSectionTitle icon={<AtSign className="size-4" />} title="发件人身份" description="这组名称和地址会显示在注册验证码邮件的 From 信息中。" />
+                                <div className="admin-email-form-grid">
+                                    <Form.Item
+                                        name="fromEmail"
+                                        label="发件邮箱"
+                                        rules={[
+                                            {
+                                                validator: (_, value: string | undefined) => (!draftEnabled || !value || isValidEmail(value.trim()) ? Promise.resolve() : Promise.reject(new Error("请输入有效的发件邮箱"))),
+                                            },
+                                        ]}
+                                        extra="通常需要与 SMTP 账号或服务商验证域名一致。"
+                                    >
+                                        <Input autoComplete="off" inputMode="email" placeholder="noreply@example.com" />
+                                    </Form.Item>
+                                    <Form.Item
+                                        name="fromName"
+                                        label="发件人名称"
+                                        rules={[
+                                            {
+                                                validator: (_, value: string | undefined) => (!draftEnabled || !value || !/[\r\n]/.test(value) ? Promise.resolve() : Promise.reject(new Error("发件人名称不能包含换行"))),
+                                            },
+                                        ]}
+                                        extra="留空时服务端使用“影策”。"
+                                    >
+                                        <Input placeholder="影策" />
+                                    </Form.Item>
+                                </div>
                             </div>
-                        </div>
-                    </Form>
-                </SettingsSectionCard>
-            </div>
+                        </Form>
+                    </SettingsSectionCard>
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -501,12 +488,6 @@ function isEmailSetting(value: unknown): value is EmailSetting {
 
 function isValidEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function encryptionLabel(value: EmailSetting["encryption"]) {
-    if (value === "tls") return "直接 TLS";
-    if (value === "none") return "无加密";
-    return "STARTTLS";
 }
 
 function formatSettingTime(value: string | undefined, fallback: string) {

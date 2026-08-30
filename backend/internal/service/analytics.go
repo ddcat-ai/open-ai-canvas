@@ -230,9 +230,17 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 	for _, user := range users {
 		userByID[user.ID] = user
 	}
+	billingOrderIDs := make([]string, 0, len(logs))
+	seenBillingOrderIDs := make(map[string]struct{}, len(logs))
 	taskIDs := make([]string, 0, len(logs))
 	seenTaskIDs := make(map[string]struct{}, len(logs))
 	for _, log := range logs {
+		if log.BillingOrderID != "" {
+			if _, exists := seenBillingOrderIDs[log.BillingOrderID]; !exists {
+				seenBillingOrderIDs[log.BillingOrderID] = struct{}{}
+				billingOrderIDs = append(billingOrderIDs, log.BillingOrderID)
+			}
+		}
 		if (log.Capability != "image" && log.Capability != "video") || log.TaskID == "" {
 			continue
 		}
@@ -250,6 +258,10 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 	for _, task := range tasks {
 		taskByID[task.ID] = task
 	}
+	billingOrderByID, err := s.repo.BillingOrdersByIDs(billingOrderIDs)
+	if err != nil {
+		return err
+	}
 	for index := range logs {
 		if logs[index].StartedAt.IsZero() {
 			logs[index].StartedAt = logs[index].CreatedAt
@@ -264,6 +276,15 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 		if user, exists := userByID[logs[index].UserID]; exists {
 			logs[index].UserDisplayName = user.DisplayName
 			logs[index].UserAccount = user.Username
+		}
+		if order, exists := billingOrderByID[logs[index].BillingOrderID]; exists && order.UserID == logs[index].UserID {
+			logs[index].BillingAvailable = true
+			logs[index].BillingStatus = order.Status
+			if order.Status == model.BillingStatusSettled {
+				logs[index].BillingAmount = order.ActualAmountMicrocredits
+			} else if order.Status != model.BillingStatusRefunded {
+				logs[index].BillingAmount = order.ReservedAmountMicrocredits
+			}
 		}
 		if task, exists := taskByID[logs[index].TaskID]; exists && task.UserID == logs[index].UserID {
 			logs[index].TaskStatus = task.Status
@@ -373,13 +394,22 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	var buffer bytes.Buffer
 	buffer.WriteString("\xEF\xBB\xBF")
 	writer := csv.NewWriter(&buffer)
-	_ = writer.Write([]string{"时间", "用户", "用户账号", "渠道", "模型", "能力", "状态", "轮询次数", "耗时毫秒", "输入Token", "输出Token", "缓存Token", "计费", "币种", "错误码", "错误"})
+	_ = writer.Write([]string{"时间", "用户", "用户账号", "渠道", "模型", "能力", "状态", "轮询次数", "耗时毫秒", "输入Token", "输出Token", "缓存Token", "积分计费(微积分)", "积分计费状态", "上游估算费用(微单位)", "币种", "错误码", "错误"})
 	for _, log := range logs {
 		startedAt := log.StartedAt
 		if startedAt.IsZero() {
 			startedAt = log.CreatedAt
 		}
-		_ = writer.Write([]string{startedAt.UTC().Format(time.RFC3339), log.UserDisplayName, log.UserAccount, log.ChannelName, log.Model, log.Capability, string(log.Status), strconv.Itoa(log.PollCount), strconv.FormatInt(log.DurationMs, 10), strconv.FormatInt(log.InputTokens, 10), strconv.FormatInt(log.OutputTokens, 10), strconv.FormatInt(log.CachedTokens, 10), strconv.FormatInt(log.EstimatedCostMicros, 10), log.Currency, log.ErrorCode, log.Error})
+		billingAmount, billingStatus := "", ""
+		if log.BillingAvailable {
+			billingAmount = strconv.FormatInt(log.BillingAmount, 10)
+			billingStatus = string(log.BillingStatus)
+		}
+		upstreamCost := ""
+		if log.CostAvailable {
+			upstreamCost = strconv.FormatInt(log.EstimatedCostMicros, 10)
+		}
+		_ = writer.Write([]string{startedAt.UTC().Format(time.RFC3339), log.UserDisplayName, log.UserAccount, log.ChannelName, log.Model, log.Capability, string(log.Status), strconv.Itoa(log.PollCount), strconv.FormatInt(log.DurationMs, 10), strconv.FormatInt(log.InputTokens, 10), strconv.FormatInt(log.OutputTokens, 10), strconv.FormatInt(log.CachedTokens, 10), billingAmount, billingStatus, upstreamCost, log.Currency, log.ErrorCode, log.Error})
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {

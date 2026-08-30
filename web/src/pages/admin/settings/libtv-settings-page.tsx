@@ -1,12 +1,12 @@
 import { App, Button, Input, Skeleton, Switch } from "antd";
-import { AlertTriangle, BadgeCheck, Cable, CircleCheck, CloudDownload, KeyRound, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Trash2, Wifi } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CircleCheck, CloudDownload, KeyRound, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Trash2, Wifi } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { getAdminLibTVSetting, testAdminLibTV, updateAdminLibTVSetting, type AdminLibTVSetting } from "@/services/api/libtv";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminStatTile, AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
+import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
 type ConnectionTestStatus = "idle" | "testing" | "success" | "error";
 
@@ -30,6 +30,7 @@ export default function LibTVSettingsPage() {
 
     const draftHasToken = Boolean(token.trim()) || Boolean(setting?.hasToken && !clearTokenDraft);
     const dirty = Boolean(setting && (enabled !== setting.enabled || Boolean(token.trim()) || clearTokenDraft));
+    const enabledDirty = Boolean(setting && enabled !== setting.enabled);
     const credentialDraftLabel = token.trim() ? (setting?.hasToken ? "待替换" : "待新增") : clearTokenDraft ? "待清除" : setting?.hasToken ? "已配置" : "未配置";
 
     const load = useCallback(
@@ -141,19 +142,14 @@ export default function LibTVSettingsPage() {
         setSaveError("");
     };
 
-    const changeEnabled = async (nextEnabled: boolean) => {
+    const changeEnabled = (nextEnabled: boolean) => {
         if (nextEnabled && !draftHasToken) {
             message.warning("请先填写 LibTV Token，再启用画布导入");
             return;
         }
-        if (!setting || saving || nextEnabled === setting.enabled) return;
+        if (!setting || saving || nextEnabled === enabled) return;
         setEnabled(nextEnabled);
         setSaveError("");
-        try {
-            await save({ enabled: nextEnabled, includeDraft: nextEnabled });
-        } catch {
-            setEnabled(setting.enabled);
-        }
     };
 
     const markTokenForRemoval = () => {
@@ -169,12 +165,11 @@ export default function LibTVSettingsPage() {
         setSaveError("");
     };
 
-    async function save(override?: { enabled?: boolean; includeDraft?: boolean }) {
+    async function save() {
         if (!setting) return;
-        const nextEnabled = override?.enabled ?? enabled;
-        const includeDraft = override?.includeDraft ?? true;
-        const nextToken = includeDraft ? token.trim() : "";
-        const clearToken = includeDraft && clearTokenDraft;
+        const nextEnabled = enabled;
+        const nextToken = token.trim();
+        const clearToken = clearTokenDraft;
         const expectedHasToken = nextToken ? true : clearToken ? false : setting.hasToken;
         if (nextEnabled && !expectedHasToken) {
             message.error("启用 LibTV 画布导入前必须配置 Token");
@@ -245,17 +240,10 @@ export default function LibTVSettingsPage() {
 
     if (loading && !setting) {
         return (
-            <AdminPageFrame title="第三方参数配置" description="管理外部平台的服务端凭据与接入状态" scroll>
+            <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
                 <div className="admin-settings-stack admin-third-party-settings" aria-label="正在读取第三方参数配置" role="status">
                     <div className="admin-third-party-command-bar">
                         <Skeleton active title={{ width: 190 }} paragraph={false} />
-                    </div>
-                    <div className="admin-third-party-overview">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                            <div key={index} className="admin-stat-tile">
-                                <Skeleton active title={{ width: 96 }} paragraph={{ rows: 1 }} />
-                            </div>
-                        ))}
                     </div>
                     <div className="admin-third-party-loading-card">
                         <Skeleton active paragraph={{ rows: 8 }} />
@@ -267,7 +255,7 @@ export default function LibTVSettingsPage() {
 
     if (!setting) {
         return (
-            <AdminPageFrame title="第三方参数配置" description="管理外部平台的服务端凭据与接入状态" scroll>
+            <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
                 <div className="admin-settings-stack admin-third-party-settings">
                     <div className="admin-third-party-load-error" role="alert">
                         <span className="admin-third-party-load-error-icon">
@@ -287,13 +275,10 @@ export default function LibTVSettingsPage() {
     }
 
     return (
-        <AdminPageFrame title="第三方参数配置" description="管理外部平台的服务端凭据与接入状态" scroll>
+        <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
             <div className="admin-settings-stack admin-third-party-settings">
                 <div className={cn("admin-third-party-command-bar", dirty && "is-dirty")}>
                     <div className="admin-third-party-command-copy" aria-live="polite">
-                        <span className="admin-third-party-command-icon">
-                            <Cable className="size-4" aria-hidden="true" />
-                        </span>
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <strong>{dirty ? "第三方参数有调整待保存" : "第三方参数已与服务端同步"}</strong>
@@ -321,31 +306,14 @@ export default function LibTVSettingsPage() {
                     </div>
                 ) : null}
 
-                <div className="admin-third-party-overview" aria-label="第三方参数配置概览">
-                    <AdminStatTile label="已接入平台" value="1 个" detail="LibTV 画布导入" />
-                    <AdminStatTile label="服务端凭据" value={credentialDraftLabel} detail={dirty ? "暂存状态预览" : setting.hasToken ? "明文不回传浏览器" : "需要管理员配置"} />
-                    <AdminStatTile label="用户导入入口" value={enabled ? "已启用" : "已停用"} detail={dirty ? "暂存状态预览" : "服务端当前状态"} />
-                    <AdminStatTile label="配置来源" value={hasValidSettingTime(setting.updatedAt) ? "管理员配置" : "系统默认"} detail={formatSettingTime(setting.updatedAt, "尚未保存第三方参数")} />
-                </div>
-
                 <div id="admin-third-party-libtv" className="admin-settings-anchor">
                     <SettingsSectionCard
-                        className="admin-third-party-section"
-                        icon={<CloudDownload className="size-4" aria-hidden="true" />}
-                        title="LibTV 画布导入"
-                        description="由影策服务端读取指定 LibTV 画布，并转换为当前项目中的节点与连线。"
-                        status={<AdminStatusBadge label={enabled ? "入口开放" : "入口停用"} tone={enabled ? "success" : "neutral"} />}
-                        footer={
-                            <div className="admin-third-party-footer">
-                                <div className="admin-third-party-footer-note">
-                                    <ShieldCheck className="size-4" aria-hidden="true" />
-                                    <span>{formatSettingTime(setting.updatedAt, "尚未保存 LibTV 配置")} · 保存不会读取外部画布</span>
-                                </div>
-                                <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || refreshing} onClick={() => void submitSave()}>
-                                    保存修改
-                                </Button>
-                            </div>
-                        }
+                        className="admin-third-party-section admin-third-party-credential-section"
+                        icon={<KeyRound className="size-4" aria-hidden="true" />}
+                        title="1. 配置 LibTV 服务端访问凭据"
+                        description="Token 只提交到影策服务端，保存后浏览器不会再收到或显示明文。"
+                        status={<AdminStatusBadge label={credentialDraftLabel} tone={clearTokenDraft ? "warning" : draftHasToken ? "success" : "neutral"} />}
+                        footer={!draftHasToken ? <ThirdPartySaveFooter setting={setting} dirty={dirty} saving={saving} refreshing={refreshing} onReset={resetDraft} onSave={submitSave} /> : undefined}
                     >
                         <div className="admin-third-party-provider">
                             <div className="admin-third-party-provider-heading">
@@ -361,101 +329,91 @@ export default function LibTVSettingsPage() {
                                 <AdminStatusBadge label={draftHasToken ? "凭据就绪" : "缺少凭据"} tone={draftHasToken ? "success" : "warning"} />
                             </div>
                         </div>
-
-                        <div className="admin-third-party-domain-grid">
-                            <section className="admin-third-party-domain">
-                                <div className="admin-third-party-domain-heading">
-                                    <span>
-                                        <CloudDownload className="size-4" aria-hidden="true" />
-                                    </span>
-                                    <div>
-                                        <h3>用户导入入口</h3>
-                                        <p>控制创作台是否允许普通用户通过 UUID 发起 LibTV 画布导入。</p>
-                                    </div>
-                                </div>
-                                <div className="admin-third-party-policy-control">
-                                    <div>
-                                        <strong>{enabled ? "允许发起新的 LibTV 导入" : "不开放新的 LibTV 导入"}</strong>
-                                        <p>{enabled ? "保存后，服务端会使用已保存的 Token 读取用户指定的画布。" : "已有导入节点与连线继续保留，不会被删除或转换。"}</p>
-                                    </div>
-                                    <div className="admin-third-party-policy-switch">
-                                        <span>{enabled ? "开启" : "关闭"}</span>
-                                        <Switch aria-label="允许用户导入 LibTV 画布，切换后立即保存" checked={enabled} disabled={saving || refreshing} onChange={(checked) => void changeEnabled(checked)} />
-                                    </div>
-                                </div>
-                                <div className="admin-third-party-flow" aria-label="LibTV 画布导入链路">
-                                    <FlowStep icon={<KeyRound className="size-4" />} label="服务端凭据" detail="Token 不回传" />
-                                    <span aria-hidden="true">→</span>
-                                    <FlowStep icon={<Wifi className="size-4" />} label="读取画布" detail="按 UUID 请求" />
-                                    <span aria-hidden="true">→</span>
-                                    <FlowStep icon={<CloudDownload className="size-4" />} label="导入影策" detail="生成节点与连线" />
-                                </div>
-                            </section>
-
-                            <section className="admin-third-party-domain">
-                                <div className="admin-third-party-domain-heading">
-                                    <span>
-                                        <KeyRound className="size-4" aria-hidden="true" />
-                                    </span>
-                                    <div>
-                                        <h3>服务端访问凭据</h3>
-                                        <p>新 Token 只作为草稿保存在当前输入框，保存后明文不会再显示。</p>
-                                    </div>
-                                </div>
-                                <label className="admin-third-party-field-label" htmlFor="admin-libtv-token">
-                                    LibTV Token
-                                </label>
-                                <Input.Password
-                                    id="admin-libtv-token"
-                                    value={token}
-                                    onChange={(event) => changeToken(event.target.value)}
-                                    placeholder={setting.hasToken && !clearTokenDraft ? configuredSecretText : clearTokenDraft ? "已标记为清除，可输入新 Token 改为替换" : "输入 LibTV Token"}
-                                    disabled={saving || refreshing}
-                                    autoComplete="new-password"
-                                    aria-describedby="admin-libtv-token-help"
-                                />
-                                <div id="admin-libtv-token-help" className="admin-third-party-credential-state">
-                                    <span className={cn("admin-third-party-credential-indicator", draftHasToken && "is-ready", clearTokenDraft && "is-warning")}>
-                                        {draftHasToken ? <CircleCheck className="size-4" aria-hidden="true" /> : <AlertTriangle className="size-4" aria-hidden="true" />}
-                                        {credentialDraftLabel}
-                                    </span>
-                                    <p>
-                                        {token.trim()
-                                            ? setting.hasToken
-                                                ? "保存后替换服务端凭据；当前内容尚未提交。"
-                                                : "保存后新增服务端凭据；当前内容尚未提交。"
-                                            : clearTokenDraft
-                                              ? "保存后清除 Token，并同时停用导入入口。"
-                                              : setting.hasToken
-                                                ? "留空保存会保留服务端已有 Token。"
-                                                : "尚未配置 Token，无法启用或验证 LibTV 接入。"}
-                                    </p>
-                                </div>
-                                <div className="admin-third-party-credential-actions">
-                                    {clearTokenDraft ? (
-                                        <Button icon={<RotateCcw className="size-4" />} disabled={saving || refreshing} onClick={restoreTokenDraft}>
-                                            撤销清除
-                                        </Button>
-                                    ) : setting.hasToken ? (
-                                        <Button danger icon={<Trash2 className="size-4" />} disabled={saving || refreshing} onClick={markTokenForRemoval}>
-                                            标记为清除
-                                        </Button>
-                                    ) : null}
-                                </div>
-                            </section>
-                        </div>
-
-                        <section className="admin-third-party-test-section">
-                            <div className="admin-third-party-test-heading">
-                                <span>
-                                    <Wifi className="size-4" aria-hidden="true" />
+                        <div className="admin-third-party-credential-panel">
+                            <label className="admin-third-party-field-label" htmlFor="admin-libtv-token">
+                                LibTV Token
+                            </label>
+                            <Input.Password
+                                id="admin-libtv-token"
+                                value={token}
+                                onChange={(event) => changeToken(event.target.value)}
+                                placeholder={setting.hasToken && !clearTokenDraft ? configuredSecretText : clearTokenDraft ? "已标记为清除，可输入新 Token 改为替换" : "输入 LibTV Token"}
+                                disabled={saving || refreshing}
+                                autoComplete="new-password"
+                                aria-describedby="admin-libtv-token-help"
+                            />
+                            <div id="admin-libtv-token-help" className="admin-third-party-credential-state">
+                                <span className={cn("admin-third-party-credential-indicator", draftHasToken && "is-ready", clearTokenDraft && "is-warning")}>
+                                    {draftHasToken ? <CircleCheck className="size-4" aria-hidden="true" /> : <AlertTriangle className="size-4" aria-hidden="true" />}
+                                    {credentialDraftLabel}
                                 </span>
-                                <div>
-                                    <h3>验证已保存凭据</h3>
-                                    <p>使用服务端当前保存的 Token 读取指定画布，只验证读取权限，不向 LibTV 或当前影策画布写入内容。</p>
-                                </div>
-                                <TestStatus status={testStatus} />
+                                <p>
+                                    {token.trim()
+                                        ? setting.hasToken
+                                            ? "保存后替换服务端凭据；当前内容尚未提交。"
+                                            : "保存后新增服务端凭据；当前内容尚未提交。"
+                                        : clearTokenDraft
+                                          ? "保存后清除 Token，并同时停用导入入口。"
+                                          : setting.hasToken
+                                            ? "留空保存会保留服务端已有 Token。"
+                                            : "尚未配置 Token，无法启用或验证 LibTV 接入。"}
+                                </p>
                             </div>
+                            <div className="admin-third-party-credential-actions">
+                                {clearTokenDraft ? (
+                                    <Button icon={<RotateCcw className="size-4" />} disabled={saving || refreshing} onClick={restoreTokenDraft}>
+                                        撤销清除
+                                    </Button>
+                                ) : setting.hasToken ? (
+                                    <Button danger icon={<Trash2 className="size-4" />} disabled={saving || refreshing} onClick={markTokenForRemoval}>
+                                        标记为清除
+                                    </Button>
+                                ) : null}
+                            </div>
+                        </div>
+                    </SettingsSectionCard>
+                </div>
+
+                {draftHasToken ? (
+                    <div id="admin-third-party-access" className="admin-settings-anchor">
+                        <SettingsSectionCard
+                            className="admin-third-party-section admin-third-party-access-section"
+                            icon={<CloudDownload className="size-4" aria-hidden="true" />}
+                            title="2. 是否开放用户导入 LibTV 画布"
+                            description="控制创作台是否允许普通用户通过 UUID 发起新的 LibTV 画布导入。"
+                            status={<AdminStatusBadge label={enabledDirty ? (enabled ? "待开放" : "待关闭") : enabled ? "入口开放" : "入口关闭"} tone={enabledDirty ? "warning" : enabled ? "success" : "neutral"} />}
+                            footer={<ThirdPartySaveFooter setting={setting} dirty={dirty} saving={saving} refreshing={refreshing} onReset={resetDraft} onSave={submitSave} />}
+                        >
+                            <div className="admin-third-party-policy-control">
+                                <div>
+                                    <strong>{enabled ? "允许发起新的 LibTV 导入" : "不开放新的 LibTV 导入"}</strong>
+                                    <p>{enabled ? "保存后，服务端会使用已保存的 Token 读取用户指定的画布。" : "已有导入节点与连线继续保留，不会被删除或转换。"}</p>
+                                </div>
+                                <div className="admin-third-party-policy-switch">
+                                    <span>{enabled ? "开启" : "关闭"}</span>
+                                    <Switch aria-label="允许用户导入 LibTV 画布" checked={enabled} disabled={saving || refreshing} onChange={changeEnabled} />
+                                </div>
+                            </div>
+                            <div className="admin-third-party-flow" aria-label="LibTV 画布导入链路">
+                                <FlowStep icon={<KeyRound className="size-4" />} label="服务端凭据" detail="Token 不回传" />
+                                <span aria-hidden="true">→</span>
+                                <FlowStep icon={<Wifi className="size-4" />} label="读取画布" detail="按 UUID 请求" />
+                                <span aria-hidden="true">→</span>
+                                <FlowStep icon={<CloudDownload className="size-4" />} label="导入影策" detail="生成节点与连线" />
+                            </div>
+                        </SettingsSectionCard>
+                    </div>
+                ) : null}
+
+                {setting.hasToken && !clearTokenDraft ? (
+                    <div id="admin-third-party-test" className="admin-settings-anchor">
+                        <SettingsSectionCard
+                            className="admin-third-party-section admin-third-party-test-card"
+                            icon={<Wifi className="size-4" aria-hidden="true" />}
+                            title="3. 验证已保存的 LibTV 凭据"
+                            description="使用服务端当前保存的 Token 发起一次只读请求，不会向 LibTV 或当前影策画布写入内容。"
+                            status={<TestStatus status={testStatus} />}
+                        >
                             <div className="admin-third-party-test-controls">
                                 <div className="admin-third-party-test-input">
                                     <label htmlFor="admin-libtv-test-uuid">可访问的 LibTV 画布 UUID</label>
@@ -489,11 +447,32 @@ export default function LibTVSettingsPage() {
                                             : "验证会产生一次真实的外部只读请求，但不会保存画布内容。"}
                                 </span>
                             </div>
-                        </section>
-                    </SettingsSectionCard>
-                </div>
+                        </SettingsSectionCard>
+                    </div>
+                ) : null}
             </div>
         </AdminPageFrame>
+    );
+}
+
+function ThirdPartySaveFooter({ setting, dirty, saving, refreshing, onReset, onSave }: { setting: AdminLibTVSetting; dirty: boolean; saving: boolean; refreshing: boolean; onReset: () => void; onSave: () => Promise<void> }) {
+    return (
+        <div className="admin-third-party-footer">
+            <div className="admin-third-party-footer-note">
+                <ShieldCheck className="size-4" aria-hidden="true" />
+                <span>{formatSettingTime(setting.updatedAt, "尚未保存 LibTV 配置")} · 保存不会读取外部画布</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                {dirty ? (
+                    <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={onReset}>
+                        撤销
+                    </Button>
+                ) : null}
+                <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || refreshing} onClick={() => void onSave()}>
+                    保存修改
+                </Button>
+            </div>
+        </div>
     );
 }
 

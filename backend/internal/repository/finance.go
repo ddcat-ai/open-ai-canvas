@@ -477,6 +477,21 @@ func (r *Repository) BillingOrder(id string) (*model.BillingOrder, error) {
 	return &order, nil
 }
 
+func (r *Repository) BillingOrdersByIDs(ids []string) (map[string]model.BillingOrder, error) {
+	result := make(map[string]model.BillingOrder, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var orders []model.BillingOrder
+	if err := r.db.Where("id IN ?", ids).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	for _, order := range orders {
+		result[order.ID] = order
+	}
+	return result, nil
+}
+
 func (r *Repository) BillingOrdersByTaskIDs(userID string, taskIDs []string) (map[string]model.BillingOrder, error) {
 	result := make(map[string]model.BillingOrder, len(taskIDs))
 	if len(taskIDs) == 0 {

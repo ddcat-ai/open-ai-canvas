@@ -6,7 +6,9 @@ export type AnnouncementPendingReview = {
     previousTitle?: string;
     title: string;
     content: string;
+    imageResourceId?: string;
     level: "info" | "success" | "warning" | "critical";
+    pinned?: boolean;
     notice: string;
     requestedAt: string;
 };
@@ -21,7 +23,9 @@ export function readAnnouncementPendingReview(): AnnouncementPendingReview | nul
             (parsed.operation !== "create" && parsed.operation !== "update" && parsed.operation !== "close") ||
             typeof parsed.title !== "string" ||
             typeof parsed.content !== "string" ||
+            (parsed.imageResourceId !== undefined && typeof parsed.imageResourceId !== "string") ||
             (parsed.level !== "info" && parsed.level !== "success" && parsed.level !== "warning" && parsed.level !== "critical") ||
+            (parsed.pinned !== undefined && typeof parsed.pinned !== "boolean") ||
             typeof parsed.notice !== "string" ||
             !parsed.notice ||
             typeof parsed.requestedAt !== "string" ||

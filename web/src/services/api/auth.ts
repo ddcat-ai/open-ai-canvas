@@ -1,5 +1,5 @@
 import type { ModelChannel } from "@/stores/use-config-store";
-import type { CreditLedgerEntry } from "@/services/api/wallet";
+import type { BillingOrder, CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
@@ -60,6 +60,10 @@ export type ApiCallLog = {
     channelName: string;
     taskId?: string;
     taskStatus?: TaskStatus;
+    billingOrderId?: string;
+    billingStatus?: BillingOrder["status"];
+    billingAmountMicrocredits: number;
+    billingAvailable: boolean;
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
     operation?: string;
@@ -120,8 +124,15 @@ export type AdminUserDetail = {
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
     counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number };
     storageUsage: {
-        assetCount: number; assetBytes: number; canvasCount: number; canvasBytes: number;
-        sessionCount: number; sessionBytes: number; taskCount: number; taskBytes: number; apiCallCount: number;
+        assetCount: number;
+        assetBytes: number;
+        canvasCount: number;
+        canvasBytes: number;
+        sessionCount: number;
+        sessionBytes: number;
+        taskCount: number;
+        taskBytes: number;
+        apiCallCount: number;
     };
     storedFileBytes: number;
     dailyUploadBytes: number;
@@ -354,7 +365,6 @@ export type RuntimePolicySetting = {
     createdAt?: string;
     updatedAt?: string;
 };
-
 
 export function getAuthSettings() {
     return request<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>(api.get("/auth/settings"));

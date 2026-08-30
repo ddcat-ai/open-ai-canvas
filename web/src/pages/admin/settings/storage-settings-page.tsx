@@ -1,13 +1,13 @@
-import { App, Button, Form, Input, Skeleton } from "antd";
-import { AlertTriangle, BadgeCheck, Cloud, Database, Globe2, HardDrive, KeyRound, LocateFixed, RefreshCw, RotateCcw, Save, Server, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { App, Button, Form, Input, Select, Skeleton, Switch } from "antd";
+import { AlertTriangle, BadgeCheck, Check, Cloud, Database, Globe2, HardDrive, KeyRound, LocateFixed, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Wifi } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
+import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
 import { cn } from "@/lib/utils";
-import { getAdminOSSSetting, updateAdminOSSSetting, type AdminOSSSetting } from "@/services/api/auth";
-import { useAdminContext } from "../admin-context";
+import { getAdminOSSSetting, testAdminOSSConnection, updateAdminOSSSetting, type AdminOSSSetting } from "@/services/api/auth";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminStatTile, AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
+import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
 type StorageMode = "local" | AdminOSSSetting["provider"];
 type OSSFormValues = {
@@ -19,25 +19,32 @@ type OSSFormValues = {
     bucket: string;
     accessKeyId: string;
     accessKeySecret: string;
+    sessionToken: string;
     pathPrefix: string;
+    s3Preset: S3Preset;
+    pathStyle: boolean;
+    allowUserS3: boolean;
 };
 
-type StoragePayload = Pick<AdminOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "accessKeySecret" | "publicBaseUrl" | "pathPrefix">;
+type StoragePayload = Pick<AdminOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "accessKeySecret" | "sessionToken" | "publicBaseUrl" | "pathPrefix" | "s3Preset" | "pathStyle" | "allowUserS3">;
 
 const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; description: string }> = [
     { mode: "local", label: "服务器本地", short: "本地磁盘", description: "新增资源写入当前部署的数据目录，通过后端签名链接访问。" },
     { mode: "aliyun", label: "阿里云 OSS", short: "对象存储", description: "新增资源写入阿里云 Bucket，可选 CDN 域名读取。" },
     { mode: "tencent", label: "腾讯云 COS", short: "对象存储", description: "新增资源写入腾讯云 Bucket，可由 Region 生成 Endpoint。" },
     { mode: "qiniu", label: "七牛云 Kodo", short: "对象存储", description: "新增资源上传到 Kodo；无绑定域名时由后端代理读取。" },
+    { mode: "s3", label: "S3 兼容存储", short: "对象存储", description: "支持 AWS S3、Cloudflare R2、Backblaze B2、RustFS 与自定义 S3 Endpoint。" },
 ];
 
 export default function StorageSettingsPage() {
     const { message, modal } = App.useApp();
-    const { references } = useAdminContext();
     const [setting, setSetting] = useState<AdminOSSSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<OSSConnectionTestResult | null>(null);
+    const [testStale, setTestStale] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [draftMode, setDraftMode] = useState<StorageMode>("local");
     const [loadError, setLoadError] = useState("");
@@ -46,7 +53,6 @@ export default function StorageSettingsPage() {
     const requestVersionRef = useRef(0);
     const navigationConfirmOpenRef = useRef(false);
     const navigationTriggerRef = useRef<HTMLElement | null>(null);
-    const userNameById = useMemo(() => new Map(references.users.map((user) => [user.id, user.displayName || user.username])), [references.users]);
 
     const load = useCallback(
         async (initial = false, announce = false) => {
@@ -59,6 +65,8 @@ export default function StorageSettingsPage() {
                 if (requestVersion !== requestVersionRef.current) return;
                 if (!isAdminOSSSetting(result.setting)) throw new Error("服务端返回的存储配置格式无效");
                 setSetting(result.setting);
+                setTestResult(result.setting.testedAt ? { ok: true, testedAt: result.setting.testedAt, testedDigest: result.setting.testedDigest } : null);
+                setTestStale(false);
                 setDirty(false);
                 setSaveError("");
                 if (announce) message.success("已重新读取当前平台存储配置");
@@ -138,6 +146,8 @@ export default function StorageSettingsPage() {
         setDraftMode(values.mode);
         setDirty(false);
         setSaveError("");
+        setTestResult(setting.testedAt ? { ok: true, testedAt: setting.testedAt, testedDigest: setting.testedDigest } : null);
+        setTestStale(false);
         message.info("已撤销存储服务的未保存调整");
     };
 
@@ -167,24 +177,14 @@ export default function StorageSettingsPage() {
         form.setFields([]);
         setDraftMode(nextMode);
         setDirty(hasStorageChanges({ ...current, ...nextValues }, setting));
+        setTestStale(true);
         setSaveError("");
         return { ...current, ...nextValues } as OSSFormValues;
     };
 
-    const requestModeChange = async (nextMode: StorageMode) => {
+    const requestModeChange = (nextMode: StorageMode) => {
         if (!setting || nextMode === draftMode || saving || refreshing) return;
-        const values = applyMode(nextMode);
-        if (!values) return;
-        const validationError = validateStorageDraft(values, setting);
-        if (validationError) {
-            message.info(`${validationError}；补全后点击保存修改即可生效`);
-            return;
-        }
-        try {
-            await save(values);
-        } catch {
-            // 保存错误已在 save 中就地提示。
-        }
+        applyMode(nextMode);
     };
 
     const save = async (values: OSSFormValues) => {
@@ -200,6 +200,8 @@ export default function StorageSettingsPage() {
             form.setFieldsValue(nextValues);
             setDraftMode(nextValues.mode);
             setDirty(false);
+            setTestResult(result.setting.testedAt ? { ok: true, testedAt: result.setting.testedAt, testedDigest: result.setting.testedDigest } : null);
+            setTestStale(false);
             message.success("平台存储配置已保存");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "保存存储配置失败";
@@ -231,20 +233,40 @@ export default function StorageSettingsPage() {
         }
     };
 
+    const testConnection = async () => {
+        if (!setting) return;
+        let values: OSSFormValues;
+        try {
+            values = await form.validateFields();
+        } catch {
+            return;
+        }
+        const validationError = validateStorageDraft(values, setting);
+        if (validationError) {
+            message.error(validationError);
+            return;
+        }
+        if (values.mode === "local") return;
+        setTesting(true);
+        try {
+            const result = await testAdminOSSConnection(connectionInput(values));
+            setTestResult(result);
+            setTestStale(false);
+            result.ok ? message.success(result.message || "连接测试通过") : message.error(result.message || "连接测试失败");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "连接测试失败";
+            setTestResult({ ok: false, message: errorMessage });
+            setTestStale(false);
+            message.error(errorMessage);
+        } finally {
+            setTesting(false);
+        }
+    };
+
     if (loading && !setting) {
         return (
             <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
                 <div className="admin-settings-stack admin-storage-settings" aria-label="正在读取平台存储配置" role="status">
-                    <div className="admin-storage-command-bar">
-                        <Skeleton active title={{ width: 180 }} paragraph={false} />
-                    </div>
-                    <div className="admin-storage-overview">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                            <div key={index} className="admin-stat-tile">
-                                <Skeleton active title={{ width: 96 }} paragraph={{ rows: 1 }} />
-                            </div>
-                        ))}
-                    </div>
                     <div className="admin-storage-loading-card">
                         <Skeleton active paragraph={{ rows: 7 }} />
                     </div>
@@ -277,8 +299,6 @@ export default function StorageSettingsPage() {
     const currentValues = form.getFieldsValue(true);
     const normalizedDraft = normalizeStoragePayload(currentValues, setting);
     const hasCurrentProviderSecret = draftMode !== "local" && setting.provider === draftMode && setting.hasAccessKeySecret;
-    const secretConfigured = draftMode === "local" || Boolean(normalizedDraft.accessKeySecret || hasCurrentProviderSecret);
-    const configOperator = setting.updatedBy ? userNameById.get(setting.updatedBy) || setting.updatedBy : "系统默认";
 
     return (
         <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
@@ -289,11 +309,8 @@ export default function StorageSettingsPage() {
                             <Database className="size-4" aria-hidden="true" />
                         </span>
                         <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <strong>{dirty ? "平台存储有调整待保存" : "平台存储配置已同步"}</strong>
-                                <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
-                            </div>
-                            <p>{dirty ? "当前选择和接入信息只在本页暂存；保存后仅影响新增资源。" : "页面显示新增资源的默认去向；已有资源保持原存储位置。"}</p>
+                            <strong>{dirty ? "有未保存的存储调整" : `当前使用：${storageProviderLabel(draftMode)}`}</strong>
+                            <p>{dirty ? "保存后仅影响新增资源。" : formatSettingTime(setting.updatedAt, "使用系统默认值")}</p>
                         </div>
                     </div>
                     <div className="admin-storage-command-actions">
@@ -315,28 +332,13 @@ export default function StorageSettingsPage() {
                     </div>
                 ) : null}
 
-                <div className="admin-storage-overview" aria-label="平台存储配置概览">
-                    <AdminStatTile label="新增资源存储" value={storageProviderLabel(draftMode)} detail={dirty ? "暂存状态预览" : formatSettingTime(setting.updatedAt, "使用系统默认值")} />
-                    <AdminStatTile
-                        label="读取链路"
-                        value={storageDeliveryLabel(draftMode, normalizedDraft.cdnBaseUrl)}
-                        detail={draftMode === "local" ? "经当前后端签名访问" : normalizedDraft.cdnBaseUrl ? "浏览器使用绑定或 CDN 域名" : "使用签名地址或后端代理"}
-                    />
-                    <AdminStatTile
-                        label="访问凭据"
-                        value={secretConfigured ? (draftMode === "local" ? "无需云密钥" : "已配置") : "未配置"}
-                        detail={draftMode === "local" ? "由当前部署管理资源" : hasCurrentProviderSecret && !normalizedDraft.accessKeySecret ? "保留服务端已有密钥" : "密钥仅保存在服务端"}
-                    />
-                    <AdminStatTile label="配置来源" value={hasValidSettingTime(setting.updatedAt) ? "管理员配置" : "系统默认"} detail={hasValidSettingTime(setting.updatedAt) ? configOperator : "尚未保存平台存储配置"} />
-                </div>
-
                 <div id="admin-storage-mode" className="admin-settings-anchor">
                     <SettingsSectionCard
                         className="admin-storage-section admin-storage-mode-section"
                         icon={<HardDrive className="size-4" aria-hidden="true" />}
-                        title="新资源存储位置"
-                        description="选择之后新增资源的默认写入位置，不迁移、覆盖或删除已有资源。"
-                        status={<AdminStatusBadge label={dirty ? `待切换为${storageProviderLabel(draftMode)}` : storageProviderLabel(draftMode)} tone={dirty ? "warning" : "neutral"} />}
+                        title="1. 选择新资源存储位置"
+                        description="先选择一种存储方式。选择结果会决定下一步需要填写的接入信息，不会迁移已有资源。"
+                        status={<AdminStatusBadge label={dirty ? "待保存" : "当前设置"} tone={dirty ? "warning" : "info"} />}
                     >
                         <div className="admin-storage-mode-content">
                             <div className="admin-storage-mode-grid" role="radiogroup" aria-label="新增资源存储位置">
@@ -348,20 +350,26 @@ export default function StorageSettingsPage() {
                                         aria-checked={draftMode === item.mode}
                                         className={cn("admin-storage-mode-choice", draftMode === item.mode && "is-selected")}
                                         disabled={loading || refreshing || saving}
-                                        onClick={() => void requestModeChange(item.mode)}
+                                        onClick={() => requestModeChange(item.mode)}
                                     >
                                         <span className="admin-storage-mode-icon">{item.mode === "local" ? <HardDrive className="size-4" aria-hidden="true" /> : <Cloud className="size-4" aria-hidden="true" />}</span>
                                         <span className="admin-storage-mode-copy">
                                             <strong>{item.label}</strong>
                                             <small>{item.description}</small>
                                         </span>
-                                        <AdminStatusBadge label={draftMode === item.mode ? "当前选择" : item.short} tone={draftMode === item.mode ? "info" : "neutral"} />
+                                        <span className="admin-storage-mode-meta">{item.short}</span>
+                                        {draftMode === item.mode ? (
+                                            <span className="admin-storage-mode-selected">
+                                                <Check className="size-3.5" aria-hidden="true" />
+                                                已选择
+                                            </span>
+                                        ) : null}
                                     </button>
                                 ))}
                             </div>
                             <div className="admin-storage-history-note">
                                 <ShieldCheck className="size-4" aria-hidden="true" />
-                                <span>切换后只改变新增资源；历史资源仍按自身记录的 provider、Endpoint 和 Bucket 读取，云厂商切换时服务端会归档上一厂商凭据。</span>
+                                <span>选择后继续完成第 2 步并保存。保存只改变新增资源；历史资源仍按自身记录的 provider、Endpoint 和 Bucket 读取。</span>
                             </div>
                         </div>
                     </SettingsSectionCard>
@@ -371,8 +379,8 @@ export default function StorageSettingsPage() {
                     <SettingsSectionCard
                         className="admin-storage-section admin-storage-configuration-section"
                         icon={draftMode === "local" ? <Server className="size-4" aria-hidden="true" /> : <Cloud className="size-4" aria-hidden="true" />}
-                        title={draftMode === "local" ? "服务器本地访问" : `${storageProviderLabel(draftMode)} 接入配置`}
-                        description={draftMode === "local" ? "设置浏览器访问本地资源时使用的服务器根地址。" : "配置新资源写入位置、读取出口和服务端访问密钥。"}
+                        title={draftMode === "local" ? "2. 配置服务器本地访问" : `2. 配置 ${storageProviderLabel(draftMode)} 接入`}
+                        description={draftMode === "local" ? "填写浏览器访问本地资源时使用的服务器根地址，然后保存。" : "按顺序填写存储位置、读取出口和服务端访问密钥，然后测试并保存。"}
                         status={
                             <AdminStatusBadge
                                 label={dirty ? "有调整" : storageConfigurationReady(draftMode, normalizedDraft, setting) ? "已配置" : "待配置"}
@@ -383,7 +391,7 @@ export default function StorageSettingsPage() {
                             <>
                                 <div className="admin-storage-footer-note">
                                     <BadgeCheck className="size-4" aria-hidden="true" />
-                                    <span>{formatSettingTime(setting.updatedAt, "尚未保存平台存储配置")} · 保存不会连接存储服务或上传测试文件</span>
+                                    <span>{formatSettingTime(setting.updatedAt, "尚未保存平台存储配置")} · 保存不会自动连接存储服务，建议先执行连接测试</span>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {dirty ? (
@@ -403,10 +411,11 @@ export default function StorageSettingsPage() {
                             layout="vertical"
                             requiredMark={false}
                             disabled={loading || refreshing || saving}
-                            onValuesChange={() => {
+                            onValuesChange={(changedValues) => {
                                 const values = form.getFieldsValue(true);
                                 setDraftMode(values.mode || "local");
                                 setDirty(hasStorageChanges(values, setting));
+                                if (changesRequireOSSRetest(changedValues)) setTestStale(true);
                                 setSaveError("");
                             }}
                         >
@@ -449,9 +458,27 @@ export default function StorageSettingsPage() {
 
                                     <div className="admin-storage-form-section">
                                         <FormSectionTitle icon={<Database className="size-4" />} title="存储位置" description="Bucket 决定容器，路径前缀用于隔离当前应用写入的对象目录。" />
+                                        {draftMode === "s3" ? (
+                                            <Form.Item name="s3Preset" label="S3 预设" extra={getS3PresetHints(form.getFieldValue("s3Preset") || "custom").help}>
+                                                <Select
+                                                    options={S3_PRESET_OPTIONS}
+                                                    onChange={(preset: S3Preset) => {
+                                                        const hints = getS3PresetHints(preset);
+                                                        form.setFieldsValue({ region: hints.region, endpoint: hints.endpoint });
+                                                        setDirty(hasStorageChanges({ ...form.getFieldsValue(true), region: hints.region, endpoint: hints.endpoint, s3Preset: preset }, setting));
+                                                        setTestStale(true);
+                                                    }}
+                                                />
+                                            </Form.Item>
+                                        ) : null}
                                         <div className="admin-storage-form-grid is-location">
                                             <Form.Item name="region" label="Region" extra={draftMode === "tencent" ? "Endpoint 留空时由 Region 自动生成。" : draftMode === "qiniu" ? "无绑定域名时用于兼容 S3 的私有读取。" : "按云厂商控制台显示值填写。"}>
-                                                <Input autoComplete="off" placeholder={draftMode === "tencent" ? "ap-guangzhou" : draftMode === "qiniu" ? "z0 / cn-east-1" : "oss-cn-hangzhou"} />
+                                                <Input
+                                                    autoComplete="off"
+                                                    placeholder={
+                                                        draftMode === "s3" ? getS3PresetHints(form.getFieldValue("s3Preset") || "custom").region : draftMode === "tencent" ? "ap-guangzhou" : draftMode === "qiniu" ? "z0 / cn-east-1" : "oss-cn-hangzhou"
+                                                    }
+                                                />
                                             </Form.Item>
                                             <Form.Item name="bucket" label="Bucket">
                                                 <Input autoComplete="off" placeholder={draftMode === "qiniu" ? "七牛云存储空间名称" : "对象存储 Bucket"} />
@@ -468,12 +495,26 @@ export default function StorageSettingsPage() {
                                             <Form.Item
                                                 name="endpoint"
                                                 label={draftMode === "qiniu" ? "上传 Endpoint" : "Endpoint"}
-                                                extra={draftMode === "tencent" ? "可留空并由 Region 生成，也可填写完整 COS Endpoint。" : "必须填写完整的 http/https 地址，服务端会继续执行出站安全校验。"}
+                                                extra={
+                                                    draftMode === "s3"
+                                                        ? getS3PresetHints(form.getFieldValue("s3Preset") || "custom").help
+                                                        : draftMode === "tencent"
+                                                          ? "可留空并由 Region 生成，也可填写完整 COS Endpoint。"
+                                                          : "必须填写完整的 http/https 地址，服务端会继续执行出站安全校验。"
+                                                }
                                             >
                                                 <Input
                                                     autoComplete="off"
                                                     inputMode="url"
-                                                    placeholder={draftMode === "tencent" ? "https://cos.ap-guangzhou.myqcloud.com" : draftMode === "qiniu" ? "https://up-z0.qiniup.com" : "https://oss-cn-hangzhou.aliyuncs.com"}
+                                                    placeholder={
+                                                        draftMode === "s3"
+                                                            ? getS3PresetHints(form.getFieldValue("s3Preset") || "custom").endpoint
+                                                            : draftMode === "tencent"
+                                                              ? "https://cos.ap-guangzhou.myqcloud.com"
+                                                              : draftMode === "qiniu"
+                                                                ? "https://up-z0.qiniup.com"
+                                                                : "https://oss-cn-hangzhou.aliyuncs.com"
+                                                    }
                                                 />
                                             </Form.Item>
                                             <Form.Item
@@ -495,10 +536,39 @@ export default function StorageSettingsPage() {
                                             <Form.Item name="accessKeySecret" label={hasCurrentProviderSecret ? `${accessKeySecretLabel(draftMode)}（${configuredSecretText}）` : accessKeySecretLabel(draftMode)} extra="只在新增或替换当前厂商密钥时填写。">
                                                 <Input.Password autoComplete="new-password" placeholder={hasCurrentProviderSecret ? "留空保留原密钥" : accessKeySecretLabel(draftMode)} />
                                             </Form.Item>
+                                            {draftMode === "s3" ? (
+                                                <Form.Item
+                                                    name="sessionToken"
+                                                    label={setting.provider === "s3" && setting.hasSessionToken ? `Session Token（${configuredSecretText}）` : "Session Token（可选）"}
+                                                    extra="使用临时凭证时填写；留空会保留当前 S3 提供方已有 Token。"
+                                                >
+                                                    <Input.Password autoComplete="new-password" placeholder={setting.provider === "s3" && setting.hasSessionToken ? "留空保留原 Token" : "临时凭证 Session Token"} />
+                                                </Form.Item>
+                                            ) : null}
+                                        </div>
+                                        {draftMode === "s3" ? (
+                                            <Form.Item name="pathStyle" label="Path Style" valuePropName="checked" extra="开启后强制使用 path-style；关闭时由后端按 Endpoint 自动选择。">
+                                                <Switch checkedChildren="强制" unCheckedChildren="自动" />
+                                            </Form.Item>
+                                        ) : null}
+                                    </div>
+                                    <div className="admin-storage-form-section">
+                                        <FormSectionTitle icon={<Wifi className="size-4" />} title="连接验证" description="使用当前草稿执行最小读写测试；测试不会保存配置，也不会迁移已有资源。" />
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <Button icon={<Wifi className="size-4" />} loading={testing} disabled={saving || refreshing} onClick={() => void testConnection()}>
+                                                测试连接
+                                            </Button>
+                                            <ConnectionTestStatus result={testResult} stale={testStale} />
                                         </div>
                                     </div>
                                 </>
                             )}
+                            <div className="admin-storage-form-section">
+                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="允许用户配置个人 S3 兼容存储；个人配置停用时仍回退到平台存储。" />
+                                <Form.Item name="allowUserS3" label="允许个人 S3 兼容存储" valuePropName="checked">
+                                    <Switch checkedChildren="允许" unCheckedChildren="不允许" />
+                                </Form.Item>
+                            </div>
                         </Form>
                     </SettingsSectionCard>
                 </div>
@@ -529,7 +599,11 @@ function formValues(setting: AdminOSSSetting): OSSFormValues {
         bucket: setting.bucket || "",
         accessKeyId: setting.accessKeyId || "",
         accessKeySecret: "",
-        pathPrefix: setting.pathPrefix || "",
+        sessionToken: "",
+        pathPrefix: setting.pathPrefix || DEFAULT_OSS_PATH_PREFIX,
+        s3Preset: setting.s3Preset || "custom",
+        pathStyle: setting.pathStyle === true,
+        allowUserS3: setting.allowUserS3 === true,
     };
 }
 
@@ -542,10 +616,24 @@ function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: Admin
             bucket: setting.bucket || "",
             accessKeyId: setting.accessKeyId || "",
             accessKeySecret: "",
+            sessionToken: "",
             pathPrefix: setting.pathPrefix || pathPrefix || "",
+            s3Preset: setting.s3Preset || "custom",
+            pathStyle: setting.pathStyle === true,
         };
     }
-    return { region: "", endpoint: "", cdnBaseUrl: "", bucket: "", accessKeyId: "", accessKeySecret: "", pathPrefix: pathPrefix || "" };
+    return {
+        region: "",
+        endpoint: "",
+        cdnBaseUrl: "",
+        bucket: "",
+        accessKeyId: "",
+        accessKeySecret: "",
+        sessionToken: "",
+        pathPrefix: pathPrefix || DEFAULT_OSS_PATH_PREFIX,
+        s3Preset: "custom",
+        pathStyle: false,
+    };
 }
 
 function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminOSSSetting): StoragePayload {
@@ -563,8 +651,12 @@ function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminO
         bucket: values.bucket?.trim() || "",
         accessKeyId: values.accessKeyId?.trim() || "",
         accessKeySecret: values.accessKeySecret?.trim() || "",
+        sessionToken: values.sessionToken?.trim() || "",
         publicBaseUrl: trimTrailingSlash(values.publicBaseUrl || ""),
-        pathPrefix: (values.pathPrefix?.trim() || "").replace(/^\/+|\/+$/g, ""),
+        pathPrefix: (values.pathPrefix?.trim() || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
+        s3Preset: values.s3Preset || "custom",
+        pathStyle: values.pathStyle === true,
+        allowUserS3: values.allowUserS3 === true,
     };
 }
 
@@ -572,15 +664,17 @@ function hasStorageChanges(values: Partial<OSSFormValues>, setting: AdminOSSSett
     if (!setting) return false;
     const draft = normalizeStoragePayload(values, setting);
     const saved = normalizeStoragePayload(formValues(setting), setting);
-    if (draft.accessKeySecret) return true;
-    return (Object.keys(saved) as Array<keyof StoragePayload>).some((key) => key !== "accessKeySecret" && draft[key] !== saved[key]);
+    if (draft.accessKeySecret || draft.sessionToken) return true;
+    return (Object.keys(saved) as Array<keyof StoragePayload>).some((key) => key !== "accessKeySecret" && key !== "sessionToken" && draft[key] !== saved[key]);
 }
 
 function validateStorageDraft(values: OSSFormValues, setting: AdminOSSSetting) {
     const draft = normalizeStoragePayload(values, setting);
     if (!draft.enabled) return validatePublicBaseURL(draft.publicBaseUrl);
     if (!draft.bucket) return "请填写对象存储 Bucket";
-    if (!draft.endpoint) return draft.provider === "tencent" ? "请填写腾讯云 COS Region 或 Endpoint" : draft.provider === "qiniu" ? "请填写七牛云 Kodo 上传 Endpoint" : "请填写阿里云 OSS Endpoint";
+    if (!draft.endpoint)
+        return draft.provider === "tencent" ? "请填写腾讯云 COS Region 或 Endpoint" : draft.provider === "qiniu" ? "请填写七牛云 Kodo 上传 Endpoint" : draft.provider === "s3" ? "请填写 S3 Endpoint 服务根 URL" : "请填写阿里云 OSS Endpoint";
+    if (draft.provider === "s3" && !draft.region) return "请填写 S3 Region";
     if (!isHTTPURL(draft.endpoint)) return "Endpoint 必须是完整的 http/https 地址";
     if (draft.cdnBaseUrl && !isValidCDNBaseURL(draft.cdnBaseUrl)) return "CDN 或绑定域名只能填写 http/https 根地址，不能包含认证、路径、查询参数或片段";
     if (!draft.accessKeyId) return `请填写 ${accessKeyIdLabel(draft.provider)}`;
@@ -603,8 +697,9 @@ function validatePublicBaseURL(value: string) {
 
 function storageResponseMatches(setting: AdminOSSSetting, expected: StoragePayload) {
     const actual = normalizeStoragePayload(formValues(setting), setting);
-    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix"];
+    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3"];
     if (expected.accessKeySecret && !setting.hasAccessKeySecret) return false;
+    if (expected.sessionToken && !setting.hasSessionToken) return false;
     return fields.every((key) => actual[key] === expected[key]);
 }
 
@@ -613,13 +708,17 @@ function isAdminOSSSetting(value: unknown): value is AdminOSSSetting {
     const setting = value as Partial<AdminOSSSetting>;
     return (
         typeof setting.enabled === "boolean" &&
-        ["aliyun", "tencent", "qiniu"].includes(setting.provider || "") &&
+        ["aliyun", "tencent", "qiniu", "s3"].includes(setting.provider || "") &&
+        ["aws", "r2", "b2", "rustfs", "custom"].includes(setting.s3Preset || "") &&
         typeof setting.region === "string" &&
         typeof setting.endpoint === "string" &&
         typeof setting.cdnBaseUrl === "string" &&
         typeof setting.bucket === "string" &&
         typeof setting.accessKeyId === "string" &&
         typeof setting.hasAccessKeySecret === "boolean" &&
+        typeof setting.hasSessionToken === "boolean" &&
+        typeof setting.pathStyle === "boolean" &&
+        typeof setting.allowUserS3 === "boolean" &&
         typeof setting.publicBaseUrl === "string" &&
         typeof setting.pathPrefix === "string"
     );
@@ -631,16 +730,11 @@ function storageConfigurationReady(mode: StorageMode, values: StoragePayload, se
 }
 
 function storageProviderLabel(provider?: StorageMode) {
-    return provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
-}
-
-function storageDeliveryLabel(mode: StorageMode, cdnBaseUrl: string) {
-    if (mode === "local") return "后端签名链接";
-    if (cdnBaseUrl) return mode === "qiniu" ? "绑定域名" : "CDN 域名";
-    return mode === "qiniu" ? "后端代理" : "对象存储签名";
+    return provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
 }
 
 function providerGuidance(mode: Exclude<StorageMode, "local">) {
+    if (mode === "s3") return "使用预设快速填写 Region 与 Endpoint，也可以选择自定义；自托管 S3 仍受服务端私网主机白名单约束。";
     if (mode === "tencent") return "腾讯云可只填写 Region，由服务端生成标准 COS Endpoint；也可填写完整 Endpoint 覆盖。";
     if (mode === "qiniu") return "七牛上传必须配置上传 Endpoint；绑定域名可选，留空时资源由当前后端使用 AK/SK 代理读取。";
     return "阿里云需要完整 OSS Endpoint、Bucket 和访问密钥；CDN 域名可选。";
@@ -674,6 +768,29 @@ function isValidCDNBaseURL(value: string) {
 
 function trimTrailingSlash(value: string) {
     return value.trim().replace(/\/+$/, "");
+}
+
+function connectionInput(values: OSSFormValues) {
+    return {
+        provider: values.mode === "local" ? ("aliyun" as const) : values.mode,
+        s3Preset: values.s3Preset,
+        region: values.region.trim(),
+        endpoint: trimTrailingSlash(values.endpoint),
+        cdnBaseUrl: trimTrailingSlash(values.cdnBaseUrl),
+        bucket: values.bucket.trim(),
+        accessKeyId: values.accessKeyId.trim(),
+        accessKeySecret: values.accessKeySecret.trim(),
+        sessionToken: values.sessionToken.trim(),
+        pathPrefix: (values.pathPrefix.trim() || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
+        pathStyle: values.pathStyle === true,
+    };
+}
+
+function ConnectionTestStatus({ result, stale }: { result: OSSConnectionTestResult | null; stale: boolean }) {
+    if (stale) return <AdminStatusBadge label="配置已变化，请重新测试" tone="warning" />;
+    if (!result) return <AdminStatusBadge label="尚未测试" tone="neutral" />;
+    if (result.ok) return <AdminStatusBadge label={result.testedAt ? `测试通过 · ${formatSettingTime(result.testedAt, "刚刚")}` : "测试通过"} tone="success" />;
+    return <AdminStatusBadge label={result.message || "测试失败"} tone="error" />;
 }
 
 function hasValidSettingTime(value?: string) {
