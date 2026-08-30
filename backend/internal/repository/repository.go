@@ -1131,6 +1131,7 @@ func (r *Repository) UpdateProject(project *model.Project) error {
 		"name": project.Name, "type": project.Type, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
 		"description": project.Description, "cover_resource_id": project.CoverResourceID,
 		"style_preset_id": project.StylePresetID, "style_profile_json": project.StyleProfileJSON,
+		"default_image_model": project.DefaultImageModel, "default_video_model": project.DefaultVideoModel,
 		"status": project.Status, "revision": project.Revision, "updated_at": project.UpdatedAt,
 	}).Error
 }

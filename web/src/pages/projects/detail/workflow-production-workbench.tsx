@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Empty, Form, Image, Input, InputNumber, Segmented, Select, Tag } from "antd";
 import { Box, ChevronDown, ChevronLeft, ChevronRight, Download, Film, Image as ImageIcon, Layers3, List, Play, Plus, RefreshCcw, Save, SlidersHorizontal, Trash2, UsersRound, WandSparkles, X } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
+import { ModelPicker } from "@/components/model-picker";
+import { CreditSymbol, requestCreditCost } from "@/constant/credits";
+import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationOptions } from "@/lib/model-capabilities";
+import { modelQuoteRequest } from "@/lib/model-pricing";
+import { modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { runBackendGenerationTask } from "@/services/api/generation-task";
+import { quoteLogicalModel } from "@/services/api/logical-models";
 import { type GenerationTask } from "@/services/api/task-center";
 import {
     createUnitWorkflow,
@@ -25,7 +32,8 @@ import {
 } from "@/services/api/projects";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { skillRuntime } from "@/services/skill-runtime";
-import { modelDisplayName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { configuredModelMatchesCapability, modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { SkillRuntimePicker, useSkillRuntimeCatalog } from "@/components/skills/skill-runtime-picker";
 
 import {
@@ -69,6 +77,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const navigate = useNavigate();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const [form] = Form.useForm<ShotEditorValues>();
     const watchedDuration = Form.useWatch("durationSeconds", form);
     const watchedTitle = Form.useWatch("title", form);
@@ -93,24 +102,110 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const shotTaskElapsed = shotTask ? formatTaskElapsed(Date.parse(shotTask.startedAt || shotTask.createdAt), taskClock) : "";
     const newestArtifact = artifacts.find((item) => item.selected) || artifacts[0];
     const previewArtifact = artifacts.find((item) => item.id === previewArtifactId) || newestArtifact;
-    const modelOptions = (activeStage === "video" ? effectiveConfig.videoModels : effectiveConfig.imageModels) || [];
-    const defaultModel = activeStage === "video" ? effectiveConfig.videoModel : effectiveConfig.imageModel;
-    const [selectedModel, setSelectedModel] = useState(defaultModel || modelOptions[0] || "");
+    const generationCapability = activeStage === "video" ? "video" as const : "image" as const;
+    const modelOptions = useMemo(() => selectableModelsByCapability(effectiveConfig, generationCapability), [effectiveConfig, generationCapability]);
+    const projectDefaultModel = generationCapability === "video" ? detail.project.defaultVideoModel : detail.project.defaultImageModel;
+    const globalDefaultModel = generationCapability === "video" ? effectiveConfig.videoModel : effectiveConfig.imageModel;
+    const defaultModel = projectDefaultModel && configuredModelMatchesCapability(effectiveConfig, projectDefaultModel, generationCapability) ? projectDefaultModel : globalDefaultModel;
+    const initialModel = defaultModel || modelOptions[0] || "";
+    const [selectedModel, setSelectedModel] = useState(initialModel);
+    const selectedModelRef = useRef(initialModel);
     const [aspectRatio, setAspectRatio] = useState(detail.project.aspectRatio || "16:9");
     const [resolution, setResolution] = useState(effectiveConfig.vquality || "720");
+    const [imageQuality, setImageQuality] = useState(effectiveConfig.quality || "auto");
     const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
     const { skills: availableSkills, loading: skillsLoading } = useSkillRuntimeCatalog();
     const shotAssetReferenceContext = useMemo(() => buildShotAssetReferenceContext(detail, selectedShot?.id || ""), [detail, selectedShot?.id]);
     const referenceByVersionId = useMemo(() => new Map((detail.shotReferences || []).filter((reference) => reference.shotId === selectedShot?.id && reference.role === "reference" && reference.status === "linked").map((reference) => [reference.assetVersionId, reference])), [detail.shotReferences, selectedShot?.id]);
-    const modelSummary = selectedModel ? modelDisplayName(effectiveConfig, selectedModel) : "未选择模型";
+    const currentDurationSeconds = Number(watchedDuration || Math.max(0.5, (selectedShot?.durationMs || 3000) / 1000));
+    const generationSeconds = String(Math.max(1, Math.round(currentDurationSeconds)));
+    const modelRequirements = useMemo<ModelRequirements>(() => ({
+        capability: generationCapability,
+        input: { textCount: 1, imageCount: shotAssetReferenceContext.referenceImages.length, videoCount: 0, audioCount: 0, characterCount: 0 },
+        videoSeconds: generationCapability === "video" ? generationSeconds : undefined,
+        imageSize: generationCapability === "image" ? aspectRatio : undefined,
+        options: generationCapability === "video"
+            ? { size: aspectRatio, vquality: resolution, videoSeconds: Number(generationSeconds) }
+            : { size: aspectRatio, quality: imageQuality },
+    }), [aspectRatio, generationCapability, generationSeconds, imageQuality, resolution, shotAssetReferenceContext.referenceImages.length]);
+    const routedModel = resolveCompatibleModel(effectiveConfig, selectedModel, modelRequirements) || selectedModel;
+    const activeProfile = useMemo(() => modelCapabilityConfigFor(effectiveConfig, routedModel), [effectiveConfig, routedModel]);
+    const videoProfile = generationCapability === "video" ? activeProfile.video : undefined;
+    const imageProfile = generationCapability === "image" ? activeProfile.image : undefined;
+    const generationConfig = useMemo(() => ({
+        ...effectiveConfig,
+        model: routedModel,
+        imageModel: generationCapability === "image" ? routedModel : effectiveConfig.imageModel,
+        videoModel: generationCapability === "video" ? routedModel : effectiveConfig.videoModel,
+        size: aspectRatio,
+        quality: imageQuality,
+        vquality: resolution,
+        videoSeconds: generationSeconds,
+    }), [aspectRatio, effectiveConfig, generationCapability, generationSeconds, imageQuality, resolution, routedModel]);
+    const priceChannel = resolveModelChannel(generationConfig, routedModel);
+    const configuredCredits = requestCreditCost({
+        channelMode: priceChannel.scope === "system" ? "remote" : "local",
+        modelCosts: priceChannel.modelCosts,
+        model: modelOptionName(routedModel),
+        count: 1,
+        seconds: generationCapability === "video" ? generationSeconds : 1,
+        capability: generationCapability,
+        config: generationConfig,
+        requirements: modelRequirements,
+    });
+    const quoteRequest = useMemo(() => modelQuoteRequest(generationConfig, routedModel, generationCapability, modelRequirements), [generationCapability, generationConfig, modelRequirements, routedModel]);
+    const quoteRequestKey = JSON.stringify(quoteRequest || null);
+    const [quotedCredits, setQuotedCredits] = useState<number | null>(null);
+    const generationCredits = quotedCredits ?? configuredCredits;
+    const formattedGenerationCredits = generationCredits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    const modelSummary = routedModel ? modelDisplayName(effectiveConfig, routedModel) : "未选择模型";
     const durationSummary = `${Number(watchedDuration || Math.max(0.5, (selectedShot?.durationMs || 3000) / 1000))}s`;
-    const resolutionSummary = `${resolution.replace(/p$/i, "")}p`;
+    const resolutionSummary = generationCapability === "video" ? formatVideoResolutionLabel(resolution) : imageQuality.toUpperCase();
 
     useEffect(() => {
-        setSelectedModel(defaultModel || modelOptions[0] || "");
-    }, [activeStage, defaultModel, modelOptions]);
+        selectedModelRef.current = initialModel;
+        setSelectedModel(initialModel);
+        if (!initialModel) return;
+        const profile = modelCapabilityConfigFor(effectiveConfig, initialModel);
+        if (generationCapability === "video" && profile.video) {
+            const normalized = normalizeVideoValue(profile.video, {
+                seconds: effectiveConfig.videoSeconds,
+                ratio: detail.project.aspectRatio || effectiveConfig.size,
+                resolution: effectiveConfig.vquality,
+            });
+            setAspectRatio(normalized.ratio);
+            setResolution(normalized.resolution);
+            form.setFieldValue("durationSeconds", Number(normalized.seconds));
+        } else if (generationCapability === "image" && profile.image) {
+            const normalized = normalizeImageValue(profile.image, { size: detail.project.aspectRatio || effectiveConfig.size, quality: effectiveConfig.quality, count: "1" });
+            setAspectRatio(normalized.size);
+            setImageQuality(normalized.quality);
+        }
+    }, [detail.project.aspectRatio, effectiveConfig, form, generationCapability, initialModel]);
 
     useEffect(() => {
+        if (!creditsEnabled || !quoteRequest) {
+            setQuotedCredits(null);
+            return;
+        }
+        const controller = new AbortController();
+        setQuotedCredits(null);
+        quoteLogicalModel(quoteRequest.logicalModelID, quoteRequest.intent, controller.signal)
+            .then(({ quote }) => setQuotedCredits(quote.amountMicrocredits / 1_000_000))
+            .catch(() => {
+                if (!controller.signal.aborted) setQuotedCredits(null);
+            });
+        return () => controller.abort();
+        // quoteRequestKey captures the normalized request without retriggering on object identity.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [creditsEnabled, quoteRequestKey]);
+
+    useEffect(() => {
+        const shotDurationSeconds = Math.max(0.5, (revision?.durationMs || selectedShot?.durationMs || 3000) / 1000);
+        const currentModel = selectedModelRef.current || initialModel;
+        const normalizedDurationSeconds = generationCapability === "video" && currentModel
+            ? Number(normalizeVideoValue(modelCapabilityConfigFor(effectiveConfig, currentModel).video!, { seconds: String(shotDurationSeconds) }).seconds)
+            : shotDurationSeconds;
         form.setFieldsValue({
             title: selectedShot?.title || "",
             plotDescription: revision?.plotDescription || selectedShot?.description || "",
@@ -119,7 +214,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
             shotSize: revision?.shotSize || "",
             cameraAngle: revision?.cameraAngle || "",
             cameraMovement: revision?.cameraMovement || "",
-            durationSeconds: Math.max(0.5, (revision?.durationMs || selectedShot?.durationMs || 3000) / 1000),
+            durationSeconds: normalizedDurationSeconds,
             imagePrompt: revision?.imagePrompt || "",
             videoPrompt: revision?.videoPrompt || "",
             negativePrompt: revision?.negativePrompt || "",
@@ -127,7 +222,29 @@ export default function WorkflowProductionWorkbench(props: Props) {
         });
         setPreviewArtifactId("");
         setEditorDirty(!revision);
-    }, [form, revision?.id, selectedShot?.id]);
+    }, [effectiveConfig, form, generationCapability, initialModel, revision?.id, selectedShot?.id]);
+
+    const changeGenerationModel = (nextModel: string) => {
+        selectedModelRef.current = nextModel;
+        setSelectedModel(nextModel);
+        const profile = modelCapabilityConfigFor(effectiveConfig, nextModel);
+        if (generationCapability === "video" && profile.video) {
+            const normalized = normalizeVideoValue(profile.video, {
+                seconds: String(form.getFieldValue("durationSeconds") || generationSeconds),
+                ratio: aspectRatio,
+                resolution,
+            });
+            setAspectRatio(normalized.ratio);
+            setResolution(normalized.resolution);
+            form.setFieldValue("durationSeconds", Number(normalized.seconds));
+            return;
+        }
+        if (generationCapability === "image" && profile.image) {
+            const normalized = normalizeImageValue(profile.image, { size: aspectRatio, quality: imageQuality, count: "1" });
+            setAspectRatio(normalized.size);
+            setImageQuality(normalized.quality);
+        }
+    };
 
     const saveShot = useMutation({
         mutationFn: async (values: ShotEditorValues) => {
@@ -178,8 +295,10 @@ export default function WorkflowProductionWorkbench(props: Props) {
             }
             if (!productionStep) throw new Error("当前生成阶段不可用，请刷新页面后重试");
             if (productionStep.status === "failed") throw new Error("当前生成阶段失败，请刷新后重试");
-            if (!selectedModel) throw new Error(activeStage === "video" ? "请先配置视频模型" : "请先配置图片模型");
-            if (selectedModel.startsWith("local:dreamina-cli")) throw new Error("本机即梦任务暂不能登记到分镜产物，请选择后端模型渠道");
+            if (!routedModel) throw new Error(activeStage === "video" ? "请先配置视频模型" : "请先配置图片模型");
+            if (routedModel.startsWith("local:dreamina-cli")) throw new Error("本机即梦任务暂不能登记到分镜产物，请选择后端模型渠道");
+            const compatibilityError = modelCompatibilityError(effectiveConfig, routedModel, modelRequirements);
+            if (compatibilityError) throw new Error(`当前模型配置不可用：${compatibilityError}`);
             const values = await form.validateFields();
             const saved = await saveProjectShot(projectId, {
                 id: selectedShot.id,
@@ -191,17 +310,9 @@ export default function WorkflowProductionWorkbench(props: Props) {
                 status: selectedShot.status,
                 revision: revisionInput(values),
             });
-            const mode = activeStage === "video" ? "video" as const : "image" as const;
-            const config = {
-                ...effectiveConfig,
-                model: selectedModel,
-                imageModel: mode === "image" ? selectedModel : effectiveConfig.imageModel,
-                videoModel: mode === "video" ? selectedModel : effectiveConfig.videoModel,
-                size: aspectRatio,
-                vquality: resolution,
-                videoSeconds: String(Math.max(1, Math.round(values.durationSeconds))),
-            };
-            if (!isAiConfigReady(config, selectedModel)) throw new Error("当前模型渠道配置不完整，请先到设置中补齐");
+            const mode = generationCapability;
+            const config = { ...generationConfig, videoSeconds: String(Math.max(1, Math.round(values.durationSeconds))) };
+            if (!isAiConfigReady(config, routedModel)) throw new Error("当前模型渠道配置不完整，请先到设置中补齐");
             const basePrompt = mode === "video"
                 ? [values.videoPrompt || values.plotDescription, values.action, values.continuityNotes].filter(Boolean).join("\n")
                 : [values.imagePrompt || values.plotDescription, values.action, "黑白分镜草图，清晰动作节拍，电影构图"].filter(Boolean).join("\n");
@@ -349,12 +460,39 @@ export default function WorkflowProductionWorkbench(props: Props) {
                             >
                                 <div className="workflow-settings-section">
                                     <div className="workflow-settings-section-title">生成规格</div>
-                                    <Form.Item label="生成模型"><Select showSearch value={selectedModel || undefined} placeholder={activeStage === "video" ? "选择视频模型" : "选择图片模型"} onChange={setSelectedModel} options={modelOptions.map((value) => ({ value, label: modelDisplayName(effectiveConfig, value) }))} /></Form.Item>
+                                    <Form.Item label="生成模型">
+                                        <ModelPicker
+                                            config={generationConfig}
+                                            value={selectedModel}
+                                            capability={generationCapability}
+                                            requirements={modelRequirements}
+                                            onChange={changeGenerationModel}
+                                            fullWidth
+                                            className="workflow-model-picker"
+                                            placeholder={activeStage === "video" ? "选择视频模型" : "选择图片模型"}
+                                            showSelectedPrice
+                                        />
+                                    </Form.Item>
                                     <Form.Item label="技能库"><SkillRuntimePicker profile="shortDrama" skills={availableSkills} loading={skillsLoading} value={selectedSkillIds} onChange={setSelectedSkillIds} /></Form.Item>
                                     <div className="workflow-form-grid is-three">
-                                        <Form.Item name="durationSeconds" label="镜头时长（秒）"><InputNumber className="w-full" min={0.5} max={60} step={0.5} /></Form.Item>
-                                        <Form.Item label="画幅"><Select value={aspectRatio} onChange={setAspectRatio} options={[detail.project.aspectRatio, "16:9", "9:16", "1:1"].filter((value, index, array) => value && array.indexOf(value) === index).map((value) => ({ value, label: value }))} /></Form.Item>
-                                        <Form.Item label="分辨率"><Select value={resolution} onChange={setResolution} options={[{ value: "480", label: "480p" }, { value: "720", label: "720p" }, { value: "1080", label: "1080p" }]} /></Form.Item>
+                                        <Form.Item name="durationSeconds" label="镜头时长（秒）">
+                                            {generationCapability === "video" && videoProfile?.duration.selection === "enum"
+                                                ? <Select options={videoDurationOptions(videoProfile).map((value) => ({ value, label: `${value} 秒` }))} />
+                                                : <InputNumber className="w-full" min={generationCapability === "video" ? videoProfile?.duration.min || 1 : 0.5} max={generationCapability === "video" ? videoProfile?.duration.max || 60 : 60} step={generationCapability === "video" ? videoProfile?.duration.step || 1 : 0.5} />}
+                                        </Form.Item>
+                                        <Form.Item label={generationCapability === "video" ? "画幅" : "尺寸 / 画幅"}>
+                                            <Select
+                                                showSearch
+                                                value={aspectRatio}
+                                                onChange={setAspectRatio}
+                                                options={(generationCapability === "video" ? videoProfile?.ratios || [] : imageProfile?.size.values.filter((value) => value !== "*") || []).map((value) => ({ value, label: value }))}
+                                            />
+                                        </Form.Item>
+                                        {generationCapability === "video" ? (
+                                            <Form.Item label="分辨率"><Select value={resolution} onChange={setResolution} options={(videoProfile?.resolutions || []).map((value) => ({ value, label: formatVideoResolutionLabel(value) }))} /></Form.Item>
+                                        ) : imageProfile?.quality.supported ? (
+                                            <Form.Item label="生成画质"><Select value={imageQuality} onChange={setImageQuality} options={imageProfile.quality.values.map((value) => ({ value, label: value.toUpperCase() }))} /></Form.Item>
+                                        ) : <div />}
                                     </div>
                                 </div>
                                 <div className="workflow-settings-section">
@@ -382,6 +520,9 @@ export default function WorkflowProductionWorkbench(props: Props) {
                             </WorkflowDisclosure>
                         </div>
                         <footer className="workflow-editor-actions">
+                            <div className="workflow-generation-cost" aria-live="polite">
+                                {creditsEnabled && formattedGenerationCredits ? <><CreditSymbol /><span>本次预计 {formattedGenerationCredits} 积分</span></> : creditsEnabled && routedModel ? <span>本次费用将在提交时按实际规格计算</span> : null}
+                            </div>
                             <div className="flex items-center gap-2"><Button danger icon={<Trash2 className="size-4" />} loading={deleteShot.isPending} disabled={saveShot.isPending || generateArtifact.isPending || changeAssetBinding.isPending} onClick={requestDeleteShot}>删除镜头</Button><Button htmlType="submit" icon={<Save className="size-4" />} loading={saveShot.isPending} disabled={!editorDirty || deleteShot.isPending}>保存脚本</Button><Button type="primary" icon={<Play className="size-4" />} loading={generateArtifact.isPending || shotTask?.status === "queued" || shotTask?.status === "running"} disabled={deleteShot.isPending} onClick={() => generateArtifact.mutate()}>{shotTask?.status === "queued" || shotTask?.status === "running" ? `${stageCopy.action}（已运行${shotTaskElapsed}）` : shotTask?.status === "failed" ? `${stageCopy.action}（上次失败，可重试）` : shotTask?.status === "succeeded" && !newestArtifact ? `${stageCopy.action}（已完成，正在同步）` : newestArtifact ? `${stageCopy.action}（已生成）` : stageCopy.action}</Button></div>
                         </footer>
                     </Form>

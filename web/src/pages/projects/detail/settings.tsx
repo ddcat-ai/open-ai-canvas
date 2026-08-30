@@ -5,12 +5,13 @@ import { Archive, Check, Eye, FolderOpen, Image as ImageIcon, Palette, Pencil, S
 
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { CanvasStyleDetailModal, CanvasStylePickerModal, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { ModelPicker } from "@/components/model-picker";
 import { createStyleProfileSnapshot, parseStyleProfile, resolveStyleExecutionPlan, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { listProjectAssetsPage, updateProject } from "@/services/api/projects";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
+import { modelDisplayName, resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
 
 import type { ProjectDetailViewProps } from "./shared";
 
@@ -26,6 +27,8 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
     const [sourceType, setSourceType] = useState(project.sourceType);
     const [stylePresetId, setStylePresetId] = useState(project.stylePresetId || "");
     const [styleProfileJson, setStyleProfileJson] = useState(project.styleProfileJson || "");
+    const [defaultImageModel, setDefaultImageModel] = useState(project.defaultImageModel || "");
+    const [defaultVideoModel, setDefaultVideoModel] = useState(project.defaultVideoModel || "");
     const [styleDetail, setStyleDetail] = useState<CanvasStylePreset | null>(null);
     const [stylePickerOpen, setStylePickerOpen] = useState(false);
     const [styleEditorRequested, setStyleEditorRequested] = useState(false);
@@ -39,8 +42,8 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
         enabled: coverPickerOpen,
     });
     const projectCoverAssets = coverAssetsQuery.data?.assets || [];
-    useEffect(() => { setName(project.name); setDescription(project.description || ""); setAspectRatio(project.aspectRatio); setSourceType(project.sourceType); setStylePresetId(project.stylePresetId || ""); setStyleProfileJson(project.styleProfileJson || ""); }, [project]);
-    const dirty = useMemo(() => name.trim() !== project.name || description !== (project.description || "") || aspectRatio !== project.aspectRatio || sourceType !== project.sourceType || stylePresetId !== (project.stylePresetId || "") || styleProfileJson !== (project.styleProfileJson || ""), [aspectRatio, description, name, project, sourceType, stylePresetId, styleProfileJson]);
+    useEffect(() => { setName(project.name); setDescription(project.description || ""); setAspectRatio(project.aspectRatio); setSourceType(project.sourceType); setStylePresetId(project.stylePresetId || ""); setStyleProfileJson(project.styleProfileJson || ""); setDefaultImageModel(project.defaultImageModel || ""); setDefaultVideoModel(project.defaultVideoModel || ""); }, [project]);
+    const dirty = useMemo(() => name.trim() !== project.name || description !== (project.description || "") || aspectRatio !== project.aspectRatio || sourceType !== project.sourceType || stylePresetId !== (project.stylePresetId || "") || styleProfileJson !== (project.styleProfileJson || "") || defaultImageModel !== (project.defaultImageModel || "") || defaultVideoModel !== (project.defaultVideoModel || ""), [aspectRatio, defaultImageModel, defaultVideoModel, description, name, project, sourceType, stylePresetId, styleProfileJson]);
     const selectedStyle = useMemo(() => resolveProjectCanvasStyle(stylePresetId, styleProfileJson), [stylePresetId, styleProfileJson]);
     const styleProfile = useMemo(() => parseStyleProfile(styleProfileJson) || selectedStyle?.profile || (selectedStyle ? createStyleProfileSnapshot(selectedStyle) : null), [selectedStyle, styleProfileJson]);
     const enabledStyleAssets = styleProfile?.assets.filter((asset) => asset.enabled !== false) || [];
@@ -91,7 +94,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
         for (const [itemId, resourceId] of coverResourceByItemId) coverResourceByItemIdRef.current.set(itemId, resourceId);
     }, [coverResourceByItemId]);
     const currentCoverItemId = coverPickerItems.find((item) => coverResourceByItemId.get(item.id) === project.coverResourceId)?.id;
-    const saveMutation = useMutation({ mutationFn: () => updateProject(project.id, { name: name.trim(), description, aspectRatio, sourceType, stylePresetId, styleProfileJson }), onSuccess: () => { refreshProject(); message.success("项目设置已保存"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目设置保存失败") });
+    const saveMutation = useMutation({ mutationFn: () => updateProject(project.id, { name: name.trim(), description, aspectRatio, sourceType, stylePresetId, styleProfileJson, defaultImageModel, defaultVideoModel }), onSuccess: () => { refreshProject(); message.success("项目设置已保存"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目设置保存失败") });
     const archiveMutation = useMutation({ mutationFn: () => updateProject(project.id, { status: project.status === "archived" ? "active" : "archived" }), onSuccess: () => { setArchiveOpen(false); refreshProject(); message.success(project.status === "archived" ? "项目已恢复" : "项目已归档"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目状态更新失败") });
     const coverMutation = useMutation({ mutationFn: (coverResourceId: string) => updateProject(project.id, { coverResourceId }), onSuccess: (_, coverResourceId) => { setCoverPickerOpen(false); refreshProject(); message.success(coverResourceId ? "项目主图已更新" : "项目主图已移除"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目主图更新失败") });
 
@@ -106,6 +109,24 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
                     <Field label="默认画幅"><Select className="w-full" value={aspectRatio} options={[{ label: "9:16 · 竖屏短剧", value: "9:16" }, { label: "16:9 · 横屏", value: "16:9" }, { label: "1:1 · 方形", value: "1:1" }]} onChange={setAspectRatio} /></Field>
                     <Field label="内容来源"><Select className="w-full" value={sourceType} options={[{ label: "空白开始", value: "blank" }, { label: "导入小说", value: "novel" }, { label: "粘贴文本", value: "text" }]} onChange={setSourceType} /></Field>
                     <Field label="项目简介" className="md:col-span-2 xl:col-span-4"><Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="一句话说明项目目标" /></Field>
+                </div>
+            </section>
+
+            <section className="border-t border-border/70 py-5">
+                <div className="mb-3"><h3 className="text-sm font-semibold">默认生成模型</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/45">分镜图、动作预演与镜头视频优先使用项目默认；未设置或模型不可用时跟随工作台全局默认。</p></div>
+                <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="默认生图模型">
+                        <div className="flex items-center gap-2">
+                            <ModelPicker config={effectiveConfig} value={defaultImageModel} capability="image" onChange={setDefaultImageModel} fullWidth placeholder={`跟随全局 · ${modelDisplayName(effectiveConfig, effectiveConfig.imageModel) || "未配置"}`} showSelectedPrice />
+                            {defaultImageModel ? <Button type="text" size="small" onClick={() => setDefaultImageModel("")}>跟随全局</Button> : null}
+                        </div>
+                    </Field>
+                    <Field label="默认视频模型">
+                        <div className="flex items-center gap-2">
+                            <ModelPicker config={effectiveConfig} value={defaultVideoModel} capability="video" onChange={setDefaultVideoModel} fullWidth placeholder={`跟随全局 · ${modelDisplayName(effectiveConfig, effectiveConfig.videoModel) || "未配置"}`} showSelectedPrice />
+                            {defaultVideoModel ? <Button type="text" size="small" onClick={() => setDefaultVideoModel("")}>跟随全局</Button> : null}
+                        </div>
+                    </Field>
                 </div>
             </section>
 

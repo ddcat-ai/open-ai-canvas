@@ -14,25 +14,29 @@ import (
 )
 
 type CreateProjectRequest struct {
-	Name             string `json:"name"`
-	Type             string `json:"type"`
-	AspectRatio      string `json:"aspectRatio"`
-	SourceType       string `json:"sourceType"`
-	Description      string `json:"description"`
-	StylePresetID    string `json:"stylePresetId"`
-	StyleProfileJSON string `json:"styleProfileJson"`
+	Name              string `json:"name"`
+	Type              string `json:"type"`
+	AspectRatio       string `json:"aspectRatio"`
+	SourceType        string `json:"sourceType"`
+	Description       string `json:"description"`
+	StylePresetID     string `json:"stylePresetId"`
+	StyleProfileJSON  string `json:"styleProfileJson"`
+	DefaultImageModel string `json:"defaultImageModel"`
+	DefaultVideoModel string `json:"defaultVideoModel"`
 }
 
 type UpdateProjectRequest struct {
-	Name             string  `json:"name"`
-	Type             string  `json:"type"`
-	AspectRatio      string  `json:"aspectRatio"`
-	SourceType       string  `json:"sourceType"`
-	Description      *string `json:"description"`
-	CoverResourceID  *string `json:"coverResourceId"`
-	StylePresetID    *string `json:"stylePresetId"`
-	StyleProfileJSON *string `json:"styleProfileJson"`
-	Status           string  `json:"status"`
+	Name              string  `json:"name"`
+	Type              string  `json:"type"`
+	AspectRatio       string  `json:"aspectRatio"`
+	SourceType        string  `json:"sourceType"`
+	Description       *string `json:"description"`
+	CoverResourceID   *string `json:"coverResourceId"`
+	StylePresetID     *string `json:"stylePresetId"`
+	StyleProfileJSON  *string `json:"styleProfileJson"`
+	DefaultImageModel *string `json:"defaultImageModel"`
+	DefaultVideoModel *string `json:"defaultVideoModel"`
+	Status            string  `json:"status"`
 }
 
 type CreateProjectUnitRequest struct {
@@ -240,7 +244,15 @@ func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.
 		return model.Project{}, BadAuthRequest(err.Error())
 	}
 	now := time.Now()
-	project := model.Project{ID: newID(), UserID: userID, Name: name, Type: projectType, AspectRatio: aspectRatio, SourceType: sourceType, Description: strings.TrimSpace(req.Description), StylePresetID: stylePresetID, StyleProfileJSON: styleProfileJSON, Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
+	defaultImageModel, err := normalizeProjectDefaultModel(req.DefaultImageModel)
+	if err != nil {
+		return model.Project{}, err
+	}
+	defaultVideoModel, err := normalizeProjectDefaultModel(req.DefaultVideoModel)
+	if err != nil {
+		return model.Project{}, err
+	}
+	project := model.Project{ID: newID(), UserID: userID, Name: name, Type: projectType, AspectRatio: aspectRatio, SourceType: sourceType, Description: strings.TrimSpace(req.Description), StylePresetID: stylePresetID, StyleProfileJSON: styleProfileJSON, DefaultImageModel: defaultImageModel, DefaultVideoModel: defaultVideoModel, Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateProject(&project); err != nil {
 		return model.Project{}, err
 	}
@@ -301,6 +313,20 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 		}
 		project.StyleProfileJSON = styleProfileJSON
 	}
+	if req.DefaultImageModel != nil {
+		defaultImageModel, modelErr := normalizeProjectDefaultModel(*req.DefaultImageModel)
+		if modelErr != nil {
+			return model.Project{}, modelErr
+		}
+		project.DefaultImageModel = defaultImageModel
+	}
+	if req.DefaultVideoModel != nil {
+		defaultVideoModel, modelErr := normalizeProjectDefaultModel(*req.DefaultVideoModel)
+		if modelErr != nil {
+			return model.Project{}, modelErr
+		}
+		project.DefaultVideoModel = defaultVideoModel
+	}
 	if err := validateStyleProfilePreset(project.StylePresetID, project.StyleProfileJSON); err != nil {
 		return model.Project{}, BadAuthRequest(err.Error())
 	}
@@ -316,6 +342,14 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 		return model.Project{}, err
 	}
 	return *project, nil
+}
+
+func normalizeProjectDefaultModel(value string) (string, error) {
+	modelRef := strings.TrimSpace(value)
+	if len(modelRef) > 500 {
+		return "", BadAuthRequest("项目默认模型标识过长")
+	}
+	return modelRef, nil
 }
 
 func (s *Service) DeleteProject(userID string, id string) error {

@@ -82,6 +82,42 @@ func TestUpdateProjectCoverRequiresOwnedReadyImage(t *testing.T) {
 	}
 }
 
+func TestUpdateProjectPersistsDefaultGenerationModels(t *testing.T) {
+	service, db := newProjectSettingsTestService(t)
+	now := time.Now()
+	project := model.Project{ID: "project-model-defaults", UserID: "user-1", Name: "短剧", Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	imageModel := " system-channel::image-model "
+	videoModel := "user-channel::MiniMax-H3"
+	updated, err := service.UpdateProject("user-1", project.ID, UpdateProjectRequest{DefaultImageModel: &imageModel, DefaultVideoModel: &videoModel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.DefaultImageModel != "system-channel::image-model" || updated.DefaultVideoModel != videoModel {
+		t.Fatalf("updated model defaults = %q / %q", updated.DefaultImageModel, updated.DefaultVideoModel)
+	}
+
+	var persisted model.Project
+	if err := db.First(&persisted, "id = ?", project.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if persisted.DefaultImageModel != updated.DefaultImageModel || persisted.DefaultVideoModel != updated.DefaultVideoModel {
+		t.Fatalf("persisted model defaults = %q / %q", persisted.DefaultImageModel, persisted.DefaultVideoModel)
+	}
+
+	empty := ""
+	cleared, err := service.UpdateProject("user-1", project.ID, UpdateProjectRequest{DefaultVideoModel: &empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.DefaultVideoModel != "" {
+		t.Fatalf("default video model = %q after clear", cleared.DefaultVideoModel)
+	}
+}
+
 func TestProjectUnitSummaryPersistsWordCount(t *testing.T) {
 	service, db := newProjectSettingsTestService(t)
 	now := time.Now()

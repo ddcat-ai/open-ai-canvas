@@ -14,6 +14,8 @@ export type Project = {
     coverResourceId?: string;
     stylePresetId: string;
     styleProfileJson?: string;
+    defaultImageModel?: string;
+    defaultVideoModel?: string;
     status: "active" | "archived" | string;
     revision: number;
     createdAt: string;
@@ -411,11 +413,11 @@ function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
     };
 }
 
-export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string; styleProfileJson?: string }) {
+export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string; styleProfileJson?: string; defaultImageModel?: string; defaultVideoModel?: string }) {
     return request<{ project: Project }>(api.post("/projects", input));
 }
 
-export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "coverResourceId" | "stylePresetId" | "styleProfileJson" | "status">>) {
+export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "coverResourceId" | "stylePresetId" | "styleProfileJson" | "defaultImageModel" | "defaultVideoModel" | "status">>) {
     return request<{ project: Project }>(api.patch(`/projects/${encodeURIComponent(projectId)}`, input));
 }
 

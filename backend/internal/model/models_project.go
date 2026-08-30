@@ -170,20 +170,22 @@ type CharacterVoiceBinding struct {
 
 // Project 是短剧领域聚合根；CanvasProject 仍代表可独立创作的画布文档。
 type Project struct {
-	ID               string        `json:"id" gorm:"primaryKey;size:36"`
-	UserID           string        `json:"userId" gorm:"index;size:36;uniqueIndex:idx_projects_user_name,priority:1"`
-	Name             string        `json:"name" gorm:"size:240;uniqueIndex:idx_projects_user_name,priority:2"`
-	Type             string        `json:"type" gorm:"size:32;index"`
-	AspectRatio      string        `json:"aspectRatio" gorm:"size:16"`
-	SourceType       string        `json:"sourceType" gorm:"size:32"`
-	Description      string        `json:"description" gorm:"type:text"`
-	CoverResourceID  string        `json:"coverResourceId,omitempty" gorm:"index;size:36"`
-	StylePresetID    string        `json:"stylePresetId" gorm:"size:64"`
-	StyleProfileJSON string        `json:"styleProfileJson" gorm:"type:text"`
-	Status           ProjectStatus `json:"status" gorm:"index;size:24"`
-	Revision         int64         `json:"revision"`
-	CreatedAt        time.Time     `json:"createdAt"`
-	UpdatedAt        time.Time     `json:"updatedAt" gorm:"index"`
+	ID                string        `json:"id" gorm:"primaryKey;size:36"`
+	UserID            string        `json:"userId" gorm:"index;size:36;uniqueIndex:idx_projects_user_name,priority:1"`
+	Name              string        `json:"name" gorm:"size:240;uniqueIndex:idx_projects_user_name,priority:2"`
+	Type              string        `json:"type" gorm:"size:32;index"`
+	AspectRatio       string        `json:"aspectRatio" gorm:"size:16"`
+	SourceType        string        `json:"sourceType" gorm:"size:32"`
+	Description       string        `json:"description" gorm:"type:text"`
+	CoverResourceID   string        `json:"coverResourceId,omitempty" gorm:"index;size:36"`
+	StylePresetID     string        `json:"stylePresetId" gorm:"size:64"`
+	StyleProfileJSON  string        `json:"styleProfileJson" gorm:"type:text"`
+	DefaultImageModel string        `json:"defaultImageModel,omitempty" gorm:"size:500"`
+	DefaultVideoModel string        `json:"defaultVideoModel,omitempty" gorm:"size:500"`
+	Status            ProjectStatus `json:"status" gorm:"index;size:24"`
+	Revision          int64         `json:"revision"`
+	CreatedAt         time.Time     `json:"createdAt"`
+	UpdatedAt         time.Time     `json:"updatedAt" gorm:"index"`
 }
 
 // StyleProfile 是用户可持续编辑的风格源；项目只保存应用当时的 JSON 快照，避免源对象更新污染历史生成。
