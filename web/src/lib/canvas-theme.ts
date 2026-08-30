@@ -4,7 +4,7 @@ export type CanvasBackgroundMode = "dots" | "lines" | "blank";
 export const canvasThemes = {
     light: {
         canvas: {
-            background: "#ffffff",
+            background: "#f4f5f7",
             dot: "rgba(15,23,42,.20)",
             line: "rgba(15,23,42,.15)",
             selectionFill: "rgba(17,17,17,.10)",
@@ -14,9 +14,9 @@ export const canvasThemes = {
             fill: "#ffffff",
             panel: "#ffffff",
             stroke: "#e2e4e8",
-            edge: "rgba(15,23,42,.16)",
-            shadow: "0 6px 18px rgba(15,23,42,.08)",
-            hoverShadow: "0 10px 24px rgba(15,23,42,.12)",
+            edge: "rgba(15,23,42,.18)",
+            shadow: "0 8px 22px rgba(15,23,42,.10), 0 1px 3px rgba(15,23,42,.08)",
+            hoverShadow: "0 14px 32px rgba(15,23,42,.16), 0 2px 6px rgba(15,23,42,.10)",
             activeStroke: "#111827",
             placeholder: "#9ca3af",
             text: "#111827",
@@ -70,19 +70,19 @@ export const canvasThemes = {
     },
     dark: {
         canvas: {
-            background: "#0b0b0b",
+            background: "#0d0f12",
             dot: "rgba(178,178,178,.18)",
             line: "rgba(178,178,178,.14)",
             selectionFill: "rgba(255,255,255,.12)",
         },
         node: {
             label: "#a3a3a3",
-            fill: "#181818",
+            fill: "#1b1d21",
             panel: "#141414",
             stroke: "rgba(255,255,255,.12)",
             edge: "rgba(255,255,255,.18)",
-            shadow: "0 8px 24px rgba(0,0,0,.34)",
-            hoverShadow: "0 12px 30px rgba(0,0,0,.46)",
+            shadow: "0 10px 28px rgba(0,0,0,.52), 0 1px 0 rgba(255,255,255,.05)",
+            hoverShadow: "0 16px 38px rgba(0,0,0,.68), 0 1px 0 rgba(255,255,255,.08)",
             activeStroke: "#f1f1f1",
             placeholder: "#737373",
             text: "#ededed",
