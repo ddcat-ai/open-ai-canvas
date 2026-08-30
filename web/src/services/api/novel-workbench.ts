@@ -10,8 +10,8 @@ export type NovelWorkbenchRun = {
     userId: string;
     projectId: string;
     outputMode: NovelWorkbenchMode | string;
-    engineVersion?: number;
-    status: "queued" | "running" | "paused" | "completed" | "failed" | string;
+    engineVersion: number;
+    status: "queued" | "running" | "paused" | "completed" | "failed" | "archived" | string;
     stage: string;
     pipelineStage?: string;
     qualityPolicy?: string;
@@ -25,77 +25,100 @@ export type NovelWorkbenchRun = {
     updatedAt: string;
 };
 
-export type NovelWorkbenchArc = {
-    index: number;
-    title: string;
-    startUnit: number;
-    endUnit: number;
-    mission: string;
-    escalation: string;
-    keyConflict: string;
-    turn: string;
-    exitDebt: string;
-    characters: string[];
-};
-
-export type NovelWorkbenchControl = {
-    engineVersion?: number;
-    title?: string;
-    logline?: string;
-    arcs?: NovelWorkbenchArc[];
-    brief?: Record<string, unknown>;
-    documents?: NovelWorkbenchControlDocuments;
-};
-
-export type NovelWorkbenchLedgerItem = {
+export type NovelWorkbenchV3Character = {
     id: string;
-    description: string;
+    name: string;
+    role: string;
+    desire: string;
+    fear: string;
+    voice: string;
+    initialState: string;
+};
+
+export type NovelWorkbenchV3Fact = {
+    id: string;
+    statement: string;
+    kind: "fact" | "promise" | "question" | string;
     introducedByUnit: number;
-    payoffByUnit: number;
+    resolveByUnit: number;
     ownerIds: string[];
 };
 
-export type NovelWorkbenchRoadmapEntry = {
+export type NovelWorkbenchV3Bible = {
+    premise?: string;
+    endingPromise?: string;
+    theme?: string;
+    worldRules?: string[];
+    characters?: NovelWorkbenchV3Character[];
+    facts?: NovelWorkbenchV3Fact[];
+};
+
+export type NovelWorkbenchV3StoryArc = {
     id: string;
     title: string;
     startUnit: number;
     endUnit: number;
     mission: string;
-    escalation: string;
-    keyTurn: string;
-    exitDebt: string;
-    plannedIntroductions: string[];
-    plannedPayoffs: string[];
+    turningPoint: string;
+    exitPromise: string;
 };
 
-export type NovelWorkbenchControlDocuments = {
-    projectOverview?: Record<string, unknown>;
-    themeAndProposition?: Record<string, unknown>;
-    worldbuilding?: Record<string, unknown>;
-    castBible?: Array<Record<string, unknown>>;
-    relationshipMap?: Array<Record<string, unknown>>;
-    mainPlotlines?: Array<Record<string, unknown>>;
-    foreshadowLedger?: NovelWorkbenchLedgerItem[];
-    readerPromiseLedger?: NovelWorkbenchLedgerItem[];
-    chapterRoadmap?: NovelWorkbenchRoadmapEntry[];
-    styleGuide?: Record<string, unknown>;
-    writingLog?: Array<Record<string, unknown>>;
+export type NovelWorkbenchV3StyleGuide = {
+    narrativeVoice?: string;
+    pacingRules?: string[];
+    forbiddenDrift?: string[];
+};
+
+export type NovelWorkbenchV3EpisodePacket = {
+    unit: number;
+    title: string;
+    entryBridge: string;
+    goal: string;
+    pressure: string;
+    choice: string;
+    turn: string;
+    exitDebt: string;
+    characterIds: string[];
+    factActions?: Array<{ factId: string; action: string; visibleEvent: string }>;
+    characterChanges?: Array<{ characterId: string; toStatus: string; toLocation: string; reason: string }>;
+    knowledgeGrants?: Array<{ characterId: string; factIds: string[]; reason: string }>;
+    requiredEvents: string[];
+    allowedConclusion: string;
+    forbiddenConclusions: string[];
+};
+
+export type NovelWorkbenchV3ArcPackage = {
+    version: number;
+    arcId: string;
+    title: string;
+    startUnit: number;
+    endUnit: number;
+    entryDigest: string;
+    arcSummary: string;
+    packets: NovelWorkbenchV3EpisodePacket[];
+    sealedAt?: string;
+};
+
+export type NovelWorkbenchControl = {
+    engineVersion: number;
+    title?: string;
+    logline?: string;
+    brief?: Record<string, unknown>;
+    bible?: NovelWorkbenchV3Bible;
+    storyMap?: NovelWorkbenchV3StoryArc[];
+    style?: NovelWorkbenchV3StyleGuide;
 };
 
 export type NovelWorkbenchDynamicState = {
     completedUnit: number;
-    currentArc: string;
+    currentArc?: NovelWorkbenchV3ArcPackage | null;
+    currentArcId?: string;
     lastUnitSummary: string;
     nextUnitBridge: string;
-    narrativeFacts?: Record<string, { id: string; statement: string; status: string; establishedUnit: number }>;
-    currentRoadmapId?: string;
-    currentRoadmapTitle?: string;
-    openDebtIds?: string[];
-    characterStates?: Record<string, string>;
-    relationshipStates?: Record<string, string>;
-    plotlineStates?: Record<string, string>;
-    foreshadowStates?: Record<string, string>;
-    promiseStates?: Record<string, string>;
+    factStates?: Record<string, string>;
+    openQuestions?: Array<{ id: string; text: string; openedUnit: number }>;
+    recentSummaries?: Array<{ unit: number; title: string; summary: string }>;
+    characterStates?: Record<string, { status?: string; location?: string; knownFactIds?: string[] }>;
 };
 
 export type NovelWorkbenchArtifact = {

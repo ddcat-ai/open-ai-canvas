@@ -9,7 +9,7 @@ import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/
 import { ModelPicker } from "@/components/model-picker";
 import { settingsPath } from "@/lib/settings-navigation";
 import { backendProviderConfig } from "@/services/api/generation-task";
-import { listNovelWorkbenchRuns, pauseNovelWorkbench, rebuildNovelWorkbench, resumeNovelWorkbench, startNovelWorkbench, type NovelWorkbenchMode, type NovelWorkbenchRunSummary, type StartNovelWorkbenchInput } from "@/services/api/novel-workbench";
+import { listNovelWorkbenchRuns, pauseNovelWorkbench, resumeNovelWorkbench, startNovelWorkbench, type NovelWorkbenchMode, type NovelWorkbenchRunSummary, type StartNovelWorkbenchInput } from "@/services/api/novel-workbench";
 import { logicalModelIDForConfig, modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
 
 type WorkbenchDraft = {
@@ -131,18 +131,6 @@ export default function NovelsPage() {
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "恢复失败"),
     });
-    const rebuildMutation = useMutation({
-        mutationFn: (projectId: string) => {
-            const runtime = createRuntimeConfig();
-            return rebuildNovelWorkbench(projectId, runtime);
-        },
-        onSuccess: ({ project }) => {
-            void queryClient.invalidateQueries({ queryKey: ["novel-workbench", "runs"] });
-            message.success(`已建立《${project.name}》的强控制版本`);
-            navigate(`/novels/${project.id}/control`);
-        },
-        onError: (error) => message.error(error instanceof Error ? error.message : "重建失败"),
-    });
 
     const textModel = selectedModel || effectiveConfig.textModel;
     const selectedModelName = textModel ? modelDisplayName(effectiveConfig, textModel) : "未选择文本模型";
@@ -209,10 +197,8 @@ export default function NovelsPage() {
                             onOpen={() => navigate(`/novels/${item.project.id}/control`)}
                             onPause={() => pauseMutation.mutate(item.project.id)}
                             onResume={() => resumeMutation.mutate(item.project.id)}
-                            onRebuild={() => rebuildMutation.mutate(item.project.id)}
                             pausing={pauseMutation.isPending && pauseMutation.variables === item.project.id}
                             resuming={resumeMutation.isPending && resumeMutation.variables === item.project.id}
-                            rebuilding={rebuildMutation.isPending && rebuildMutation.variables === item.project.id}
                         />
                     ))}
                 </section>
@@ -352,25 +338,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
     );
 }
 
-function RunCard({
-    item,
-    onOpen,
-    onPause,
-    onResume,
-    onRebuild,
-    pausing,
-    resuming,
-    rebuilding,
-}: {
-    item: NovelWorkbenchRunSummary;
-    onOpen: () => void;
-    onPause: () => void;
-    onResume: () => void;
-    onRebuild: () => void;
-    pausing: boolean;
-    resuming: boolean;
-    rebuilding: boolean;
-}) {
+function RunCard({ item, onOpen, onPause, onResume, pausing, resuming }: { item: NovelWorkbenchRunSummary; onOpen: () => void; onPause: () => void; onResume: () => void; pausing: boolean; resuming: boolean }) {
     const { run, project, title, logline, currentArc } = item;
     const label = unitLabel(run.outputMode);
     const nextUnit = Math.min(run.targetUnitCount, Math.max(1, run.completedUnitCount + 1));
@@ -415,19 +383,9 @@ function RunCard({
                     <Button size="small" type="text" icon={<ArrowUpRight className="size-3.5" />} onClick={onOpen}>
                         控制台
                     </Button>
-                    {run.engineVersion && run.engineVersion >= 2 ? (
-                        <Tooltip title="强控制系统：档案、账本、审稿与提交记录已启用">
-                            <ShieldCheck className="size-4 text-emerald-500" />
-                        </Tooltip>
-                    ) : run.status === "archived" ? (
-                        <Tooltip title="重建前快照仅供查看">
-                            <ShieldCheck className="size-4 text-foreground/40" />
-                        </Tooltip>
-                    ) : (
-                        <Button size="small" type="text" icon={<ShieldCheck className="size-3.5" />} loading={rebuilding} onClick={onRebuild}>
-                            强控重建
-                        </Button>
-                    )}
+                    <Tooltip title="V3 弧级控制：全书正史、封存执行包、审稿与原子提交已启用">
+                        <ShieldCheck className="size-4 text-emerald-500" />
+                    </Tooltip>
                     {active ? (
                         <Button size="small" icon={<Pause className="size-3.5" />} loading={pausing} onClick={onPause}>
                             暂停

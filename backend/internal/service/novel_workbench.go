@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -25,6 +24,7 @@ const (
 	novelWorkbenchStatusPaused    = "paused"
 	novelWorkbenchStatusCompleted = "completed"
 	novelWorkbenchStatusFailed    = "failed"
+	novelWorkbenchStatusArchived  = "archived"
 
 	novelWorkbenchPhaseBootstrap = "bootstrap"
 	novelWorkbenchPhaseUnit      = "unit"
@@ -33,8 +33,8 @@ const (
 	novelWorkbenchAudienceSelectionLimit = 2
 )
 
-// StartNovelWorkbenchRequest 是小说工作台的创作简报。它不把 80 集写死：
-// targetUnitCount 可以是章节或集数，outputMode 决定最终正文的表现形式。
+// StartNovelWorkbenchRequest 是小说工作台的创作简报。targetUnitCount 可以是章节或集数，
+// outputMode 决定最终正文的表现形式。
 type StartNovelWorkbenchRequest struct {
 	ProjectName         string         `json:"projectName"`
 	Premise             string         `json:"premise"`
@@ -95,75 +95,6 @@ type novelWorkbenchBrief struct {
 	CustomRequirements  string `json:"customRequirements"`
 }
 
-// novelWorkbenchArc 只定义一段创作弧线，而不是预写每一集的流水账。
-// 每个实际单元的细化控制卡会在执行前结合最新状态生成。
-type novelWorkbenchArc struct {
-	Index       int      `json:"index"`
-	Title       string   `json:"title"`
-	StartUnit   int      `json:"startUnit"`
-	EndUnit     int      `json:"endUnit"`
-	Mission     string   `json:"mission"`
-	Escalation  string   `json:"escalation"`
-	KeyConflict string   `json:"keyConflict"`
-	Turn        string   `json:"turn"`
-	ExitDebt    string   `json:"exitDebt"`
-	Characters  []string `json:"characters"`
-}
-
-type novelWorkbenchControl struct {
-	Version    int                 `json:"version"`
-	Title      string              `json:"title"`
-	Logline    string              `json:"logline"`
-	Brief      novelWorkbenchBrief `json:"brief"`
-	StoryBible map[string]any      `json:"storyBible"`
-	Arcs       []novelWorkbenchArc `json:"arcs"`
-}
-
-type novelWorkbenchAuditEntry struct {
-	Unit    int       `json:"unit"`
-	Title   string    `json:"title"`
-	Summary string    `json:"summary"`
-	At      time.Time `json:"at"`
-}
-
-type novelWorkbenchState struct {
-	CompletedUnit      int                        `json:"completedUnit"`
-	CurrentArc         string                     `json:"currentArc"`
-	LastUnitSummary    string                     `json:"lastUnitSummary"`
-	CharacterStates    []string                   `json:"characterStates"`
-	RelationshipStates []string                   `json:"relationshipStates"`
-	PlotlineStates     []string                   `json:"plotlineStates"`
-	ForeshadowStates   []string                   `json:"foreshadowStates"`
-	OpenDebts          []string                   `json:"openDebts"`
-	NextUnitBridge     string                     `json:"nextUnitBridge"`
-	AuditTrail         []novelWorkbenchAuditEntry `json:"auditTrail"`
-}
-
-type novelWorkbenchBootstrapOutput struct {
-	Title      string              `json:"title"`
-	Logline    string              `json:"logline"`
-	StoryBible map[string]any      `json:"storyBible"`
-	Arcs       []novelWorkbenchArc `json:"arcs"`
-}
-
-type novelWorkbenchWriteback struct {
-	CharacterStates    []string `json:"characterStates"`
-	RelationshipStates []string `json:"relationshipStates"`
-	PlotlineStates     []string `json:"plotlineStates"`
-	ForeshadowStates   []string `json:"foreshadowStates"`
-	OpenDebts          []string `json:"openDebts"`
-	NextUnitBridge     string   `json:"nextUnitBridge"`
-	QualityNotes       []string `json:"qualityNotes"`
-}
-
-type novelWorkbenchUnitOutput struct {
-	Unit      int                     `json:"unit"`
-	Title     string                  `json:"title"`
-	Content   string                  `json:"content"`
-	Summary   string                  `json:"summary"`
-	Writeback novelWorkbenchWriteback `json:"writeback"`
-}
-
 type novelWorkbenchTaskInput struct {
 	Mode   string         `json:"mode"`
 	Config providerConfig `json:"config"`
@@ -196,19 +127,19 @@ func (s *Service) StartNovelWorkbench(userID string, req StartNovelWorkbenchRequ
 		return nil, err
 	}
 
-	controlJSON, err := json.Marshal(newNovelWorkbenchV2Control(brief))
+	controlJSON, err := json.Marshal(newNovelWorkbenchV3Control(brief))
 	if err != nil {
 		return nil, err
 	}
-	stateJSON, err := json.Marshal(newNovelWorkbenchV2State())
+	stateJSON, err := json.Marshal(newNovelWorkbenchV3State())
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
 	run := model.NovelWorkbenchRun{
 		ID: newID(), UserID: userID, ProjectID: project.ID, OutputMode: brief.OutputMode,
-		EngineVersion: novelWorkbenchV2EngineVersion, Status: novelWorkbenchStatusQueued, Stage: "等待建立创作控制档案",
-		PipelineStage: novelWorkbenchV2PipelineBootstrap, QualityPolicy: novelWorkbenchV2QualityPolicy,
+		EngineVersion: novelWorkbenchV3EngineVersion, Status: novelWorkbenchStatusQueued, Stage: "等待建立弧级创作档案",
+		PipelineStage: novelWorkbenchV3PipelineBootstrap, QualityPolicy: novelWorkbenchV3QualityPolicy,
 		TargetUnitCount: brief.TargetUnitCount, ControlJSON: string(controlJSON), DynamicStateJSON: string(stateJSON),
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -217,7 +148,7 @@ func (s *Service) StartNovelWorkbench(userID string, req StartNovelWorkbenchRequ
 		return nil, err
 	}
 
-	task, err := s.enqueueNovelWorkbenchTask(userID, project.ID, run.ID, novelWorkbenchPhaseBootstrap, 0, req.Config, req.LogicalModelID, "建立小说工作台总控档案")
+	task, err := s.enqueueNovelWorkbenchTask(userID, project.ID, run.ID, novelWorkbenchPhaseBootstrap, 0, req.Config, req.LogicalModelID, "建立弧级创作档案")
 	if err != nil {
 		_ = s.DeleteProject(userID, project.ID)
 		return nil, err
@@ -230,6 +161,8 @@ func (s *Service) StartNovelWorkbench(userID string, req StartNovelWorkbenchRequ
 	return &StartNovelWorkbenchResult{Project: project, Run: run, Task: taskForOutput(*task)}, nil
 }
 
+// ListNovelWorkbenchRuns deliberately exposes only V3 runs. Historical rows
+// remain intact in the database, but cannot enter the active workbench again.
 func (s *Service) ListNovelWorkbenchRuns(userID string) ([]NovelWorkbenchRunSummary, error) {
 	runs, err := s.repo.NovelWorkbenchRuns(userID)
 	if err != nil {
@@ -237,27 +170,22 @@ func (s *Service) ListNovelWorkbenchRuns(userID string) ([]NovelWorkbenchRunSumm
 	}
 	result := make([]NovelWorkbenchRunSummary, 0, len(runs))
 	for _, run := range runs {
+		if run.EngineVersion != novelWorkbenchV3EngineVersion {
+			continue
+		}
 		project, projectErr := s.repo.ProjectForUser(userID, run.ProjectID)
 		if projectErr != nil {
 			return nil, projectErr
 		}
 		title, logline, currentArc := project.Name, "", ""
-		if run.EngineVersion >= novelWorkbenchV2EngineVersion {
-			control, controlErr := decodeNovelWorkbenchV2Control(run.ControlJSON)
-			state, stateErr := decodeNovelWorkbenchV2State(run.DynamicStateJSON)
-			if controlErr == nil {
-				title = firstNonEmptyString(control.Title, project.Name)
-				logline = control.Logline
-			}
-			if stateErr == nil {
-				currentArc = state.CurrentRoadmapTitle
-			}
-		} else {
-			control, _ := decodeNovelWorkbenchControl(run.ControlJSON)
-			state, _ := decodeNovelWorkbenchState(run.DynamicStateJSON)
+		control, controlErr := decodeNovelWorkbenchV3Control(run.ControlJSON)
+		state, stateErr := decodeNovelWorkbenchV3State(run.DynamicStateJSON)
+		if controlErr == nil {
 			title = firstNonEmptyString(control.Title, project.Name)
 			logline = control.Logline
-			currentArc = state.CurrentArc
+		}
+		if stateErr == nil {
+			currentArc = state.CurrentArcTitle()
 		}
 		result = append(result, NovelWorkbenchRunSummary{
 			Run: run, Project: *project, Title: title, Logline: logline, CurrentArc: currentArc,
@@ -278,26 +206,18 @@ func (s *Service) NovelWorkbenchRunDetail(userID string, projectID string) (*Nov
 	if run.UserID != userID {
 		return nil, gorm.ErrRecordNotFound
 	}
+	if run.EngineVersion != novelWorkbenchV3EngineVersion {
+		return nil, BadAuthRequest("小说工作台仅保留 V3 弧级创作项目")
+	}
 	artifacts, err := s.repo.NovelWorkbenchArtifacts(run.ID)
 	if err != nil {
 		return nil, err
 	}
-	if run.EngineVersion >= novelWorkbenchV2EngineVersion {
-		control, controlErr := decodeNovelWorkbenchV2Control(run.ControlJSON)
-		if controlErr != nil {
-			return nil, controlErr
-		}
-		state, stateErr := decodeNovelWorkbenchV2State(run.DynamicStateJSON)
-		if stateErr != nil {
-			return nil, stateErr
-		}
-		return &NovelWorkbenchRunDetail{Run: *run, Project: *project, Control: control, DynamicState: state, Artifacts: artifacts}, nil
-	}
-	control, err := decodeNovelWorkbenchControl(run.ControlJSON)
+	control, err := decodeNovelWorkbenchV3Control(run.ControlJSON)
 	if err != nil {
 		return nil, err
 	}
-	state, err := decodeNovelWorkbenchState(run.DynamicStateJSON)
+	state, err := decodeNovelWorkbenchV3State(run.DynamicStateJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -308,6 +228,9 @@ func (s *Service) PauseNovelWorkbench(ctx context.Context, userID string, projec
 	run, err := s.novelWorkbenchRunForUser(userID, projectID)
 	if err != nil {
 		return nil, err
+	}
+	if run.EngineVersion != novelWorkbenchV3EngineVersion {
+		return nil, BadAuthRequest("小说工作台仅保留 V3 弧级创作项目")
 	}
 	if run.Status == novelWorkbenchStatusCompleted {
 		return nil, BadAuthRequest("这部作品已经完成，不需要暂停")
@@ -342,6 +265,9 @@ func (s *Service) ResumeNovelWorkbench(userID string, projectID string, req Resu
 	if err != nil {
 		return nil, nil, err
 	}
+	if run.EngineVersion != novelWorkbenchV3EngineVersion {
+		return nil, nil, BadAuthRequest("小说工作台仅保留 V3 弧级创作项目")
+	}
 	if run.Status == novelWorkbenchStatusCompleted {
 		return nil, nil, BadAuthRequest("这部作品已经完成")
 	}
@@ -353,20 +279,11 @@ func (s *Service) ResumeNovelWorkbench(userID string, projectID string, req Resu
 			return nil, nil, BadAuthRequest("当前已有进行中的创作任务")
 		}
 	}
-	needsBootstrap := false
-	if run.EngineVersion >= novelWorkbenchV2EngineVersion {
-		control, controlErr := decodeNovelWorkbenchV2Control(run.ControlJSON)
-		if controlErr != nil {
-			return nil, nil, controlErr
-		}
-		needsBootstrap = !novelWorkbenchV2ControlReady(control)
-	} else {
-		control, controlErr := decodeNovelWorkbenchControl(run.ControlJSON)
-		if controlErr != nil {
-			return nil, nil, controlErr
-		}
-		needsBootstrap = strings.TrimSpace(control.Title) == "" || len(control.Arcs) == 0
+	control, controlErr := decodeNovelWorkbenchV3Control(run.ControlJSON)
+	if controlErr != nil {
+		return nil, nil, controlErr
 	}
+	needsBootstrap := !novelWorkbenchV3ControlReady(control)
 	phase := novelWorkbenchPhaseUnit
 	unit := run.CompletedUnitCount + 1
 	label := fmt.Sprintf("继续生成第 %d 单元", unit)
@@ -388,10 +305,10 @@ func (s *Service) ResumeNovelWorkbench(userID string, projectID string, req Resu
 
 	run.Status = novelWorkbenchStatusQueued
 	run.Stage = label
-	if phase == novelWorkbenchPhaseBootstrap && run.EngineVersion >= novelWorkbenchV2EngineVersion {
-		run.PipelineStage = novelWorkbenchV2PipelineBootstrap
-	} else if run.EngineVersion >= novelWorkbenchV2EngineVersion {
-		run.PipelineStage = novelWorkbenchV2PipelinePrepare
+	if phase == novelWorkbenchPhaseBootstrap {
+		run.PipelineStage = novelWorkbenchV3PipelineBootstrap
+	} else {
+		run.PipelineStage = novelWorkbenchV3PipelinePrepare
 	}
 	run.CurrentTaskID = ""
 	run.LastError = ""
@@ -418,7 +335,7 @@ func (s *Service) ResumeNovelWorkbench(userID string, projectID string, req Resu
 }
 
 func (s *Service) processNovelWorkbenchTask(ctx context.Context, task model.Task) (map[string]interface{}, []map[string]interface{}, error) {
-	input, config, err := parseNovelWorkbenchTaskInput(task.InputJSON)
+	input, _, err := parseNovelWorkbenchTaskInput(task.InputJSON)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -431,6 +348,9 @@ func (s *Service) processNovelWorkbenchTask(ctx context.Context, task model.Task
 	}
 	if run.UserID != task.UserID || run.ID != input.RunID {
 		return nil, nil, errors.New("小说工作台任务与项目状态不匹配")
+	}
+	if run.EngineVersion != novelWorkbenchV3EngineVersion {
+		return nil, nil, errors.New("小说工作台仅保留 V3 弧级创作项目")
 	}
 	if run.Status == novelWorkbenchStatusPaused {
 		return nil, nil, errors.New("小说工作台已暂停")
@@ -455,183 +375,12 @@ func (s *Service) processNovelWorkbenchTask(ctx context.Context, task model.Task
 		return nil, nil, err
 	}
 
-	var result map[string]interface{}
-	if run.EngineVersion >= novelWorkbenchV2EngineVersion {
-		result, err = s.processNovelWorkbenchV2Task(ctx, task, run, input, config, resolvedConfig)
-		if err != nil {
-			s.markNovelWorkbenchFailure(run, task, err)
-			return nil, nil, err
-		}
-		return result, nil, nil
-	}
-	switch input.Phase {
-	case novelWorkbenchPhaseBootstrap:
-		result, err = s.processNovelWorkbenchBootstrap(ctx, task, run, input, config, resolvedConfig)
-	case novelWorkbenchPhaseUnit:
-		result, err = s.processNovelWorkbenchUnit(ctx, task, run, input, config, resolvedConfig)
-	default:
-		err = fmt.Errorf("小说工作台不支持的任务阶段：%s", input.Phase)
-	}
+	result, err := s.processNovelWorkbenchV3Task(ctx, task, run, input, resolvedConfig)
 	if err != nil {
 		s.markNovelWorkbenchFailure(run, task, err)
 		return nil, nil, err
 	}
 	return result, nil, nil
-}
-
-func (s *Service) processNovelWorkbenchBootstrap(ctx context.Context, task model.Task, run *model.NovelWorkbenchRun, input novelWorkbenchTaskInput, config map[string]any, resolvedConfig providerConfig) (map[string]interface{}, error) {
-	control, err := decodeNovelWorkbenchControl(run.ControlJSON)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.repo.UpdateTaskProgress(task.ID, "构建创作总控档案", 45); err != nil {
-		return nil, err
-	}
-	prompt := buildNovelWorkbenchBootstrapPrompt(control.Brief)
-	generated, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: prompt, Config: resolvedConfig, StreamText: true, MaxOutputTokens: novelWorkbenchBootstrapTokenLimit(control.Brief.TargetUnitCount)})
-	if err != nil {
-		return nil, err
-	}
-	output, parseErr := decodeNovelWorkbenchBootstrap(stringValue(generated["text"]))
-	if parseErr == nil {
-		parseErr = validateNovelWorkbenchBootstrap(&output, control.Brief)
-	}
-	if parseErr != nil {
-		if err := s.repo.UpdateTaskProgress(task.ID, "修复总控档案结构", 64); err != nil {
-			return nil, err
-		}
-		repaired, repairErr := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: buildNovelWorkbenchBootstrapRepairPrompt(control.Brief, stringValue(generated["text"]), parseErr), Config: resolvedConfig, StreamText: true, MaxOutputTokens: novelWorkbenchBootstrapTokenLimit(control.Brief.TargetUnitCount)})
-		if repairErr != nil {
-			return nil, fmt.Errorf("总控档案结构修复失败：%w", repairErr)
-		}
-		output, parseErr = decodeNovelWorkbenchBootstrap(stringValue(repaired["text"]))
-		if parseErr == nil {
-			parseErr = validateNovelWorkbenchBootstrap(&output, control.Brief)
-		}
-		if parseErr != nil {
-			return nil, fmt.Errorf("总控档案结构修复后仍不可用：%w", parseErr)
-		}
-	}
-
-	control.Version = 1
-	control.Title = output.Title
-	control.Logline = output.Logline
-	control.StoryBible = output.StoryBible
-	control.Arcs = output.Arcs
-	controlJSON, err := json.Marshal(control)
-	if err != nil {
-		return nil, err
-	}
-	stateJSON, err := json.Marshal(novelWorkbenchState{})
-	if err != nil {
-		return nil, err
-	}
-	run.ControlJSON = string(controlJSON)
-	run.DynamicStateJSON = string(stateJSON)
-	run.CompletedUnitCount = 0
-	run.CurrentUnit = 0
-	prepareNovelWorkbenchContinuation(run, "总控档案完成，等待第 1 单元")
-	if err := s.repo.UpdateNovelWorkbenchRun(run); err != nil {
-		return nil, err
-	}
-	if err := s.repo.UpdateTaskProgress(task.ID, "保存总控档案", 82); err != nil {
-		return nil, err
-	}
-	result := novelWorkbenchContinuationDirective(1, "生成第 1 单元")
-	result["projectId"] = run.ProjectID
-	result["title"] = control.Title
-	result["logline"] = control.Logline
-	result["arcCount"] = len(control.Arcs)
-	result["status"] = run.Status
-	return result, nil
-}
-
-func (s *Service) processNovelWorkbenchUnit(ctx context.Context, task model.Task, run *model.NovelWorkbenchRun, input novelWorkbenchTaskInput, config map[string]any, resolvedConfig providerConfig) (map[string]interface{}, error) {
-	expectedUnit := run.CompletedUnitCount + 1
-	if input.Unit != expectedUnit || input.Unit < 1 || input.Unit > run.TargetUnitCount {
-		return nil, fmt.Errorf("当前应生成第 %d 单元，收到第 %d 单元", expectedUnit, input.Unit)
-	}
-	control, err := decodeNovelWorkbenchControl(run.ControlJSON)
-	if err != nil {
-		return nil, err
-	}
-	state, err := decodeNovelWorkbenchState(run.DynamicStateJSON)
-	if err != nil {
-		return nil, err
-	}
-	arc, ok := novelWorkbenchArcForUnit(control.Arcs, input.Unit)
-	if !ok {
-		return nil, fmt.Errorf("第 %d 单元没有可执行的分部弧线", input.Unit)
-	}
-	if err := s.repo.UpdateTaskProgress(task.ID, fmt.Sprintf("第 %d 单元：生成详细控制卡", input.Unit), 46); err != nil {
-		return nil, err
-	}
-	prompt := buildNovelWorkbenchUnitPrompt(control, state, arc, input.Unit)
-	generated, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: prompt, Config: resolvedConfig, StreamText: true, MaxOutputTokens: novelWorkbenchUnitTokenLimit(control.Brief.TargetUnitLength)})
-	if err != nil {
-		return nil, err
-	}
-	output, parseErr := decodeNovelWorkbenchUnit(stringValue(generated["text"]))
-	if parseErr == nil {
-		parseErr = validateNovelWorkbenchUnit(&output, control.Brief, input.Unit)
-	}
-	if parseErr != nil {
-		if err := s.repo.UpdateTaskProgress(task.ID, fmt.Sprintf("第 %d 单元：修复正文结构", input.Unit), 68); err != nil {
-			return nil, err
-		}
-		repaired, repairErr := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: buildNovelWorkbenchUnitRepairPrompt(control.Brief, input.Unit, stringValue(generated["text"]), parseErr), Config: resolvedConfig, StreamText: true, MaxOutputTokens: novelWorkbenchUnitTokenLimit(control.Brief.TargetUnitLength)})
-		if repairErr != nil {
-			return nil, fmt.Errorf("第 %d 单元修复失败：%w", input.Unit, repairErr)
-		}
-		output, parseErr = decodeNovelWorkbenchUnit(stringValue(repaired["text"]))
-		if parseErr == nil {
-			parseErr = validateNovelWorkbenchUnit(&output, control.Brief, input.Unit)
-		}
-		if parseErr != nil {
-			return nil, fmt.Errorf("第 %d 单元修复后仍不可用：%w", input.Unit, parseErr)
-		}
-	}
-	if err := s.repo.UpdateTaskProgress(task.ID, fmt.Sprintf("第 %d 单元：连续性验收并写回", input.Unit), 82); err != nil {
-		return nil, err
-	}
-	title := novelWorkbenchUnitTitle(control.Brief.OutputMode, input.Unit, output.Title)
-	if _, err := s.upsertNovelWorkbenchUnit(run.ProjectID, input.Unit-1, control.Brief.OutputMode, title, strings.TrimSpace(output.Content)); err != nil {
-		return nil, err
-	}
-	state = applyNovelWorkbenchWriteback(state, arc, input.Unit, title, output)
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		return nil, err
-	}
-	run.DynamicStateJSON = string(stateJSON)
-	run.CompletedUnitCount = input.Unit
-	run.CurrentUnit = input.Unit
-	run.LastError = ""
-	run.CurrentTaskID = ""
-	run.UpdatedAt = time.Now()
-	if input.Unit >= run.TargetUnitCount {
-		run.Status = novelWorkbenchStatusCompleted
-		run.Stage = "已完成"
-		if err := s.repo.UpdateNovelWorkbenchRun(run); err != nil {
-			return nil, err
-		}
-		return map[string]interface{}{
-			"projectId": run.ProjectID, "unit": input.Unit, "title": title,
-			"completed": true, "completedUnitCount": run.CompletedUnitCount,
-		}, nil
-	}
-
-	prepareNovelWorkbenchContinuation(run, fmt.Sprintf("第 %d 单元已写回，等待第 %d 单元", input.Unit, input.Unit+1))
-	if err := s.repo.UpdateNovelWorkbenchRun(run); err != nil {
-		return nil, err
-	}
-	result := novelWorkbenchContinuationDirective(input.Unit+1, fmt.Sprintf("生成第 %d 单元", input.Unit+1))
-	result["projectId"] = run.ProjectID
-	result["unit"] = input.Unit
-	result["title"] = title
-	result["completed"] = false
-	result["completedUnitCount"] = run.CompletedUnitCount
-	return result, nil
 }
 
 func (s *Service) enqueueNovelWorkbenchTask(userID string, projectID string, runID string, phase string, unit int, config map[string]any, logicalModelID string, label string) (*model.Task, error) {
@@ -659,8 +408,8 @@ func novelWorkbenchContinuationDirective(unit int, label string) map[string]inte
 	}
 }
 
-// scheduleNovelWorkbenchContinuation 在当前任务已经落为成功后再排入下一单元。
-// 这样一部长篇作品始终只占用一个活动任务名额，不会被自身的续写任务卡住。
+// scheduleNovelWorkbenchContinuation runs only after the current task is
+// marked successful, so a long work occupies at most one active task slot.
 func (s *Service) scheduleNovelWorkbenchContinuation(task model.Task, protectedInput string, result map[string]interface{}) error {
 	phase := strings.TrimSpace(stringValue(result["nextPhase"]))
 	if phase == "" {
@@ -694,6 +443,9 @@ func (s *Service) scheduleNovelWorkbenchContinuation(task model.Task, protectedI
 	}
 	if run.UserID != task.UserID || run.ID != input.RunID {
 		return errors.New("小说工作台续写任务与运行记录不匹配")
+	}
+	if run.EngineVersion != novelWorkbenchV3EngineVersion {
+		return errors.New("小说工作台仅保留 V3 弧级创作项目")
 	}
 	if run.Status == novelWorkbenchStatusPaused || run.Status == novelWorkbenchStatusCompleted {
 		return nil
@@ -735,39 +487,6 @@ func (s *Service) markNovelWorkbenchContinuationFailure(projectID string, cause 
 	run.LastError = truncateRunes(cause.Error(), 2_000)
 	run.UpdatedAt = time.Now()
 	_ = s.repo.UpdateNovelWorkbenchRun(run)
-}
-
-func (s *Service) upsertNovelWorkbenchUnit(projectID string, position int, outputMode string, title string, content string) (*model.ProjectUnit, error) {
-	unit, err := s.repo.ProjectUnitAtPosition(projectID, position)
-	if err == nil {
-		unit.Kind = novelWorkbenchProjectUnitKind(outputMode)
-		unit.Title = title
-		unit.SourceText = content
-		unit.Status = model.ProjectUnitStatusReady
-		unit.UpdatedAt = time.Now()
-		if err := s.repo.UpdateProjectUnit(unit); err != nil {
-			return nil, err
-		}
-		if err := s.repo.BumpProjectRevision(projectID); err != nil {
-			return nil, err
-		}
-		return unit, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	now := time.Now()
-	created := &model.ProjectUnit{
-		ID: newID(), ProjectID: projectID, Kind: novelWorkbenchProjectUnitKind(outputMode), Title: title,
-		SourceText: content, Status: model.ProjectUnitStatusReady, Position: position, CreatedAt: now, UpdatedAt: now,
-	}
-	if err := s.repo.CreateProjectUnit(created); err != nil {
-		return nil, err
-	}
-	if err := s.repo.BumpProjectRevision(projectID); err != nil {
-		return nil, err
-	}
-	return created, nil
 }
 
 func (s *Service) novelWorkbenchRunForUser(userID string, projectID string) (*model.NovelWorkbenchRun, error) {
@@ -903,44 +622,8 @@ func parseNovelWorkbenchTaskInput(raw string) (novelWorkbenchTaskInput, map[stri
 	return input, config, nil
 }
 
-func decodeNovelWorkbenchControl(raw string) (novelWorkbenchControl, error) {
-	var control novelWorkbenchControl
-	if strings.TrimSpace(raw) == "" {
-		return control, errors.New("小说工作台总控档案为空")
-	}
-	if err := json.Unmarshal([]byte(raw), &control); err != nil {
-		return control, fmt.Errorf("小说工作台总控档案损坏：%w", err)
-	}
-	return control, nil
-}
-
-func decodeNovelWorkbenchState(raw string) (novelWorkbenchState, error) {
-	var state novelWorkbenchState
-	if strings.TrimSpace(raw) == "" {
-		return state, nil
-	}
-	if err := json.Unmarshal([]byte(raw), &state); err != nil {
-		return state, fmt.Errorf("小说工作台动态状态损坏：%w", err)
-	}
-	return state, nil
-}
-
-func decodeNovelWorkbenchBootstrap(text string) (novelWorkbenchBootstrapOutput, error) {
-	var output novelWorkbenchBootstrapOutput
-	if err := decodeNovelWorkbenchJSONObject(text, &output); err != nil {
-		return output, err
-	}
-	return output, nil
-}
-
-func decodeNovelWorkbenchUnit(text string) (novelWorkbenchUnitOutput, error) {
-	var output novelWorkbenchUnitOutput
-	if err := decodeNovelWorkbenchJSONObject(text, &output); err != nil {
-		return output, err
-	}
-	return output, nil
-}
-
+// decodeNovelWorkbenchJSONObject accepts a JSON object surrounded by model
+// commentary or a fenced JSON block, while keeping the accepted payload strict.
 func decodeNovelWorkbenchJSONObject(text string, target any) error {
 	cleaned := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(text, "```json", ""), "```", ""))
 	start := strings.Index(cleaned, "{")
@@ -990,107 +673,6 @@ func decodeNovelWorkbenchJSONObject(text string, target any) error {
 	return nil
 }
 
-func validateNovelWorkbenchBootstrap(output *novelWorkbenchBootstrapOutput, brief novelWorkbenchBrief) error {
-	output.Title = strings.TrimSpace(output.Title)
-	output.Logline = strings.TrimSpace(output.Logline)
-	if output.Title == "" || output.Logline == "" {
-		return errors.New("总控档案缺少作品标题或一句话卖点")
-	}
-	if len(output.StoryBible) == 0 {
-		return errors.New("总控档案缺少故事圣经")
-	}
-	if len(output.Arcs) < 2 {
-		return errors.New("总控档案至少需要两段可执行的分部弧线")
-	}
-	sort.SliceStable(output.Arcs, func(left, right int) bool { return output.Arcs[left].StartUnit < output.Arcs[right].StartUnit })
-	for index := range output.Arcs {
-		arc := &output.Arcs[index]
-		arc.Index = index + 1
-		arc.Title = strings.TrimSpace(arc.Title)
-		arc.Mission = strings.TrimSpace(arc.Mission)
-		arc.KeyConflict = strings.TrimSpace(arc.KeyConflict)
-		arc.ExitDebt = strings.TrimSpace(arc.ExitDebt)
-		if arc.Title == "" || arc.Mission == "" || arc.KeyConflict == "" || arc.ExitDebt == "" {
-			return fmt.Errorf("第 %d 段分部弧线缺少标题、任务、核心冲突或离场债务", index+1)
-		}
-		if arc.StartUnit < 1 || arc.EndUnit < arc.StartUnit || arc.EndUnit > brief.TargetUnitCount {
-			return fmt.Errorf("第 %d 段分部弧线的单元范围无效", index+1)
-		}
-		if index == 0 && arc.StartUnit != 1 {
-			return errors.New("第一段分部弧线必须从第 1 单元开始")
-		}
-		if index > 0 && arc.StartUnit != output.Arcs[index-1].EndUnit+1 {
-			return errors.New("分部弧线的范围必须连续覆盖，不能遗漏或重叠")
-		}
-	}
-	if output.Arcs[len(output.Arcs)-1].EndUnit != brief.TargetUnitCount {
-		return fmt.Errorf("最后一段分部弧线必须覆盖到第 %d 单元", brief.TargetUnitCount)
-	}
-	return nil
-}
-
-func validateNovelWorkbenchUnit(output *novelWorkbenchUnitOutput, brief novelWorkbenchBrief, expectedUnit int) error {
-	if output.Unit != expectedUnit {
-		return fmt.Errorf("正文单元编号必须为 %d", expectedUnit)
-	}
-	output.Title = strings.TrimSpace(output.Title)
-	output.Content = strings.TrimSpace(output.Content)
-	output.Summary = strings.TrimSpace(output.Summary)
-	if output.Title == "" || output.Content == "" || output.Summary == "" {
-		return errors.New("正文缺少标题、完整内容或单元摘要")
-	}
-	minimum := brief.TargetUnitLength / 2
-	if minimum < 180 {
-		minimum = 180
-	}
-	if len([]rune(output.Content)) < minimum {
-		return fmt.Errorf("正文过短，至少应达到约 %d 字", minimum)
-	}
-	if strings.TrimSpace(output.Writeback.NextUnitBridge) == "" {
-		return errors.New("正文缺少下一单元的连续性接力")
-	}
-	return nil
-}
-
-func novelWorkbenchArcForUnit(arcs []novelWorkbenchArc, unit int) (novelWorkbenchArc, bool) {
-	for _, arc := range arcs {
-		if unit >= arc.StartUnit && unit <= arc.EndUnit {
-			return arc, true
-		}
-	}
-	return novelWorkbenchArc{}, false
-}
-
-func applyNovelWorkbenchWriteback(state novelWorkbenchState, arc novelWorkbenchArc, unit int, title string, output novelWorkbenchUnitOutput) novelWorkbenchState {
-	state.CompletedUnit = unit
-	state.CurrentArc = arc.Title
-	state.LastUnitSummary = output.Summary
-	state.CharacterStates = keepOrReplaceNovelWorkbenchState(state.CharacterStates, output.Writeback.CharacterStates)
-	state.RelationshipStates = keepOrReplaceNovelWorkbenchState(state.RelationshipStates, output.Writeback.RelationshipStates)
-	state.PlotlineStates = keepOrReplaceNovelWorkbenchState(state.PlotlineStates, output.Writeback.PlotlineStates)
-	state.ForeshadowStates = keepOrReplaceNovelWorkbenchState(state.ForeshadowStates, output.Writeback.ForeshadowStates)
-	state.OpenDebts = keepOrReplaceNovelWorkbenchState(state.OpenDebts, output.Writeback.OpenDebts)
-	state.NextUnitBridge = strings.TrimSpace(output.Writeback.NextUnitBridge)
-	state.AuditTrail = append(state.AuditTrail, novelWorkbenchAuditEntry{Unit: unit, Title: title, Summary: output.Summary, At: time.Now()})
-	if len(state.AuditTrail) > 16 {
-		state.AuditTrail = state.AuditTrail[len(state.AuditTrail)-16:]
-	}
-	return state
-}
-
-func keepOrReplaceNovelWorkbenchState(previous []string, next []string) []string {
-	cleaned := make([]string, 0, len(next))
-	for _, item := range next {
-		if value := strings.TrimSpace(item); value != "" {
-			cleaned = append(cleaned, value)
-		}
-	}
-	if len(cleaned) == 0 {
-		return previous
-	}
-	return cleaned
-}
-
 func novelWorkbenchProjectUnitKind(mode string) model.ProjectUnitKind {
 	if mode == novelWorkbenchModeScreenplay {
 		return model.ProjectUnitKindEpisode
@@ -1115,7 +697,7 @@ func novelWorkbenchUnitTitle(mode string, unit int, title string) string {
 
 func novelWorkbenchStage(phase string, unit int, mode string) string {
 	if phase == novelWorkbenchPhaseBootstrap {
-		return "正在建立总控档案"
+		return "正在建立弧级创作档案"
 	}
 	label := "章"
 	if mode == novelWorkbenchModeScreenplay {
@@ -1125,7 +707,6 @@ func novelWorkbenchStage(phase string, unit int, mode string) string {
 }
 
 func novelWorkbenchBootstrapTokenLimit(targetUnits int) int {
-	// 这里只输出分部弧线而非逐单元路线，规模增长不会线性吞掉上下文窗口。
 	if targetUnits <= 24 {
 		return 8_000
 	}
@@ -1144,98 +725,4 @@ func novelWorkbenchUnitTokenLimit(targetLength int) int {
 		limit = 9_000
 	}
 	return limit
-}
-
-func recommendedNovelWorkbenchArcCount(targetUnits int) int {
-	switch {
-	case targetUnits <= 4:
-		return 2
-	case targetUnits <= 16:
-		return 3
-	case targetUnits <= 40:
-		return 4
-	case targetUnits <= 80:
-		return 5
-	case targetUnits <= 160:
-		return 6
-	default:
-		return 8
-	}
-}
-
-func buildNovelWorkbenchBootstrapPrompt(brief novelWorkbenchBrief) string {
-	modeInstruction := "输出可拍摄的短剧剧本。"
-	unitLabel := "集"
-	if brief.OutputMode == novelWorkbenchModeNovel {
-		modeInstruction = "输出可连载阅读的小说正文。"
-		unitLabel = "章"
-	}
-	briefJSON, _ := json.Marshal(brief)
-	return fmt.Sprintf(`你是中文长篇创作总监，正在建立一部作品的“总控档案”。%s
-
-核心原则：先建立可持续执行的故事真相，再进入逐%s写作；所有输出使用简体中文；不得模仿任何具体作品或作者。目标不是列出空泛的逐%s标题，而是让之后每个单元都能依据人物、伏笔、债务和分部目标写出完整正文。
-
-用户创作简报：
-%s
-
-请完成：
-1. 故事圣经 storyBible：必须包含核心承诺、世界与规则、主角与核心角色（欲望/恐惧/缺口/关系压力/说话特征）、主线与副线、关键伏笔、主题代价、风格边界与禁忌。
-2. 生成约 %d 段“分部弧线” arcs（可因作品需要上下微调一段）：每段只说明范围、核心任务、升级、冲突、关键转折和离场债务；范围必须从第 1 %s 连续覆盖至第 %d %s。不要生成逐%s的标题清单、不要把每个单元写成同一种钩子。
-3. 标题与一句话卖点必须明确、具有独特冲突。
-
-只输出一个合法 JSON 对象，不能使用 Markdown 代码块，也不要附加解释：
-{"title":"","logline":"","storyBible":{"corePromise":"","worldRules":[],"characters":[{"name":"","role":"","desire":"","fear":"","blindSpot":"","relationshipPressure":"","voice":"","arc":""}],"plotlines":[],"foreshadows":[],"themeCost":"","styleGuide":"","forbiddenDrift":[]},"arcs":[{"index":1,"title":"","startUnit":1,"endUnit":1,"mission":"","escalation":"","keyConflict":"","turn":"","exitDebt":"","characters":[]}]}`,
-		modeInstruction, unitLabel, unitLabel, string(briefJSON), recommendedNovelWorkbenchArcCount(brief.TargetUnitCount), unitLabel, brief.TargetUnitCount, unitLabel, unitLabel)
-}
-
-func buildNovelWorkbenchBootstrapRepairPrompt(brief novelWorkbenchBrief, raw string, validationErr error) string {
-	return fmt.Sprintf(`把下面的总控档案修复为一个合法 JSON 对象。不要重新解释创作思路，不要加入逐单元流水账；必须保留有价值的原创信息。分部弧线必须连续覆盖第 1 到第 %d 单元，且每段都有标题、任务、核心冲突和离场债务。
-
-校验问题：%s
-
-原始输出：
-%s
-
-只输出 JSON。`, brief.TargetUnitCount, validationErr.Error(), raw)
-}
-
-func buildNovelWorkbenchUnitPrompt(control novelWorkbenchControl, state novelWorkbenchState, arc novelWorkbenchArc, unit int) string {
-	unitLabel := "第 %d 集"
-	formatInstruction := "写成可拍摄的短剧剧本：用场景编号/场景信息、人物动作、对白、必要的旁白或音效；单集结尾必须形成因果钩子，不得只留口号。"
-	if control.Brief.OutputMode == novelWorkbenchModeNovel {
-		unitLabel = "第 %d 章"
-		formatInstruction = "写成完整小说章节：有场景推进、人物行动、有效对白、情绪和因果，不得写成提纲或剧情摘要。"
-	}
-	briefJSON, _ := json.Marshal(control.Brief)
-	bibleJSON, _ := json.Marshal(control.StoryBible)
-	arcJSON, _ := json.Marshal(arc)
-	stateJSON, _ := json.Marshal(state)
-	return fmt.Sprintf(`你是这部作品的执行主笔。现在只写 %s，但必须从总控档案和最新动态状态中取材；不要自行改写既定角色关系、世界规则和已发生事实。
-
-创作模式：%s
-总控简报：%s
-故事圣经：%s
-当前分部弧线：%s
-最新动态状态：%s
-
-执行顺序（仅在内部完成，不要解释过程）：
-1. 为本单元生成详细控制卡：本单元任务、回收或埋设、人物压力、场景推进和尾钩。
-2. 完成正文。%s 正文字数目标约 %d 字；禁止用简介、提纲、复盘或“下集预告”代替正文。
-3. 自检人物是否有行为动机、关系变化是否有桥梁、伏笔是否真实改变压力、结尾是否承接已有线索。
-4. 写回下一单元所需的连续性状态。
-
-只输出一个合法 JSON 对象，不能用 Markdown 代码块或解释：
-{"unit":%d,"title":"","content":"完整正文","summary":"本单元发生了什么及其因果后果","writeback":{"characterStates":[],"relationshipStates":[],"plotlineStates":[],"foreshadowStates":[],"openDebts":[],"nextUnitBridge":"下一单元必须承接的具体压力","qualityNotes":[]}}`,
-		fmt.Sprintf(unitLabel, unit), control.Brief.OutputMode, string(briefJSON), string(bibleJSON), string(arcJSON), string(stateJSON), formatInstruction, control.Brief.TargetUnitLength, unit)
-}
-
-func buildNovelWorkbenchUnitRepairPrompt(brief novelWorkbenchBrief, unit int, raw string, validationErr error) string {
-	return fmt.Sprintf(`将下面第 %d 单元的输出修复为合法 JSON。必须保留完整正文，不能缩写成大纲；正文应约 %d 字，并保留下一单元具体可执行的连续性接力。
-
-校验问题：%s
-
-原始输出：
-%s
-
-只输出 JSON，结构为：{"unit":%d,"title":"","content":"","summary":"","writeback":{"characterStates":[],"relationshipStates":[],"plotlineStates":[],"foreshadowStates":[],"openDebts":[],"nextUnitBridge":"","qualityNotes":[]}}`, unit, brief.TargetUnitLength, validationErr.Error(), raw, unit)
 }
