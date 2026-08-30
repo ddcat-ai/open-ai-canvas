@@ -26,8 +26,37 @@ test("announcement editor preserves image and pinned fields through edit and sav
     expect(panel).toContain('imageResourceId: values.imageResourceId?.trim() || ""');
     expect(panel).toContain("pinned: Boolean(values.pinned)");
     expect(panel).toContain('(announcement?.imageResourceId || "") === (expectedContent.imageResourceId || "")');
+    expect(panel).toContain('rootClassName="admin-modal-root admin-announcement-editor-modal"');
+    expect(panel).toContain("centered");
+    expect(panel).not.toContain("<Drawer");
     expect(safetySource).toContain("imageResourceId?: string");
     expect(safetySource).toContain("pinned?: boolean");
+});
+
+test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {
+    const source = compactSource(await Bun.file(new URL("../src/pages/admin/components/analytics-panel.tsx", import.meta.url)).text());
+
+    expect(source).toContain('type RangePreset = "7d" | "30d" | "60d"');
+    expect(source).toContain('["60d", "60 天"]');
+    expect(source).toContain('next.set("rangePreset", rangePreset)');
+    expect(source).toContain("setRangePreset(undefined)");
+    expect(source).toContain('placeholder={pricingModelOptions.length ? "选择已启用模型" : "暂无已启用模型"}');
+    expect(source).toContain("onValuesChange={handlePricingValuesChange}");
+    expect(source).toContain("onChange={handlePricingModelChange}");
+    expect(source).toContain('hasOwnProperty.call(changedValues, "model")');
+    expect(source).toContain("if (matchingChannels.length) form.setFieldValue(\"channelId\", matchingChannels[0].id)");
+    expect(source).toContain("const sourceChannels = channels.filter((channel) => channel.enabled !== false)");
+    expect(source).toContain('inputMode="decimal"');
+    expect(source).toContain('className="admin-analytics-price-input"');
+    expect(source).toContain('className="admin-analytics-price-field"');
+    expect(source).toContain('rootClassName="admin-modal-root admin-analytics-pricing-modal"');
+    expect(source).toContain("zIndex={1200}");
+    expect(source).toContain("setPricingWorkspaceOpen(false)");
+    expect(source).toContain("validator: validatePriceInput");
+    expect(source).toContain('请输入非负价格，最多 6 位小数');
+    expect(source).toContain("function formatPriceInput(micros: number)");
+    expect(source).toContain("function toMicros(value?: string | number)");
+    expect(source).not.toContain("<InputNumber");
 });
 
 test("storage settings keep generic S3 controls and connection validation", async () => {

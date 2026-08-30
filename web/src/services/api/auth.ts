@@ -161,7 +161,7 @@ export type AnalyticsFilters = {
 
 export type AdminReferenceData = {
     users: Array<{ id: string; username: string; displayName: string }>;
-    channels: Array<{ id: string; name: string; models: string[] }>;
+    channels: Array<{ id: string; name: string; enabled: boolean; models: string[] }>;
 };
 
 export type AdminAnalytics = {

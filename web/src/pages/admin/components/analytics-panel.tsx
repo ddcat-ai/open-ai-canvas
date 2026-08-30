@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { App, Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Select, Tabs, Tag, Tooltip } from "antd";
+import { App, Button, DatePicker, Drawer, Form, Input, Modal, Select, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { AlertTriangle, BarChart3, CircleDollarSign, Clock3, Gauge, Pencil, Plus, RefreshCw, Settings2, Trash2, UsersRound, Workflow } from "lucide-react";
@@ -32,16 +32,17 @@ type PricingFormValues = {
     model: string;
     capability: ModelPricing["capability"];
     currency: string;
-    inputPerMillion?: number;
-    outputPerMillion?: number;
-    cachedPerMillion?: number;
-    perRequest?: number;
-    perMedia?: number;
-    perVideoSecond?: number;
+    inputPerMillion?: string;
+    outputPerMillion?: string;
+    cachedPerMillion?: string;
+    perRequest?: string;
+    perMedia?: string;
+    perVideoSecond?: string;
 };
 
 type TrendMetric = "volume" | "quality" | "activity";
 type AnalysisTab = "models" | "users" | "failures";
+type RangePreset = "7d" | "30d" | "60d";
 
 const capabilityOptions = [
     { label: "文本", value: "text" },
@@ -53,7 +54,8 @@ const capabilityOptions = [
 export default function AnalyticsPanel({ users, channels }: Props) {
     const { message } = App.useApp();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [range, setRange] = useState<[Dayjs, Dayjs]>(() => [filterDate(searchParams.get("from"), dayjs().subtract(29, "day")), filterDate(searchParams.get("to"), dayjs())]);
+    const [rangePreset, setRangePreset] = useState<RangePreset | undefined>(() => initialRangePreset(searchParams));
+    const [range, setRange] = useState<[Dayjs, Dayjs]>(() => initialAnalyticsRange(searchParams, rangePreset));
     const [userId, setUserId] = useState(searchParams.get("userId") || undefined);
     const [model, setModel] = useState(searchParams.get("model") || undefined);
     const [channelId, setChannelId] = useState(searchParams.get("channelId") || undefined);
@@ -73,6 +75,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [trendMetric, setTrendMetric] = useState<TrendMetric>("volume");
     const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("models");
     const [pricingWorkspaceOpen, setPricingWorkspaceOpen] = useState(false);
+    const [pendingPricing, setPendingPricing] = useState<ModelPricing | null | undefined>(undefined);
     const [form] = Form.useForm<PricingFormValues>();
     const analyticsPageSize = 20;
 
@@ -107,9 +110,11 @@ export default function AnalyticsPanel({ users, channels }: Props) {
             if (value) next.set(key, value);
             else next.delete(key);
         }
+        if (rangePreset) next.set("rangePreset", rangePreset);
+        else next.delete("rangePreset");
         setSearchParams(next, { replace: true });
         void reload();
-    }, [filters]);
+    }, [filters, rangePreset]);
 
     useEffect(() => {
         setModelPage(1);
@@ -141,8 +146,17 @@ export default function AnalyticsPanel({ users, channels }: Props) {
         return [...names].sort().map((name) => ({ label: name, value: name }));
     }, [channels, data?.models]);
 
-    const openPricing = (pricing?: ModelPricing) => {
-        setEditingPricing(pricing || null);
+    const pricingModelOptions = useMemo(() => {
+        const names = new Set<string>();
+        const sourceChannels = channels.filter((channel) => channel.enabled !== false);
+        sourceChannels.forEach((channel) => channel.models?.forEach((name) => names.add(name)));
+        if (editingPricing?.model) names.add(editingPricing.model);
+        return [...names].sort().map((name) => ({ label: name, value: name }));
+    }, [channels, editingPricing?.model]);
+
+    const preparePricingForm = (pricing: ModelPricing | null) => {
+        setEditingPricing(pricing);
+        form.resetFields();
         form.setFieldsValue(
             pricing
                 ? {
@@ -150,16 +164,48 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                       model: pricing.model,
                       capability: pricing.capability,
                       currency: pricing.currency,
-                      inputPerMillion: fromMicros(pricing.inputPerMillionMicros),
-                      outputPerMillion: fromMicros(pricing.outputPerMillionMicros),
-                      cachedPerMillion: fromMicros(pricing.cachedPerMillionMicros),
-                      perRequest: fromMicros(pricing.perRequestMicros),
-                      perMedia: fromMicros(pricing.perMediaMicros),
-                      perVideoSecond: fromMicros(pricing.perVideoSecondMicros),
+                      inputPerMillion: formatPriceInput(pricing.inputPerMillionMicros),
+                      outputPerMillion: formatPriceInput(pricing.outputPerMillionMicros),
+                      cachedPerMillion: formatPriceInput(pricing.cachedPerMillionMicros),
+                      perRequest: formatPriceInput(pricing.perRequestMicros),
+                      perMedia: formatPriceInput(pricing.perMediaMicros),
+                      perVideoSecond: formatPriceInput(pricing.perVideoSecondMicros),
                   }
-                : { channelId: undefined, model: "", capability: "text", currency: "USD", inputPerMillion: 0, outputPerMillion: 0, cachedPerMillion: 0, perRequest: 0, perMedia: 0, perVideoSecond: 0 },
+                : { channelId: undefined, model: "", capability: "text", currency: "USD", inputPerMillion: "", outputPerMillion: "", cachedPerMillion: "", perRequest: "", perMedia: "", perVideoSecond: "" },
         );
         setPricingModalOpen(true);
+    };
+
+    const openPricing = (pricing?: ModelPricing) => {
+        const nextPricing = pricing || null;
+        if (pricingWorkspaceOpen) {
+            setPendingPricing(nextPricing);
+            setPricingWorkspaceOpen(false);
+        } else {
+            preparePricingForm(nextPricing);
+        }
+    };
+
+    const handlePricingValuesChange = (changedValues: Partial<PricingFormValues>, values: PricingFormValues) => {
+        if (Object.prototype.hasOwnProperty.call(changedValues, "channelId")) {
+            const nextModels = channels
+                .filter((channel) => channel.enabled !== false && (!values.channelId || channel.id === values.channelId))
+                .flatMap((channel) => channel.models || []);
+            if (values.model && !nextModels.includes(values.model)) form.setFieldValue("model", undefined);
+            return;
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(changedValues, "model") || !values.model) return;
+        const matchingChannels = channels.filter((channel) => channel.enabled !== false && channel.models?.includes(values.model));
+        if (values.channelId && matchingChannels.some((channel) => channel.id === values.channelId)) return;
+        if (matchingChannels.length) form.setFieldValue("channelId", matchingChannels[0].id);
+    };
+
+    const handlePricingModelChange = (modelName: string) => {
+        const currentChannelId = form.getFieldValue("channelId") as string | undefined;
+        const matchingChannels = channels.filter((channel) => channel.enabled !== false && channel.models?.includes(modelName));
+        const matchingChannel = matchingChannels.find((channel) => channel.id === currentChannelId) || matchingChannels[0];
+        form.setFieldsValue({ model: modelName, channelId: matchingChannel?.id || currentChannelId });
     };
 
     const savePricing = async () => {
@@ -308,12 +354,12 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const pricedModelCount = modelRows.filter((item) => item.costAvailable).length;
     const trendHasData = trendMetric === "volume" ? trend.some((item) => item.tasks > 0 || item.requests > 0) : trendMetric === "quality" ? trend.some((item) => item.requests > 0) : trend.some((item) => item.activeUsers > 0);
     const trendTitle = trendMetric === "volume" ? "任务与请求趋势" : trendMetric === "quality" ? "请求质量趋势" : "用户活跃趋势";
-    const rangePreset = resolveRangePreset(range);
     const pageRows = <T,>(rows: T[], page: number) => rows.slice((page - 1) * analyticsPageSize, page * analyticsPageSize);
 
-    const applyRangePreset = (preset: "7d" | "30d" | "month") => {
+    const applyRangePreset = (preset: RangePreset) => {
         const end = dayjs();
-        const start = preset === "7d" ? end.subtract(6, "day") : preset === "30d" ? end.subtract(29, "day") : end.startOf("month");
+        const start = preset === "7d" ? end.subtract(6, "day") : preset === "30d" ? end.subtract(29, "day") : end.subtract(59, "day");
+        setRangePreset(preset);
         setRange([start, end]);
     };
 
@@ -345,7 +391,16 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     <>
                         <div className="admin-analytics-range-picker" role="group" aria-label="时间范围">
                             <span className="sr-only">时间范围</span>
-                            <DatePicker.RangePicker allowClear={false} value={range} onChange={(value) => value?.[0] && value?.[1] && setRange([value[0], value[1]])} />
+                            <DatePicker.RangePicker
+                                allowClear={false}
+                                value={range}
+                                onChange={(value) => {
+                                    if (value?.[0] && value?.[1]) {
+                                        setRangePreset(undefined);
+                                        setRange([value[0], value[1]]);
+                                    }
+                                }}
+                            />
                         </div>
                         <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
                             刷新
@@ -375,7 +430,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                         [
                             ["7d", "7 天"],
                             ["30d", "30 天"],
-                            ["month", "本月"],
+                            ["60d", "60 天"],
                         ] as const
                     ).map(([value, label]) => (
                         <button key={value} type="button" className={rangePreset === value ? "is-active" : undefined} aria-pressed={rangePreset === value} onClick={() => applyRangePreset(value)}>
@@ -566,6 +621,12 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 open={pricingWorkspaceOpen}
                 width="min(1120px, calc(100vw - 48px))"
                 onClose={() => setPricingWorkspaceOpen(false)}
+                afterOpenChange={(open) => {
+                    if (open || pendingPricing === undefined) return;
+                    const nextPricing = pendingPricing;
+                    setPendingPricing(undefined);
+                    preparePricingForm(nextPricing);
+                }}
                 extra={
                     <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openPricing()}>
                         新增价格
@@ -581,14 +642,14 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 />
             </Drawer>
 
-            <Modal title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={760}>
-                <Form form={form} layout="vertical" requiredMark={false}>
+            <Modal rootClassName="admin-modal-root admin-analytics-pricing-modal" title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={760} zIndex={1200} destroyOnHidden>
+                <Form form={form} layout="vertical" requiredMark={false} onValuesChange={handlePricingValuesChange}>
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                        <Form.Item name="model" label="模型" rules={[{ required: true, message: "请填写模型名" }]}>
-                            <Input />
+                        <Form.Item name="model" label="模型" rules={[{ required: true, message: "请选择模型" }]}>
+                            <Select showSearch optionFilterProp="label" placeholder={pricingModelOptions.length ? "选择已启用模型" : "暂无已启用模型"} options={pricingModelOptions} disabled={!pricingModelOptions.length} onChange={handlePricingModelChange} />
                         </Form.Item>
                         <Form.Item name="channelId" label="渠道范围">
-                            <Select allowClear placeholder="全部渠道" options={channels.map((channel) => ({ label: channel.name, value: channel.id }))} />
+                            <Select allowClear placeholder="全部渠道" options={channels.filter((channel) => channel.enabled !== false).map((channel) => ({ label: channel.name, value: channel.id }))} />
                         </Form.Item>
                         <Form.Item name="capability" label="能力类型" rules={[{ required: true }]}>
                             <Select options={capabilityOptions} />
@@ -679,10 +740,16 @@ function FilterSelect({
 
 function PriceInput({ name, label }: { name: keyof PricingFormValues; label: string }) {
     return (
-        <Form.Item name={name} label={`${label}（币种单位）`} rules={[{ type: "number", min: 0, message: "价格不能小于 0" }]}>
-            <InputNumber min={0} precision={6} step={0.000001} className="w-full" />
+        <Form.Item className="admin-analytics-price-field" name={name} label={`${label}（币种单位）`} rules={[{ validator: validatePriceInput }]}>
+            <Input aria-label={`${label}价格`} disabled={false} readOnly={false} inputMode="decimal" maxLength={30} className="admin-analytics-price-input" style={{ width: "100%" }} />
         </Form.Item>
     );
+}
+
+function validatePriceInput(_: unknown, value?: string) {
+    const normalized = value?.trim() || "";
+    if (!normalized || /^(?:\d+(?:\.\d{0,6})?|\.\d{1,6})$/.test(normalized)) return Promise.resolve();
+    return Promise.reject(new Error("请输入非负价格，最多 6 位小数"));
 }
 
 function capabilityLabel(value: string) {
@@ -734,8 +801,13 @@ function fromMicros(value: number) {
     return value / 1_000_000;
 }
 
-function toMicros(value?: number) {
-    return Math.round((value || 0) * 1_000_000);
+function formatPriceInput(micros: number) {
+    return fromMicros(micros).toFixed(6);
+}
+
+function toMicros(value?: string | number) {
+    const parsed = typeof value === "number" ? value : Number(value?.trim() || 0);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 1_000_000) : 0;
 }
 
 function filterDate(value: string | null, fallback: Dayjs) {
@@ -744,11 +816,38 @@ function filterDate(value: string | null, fallback: Dayjs) {
     return parsed.isValid() ? parsed : fallback;
 }
 
-function resolveRangePreset(range: [Dayjs, Dayjs]): "7d" | "30d" | "month" | undefined {
+function resolveRangePreset(range: [Dayjs, Dayjs]): RangePreset | undefined {
     const end = dayjs();
     if (!range[1].isSame(end, "day")) return undefined;
-    if (range[0].isSame(end.startOf("month"), "day")) return "month";
     if (range[0].isSame(end.subtract(6, "day"), "day")) return "7d";
     if (range[0].isSame(end.subtract(29, "day"), "day")) return "30d";
+    if (range[0].isSame(end.subtract(59, "day"), "day")) return "60d";
     return undefined;
+}
+
+function parseRangePreset(value: string | null): RangePreset | undefined {
+    return value === "7d" || value === "30d" || value === "60d" ? value : undefined;
+}
+
+function initialRangePreset(searchParams: URLSearchParams): RangePreset | undefined {
+    const explicit = parseRangePreset(searchParams.get("rangePreset"));
+    if (explicit) return explicit;
+    if (searchParams.has("from") || searchParams.has("to")) return resolveRangePresetFromQuery(searchParams.get("from"), searchParams.get("to"));
+    return "30d";
+}
+
+function initialAnalyticsRange(searchParams: URLSearchParams, preset: RangePreset | undefined): [Dayjs, Dayjs] {
+    const end = dayjs();
+    if (preset) {
+        const days = preset === "7d" ? 6 : preset === "30d" ? 29 : 59;
+        return [end.subtract(days, "day"), end];
+    }
+    return [filterDate(searchParams.get("from"), end.subtract(29, "day")), filterDate(searchParams.get("to"), end)];
+}
+
+function resolveRangePresetFromQuery(from: string | null, to: string | null): RangePreset | undefined {
+    const start = from ? dayjs(from) : null;
+    const end = to ? dayjs(to) : null;
+    if (!start?.isValid() || !end?.isValid()) return undefined;
+    return resolveRangePreset([start, end]);
 }
