@@ -13,6 +13,8 @@ const HYDRATED_MEDIA_KEYS = new Set<keyof CanvasNodeMetadata>([
     "bytes",
     "mimeType",
     "durationMs",
+    "hasAudio",
+    "videoPreview",
     "drawingPreviewUrl",
 ]);
 

@@ -2,7 +2,7 @@ import { App, Button, Input, Modal, Tag } from "antd";
 import { CircleAlert, ExternalLink, Import, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { buildLibTVImagePreviewUrl, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
+import { buildLibTVImagePreviewUrl, buildLibTVVideoPreviewUrl, buildLibTVVideoSourceUrl, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
 import { importLibTVCanvas, type LibTVImportResult } from "@/services/api/libtv";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
 
@@ -30,8 +30,8 @@ function buildCanvasNodes(result: LibTVImportResult, viewport: ViewportTransform
         width: node.width,
         height: node.height,
         metadata: {
-            content: node.content,
-            previewContent: node.type === "image" ? buildLibTVImagePreviewUrl(node.content) : undefined,
+            content: node.type === "video" ? buildLibTVVideoSourceUrl(node.content) : node.content,
+            previewContent: node.type === "image" ? buildLibTVImagePreviewUrl(node.content) : buildLibTVVideoPreviewUrl(node.content) || undefined,
             prompt: node.prompt,
             model: node.model,
             status: node.status || "idle",

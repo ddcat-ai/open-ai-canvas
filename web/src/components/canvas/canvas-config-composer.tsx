@@ -331,7 +331,7 @@ function ResourcePreview({ candidate }: { candidate: ComposerCandidate }) {
         );
     }
     if (input.type === "image" && input.image) return <img src={input.image.dataUrl} alt="" className="size-9 rounded-md object-cover" />;
-    if (input.type === "video" && input.video) return <video src={input.video.url} className="size-9 rounded-md bg-black object-cover" muted preload="metadata" />;
+    if (input.type === "video" && input.previewUrl) return <img src={input.previewUrl} alt="" className="size-9 rounded-md bg-black object-cover" loading="lazy" decoding="async" />;
     const Icon = input.type === "audio" ? Music2 : input.type === "video" ? Video : input.type === "image" ? ImageIcon : FileText;
     return (
         <span className="grid size-9 shrink-0 place-items-center rounded-md bg-black/10">
@@ -352,9 +352,10 @@ function createReferenceChip(input: NodeGenerationInput, inputs: NodeGenerationI
     wrapper.dataset.referenceToken = `@${generationInputMentionLabel(input, inputs)}`;
     wrapper.className = "mx-px inline-flex h-7 max-w-40 items-center justify-center overflow-hidden rounded-md border px-1 text-xs leading-none align-middle";
     Object.assign(wrapper.style, chipStyle(theme));
-    if (input.type === "image" && input.image && input.sourceKind !== "drawing") {
+    const previewUrl = input.type === "image" && input.image && input.sourceKind !== "drawing" ? input.image.dataUrl : input.type === "video" ? input.previewUrl : "";
+    if (previewUrl) {
         const image = document.createElement("img");
-        image.src = input.image.dataUrl;
+        image.src = previewUrl;
         image.alt = input.title;
         image.className = "size-6 rounded object-cover";
         wrapper.className = "mx-px inline-flex size-6 items-center justify-center overflow-hidden rounded align-middle";
@@ -362,7 +363,7 @@ function createReferenceChip(input: NodeGenerationInput, inputs: NodeGenerationI
         wrapper.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            onImagePreview(input.image?.dataUrl || "");
+            onImagePreview(previewUrl);
         });
     } else {
         wrapper.title = input.sourceKind === "drawing" ? resourceLabel(input, inputs) : input.text || input.title;

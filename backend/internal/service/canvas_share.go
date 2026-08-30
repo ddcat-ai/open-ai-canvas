@@ -41,7 +41,7 @@ var publicCanvasMetadataKeys = map[string]bool{
 	"audioVoice": true, "audioFormat": true, "audioSpeed": true, "audioInstructions": true,
 	"naturalWidth": true, "naturalHeight": true, "freeResize": true, "isBatchRoot": true,
 	"batchRootId": true, "batchChildIds": true, "batchUsesReferenceImages": true, "primaryImageId": true,
-	"imageBatchExpanded": true, "mimeType": true, "bytes": true, "durationMs": true, "assetTags": true,
+	"imageBatchExpanded": true, "mimeType": true, "bytes": true, "durationMs": true, "hasAudio": true, "assetTags": true,
 	"workflowKind": true, "workflowTitle": true, "workflowDescription": true, "shotIndex": true,
 	"sceneId": true, "characterIds": true, "referenceSetId": true, "referenceAssetNodeIds": true, "assetBindings": true,
 	"characterName": true, "characterPrompt": true, "characterAliases": true, "characterView": true, "characterViewNodeIds": true,

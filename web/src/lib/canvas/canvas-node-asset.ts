@@ -1,4 +1,5 @@
 import { getDataUrlByteSize } from "@/lib/image-utils";
+import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import type { Asset, AssetCategory, NewAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
@@ -24,7 +25,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
     };
     const base = {
         title,
-        coverUrl: node.type === CanvasNodeType.Image ? content : "",
+        coverUrl: node.type === CanvasNodeType.Image ? content : node.type === CanvasNodeType.Video ? canvasNodeVideoPreviewUrl(node) : "",
         tags: node.metadata?.assetTags || [],
         category: canvasNodeAssetCategory(node),
         status: "confirmed" as const,
@@ -60,6 +61,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
                 width: node.metadata?.naturalWidth || node.width,
                 height: node.metadata?.naturalHeight || node.height,
                 durationMs: node.metadata?.durationMs,
+                hasAudio: node.metadata?.hasAudio,
                 bytes: node.metadata?.bytes || 0,
                 mimeType: node.metadata?.mimeType || "video/mp4",
             },

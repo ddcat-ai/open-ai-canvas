@@ -25,3 +25,11 @@ export function shouldReduceCanvasMediaEffects(mode: CanvasMediaPerformanceMode,
     const mediaCount = nodes.filter((node) => node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio).length;
     return nodes.length >= 80 || mediaCount >= 32;
 }
+
+export function resolveActiveCanvasMediaNodeId(selectedNodeIds: ReadonlySet<string>, nodeById: ReadonlyMap<string, CanvasNodeData>) {
+    if (selectedNodeIds.size !== 1) return null;
+    const nodeId = selectedNodeIds.values().next().value;
+    if (!nodeId) return null;
+    const type = nodeById.get(nodeId)?.type;
+    return type === CanvasNodeType.Video || type === CanvasNodeType.Audio ? nodeId : null;
+}

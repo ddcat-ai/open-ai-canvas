@@ -1,4 +1,5 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
+import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { Skill } from "@/services/api/skills";
@@ -14,7 +15,11 @@ export type CanvasResourceReference = {
     label: string;
     title: string;
     previewUrl?: string;
+    /** 仅素材库视频在没有静态封面时使用的首帧回退源。 */
+    mediaUrl?: string;
     storageKey?: string;
+    /** 视频首帧是独立的图片资源，不能用视频 storageKey 解析。 */
+    previewStorageKey?: string;
     text?: string;
     active: boolean;
     sourceType?: CanvasNodeTypeId;
@@ -50,7 +55,7 @@ export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceRefe
     return assets.flatMap((asset): CanvasResourceReference[] => {
         if (asset.kind === "model") return [];
         const kind: CanvasResourceKind = asset.kind === "entity" ? "character" : asset.kind;
-        const previewUrl = asset.kind === "image" ? asset.data.dataUrl : asset.kind === "video" ? asset.data.url : asset.coverUrl;
+        const previewUrl = asset.kind === "image" ? asset.data.dataUrl : asset.kind === "video" ? canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl) : asset.coverUrl;
         const text = asset.kind === "text" ? asset.data.content : undefined;
         return [{
             id: `asset:${asset.id}`,
@@ -60,6 +65,7 @@ export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceRefe
             label: asset.title,
             title: asset.title,
             previewUrl,
+            mediaUrl: asset.kind === "video" && !previewUrl ? asset.data.url : undefined,
             storageKey: "storageKey" in asset.data ? asset.data.storageKey : undefined,
             text,
             active: false,
@@ -148,8 +154,15 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
                 kind,
                 label,
                 title: node.title || label,
-                previewUrl: node.metadata?.workflowKind === "character" ? node.metadata.characterCoverUrl : node.type === CanvasNodeType.Drawing ? node.metadata?.drawingPreviewUrl : node.metadata?.previewContent || node.metadata?.content,
+                previewUrl: node.metadata?.workflowKind === "character"
+                    ? node.metadata.characterCoverUrl
+                    : node.type === CanvasNodeType.Drawing
+                      ? node.metadata?.drawingPreviewUrl
+                      : node.type === CanvasNodeType.Video
+                        ? canvasNodeVideoPreviewUrl(node)
+                        : node.metadata?.previewContent || node.metadata?.content,
                 storageKey: node.metadata?.storageKey,
+                previewStorageKey: node.type === CanvasNodeType.Video ? node.metadata?.videoPreview?.storageKey : undefined,
                 text: node.metadata?.workflowKind === "character" ? node.metadata.characterPrompt : node.type === CanvasNodeType.Text ? node.metadata?.content || node.metadata?.prompt : node.type === CanvasNodeType.Skill ? skillResourceText(node) : undefined,
                 active,
                 sourceType: node.type,

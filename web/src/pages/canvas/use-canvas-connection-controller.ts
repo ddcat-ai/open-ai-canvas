@@ -43,8 +43,10 @@ type ConnectionDropTarget = {
 
 type BatchConnectionDropTarget = ConnectionDropTarget;
 
-const CONNECTION_HANDLE_HIT_RADIUS = 40;
-const CONNECTION_NODE_HIT_PADDING = 32;
+// LibTV's 80px world-space quick-add zone renders at roughly 110px on the
+// reference canvas. Use the same generous 112px screen-space diameter here,
+// while retaining a circular boundary around the corresponding side anchor.
+const CONNECTION_SNAP_RADIUS = 56;
 const NODE_STATUS_IDLE = "idle" as const;
 
 function selectRunningHubWorkflow(config: AiConfig) {
@@ -94,6 +96,8 @@ export function useCanvasConnectionController({
     const batchConnectionPreviewRef = useRef<CanvasBatchConnectionPreview | null>(null);
     const batchConnectionPointerIdRef = useRef<number | null>(null);
     const batchConnectionPointerStartRef = useRef<Position | null>(null);
+    const pointerMoveFrameRef = useRef<number | null>(null);
+    const latestPointerMoveRef = useRef<PointerEvent | null>(null);
 
     useLayoutEffect(() => {
         connectingParamsRef.current = connectingParams;
@@ -195,6 +199,8 @@ export function useCanvasConnectionController({
         const nodeType = type;
         if (nodeType === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
             message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
+            closeConnectionCreateMenu();
+            setConnecting(null);
             return;
         }
         const batchSourceNodeIds = pending.batchSourceNodeIds?.length ? Array.from(new Set(pending.batchSourceNodeIds)) : [];
@@ -218,6 +224,7 @@ export function useCanvasConnectionController({
         if (selectedWorkflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, selectedWorkflowProvider)) {
             message.error(`${selectedWorkflowProvider === "runninghub" ? "RunningHub" : "ComfyUI"} 工作流插件未启用`);
             closeConnectionCreateMenu();
+            setConnecting(null);
             return;
         }
         const runningHubWorkflow = selectedWorkflowProvider === "runninghub" ? selectRunningHubWorkflow(config) : undefined;
@@ -262,6 +269,7 @@ export function useCanvasConnectionController({
         if (batchSourceNodeIds.length && nodeType === CanvasNodeType.Drawing) {
             message.error("批量连接暂不支持创建绘图，请先连接到普通节点");
             closeConnectionCreateMenu();
+            setConnecting(null);
             return;
         }
         const batchPlan = batchSourceNodeIds.length
@@ -296,11 +304,15 @@ export function useCanvasConnectionController({
         const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
         if (!connection) {
             message.warning("当前节点不能建立这条连线");
+            closeConnectionCreateMenu();
+            setConnecting(null);
             return;
         }
         const policyError = canvasConnectionError(config, [...nodesRef.current, newNode], connectionsRef.current, connection);
         if (policyError) {
             message.warning(policyError);
+            closeConnectionCreateMenu();
+            setConnecting(null);
             return;
         }
         if (nodeType === CanvasNodeType.Drawing) {
@@ -308,6 +320,8 @@ export function useCanvasConnectionController({
             const sourceUrl = drawingSourceNode?.type === CanvasNodeType.Image ? drawingSourceNode.metadata?.content : "";
             if (pending.connection.handleType !== "source" || !drawingSourceNode || !sourceUrl || !newNode.metadata?.drawingId) {
                 message.error("只有已有图片内容的输出连线可以创建绘图");
+                closeConnectionCreateMenu();
+                setConnecting(null);
                 return;
             }
             closeConnectionCreateMenu();
@@ -370,8 +384,7 @@ export function useCanvasConnectionController({
     const getConnectionDropTarget = useCallback((clientX: number, clientY: number, current: ConnectionHandle): ConnectionDropTarget => {
         const world = screenToCanvas(clientX, clientY);
         const scale = Math.max(viewportRef.current.k, 0.05);
-        const padding = CONNECTION_NODE_HIT_PADDING / scale;
-        const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
+        const handleRadius = CONNECTION_SNAP_RADIUS / scale;
         let isNearNode = false;
         let bestNodeId: string | null = null;
         let bestHandleId: string | undefined;
@@ -385,23 +398,25 @@ export function useCanvasConnectionController({
                 const scrollTop = scriptScrollTopById[node.id] || 0;
                 const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
                 if (node.type === CanvasNodeType.Script && !targetHandleId) return;
-                const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
+                // Ordinary nodes expose one centered input/output port. Only
+                // storyboard rows have a meaningful vertical target position.
+                const targetAnchorRatio = undefined;
                 const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
                 const dx = world.x - anchor.x;
                 const dy = world.y - anchor.y;
-                const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
-                const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
-                const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
-                if (!hitsHandle && !hitsInside && !hitsExpanded) return;
+                // Do not treat the node body or a rectangular padding band as a
+                // connection target. LibTV snaps only inside the circular
+                // quick-add area centred on the corresponding side handle.
+                const hitsSnapZone = dx * dx + dy * dy <= handleRadius * handleRadius;
+                if (!hitsSnapZone) return;
                 isNearNode = true;
                 const normalized = node.id === current.nodeId ? null : normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType);
                 if (!normalized || canvasConnectionError(config, nodesRef.current, connectionsRef.current, normalized)) return;
-                const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
-                if (priority < bestPriority) {
+                if (1 < bestPriority) {
                     bestNodeId = node.id;
                     bestHandleId = targetHandleId;
                     bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = priority;
+                    bestPriority = 1;
                 }
             });
         return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
@@ -415,8 +430,7 @@ export function useCanvasConnectionController({
 
         const world = screenToCanvas(clientX, clientY);
         const scale = Math.max(viewportRef.current.k, 0.05);
-        const padding = CONNECTION_NODE_HIT_PADDING / scale;
-        const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
+        const handleRadius = CONNECTION_SNAP_RADIUS / scale;
         let isNearNode = false;
         let bestNodeId: string | null = null;
         let bestHandleId: string | undefined;
@@ -431,22 +445,19 @@ export function useCanvasConnectionController({
                 const scrollTop = scriptScrollTopById[node.id] || 0;
                 const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
                 if (node.type === CanvasNodeType.Script && !targetHandleId) return;
-                const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
+                const targetAnchorRatio = undefined;
                 const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
                 const dx = world.x - anchor.x;
                 const dy = world.y - anchor.y;
-                const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
-                const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
-                const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
-                if (!hitsHandle && !hitsInside && !hitsExpanded) return;
+                const hitsSnapZone = dx * dx + dy * dy <= handleRadius * handleRadius;
+                if (!hitsSnapZone) return;
                 isNearNode = true;
                 if (!hasBatchConnectionCandidate(sourceNodeIds, node.id, nodesRef.current)) return;
-                const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
-                if (priority < bestPriority) {
+                if (1 < bestPriority) {
                     bestNodeId = node.id;
                     bestHandleId = targetHandleId;
                     bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = priority;
+                    bestPriority = 1;
                 }
             });
         return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
@@ -541,6 +552,11 @@ export function useCanvasConnectionController({
     const handleConnectStart = useCallback((event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => {
         event.preventDefault();
         event.stopPropagation();
+        // A new pin interaction always starts a fresh session. Without this
+        // reset, an old quick-create menu can coexist with the new draft line;
+        // pointerup then sees the stale pending menu and silently aborts.
+        if (pendingConnectionCreateRef.current) closeConnectionCreateMenu();
+        if (connectingParamsRef.current) setConnecting(null);
         if (batchConnectionPreviewRef.current && handleType === "target") {
             commitBatchConnection(batchConnectionPreviewRef.current.sourceNodeIds, nodeId, handleId, anchorRatio);
             clearBatchConnection();
@@ -554,10 +570,19 @@ export function useCanvasConnectionController({
         setConnectionTargetNodeId(null);
         setConnectionTargetAnchorRatio(undefined);
         setSelectedConnectionId(null);
-    }, [clearBatchConnection, commitBatchConnection, screenToCanvas, setConnecting, setSelectedConnectionId]);
+    }, [clearBatchConnection, closeConnectionCreateMenu, commitBatchConnection, screenToCanvas, setConnecting, setSelectedConnectionId]);
 
     useEffect(() => {
-        const handlePointerMove = (event: PointerEvent) => {
+        const cancelPendingPointerMove = () => {
+            latestPointerMoveRef.current = null;
+            if (pointerMoveFrameRef.current !== null) window.cancelAnimationFrame(pointerMoveFrameRef.current);
+            pointerMoveFrameRef.current = null;
+        };
+        const flushPointerMove = () => {
+            pointerMoveFrameRef.current = null;
+            const event = latestPointerMoveRef.current;
+            latestPointerMoveRef.current = null;
+            if (!event) return;
             const batch = batchConnectionPreviewRef.current;
             if (batch && (batchConnectionPointerIdRef.current === null || batchConnectionPointerIdRef.current === event.pointerId)) {
                 const target = getBatchConnectionDropTarget(event.clientX, event.clientY, batch.sourceNodeIds);
@@ -572,7 +597,19 @@ export function useCanvasConnectionController({
             setConnectionTargetAnchorRatio(dropTarget.anchorRatio);
             setMouseWorld(screenToCanvas(event.clientX, event.clientY));
         };
+        const handlePointerMove = (event: PointerEvent) => {
+            // Pointer events can arrive faster than the canvas can paint. Keep
+            // only the latest position and update the preview once per frame,
+            // which prevents redundant React/Leafer work and visible jitter.
+            latestPointerMoveRef.current = event;
+            if (pointerMoveFrameRef.current === null) pointerMoveFrameRef.current = window.requestAnimationFrame(flushPointerMove);
+        };
         const handlePointerUp = (event: PointerEvent) => {
+            latestPointerMoveRef.current = null;
+            if (pointerMoveFrameRef.current !== null) {
+                window.cancelAnimationFrame(pointerMoveFrameRef.current);
+                pointerMoveFrameRef.current = null;
+            }
             if (batchConnectionPointerIdRef.current === event.pointerId) {
                 const start = batchConnectionPointerStartRef.current;
                 const batch = batchConnectionPreviewRef.current;
@@ -608,6 +645,7 @@ export function useCanvasConnectionController({
             finishConnection(event.clientX, event.clientY);
         };
         const handlePointerCancel = (event: PointerEvent) => {
+            cancelPendingPointerMove();
             if (batchConnectionPointerIdRef.current === event.pointerId) {
                 clearBatchConnection();
                 return;
@@ -615,6 +653,7 @@ export function useCanvasConnectionController({
             if (connectingPointerIdRef.current === event.pointerId) setConnecting(null);
         };
         const cancel = () => {
+            cancelPendingPointerMove();
             if (connectingParamsRef.current) setConnecting(null);
             if (batchConnectionPreviewRef.current) clearBatchConnection();
         };
@@ -623,6 +662,7 @@ export function useCanvasConnectionController({
         window.addEventListener("pointercancel", handlePointerCancel);
         window.addEventListener("blur", cancel);
         return () => {
+            cancelPendingPointerMove();
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
             window.removeEventListener("pointercancel", handlePointerCancel);

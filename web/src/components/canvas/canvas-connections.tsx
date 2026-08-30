@@ -167,8 +167,8 @@ export function activeConnectionPath(node: CanvasNodeData | undefined, handle: C
  *
  * 单端口的一侧（左右各一个出入口，除分镜脚本外都是）**永远取边的正中**：
  * 之前按鼠标落点比例取 Y，多条线接同一个端口就会沿着边散开，视觉上像节点有很多端口。
- * 真正的多端口只存在于分镜脚本的 `row:` 句柄，走下面的分支——所以这里不再接受
- * anchorRatio 参数，避免「传了却被忽略」。
+ * 真正的多端口只存在于分镜脚本的 `row:` 句柄；普通节点始终连接到边缘
+ * 垂直中心，避免同一个节点因鼠标落点产生漂移的“伪端口”。
  */
 export function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {
     if (handleId === "storyboard:context") return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;

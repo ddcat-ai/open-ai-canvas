@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, Play, RefreshCw, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, RefreshCw, Video } from "lucide-react";
 
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
@@ -7,18 +7,21 @@ import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskSt
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
-import { buildLibTVImagePreviewUrl } from "@/lib/canvas/libtv-import";
+import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
 import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/resource-blob-cache";
+import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
+import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 import { MarkdownNodeContent } from "./nodes/markdown-node";
@@ -50,6 +53,8 @@ export type CanvasNodeContentProps = {
     onOpenTaskDetails?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     reduceMediaEffects?: boolean;
+    mediaActive?: boolean;
+    hydrateMediaPreview?: boolean;
 };
 
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
@@ -412,11 +417,10 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
     return content;
 }
 
-function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContentProps) {
-    const playWhenReadyRef = useRef(false);
+function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, hydrateMediaPreview = false }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMetadata } = useCanvasNodeActions();
-    const { url, loading, load } = useNodeResourceUrl(node, false);
+    const { url, loading } = useNodeResourceUrl(node, mediaActive);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -445,7 +449,8 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContent
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMetadata, url]);
 
     if (!node.metadata?.content) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
-    if (!url) return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存视频" : "加载并缓存视频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;
+    if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} hydrateMediaPreview={hydrateMediaPreview} />;
+    if (!url) return <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />;
 
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
     const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
@@ -456,30 +461,69 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: CanvasNodeContent
     return (
         <div ref={playerBoxRef} className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[var(--node-radius)] bg-black">
             <div className="relative" style={{ width: fitWidth, height: Math.round(fitHeight) }}>
-                <VideoPlayer src={url} mimeType={node.metadata?.mimeType} title={node.title || "视频"} preload={reduceMediaEffects ? "none" : "metadata"} autoPlay={playWhenReadyRef.current} onCanPlay={() => { playWhenReadyRef.current = false; }} brandColor={theme.accent.primary} className="h-full w-full rounded-[var(--node-radius)] bg-black" dataCanvasNoZoom compactControls />
+                <VideoPlayer src={url} mimeType={node.metadata?.mimeType} title={node.title || "视频"} hasAudio={inferVideoHasAudio(node.metadata)} autoPlay={mediaActive} preload={reduceMediaEffects ? "none" : "metadata"} brandColor={theme.accent.primary} className="h-full w-full rounded-[var(--node-radius)] bg-black" dataCanvasNoZoom compactControls />
                 {activeEntry && activeEntry.text.trim() ? <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} /> : null}
             </div>
         </div>
     );
 }
 
+function inferVideoHasAudio(metadata: CanvasNodeData["metadata"]): boolean | undefined {
+    if (typeof metadata?.hasAudio === "boolean") return metadata.hasAudio;
+    // Generated nodes from older saves may not have `hasAudio` yet. In that
+    // case an explicit generation setting is the only persisted signal we
+    // have; leave all other videos in the unknown state.
+    const value = metadata?.generateAudio?.trim().toLowerCase();
+    if (["false", "0", "off", "no", "disabled"].includes(value || "")) return false;
+    if (["true", "1", "on", "yes", "enabled"].includes(value || "")) return true;
+    return undefined;
+}
+
 function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const playWhenReadyRef = useRef(false);
-    const { url, loading, load } = useNodeResourceUrl(node, false);
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent icon={<Music2 className="size-7 opacity-35" />} label="空音频节点" color={theme.node.placeholder} />;
+    return <CanvasAudioPlayer node={node} theme={theme} />;
+}
+
+function InactiveVideoPreview({ node, theme, hydrateMediaPreview = false }: Pick<CanvasNodeContentProps, "node" | "theme" | "hydrateMediaPreview">) {
+    const previewUrl = canvasNodeVideoPreviewUrl(node);
+    const { updateMetadata } = useCanvasNodeActions();
+    const updateMetadataRef = useRef(updateMetadata);
+    const [hydrating, setHydrating] = useState(false);
+
     useEffect(() => {
-        if (!url || !playWhenReadyRef.current) return;
-        playWhenReadyRef.current = false;
-        void audioRef.current?.play().catch(() => undefined);
-    }, [url]);
-    if (!node.metadata?.content) return <EmptyMediaContent icon={<Music2 className="size-7 opacity-35" />} label="空音频节点" color={theme.node.placeholder} />;
-    if (!url) return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存音频" : "加载并缓存音频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;
-    return (
-        <div className="flex h-full w-full flex-col justify-center gap-3 px-4" style={{ background: theme.node.fill, color: theme.node.text }}>
-            <div className="flex min-w-0 items-center gap-2 text-sm opacity-70"><Music2 className="size-4 shrink-0" /><span className="min-w-0 truncate" title={node.title || "音频"}>{node.title || "音频"}</span></div>
-            <audio ref={audioRef} src={url} controls preload="metadata" className="w-full" data-canvas-no-zoom />
-        </div>
-    );
+        updateMetadataRef.current = updateMetadata;
+    }, [updateMetadata]);
+
+    useEffect(() => {
+        if (previewUrl || !hydrateMediaPreview || !node.metadata?.content || !updateMetadataRef.current) {
+            setHydrating(false);
+            return;
+        }
+        const controller = new AbortController();
+        setHydrating(true);
+        void hydrateCanvasVideoPreview(node, controller.signal)
+            .then((videoPreview) => {
+                if (!controller.signal.aborted && videoPreview) updateMetadataRef.current?.(node.id, { videoPreview });
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                if (!controller.signal.aborted) setHydrating(false);
+            });
+        return () => controller.abort();
+    }, [hydrateMediaPreview, node.id, node.metadata?.content, node.metadata?.storageKey, previewUrl]);
+
+    if (previewUrl) {
+        return <div className="relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black"><img src={previewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" /></div>;
+    }
+    return <InactiveMediaCard icon={<Video className="size-7" />} title={node.title || "视频"} hint={hydrating ? "正在生成首帧" : "选择后加载视频"} theme={theme} />;
+}
+
+function InactiveMediaCard({ icon, title, hint, theme }: { icon: ReactNode; title: string; hint: string; theme: CanvasTheme }) {
+    return <div className="flex size-full flex-col items-center justify-center gap-2 rounded-[var(--node-radius)] px-4 text-center" style={{ background: theme.node.fill, color: theme.node.muted }}><span className="opacity-40">{icon}</span><span className="max-w-full truncate text-xs font-medium" title={title}>{title}</span><span className="text-[var(--fs-tiny)] opacity-50">{hint}</span></div>;
+}
+
+function MediaLoadingState({ icon, label }: { icon: ReactNode; label: string }) {
+    return <div role="status" className="flex size-full flex-col items-center justify-center gap-2 rounded-[var(--node-radius)] bg-black text-white/75"><span className="grid size-10 place-items-center rounded-full bg-white/10">{icon}</span><span className="text-xs font-medium">{label}</span></div>;
 }
 
 function EmptyMediaContent({ icon, label, color }: { icon: ReactNode; label: string; color: string }) {
@@ -526,15 +570,19 @@ function ImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, bat
     );
 }
 
-function DeferredMediaLoad({ icon, label, disabled, onClick }: { icon: ReactNode; label: string; disabled: boolean; onClick: () => void }) {
-    return <button type="button" data-canvas-no-zoom className="flex size-full flex-col items-center justify-center gap-2 rounded-[var(--node-radius)] bg-black text-white/75 transition-colors hover:text-white disabled:cursor-wait" disabled={disabled} onClick={(event) => { event.stopPropagation(); onClick(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}><span className="grid size-10 place-items-center rounded-full bg-white/10">{icon}</span><span className="text-xs font-medium">{label}</span></button>;
-}
-
 function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
     const storageKey = node.metadata?.storageKey || "";
-    const content = node.metadata?.content || "";
-    const fallback = node.metadata?.previewContent
-        || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
+    const rawContent = node.metadata?.content || "";
+    const content = node.type === CanvasNodeType.Video && node.metadata?.importSource?.provider === "libtv"
+        ? buildLibTVVideoSourceUrl(rawContent)
+        : rawContent;
+    // `previewContent` is intentionally passive-only.  When a media node is
+    // activated, VideoPlayer/Audio must receive the playable asset, never the
+    // LibTV OSS snapshot URL stored for the thumbnail.
+    const fallback = node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio
+        ? content
+        : node.metadata?.previewContent
+            || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
     const isRemoteResource = Boolean(resourceIdFromStorageKey(storageKey));
     const [url, setUrl] = useState(isRemoteResource ? "" : fallback);
     const [loading, setLoading] = useState(isRemoteResource && eager);
@@ -559,22 +607,7 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
         return () => { cancelled = true; };
     }, [eager, fallback, isRemoteResource, storageKey]);
 
-    const load = useCallback(async () => {
-        if (url) return url;
-        if (!isRemoteResource) return fallback;
-        setLoading(true);
-        try {
-            const next = (await cacheResourceObjectUrl(storageKey)) || fallback;
-            setUrl(next);
-            return next;
-        } catch {
-            setUrl(fallback);
-            return fallback;
-        } finally {
-            setLoading(false);
-        }
-    }, [fallback, isRemoteResource, storageKey, url]);
-    return { url, loading, load };
+    return { url, loading };
 }
 
 function useNearViewport(ref: RefObject<Element | null>) {

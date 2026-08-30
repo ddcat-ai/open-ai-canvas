@@ -5,6 +5,8 @@ import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
+import { resolveActiveCanvasMediaNodeId } from "@/lib/canvas/canvas-performance-mode";
+import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import type { CanvasDisplayConnection, CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
@@ -25,6 +27,7 @@ type CanvasProjectWorldLayersProps = {
     connectionTargetNodeId: string | null;
     nodeById: Map<string, CanvasNodeData>;
     visibleNodes: CanvasNodeData[];
+    nodeStackOrder: CanvasNodeStackOrder;
     frameChildrenById: Map<string, CanvasNodeData[]>;
     linkedFolderPreviewNodesById: Map<string, CanvasNodeData[]>;
     dragPreview: DragPreview;
@@ -80,6 +83,11 @@ const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 
 export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
     const { viewportScale } = props;
+    const activeMediaNodeId = resolveActiveCanvasMediaNodeId(props.selectedNodeIds, props.nodeById);
+    const orderedVisibleNodes = [
+        ...props.visibleNodes.filter(isFrameNode),
+        ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
+    ];
     const framePreviewNodes = (node: CanvasNodeData) => {
         const assetFolderId = node.metadata?.folder?.assetFolderId;
         if (assetFolderId) return props.linkedFolderPreviewNodesById.get(assetFolderId) || EMPTY_CANVAS_NODES;
@@ -110,7 +118,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                 ))}
             </svg>
 
-            {props.visibleNodes.map((node) =>
+            {orderedVisibleNodes.map((node) =>
                 isFrameNode(node) ? (
                     <CanvasFrameNode
                         key={node.id}
@@ -135,6 +143,8 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         dragOffset={props.dragPreview?.nodeIds.has(node.id) ? props.dragPreview : undefined}
                         scale={viewportScale}
                         isSelected={props.selectedNodeIds.has(node.id)}
+                        mediaActive={activeMediaNodeId === node.id}
+                        hydrateMediaPreview={activeMediaNodeId === null}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}

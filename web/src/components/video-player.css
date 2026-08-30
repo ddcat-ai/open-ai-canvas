@@ -4,6 +4,20 @@
     aspect-ratio: auto;
 }
 
+.canvas-video-player {
+    position: relative;
+    isolation: isolate;
+    --canvas-video-control-size: 36px;
+    --canvas-video-control-gap: 6px;
+}
+
+.canvas-video-player[data-player-variant="compact"] {
+    --canvas-video-control-gap: 4px;
+    --video-volume-panel-width: 42px;
+    --video-volume-slider-width: 28px;
+    --video-volume-slider-max-width: 48px;
+}
+
 .canvas-video-player [data-media-provider] video {
     width: 100%;
     height: 100%;
@@ -11,9 +25,323 @@
     object-fit: contain;
 }
 
-/* 画布节点顶部还有标题和存储状态，隐藏 Vidstack 小布局的顶部控制组避免互相遮挡；全屏时恢复完整工具栏。 */
-.canvas-video-player-compact:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:first-child {
+/* 语义化定位：按控件内容识别组，避免依赖 Vidstack 组的首尾顺序。 */
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group {
+    align-items: center;
+    gap: var(--canvas-video-control-gap);
+    min-width: 0;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-slider) {
+    width: 100%;
+    padding: 0 8px;
+    margin: 0;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) {
+    display: flex;
+    width: 100%;
+    min-height: calc(var(--canvas-video-control-size) + 8px);
+    padding: 2px 8px 6px;
+    margin: 0;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-play-button,
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button,
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-volume,
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-button {
+    flex: 0 0 var(--canvas-video-control-size);
+    flex-shrink: 0;
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    margin: 0;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-play-button {
+    order: 1;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-time-group {
+    order: 2;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-volume {
+    order: 3;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button {
+    order: 4;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-time-group {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) .vds-volume {
+    margin-left: auto;
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-volume) .vds-volume-popup {
+    top: auto;
+    bottom: calc(100% + var(--gap, 10px));
+}
+
+/* Keep the compact vertical volume rail centered on its mute button. The
+   explicit anchor prevents browser/layout scaling from inheriting a stale
+   horizontal offset while the popup is moved above the controls row. */
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-volume .vds-volume-popup {
+    left: 50%;
+    right: auto;
+    display: grid;
+    place-items: center;
+    transform: translateX(-50%);
+}
+
+.canvas-video-player:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-volume .vds-volume-slider {
+    margin: 0;
+}
+
+/* The compact rail should read as a small control, not a tall black column.
+   Keep the hit target intact while shortening the visible rail and its panel
+   padding to match the LibTV proportions. */
+.canvas-video-player[data-player-variant="compact"] .vds-video-layout[data-sm] .vds-volume {
+    --video-volume-height: 64px;
+    --video-volume-gap: 6px;
+    /* Keep the LibTV-style volume rail visually compact. The mute button's
+       hit target remains governed by --canvas-video-control-size; these
+       values only size the popup surface and slider inside it. */
+    --video-volume-bg: rgba(12, 13, 16, 0.92);
+    --video-volume-border: 1px solid rgba(255, 255, 255, 0.12);
+    --video-volume-border-radius: 6px;
+}
+
+.canvas-video-player[data-player-variant="compact"] .vds-video-layout[data-sm] .vds-volume .vds-volume-popup {
+    box-sizing: border-box;
+    width: var(--video-volume-panel-width);
+    min-width: var(--video-volume-panel-width);
+    padding: 5px 6px;
+}
+
+/* The popup is intentionally above the button in the canvas player. Preserve
+   Vidstack's safe-area behavior on that side too, so a real mouse can cross
+   the small visual gap without closing the popup before reaching the rail. */
+.canvas-video-player[data-player-variant="compact"] .vds-video-layout[data-sm] .vds-volume .vds-volume-popup::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(-1 * var(--gap, 6px));
+    height: var(--gap, 6px);
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"] .vds-video-layout[data-sm] .vds-volume .vds-volume-slider {
+    --media-slider-width: var(--video-volume-slider-width);
+}
+
+/* A confirmed silent source keeps its mute indicator as a status icon. The
+   volume controls remain visible for consistency, but are intentionally
+   unavailable so a click cannot suggest that the video gained an audio track. */
+.canvas-video-player[data-no-audio="true"] .vds-volume .vds-mute-button,
+.canvas-video-player[data-no-audio="true"] .vds-volume .vds-volume-slider {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* 画布节点保持轻量，只显示播放、时间、音量和全屏，避免窄节点中额外图标挤压布局。 */
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout .vds-controls-group > :is(.vds-caption-button, .vds-download-button, .vds-pip-button, .vds-airplay-button, .vds-google-cast-button, .vds-chapters-button) {
     display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) {
+    position: absolute;
+    right: calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 22px);
+    bottom: 8px;
+    width: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) .vds-volume {
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) {
+    position: absolute;
+    inset-inline: 8px;
+    bottom: 8px;
+    width: auto;
+    min-height: var(--canvas-video-control-size);
+    padding: 0 0 0 calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 2px);
+    z-index: 2;
+    pointer-events: none !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-play-button {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button {
+    margin-left: auto;
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-time-group {
+    pointer-events: auto;
+}
+
+/* 小布局沿用 LibTV 的单行控件：播放、时间、进度、音量、全屏共享同一底边。 */
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) {
+    position: absolute;
+    left: calc(var(--canvas-video-control-size) * 3 + var(--canvas-video-control-gap) + 40px);
+    right: calc(var(--canvas-video-control-size) * 2 + var(--canvas-video-control-gap) * 2 + 12px);
+    bottom: 8px;
+    width: auto;
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    /* Keep the timeline above the video surface and below the fixed buttons.
+       The default Vidstack layout gives this group a dedicated hit layer;
+       absolute compact positioning must preserve that explicitly. */
+    z-index: 11;
+    pointer-events: auto !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 24px;
+    pointer-events: auto !important;
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider .vds-slider-chapters,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider .vds-slider-chapter,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider .vds-slider-track,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider .vds-slider-thumb {
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    z-index: 3;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) > .vds-controls-spacer {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) .vds-play-button {
+    flex: 0 0 var(--canvas-video-control-size);
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    margin: 0;
+    transform: none;
+}
+
+/* Vidstack switches to data-lg when a node is stretched. Keep the compact
+   canvas layout stable instead of allowing the large layout to reorder icons. */
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-volume):not(:has(.vds-time-group)),
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(> .vds-play-button):not(:has(.vds-time-group)) {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) {
+    position: absolute;
+    inset-inline: 8px;
+    bottom: 8px;
+    width: auto;
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: var(--canvas-video-control-gap);
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) > .vds-controls-spacer {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-play-button,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-volume,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button,
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-button {
+    flex: 0 0 var(--canvas-video-control-size);
+    flex-shrink: 0;
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    margin: 0;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-play-button {
+    order: 1;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-time-group {
+    order: 2;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-volume {
+    order: 3;
+    margin-left: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button {
+    order: 4;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-slider) {
+    position: absolute;
+    inset-inline: 8px;
+    bottom: calc(var(--canvas-video-control-size) + 12px);
+    width: auto;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    z-index: 11;
+    pointer-events: auto !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]) .vds-video-layout[data-lg] .vds-controls-group:has(.vds-time-slider) .vds-time-slider {
+    width: 100%;
+    min-width: 0;
+    pointer-events: auto !important;
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+/* 预览弹窗沿用完整控件，但同样固定按钮和时间区域，防止弹窗窄化时发生重叠。 */
+.canvas-video-player[data-player-variant="dialog"]:not([data-fullscreen]) .vds-video-layout .vds-controls-group:has(.vds-time-group) {
+    padding-inline: 12px;
 }
 
 /* 节点内保持紧凑；全屏使用桌面播放器级别的控制尺寸，不依赖 Vidstack 小布局的默认值。 */
@@ -38,15 +366,16 @@
     padding-inline: 24px;
 }
 
-.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:nth-last-child(2) {
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:has(.vds-time-slider) {
     min-height: 64px;
     margin-bottom: -12px;
     padding-inline: 28px;
 }
 
-.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:last-child {
+.canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:has(.vds-time-group) {
     min-height: 82px;
     gap: 4px;
+    margin: 0;
     padding: 8px 24px max(12px, env(safe-area-inset-bottom));
 }
 
@@ -107,8 +436,183 @@
         font-size: 16px;
     }
 
-    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:last-child {
+    .canvas-video-player:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout .vds-controls-group:has(.vds-time-group) {
         min-height: 72px;
         padding-inline: 12px;
+    }
+}
+
+/* The compact canvas player keeps the same control order in fullscreen as it
+   does inside a node: play, time, volume, fullscreen. Vidstack's small layout
+   renders these controls in separate groups, so pin each group explicitly
+   instead of relying on the group's DOM order. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) {
+    --canvas-video-control-size: 60px;
+    --canvas-video-control-gap: 8px;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group {
+    box-sizing: border-box;
+    align-items: center;
+    gap: var(--canvas-video-control-gap);
+}
+
+/* Only the volume control survives from the small layout's top group. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) {
+    position: absolute;
+    right: calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 24px);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) > :not(.vds-volume) {
+    display: none !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) .vds-volume {
+    flex: 0 0 var(--canvas-video-control-size);
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    pointer-events: auto;
+}
+
+/* Keep the vertical rail above the volume button in fullscreen as well. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-volume .vds-volume-popup {
+    top: auto;
+    bottom: calc(100% + var(--gap, 6px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    width: var(--video-volume-panel-width, 42px);
+    min-width: var(--video-volume-panel-width, 42px);
+    padding: 5px 6px;
+}
+
+/* The center group contains only the play button in the compact layout. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) {
+    position: absolute;
+    left: 24px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    padding: 0;
+    z-index: 3;
+    display: flex;
+    justify-content: center;
+    pointer-events: auto !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) > .vds-controls-spacer {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) .vds-play-button {
+    flex: 0 0 var(--canvas-video-control-size);
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    margin: 0;
+    transform: none;
+}
+
+/* Time and fullscreen share the bottom row; the time text may shrink but the
+   fullscreen button always keeps its target size. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) {
+    position: absolute;
+    inset-inline: 24px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size);
+    margin: 0;
+    padding: 0 0 0 calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 2px);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    pointer-events: none !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) > .vds-controls-spacer,
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-chapter-title {
+    display: none;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-time-group {
+    order: 2;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    white-space: nowrap;
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) .vds-fullscreen-button {
+    order: 4;
+    flex: 0 0 var(--canvas-video-control-size);
+    width: var(--canvas-video-control-size);
+    min-width: var(--canvas-video-control-size);
+    height: var(--canvas-video-control-size);
+    margin-left: auto;
+    pointer-events: auto;
+}
+
+/* Keep fullscreen controls in the same single-row order as the compact node:
+   play, time, progress, volume, fullscreen. The progress rail stays between
+   the time and volume controls instead of moving to a separate upper row. */
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) {
+    position: absolute;
+    left: calc(var(--canvas-video-control-size) * 3 + var(--canvas-video-control-gap) + 40px);
+    right: calc(var(--canvas-video-control-size) * 2 + var(--canvas-video-control-gap) * 2 + 28px);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    height: var(--canvas-video-control-size);
+    min-height: var(--canvas-video-control-size) !important;
+    margin: 0;
+    padding: 0;
+    z-index: 11;
+    pointer-events: auto !important;
+}
+
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) .vds-time-slider {
+    width: 100%;
+    height: var(--canvas-video-control-size);
+    min-width: 0;
+    pointer-events: auto !important;
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+@media screen and (max-width: 599px) {
+    .canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) {
+        --canvas-video-control-size: 52px;
+    }
+
+    .canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) {
+        right: calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 12px);
+    }
+
+    .canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-group) {
+        inset-inline: 12px;
+        padding-left: calc(var(--canvas-video-control-size) + var(--canvas-video-control-gap) + 2px);
+    }
+
+    .canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(> .vds-play-button) {
+        left: 12px;
+    }
+
+    .canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-time-slider) {
+        left: calc(var(--canvas-video-control-size) * 3 + var(--canvas-video-control-gap) + 28px);
+        right: calc(var(--canvas-video-control-size) * 2 + var(--canvas-video-control-gap) * 2 + 20px);
     }
 }

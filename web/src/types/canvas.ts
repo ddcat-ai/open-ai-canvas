@@ -194,6 +194,14 @@ export type CanvasNodeMetadata = {
           };
     content?: string;
     previewContent?: string;
+    videoPreview?: {
+        content: string;
+        storageKey?: string;
+        width?: number;
+        height?: number;
+        bytes?: number;
+        mimeType?: string;
+    };
     richText?: Record<string, unknown>;
     composerContent?: string;
     prompt?: string;
@@ -244,6 +252,8 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    /** Whether the video file contains an audio track when this is known. */
+    hasAudio?: boolean;
     assetId?: string;
     assetTags?: string[];
     assetCategory?: "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "other";

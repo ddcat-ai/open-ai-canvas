@@ -18,7 +18,9 @@ type UseCanvasSelectionControllerOptions = {
     cancelPendingConnectionCreate: () => void;
     onCanvasSelectionStart: () => void;
     onNodeInteractionStart: (selectionModifier: boolean) => void;
+    onNodeBringToFront?: (nodeId: string) => void;
     onNodeClick: (node: CanvasNodeData) => void;
+    onNodeDragEnd?: (nodeId: string) => void;
     onBatchConnectionTarget?: (event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => boolean;
     onLinkedFolderDrop?: (folder: CanvasNodeData, nodes: CanvasNodeData[]) => void;
     onDeselect: () => void;
@@ -58,7 +60,9 @@ export function useCanvasSelectionController({
     cancelPendingConnectionCreate,
     onCanvasSelectionStart,
     onNodeInteractionStart,
+    onNodeBringToFront,
     onNodeClick,
+    onNodeDragEnd,
     onBatchConnectionTarget,
     onLinkedFolderDrop,
     onDeselect,
@@ -131,6 +135,9 @@ export function useCanvasSelectionController({
         event.stopPropagation();
         if (event.button !== 0) return;
         if (onBatchConnectionTarget?.(event, nodeId)) return;
+        // Paint order is session-local UI state. Update it once at the start
+        // of a real node interaction so dragging also survives deselection.
+        onNodeBringToFront?.(nodeId);
         setSelectedConnectionId(null);
         const currentNodes = nodesRef.current;
         const nextSelected = new Set(selectedNodeIdsRef.current);
@@ -183,7 +190,7 @@ export function useCanvasSelectionController({
         setIsNodeDragging(true);
         setAlignmentGuides({});
         setDragPreview({ x: 0, y: 0, nodeIds: new Set(initialSelectedNodes.map((item) => item.id)) });
-    }, [historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeClick, onNodeInteractionStart, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
     const finishNodeDrag = useCallback((clientX?: number, clientY?: number) => {
         if (dragFrameRef.current) {
@@ -217,6 +224,7 @@ export function useCanvasSelectionController({
             // 素材库文件夹只建立归档关系，不把画布节点变成其本地子节点。
             setNodes(linkedFolder ? positioned : applyFrameDrop(positioned, draggedNodeIds, targetId));
             if (linkedFolder) onLinkedFolderDrop?.(linkedFolder, positioned.filter((node) => draggedNodeIds.has(node.id)));
+            if (clickedNodeId) onNodeDragEnd?.(clickedNodeId);
         }
         setFrameDropTargetId(null);
         alignmentContextRef.current = null;
@@ -225,7 +233,7 @@ export function useCanvasSelectionController({
             const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
             if (clickedNode) onNodeClick(clickedNode);
         }
-    }, [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, setNodes, viewportRef]);
+    }, [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, onNodeDragEnd, setNodes, viewportRef]);
 
     const handleNodeDragMove = useCallback((event: MouseEvent | PointerEvent) => {
         if (!dragRef.current.isDraggingNode) return;

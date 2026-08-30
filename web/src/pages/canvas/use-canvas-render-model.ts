@@ -150,7 +150,9 @@ export function useCanvasRenderModel({
     const emotionNode = emotionNodeId ? nodeById.get(emotionNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const contextMenuNode = contextMenu?.type === "node" ? nodeById.get(contextMenu.nodeId) || null : null;
-    const activeNodeId = selectedNodeIds.size > 1 ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
+    // Hover only drives transient affordances (toolbar/handles). Selection is
+    // the explicit focus action that raises a node and highlights its graph.
+    const activeNodeId = selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null;
 
     const selectedNodeBounds = useMemo(() => {
         if (selectedNodeIds.size < 2) return null;

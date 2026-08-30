@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { resolveMediaUrl } from "@/services/file-storage";
 import { resolveImageUrl } from "@/services/image-storage";
 
 type ResolvedPreview = {
@@ -59,16 +58,16 @@ export function useResolvedCanvasResourceReferences(references: CanvasResourceRe
 }
 
 function previewIdentity(reference: CanvasResourceReference) {
-    if (!reference.storageKey || !["image", "video", "character"].includes(reference.kind)) return "";
-    return `${reference.kind}:${reference.storageKey}`;
+    const storageKey = reference.kind === "video" ? reference.previewStorageKey : reference.storageKey;
+    if (!storageKey || !["image", "video", "character"].includes(reference.kind)) return "";
+    return `${reference.kind}:${storageKey}`;
 }
 
 function resolveReferencePreview(reference: CanvasResourceReference, identity: string) {
     const cached = previewPromiseCache.get(identity);
     if (cached) return cached;
-    const pending = (reference.kind === "video"
-        ? resolveMediaUrl(reference.storageKey, reference.previewUrl || "")
-        : resolveImageUrl(reference.storageKey, reference.previewUrl || "", { cacheMiss: true }))
+    const storageKey = reference.kind === "video" ? reference.previewStorageKey : reference.storageKey;
+    const pending = resolveImageUrl(storageKey, reference.previewUrl || "", { cacheMiss: true })
         .catch(() => reference.previewUrl || "")
         .then((url) => {
             if (!url) previewPromiseCache.delete(identity);

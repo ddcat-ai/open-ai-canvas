@@ -481,14 +481,21 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
 
 function createInlinePreview(reference: CanvasResourceReference) {
     if ((reference.kind === "image" || reference.kind === "video" || reference.kind === "character") && reference.previewUrl) {
-        const media = document.createElement(reference.kind === "video" ? "video" : "img");
+        const media = document.createElement("img");
         media.className = `canvas-resource-inline-preview is-${reference.kind}`;
         media.setAttribute("src", reference.previewUrl);
         media.setAttribute("alt", "");
-        if (media instanceof HTMLVideoElement) {
-            media.muted = true;
-            media.preload = "metadata";
-        }
+        return media;
+    }
+    if (reference.kind === "video" && reference.mediaUrl) {
+        const media = document.createElement("video");
+        media.className = "canvas-resource-inline-preview is-video";
+        media.setAttribute("src", reference.mediaUrl);
+        media.setAttribute("aria-hidden", "true");
+        media.muted = true;
+        media.playsInline = true;
+        media.preload = "metadata";
+        media.onloadedmetadata = () => primeVideoPreviewFrame(media);
         return media;
     }
     const fallback = document.createElement("span");
@@ -685,7 +692,10 @@ function MentionReferenceList({ references, activeReferenceId, onSelect }: { ref
 
 function ReferencePreview({ reference }: { reference: CanvasResourceReference }) {
     if (reference.kind === "image" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="canvas-resource-mention-preview is-image" />;
-    if (reference.kind === "video" && reference.previewUrl) return <video src={reference.previewUrl} className="canvas-resource-mention-preview is-video" muted preload="metadata" />;
+    if (reference.kind === "video" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="canvas-resource-mention-preview is-video" loading="lazy" decoding="async" />;
+    if (reference.kind === "video" && reference.mediaUrl) {
+        return <video src={reference.mediaUrl} aria-hidden="true" muted playsInline preload="metadata" className="canvas-resource-mention-preview is-video" onLoadedMetadata={(event) => primeVideoPreviewFrame(event.currentTarget)} />;
+    }
     if (reference.kind === "character" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="canvas-resource-mention-preview is-character" />;
     if (reference.kind === "skill") {
         return (
@@ -700,6 +710,17 @@ function ReferencePreview({ reference }: { reference: CanvasResourceReference })
             <Icon aria-hidden />
         </span>
     );
+}
+
+function primeVideoPreviewFrame(video: HTMLVideoElement) {
+    if (video.currentTime !== 0 || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    try {
+        // Metadata-only loading does not paint a frame consistently across browsers.
+        // Seeking a tiny amount keeps this preview passive while forcing first-frame decode.
+        video.currentTime = Math.min(0.001, video.duration);
+    } catch {
+        // A transient media error should leave the fallback element usable.
+    }
 }
 
 function splitMentionText(value: string, references: CanvasResourceReference[]) {

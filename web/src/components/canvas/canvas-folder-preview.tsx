@@ -3,6 +3,7 @@ import { Dropdown } from "antd";
 import { FileAudio, FileText, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 
 import { CANVAS_FOLDER_THEME_OPTIONS, resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
+import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import type { CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData } from "@/types/canvas";
 import { CanvasNodeType } from "@/types/canvas";
 
@@ -189,8 +190,9 @@ function FolderNodeMedia({ node }: { node?: CanvasNodeData }) {
     if (node?.type === CanvasNodeType.Image && node.metadata?.content) {
         return <img src={node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
-    if (node?.type === CanvasNodeType.Video && node.metadata?.content) {
-        return <video src={node.metadata.content} muted playsInline preload="metadata" />;
+    const videoPreview = node ? canvasNodeVideoPreviewUrl(node) : "";
+    if (videoPreview) {
+        return <img src={videoPreview} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
     if (node?.type === CanvasNodeType.Drawing && (node.metadata?.drawingPreviewUrl || node.metadata?.content)) {
         return <img src={node.metadata.drawingPreviewUrl || node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;

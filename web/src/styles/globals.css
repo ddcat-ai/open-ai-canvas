@@ -7087,6 +7087,8 @@
         left: 0;
         height: 30px;
         content: "";
+        /* Keep the hover bridge from covering the node's external title. */
+        pointer-events: none;
     }
 
     .canvas-floating-dock {
@@ -9329,7 +9331,9 @@
     }
 
     .canvas-world-raster-layer {
-        zoom: var(--canvas-committed-scale);
+        /* 使用标准 transform，避免搜狗 Chromium 对 zoom 下绝对定位的偏移。 */
+        transform: scale(var(--canvas-committed-scale));
+        transform-origin: 0 0;
     }
 
     [data-canvas-viewport-interacting="true"] .canvas-world-layer {

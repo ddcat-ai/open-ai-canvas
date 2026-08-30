@@ -83,7 +83,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                 styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "#090909" } }}
             >
                 {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? (
-                    <VideoPlayer src={previewNode.metadata.content} mimeType={previewNode.metadata.mimeType} title={previewNode.title || "视频预览"} className="max-h-[84vh] max-w-full bg-black" />
+                    <VideoPlayer src={previewNode.metadata.content} mimeType={previewNode.metadata.mimeType} title={previewNode.title || "视频预览"} hasAudio={typeof previewNode.metadata.hasAudio === "boolean" ? previewNode.metadata.hasAudio : undefined} className="max-h-[84vh] max-w-full bg-black" />
                 ) : null}
             </Modal>
 

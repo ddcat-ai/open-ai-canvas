@@ -43,6 +43,7 @@ export function canvasAssetHandoffPayloads(assets: Asset[], assetIds: Iterable<s
                 width: asset.data.width,
                 height: asset.data.height,
                 durationMs: asset.data.durationMs,
+                hasAudio: asset.data.hasAudio,
                 bytes: asset.data.bytes,
                 mimeType: asset.data.mimeType,
                 assetId: asset.id,

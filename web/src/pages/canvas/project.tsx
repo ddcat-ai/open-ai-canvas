@@ -90,6 +90,7 @@ import { CanvasProjectSelectionToolbar } from "./canvas-project-selection-toolba
 import { CanvasProjectStatusDialogs } from "./canvas-project-status-dialogs";
 import { CanvasProjectWorldLayers } from "./canvas-project-world-layers";
 import { CanvasNodeActionContext } from "@/components/canvas/canvas-node-action-context";
+import { bringCanvasNodeToFront, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import { PortraitClearanceModal } from "@/components/canvas/portrait-clearance/portrait-clearance-modal";
 import { CanvasNodeGraphContext, type CanvasNodeGraphContextValue } from "@/components/canvas/canvas-node-graph-context";
 import { CanvasRefreshShell } from "./canvas-refresh-shell";
@@ -234,6 +235,10 @@ function InfiniteCanvasPage() {
         nodesRef.current = next;
         setNodesState(next);
     }, []);
+    const [nodeStackOrder, setNodeStackOrder] = useState<CanvasNodeStackOrder>([]);
+    const bringNodeToFront = useCallback((nodeId: string) => {
+        setNodeStackOrder((current) => bringCanvasNodeToFront(current, nodeId));
+    }, []);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -317,7 +322,16 @@ function InfiniteCanvasPage() {
 
     useEffect(() => {
         didInitialCenterRef.current = false;
+        setNodeStackOrder([]);
     }, [projectId]);
+
+    useEffect(() => {
+        const nodeIds = new Set(nodes.map((node) => node.id));
+        setNodeStackOrder((current) => {
+            const next = current.filter((nodeId) => nodeIds.has(nodeId));
+            return next.length === current.length ? current : next;
+        });
+    }, [nodes]);
 
     const connectionsRef = useRef(connections);
     const chatSessionsRef = useRef(chatSessions);
@@ -980,6 +994,9 @@ function InfiniteCanvasPage() {
     }, []);
 
     const handleSelectedNodeClick = useCallback((node: CanvasNodeData) => {
+        // Selection is transient, but the LibTV-style paint order survives
+        // deselection so a clicked lower node stays above its neighbours.
+        if (node.type !== CanvasNodeType.Frame) bringNodeToFront(node.id);
         if (node.type === CanvasNodeType.Drawing) {
             setDialogNodeId(null);
             setDrawingNodeId(node.id);
@@ -998,6 +1015,23 @@ function InfiniteCanvasPage() {
                 return currentNode?.type === CanvasNodeType.Config ? current : node.id;
             });
         }
+    }, [bringNodeToFront, nodesRef]);
+
+    const handleNodeBringToFront = useCallback((nodeId: string) => {
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (node && node.type !== CanvasNodeType.Frame) bringNodeToFront(nodeId);
+    }, [bringNodeToFront, nodesRef]);
+
+    const handleNodeDragEnd = useCallback((nodeId: string) => {
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === PORTRAIT_CLEARANCE_NODE_TYPE) {
+            setDialogNodeId(null);
+            return;
+        }
+        // A drag selects a new node even though it is not a click. Keep the
+        // generation editor bound to the node most recently moved so a stale
+        // panel from the previous node cannot reappear after mouse-up.
+        setDialogNodeId(node.id);
     }, [nodesRef]);
 
     const handleCanvasDeselect = useCallback(() => {
@@ -1020,7 +1054,9 @@ function InfiniteCanvasPage() {
         cancelPendingConnectionCreate,
         onCanvasSelectionStart: handleCanvasSelectionStart,
         onNodeInteractionStart: handleNodeInteractionStart,
+        onNodeBringToFront: handleNodeBringToFront,
         onNodeClick: handleSelectedNodeClick,
+        onNodeDragEnd: handleNodeDragEnd,
         onBatchConnectionTarget: handleBatchConnectionTargetClick,
         onLinkedFolderDrop: archiveNodesToLinkedFolder,
         onDeselect: handleCanvasDeselect,
@@ -1257,6 +1293,10 @@ function InfiniteCanvasPage() {
         });
     }, [mentionReferencesByNodeId, setNodes]);
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
+    // dragPreview is published on the same pointer-down frame as isNodeDragging.
+    // Treat either signal as moving so floating editors disappear before the
+    // first preview transform is painted and never affect drag layout.
+    const isCanvasNodeMoving = isNodeDragging || Boolean(dragPreview?.nodeIds.size);
     const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
     const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
     const frameNode = frameDialogNodeId ? nodeById.get(frameDialogNodeId) || null : null;
@@ -2126,6 +2166,7 @@ function InfiniteCanvasPage() {
                                     connectionTargetNodeId={connectionTargetNodeId}
                                     nodeById={nodeById}
                                     visibleNodes={visibleNodes}
+                                    nodeStackOrder={nodeStackOrder}
                                     frameChildrenById={frameChildrenById}
                                     linkedFolderPreviewNodesById={linkedFolderPreviewNodesById}
                                     dragPreview={dragPreview}
@@ -2278,7 +2319,7 @@ function InfiniteCanvasPage() {
                         ) : null}
                     </div>
 
-                    {angleNode?.metadata?.content ? (
+                    {angleNode?.metadata?.content && !isCanvasNodeMoving ? (
                         <CanvasNodePanelOverlay
                             node={angleNode}
                             viewport={viewport}
@@ -2298,7 +2339,7 @@ function InfiniteCanvasPage() {
                         </CanvasNodePanelOverlay>
                     ) : null}
 
-                    {emotionNode?.metadata?.content ? (
+                    {emotionNode?.metadata?.content && !isCanvasNodeMoving ? (
                         <CanvasEmotionWorkspace
                             node={emotionNode}
                             viewport={viewport}
@@ -2312,7 +2353,7 @@ function InfiniteCanvasPage() {
                         />
                     ) : null}
 
-                    {dialogNode && dialogNode.type !== CanvasNodeType.Script && dialogNode.type !== CanvasNodeType.Drawing && !selectionBox ? (
+                    {dialogNode && dialogNode.type !== CanvasNodeType.Script && dialogNode.type !== CanvasNodeType.Drawing && !selectionBox && !isCanvasNodeMoving ? (
                         <CanvasNodePanelOverlay
                             node={dialogNode}
                             viewport={viewport}
@@ -2337,7 +2378,7 @@ function InfiniteCanvasPage() {
                         />
                     ) : null}
 
-                    {selectedNodeBounds && !selectionBox && !isNodeDragging ? (
+                    {selectedNodeBounds && !selectionBox && !isCanvasNodeMoving ? (
                         <CanvasProjectSelectionToolbar
                             anchorRef={selectionBoundsElementRef}
                             containerRef={containerRef}
@@ -2368,7 +2409,7 @@ function InfiniteCanvasPage() {
                     ) : null}
 
                     <CanvasNodeToolbar
-                        node={isNodeDragging || nodeImageSettingsOpen || emotionNodeId ? null : toolbarNode}
+                        node={isCanvasNodeMoving || nodeImageSettingsOpen || emotionNodeId ? null : toolbarNode}
                         workspaceMode={workspaceMode}
                         viewport={viewport}
                         containerRef={containerRef}

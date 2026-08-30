@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal, Tooltip } from "antd";
 import { Image as ImageIcon, Music2, Play, UserRound } from "lucide-react";
 
+import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { isStoryboardPreviewAsset } from "@/lib/canvas/canvas-storyboard-materializer";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { CanvasNodeType, type CanvasNodeData, type StoryboardAssetBinding } from "@/types/canvas";
@@ -55,13 +56,14 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
 }
 
 function AssetThumbnail({ node }: { node: CanvasNodeData }) {
-    const source = useNodeMediaSource(node);
+    const videoPreview = canvasNodeVideoPreviewUrl(node);
+    const source = useNodeMediaSource(node.type === CanvasNodeType.Video ? null : node);
     if (node.type === CanvasNodeType.Audio) return <Music2 className="size-4" />;
     if (node.metadata?.workflowKind === "character" && !source) return <UserRound className="size-4" />;
     if (node.type === CanvasNodeType.Video) {
-        return source ? (
+        return videoPreview ? (
             <>
-                <video src={source} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
+                <img src={videoPreview} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-cover" />
                 <span className="absolute inset-0 grid place-items-center bg-black/15"><Play className="size-3.5 fill-white text-white" /></span>
             </>
         ) : <Play className="size-4" />;

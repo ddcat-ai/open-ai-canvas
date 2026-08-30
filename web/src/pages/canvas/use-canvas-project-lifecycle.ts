@@ -238,7 +238,7 @@ export function useCanvasProjectLifecycle({
     };
 }
 
-const hydratedMediaMetadataKeys = ["content", "storageKey", "naturalWidth", "naturalHeight", "bytes", "mimeType", "durationMs"] as const satisfies readonly (keyof CanvasNodeMetadata)[];
+const hydratedMediaMetadataKeys = ["content", "storageKey", "naturalWidth", "naturalHeight", "bytes", "mimeType", "durationMs", "hasAudio", "videoPreview"] as const satisfies readonly (keyof CanvasNodeMetadata)[];
 
 function mergeHydratedNodeMedia(currentNodes: CanvasNodeData[], initialNodes: CanvasNodeData[], hydratedNodes: CanvasNodeData[]) {
     const initialById = new Map(initialNodes.map((node) => [node.id, node]));

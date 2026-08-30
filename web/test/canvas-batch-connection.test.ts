@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { buildBatchConnectionCreateRequest, hasBatchConnectionCandidate, planBatchConnections } from "@/lib/canvas/canvas-batch-connection";
+import { canvasConnectionPath } from "@/components/canvas/canvas-connections";
 import { defaultConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
@@ -89,6 +90,35 @@ describe("planBatchConnections", () => {
         });
         expect(result.connected).toEqual(["image-a", "image-b"]);
         expect(result.connections).toHaveLength(2);
+    });
+});
+
+describe("canvas connection anchors", () => {
+    it("keeps ordinary node edges centered even when legacy ratios exist", () => {
+        const connection: CanvasConnection = {
+            id: "ratio-test",
+            fromNodeId: "text-a",
+            toNodeId: "text-b",
+            fromAnchorRatio: 0.2,
+            toAnchorRatio: 0.8,
+        };
+        const result = canvasConnectionPath(connection, nodes[0], nodes[1]);
+
+        expect(result.startY).toBe(90);
+        expect(result.endY).toBe(310);
+    });
+
+    it("keeps storyboard row handles positioned independently from the node center", () => {
+        const connection: CanvasConnection = {
+            id: "storyboard-row-test",
+            fromNodeId: "text-a",
+            toNodeId: "script",
+            toHandleId: "row:row-1",
+        };
+        const result = canvasConnectionPath(connection, nodes[0], nodes[4]);
+
+        expect(result.startY).toBe(90);
+        expect(result.endY).toBeGreaterThan(90);
     });
 });
 
