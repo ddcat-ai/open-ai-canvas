@@ -41,7 +41,9 @@ type PinchState = {
 };
 
 export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, boxSelectEnabled = false, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const colorTheme = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
+    const canvasBackground = colorTheme === "light" ? "#e6e6e6" : theme.canvas.background;
     const panState = useRef({
         isPanning: false,
         pointerId: -1,
@@ -372,7 +374,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             ref={containerRef}
             className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : boxSelectEnabled ? "cursor-crosshair" : "cursor-grab"}`}
             style={{
-                background: theme.canvas.background,
+                background: canvasBackground,
                 overscrollBehavior: "none",
                 "--canvas-live-x": `${viewport.x}px`,
                 "--canvas-live-y": `${viewport.y}px`,
