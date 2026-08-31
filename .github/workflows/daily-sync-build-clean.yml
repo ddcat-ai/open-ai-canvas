@@ -136,11 +136,13 @@ jobs:
           - open-ai-canvas-backend
 
     steps:
-      - name: Delete old container package versions
+      - name: Delete untagged container package versions
+        # A multi-architecture image index references per-platform child manifests.
+        # Deleting tagged versions can remove those children and break `latest` pulls.
         uses: actions/delete-package-versions@v5
         with:
           token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           package-name: ${{ matrix.package-name }}
           package-type: container
           min-versions-to-keep: 1
-          delete-only-untagged-versions: "false"
+          delete-only-untagged-versions: "true"
