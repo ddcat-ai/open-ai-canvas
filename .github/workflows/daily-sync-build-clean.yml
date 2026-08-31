@@ -1,0 +1,119 @@
+name: Daily Sync, Build & Keep Latest Image
+
+on:
+  schedule:
+    # 每天北京时间凌晨 03:00 运行（对应 UTC 19:00）
+    - cron: "0 19 * * *"
+  workflow_dispatch: # 支持在 GitHub Actions 页面手动点击触发
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  sync-and-build:
+    name: Sync Upstream & Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: open-ai-canvas-web
+            dockerfile: Dockerfile
+          - image: open-ai-canvas-backend
+            dockerfile: backend/Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync with upstream repository
+        shell: bash
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/ddcat-ai/open-ai-canvas.git || true
+          git fetch upstream main
+          # 尝试合并上游主分支代码
+          git merge upstream/main -m "chore: sync upstream main [skip ci]" || {
+            echo "::warning::Merge conflict or fast-forward failed, resetting to upstream/main"
+            git reset --hard upstream/main
+          }
+          # 将同步后的最新代码推送回当前 fork 仓库
+          git push origin main || echo "::warning::Push to origin main skipped or already up to date"
+
+      - name: Resolve and validate build version
+        id: build-info
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository owner
+        id: repo-owner
+        shell: bash
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.build-info.outputs.version }}
+            type=sha,prefix=sha-
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            BUILD_VERSION=${{ steps.build-info.outputs.version }}
+            BUILD_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.build-info.outputs.build_time }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  cleanup-packages:
+    name: Cleanup Old Packages (Keep Only 1 Latest)
+    needs: sync-and-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-name:
+          - open-ai-canvas-web
+          - open-ai-canvas-backend
+
+    steps:
+      - name: Delete old container package versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ matrix.package-name }}
+          package-type: container
+          min-versions-to-keep: 1
+          delete-only-untagged-versions: "false"
