@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Clock3, Film, Layers3, PackageCheck } from "lucide-react";
 import { Link } from "react-router";
 
+import { ASSET_CATEGORIES } from "@/lib/asset-category";
 import { listProjectAssetsPage, type ProjectDetail } from "@/services/api/projects";
 
 import { assetCategoryLabel, formatDuration, MetricCard, StageHeading } from "./workflow-shared";
@@ -16,8 +17,7 @@ export function AssetsStage({ detail, projectId, unitId }: { detail: ProjectDeta
     const candidates = detail.assetCandidates.filter((item) => !item.unitId || item.unitId === unitId);
     const assetCountsQuery = useQuery({ queryKey: ["project", projectId, "assets", "workflow-counts"], queryFn: () => listProjectAssetsPage(projectId, { page: 1, pageSize: 1 }) });
     const confirmedCounts = assetCountsQuery.data?.categoryCounts || {};
-    const categories = ["character", "environment", "wardrobe", "prop", "weapon"];
-    return <section className="mx-auto max-w-6xl"><StageHeading eyebrow="02 / 资产拆分" title="确认镜头真正会使用的资产" description="角色、场景、服饰、配饰与武器先建立稳定版本，镜头再绑定具体版本。" /><div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{categories.map((category) => { const confirmed = confirmedCounts[category] || 0; const pending = candidates.filter((item) => item.category === category && item.status === "pending_confirmation").length; return <div key={category} className="border-t border-border/70 py-4"><div className="text-xs font-medium text-foreground/55">{assetCategoryLabel(category)}</div><div className="mt-3 text-2xl font-semibold">{assetCountsQuery.isLoading ? "—" : confirmed}</div><div className="mt-1 text-[var(--fs-micro)] text-foreground/42">已确认 · {pending} 待处理</div></div>; })}</div><div className="mt-5 flex items-center justify-between border-y border-border/70 py-5"><div><h3 className="text-sm font-semibold">资产库承担版本确认与设定维护</h3><p className="mt-1 text-xs text-foreground/48">确认后可直接在分镜工作台左栏绑定到镜头。</p></div><Link to={`/projects/${projectId}/assets`}><Button type="primary">打开资产库</Button></Link></div></section>;
+    return <section className="mx-auto max-w-6xl"><StageHeading eyebrow="02 / 资产拆分" title="确认镜头真正会使用的资产" description="角色、场景、道具、素材与其他资产先建立稳定版本，镜头再绑定具体版本。" /><div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{ASSET_CATEGORIES.map((category) => { const confirmed = confirmedCounts[category] || 0; const pending = candidates.filter((item) => item.category === category && item.status === "pending_confirmation").length; return <div key={category} className="border-t border-border/70 py-4"><div className="text-xs font-medium text-foreground/55">{assetCategoryLabel(category)}</div><div className="mt-3 text-2xl font-semibold">{assetCountsQuery.isLoading ? "—" : confirmed}</div><div className="mt-1 text-[var(--fs-micro)] text-foreground/42">已确认 · {pending} 待处理</div></div>; })}</div><div className="mt-5 flex items-center justify-between border-y border-border/70 py-5"><div><h3 className="text-sm font-semibold">资产库承担版本确认与设定维护</h3><p className="mt-1 text-xs text-foreground/48">确认后可直接在分镜工作台左栏绑定到镜头。</p></div><Link to={`/projects/${projectId}/assets`}><Button type="primary">打开资产库</Button></Link></div></section>;
 }
 
 export function DeliveryStage({ detail, unitId }: { detail: ProjectDetail; unitId: string }) {

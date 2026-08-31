@@ -347,17 +347,17 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         setCompletedChapterOperations((current) => ({ ...current, [chapterOperationKey(unitId, kind)]: true }));
     };
     const storeExtractedCharacters = async (unitId: string, characters: Awaited<ReturnType<typeof extractChapterCharacters>>) => {
-        // 已确认角色允许再次提取并作为候选归并，只有尚待处理的同名候选需要去重。
-        const knownNames = new Set(detail.assetCandidates
-            .filter((candidate) => candidate.category === "character" && candidate.status === "pending_confirmation")
-            .map((candidate) => normalizeCharacterName(candidate.name)));
+        const knownNames = new Set([
+            ...detail.assetCandidates.filter((candidate) => candidate.category === "character").map((candidate) => normalizeCharacterName(candidate.name)),
+            ...detail.assets.filter((asset) => asset.category === "character").map((asset) => normalizeCharacterName(asset.title)),
+        ]);
         const fresh = characters.filter((character) => ![character.name, ...character.aliases].map(normalizeCharacterName).some((name) => knownNames.has(name)));
-        if (fresh.length) {
-            await createProjectAssetCandidates(detail.project.id, fresh.map((character) => ({ unitId, name: character.name, category: "character", details: { ...character } })));
-        }
+        const created = fresh.length
+            ? await createProjectAssetCandidates(detail.project.id, fresh.map((character) => ({ unitId, name: character.name, category: "character", details: { ...character } })), "chapter_character_extract")
+            : { candidates: [] };
         markChapterOperationCompleted(unitId, "characters");
         refreshProject();
-        return fresh.length;
+        return created.candidates.length;
     };
     const storeGeneratedStoryboard = async (unitId: string, rows: ReturnType<typeof chapterStoryboardFromGenerationTask>["rows"]) => {
         const shots = storyboardRowsToProjectShots(rows, detail);

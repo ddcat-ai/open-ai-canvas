@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"infinite-canvas/backend/internal/model"
+
 	"gorm.io/gorm"
 )
 
@@ -25,6 +27,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	}
 	if !db.Migrator().HasIndex(&schemaMigration{}, "idx_schema_migrations_applied_at") {
 		t.Fatal("schema migration v2 did not create the applied_at index")
+	}
+	if !db.Migrator().HasIndex(&model.ProjectAssetCandidate{}, "idx_project_asset_candidates_pending_identity") {
+		t.Fatal("schema migration v3 did not create candidate identity index")
 	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
@@ -47,6 +52,39 @@ func TestMigrateSchemaRejectsChecksumMismatch(t *testing.T) {
 	}
 	if err := RequireSchemaVersion(db); err == nil || !strings.Contains(err.Error(), "校验和不一致") {
 		t.Fatalf("schema verification must reject checksum mismatch, got %v", err)
+	}
+}
+
+func TestMigrateSchemaV3NormalizesLegacyAccessoryCategory(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-asset-taxonomy?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Asset{}, &model.ProjectAssetCandidate{}); err != nil {
+		t.Fatal(err)
+	}
+	asset := model.Asset{ID: "asset-1", UserID: "user-1", Kind: "image", Category: model.AssetCategory("accessory"), Title: "旧配饰"}
+	candidate := model.ProjectAssetCandidate{ID: "candidate-1", ProjectID: "project-1", Name: "旧配饰候选", Category: model.AssetCategory("accessory"), Status: "pending_confirmation"}
+	if err := db.Create(&asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&candidate).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateSchemaV3(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&asset, "id = ?", asset.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&candidate, "id = ?", candidate.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if asset.Category != model.AssetCategoryProp || candidate.Category != model.AssetCategoryProp {
+		t.Fatalf("legacy accessory categories = %q/%q, want prop/prop", asset.Category, candidate.Category)
+	}
+	if candidate.NameKey != model.AssetCandidateNameKey(candidate.Name) {
+		t.Fatalf("candidate name key = %q", candidate.NameKey)
 	}
 }
 

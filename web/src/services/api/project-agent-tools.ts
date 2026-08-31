@@ -11,6 +11,7 @@ import {
     type ProjectDetail,
     type ShotAssetReference,
 } from "./projects";
+import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
 
 export const projectAgentToolNames = [
     "project_get_context",
@@ -47,7 +48,7 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
     }
     if (name === "project_extract_asset_candidates") {
         const candidates = Array.isArray(rawInput.candidates) ? rawInput.candidates : [];
-        return createProjectAssetCandidates(projectId, candidates.filter(isCandidateInput));
+        return createProjectAssetCandidates(projectId, candidates.map(normalizeAgentCandidateInput).filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), "agent");
     }
     if (name === "project_confirm_asset_candidate") {
         return confirmProjectAssetCandidate(projectId, String(rawInput.candidateId || ""), String(rawInput.assetId || "") || undefined);
@@ -68,7 +69,7 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
         return updateWorkflowStep(projectId, String(rawInput.stepId || ""), { status: "running" });
     }
     if (name === "project_link_asset") {
-        return linkProjectAsset(projectId, { assetId: String(rawInput.assetId || ""), category: String(rawInput.category || "other") });
+        return linkProjectAsset(projectId, { assetId: String(rawInput.assetId || ""), category: normalizeAssetCategory(rawInput.category) });
     }
     if (name === "project_upsert_asset_version") {
         return createProjectAssetVersion(projectId, String(rawInput.assetId || ""), { prompt: String(rawInput.prompt || ""), definitionJson: typeof rawInput.definitionJson === "string" ? rawInput.definitionJson : undefined, note: String(rawInput.note || "") });
@@ -79,10 +80,21 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
     throw new Error(`未知项目工具：${name}`);
 }
 
-function isCandidateInput(value: unknown): value is { unitId?: string; shotId?: string; name: string; category: string; details?: Record<string, unknown> } {
-    if (!value || typeof value !== "object") return false;
+const agentCandidateCategories = new Set<AssetCategory>(["environment", "prop", "material", "other"]);
+
+function normalizeAgentCandidateInput(value: unknown): { unitId?: string; shotId?: string; name: string; category: AssetCategory; details?: Record<string, unknown> } | null {
+    if (!value || typeof value !== "object") return null;
     const item = value as Record<string, unknown>;
-    return typeof item.name === "string" && typeof item.category === "string";
+    if (typeof item.name !== "string" || typeof item.category !== "string") return null;
+    const category = normalizeAssetCategory(item.category);
+    if (!agentCandidateCategories.has(category)) return null;
+    return {
+        name: item.name,
+        category,
+        ...(typeof item.unitId === "string" ? { unitId: item.unitId } : {}),
+        ...(typeof item.shotId === "string" ? { shotId: item.shotId } : {}),
+        ...(item.details && typeof item.details === "object" && !Array.isArray(item.details) ? { details: item.details as Record<string, unknown> } : {}),
+    };
 }
 
 function isShotInput(value: unknown): value is { id?: string; unitId?: string; title: string; description?: string; position?: number; durationMs?: number; status?: string } {

@@ -232,3 +232,23 @@ func TestProjectAssetsPagePaginatesAndReturnsFacets(t *testing.T) {
 		t.Fatalf("unexpected folder facets: %+v", page.FolderCounts)
 	}
 }
+
+func TestProjectAssetCandidatesPageSearchesNamesWithinFilters(t *testing.T) {
+	service, db := newProjectWorkbenchReadTestService(t)
+	project := seedWorkbenchProject(t, db)
+	candidates := []model.ProjectAssetCandidate{
+		{ID: "candidate-1", ProjectID: project.ID, UnitID: "unit-1", Name: "红色雨伞", Category: model.AssetCategoryProp, Status: "pending_confirmation"},
+		{ID: "candidate-2", ProjectID: project.ID, UnitID: "unit-1", Name: "蓝色雨衣", Category: model.AssetCategoryProp, Status: "pending_confirmation"},
+		{ID: "candidate-3", ProjectID: project.ID, UnitID: "unit-2", Name: "红色雨伞场景", Category: model.AssetCategoryEnvironment, Status: "pending_confirmation"},
+	}
+	if err := db.Create(&candidates).Error; err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.ProjectAssetCandidatesPage("user-1", project.ID, 1, 20, "unit-1", "pending_confirmation", "prop", "雨伞")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Candidates) != 1 || page.Candidates[0].ID != "candidate-1" {
+		t.Fatalf("unexpected candidate search result: %+v", page)
+	}
+}

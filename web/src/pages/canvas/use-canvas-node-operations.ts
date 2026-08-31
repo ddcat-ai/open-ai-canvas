@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_HEADER_HEIGHT, getFrameChildIds, getFrameChildren, isFrameNode } from "@/lib/canvas/canvas-frame";
-import { alignCanvasNodes, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
+import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
@@ -200,12 +200,9 @@ export function useCanvasNodeOperations({
             return;
         }
 
-        const candidateIds = new Set(candidates.map((node) => node.id));
-        const hasConnections = connectionsRef.current.some((connection) => candidateIds.has(connection.fromNodeId) && candidateIds.has(connection.toNodeId));
-        const mode = hasConnections ? "flow" : "grid";
-        const positions = mode === "flow" ? layoutCanvasFlow(candidates, connectionsRef.current) : layoutCanvasNodes(candidates, "grid");
+        const positions = layoutCanvasAuto(candidates, connectionsRef.current);
         commitNodes(currentNodes.map((node) => positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node));
-        message.success(mode === "flow" ? (hasSelection ? "已按连线整理选中节点" : "已按连线整理画布") : (hasSelection ? "已网格整理选中节点" : "已网格整理画布"));
+        message.success(hasSelection ? "已按媒体分类整理选中节点" : "已按媒体分类整理画布");
     }, [commitNodes, connectionsRef, message, nodesRef, selectedNodeIdsRef]);
 
     const alignSelectedNodes = useCallback((mode: CanvasAlignmentMode) => {

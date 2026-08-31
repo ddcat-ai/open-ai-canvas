@@ -175,7 +175,7 @@ func (r *Repository) ProjectCanvasUnitLinksForCanvases(projectID string, canvasI
 	return links, err
 }
 
-func (r *Repository) ProjectAssetCandidatesPage(projectID string, page int, pageSize int, unitID string, status string, category string) ([]model.ProjectAssetCandidate, int64, error) {
+func (r *Repository) ProjectAssetCandidatesPage(projectID string, page int, pageSize int, unitID string, status string, category string, queryText string) ([]model.ProjectAssetCandidate, int64, error) {
 	var candidates []model.ProjectAssetCandidate
 	var total int64
 	query := r.db.Model(&model.ProjectAssetCandidate{}).Where("project_id = ?", projectID)
@@ -187,6 +187,9 @@ func (r *Repository) ProjectAssetCandidatesPage(projectID string, page int, page
 	}
 	if value := strings.TrimSpace(category); value != "" {
 		query = query.Where("category = ?", value)
+	}
+	if value := strings.TrimSpace(queryText); value != "" {
+		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(value)+"%")
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

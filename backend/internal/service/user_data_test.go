@@ -27,6 +27,35 @@ func TestAssetFromJSONAcceptsDeterministicGenerationID(t *testing.T) {
 	}
 }
 
+func TestAssetFromJSONNormalizesLegacyAndUnclassifiedMediaCategories(t *testing.T) {
+	tests := []struct {
+		name     string
+		kind     string
+		category string
+		want     model.AssetCategory
+	}{
+		{name: "legacy accessory", kind: "image", category: "accessory", want: model.AssetCategoryProp},
+		{name: "legacy style", kind: "image", category: "style", want: model.AssetCategoryMaterial},
+		{name: "unclassified video", kind: "video", want: model.AssetCategoryMaterial},
+		{name: "unclassified entity", kind: "entity", want: model.AssetCategoryCharacter},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			raw, err := json.Marshal(map[string]any{"id": "asset-1", "kind": test.kind, "category": test.category, "title": "测试资产"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			asset, err := assetFromJSON("user-1", raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if asset.Category != test.want {
+				t.Fatalf("category = %q, want %q", asset.Category, test.want)
+			}
+		})
+	}
+}
+
 func TestAssetFromJSONRejectsIDOverLimit(t *testing.T) {
 	raw, err := json.Marshal(map[string]any{"id": strings.Repeat("a", model.AssetIDMaxLength+1), "kind": "image"})
 	if err != nil {

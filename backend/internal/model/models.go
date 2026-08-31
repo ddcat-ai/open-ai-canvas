@@ -144,10 +144,8 @@ const (
 
 	AssetCategoryCharacter   AssetCategory = "character"
 	AssetCategoryEnvironment AssetCategory = "environment"
-	AssetCategoryWardrobe    AssetCategory = "wardrobe"
 	AssetCategoryProp        AssetCategory = "prop"
-	AssetCategoryWeapon      AssetCategory = "weapon"
-	AssetCategoryStyle       AssetCategory = "style"
+	AssetCategoryMaterial    AssetCategory = "material"
 	AssetCategoryOther       AssetCategory = "other"
 
 	AssetVersionStatusDraft     AssetVersionStatus = "draft"

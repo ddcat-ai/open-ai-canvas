@@ -18,6 +18,8 @@ export type OSSConnectionTestInput = {
     pathStyle?: boolean;
 };
 
+export type OSSConnectionTestDraft = Omit<Partial<OSSConnectionTestInput>, "provider"> & Pick<OSSConnectionTestInput, "provider">;
+
 export type OSSConnectionTestResult = {
     ok: boolean;
     message?: string;
@@ -61,19 +63,7 @@ const S3_PRESET_HINTS: Record<S3Preset, { region: string; endpoint: string; help
     },
 };
 
-const CONNECTION_FIELDS = new Set([
-    "provider",
-    "s3Preset",
-    "region",
-    "endpoint",
-    "cdnBaseUrl",
-    "bucket",
-    "accessKeyId",
-    "accessKeySecret",
-    "sessionToken",
-    "pathPrefix",
-    "pathStyle",
-]);
+const CONNECTION_FIELDS = new Set(["provider", "s3Preset", "region", "endpoint", "cdnBaseUrl", "bucket", "accessKeyId", "accessKeySecret", "sessionToken", "pathPrefix", "pathStyle"]);
 
 export function getS3PresetHints(preset?: S3Preset) {
     return S3_PRESET_HINTS[preset || "custom"];
@@ -81,4 +71,28 @@ export function getS3PresetHints(preset?: S3Preset) {
 
 export function changesRequireOSSRetest(changedValues: Record<string, unknown>) {
     return Object.keys(changedValues).some((key) => CONNECTION_FIELDS.has(key));
+}
+
+export function normalizeOSSConnectionTestInput(input: OSSConnectionTestDraft): OSSConnectionTestInput {
+    return {
+        provider: input.provider,
+        s3Preset: input.s3Preset || "custom",
+        region: trimConnectionValue(input.region),
+        endpoint: trimConnectionURL(input.endpoint),
+        cdnBaseUrl: trimConnectionURL(input.cdnBaseUrl),
+        bucket: trimConnectionValue(input.bucket),
+        accessKeyId: trimConnectionValue(input.accessKeyId),
+        accessKeySecret: trimConnectionValue(input.accessKeySecret),
+        sessionToken: trimConnectionValue(input.sessionToken),
+        pathPrefix: (trimConnectionValue(input.pathPrefix) || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
+        pathStyle: input.pathStyle === true,
+    };
+}
+
+function trimConnectionValue(value?: string) {
+    return (value || "").trim();
+}
+
+function trimConnectionURL(value?: string) {
+    return trimConnectionValue(value).replace(/\/+$/, "");
 }

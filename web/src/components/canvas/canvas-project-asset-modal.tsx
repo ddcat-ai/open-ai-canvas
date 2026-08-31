@@ -4,12 +4,13 @@ import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/componen
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { externalAssetToInsertPayload, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
+import { ASSET_CATEGORY_LABELS, normalizeAssetCategory } from "@/lib/asset-category";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { ProjectAsset, ProjectDetail } from "@/services/api/projects";
 import { getRemoteAsset } from "@/services/api/user-data";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 
-const categoryLabels: Record<string, string> = { all: "全部资产", character: "角色", environment: "场景", wardrobe: "服饰", prop: "道具", weapon: "武器", style: "画风", other: "其他" };
+const categoryLabels: Record<string, string> = { all: "全部资产", ...ASSET_CATEGORY_LABELS };
 type ProjectPickerItem = { id: string; category: string; folderId?: string; project?: ProjectAsset; character?: ProjectAsset; media?: Asset };
 
 export function CanvasProjectAssetModal({ open, detail, initialCategory = "all", initialFolderId = "all", onClose, onInsert, onInsertFolder }: { open: boolean; detail?: ProjectDetail; initialCategory?: string; initialFolderId?: string; onClose: () => void; onInsert: (payloads: InsertAssetPayload[]) => Promise<void> | void; onInsertFolder?: (folderId: string) => Promise<void> | void }) {
@@ -20,13 +21,13 @@ export function CanvasProjectAssetModal({ open, detail, initialCategory = "all",
         const projectItems = (detail?.assets || []).flatMap((asset): ProjectPickerItem[] => {
             if (asset.category === "character" && asset.character) return [{ id: asset.id, category: "character", folderId: asset.folderId, project: asset, character: asset }];
             const media = mediaById.get(asset.id);
-            return asset.mediaType === "model" || asset.mediaType === "entity" ? [] : [{ id: asset.id, category: asset.category || media?.category || "other", folderId: asset.folderId, project: asset, media }];
+            return asset.mediaType === "model" || asset.mediaType === "entity" ? [] : [{ id: asset.id, category: normalizeAssetCategory(asset.category || media?.category), folderId: asset.folderId, project: asset, media }];
         });
         if (detail) return projectItems;
         // 自由画布未关联项目时回退到个人素材库。
         return mediaAssets
             .filter((asset) => asset.kind !== "model" && asset.kind !== "entity")
-            .map((media): ProjectPickerItem => ({ id: media.id, category: media.category || "other", media }));
+            .map((media): ProjectPickerItem => ({ id: media.id, category: normalizeAssetCategory(media.category), media }));
     }, [detail?.assets, mediaAssets]);
     const localPickerItems = useMemo<AssetLibraryPickerItem[]>(() => items.map((item) => {
         const character = item.character;

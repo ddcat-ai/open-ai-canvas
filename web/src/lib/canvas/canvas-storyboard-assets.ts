@@ -38,7 +38,7 @@ export function storyboardAssetRoleForNode(node: CanvasNodeData): StoryboardAsse
     if (node.type === CanvasNodeType.Audio) return "audio";
     if (node.type === CanvasNodeType.Video) return "motion";
     const category = node.metadata?.assetCategory;
-    if (category === "environment" || category === "wardrobe" || category === "prop" || category === "weapon" || category === "style") return category;
+    if (category === "environment" || category === "prop") return category;
     if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Drawing) return "style";
     return null;
 }

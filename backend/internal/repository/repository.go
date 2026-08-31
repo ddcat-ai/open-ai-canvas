@@ -2041,6 +2041,11 @@ func (r *Repository) CreateProjectAssetCandidates(candidates []model.ProjectAsse
 	return r.db.Create(&candidates).Error
 }
 
+func (r *Repository) CreateProjectAssetCandidate(candidate *model.ProjectAssetCandidate) (bool, error) {
+	result := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(candidate)
+	return result.RowsAffected == 1, result.Error
+}
+
 // ConfirmProjectAssetCandidate 将正式资产身份、首版本、项目引用和候选状态放在同一事务中，避免出现半确认数据。
 func (r *Repository) ConfirmProjectAssetCandidate(candidate *model.ProjectAssetCandidate, asset *model.Asset, version *model.AssetVersion, link *model.ProjectAssetLink, createAsset bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {

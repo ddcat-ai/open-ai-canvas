@@ -1,4 +1,5 @@
 import { apiClient, request } from "@/services/api/request";
+import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
 import type { GenerationTask } from "@/services/api/task-center";
 
 const api = apiClient;
@@ -56,7 +57,7 @@ export type ProjectAsset = {
     id: string;
     title: string;
     mediaType: string;
-    category: string;
+    category: AssetCategory;
     status: string;
     primaryVersionId?: string;
     versionCount: number;
@@ -121,7 +122,7 @@ export type ProjectAssetCandidate = {
     unitId?: string;
     shotId?: string;
     name: string;
-    category: string;
+    category: AssetCategory;
     status: "pending_confirmation" | "confirmed" | "ignored" | string;
     detailsJson: string;
     resolvedAssetId?: string;
@@ -365,21 +366,30 @@ export function listProjectAssetsPage(projectId: string, options: { page?: numbe
         status: options.status || undefined,
         folder_id: options.folderId,
         q: options.query || undefined,
-    } }));
+    } })).then((page) => ({ ...page, assets: page.assets.map(normalizeProjectAsset) }));
 }
 
 export function listProjectAssets(projectId: string) {
-    return request<{ assets: ProjectAsset[] }>(api.get(`/projects/${encodeURIComponent(projectId)}/assets`));
+    return request<{ assets: ProjectAsset[] }>(api.get(`/projects/${encodeURIComponent(projectId)}/assets`)).then((result) => ({ assets: result.assets.map(normalizeProjectAsset) }));
 }
 
-export function listProjectAssetCandidates(projectId: string, options: { page?: number; pageSize?: number; unitId?: string; status?: string; category?: string } = {}) {
+export function listProjectAssetCandidates(projectId: string, options: { page?: number; pageSize?: number; unitId?: string; status?: string; category?: string; query?: string } = {}) {
     return request<ProjectAssetCandidatePage>(api.get(`/projects/${encodeURIComponent(projectId)}/asset-candidates`, { params: {
         page: options.page || 1,
         page_size: options.pageSize || 100,
         unit_id: options.unitId || undefined,
         status: options.status || undefined,
         category: options.category || undefined,
-    } }));
+        q: options.query || undefined,
+    } })).then((page) => ({ ...page, candidates: page.candidates.map(normalizeProjectAssetCandidate) }));
+}
+
+function normalizeProjectAsset(asset: ProjectAsset): ProjectAsset {
+    return { ...asset, category: normalizeAssetCategory(asset.category), usages: Array.isArray(asset.usages) ? asset.usages : [] };
+}
+
+function normalizeProjectAssetCandidate(candidate: ProjectAssetCandidate): ProjectAssetCandidate {
+    return { ...candidate, category: normalizeAssetCategory(candidate.category) };
 }
 
 function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
@@ -391,8 +401,7 @@ function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
         : [];
     const assets = Array.isArray(detail.assets)
         ? detail.assets.map((asset) => ({
-            ...asset,
-            usages: Array.isArray(asset.usages) ? asset.usages : [],
+            ...normalizeProjectAsset(asset),
             ...(asset.character ? {
                 character: {
                     ...asset.character,
@@ -415,7 +424,7 @@ function normalizeProjectDetail(detail: ProjectDetail): ProjectDetail {
         shotRevisions: Array.isArray(detail.shotRevisions) ? detail.shotRevisions : [],
         shotArtifacts: Array.isArray(detail.shotArtifacts) ? detail.shotArtifacts : [],
         shotReferences: Array.isArray(detail.shotReferences) ? detail.shotReferences : [],
-		assetCandidates: Array.isArray(detail.assetCandidates) ? detail.assetCandidates : [],
+		assetCandidates: Array.isArray(detail.assetCandidates) ? detail.assetCandidates.map(normalizeProjectAssetCandidate) : [],
 		tasks: Array.isArray(detail.tasks) ? detail.tasks : [],
     };
 }
@@ -468,7 +477,7 @@ export function unlinkCanvasProject(projectId: string, canvasId: string) {
     return request<{ canvasId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvases/${encodeURIComponent(canvasId)}`));
 }
 
-export function linkProjectAsset(projectId: string, input: { assetId: string; category: string; folderId?: string }, signal?: AbortSignal) {
+export function linkProjectAsset(projectId: string, input: { assetId: string; category: AssetCategory; folderId?: string }, signal?: AbortSignal) {
     return request<{ asset: ProjectAsset }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets`, input, { signal }));
 }
 
@@ -476,7 +485,7 @@ export function unlinkProjectAsset(projectId: string, assetId: string) {
     return request<{ id: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`));
 }
 
-export function updateProjectAssetCategory(projectId: string, assetId: string, category: string, signal?: AbortSignal) {
+export function updateProjectAssetCategory(projectId: string, assetId: string, category: AssetCategory, signal?: AbortSignal) {
     return request<{ asset: ProjectAsset }>(api.patch(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`, { category }, { signal }));
 }
 
@@ -560,8 +569,8 @@ export function createShotRevision(projectId: string, shotId: string, input: Sho
     return request<{ shot: ProjectShot; revision: ShotRevision }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/revisions`, input));
 }
 
-export function createProjectAssetCandidates(projectId: string, candidates: Array<{ unitId?: string; shotId?: string; name: string; category: string; details?: Record<string, unknown> }>) {
-    return request<{ candidates: ProjectAssetCandidate[] }>(api.post(`/projects/${encodeURIComponent(projectId)}/asset-candidates`, { candidates }));
+export function createProjectAssetCandidates(projectId: string, candidates: Array<{ unitId?: string; shotId?: string; name: string; category: AssetCategory; details?: Record<string, unknown> }>, source?: "chapter_character_extract" | "agent") {
+	return request<{ candidates: ProjectAssetCandidate[] }>(api.post(`/projects/${encodeURIComponent(projectId)}/asset-candidates`, { candidates, source }));
 }
 
 export function confirmProjectAssetCandidate(projectId: string, candidateId: string, assetId?: string) {

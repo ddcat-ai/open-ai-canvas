@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
+
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 2
+const CurrentSchemaVersion int64 = 3
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
+const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -40,10 +43,50 @@ type migration struct {
 var schemaMigrations = []migration{
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
+	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
 	return tx.Exec("CREATE INDEX IF NOT EXISTS idx_schema_migrations_applied_at ON schema_migrations (applied_at)").Error
+}
+
+func migrateSchemaV3(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.ProjectAssetCandidate{}); err != nil {
+		return fmt.Errorf("扩展资产候选身份字段：%w", err)
+	}
+	if err := tx.Exec("UPDATE assets SET category = 'prop' WHERE category IN ('wardrobe', 'weapon', 'accessory')").Error; err != nil {
+		return fmt.Errorf("合并资产道具分类：%w", err)
+	}
+	if err := tx.Exec("UPDATE assets SET category = 'material' WHERE category = 'style' OR (category = 'other' AND kind IN ('image', 'video', 'audio', 'model'))").Error; err != nil {
+		return fmt.Errorf("迁移资产素材分类：%w", err)
+	}
+	if err := tx.Exec("UPDATE project_asset_candidates SET category = 'prop' WHERE category IN ('wardrobe', 'weapon', 'accessory')").Error; err != nil {
+		return fmt.Errorf("合并候选道具分类：%w", err)
+	}
+	if err := tx.Exec("UPDATE project_asset_candidates SET category = 'material' WHERE category = 'style'").Error; err != nil {
+		return fmt.Errorf("迁移候选素材分类：%w", err)
+	}
+	var candidates []model.ProjectAssetCandidate
+	if err := tx.Order("created_at asc, id asc").Find(&candidates).Error; err != nil {
+		return fmt.Errorf("读取资产候选身份：%w", err)
+	}
+	seenPending := make(map[string]string, len(candidates))
+	for _, candidate := range candidates {
+		nameKey := model.AssetCandidateNameKey(candidate.Name)
+		updates := map[string]any{"name_key": nameKey}
+		identity := candidate.ProjectID + ":" + string(candidate.Category) + ":" + nameKey
+		if candidate.Status == "pending_confirmation" && nameKey != "" {
+			if _, exists := seenPending[identity]; exists {
+				updates["status"] = "ignored"
+			} else {
+				seenPending[identity] = candidate.ID
+			}
+		}
+		if err := tx.Model(&model.ProjectAssetCandidate{}).Where("id = ?", candidate.ID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("回填资产候选身份 %s：%w", candidate.ID, err)
+		}
+	}
+	return tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_project_asset_candidates_pending_identity ON project_asset_candidates(project_id, category, name_key) WHERE status = 'pending_confirmation' AND name_key <> ''").Error
 }
 
 func MigrateSchema(db *gorm.DB) error {

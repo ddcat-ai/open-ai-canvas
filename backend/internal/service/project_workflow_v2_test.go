@@ -20,7 +20,7 @@ func newProjectWorkflowV2TestService(t *testing.T) (*Service, *gorm.DB) {
 	}
 	if err := db.AutoMigrate(
 		&model.Project{}, &model.ProjectUnit{}, &model.CanvasProject{}, &model.Asset{}, &model.AssetVersion{}, &model.ProjectAssetLink{}, &model.ProjectAssetCandidate{},
-		&model.AssetRepresentation{},
+		&model.AssetRepresentation{}, &model.CharacterVoiceBinding{},
 		&model.Shot{}, &model.ShotRevision{}, &model.ShotArtifact{}, &model.ShotAssetReference{},
 		&model.WorkflowTemplateVersion{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{}, &model.WorkflowStepTask{},
 		&model.ProductionTaskLink{}, &model.Task{}, &model.Resource{},
@@ -129,6 +129,79 @@ func TestShortDramaWorkflowV2UsesProductionOrder(t *testing.T) {
 	if workflow.Steps[0].Status != model.WorkflowStepStatusReady {
 		t.Fatalf("first step status = %s, want ready", workflow.Steps[0].Status)
 	}
+}
+
+func TestCreateProjectCharacterCandidatesIsIdempotentAcrossPendingAndConfirmed(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	request := CreateAssetCandidatesRequest{
+		Source: assetCandidateSourceChapterCharacter,
+		Candidates: []AssetCandidateInput{{
+			UnitID: unit.ID, Name: " 小红帽 ", Category: string(model.AssetCategoryCharacter),
+			Details: validCharacterCandidateDetails([]any{"小红"}),
+		}},
+	}
+
+	created, err := service.CreateProjectAssetCandidates("user-1", project.ID, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 1 {
+		t.Fatalf("created candidates = %d, want 1", len(created))
+	}
+	created, err = service.CreateProjectAssetCandidates("user-1", project.ID, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 0 {
+		t.Fatalf("duplicate pending candidates = %d, want 0", len(created))
+	}
+
+	if _, err := service.ConfirmProjectAssetCandidate("user-1", project.ID, firstProjectCandidateID(t, db), ConfirmProjectAssetCandidateRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	created, err = service.CreateProjectAssetCandidates("user-1", project.ID, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 0 {
+		t.Fatalf("confirmed character was extracted again: %d", len(created))
+	}
+	var assetCount int64
+	if err := db.Model(&model.Asset{}).Where("user_id = ? AND category = ?", "user-1", model.AssetCategoryCharacter).Count(&assetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assetCount != 1 {
+		t.Fatalf("character assets = %d, want 1", assetCount)
+	}
+}
+
+func TestCreateProjectCharacterCandidatesRejectsNonChapterSource(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	_, err := service.CreateProjectAssetCandidates("user-1", project.ID, CreateAssetCandidatesRequest{
+		Source:     "agent",
+		Candidates: []AssetCandidateInput{{UnitID: unit.ID, Name: "猎人", Category: string(model.AssetCategoryCharacter), Details: validCharacterCandidateDetails(nil)}},
+	})
+	if err == nil {
+		t.Fatal("agent source unexpectedly created a character candidate")
+	}
+}
+
+func validCharacterCandidateDetails(aliases []any) map[string]any {
+	return map[string]any{
+		"role": "主角", "aliases": aliases, "appearance": "红色斗篷", "clothing": "红色兜帽与斗篷", "physique": "儿童体型",
+		"personality": "勇敢", "voiceLanguage": "普通话", "voiceAge": "儿童", "voiceTimbre": "清亮",
+	}
+}
+
+func firstProjectCandidateID(t *testing.T, db *gorm.DB) string {
+	t.Helper()
+	var candidate model.ProjectAssetCandidate
+	if err := db.Order("created_at asc").First(&candidate).Error; err != nil {
+		t.Fatal(err)
+	}
+	return candidate.ID
 }
 
 func TestWorkflowCompletionRequiresStageGate(t *testing.T) {

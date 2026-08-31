@@ -112,8 +112,10 @@ type ProjectAssetCandidate struct {
 	UnitID          string        `json:"unitId,omitempty" gorm:"index;size:36;index:idx_project_asset_candidates_project_unit_status,priority:2"`
 	ShotID          string        `json:"shotId,omitempty" gorm:"index;size:36"`
 	Name            string        `json:"name" gorm:"size:240"`
+	NameKey         string        `json:"-" gorm:"index;size:240"`
 	Category        AssetCategory `json:"category" gorm:"index;size:32;index:idx_project_asset_candidates_project_status_category,priority:3"`
 	Status          string        `json:"status" gorm:"index;size:32;index:idx_project_asset_candidates_project_unit_status,priority:3;index:idx_project_asset_candidates_project_status_category,priority:2"`
+	Source          string        `json:"source,omitempty" gorm:"index;size:48"`
 	DetailsJSON     string        `json:"detailsJson" gorm:"type:text"`
 	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:80"`
 	CreatedAt       time.Time     `json:"createdAt"`

@@ -14,6 +14,7 @@ import { createLocalDreaminaTaskEffectStore } from "@/services/local-dreamina-ge
 import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provider-neutral-generation-effects";
 import { saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { normalizeAssetCategory } from "@/lib/asset-category";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { useAssetStore, type AssetCategory, type AssetStatus, type NewAsset } from "@/stores/use-asset-store";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -92,7 +93,7 @@ async function syncAssetToProject(assetId: string, domainProjectId: string, cate
         domainProjectId,
         {
             assetId: asset.id,
-            category: category || asset.category || "other",
+            category: normalizeAssetCategory(category || asset.category),
             folderId,
         },
         signal,
@@ -102,7 +103,7 @@ async function syncAssetToProject(assetId: string, domainProjectId: string, cate
     if (folderId !== undefined && (linked.folderId || "") !== folderId) linked = (await moveProjectAsset(domainProjectId, asset.id, folderId, signal)).asset;
     throwIfAborted(signal);
     useAssetStore.getState().updateAsset(asset.id, {
-        category: linked.category as AssetCategory,
+        category: normalizeAssetCategory(linked.category),
         status: linked.status as AssetStatus,
         primaryVersionId: linked.primaryVersionId,
         metadata: { ...asset.metadata, projectIds: [...new Set([...linkedProjectIds, domainProjectId])] },

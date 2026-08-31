@@ -354,12 +354,12 @@ func (s *Service) ProjectCanvasesPage(userID string, projectID string, page int,
 	return ProjectCanvasPage{Canvases: canvases, CanvasUnitLinks: links, Page: page, PageSize: pageSize, Total: total, HasMore: int64(page*pageSize) < total}, nil
 }
 
-func (s *Service) ProjectAssetCandidatesPage(userID string, projectID string, page int, pageSize int, unitID string, status string, category string) (ProjectAssetCandidatePage, error) {
+func (s *Service) ProjectAssetCandidatesPage(userID string, projectID string, page int, pageSize int, unitID string, status string, category string, query string) (ProjectAssetCandidatePage, error) {
 	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
 		return ProjectAssetCandidatePage{}, err
 	}
 	page, pageSize = normalizeProjectPage(page, pageSize, 200)
-	candidates, total, err := s.repo.ProjectAssetCandidatesPage(projectID, page, pageSize, unitID, status, category)
+	candidates, total, err := s.repo.ProjectAssetCandidatesPage(projectID, page, pageSize, unitID, status, category, query)
 	if err != nil {
 		return ProjectAssetCandidatePage{}, err
 	}

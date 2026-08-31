@@ -1,5 +1,6 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData } from "@/types/canvas";
+import { normalizeAssetCategory } from "@/lib/asset-category";
 
 export type CanvasStorageTombstones = {
     projects: Record<string, number>;
@@ -61,7 +62,7 @@ function normalizeTombstones(value: unknown): CanvasStorageTombstones {
 export function parseCanvasStorageDocument(value: string | null, fallback: CanvasProject[] = []): CanvasStorageDocument {
     if (!value) {
         return {
-            state: { projects: fallback },
+            state: { projects: normalizeProjectAssetCategories(fallback) },
             version: 0,
             storageRevision: 0,
             tombstones: emptyTombstones(),
@@ -75,11 +76,26 @@ export function parseCanvasStorageDocument(value: string | null, fallback: Canva
     };
     if (!Array.isArray(parsed.state?.projects)) throw new Error("画布持久状态无效");
     return {
-        state: { projects: parsed.state.projects as CanvasProject[] },
+        state: { projects: normalizeProjectAssetCategories(parsed.state.projects as CanvasProject[]) },
         version: typeof parsed.version === "number" ? parsed.version : 0,
         storageRevision: typeof parsed.storageRevision === "number" && Number.isFinite(parsed.storageRevision) ? parsed.storageRevision : 0,
         tombstones: normalizeTombstones(parsed.tombstones),
     };
+}
+
+function normalizeProjectAssetCategories(projects: CanvasProject[]) {
+    return projects.map((project) => {
+        let changed = false;
+        const nodes = project.nodes.map((node) => {
+            const category = node.metadata?.assetCategory;
+            if (!category) return node;
+            const normalized = normalizeAssetCategory(category);
+            if (normalized === category) return node;
+            changed = true;
+            return { ...node, metadata: { ...node.metadata, assetCategory: normalized } };
+        });
+        return changed ? { ...project, nodes } : project;
+    });
 }
 
 export function serializeCanvasStorageDocument(document: CanvasStorageDocument) {

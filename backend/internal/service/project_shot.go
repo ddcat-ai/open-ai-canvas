@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -61,7 +62,10 @@ type AssetCandidateInput struct {
 
 type CreateAssetCandidatesRequest struct {
 	Candidates []AssetCandidateInput `json:"candidates"`
+	Source     string                `json:"source"`
 }
+
+const assetCandidateSourceChapterCharacter = "chapter_character_extract"
 
 func (s *Service) CreateProjectShot(userID string, projectID string, req CreateProjectShotRequest) (model.Shot, error) {
 	if _, err := s.activeProjectForUser(userID, projectID); err != nil {
@@ -301,13 +305,30 @@ func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, 
 	if len(req.Candidates) == 0 || len(req.Candidates) > 100 {
 		return nil, BadAuthRequest("资产候选数量必须在 1 到 100 之间")
 	}
+	source := strings.TrimSpace(req.Source)
+	existingCandidates, err := s.repo.ProjectAssetCandidates(projectID)
+	if err != nil {
+		return nil, err
+	}
+	projectAssets, err := s.repo.ProjectAssets(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	knownKeys := projectAssetCandidateIdentityKeys(existingCandidates, projectAssets)
 	now := time.Now()
 	candidates := make([]model.ProjectAssetCandidate, 0, len(req.Candidates))
 	for _, input := range req.Candidates {
 		name := strings.TrimSpace(input.Name)
+		nameKey := model.AssetCandidateNameKey(name)
 		category := model.AssetCategory(strings.TrimSpace(input.Category))
-		if name == "" || !validAssetCategory(category) {
+		if name == "" || nameKey == "" || !validAssetCategory(category) {
 			return nil, BadAuthRequest("资产候选名称或分类无效")
+		}
+		if category == model.AssetCategoryCharacter && source != assetCandidateSourceChapterCharacter {
+			return nil, BadAuthRequest("角色候选只能从剧情章节的角色提取流程创建")
+		}
+		if category == model.AssetCategoryCharacter && strings.TrimSpace(input.UnitID) == "" {
+			return nil, BadAuthRequest("角色候选必须关联剧情章节")
 		}
 		if input.UnitID != "" {
 			if _, err := s.repo.ProjectUnit(projectID, input.UnitID); err != nil {
@@ -328,15 +349,104 @@ func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, 
 				return nil, err
 			}
 		}
-		candidates = append(candidates, model.ProjectAssetCandidate{ID: newID(), ProjectID: projectID, UnitID: strings.TrimSpace(input.UnitID), ShotID: strings.TrimSpace(input.ShotID), Name: name, Category: category, Status: "pending_confirmation", DetailsJSON: detailsJSON, CreatedAt: now, UpdatedAt: now})
+		identityKeys := assetCandidateInputIdentityKeys(name, input.Details)
+		if assetCandidateIdentityExists(knownKeys, category, identityKeys) {
+			continue
+		}
+		candidate := model.ProjectAssetCandidate{ID: newID(), ProjectID: projectID, UnitID: strings.TrimSpace(input.UnitID), ShotID: strings.TrimSpace(input.ShotID), Name: name, NameKey: nameKey, Category: category, Status: "pending_confirmation", Source: source, DetailsJSON: detailsJSON, CreatedAt: now, UpdatedAt: now}
+		inserted, createErr := s.repo.CreateProjectAssetCandidate(&candidate)
+		if createErr != nil {
+			return nil, createErr
+		}
+		if !inserted {
+			continue
+		}
+		candidates = append(candidates, candidate)
+		addAssetCandidateIdentityKeys(knownKeys, category, identityKeys)
 	}
-	if err := s.repo.CreateProjectAssetCandidates(candidates); err != nil {
-		return nil, err
-	}
-	if err := s.repo.BumpProjectRevision(projectID); err != nil {
-		return nil, err
+	if len(candidates) > 0 {
+		if err := s.repo.BumpProjectRevision(projectID); err != nil {
+			return nil, err
+		}
 	}
 	return candidates, nil
+}
+
+func projectAssetCandidateIdentityKeys(candidates []model.ProjectAssetCandidate, assets []model.Asset) map[string]struct{} {
+	known := make(map[string]struct{}, len(candidates)+len(assets))
+	for _, candidate := range candidates {
+		keys := []string{candidate.NameKey}
+		if strings.TrimSpace(candidate.DetailsJSON) != "" {
+			var details map[string]any
+			if json.Unmarshal([]byte(candidate.DetailsJSON), &details) == nil {
+				keys = append(keys, assetCandidateAliases(details)...)
+			}
+		}
+		addAssetCandidateIdentityKeys(known, candidate.Category, keys)
+	}
+	for _, asset := range assets {
+		keys := []string{model.AssetCandidateNameKey(asset.Title)}
+		if asset.Category == model.AssetCategoryCharacter {
+			keys = append(keys, characterAssetAliasKeys(asset.PayloadJSON)...)
+		}
+		addAssetCandidateIdentityKeys(known, asset.Category, keys)
+	}
+	return known
+}
+
+func assetCandidateInputIdentityKeys(name string, details map[string]any) []string {
+	return append([]string{model.AssetCandidateNameKey(name)}, assetCandidateAliases(details)...)
+}
+
+func assetCandidateAliases(details map[string]any) []string {
+	if details == nil {
+		return nil
+	}
+	values, ok := details["aliases"].([]any)
+	if !ok {
+		if stringsValue, stringsOK := details["aliases"].([]string); stringsOK {
+			values = make([]any, len(stringsValue))
+			for index, value := range stringsValue {
+				values[index] = value
+			}
+		}
+	}
+	keys := make([]string, 0, len(values))
+	for _, value := range values {
+		if key := model.AssetCandidateNameKey(fmt.Sprint(value)); key != "" {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+func characterAssetAliasKeys(payloadJSON string) []string {
+	var payload struct {
+		Data struct {
+			Definition map[string]any `json:"definition"`
+		} `json:"data"`
+	}
+	if json.Unmarshal([]byte(payloadJSON), &payload) != nil {
+		return nil
+	}
+	return assetCandidateAliases(payload.Data.Definition)
+}
+
+func assetCandidateIdentityExists(known map[string]struct{}, category model.AssetCategory, keys []string) bool {
+	for _, key := range keys {
+		if _, exists := known[string(category)+":"+key]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func addAssetCandidateIdentityKeys(known map[string]struct{}, category model.AssetCategory, keys []string) {
+	for _, key := range keys {
+		if key != "" {
+			known[string(category)+":"+key] = struct{}{}
+		}
+	}
 }
 
 func validShotAssetRole(role string) bool {

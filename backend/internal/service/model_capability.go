@@ -68,6 +68,7 @@ type ParameterSupport struct {
 type VideoCapabilityConfig struct {
 	References        VideoReferenceConfig `json:"references"`
 	Duration          VideoDurationConfig  `json:"duration"`
+	DurationSupported *bool                `json:"durationSupported,omitempty"`
 	Ratios            []string             `json:"ratios"`
 	DefaultRatio      string               `json:"defaultRatio"`
 	Resolutions       []string             `json:"resolutions"`
@@ -107,6 +108,10 @@ type VideoBooleanConfig struct {
 
 func DefaultModelCapabilityConfig(protocol string) *ModelCapabilityConfig {
 	return DefaultModelCapabilityConfigForModel(protocol, "")
+}
+
+func videoDurationSupported(value *VideoCapabilityConfig) bool {
+	return value == nil || value.DurationSupported == nil || *value.DurationSupported
 }
 
 func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapabilityConfig {

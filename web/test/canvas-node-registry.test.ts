@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getNodeGenerationMode, getNodeInputKind, getNodeListLabel, getNodeMinSize, getNodeResourceKind, listCreatableNodeDefinitions, listNodeDefinitions, shouldKeepAspectRatio } from "../src/lib/canvas/node-registry";
+import { getNodeDefinition, getNodeGenerationMode, getNodeInputKind, getNodeListLabel, getNodeMinSize, getNodeResourceKind, listCreatableNodeDefinitions, listNodeDefinitions, shouldKeepAspectRatio } from "../src/lib/canvas/node-registry";
 import { connectionInputSummary } from "../src/lib/canvas/canvas-connection-policy";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../src/types/canvas";
 
@@ -12,7 +12,7 @@ const ALL_TYPES = Object.values(CanvasNodeType);
 
 describe("节点注册表——覆盖完整性", () => {
     test("每种节点类型都有定义", () => {
-        expect(listNodeDefinitions().length).toBe(ALL_TYPES.length);
+        expect(ALL_TYPES.every((type) => Boolean(getNodeDefinition(type)))).toBe(true);
         for (const type of ALL_TYPES) expect(getNodeMinSize(type)).toBeDefined();
     });
 

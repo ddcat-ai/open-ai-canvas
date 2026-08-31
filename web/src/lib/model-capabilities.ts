@@ -64,6 +64,7 @@ export type VideoCapabilityConfig = {
         values?: number[];
         default: number;
     };
+    durationSupported?: boolean;
     ratios: string[];
     defaultRatio: string;
     resolutions: string[];

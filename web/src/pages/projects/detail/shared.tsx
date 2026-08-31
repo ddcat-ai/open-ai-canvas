@@ -2,6 +2,7 @@ import { Tag } from "antd";
 import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectUnit } from "@/services/api/projects";
+import { ASSET_CATEGORY_LABELS, assetCategoryLabel as sharedAssetCategoryLabel } from "@/lib/asset-category";
 
 export type ProjectDetailViewProps = {
     detail: ProjectDetail;
@@ -9,15 +10,7 @@ export type ProjectDetailViewProps = {
     onCreateCanvas: () => void;
 };
 
-export const categoryLabels: Record<string, string> = {
-    character: "角色",
-    environment: "场景",
-    wardrobe: "服饰",
-    prop: "道具",
-    weapon: "武器",
-    style: "画风",
-    other: "其他",
-};
+export const categoryLabels: Record<string, string> = ASSET_CATEGORY_LABELS;
 
 export const mediaLabels: Record<string, string> = {
     image: "图片",
@@ -64,7 +57,7 @@ const sourceTypeLabels: Record<string, string> = {
 };
 
 export function categoryLabel(value: string) {
-    return categoryLabels[value] || "其他";
+    return sharedAssetCategoryLabel(value);
 }
 
 export function statusLabel(value: string) {

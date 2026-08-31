@@ -296,6 +296,9 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 		if tier.VideoSeconds == 0 {
 			continue
 		}
+		if !videoDurationSupported(config.Video) {
+			continue
+		}
 		if config.Video.Duration.Selection == "enum" && !durationSupported[tier.VideoSeconds] {
 			return BadAuthRequest(fmt.Sprintf("价格档时长 %d 秒不在该视频模型支持范围内", tier.VideoSeconds))
 		}
@@ -742,30 +745,26 @@ func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []
 		}
 		desired[name] = true
 		if item := byKey[name]; item != nil {
-			if !item.Enabled {
-				item.Enabled = true
-				item.PriceVersion++
-				if err := s.repo.SaveChannelModel(item); err != nil {
-					return err
-				}
-			}
 			continue
 		}
 		modelID, idErr := s.repo.NextPrefixedID("MODEL")
 		if idErr != nil {
 			return idErr
 		}
-		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1}
+		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, UnitPriceMicrocredits: 0, PriceVersion: 1}
 		if err := s.repo.SaveChannelModel(&item); err != nil {
 			return err
 		}
 	}
 	for index := range existing {
-		if existing[index].Enabled && !desired[existing[index].ModelKey] {
+		if !desired[existing[index].ModelKey] {
+			changed := existing[index].Enabled
 			existing[index].Enabled = false
-			existing[index].PriceVersion++
-			if err := s.repo.SaveChannelModel(&existing[index]); err != nil {
-				return err
+			if changed {
+				existing[index].PriceVersion++
+				if err := s.repo.SaveChannelModel(&existing[index]); err != nil {
+					return err
+				}
 			}
 		}
 	}

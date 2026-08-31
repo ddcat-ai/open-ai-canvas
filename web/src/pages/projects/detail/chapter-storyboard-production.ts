@@ -1,4 +1,5 @@
 import type { StoryboardRow } from "@/types/canvas";
+import { formatShotOrdinal } from "@/lib/shot-label";
 import type { ProjectDetail, ShotRevisionInput } from "@/services/api/projects";
 import { ensureShotAssetMentionPrompt } from "./workflow-shot-references";
 
@@ -90,7 +91,7 @@ export function storyboardRowsToProjectShots(rows: StoryboardRow[], detail?: Pro
             return reference ? [reference] : [];
         });
         return {
-            title: `SC.${String(shotNumber).padStart(2, "0")}`,
+            title: formatShotOrdinal(index),
             description,
             durationMs,
             assetVersionIds: storyboardRowAssetVersionIds(row, versionByAssetId),

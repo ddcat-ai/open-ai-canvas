@@ -1,4 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
+import { defaultAssetCategoryForKind, normalizeAssetCategory } from "@/lib/asset-category";
 
 export type AssetStorageDocument = {
     state: { assets: Asset[] };
@@ -8,10 +9,12 @@ export type AssetStorageDocument = {
 };
 
 export function normalizeAssetRecord(asset: Asset): Asset {
-    if (Array.isArray(asset.tags) && asset.tags.every((tag) => typeof tag === "string")) return asset;
+    const category = normalizeAssetCategory(asset.category, defaultAssetCategoryForKind(asset.kind));
+    if (Array.isArray(asset.tags) && asset.tags.every((tag) => typeof tag === "string") && asset.category === category) return asset;
     return {
         ...asset,
         tags: Array.isArray(asset.tags) ? asset.tags.filter((tag): tag is string => typeof tag === "string") : [],
+        category,
     };
 }
 

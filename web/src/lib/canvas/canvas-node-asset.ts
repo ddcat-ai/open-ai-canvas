@@ -116,13 +116,14 @@ export function declaredCanvasNodeAssetCategory(node: CanvasNodeData): AssetCate
     if (node.metadata?.assetCategory) return node.metadata.assetCategory;
     if (node.metadata?.workflowKind === "character") return "character";
     if (node.metadata?.workflowKind === "scene") return "environment";
-    if (node.metadata?.workflowKind === "styleboard") return "style";
+    if (node.metadata?.workflowKind === "styleboard") return "material";
     return undefined;
 }
 
 export function canvasNodeAssetCategory(node: CanvasNodeData): AssetCategory {
     const declared = declaredCanvasNodeAssetCategory(node);
     if (declared) return declared;
+    if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) return "material";
     return "other";
 }
 

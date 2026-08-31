@@ -602,12 +602,12 @@ func (s *Service) ensureGeneratedProjectAsset(task model.Task, projectID string,
 	}
 	title += " · " + label
 	payload, _ := json.Marshal(map[string]any{
-		"id": assetID, "kind": mediaType, "category": model.AssetCategoryOther, "status": model.AssetVersionStatusConfirmed,
+		"id": assetID, "kind": mediaType, "category": model.AssetCategoryMaterial, "status": model.AssetVersionStatusConfirmed,
 		"primaryVersionId": versionID, "title": title,
 		"data":     map[string]any{"storageKey": "resource:" + resourceID, "url": "/api/resources/" + resourceID + "/file", "mimeType": resource.MimeType, "bytes": resource.Size},
 		"metadata": map[string]any{"source": "short-drama-workflow", "taskId": task.ID, "shotId": shot.ID, "projectIds": []string{projectID}},
 	})
-	asset := &model.Asset{ID: assetID, UserID: task.UserID, Kind: mediaType, Category: model.AssetCategoryOther, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: title, PayloadJSON: string(payload), CreatedAt: now, UpdatedAt: now}
+	asset := &model.Asset{ID: assetID, UserID: task.UserID, Kind: mediaType, Category: model.AssetCategoryMaterial, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: title, PayloadJSON: string(payload), CreatedAt: now, UpdatedAt: now}
 	version := &model.AssetVersion{ID: versionID, AssetID: assetID, Version: 1, Status: model.AssetVersionStatusConfirmed, DefinitionJSON: "{}", Prompt: task.Prompt, Note: "工作流生成产物", CreatedAt: now, UpdatedAt: now}
 	folderID, err := s.resolveProjectAssetFolderID(projectID, nil)
 	if err != nil {

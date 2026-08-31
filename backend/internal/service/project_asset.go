@@ -462,7 +462,7 @@ func containsString(values []string, target string) bool {
 
 func validAssetCategory(category model.AssetCategory) bool {
 	switch category {
-	case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryWardrobe, model.AssetCategoryProp, model.AssetCategoryWeapon, model.AssetCategoryStyle, model.AssetCategoryOther:
+	case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryProp, model.AssetCategoryMaterial, model.AssetCategoryOther:
 		return true
 	default:
 		return false

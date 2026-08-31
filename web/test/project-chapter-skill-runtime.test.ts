@@ -19,7 +19,7 @@ test("镜头画面使用已绑定资产的 @ 引用编辑器", async () => {
     const source = await Bun.file(new URL("../src/pages/projects/detail/workflow-production-workbench.tsx", import.meta.url)).text();
     expect(source).toContain('name="plotDescription"');
     expect(source).toContain('<ShotAssetMentionTextarea variant="scene"');
-    expect(source).toContain("resolveShotAssetMentionPrompt(basePrompt, shotAssetReferenceContext)");
+    expect(source).toContain("resolveShotAssetMentionPrompt(basePrompt, shotAssetReferenceContext");
     expect(source).toContain("<Image.PreviewGroup>");
 });
 

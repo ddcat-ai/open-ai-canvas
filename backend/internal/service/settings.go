@@ -259,7 +259,7 @@ func (s *Service) UpdateUserOSSSetting(actor *model.User, req OSSSettingRequest)
 func (s *Service) readOSSSetting() (*model.SystemSetting, ossSettingValue, error) {
 	setting, err := s.repo.SystemSetting(ossSettingKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, defaultOSSSetting(), nil
+		return nil, normalizeOSSSetting(defaultOSSSetting()), nil
 	}
 	if err != nil {
 		return nil, ossSettingValue{}, err
@@ -294,7 +294,7 @@ func (s *Service) readOSSSetting() (*model.SystemSetting, ossSettingValue, error
 func (s *Service) readUserOSSSetting(userID string) (*model.UserOSSSetting, ossSettingValue, error) {
 	setting, err := s.repo.LatestUserOSSSetting(userID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, defaultOSSSetting(), nil
+		return nil, normalizeOSSSetting(defaultOSSSetting()), nil
 	}
 	if err != nil {
 		return nil, ossSettingValue{}, err

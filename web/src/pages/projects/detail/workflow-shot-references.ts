@@ -1,4 +1,5 @@
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { assetCategoryLabel, normalizeAssetCategory } from "@/lib/asset-category";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } from "@/services/api/resources";
 import type { CharacterRepresentation, ProjectAsset, ProjectDetail, ShotAssetReference } from "@/services/api/projects";
 import type { AssetCategory } from "@/stores/use-asset-store";
@@ -22,8 +23,6 @@ export type ShotPromptAssetReference = {
     voiceDescription?: string;
     dialogue?: string;
 };
-
-const assetCategories = new Set<AssetCategory>(["character", "environment", "wardrobe", "prop", "weapon", "style", "other"]);
 
 export function buildShotAssetReferenceContext(detail: ProjectDetail, shotId: string): ShotAssetReferenceContext {
     const assetByVersionId = new Map(detail.assets.filter((asset) => asset.primaryVersionId).map((asset) => [asset.primaryVersionId as string, asset]));
@@ -194,11 +193,11 @@ function dialogueForCharacter(dialogue: string, characterName: string) {
 }
 
 function projectAssetCategory(value: string): AssetCategory {
-    return assetCategories.has(value as AssetCategory) ? value as AssetCategory : "other";
+    return normalizeAssetCategory(value);
 }
 
 function projectAssetCategoryLabel(value: string) {
-    return ({ environment: "场景", wardrobe: "服装", prop: "道具", weapon: "武器", style: "风格", other: "资产" } as Record<string, string>)[value] || "资产";
+    return assetCategoryLabel(value);
 }
 
 function characterVoiceDescription(asset: ProjectAsset) {

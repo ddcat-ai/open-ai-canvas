@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, UserRound, Video, Workflow } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildAssetMentionReferences, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { useAssetStore, type AssetCategory } from "@/stores/use-asset-store";
@@ -503,16 +504,6 @@ function createInlinePreview(reference: CanvasResourceReference) {
     fallback.textContent = reference.sourceType === CanvasNodeType.Drawing ? "✎" : reference.kind === "audio" ? "♪" : reference.kind === "video" ? "▶" : reference.kind === "image" ? "□" : reference.kind === "skill" ? "✦" : "";
     return fallback;
 }
-
-const ASSET_CATEGORY_LABELS: Record<AssetCategory, string> = {
-    character: "角色",
-    environment: "场景",
-    wardrobe: "服饰",
-    prop: "道具",
-    weapon: "武器",
-    style: "画风",
-    other: "其他",
-};
 
 function MentionMenu({ anchor, connectedReferences, assetReferences, filteredReferences, query, cursorOffset, activeReferenceId, preferredWidth, onQueryChange, onClose, onSelect }: {
     anchor: HTMLElement;

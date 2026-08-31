@@ -3,6 +3,7 @@ import { Tag } from "antd";
 import { Check, CircleAlert } from "lucide-react";
 import { Link } from "react-router";
 
+import { assetCategoryLabel as sharedAssetCategoryLabel } from "@/lib/asset-category";
 import type { ProjectDetail, ProjectShot, ShotArtifact, ShotRevision, WorkflowStep } from "@/services/api/projects";
 import type { TaskStatus } from "@/services/api/task-center";
 
@@ -71,7 +72,7 @@ export function artifactTypeForStage(stage: ShortDramaWorkflowStage) {
 }
 
 export function assetCategoryLabel(category: string) {
-    return ({ character: "角色", environment: "场景", wardrobe: "服饰", accessory: "配饰", prop: "道具", weapon: "武器", style: "画风" } as Record<string, string>)[category] || category || "其他";
+    return sharedAssetCategoryLabel(category);
 }
 
 export function formatDuration(durationMs: number) {

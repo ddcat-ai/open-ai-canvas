@@ -879,7 +879,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.ProjectAssetCandidatesPage(user.ID, c.Param("id"), page, pageSize, c.Query("unit_id"), c.Query("status"), c.Query("category"))
+		result, err := svc.ProjectAssetCandidatesPage(user.ID, c.Param("id"), page, pageSize, c.Query("unit_id"), c.Query("status"), c.Query("category"), c.Query("q"))
 		if err != nil {
 			failService(c, err)
 			return

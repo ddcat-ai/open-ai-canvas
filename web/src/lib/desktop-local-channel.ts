@@ -20,7 +20,7 @@ export function desktopLocalChannelFormState(desktopLocalChannelsEnabled: boolea
 
 export function projectDesktopLocalChannelRuntime<T extends { allowLocalChannel?: boolean }>(config: T): T {
     const desktopLocalChannelsEnabled = useUserStore.getState().features.desktopLocalChannelsEnabled;
-    const hostname = typeof window === "undefined" ? "" : window.location.hostname;
+    const hostname = typeof window === "undefined" ? "" : window.location?.hostname || "";
     const allowLocalChannel = desktopLocalChannelPayloadValue(desktopLocalChannelsEnabled, hostname, config.allowLocalChannel);
     return config.allowLocalChannel === allowLocalChannel ? config : { ...config, allowLocalChannel };
 }

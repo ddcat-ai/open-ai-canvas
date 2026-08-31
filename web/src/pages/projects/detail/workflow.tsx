@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Empty } from "antd";
 import { Link } from "react-router";
 
+import { formatShotOrdinal } from "@/lib/shot-label";
 import { saveProjectShot, type ProjectDetail } from "@/services/api/projects";
 
 import { AssetsStage, DeliveryStage, StoryStage } from "./workflow-stage-views";
@@ -49,7 +50,7 @@ export default function ProjectWorkflowView({ detail, projectId, unitId, stage }
             if (!unit) throw new Error("请先添加章节");
             return saveProjectShot(projectId, {
                 unitId: unit.id,
-                title: `SC.${String(shots.length + 1).padStart(2, "0")}`,
+                title: formatShotOrdinal(shots.length),
                 description: "待补充分镜画面",
                 position: shots.length,
                 durationMs: 3000,

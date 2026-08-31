@@ -5,8 +5,10 @@ const positionSchema = z.object({ x: z.number(), y: z.number() });
 const viewportSchema = z.object({ x: z.number(), y: z.number(), k: z.number() });
 const nodeTypeSchema = z.enum(["image", "text", "script", "video", "audio", "frame"]);
 const generationModeSchema = z.enum(["text", "image", "video", "audio"]);
+const assetCategorySchema = z.enum(["character", "environment", "prop", "material", "other"]);
+const agentCandidateCategorySchema = z.enum(["environment", "prop", "material", "other"]);
 const projectIdSchema = z.string().min(1).optional();
-const projectCandidateSchema = z.object({ unitId: z.string().optional(), shotId: z.string().optional(), name: z.string().min(1), category: z.string().min(1), details: recordSchema.optional() });
+const projectCandidateSchema = z.object({ unitId: z.string().optional(), shotId: z.string().optional(), name: z.string().min(1), category: agentCandidateCategorySchema, details: recordSchema.optional() });
 const projectShotSchema = z.object({ id: z.string().optional(), unitId: z.string().optional(), title: z.string().min(1), description: z.string().optional(), position: z.number().int().min(0).optional(), durationMs: z.number().int().min(0).optional(), status: z.string().optional() });
 
 export const toolNames = [
@@ -158,7 +160,7 @@ export const toolInputSchemas = {
     project_create_or_update_shots: z.object({ projectId: projectIdSchema, shots: z.array(projectShotSchema).min(1).max(100) }),
     project_link_shot_asset: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), assetVersionId: z.string().min(1), role: z.enum(["reference", "start_frame", "end_frame", "keyframe", "storyboard", "output"]) }),
     project_start_workflow_step: z.object({ projectId: projectIdSchema, stepId: z.string().min(1) }),
-    project_link_asset: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), category: z.string().min(1) }),
+    project_link_asset: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), category: assetCategorySchema }),
     project_upsert_asset_version: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), prompt: z.string().optional(), definitionJson: z.string().optional(), note: z.string().optional() }),
     project_register_task_output: z.object({ projectId: projectIdSchema, stepId: z.string().min(1), taskId: z.string().min(1), assetVersionId: z.string().optional(), resourceId: z.string().optional(), mediaType: z.string().optional(), role: z.enum(["reference", "start_frame", "end_frame", "keyframe", "storyboard", "output"]).optional(), metadataJson: z.string().optional(), outputJson: z.string().optional() }),
 } satisfies Record<ToolName, z.AnyZodObject>;
@@ -196,7 +198,7 @@ export const toolDescriptions: Record<ToolName, string> = {
     canvas_run_generation: "触发指定节点生成；对已有生成任务明确重试时传 retry=true，以复用产品级重试幂等身份。",
     project_get_context: "读取当前短剧项目的章节、画布、资产、镜头、候选和工作流事实。",
     project_list_units: "按类型或状态筛选当前短剧项目的章节/项目单元。",
-    project_extract_asset_candidates: "将分镜识别出的角色、场景、服饰、道具或武器需求登记为待确认资产候选。",
+    project_extract_asset_candidates: "将分镜识别出的场景、道具、素材或其他需求登记为待确认资产候选；角色只在剧情章节提取，不通过此工具重复创建。",
     project_confirm_asset_candidate: "确认一个资产候选，创建正式资产或关联已有个人资产。",
     project_create_or_update_shots: "创建或更新项目镜头业务数据，不把镜头状态写进画布 metadata。",
     project_link_shot_asset: "将具体资产版本按首帧、尾帧或参考等用途关联到镜头。",
