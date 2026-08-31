@@ -97,7 +97,7 @@ install_service() {
         'PrivateTmp=true' \
         'ProtectHome=true' \
         'ProtectSystem=full' \
-        "ReadWritePaths=${INSTALL_DIR} /var/lib/open-ai-canvas-updater ${SOCKET_DIR} ${UPDATER_BIN}" \
+        "ReadWritePaths=${INSTALL_DIR} /var/lib/open-ai-canvas-updater ${SOCKET_DIR} /usr/local/bin" \
         '' \
         '[Install]' \
         'WantedBy=multi-user.target' > "$temporary_service"

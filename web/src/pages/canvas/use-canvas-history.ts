@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
+import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ContextMenuState } from "@/types/canvas";
 
@@ -8,6 +9,7 @@ export type CanvasHistorySnapshot = {
     connections: CanvasConnection[];
     chatSessions: CanvasAssistantSession[];
     activeChatId: string | null;
+    canvasAppearance: CanvasAppearance;
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
 };
@@ -34,6 +36,7 @@ type CanvasHistoryPatch = {
     connections?: EntityPatch<CanvasConnection>;
     chatSessions?: EntityPatch<CanvasAssistantSession>;
     activeChatId?: ValuePatch<string | null>;
+    canvasAppearance?: ValuePatch<CanvasAppearance>;
     backgroundMode?: ValuePatch<CanvasBackgroundMode>;
     showImageInfo?: ValuePatch<boolean>;
 };
@@ -44,6 +47,7 @@ type UseCanvasHistoryOptions = CanvasHistorySnapshot & {
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setChatSessions: Dispatch<SetStateAction<CanvasAssistantSession[]>>;
     setActiveChatId: Dispatch<SetStateAction<string | null>>;
+    applyCanvasAppearance: (appearance: CanvasAppearance) => void;
     setBackgroundMode: Dispatch<SetStateAction<CanvasBackgroundMode>>;
     setShowImageInfo: Dispatch<SetStateAction<boolean>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
@@ -57,12 +61,14 @@ export function useCanvasHistory({
     connections,
     chatSessions,
     activeChatId,
+    canvasAppearance,
     backgroundMode,
     showImageInfo,
     setNodes,
     setConnections,
     setChatSessions,
     setActiveChatId,
+    applyCanvasAppearance,
     setBackgroundMode,
     setShowImageInfo,
     setSelectedNodeIds,
@@ -78,8 +84,8 @@ export function useCanvasHistory({
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
 
     const createHistorySnapshot = useCallback(
-        (): CanvasHistorySnapshot => ({ nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo }),
-        [activeChatId, backgroundMode, chatSessions, connections, nodes, showImageInfo],
+        (): CanvasHistorySnapshot => ({ nodes, connections, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo }),
+        [activeChatId, backgroundMode, canvasAppearance, chatSessions, connections, nodes, showImageInfo],
     );
 
     const clearCommitTimer = useCallback(() => {
@@ -109,6 +115,7 @@ export function useCanvasHistory({
         setConnections(snapshot.connections);
         setChatSessions(snapshot.chatSessions);
         setActiveChatId(snapshot.activeChatId);
+        applyCanvasAppearance(snapshot.canvasAppearance);
         setBackgroundMode(snapshot.backgroundMode);
         setShowImageInfo(snapshot.showImageInfo);
         setSelectedNodeIds(new Set());
@@ -120,7 +127,7 @@ export function useCanvasHistory({
             applyTimerRef.current = null;
             setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
         });
-    }, [clearCommitTimer, setActiveChatId, setBackgroundMode, setChatSessions, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo]);
+    }, [applyCanvasAppearance, clearCommitTimer, setActiveChatId, setBackgroundMode, setChatSessions, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo]);
 
     const undoCanvas = useCallback(() => {
         const patch = historyRef.current.past.pop();
@@ -176,6 +183,7 @@ function snapshotsShareReferences(before: CanvasHistorySnapshot, after: CanvasHi
         && before.connections === after.connections
         && before.chatSessions === after.chatSessions
         && before.activeChatId === after.activeChatId
+        && before.canvasAppearance === after.canvasAppearance
         && before.backgroundMode === after.backgroundMode
         && before.showImageInfo === after.showImageInfo;
 }
@@ -186,6 +194,7 @@ function createCanvasHistoryPatch(before: CanvasHistorySnapshot, after: CanvasHi
     patch.connections = createEntityPatch(before.connections, after.connections);
     patch.chatSessions = createEntityPatch(before.chatSessions, after.chatSessions);
     if (before.activeChatId !== after.activeChatId) patch.activeChatId = { before: before.activeChatId, after: after.activeChatId };
+    if (before.canvasAppearance !== after.canvasAppearance) patch.canvasAppearance = { before: before.canvasAppearance, after: after.canvasAppearance };
     if (before.backgroundMode !== after.backgroundMode) patch.backgroundMode = { before: before.backgroundMode, after: after.backgroundMode };
     if (before.showImageInfo !== after.showImageInfo) patch.showImageInfo = { before: before.showImageInfo, after: after.showImageInfo };
     return Object.values(patch).some(Boolean) ? patch : null;
@@ -219,6 +228,7 @@ function applyCanvasHistoryPatch(snapshot: CanvasHistorySnapshot, patch: CanvasH
         connections: patch.connections ? applyEntityPatch(snapshot.connections, patch.connections, side) : snapshot.connections,
         chatSessions: patch.chatSessions ? applyEntityPatch(snapshot.chatSessions, patch.chatSessions, side) : snapshot.chatSessions,
         activeChatId: patch.activeChatId ? patch.activeChatId[side] : snapshot.activeChatId,
+        canvasAppearance: patch.canvasAppearance ? patch.canvasAppearance[side] : snapshot.canvasAppearance,
         backgroundMode: patch.backgroundMode ? patch.backgroundMode[side] : snapshot.backgroundMode,
         showImageInfo: patch.showImageInfo ? patch.showImageInfo[side] : snapshot.showImageInfo,
     };

@@ -73,9 +73,10 @@ type AdminUserReference struct {
 }
 
 type AdminChannelReference struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Models []string `json:"models"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Enabled bool     `json:"enabled"`
+	Models  []string `json:"models"`
 }
 
 type AdminReferenceData struct {
@@ -189,7 +190,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName})
 	}
 	for _, channel := range channels {
-		items, itemErr := s.repo.ChannelModels(channel.ID, true)
+		items, itemErr := s.repo.ChannelModels(channel.ID, false)
 		if itemErr != nil {
 			return nil, itemErr
 		}
@@ -197,7 +198,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		for _, item := range items {
 			models = append(models, item.ModelKey)
 		}
-		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Models: uniqueNonEmpty(models)})
+		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models)})
 	}
 	return result, nil
 }

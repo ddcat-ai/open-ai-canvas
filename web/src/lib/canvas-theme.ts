@@ -4,7 +4,7 @@ export type CanvasBackgroundMode = "dots" | "lines" | "blank";
 export const canvasThemes = {
     light: {
         canvas: {
-            background: "#ffffff",
+            background: "#edeeee",
             dot: "rgba(15,23,42,.20)",
             line: "rgba(15,23,42,.15)",
             selectionFill: "rgba(17,17,17,.10)",
@@ -70,9 +70,9 @@ export const canvasThemes = {
     },
     dark: {
         canvas: {
-            background: "#0b0b0b",
-            dot: "rgba(178,178,178,.18)",
-            line: "rgba(178,178,178,.14)",
+            background: "#262626",
+            dot: "rgba(205,205,205,.28)",
+            line: "rgba(205,205,205,.28)",
             selectionFill: "rgba(255,255,255,.12)",
         },
         node: {

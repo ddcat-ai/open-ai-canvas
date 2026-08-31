@@ -123,6 +123,14 @@ func (m *Manager) preflight(composePath, targetVersion string) error {
 	if _, err := os.Stat(m.envPath()); err != nil {
 		return fmt.Errorf("读取部署环境：%w", err)
 	}
+	if m.config.SelfUpdate {
+		if strings.TrimSpace(m.config.BinaryPath) == "" {
+			return errors.New("检查 Host Updater 安装目录：二进制路径为空")
+		}
+		if err := checkWritableDirectory(filepath.Dir(m.config.BinaryPath)); err != nil {
+			return fmt.Errorf("检查 Host Updater 安装目录：%w", err)
+		}
+	}
 	var disk syscall.Statfs_t
 	if err := syscall.Statfs(m.config.BackupDir, &disk); err != nil {
 		return fmt.Errorf("检查备份磁盘空间：%w", err)
@@ -140,6 +148,26 @@ func (m *Manager) preflight(composePath, targetVersion string) error {
 	}
 	if err := m.checkHealthOnce(m.healthURL(), current); err != nil {
 		return fmt.Errorf("当前运行版本与部署配置不一致或服务未就绪：%w", err)
+	}
+	return nil
+}
+
+func checkWritableDirectory(directory string) error {
+	directory = strings.TrimSpace(directory)
+	if directory == "" {
+		return errors.New("Host Updater 二进制路径为空")
+	}
+	temporary, err := os.CreateTemp(directory, ".updater-write-test-*")
+	if err != nil {
+		return err
+	}
+	name := temporary.Name()
+	if closeErr := temporary.Close(); closeErr != nil {
+		_ = os.Remove(name)
+		return closeErr
+	}
+	if removeErr := os.Remove(name); removeErr != nil {
+		return removeErr
 	}
 	return nil
 }

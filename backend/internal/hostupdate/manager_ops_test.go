@@ -129,3 +129,20 @@ func TestCreateBackupReadsBackendDataAsRoot(t *testing.T) {
 	}
 	t.Fatalf("backend data backup did not use root: %#v", runner.calls)
 }
+
+func TestCheckWritableDirectory(t *testing.T) {
+	directory := t.TempDir()
+	if err := checkWritableDirectory(directory); err != nil {
+		t.Fatalf("writable directory rejected: %v", err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("write probe was not cleaned up: %v", entries)
+	}
+	if err := checkWritableDirectory(filepath.Join(directory, "missing")); err == nil {
+		t.Fatal("missing directory was accepted")
+	}
+}

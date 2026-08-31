@@ -230,7 +230,8 @@ function isIsoBmffVideoType(mimeType: string) {
 
 function isLikelyIsoBmffVideoUrl(source: string) {
     try {
-        const url = new URL(source, typeof window === "undefined" ? "http://localhost" : window.location.href);
+        const baseUrl = typeof window === "undefined" ? "http://localhost" : window.location?.href || "http://localhost";
+        const url = new URL(source, baseUrl);
         return /\.(mp4|m4v|mov)(?:$|[?#])/i.test(url.pathname + url.search);
     } catch {
         return false;

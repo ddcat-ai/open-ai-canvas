@@ -6628,6 +6628,39 @@
     background: var(--admin-layer-0);
 }
 
+.admin-announcement-editor-modal {
+    max-width: calc(100vw - 32px);
+}
+
+.admin-announcement-editor-modal .ant-modal-container {
+    max-height: calc(100vh - 32px);
+}
+
+.admin-announcement-editor-modal .ant-modal-body {
+    padding: 24px 28px 8px;
+}
+
+.admin-announcement-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+    gap: 24px;
+}
+
+.admin-announcement-editor-layout .admin-announcement-preview {
+    align-self: start;
+    margin-top: 0;
+}
+
+@media (max-width: 800px) {
+    .admin-announcement-editor-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-announcement-editor-layout .admin-announcement-preview {
+        margin-top: 24px;
+    }
+}
+
 .admin-announcement-drawer .ant-drawer-header {
     min-height: 64px;
     border-bottom: 1px solid var(--admin-divider);
@@ -7183,6 +7216,21 @@
 
 .admin-analytics-range-picker .ant-picker {
     width: 246px;
+}
+
+.admin-analytics-pricing-modal .admin-analytics-price-field,
+.admin-analytics-pricing-modal .admin-analytics-price-field .ant-form-item-control,
+.admin-analytics-pricing-modal .admin-analytics-price-field .ant-form-item-control-input,
+.admin-analytics-pricing-modal .admin-analytics-price-input,
+.admin-analytics-pricing-modal .admin-analytics-price-input input {
+    width: 100%;
+    min-width: 0;
+    pointer-events: auto;
+    user-select: text;
+}
+
+.admin-analytics-pricing-modal .admin-analytics-price-input {
+    display: block;
 }
 
 .admin-analytics-toolbar .admin-list-toolbar-actions {
