@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Sync with upstream repository
         shell: bash
@@ -44,6 +44,7 @@ jobs:
             git reset --hard upstream/main
           }
           # 将同步后的最新代码推送回当前 fork 仓库
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push origin main || echo "::warning::Push to origin main skipped or already up to date"
 
       - name: Resolve and validate build version
@@ -114,6 +115,7 @@ jobs:
       - name: Delete old container package versions
         uses: actions/delete-package-versions@v5
         with:
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           package-name: ${{ matrix.package-name }}
           package-type: container
           min-versions-to-keep: 1
