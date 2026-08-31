@@ -114,8 +114,11 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           # Unraid deployment target: publish one self-contained amd64 manifest.
-          # This permits retaining exactly one tagged package version safely.
+          # Disable Buildx attestations so GHCR stores no extra index/child manifests
+          # that version cleanup could orphan.
           platforms: linux/amd64
+          provenance: false
+          sbom: false
           push: true
           build-args: |
             BUILD_VERSION=${{ steps.build-info.outputs.version }}
