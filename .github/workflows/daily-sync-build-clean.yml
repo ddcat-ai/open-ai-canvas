@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
   packages: write
-  workflows: write
 
 jobs:
   sync-and-build:
