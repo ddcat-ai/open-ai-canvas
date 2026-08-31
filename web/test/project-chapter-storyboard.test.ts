@@ -15,7 +15,7 @@ describe("章节分镜写入分镜制作", () => {
 
         expect(shots).toHaveLength(1);
         expect(shots[0]).toMatchObject({
-            title: "SC.01",
+            title: "镜头01",
             description: "林默推门进入雨夜的旧屋。",
             durationMs: 5000,
             revision: {

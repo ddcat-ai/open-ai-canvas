@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type SVGProps } from "react";
-import { Input, Popover } from "antd";
+import { Button, Input, Modal } from "antd";
 import { Cpu, Search, X } from "lucide-react";
 
 import { toc } from "@lobehub/icons/es/toc";
@@ -69,7 +69,7 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
 
     useEffect(() => {
         if (open) {
-            const timer = setTimeout(() => searchInputRef.current?.focus(), 50);
+            const timer = setTimeout(() => searchInputRef.current?.focus(), 100);
             return () => clearTimeout(timer);
         } else {
             setKeyword("");
@@ -81,101 +81,108 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
         return query ? iconOptions.filter((item) => `${item.id} ${item.title}`.toLowerCase().includes(query)) : iconOptions;
     }, [keyword]);
 
-    const content = (
-        <div
-            className="w-[440px] max-w-[calc(100vw-32px)] space-y-2.5 p-0.5"
-            data-canvas-no-zoom
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-        >
-            <div className="flex items-center gap-2">
-                <Input
-                    ref={searchInputRef}
-                    size="small"
-                    prefix={<Search className="size-3.5 text-foreground/40" />}
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    placeholder="搜索 Logo 名称或品牌..."
-                    allowClear
-                />
-                {value ? (
-                    <button
-                        type="button"
-                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 text-xs text-foreground/60 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                        onClick={() => {
-                            onChange?.("");
-                            setOpen(false);
-                        }}
-                        aria-label="清除 Logo"
-                    >
-                        <X className="size-3" />
-                        <span>清除</span>
-                    </button>
-                ) : null}
-            </div>
-            <div
-                className="grid max-h-72 grid-cols-10 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-11"
-                role="listbox"
-                aria-label="模型 Logo"
-                onWheel={(event) => event.stopPropagation()}
-            >
-                {filteredIcons.length ? (
-                    filteredIcons.map((item) => {
-                        const selected = value === item.id;
-                        return (
-                            <button
-                                key={item.id}
-                                type="button"
-                                role="option"
-                                aria-selected={selected}
-                                title={item.title}
-                                className={cn(
-                                    "flex size-9 items-center justify-center rounded-md border border-transparent text-foreground/75 transition-all hover:scale-105 hover:border-border/80 hover:bg-surface-active hover:text-foreground",
-                                    selected && "border-primary/60 bg-primary/10 text-primary shadow-xs"
-                                )}
-                                onClick={() => {
-                                    onChange?.(item.id);
-                                    setOpen(false);
-                                }}
-                            >
-                                <ModelLogo icon={item.id} size={20} />
-                            </button>
-                        );
-                    })
-                ) : (
-                    <div className="col-span-full py-8 text-center text-xs text-foreground/45">
-                        未找到与 “{keyword}” 相关的 Logo
-                    </div>
-                )}
-            </div>
-            <div className="flex items-center justify-between border-t border-border/40 pt-1.5 text-[var(--fs-tiny)] text-foreground/40">
-                <span>共 {filteredIcons.length} 个可用 Logo</span>
-                <span>点击即选定并应用</span>
-            </div>
-        </div>
-    );
+    const selectedOption = useMemo(() => (value ? iconOptions.find((item) => item.id === value) : undefined), [value]);
 
     return (
-        <Popover
-            trigger={["click"]}
-            open={open}
-            onOpenChange={setOpen}
-            arrow={{ pointAtCenter: true }}
-            placement="bottomLeft"
-            destroyTooltipOnHide={false}
-            autoAdjustOverflow
-            getPopupContainer={(trigger) => trigger.closest(".ant-modal-content, .ant-drawer-content, .admin-modal, body") || document.body}
-            classNames={{ root: "model-logo-picker-popover" }}
-            content={content}
-        >
+        <>
             <button
                 type="button"
                 className="flex min-h-9 w-full items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 text-left text-sm transition-colors hover:border-border hover:bg-muted/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 aria-label="选择模型 Logo"
+                onClick={() => setOpen(true)}
             >
                 <ModelLogo icon={value} size={20} />
-                <span className="min-w-0 flex-1 truncate text-foreground/70">{value ? iconOptions.find((item) => item.id === value)?.title || value : "选择 Logo"}</span>
+                <span className="min-w-0 flex-1 truncate text-foreground/70">{selectedOption?.title || value || "选择 Logo"}</span>
+                {value ? (
+                    <span
+                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-foreground/40 hover:bg-muted hover:text-foreground"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onChange?.("");
+                        }}
+                        title="清除 Logo"
+                    >
+                        <X className="size-3" />
+                    </span>
+                ) : (
+                    <span className="text-xs text-foreground/35">浏览</span>
+                )}
             </button>
-        </Popover>
+
+            <Modal
+                title="选择模型 Logo"
+                open={open}
+                onCancel={() => setOpen(false)}
+                width={540}
+                centered
+                destroyOnClose
+                footer={
+                    <div className="flex items-center justify-between py-1 text-xs text-foreground/45">
+                        <span>共 {filteredIcons.length} 个可用 Logo</span>
+                        <div className="flex items-center gap-2">
+                            {value ? (
+                                <Button
+                                    size="small"
+                                    onClick={() => {
+                                        onChange?.("");
+                                        setOpen(false);
+                                    }}
+                                >
+                                    清除 Logo
+                                </Button>
+                            ) : null}
+                            <Button type="primary" size="small" onClick={() => setOpen(false)}>
+                                完成
+                            </Button>
+                        </div>
+                    </div>
+                }
+            >
+                <div className="space-y-3 pt-2">
+                    <Input
+                        ref={searchInputRef}
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        placeholder="搜索品牌或模型名称（如 OpenAI, Claude, Google, Flux...）"
+                        allowClear
+                    />
+                    <div
+                        className="grid max-h-[380px] grid-cols-8 gap-2 overflow-y-auto pr-1 sm:grid-cols-9"
+                        role="listbox"
+                        aria-label="模型 Logo 列表"
+                    >
+                        {filteredIcons.length ? (
+                            filteredIcons.map((item) => {
+                                const selected = value === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={selected}
+                                        title={item.title}
+                                        className={cn(
+                                            "group relative flex size-12 flex-col items-center justify-center rounded-lg border border-border/50 bg-surface text-foreground/75 transition-all hover:scale-105 hover:border-primary/60 hover:bg-surface-active hover:text-foreground",
+                                            selected && "border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary"
+                                        )}
+                                        onClick={() => {
+                                            onChange?.(item.id);
+                                            setOpen(false);
+                                        }}
+                                    >
+                                        <ModelLogo icon={item.id} size={24} />
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="col-span-full py-12 text-center text-xs text-foreground/45">
+                                未找到与 “{keyword}” 相关的 Logo
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Modal>
+        </>
     );
 }
