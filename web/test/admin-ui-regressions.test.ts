@@ -44,7 +44,7 @@ test("analytics keeps fixed range presets distinct and uses enabled channel mode
     expect(source).toContain("onValuesChange={handlePricingValuesChange}");
     expect(source).toContain("onChange={handlePricingModelChange}");
     expect(source).toContain('hasOwnProperty.call(changedValues, "model")');
-    expect(source).toContain("if (matchingChannels.length) form.setFieldValue(\"channelId\", matchingChannels[0].id)");
+    expect(source).toContain('if (matchingChannels.length) form.setFieldValue("channelId", matchingChannels[0].id)');
     expect(source).toContain("const sourceChannels = channels.filter((channel) => channel.enabled !== false)");
     expect(source).toContain('inputMode="decimal"');
     expect(source).toContain('className="admin-analytics-price-input"');
@@ -53,7 +53,7 @@ test("analytics keeps fixed range presets distinct and uses enabled channel mode
     expect(source).toContain("zIndex={1200}");
     expect(source).toContain("setPricingWorkspaceOpen(false)");
     expect(source).toContain("validator: validatePriceInput");
-    expect(source).toContain('请输入非负价格，最多 6 位小数');
+    expect(source).toContain("请输入非负价格，最多 6 位小数");
     expect(source).toContain("function formatPriceInput(micros: number)");
     expect(source).toContain("function toMicros(value?: string | number)");
     expect(source).not.toContain("<InputNumber");
@@ -123,7 +123,7 @@ test("task-first settings reveal dependent configuration only after the primary 
 
     expect(emailSource).toContain("{draftEnabled ? (");
     expect(emailSource).toContain('id="admin-email-smtp"');
-    expect(emailSource).toContain('title="1. 是否发送注册邮箱验证码"');
+    expect(emailSource).toContain('title="1. 是否发送账户安全邮件"');
     expect(emailSource).toContain('title="2. 配置 SMTP 连接与发件身份"');
 
     expect(accessSource).toContain("{draftLinuxDOEnabled ? (");

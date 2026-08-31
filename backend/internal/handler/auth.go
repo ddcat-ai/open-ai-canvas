@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,6 +66,48 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/password-reset-code", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Email string `json:"email"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "password-reset-code-ip:"+c.ClientIP(), policy.Request.EmailCodePerHour, time.Hour) {
+			return
+		}
+		if !enforceRateLimit(c, "password-reset-code-account:"+passwordResetRateLimitSubject(req.Email), policy.Request.EmailCodePerHour, time.Hour) {
+			return
+		}
+		if err := svc.SendPasswordResetEmailCode(req.Email); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/password-reset", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.PasswordResetRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "password-reset-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if !enforceRateLimit(c, "password-reset-account:"+passwordResetRateLimitSubject(req.Email), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if err := svc.ResetPassword(req); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"reset": true})
 	})
 	r.POST("/auth/login", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
@@ -1067,6 +1110,11 @@ func currentUser(c *gin.Context, svc *service.Service) (*model.User, error) {
 func sessionCookie(c *gin.Context) string {
 	value, _ := c.Cookie(service.SessionCookieName)
 	return value
+}
+
+func passwordResetRateLimitSubject(value string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(value))))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func setSessionCookie(c *gin.Context, value string, maxAge int) {

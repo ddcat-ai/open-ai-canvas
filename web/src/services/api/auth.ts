@@ -417,6 +417,14 @@ export function sendRegistrationEmailCode(email: string) {
     return request<{ sent: boolean }>(api.post("/auth/email-code", { email }));
 }
 
+export function sendPasswordResetEmailCode(email: string) {
+    return request<{ sent: boolean }>(api.post("/auth/password-reset-code", { email }));
+}
+
+export function resetPassword(input: { email: string; emailCode: string; password: string }) {
+    return request<{ reset: boolean }>(api.post("/auth/password-reset", input));
+}
+
 export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string }) {
     return request<{ user: LocalUser }>(api.post("/auth/register", input));
 }

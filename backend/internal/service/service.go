@@ -53,6 +53,7 @@ type Service struct {
 	routeHealthBlocked         map[string]time.Time
 	workers                    *workerRuntime
 	updateManager              UpdateManager
+	mailSender                 func(emailSettingValue, string, string, string) error
 }
 
 const taskWorkerConcurrency = 3

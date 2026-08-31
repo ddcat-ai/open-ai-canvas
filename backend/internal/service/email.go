@@ -159,7 +159,7 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err != nil {
 		return err
 	}
-	codeHash, err := s.emailVerificationCodeHash(email, code)
+	codeHash, err := s.emailVerificationCodeHash(registrationEmailPurpose, email, code)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	if err := sendSMTPMail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
+	if err := s.deliverEmail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
 			return errors.Join(
@@ -206,7 +206,7 @@ func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*mo
 	if time.Now().After(record.ExpiresAt) {
 		return nil, BadAuthRequest("邮箱验证码已过期，请重新获取")
 	}
-	hash, err := s.emailVerificationCodeHash(email, code)
+	hash, err := s.emailVerificationCodeHash(registrationEmailPurpose, email, code)
 	if err != nil {
 		return nil, err
 	}
@@ -216,13 +216,13 @@ func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*mo
 	return record, nil
 }
 
-func (s *Service) emailVerificationCodeHash(email string, code string) (string, error) {
+func (s *Service) emailVerificationCodeHash(purpose string, email string, code string) (string, error) {
 	key, err := s.settingsEncryptionKey()
 	if err != nil {
 		return "", err
 	}
 	mac := hmac.New(sha256.New, key)
-	_, _ = mac.Write([]byte(registrationEmailPurpose + ":" + email + ":" + code))
+	_, _ = mac.Write([]byte(strings.TrimSpace(purpose) + ":" + normalizeEmail(email) + ":" + strings.TrimSpace(code)))
 	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
@@ -345,6 +345,13 @@ func sendSMTPMail(setting emailSettingValue, recipient string, subject string, b
 		return err
 	}
 	return client.Quit()
+}
+
+func (s *Service) deliverEmail(setting emailSettingValue, recipient string, subject string, body string) error {
+	if s.mailSender != nil {
+		return s.mailSender(setting, recipient, subject, body)
+	}
+	return sendSMTPMail(setting, recipient, subject, body)
 }
 
 func randomNumericCode(length int) (string, error) {

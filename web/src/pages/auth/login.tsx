@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 import { App, Button, Divider, Input } from "antd";
 import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { applyUserSession } from "@/lib/user-session";
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, login } from "@/services/api/auth";
@@ -17,6 +17,7 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [linuxdoEnabled, setLinuxdoEnabled] = useState(false);
     const next = safeNext(params.get("next"));
+    const forgotPasswordURL = `/forgot-password?next=${encodeURIComponent(next)}`;
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
 
@@ -28,7 +29,9 @@ export default function LoginPage() {
     }, [hydrated, user, next, navigate]);
 
     useEffect(() => {
-        void getAuthSettings().then((settings) => setLinuxdoEnabled(settings.linuxdoEnabled)).catch(() => undefined);
+        void getAuthSettings()
+            .then((settings) => setLinuxdoEnabled(settings.linuxdoEnabled))
+            .catch(() => undefined);
         const oauthError = params.get("oauth_error");
         if (oauthError) message.error(oauthError);
     }, [message, params]);
@@ -50,16 +53,61 @@ export default function LoginPage() {
 
     return (
         <form onSubmit={submit} className="space-y-5">
-            <AuthField label="用户名 / 邮箱"><Input size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required /></AuthField>
-            <AuthField label="密码"><Input.Password size="large" prefix={<LockKeyhole className="size-4 text-white/35" />} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" autoComplete="current-password" required /></AuthField>
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">登录</Button>
-            {linuxdoEnabled ? <><Divider plain className="!border-white/10 !text-white/30">或</Divider><Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>使用 Linux.do 登录</Button></> : null}
+            <AuthField label="用户名 / 邮箱" htmlFor="login-account">
+                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+            </AuthField>
+            <AuthField
+                label="密码"
+                htmlFor="login-password"
+                action={
+                    <Link
+                        to={forgotPasswordURL}
+                        className="-my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium text-blue-300/80 transition-colors hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45"
+                    >
+                        忘记密码？
+                    </Link>
+                }
+            >
+                <Input.Password
+                    id="login-password"
+                    size="large"
+                    prefix={<LockKeyhole className="size-4 text-white/35" />}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="请输入密码"
+                    autoComplete="current-password"
+                    required
+                />
+            </AuthField>
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                登录
+            </Button>
+            {linuxdoEnabled ? (
+                <>
+                    <Divider plain className="!border-white/10 !text-white/30">
+                        或
+                    </Divider>
+                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                        使用 Linux.do 登录
+                    </Button>
+                </>
+            ) : null}
         </form>
     );
 }
 
-function AuthField({ label, children }: { label: string; children: ReactNode }) {
-    return <label className="block space-y-2"><span className="text-xs font-medium text-white/62">{label}</span>{children}</label>;
+function AuthField({ label, htmlFor, action, children }: { label: string; htmlFor: string; action?: ReactNode; children: ReactNode }) {
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+                <label htmlFor={htmlFor} className="text-xs font-medium text-white/62">
+                    {label}
+                </label>
+                {action}
+            </div>
+            {children}
+        </div>
+    );
 }
 
 function safeNext(value: string | null) {

@@ -10,6 +10,17 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
+func TestPasswordResetRateLimitSubjectNormalizesAndHashesEmail(t *testing.T) {
+	first := passwordResetRateLimitSubject(" Creator@Example.com ")
+	second := passwordResetRateLimitSubject("creator@example.com")
+	if first != second {
+		t.Fatalf("normalized subjects differ: %q != %q", first, second)
+	}
+	if first == "creator@example.com" || strings.Contains(first, "@") || len(first) != 64 {
+		t.Fatalf("rate limit subject is not a SHA-256 digest: %q", first)
+	}
+}
+
 func TestAuthorizeSystemProxyAllowsConfiguredGenerationModel(t *testing.T) {
 	channel := &model.ModelChannel{APIFormat: "openai", ModelsJSON: `["gpt-image-1"]`}
 	body := []byte(`{"model":"gpt-image-1","prompt":"test"}`)
