@@ -3,7 +3,7 @@ import { AlertTriangle, BadgeCheck, Check, Cloud, Database, Globe2, HardDrive, K
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
+import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
 import { cn } from "@/lib/utils";
 import { getAdminOSSSetting, testAdminOSSConnection, updateAdminOSSSetting, type AdminOSSSetting } from "@/services/api/auth";
 import { AdminPageFrame } from "../components/admin-shell";
@@ -770,20 +770,20 @@ function trimTrailingSlash(value: string) {
     return value.trim().replace(/\/+$/, "");
 }
 
-function connectionInput(values: OSSFormValues) {
-    return {
-        provider: values.mode === "local" ? ("aliyun" as const) : values.mode,
+function connectionInput(values: Partial<OSSFormValues>) {
+    return normalizeOSSConnectionTestInput({
+        provider: !values.mode || values.mode === "local" ? ("aliyun" as const) : values.mode,
         s3Preset: values.s3Preset,
-        region: values.region.trim(),
-        endpoint: trimTrailingSlash(values.endpoint),
-        cdnBaseUrl: trimTrailingSlash(values.cdnBaseUrl),
-        bucket: values.bucket.trim(),
-        accessKeyId: values.accessKeyId.trim(),
-        accessKeySecret: values.accessKeySecret.trim(),
-        sessionToken: values.sessionToken.trim(),
-        pathPrefix: (values.pathPrefix.trim() || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
+        region: values.region,
+        endpoint: values.endpoint,
+        cdnBaseUrl: values.cdnBaseUrl,
+        bucket: values.bucket,
+        accessKeyId: values.accessKeyId,
+        accessKeySecret: values.accessKeySecret,
+        sessionToken: values.sessionToken,
+        pathPrefix: values.pathPrefix,
         pathStyle: values.pathStyle === true,
-    };
+    });
 }
 
 function ConnectionTestStatus({ result, stale }: { result: OSSConnectionTestResult | null; stale: boolean }) {
