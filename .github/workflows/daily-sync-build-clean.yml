@@ -113,7 +113,9 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          # Unraid deployment target: publish one self-contained amd64 manifest.
+          # This permits retaining exactly one tagged package version safely.
+          platforms: linux/amd64
           push: true
           build-args: |
             BUILD_VERSION=${{ steps.build-info.outputs.version }}
@@ -136,13 +138,11 @@ jobs:
           - open-ai-canvas-backend
 
     steps:
-      - name: Delete untagged container package versions
-        # A multi-architecture image index references per-platform child manifests.
-        # Deleting tagged versions can remove those children and break `latest` pulls.
+      - name: Delete old container package versions
         uses: actions/delete-package-versions@v5
         with:
           token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           package-name: ${{ matrix.package-name }}
           package-type: container
           min-versions-to-keep: 1
-          delete-only-untagged-versions: "true"
+          delete-only-untagged-versions: "false"
