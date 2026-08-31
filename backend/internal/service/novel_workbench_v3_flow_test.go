@@ -157,6 +157,91 @@ func TestNovelWorkbenchV3RepairsArcPlanBeforeCallingWriter(t *testing.T) {
 	}
 }
 
+func TestNovelWorkbenchV3UsesCrossUnitReviewReferencesToRepairArcPlan(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	canonical := newNovelWorkbenchV3TestControl(4)
+	initial := novelWorkbenchV3TestArcPlan(canonical.StoryMap[0])
+	recompiled := novelWorkbenchV3TestArcPlan(canonical.StoryMap[0])
+	plannerCalls := 0
+	arcReviewCalls := 0
+	repairPrompt := ""
+	upstream := newNovelWorkbenchV3MockServer(t, func(prompt string) any {
+		switch {
+		case strings.Contains(prompt, "独立的长线连续性审稿编辑"):
+			arcReviewCalls++
+			if arcReviewCalls == 1 {
+				return novelWorkbenchV3ReviewReport{
+					Unit:        1,
+					OverallPass: false,
+					BlockingIssues: []novelWorkbenchV3ReviewIssue{{
+						Code: "ARC_CONTINUITY_GAP", Unit: 1,
+						ReferenceIDs: []string{"unit_1", "unit_2", "question_blood_mark"},
+						Evidence:     "第 1 单元未把血印公开后的行动压力交给第 2 单元。",
+						RepairAction: "在第 1 单元末建立西院封锁与进入债务，让第 2 单元据此开场。",
+					}},
+					Verdict: "需要补足相邻单元的因果接力。",
+				}
+			}
+			return novelWorkbenchV3ReviewReport{Unit: 1, OverallPass: true, Verdict: "重编后可封存"}
+		case strings.Contains(prompt, "定向重编一个尚未封存"):
+			plannerCalls++
+			repairPrompt = prompt
+			return recompiled
+		case strings.Contains(prompt, "长线作品的故事弧策划编辑"):
+			plannerCalls++
+			return initial
+		case strings.Contains(prompt, "独立的中文商业叙事审稿编辑"):
+			return novelWorkbenchV3ReviewReport{Unit: 1, OverallPass: true, Verdict: "可提交"}
+		case strings.Contains(prompt, "执行主笔"):
+			return novelWorkbenchV3Draft{Unit: 1, Title: "夜审", Content: strings.Repeat("沈宁当众展示血印，沈瑶琴封锁西院，沈宁决定追入西院。", 28), Summary: "血印公开，西院成为行动目标。"}
+		default:
+			t.Fatalf("unexpected V3 prompt: %s", prompt)
+			return nil
+		}
+	})
+	defer upstream.Close()
+
+	svc, db := newNovelWorkbenchV3FlowTestService(t)
+	project, run := createNovelWorkbenchV3ReadyRun(t, db, canonical)
+	task := createNovelWorkbenchV3FlowTask(t, db, project, run, novelWorkbenchV3TestConfig(upstream), novelWorkbenchPhaseUnit, 1, "task_v3_cross_unit_review")
+	result, _, err := svc.processNovelWorkbenchTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("V3 cross-unit review repair failed: %v", err)
+	}
+	if result["blocked"] == true || plannerCalls != 2 || arcReviewCalls != 2 {
+		t.Fatalf("V3 cross-unit review result=%#v planner=%d reviewer=%d", result, plannerCalls, arcReviewCalls)
+	}
+	if !strings.Contains(repairPrompt, `"relatedUnits":[1,2]`) || strings.Contains(repairPrompt, `"unit_1"`) {
+		t.Fatalf("V3 repair prompt did not canonicalize cross-unit references: %s", repairPrompt)
+	}
+	artifacts, err := svc.repo.NovelWorkbenchArtifacts(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := novelWorkbenchV3ArtifactKinds(artifacts)
+	if !strings.Contains(kinds, "arc_plan_rejected") || strings.Contains(kinds, "arc_review_rejected") {
+		t.Fatalf("V3 cross-unit review artifacts = %s", kinds)
+	}
+}
+
+func TestNovelWorkbenchV3ArcReviewRejectsRelatedUnitOutsideCandidatePackage(t *testing.T) {
+	control := newNovelWorkbenchV3TestControl(4)
+	arc := control.StoryMap[0]
+	plan := novelWorkbenchV3TestArcPlan(arc)
+	pkg := novelWorkbenchV3ArcPackage{Version: novelWorkbenchV3ArcPlanVersion, ArcID: arc.ID, Title: arc.Title, StartUnit: arc.StartUnit, EndUnit: arc.EndUnit, Packets: plan.Packets}
+	report := novelWorkbenchV3ReviewReport{
+		Unit:        arc.StartUnit,
+		OverallPass: false,
+		BlockingIssues: []novelWorkbenchV3ReviewIssue{{
+			Code: "ARC_CONTINUITY_GAP", Unit: arc.StartUnit, RelatedUnits: []int{arc.EndUnit + 1},
+			Evidence: "该问题错误关联了候选执行包之外的单元。", RepairAction: "只引用当前故事弧候选包中的单元。",
+		}},
+	}
+	if err := validateNovelWorkbenchV3ArcReview(report, control, arc, pkg); err == nil || !strings.Contains(err.Error(), "不存在的单元") {
+		t.Fatalf("V3 related unit validation error = %v", err)
+	}
+}
+
 func TestNovelWorkbenchV3UsesOneTargetedProseRepairAndStopsWithoutContinuation(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	canonical := newNovelWorkbenchV3TestControl(4)

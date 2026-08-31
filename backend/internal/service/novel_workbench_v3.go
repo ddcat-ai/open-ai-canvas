@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -298,6 +299,7 @@ type novelWorkbenchV3ReviewIssue struct {
 	Code         string   `json:"code"`
 	Unit         int      `json:"unit"`
 	ReferenceIDs []string `json:"referenceIds"`
+	RelatedUnits []int    `json:"relatedUnits,omitempty"`
 	Evidence     string   `json:"evidence"`
 	RepairAction string   `json:"repairAction"`
 }
@@ -413,6 +415,58 @@ func normalizeNovelWorkbenchV3IDs(values []string) []string {
 		cleaned = append(cleaned, id)
 	}
 	return cleaned
+}
+
+func normalizeNovelWorkbenchV3Units(values []int) []int {
+	cleaned := make([]int, 0, len(values))
+	seen := map[int]struct{}{}
+	for _, unit := range values {
+		if unit <= 0 {
+			continue
+		}
+		if _, exists := seen[unit]; exists {
+			continue
+		}
+		seen[unit] = struct{}{}
+		cleaned = append(cleaned, unit)
+	}
+	sort.Ints(cleaned)
+	return cleaned
+}
+
+// normalizeNovelWorkbenchV3ArcReview keeps cross-unit evidence out of the
+// stable character/fact ID namespace. Older reviewer outputs used unit_28 in
+// referenceIds; accept that exact legacy form only after it is validated
+// against the sealed candidate package.
+func normalizeNovelWorkbenchV3ArcReview(report *novelWorkbenchV3ReviewReport) {
+	normalizeIssue := func(issue *novelWorkbenchV3ReviewIssue) {
+		referenceIDs := make([]string, 0, len(issue.ReferenceIDs))
+		relatedUnits := append([]int{}, issue.RelatedUnits...)
+		for _, id := range normalizeNovelWorkbenchV3IDs(issue.ReferenceIDs) {
+			if unit, ok := novelWorkbenchV3ArcReviewLegacyUnitReference(id); ok {
+				relatedUnits = append(relatedUnits, unit)
+				continue
+			}
+			referenceIDs = append(referenceIDs, id)
+		}
+		issue.ReferenceIDs = referenceIDs
+		issue.RelatedUnits = normalizeNovelWorkbenchV3Units(relatedUnits)
+	}
+	for index := range report.BlockingIssues {
+		normalizeIssue(&report.BlockingIssues[index])
+	}
+	for index := range report.Warnings {
+		normalizeIssue(&report.Warnings[index])
+	}
+}
+
+func novelWorkbenchV3ArcReviewLegacyUnitReference(id string) (int, bool) {
+	const prefix = "unit_"
+	if !strings.HasPrefix(id, prefix) {
+		return 0, false
+	}
+	unit, err := strconv.Atoi(strings.TrimPrefix(id, prefix))
+	return unit, err == nil && unit > 0
 }
 
 func novelWorkbenchV3ControlReady(control novelWorkbenchV3Control) bool {
@@ -1016,7 +1070,8 @@ func (s *Service) ensureNovelWorkbenchV3ArcSealed(ctx context.Context, task mode
 			review = novelWorkbenchV3ReviewReport{}
 			reviewErr = decodeNovelWorkbenchJSONObject(reviewRaw, &review)
 			if reviewErr == nil {
-				reviewErr = validateNovelWorkbenchV3ArcReview(review, control, arc)
+				normalizeNovelWorkbenchV3ArcReview(&review)
+				reviewErr = validateNovelWorkbenchV3ArcReview(review, control, arc, pkg)
 			}
 			if reviewErr == nil {
 				break
@@ -1520,6 +1575,11 @@ func buildNovelWorkbenchV3ArcReviewPrompt(control novelWorkbenchV3Control, state
 当前故事弧：%s
 候选执行包：%s
 
+引用协议（必须遵守）：
+- referenceIds 只能填写全书正史中存在的稳定角色或账本 ID；不能填写单元编号或自由文本。
+- 跨单元因果、状态或知识问题必须使用 relatedUnits 数组填写候选执行包中实际存在的单元号，范围只能是第 %d 至第 %d 单元，例如 [28,29]；绝不能把 "unit_28" 这类字符串写进 referenceIds。
+- 没有稳定 ID 或跨单元引用时，分别使用空数组 []；不要为了凑字段虚构 ID。
+
 通过条件：单元连续、角色和账本 ID 存在、事件有因果接力、角色知识不越界、状态变化可执行、承诺在最后期限前有路径、弧尾仍有可执行出口。相邻单元的 entryBridge 属于下一单元；不要要求上一单元提前完成下一单元动作，但要阻止上一单元违背它自己的 characterChanges。
 
 只能把以下情形列为 blockingIssues：
@@ -1532,8 +1592,8 @@ func buildNovelWorkbenchV3ArcReviewPrompt(control novelWorkbenchV3Control, state
 不要因为“动机还有其他解释”就拦截。此类内容应作为 warning，除非执行包把它错误写成唯一事实。不要以字数、文风或偏好作为本弧阻断理由。
 
 只输出 JSON：
-{"unit":%d,"overallPass":true,"blockingIssues":[{"code":"ARC_CONTINUITY_GAP","unit":%d,"referenceIds":[""],"evidence":"","repairAction":""}],"warnings":[{"code":"","unit":%d,"referenceIds":[""],"evidence":"","repairAction":""}],"verdict":""}`,
-		novelWorkbenchV3JSON(control.Bible), novelWorkbenchV3JSON(novelWorkbenchV3ArcPlanningState(control, state, arc)), novelWorkbenchV3JSON(arc), novelWorkbenchV3JSON(pkg), arc.StartUnit, arc.StartUnit, arc.StartUnit)
+{"unit":%d,"overallPass":true,"blockingIssues":[{"code":"ARC_CONTINUITY_GAP","unit":%d,"referenceIds":[],"relatedUnits":[],"evidence":"","repairAction":""}],"warnings":[{"code":"","unit":%d,"referenceIds":[],"relatedUnits":[],"evidence":"","repairAction":""}],"verdict":""}`,
+		novelWorkbenchV3JSON(control.Bible), novelWorkbenchV3JSON(novelWorkbenchV3ArcPlanningState(control, state, arc)), novelWorkbenchV3JSON(arc), novelWorkbenchV3JSON(pkg), arc.StartUnit, arc.EndUnit, arc.StartUnit, arc.StartUnit, arc.StartUnit)
 }
 
 func buildNovelWorkbenchV3ArcReviewRepairPrompt(control novelWorkbenchV3Control, state novelWorkbenchV3State, arc novelWorkbenchV3StoryArc, pkg novelWorkbenchV3ArcPackage, previousRaw string, validationErr error) string {
@@ -1547,11 +1607,13 @@ func buildNovelWorkbenchV3ArcReviewRepairPrompt(control novelWorkbenchV3Control,
 当前故事弧：%s
 候选执行包：%s
 
-blockingIssues 只能使用 ARC_CONTINUITY_GAP、ARC_STATE_CONFLICT、ARC_KNOWLEDGE_BREACH、ARC_UNRESOLVED_ENDING、ARC_IMPOSSIBLE_STAGING；如果不存在这些硬问题，请 overallPass=true 且 blockingIssues=[]。不要把可替代动机解释或文风偏好写成 blocker。只输出 JSON。`,
-		validationErr.Error(), previousRaw, novelWorkbenchV3JSON(control.Bible), novelWorkbenchV3JSON(novelWorkbenchV3ArcPlanningState(control, state, arc)), novelWorkbenchV3JSON(arc), novelWorkbenchV3JSON(pkg))
+引用协议（必须遵守）：referenceIds 只能填写全书正史中存在的稳定角色或账本 ID，不能填写单元编号；跨单元问题要用 relatedUnits 数组填写候选执行包中实际存在、且位于第 %d 至第 %d 单元的整数。不要使用 "unit_28" 形式的字符串。无引用时使用空数组 []。
+
+blockingIssues 只能使用 ARC_CONTINUITY_GAP、ARC_STATE_CONFLICT、ARC_KNOWLEDGE_BREACH、ARC_UNRESOLVED_ENDING、ARC_IMPOSSIBLE_STAGING；如果不存在这些硬问题，请 overallPass=true 且 blockingIssues=[]。不要把可替代动机解释或文风偏好写成 blocker。每条 issue 都必须输出 referenceIds 和 relatedUnits。只输出 JSON。`,
+		validationErr.Error(), previousRaw, novelWorkbenchV3JSON(control.Bible), novelWorkbenchV3JSON(novelWorkbenchV3ArcPlanningState(control, state, arc)), novelWorkbenchV3JSON(arc), novelWorkbenchV3JSON(pkg), arc.StartUnit, arc.EndUnit)
 }
 
-func validateNovelWorkbenchV3ArcReview(report novelWorkbenchV3ReviewReport, control novelWorkbenchV3Control, arc novelWorkbenchV3StoryArc) error {
+func validateNovelWorkbenchV3ArcReview(report novelWorkbenchV3ReviewReport, control novelWorkbenchV3Control, arc novelWorkbenchV3StoryArc, pkg novelWorkbenchV3ArcPackage) error {
 	if report.Unit != 0 && (report.Unit < arc.StartUnit || report.Unit > arc.EndUnit) {
 		return fmt.Errorf("故事弧审稿报告单元 %d 不在当前故事弧内", report.Unit)
 	}
@@ -1564,6 +1626,10 @@ func validateNovelWorkbenchV3ArcReview(report novelWorkbenchV3ReviewReport, cont
 	}
 	for id := range novelWorkbenchV3FactMap(control) {
 		known[id] = struct{}{}
+	}
+	packetUnits := map[int]struct{}{}
+	for _, packet := range pkg.Packets {
+		packetUnits[packet.Unit] = struct{}{}
 	}
 	validate := func(issue novelWorkbenchV3ReviewIssue, blocking bool) error {
 		issue.Code = strings.TrimSpace(issue.Code)
@@ -1578,6 +1644,11 @@ func validateNovelWorkbenchV3ArcReview(report novelWorkbenchV3ReviewReport, cont
 		for _, id := range normalizeNovelWorkbenchV3IDs(issue.ReferenceIDs) {
 			if _, exists := known[id]; !exists {
 				return fmt.Errorf("故事弧审稿引用了不存在的 ID %s", id)
+			}
+		}
+		for _, unit := range normalizeNovelWorkbenchV3Units(issue.RelatedUnits) {
+			if _, exists := packetUnits[unit]; !exists {
+				return fmt.Errorf("故事弧审稿关联了当前执行包不存在的单元 %d", unit)
 			}
 		}
 		return nil
