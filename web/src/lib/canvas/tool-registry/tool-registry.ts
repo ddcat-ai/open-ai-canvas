@@ -15,9 +15,17 @@ export function registerToolbarTools(tools: ToolDefinition[]) {
     }
 }
 
+/** 动态命令提供者——插件贡献的画布节点安装/启用发生在运行时，无法静态注册，解析时按上下文实时生成 */
+const addNodeMenuProviders: Array<(ctx: AddNodeMenuContext) => AddNodeMenuCommand[]> = [];
+
 /** 注册添加节点菜单命令 */
 export function registerAddNodeMenuCommands(commands: AddNodeMenuCommand[]) {
     addNodeMenuRegistry.push(...commands);
+}
+
+/** 注册添加节点菜单动态命令提供者 */
+export function registerAddNodeMenuCommandProvider(provider: (ctx: AddNodeMenuContext) => AddNodeMenuCommand[]) {
+    addNodeMenuProviders.push(provider);
 }
 
 /** 获取某工具栏全部已注册工具（按 defaultOrder 升序） */
@@ -66,9 +74,12 @@ export function resolveToolbarTools(toolbar: ToolbarId, ctx: ToolContext, prefs:
     });
 }
 
-/** 解析添加节点菜单命令——仅 applicable 过滤，不参与排序/显隐 */
+/** 解析添加节点菜单命令——静态命令与动态提供者合并后仅 applicable 过滤，不参与排序/显隐 */
 export function resolveAddNodeMenuCommands(ctx: AddNodeMenuContext): AddNodeMenuCommand[] {
-    return getAddNodeMenuCommands().filter((command) => !command.applicable || command.applicable(ctx));
+    const dynamic = addNodeMenuProviders.flatMap((provider) => provider(ctx));
+    return [...getAddNodeMenuCommands(), ...dynamic]
+        .sort((a, b) => a.defaultOrder - b.defaultOrder)
+        .filter((command) => !command.applicable || command.applicable(ctx));
 }
 
 /**

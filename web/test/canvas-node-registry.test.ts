@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { getNodeDefinition, getNodeGenerationMode, getNodeInputKind, getNodeListLabel, getNodeMinSize, getNodeResourceKind, listCreatableNodeDefinitions, listNodeDefinitions, shouldKeepAspectRatio } from "../src/lib/canvas/node-registry";
+import { getNodeDefinition, getNodeGenerationMode, getNodeInputKind, getNodeListLabel, getNodeMinSize, getNodeResourceKind, listCreatableNodeDefinitions, listNodeDefinitions, registerPluginCanvasNodes, shouldKeepAspectRatio, unregisterNodeDefinitions } from "../src/lib/canvas/node-registry";
+import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "../src/lib/canvas/tool-registry";
 import { connectionInputSummary } from "../src/lib/canvas/canvas-connection-policy";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../src/types/canvas";
 
@@ -163,5 +164,56 @@ describe("节点注册表——列表标签", () => {
         expect(getNodeListLabel(CanvasNodeType.Video)).toBe("视频节点");
         expect(getNodeListLabel(CanvasNodeType.Audio)).toBe("音频节点");
         expect(getNodeListLabel(CanvasNodeType.Frame)).toBe("背板");
+    });
+});
+
+describe("插件画布节点进入添加菜单", () => {
+    const pluginId = "test-menu-plugin";
+    const nodeType = "test-menu-node";
+
+    function menuCtx(enabledPluginIds: ReadonlySet<string> | undefined, added: string[]): AddNodeMenuContext {
+        return {
+            workspaceMode: "standard",
+            isProjectLinked: false,
+            enabledPluginIds,
+            handlers: { onAddExtensionNode: (type) => added.push(type) } as AddNodeMenuContext["handlers"],
+        } as AddNodeMenuContext;
+    }
+
+    function registerTestPluginNode() {
+        registerPluginCanvasNodes(pluginId, [{ id: nodeType, label: "测试插件", defaultTitle: "测试插件节点", defaultSize: { width: 320, height: 240 }, schema: {}, renderer: "declarative" }]);
+    }
+
+    test("插件启用时命令出现并创建对应节点", () => {
+        registerTestPluginNode();
+        try {
+            const added: string[] = [];
+            const commands = resolveAddNodeMenuCommands(menuCtx(new Set([pluginId]), added));
+            const command = commands.find((item) => item.id === nodeType);
+            expect(command?.label).toBe("测试插件");
+            expect(command?.section).toBe("node");
+            command?.run(menuCtx(new Set([pluginId]), added));
+            expect(added).toEqual([nodeType]);
+        } finally {
+            unregisterNodeDefinitions(pluginId);
+        }
+    });
+
+    test("插件停用或未提供启用信息时命令不出现", () => {
+        registerTestPluginNode();
+        try {
+            const added: string[] = [];
+            expect(resolveAddNodeMenuCommands(menuCtx(new Set(), added)).some((item) => item.id === nodeType)).toBe(false);
+            expect(resolveAddNodeMenuCommands(menuCtx(undefined, added)).some((item) => item.id === nodeType)).toBe(false);
+            expect(added).toEqual([]);
+        } finally {
+            unregisterNodeDefinitions(pluginId);
+        }
+    });
+
+    test("注销插件后命令随之消失", () => {
+        registerTestPluginNode();
+        unregisterNodeDefinitions(pluginId);
+        expect(resolveAddNodeMenuCommands(menuCtx(new Set([pluginId]), [])).some((item) => item.id === nodeType)).toBe(false);
     });
 });
