@@ -12,7 +12,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
 import { settingsPath } from "@/lib/settings-navigation";
-import { requestImageQuestion } from "@/services/api/image";
+import { runBackendGenerationTask } from "@/services/api/generation-task";
 import { createProject, deleteProject, importProjectUnits, listProjects, type ProjectSummary } from "@/services/api/projects";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
 
@@ -89,16 +89,16 @@ export default function ProjectsPage() {
         try {
             const project = await createUniqueProjectName(story, selectedStyle);
             setGenerationStatus("AI 正在生成故事大纲与章节…");
-            const answer = await requestImageQuestion(
-                { ...effectiveConfig, model: textModel, imageModel: textModel, videoModel: textModel, textModel },
-                [
-                    { role: "system", content: `你是短剧编剧。根据用户的一句话故事，生成一部短剧的标题、一句话简介和 ${generateChapterCount} 个章节。生成要求：叙事采用${generateStructure}结构，每章约 ${generateWordCount} 字，使用${generatePerspective}视角，整体基调${generateTone}，主要角色约 ${generateCharacterScale}，章节篇幅${generateChapterLength}。只输出一个 JSON 对象，不要输出 markdown 代码块或其他文字。JSON 结构：{"title":"剧名","synopsis":"一句话简介","chapters":[{"title":"章节标题","content":"本章情节"}]}` },
-                    { role: "user", content: story },
-                ],
-                (text) => {
-                    setGenerationPreview(text);
-                },
-            );
+            const systemPrompt = `你是短剧编剧。根据用户的一句话故事，生成一部短剧的标题、一句话简介和 ${generateChapterCount} 个章节。生成要求：叙事采用${generateStructure}结构，每章约 ${generateWordCount} 字，使用${generatePerspective}视角，整体基调${generateTone}，主要角色约 ${generateCharacterScale}，章节篇幅${generateChapterLength}。只输出一个 JSON 对象，不要输出 markdown 代码块或其他文字。JSON 结构：{"title":"剧名","synopsis":"一句话简介","chapters":[{"title":"章节标题","content":"本章情节"}]}`;
+            const result = await runBackendGenerationTask({
+                projectId: project.project.id,
+                mode: "text",
+                prompt: story,
+                config: { ...effectiveConfig, model: textModel, imageModel: textModel, videoModel: textModel, textModel, systemPrompt },
+                metadata: { source: "project-story-generator", projectId: project.project.id },
+                onTextDelta: setGenerationPreview,
+            });
+            const answer = result.text || "";
             const parsed = parseGeneratedStory(answer);
             if (!parsed.chapters.length) throw new Error("AI 没有返回有效的章节内容，请重试");
             setGenerationStatus(`正在导入 ${parsed.chapters.length} 个章节…`);

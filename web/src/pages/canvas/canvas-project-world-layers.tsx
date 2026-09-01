@@ -1,4 +1,4 @@
-import { memo, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { memo, useMemo, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
@@ -84,10 +84,10 @@ const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
     const { viewportScale } = props;
     const activeMediaNodeId = resolveActiveCanvasMediaNodeId(props.selectedNodeIds, props.nodeById);
-    const orderedVisibleNodes = [
+    const orderedVisibleNodes = useMemo(() => [
         ...props.visibleNodes.filter(isFrameNode),
         ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
-    ];
+    ], [props.nodeStackOrder, props.visibleNodes]);
     const framePreviewNodes = (node: CanvasNodeData) => {
         const assetFolderId = node.metadata?.folder?.assetFolderId;
         if (assetFolderId) return props.linkedFolderPreviewNodesById.get(assetFolderId) || EMPTY_CANVAS_NODES;
@@ -144,7 +144,6 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         scale={viewportScale}
                         isSelected={props.selectedNodeIds.has(node.id)}
                         mediaActive={activeMediaNodeId === node.id}
-                        hydrateMediaPreview={activeMediaNodeId === null}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}

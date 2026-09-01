@@ -22,6 +22,23 @@ type AgentAdapter interface {
 	ParseAgent(context.Context, []byte) (AgentResult, error)
 }
 
+// AgentCapability lets the host distinguish a declarative provider that
+// actually declares an agent operation from one that only satisfies the Go
+// method set through the shared manifest adapter implementation.
+type AgentCapability interface {
+	AgentAvailable() bool
+}
+
+// ResultAdapter optionally resolves an authenticated binary result after an
+// asynchronous task succeeds without returning a public media URL.
+type ResultAdapter interface {
+	BuildResult(context.Context, PollContext) (RequestSpec, error)
+}
+
+type ResultCapability interface {
+	ResultAvailable() bool
+}
+
 type AgentRequestContext struct {
 	BaseURL string
 	Model   string
@@ -29,9 +46,10 @@ type AgentRequestContext struct {
 }
 
 type AgentToolCall struct {
-	ID        string
-	Name      string
-	Arguments string
+	ID               string
+	Name             string
+	Arguments        string
+	ThoughtSignature string
 }
 
 type AgentResult struct {

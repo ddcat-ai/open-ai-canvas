@@ -11,7 +11,7 @@ import { AdminStatTile, AdminStatusBadge, SettingsSectionCard } from "../compone
 
 type PolicyGroup = "resource" | "task" | "request";
 type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
-type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; max: number };
+type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; min?: number; max: number };
 type PolicySectionDefinition = {
     id: string;
     icon: ReactNode;
@@ -35,6 +35,7 @@ const resourceFields: PolicyField[] = [
     { group: "resource", name: "sessionCount", label: "Agent 会话数量", extra: "单账号可保存的 Agent 会话数量。", unit: "个", max: 999_999_999 },
     { group: "resource", name: "taskCount", label: "任务历史数量", extra: "单账号保留的任务历史记录数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "apiCallLogCount", label: "请求日志数量", extra: "单账号保留的上游请求日志数。", unit: "条", max: 999_999_999 },
+    { group: "resource", name: "recycleBinRetentionDays", label: "回收站自动清理时间", extra: "素材移入回收站后自动彻底删除的天数，0 表示不自动清理。", unit: "天", min: 0, max: 365 },
 ];
 
 const concurrencyFields: PolicyField[] = [
@@ -472,6 +473,7 @@ function PolicySection({ icon, title, description, fields, status }: PolicySecti
             <div className="admin-runtime-policy-field-grid">
                 {fields.map((field) => {
                     const inputId = `admin-runtime-policy-${field.group}-${field.name}`;
+                    const min = field.min ?? 1;
                     return (
                         <Form.Item key={`${field.group}.${field.name}`} label={field.label} htmlFor={inputId} extra={field.extra}>
                             <div className="admin-runtime-policy-number-control">
@@ -480,10 +482,10 @@ function PolicySection({ icon, title, description, fields, status }: PolicySecti
                                     name={[field.group, field.name]}
                                     rules={[
                                         { required: true, message: `请填写${field.label}` },
-                                        { type: "number", min: 1, max: field.max, message: `${field.label}必须是 1-${field.max} 的整数` },
+                                        { type: "number", min, max: field.max, message: `${field.label}必须是 ${min}-${field.max} 的整数` },
                                     ]}
                                 >
-                                    <InputNumber id={inputId} min={1} max={field.max} precision={0} aria-label={field.label} />
+                                    <InputNumber id={inputId} min={min} max={field.max} precision={0} aria-label={field.label} />
                                 </Form.Item>
                                 <span className="admin-runtime-policy-number-unit" aria-hidden="true">
                                     {field.unit}
@@ -517,7 +519,8 @@ function parseRuntimePolicySetting(value: RuntimePolicySetting): RuntimePolicySe
     if (!value || typeof value !== "object") throw new Error("服务端返回的资源与策略格式无效");
     for (const field of allPolicyFields) {
         const fieldValue = readPolicyValue(value, field);
-        if (!Number.isInteger(fieldValue) || fieldValue < 1 || fieldValue > field.max) throw new Error(`服务端返回的“${field.label}”无效`);
+        const min = field.min ?? 1;
+        if (!Number.isInteger(fieldValue) || fieldValue < min || fieldValue > field.max) throw new Error(`服务端返回的“${field.label}”无效`);
     }
     if (typeof value.configured !== "boolean") throw new Error("服务端未返回有效的配置来源状态");
     return value;

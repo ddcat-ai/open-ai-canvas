@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
-import { normalizeCanvasNodeTimestamps, stampCanvasNodeChanges } from "@/lib/canvas/canvas-node-timestamps";
+import { normalizeCanvasNodeTimestamps, stampCanvasNodeChanges, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 function node(id: string, patch: Partial<CanvasNodeData> = {}): CanvasNodeData {
@@ -47,6 +47,21 @@ describe("canvas node timestamps", () => {
         const hydrated = { ...previous, metadata: { ...previous.metadata, content: "blob:preview", naturalWidth: 1920, naturalHeight: 1080 } };
         const updated = stampCanvasNodeChanges([previous], [hydrated], "2026-08-28T02:00:00.000Z");
         expect(updated[0]?.updatedAt).toBe("2026-08-28T01:00:00.000Z");
+    });
+
+    test("batches media metadata updates while preserving untouched node references", () => {
+        const first = node("first");
+        const second = node("second");
+        const nodes = [first, second];
+        const next = updateCanvasNodes(nodes, new Map([
+            ["first", (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: 1920 } })],
+            ["second", (current) => ({ ...current, metadata: { ...current.metadata, naturalHeight: 1080 } })],
+        ]), "2026-08-28T03:00:00.000Z");
+        expect(next).not.toBe(nodes);
+        expect(next[0]).not.toBe(first);
+        expect(next[1]).not.toBe(second);
+        expect(next[0].metadata?.naturalWidth).toBe(1920);
+        expect(next[1].metadata?.naturalHeight).toBe(1080);
     });
 });
 

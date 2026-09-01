@@ -55,6 +55,19 @@ describe("canvas resource mention editor", () => {
         expect(project).not.toContain("removeCanvasResourceMention");
     });
 
+    test("keeps editable mention prompts separate from normalized generation prompts", () => {
+        const imageExecutor = source("../src/pages/canvas/canvas-image-generation-executor.ts");
+        const mediaExecutors = source("../src/pages/canvas/canvas-media-generation-executors.ts");
+        const textExecutor = source("../src/pages/canvas/canvas-text-generation-executor.ts");
+        const generationExecutor = source("../src/pages/canvas/use-canvas-generation-executor.ts");
+
+        expect(imageExecutor.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBeGreaterThanOrEqual(3);
+        expect(mediaExecutors.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBe(2);
+        expect(textExecutor.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBe(2);
+        expect(generationExecutor).toContain("composerContent: prompt");
+        expect(generationExecutor).toContain("canvasGenerationPromptMetadata(prompt, statusPrompt)");
+    });
+
     test("anchors the mention menu to the caret instead of the textarea edge", () => {
         const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
 

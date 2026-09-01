@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -378,13 +379,20 @@ func validatePromptTemplateResult(operation string, result map[string]interface{
 		return nil
 	}
 	text, _ := result["text"].(string)
-	jsonText, err := extractJSONText(text)
+	extractor := extractJSONText
+	// 角色卡契约要求顶层对象，模型正文里若先出现数组（例如先列一遍角色名）会让通用提取命中错误片段，
+	// 因此这里优先挑出带 characters 键的对象候选。
+	if operation == promptOperationCharacterExtract {
+		extractor = func(raw string) (string, error) { return extractPreferredJSONText(raw, "characters") }
+	}
+	jsonText, err := extractor(text)
 	if err != nil {
 		return fmt.Errorf("%s 返回内容不符合受保护 JSON 契约：%w", definition.Label, err)
 	}
 	if operation != promptOperationCharacterExtract {
 		return nil
 	}
+	jsonText = normalizeCharacterBreakdownRootJSON(jsonText)
 	var payload struct {
 		Characters *[]map[string]interface{} `json:"characters"`
 	}
@@ -395,6 +403,9 @@ func validatePromptTemplateResult(operation string, result map[string]interface{
 	if payload.Characters == nil {
 		return errors.New("角色卡提取结果缺少 characters 数组")
 	}
+	if len(*payload.Characters) == 0 {
+		return errors.New("角色卡提取结果没有识别到任何角色，请调整正文或重新提取")
+	}
 	for index, character := range *payload.Characters {
 		for _, field := range required {
 			if _, exists := character[field]; !exists {
@@ -403,6 +414,131 @@ func validatePromptTemplateResult(operation string, result map[string]interface{
 		}
 	}
 	return nil
+}
+
+// normalizeCharacterBreakdownRootJSON 把模型返回的角色卡结果收敛为 character-breakdown/v1 的
+// {"characters": [...]} 形态。模型并不总是遵守顶层 object 契约，实测出现的偏离包括：
+//   - 顶层直接返回角色数组（[ { name, role, ... }, ... ]）；
+//   - 数组外再包一层（[[ {...} ]]）；
+//   - 每个角色单独包一层 characters（[ {"characters":[...]}, {"characters":[...]} ]）；
+//   - 数组里混入非角色对象或 prose 片段（[ {"index":1}, {...} ]）。
+//
+// 这里只做形态归一，字段完整性仍由 validatePromptTemplateResult 的必填校验负责，
+// 因此收集阶段按宽松规则保留候选，再由必填校验给出“第 N 个角色缺少字段 X”的可读提示。
+func normalizeCharacterBreakdownRootJSON(jsonText string) string {
+	trimmed := strings.TrimSpace(jsonText)
+	if trimmed == "" {
+		return trimmed
+	}
+	if trimmed[0] != '[' {
+		return normalizeCharacterBreakdownObject(trimmed)
+	}
+	var root []json.RawMessage
+	if err := json.Unmarshal([]byte(trimmed), &root); err != nil {
+		return trimmed
+	}
+	return marshalCharacterBreakdown(collectCharacterCards(root))
+}
+
+// normalizeCharacterBreakdownObject 处理顶层已是对象的情况，只把 characters 收敛成数组。
+func normalizeCharacterBreakdownObject(jsonText string) string {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(jsonText), &obj); err != nil {
+		return jsonText
+	}
+	raw, ok := obj["characters"]
+	if !ok {
+		return jsonText
+	}
+	var cards []json.RawMessage
+	if err := json.Unmarshal(raw, &cards); err == nil {
+		// characters 已经位于契约位置，这里只摊平嵌套，不过滤元素：
+		// 缺少 name 的角色要留给必填校验报出具体字段，而不是被静默丢弃。
+		obj["characters"] = marshalRawMessageArray(flattenCharacterCardValues(cards))
+	} else {
+		// characters 被写成以角色名为键的对象时降级为取值列表。
+		var indexed map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &indexed); err != nil {
+			return jsonText
+		}
+		list := make([]json.RawMessage, 0, len(indexed))
+		for _, value := range indexed {
+			list = append(list, value)
+		}
+		obj["characters"] = marshalRawMessageArray(list)
+	}
+	encoded, err := json.Marshal(obj)
+	if err != nil {
+		return jsonText
+	}
+	return string(encoded)
+}
+
+// collectCharacterCards 递归展开顶层数组，收集所有可辨认的角色卡对象。
+// 顶层数组无法区分“角色卡列表”和模型正文里的旁枝数组，因此只保留带 name 的候选。
+func collectCharacterCards(values []json.RawMessage) []json.RawMessage {
+	result := make([]json.RawMessage, 0, len(values))
+	for _, raw := range flattenCharacterCardValues(values) {
+		if looksLikeCharacterCard(raw) {
+			result = append(result, raw)
+		}
+	}
+	return result
+}
+
+// flattenCharacterCardValues 递归摊平嵌套数组与 {"characters": [...]} 包装，不判断元素是否是角色。
+func flattenCharacterCardValues(values []json.RawMessage) []json.RawMessage {
+	result := make([]json.RawMessage, 0, len(values))
+	for _, raw := range values {
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 {
+			continue
+		}
+		switch trimmed[0] {
+		case '[':
+			var nested []json.RawMessage
+			if json.Unmarshal(trimmed, &nested) == nil {
+				result = append(result, flattenCharacterCardValues(nested)...)
+			}
+		case '{':
+			var obj map[string]json.RawMessage
+			if json.Unmarshal(trimmed, &obj) != nil {
+				continue
+			}
+			if inner, ok := obj["characters"]; ok {
+				var cards []json.RawMessage
+				if json.Unmarshal(inner, &cards) == nil {
+					result = append(result, flattenCharacterCardValues(cards)...)
+					continue
+				}
+			}
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func marshalCharacterBreakdown(cards []json.RawMessage) string {
+	return `{"characters":` + string(marshalRawMessageArray(cards)) + `}`
+}
+
+func marshalRawMessageArray(values []json.RawMessage) json.RawMessage {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return json.RawMessage("[]")
+	}
+	return encoded
+}
+
+// looksLikeCharacterCard 只判断“是否为一个角色对象”的最小特征。带 name 的对象即视为候选，
+// 缺少其余字段时交由必填校验报出具体字段名，而不是在形态归一阶段被静默丢弃。
+func looksLikeCharacterCard(raw json.RawMessage) bool {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return false
+	}
+	_, hasName := obj["name"]
+	return hasName
 }
 
 func uniqueStrings(values []string) []string {

@@ -96,6 +96,7 @@ func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
 	if err != nil {
 		return agentStoryboardPlan{}, err
 	}
+	jsonText = normalizeStoryboardRootJSON(jsonText)
 	if err := validateStoryboardJSONFields(jsonText); err != nil {
 		return agentStoryboardPlan{}, err
 	}
@@ -142,6 +143,43 @@ func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
 		}
 	}
 	return plan, nil
+}
+
+// normalizeStoryboardRootJSON 兼容部分模型不遵守 object schema、把结果作为顶层数组返回的情况。
+// - 单元素对象数组（如 [ { ...plan } ]）解包为对象；
+// - 直接返回镜头对象数组（如 [ { ...shot }, ... ]）包装成完整 plan，缺省字段由后续解析兜底填充。
+func normalizeStoryboardRootJSON(jsonText string) string {
+	trimmed := strings.TrimSpace(jsonText)
+	if trimmed == "" || trimmed[0] != '[' {
+		return trimmed
+	}
+	var arr []json.RawMessage
+	if err := json.Unmarshal([]byte(trimmed), &arr); err != nil || len(arr) == 0 {
+		return trimmed
+	}
+	// 优先识别镜头对象数组（无论单/多元素）→ 包装成完整 plan，缺省字段由后续解析兜底。
+	if looksLikeStoryboardShot(arr[0]) {
+		return `{"title":"","logline":"","styleGuide":"","characters":[],"locations":[],"shots":` + trimmed + `}`
+	}
+	// 单元素对象数组（完整 plan 对象）→ 解包。
+	if len(arr) == 1 {
+		elem := strings.TrimSpace(string(arr[0]))
+		if strings.HasPrefix(elem, "{") {
+			return elem
+		}
+	}
+	return trimmed
+}
+
+func looksLikeStoryboardShot(raw json.RawMessage) bool {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return false
+	}
+	_, hasVisual := obj["visualPrompt"]
+	_, hasDuration := obj["durationSeconds"]
+	_, hasDescription := obj["description"]
+	return hasVisual || (hasDuration && hasDescription)
 }
 
 func validateStoryboardJSONFields(jsonText string) error {
@@ -487,6 +525,40 @@ func extractJSONText(raw string) (string, error) {
 		if json.Unmarshal([]byte(candidate), &decoded) == nil {
 			return candidate, nil
 		}
+	}
+	return "", errors.New("模型返回的不是 JSON")
+}
+
+// extractPreferredJSONText 与 extractJSONText 一样逐个扫描完整的 JSON 值，但会优先返回顶层对象且
+// 包含 preferKey 的候选。模型常在给出契约对象前先用正文列举一遍内容（例如先写一段角色名数组），
+// 只取第一个可解析值会命中这些旁枝片段，导致后续校验拿到完全无关的结构。
+// 找不到偏好候选时回退到第一个可解析值，保证与 extractJSONText 的默认行为一致。
+func extractPreferredJSONText(raw string, preferKey string) (string, error) {
+	fallback := ""
+	for start := 0; start < len(raw); start++ {
+		if raw[start] != '{' && raw[start] != '[' {
+			continue
+		}
+		end := jsonValueEnd(raw, start)
+		if end < start {
+			continue
+		}
+		candidate := raw[start : end+1]
+		var decoded interface{}
+		if json.Unmarshal([]byte(candidate), &decoded) != nil {
+			continue
+		}
+		if obj, ok := decoded.(map[string]interface{}); ok {
+			if _, ok := obj[preferKey]; ok {
+				return candidate, nil
+			}
+		}
+		if fallback == "" {
+			fallback = candidate
+		}
+	}
+	if fallback != "" {
+		return fallback, nil
 	}
 	return "", errors.New("模型返回的不是 JSON")
 }

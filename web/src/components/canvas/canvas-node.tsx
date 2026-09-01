@@ -24,7 +24,6 @@ type CanvasNodeProps = {
     scale: number;
     isSelected: boolean;
     mediaActive?: boolean;
-    hydrateMediaPreview?: boolean;
     isRelated: boolean;
     isFocusRelated: boolean;
     isConnectionTarget: boolean;
@@ -70,7 +69,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     scale,
     isSelected,
     mediaActive = false,
-    hydrateMediaPreview = false,
     isRelated,
     isFocusRelated,
     isConnectionTarget,
@@ -376,7 +374,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         reduceMediaEffects={reduceMediaEffects}
                         mediaActive={mediaActive}
-                        hydrateMediaPreview={hydrateMediaPreview}
                     />
                 </div>
 

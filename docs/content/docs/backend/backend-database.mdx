@@ -15,7 +15,7 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 3。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引。
+当前结构版本为 4。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引。
 
 版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
 
@@ -128,8 +128,12 @@ description: 影策后端核心持久化表与状态边界
 
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
-| `resources` | 保存资源元数据和实际存储位置引用 | S3 资源必须通过 `storage_setting_id` 固定绑定创建时的位置；浏览器默认经同源接口读取 |
+| `resources` | 保存资源元数据和实际存储位置引用 | `user_id + upload_key` 唯一约束保证逻辑上传幂等；S3 资源必须通过 `storage_setting_id` 固定绑定创建时的位置；浏览器默认经同源接口读取 |
 | `storage_locations` | 保存平台或个人 S3 位置版本、加密凭据和连接测试摘要 | Endpoint、Bucket、Region、PathStyle、PathPrefix、Provider 组成不可变位置；同位置只轮换凭据，位置变化创建新记录 |
 | `resource_deletion_jobs` | 在业务记录删除后可靠清理物理对象 | 固化资源的存储位置与对象键；删除失败保留任务并重试，S3 404 按幂等成功处理 |
 
 `storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。
+
+`resources.upload_key` 保存客户端 `X-Idempotency-Key` 的 SHA-256 摘要。相同用户重复提交同一逻辑上传时复用已有资源；失败重试继续使用原对象路径，避免对象存储已经接收请求但响应丢失时产生第二份物理对象。未提供幂等标识的后台生成资源保持 `NULL`，不参与该唯一约束。
+
+素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。自动清理与用户手动彻底删除复用同一 service 引用校验和 `resource_deletion_jobs` Outbox，仍被画布、项目、任务或其他业务记录引用的素材不会被删除。

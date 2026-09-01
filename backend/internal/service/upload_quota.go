@@ -34,6 +34,30 @@ func (s *Service) reserveGeneratedResourceQuota(userID string, size int64) (stri
 	return s.reserveUserStoredFileQuota(userID, size, megabytes(policy.Resource.GeneratedFileMB)+1, megabytes(policy.Resource.DailyUploadMB), gigabytes(policy.Resource.StoredFileGB), fmt.Sprintf("单个生成文件不能超过 %dMB", policy.Resource.GeneratedFileMB))
 }
 
+// 失败资源的记录已经计入账号存储用量；重试只重新预留当日上传额度，避免重复计算存储容量。
+func (s *Service) reserveRetryUploadQuota(userID string, size int64) (string, error) {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return "", err
+	}
+	if size <= 0 {
+		return "", BadAuthRequest("上传文件不能为空")
+	}
+	if size >= megabytes(policy.Resource.ResourceUploadMB) {
+		return "", BadAuthRequest(fmt.Sprintf("单个上传文件必须小于 %dMB", policy.Resource.ResourceUploadMB))
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	if err := s.repo.ReserveDailyUpload(userID, day, size, megabytes(policy.Resource.DailyUploadMB)); err != nil {
+		if errors.Is(err, repository.ErrDailyUploadLimitExceeded) {
+			return "", BadAuthRequest(fmt.Sprintf("每个账号 UTC 自然日上传总量必须小于 %s", formatStorageLimit(megabytes(policy.Resource.DailyUploadMB))))
+		}
+		return "", err
+	}
+	return day, nil
+}
+
 func (s *Service) reserveUserStoredFileQuota(userID string, size int64, exclusiveSingleFileLimit int64, dailyLimit int64, storedLimit int64, singleFileMessage string) (string, error) {
 	if size <= 0 {
 		return "", BadAuthRequest("上传文件不能为空")
@@ -81,6 +105,17 @@ func (s *Service) releaseUserUploadQuota(userID string, day string, size int64) 
 	s.decreasePendingStorage(userID, size)
 	if err := s.repo.ReleaseDailyUpload(userID, day, size); err != nil {
 		log.Printf("release upload quota failed: user=%s day=%s size=%d error=%v", userID, day, size, err)
+	}
+}
+
+func (s *Service) releaseRetryUploadQuota(userID string, day string, size int64) {
+	if day == "" || size <= 0 {
+		return
+	}
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	if err := s.repo.ReleaseDailyUpload(userID, day, size); err != nil {
+		log.Printf("release retry upload quota failed: user=%s day=%s size=%d error=%v", userID, day, size, err)
 	}
 }
 

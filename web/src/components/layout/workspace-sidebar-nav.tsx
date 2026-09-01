@@ -44,8 +44,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { id: "home", title: "首页", icon: Home, to: "/home" },
-                toolItem("create", "/create"),
+                { id: "home", title: "首页", icon: Home, to: "/" },
                 ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
@@ -136,7 +135,7 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boo
                         </div>
                         <div className="mx-2 my-1 h-px bg-[var(--workspace-border)]" />
                         {[
-                            { label: "首页", to: "/home" },
+                            { label: "首页", to: "/" },
                             { label: "画布", to: "/canvas" },
                             { label: "设置", to: "/settings" },
                         ].map((entry) => (
@@ -364,7 +363,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
 
     const { groups, footer } = useMemo(() => buildNav(features, balance, user?.role === "admin"), [features, balance, user?.role]);
 
-    const slug = pathname.split("/").filter(Boolean)[0] || "create";
+    const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");
     const activeId = slug === "settings" && section ? `settings:${section}` : slug;
 

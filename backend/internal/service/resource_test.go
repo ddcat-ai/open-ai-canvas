@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"hash/crc64"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -829,6 +831,92 @@ func newResourceTestService(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
+}
+
+func TestStoreResourceReusesReadyUploadIdentity(t *testing.T) {
+	svc := newResourceTestService(t)
+	uploadKey := normalizedResourceUploadKey([]string{"image:user-1:logical-upload"})
+	first, stored, err := svc.storeResource("user-1", "image", "first.png", "image/png", 7, 1, 1, 0, bytes.NewReader([]byte("payload")), uploadKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored {
+		t.Fatal("first upload was not stored")
+	}
+	second, stored, err := svc.storeResource("user-1", "image", "second.png", "image/png", 7, 1, 1, 0, bytes.NewReader([]byte("payload")), uploadKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored || second.ID != first.ID || second.ObjectKey != first.ObjectKey {
+		t.Fatalf("idempotent upload = %#v, stored=%v; first=%#v", second, stored, first)
+	}
+	resources, err := svc.repo.Resources("user-1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("resource count = %d, want 1", len(resources))
+	}
+}
+
+func TestRetryStoredResourceKeepsOriginalObjectKey(t *testing.T) {
+	svc := newResourceTestService(t)
+	uploadKey := normalizedResourceUploadKey([]string{"image:user-1:retry-upload"})
+	failed := &model.Resource{
+		ID: "resource-failed", UserID: "user-1", Kind: "image", Status: model.ResourceStatusFailed,
+		Provider: "local", ObjectKey: "users/user-1/image/fixed.png", MimeType: "image/png", Size: 7,
+		UploadKey: uploadKey, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := svc.repo.CreateResource(failed); err != nil {
+		t.Fatal(err)
+	}
+	retried, err := svc.retryStoredResource("user-1", failed, "image", "image/png", 7, bytes.NewReader([]byte("payload")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retried.ID != failed.ID || retried.ObjectKey != "users/user-1/image/fixed.png" || retried.Status != model.ResourceStatusReady {
+		t.Fatalf("retried resource = %#v", retried)
+	}
+	resources, err := svc.repo.Resources("user-1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("resource count = %d, want 1", len(resources))
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	usage, err := svc.repo.DailyUploadBytes("user-1", day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage != 7 {
+		t.Fatalf("daily upload usage = %d, want 7", usage)
+	}
+}
+
+func TestRetryStoredResourceReleasesDailyQuotaAfterFailure(t *testing.T) {
+	svc := newResourceTestService(t)
+	uploadKey := normalizedResourceUploadKey([]string{"image:user-1:failed-retry"})
+	failed := &model.Resource{
+		ID: "resource-failed-retry", UserID: "user-1", Kind: "image", Status: model.ResourceStatusFailed,
+		Provider: "local", ObjectKey: "users/user-1/image/failed.png", MimeType: "image/png", Size: 7,
+		UploadKey: uploadKey, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := svc.repo.CreateResource(failed); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.retryStoredResource("user-1", failed, "image", "image/png", 7, iotest.ErrReader(errors.New("write failed")))
+	if err == nil || !strings.Contains(err.Error(), "write failed") {
+		t.Fatalf("retryStoredResource() error = %v", err)
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	usage, usageErr := svc.repo.DailyUploadBytes("user-1", day)
+	if usageErr != nil {
+		t.Fatal(usageErr)
+	}
+	if usage != 0 {
+		t.Fatalf("daily upload usage = %d, want 0", usage)
+	}
 }
 
 func TestLegacyMediaMigrationSkipsInvalidDataURL(t *testing.T) {

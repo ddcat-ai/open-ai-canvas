@@ -1,6 +1,7 @@
 import type { UploadedFile } from "@/services/file-storage";
 import type { UploadedImage } from "@/services/image-storage";
 import { canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { resolveResourceUrl } from "@/services/api/resources";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import type { Asset, AudioAsset, ImageAsset, NewAsset } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
@@ -151,7 +152,7 @@ export function creationAttachmentFromDocument(file: File, uploaded: UploadedFil
 }
 
 export function creationAttachmentFromAsset(asset: ImageAsset): CreationAttachment {
-    const url = asset.data.dataUrl || asset.coverUrl;
+    const url = resolveResourceUrl(asset.data.storageKey, asset.data.dataUrl || asset.coverUrl);
     return {
         id: `asset:${asset.id}`,
         name: asset.title || "素材图片",

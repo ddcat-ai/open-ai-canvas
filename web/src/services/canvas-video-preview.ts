@@ -14,13 +14,16 @@ export function hydrateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSi
     const existing = previewRequests.get(requestKey);
     if (existing) return existing;
 
-    const request = generateCanvasVideoPreview(node, signal).catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
+    const request = generateCanvasVideoPreview(node, signal)
+        .then((preview) => {
+            if (!preview) previewRequests.delete(requestKey);
+            return preview;
+        })
+        .catch((error: unknown) => {
             previewRequests.delete(requestKey);
-            throw error;
-        }
-        return null;
-    });
+            if (error instanceof DOMException && error.name === "AbortError") throw error;
+            return null;
+        });
     previewRequests.set(requestKey, request);
     return request;
 }

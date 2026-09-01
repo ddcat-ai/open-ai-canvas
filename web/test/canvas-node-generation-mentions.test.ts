@@ -40,7 +40,7 @@ describe("canvas node generation position mentions", () => {
 
         expect(context.referenceImages.map((image) => image.id)).toEqual([source.id]);
         expect(context.imageCount).toBe(1);
-        expect(context.prompt).toBe("将 图片1 图片变清晰");
+        expect(context.prompt).toBe("将 @图片1 图片变清晰");
     });
 
     test("已有图片节点未显式引用自身时不自动退化为图生图", () => {
@@ -67,8 +67,8 @@ describe("canvas node generation position mentions", () => {
 
         expect(before.referenceImages.map((image) => image.id)).toEqual(["image-a"]);
         expect(after.referenceImages.map((image) => image.id)).toEqual(["image-b"]);
-        expect(before.prompt).toBe("让 图片1 进入画面");
-        expect(after.prompt).toBe("让 图片1 进入画面");
+        expect(before.prompt).toBe("让 @图片1 进入画面");
+        expect(after.prompt).toBe("让 @图片1 进入画面");
     });
 
     test("按类型位置选择资源，提示词出现顺序不会改变槽位含义", () => {
@@ -81,7 +81,7 @@ describe("canvas node generation position mentions", () => {
 
         expect(context.referenceImages.map((image) => image.id)).toEqual(["image-b"]);
         expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-a"]);
-        expect(context.prompt).toBe("让 图片1 配合 音频1");
+        expect(context.prompt).toBe("让 @图片1 配合 @音频1");
     });
 
     test("旧节点 token 只做读取迁移，不再进入生成提示词", () => {
@@ -90,7 +90,7 @@ describe("canvas node generation position mentions", () => {
         const context = buildNodeGenerationContext(target.id, [image, target], [connection(image.id)], "让 @[node:image-a] 进入画面", []);
 
         expect(context.referenceImages.map((item) => item.id)).toEqual(["image-a"]);
-        expect(context.prompt).toBe("让 图片1 进入画面");
+        expect(context.prompt).toBe("让 @图片1 进入画面");
         expect(context.prompt).not.toContain("@[node:");
     });
 });

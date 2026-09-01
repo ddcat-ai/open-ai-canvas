@@ -4,6 +4,7 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
@@ -30,16 +31,22 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
         if (previousUserId !== nextUserId) appQueryClient.clear();
         await switchUserStorageScope(payload.user?.id);
-        const [persistedCanvas, persistedAssets, persistedPlugins] = await Promise.all([localForageStorage.getItem(CANVAS_STORE_KEY), localForageStorage.getItem(ASSET_STORE_KEY), localForageStorage.getItem(PLUGIN_STORE_KEY)]);
+        const [persistedCanvas, persistedCanvasHistory, persistedAssets, persistedPlugins] = await Promise.all([
+            localForageStorage.getItem(CANVAS_STORE_KEY),
+            localForageStorage.getItem(CANVAS_HISTORY_STORE_KEY),
+            localForageStorage.getItem(ASSET_STORE_KEY),
+            localForageStorage.getItem(PLUGIN_STORE_KEY),
+        ]);
         const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
         usePluginStore.setState({ hydrated: false, runtimeStatuses: {}, pluginStates: {} });
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
-        await Promise.all([useCanvasStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate(), usePluginStore.persist.rehydrate()]);
+        await Promise.all([useCanvasStore.persist.rehydrate(), useCanvasHistoryStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate(), usePluginStore.persist.rehydrate()]);
         // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
         if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
+        if (!persistedCanvasHistory) useCanvasHistoryStore.setState({ deletedProjects: [] });
         if (!persistedAssets) useAssetStore.setState({ assets: [] });
         if (!persistedPlugins) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
         if (!persistedConfig) {
@@ -106,9 +113,7 @@ function managedModelChannels(models: PublicLogicalModel[]) {
         scope: "system",
         enabled: true,
         models: availableModels.map((item) => item.id),
-        modelAliases: Object.fromEntries(
-            availableModels.flatMap((item) => (item.legacyModelIds || []).map((legacyID) => [legacyID, item.id])),
-        ),
+        modelAliases: Object.fromEntries(availableModels.flatMap((item) => (item.legacyModelIds || []).map((legacyID) => [legacyID, item.id]))),
         modelCosts: availableModels.map((item) => ({
             model: item.id,
             displayName: item.name,
@@ -125,7 +130,7 @@ function managedModelChannels(models: PublicLogicalModel[]) {
             logicalModelId: item.id,
             logicalCapabilitySpec: item.capabilitySpec,
             logicalCapabilityProfiles: item.capabilityProfiles,
-			logicalPriceTiers: item.priceTiers,
+            logicalPriceTiers: item.priceTiers,
             defaultOptions: item.defaultOptions,
         })),
     };

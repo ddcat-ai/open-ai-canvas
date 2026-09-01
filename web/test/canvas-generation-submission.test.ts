@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
+import { canvasGenerationPromptMetadata, canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
 
 function fingerprint(overrides: Partial<Parameters<typeof canvasGenerationRequestFingerprint>[0]> = {}) {
     return canvasGenerationRequestFingerprint({
@@ -22,6 +22,13 @@ function fingerprint(overrides: Partial<Parameters<typeof canvasGenerationReques
 }
 
 describe("canvas generation submission", () => {
+    test("持久化时分离编辑器槽位提示词和模型提示词", () => {
+        expect(canvasGenerationPromptMetadata("自我介绍 @图片1", "电影感：自我介绍 @图片1")).toEqual({
+            composerContent: "自我介绍 @图片1",
+            prompt: "电影感：自我介绍 @图片1",
+        });
+    });
+
     test("同一节点的并发提交只执行一次", async () => {
         const locks = new Map<string, Promise<unknown>>();
         let executions = 0;

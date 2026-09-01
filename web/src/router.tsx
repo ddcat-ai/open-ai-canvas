@@ -4,7 +4,7 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router";
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireFeature } from "@/components/auth/require-feature";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
+import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import UserLayout from "@/layouts/user-layout";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
@@ -36,10 +36,9 @@ const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
 const CanvasPage = lazy(loadCanvasPage);
-const CanvasProjectPage = lazy(() => import("@/pages/canvas/project"));
+const CanvasProjectPage = lazy(loadCanvasProjectPage);
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
 const CreatePage = lazy(loadCreatePage);
-const HomePage = lazy(() => import("@/pages/home"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const SkillsPage = lazy(() => import("@/pages/skills"));
 const PluginsPage = lazy(() => import("@/pages/plugins"));
@@ -96,9 +95,8 @@ export const router = createBrowserRouter([
         ),
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/", element: <Navigate to="/create" replace /> },
+            { path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
             { path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
-            { path: "/home", element: deferred(<HomePage />) },
             {
                 path: "/tasks",
                 element: (

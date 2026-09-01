@@ -2,6 +2,12 @@ import { CanvasNodeType, type CanvasMediaPerformanceMode, type CanvasNodeData } 
 
 const STORAGE_KEY = "canvas-media-performance-mode";
 
+// The DOM budget is deliberately below the connection budget. Image-heavy
+// canvases pay a texture/compositing cost per mounted card, even when the
+// cards themselves are already virtualized spatially.
+export const CANVAS_MAX_RENDERED_NODES = 720;
+export const CANVAS_MAX_RENDERED_CONNECTIONS = 5000;
+
 export function readCanvasMediaPerformanceMode(): CanvasMediaPerformanceMode {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -24,6 +30,17 @@ export function shouldReduceCanvasMediaEffects(mode: CanvasMediaPerformanceMode,
     if (mode === "quality") return false;
     const mediaCount = nodes.filter((node) => node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio).length;
     return nodes.length >= 80 || mediaCount >= 32;
+}
+
+export function canvasNodeRenderPadding(reduceMediaEffects: boolean, previouslyRendered: boolean) {
+    if (previouslyRendered) return reduceMediaEffects ? 640 : 384;
+    return reduceMediaEffects ? 128 : 192;
+}
+
+export function canvasNodeRenderBudget(scale: number) {
+    if (scale < 0.14) return 280;
+    if (scale < 0.28) return 420;
+    return CANVAS_MAX_RENDERED_NODES;
 }
 
 export function resolveActiveCanvasMediaNodeId(selectedNodeIds: ReadonlySet<string>, nodeById: ReadonlyMap<string, CanvasNodeData>) {

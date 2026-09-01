@@ -35,6 +35,8 @@ export type ToolChoice = "auto" | "required" | { type: "function"; name: string 
 export type BackendToolRequests = {
     responses: Record<string, unknown>;
     chatCompletion: Record<string, unknown>;
+    claude?: Record<string, unknown>;
+    gemini?: Record<string, unknown>;
 };
 
 export type ResponseMessageContent = AiTextMessage["content"] | string;

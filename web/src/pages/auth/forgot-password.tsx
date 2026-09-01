@@ -212,6 +212,6 @@ function Notice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 }
 
 function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/create";
+    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
     return value;
 }

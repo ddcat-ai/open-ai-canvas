@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyFrameDrop, canFolderContain, canLinkedFolderArchive, findFrameDropTarget, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
+import { applyFrameDrop, buildCanvasFrameDropIndex, canFolderContain, canLinkedFolderArchive, findFrameDropTarget, findFrameDropTargetFromIndex, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -64,6 +64,16 @@ describe("canvas folders", () => {
         expect(nextFolder.metadata?.frame?.collapsed).toBe(true);
         expect(nextFolder.metadata?.frame?.expandedWidth).toBeGreaterThan(dragged.width);
         expect(nextFolder.metadata?.frame?.expandedHeight).toBeGreaterThan(dragged.height);
+    });
+
+    test("空间索引画框落点与常规落点一致", () => {
+        const target = folder("folder");
+        const dragged = image("image");
+        const nodes = [target, dragged];
+        const index = buildCanvasFrameDropIndex(nodes);
+
+        expect(findFrameDropTargetFromIndex(index, [dragged], new Set([dragged.id]), { x: 0, y: 0 })).toBe(findFrameDropTarget(nodes, new Set([dragged.id])));
+        expect(findFrameDropTargetFromIndex(index, [dragged], new Set([dragged.id]), { x: 400, y: 400 })).toBeNull();
     });
 
     test("素材库链接文件夹只接收可归档的真实内容节点", () => {

@@ -759,6 +759,111 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 	return err
 }
 
+// RestoreRefundedBillingOrder compensates a billing order that was refunded
+// before an operator confirmed the upstream task had actually succeeded.
+//
+// The original reservation has already been returned to available credits, so
+// this transition charges the final amount directly from available credits.
+// The conditional refunded -> settled update keeps concurrent/repeated manual
+// recovery requests idempotent.
+func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var order model.BillingOrder
+		if err := tx.First(&order, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if order.Status == model.BillingStatusSettled {
+			return nil
+		}
+		if order.Status != model.BillingStatusRefunded {
+			return ErrBillingStateConflict
+		}
+
+		actual := order.AmountMicrocredits
+		var usage *BillingUsage
+		if order.BillingMode == "token" {
+			if zeroPricedTokenOrder(order) {
+				actual = 0
+			} else {
+				var err error
+				usage, err = billingUsage(tx, id)
+				if err != nil {
+					return err
+				}
+				actual, err = tokenUsageAmount(order, usage)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if actual < 0 {
+			return errors.New("invalid restored billing amount")
+		}
+
+		updated := tx.Model(&model.CreditAccount{}).
+			Where("user_id = ?", order.UserID).
+			Updates(map[string]any{
+				"available_microcredits": gorm.Expr("available_microcredits - ?", actual),
+				"version":                gorm.Expr("version + 1"),
+				"updated_at":             time.Now(),
+			})
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return errors.New("credit account does not exist")
+		}
+
+		var account model.CreditAccount
+		if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+			return err
+		}
+		now := time.Now()
+		orderUpdates := map[string]any{
+			"status":                       model.BillingStatusSettled,
+			"actual_amount_microcredits":   actual,
+			"refunded_amount_microcredits": max(order.AmountMicrocredits-actual, int64(0)),
+			"refunded_at":                  nil,
+			"settled_at":                   &now,
+			"error":                        "",
+			"updated_at":                   now,
+		}
+		if providerRequestID != "" {
+			orderUpdates["provider_request_id"] = providerRequestID
+		}
+		if usage != nil {
+			orderUpdates["input_tokens"] = usage.InputTokens
+			orderUpdates["output_tokens"] = usage.OutputTokens
+			orderUpdates["cached_tokens"] = usage.CachedTokens
+			orderUpdates["usage_available"] = true
+		}
+		orderUpdate := tx.Model(&model.BillingOrder{}).
+			Where("id = ? AND status = ?", order.ID, model.BillingStatusRefunded).
+			Updates(orderUpdates)
+		if orderUpdate.Error != nil {
+			return orderUpdate.Error
+		}
+		if orderUpdate.RowsAffected != 1 {
+			return ErrBillingStateConflict
+		}
+
+		return tx.Create(&model.CreditLedgerEntry{
+			ID:                         newRepositoryID(),
+			UserID:                     order.UserID,
+			Type:                       model.CreditLedgerConsume,
+			AmountMicrocredits:         -actual,
+			AvailableDeltaMicrocredits: -actual,
+			AvailableAfterMicrocredits: account.AvailableMicrocredits,
+			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
+			BillingOrderID:             order.ID,
+			Model:                      order.Model,
+			ChannelID:                  order.ChannelID,
+			Scene:                      order.Scene,
+			Note:                       "人工查询确认上游成功，退款订单重新扣费",
+		}).Error
+	})
+}
+
 func zeroPricedTokenOrder(order model.BillingOrder) bool {
 	return order.BillingMode == "token" &&
 		order.InputTokenPriceMicrocredits == 0 &&

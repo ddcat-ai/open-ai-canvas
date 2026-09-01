@@ -177,7 +177,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		width, _ := strconv.Atoi(c.PostForm("width"))
 		height, _ := strconv.Atoi(c.PostForm("height"))
 		durationMs, _ := strconv.ParseInt(c.PostForm("durationMs"), 10, 64)
-		resource, err := svc.UploadResource(user.ID, file, c.PostForm("kind"), width, height, durationMs)
+		resource, err := svc.UploadResource(user.ID, file, c.PostForm("kind"), width, height, durationMs, c.GetHeader("X-Idempotency-Key"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -206,7 +206,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		resource, err := svc.ImportResourceURL(user.ID, req.URL, req.Kind, req.Width, req.Height, req.DurationMs)
+		resource, err := svc.ImportResourceURL(user.ID, req.URL, req.Kind, req.Width, req.Height, req.DurationMs, c.GetHeader("X-Idempotency-Key"))
 		if err != nil {
 			failService(c, err)
 			return

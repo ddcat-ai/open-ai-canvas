@@ -1009,6 +1009,21 @@ func (r *Repository) SaveResource(resource *model.Resource) error {
 	return r.db.Save(resource).Error
 }
 
+func (r *Repository) ResourceByUploadKey(userID string, uploadKey string) (*model.Resource, error) {
+	var resource model.Resource
+	if err := r.db.First(&resource, "user_id = ? AND upload_key = ?", userID, uploadKey).Error; err != nil {
+		return nil, err
+	}
+	return &resource, nil
+}
+
+func (r *Repository) ClaimFailedResourceUpload(userID string, id string) (bool, error) {
+	result := r.db.Model(&model.Resource{}).
+		Where("id = ? AND user_id = ? AND status = ?", id, userID, model.ResourceStatusFailed).
+		Updates(map[string]any{"status": model.ResourceStatusPending, "error": "", "updated_at": time.Now()})
+	return result.RowsAffected == 1, result.Error
+}
+
 func (r *Repository) DeleteResource(userID string, id string) error {
 	return r.db.Delete(&model.Resource{}, "id = ? AND user_id = ?", id, userID).Error
 }
@@ -1070,6 +1085,18 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
 	return r.DeleteAssetAndResources(userID, id, nil, nil)
+}
+
+func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]model.Asset, error) {
+	var assets []model.Asset
+	if limit <= 0 {
+		limit = 100
+	}
+	err := r.db.Where("status = ? AND updated_at <= ?", model.AssetVersionStatusArchived, cutoff).
+		Order("updated_at asc, id asc").
+		Limit(limit).
+		Find(&assets).Error
+	return assets, err
 }
 
 func (r *Repository) ReplaceAssets(userID string, assets []model.Asset) error {

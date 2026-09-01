@@ -4,7 +4,7 @@ import { App } from "antd";
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { buildGenerationConfig, isGenerationCanceled } from "@/lib/canvas/canvas-project-generation";
-import { canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
+import { canvasGenerationPromptMetadata, canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
@@ -242,6 +242,7 @@ export function useCanvasGenerationExecutor({
                                           metadata: {
                                               ...node.metadata,
                                               prompt,
+                                              composerContent: prompt,
                                               status: NODE_STATUS_LOADING,
                                               taskStage: "正在准备生成任务",
                                               taskProgress: 0,
@@ -266,7 +267,7 @@ export function useCanvasGenerationExecutor({
                                 node.id === nodeId
                                     ? {
                                           ...node,
-                                          metadata: { ...node.metadata, prompt: statusPrompt, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
+                                          metadata: { ...node.metadata, ...canvasGenerationPromptMetadata(prompt, statusPrompt), status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
                                       }
                                     : node,
                             ),

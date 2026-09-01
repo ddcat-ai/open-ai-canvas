@@ -54,7 +54,6 @@ export type CanvasNodeContentProps = {
     onToggleBatch?: () => void;
     reduceMediaEffects?: boolean;
     mediaActive?: boolean;
-    hydrateMediaPreview?: boolean;
 };
 
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
@@ -417,10 +416,11 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
     return content;
 }
 
-function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, hydrateMediaPreview = false }: CanvasNodeContentProps) {
+function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
-    const { updateMetadata } = useCanvasNodeActions();
-    const { url, loading } = useNodeResourceUrl(node, mediaActive);
+    const { updateMediaNode } = useCanvasNodeActions();
+    const hasPassivePreview = Boolean(canvasNodeVideoPreviewUrl(node));
+    const { url, loading } = useNodeResourceUrl(node, mediaActive || !hasPassivePreview);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -434,7 +434,7 @@ function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false
             if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
             setVideoSize({ width: video.videoWidth, height: video.videoHeight });
             if (node.metadata?.naturalWidth !== video.videoWidth || node.metadata?.naturalHeight !== video.videoHeight) {
-                updateMetadata?.(node.id, { naturalWidth: video.videoWidth, naturalHeight: video.videoHeight });
+                updateMediaNode?.(node.id, (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: video.videoWidth, naturalHeight: video.videoHeight } }));
             }
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -446,10 +446,10 @@ function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false
             video.removeEventListener("timeupdate", handleTimeUpdate);
             video.removeEventListener("loadedmetadata", handleLoadedMetadata);
         };
-    }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMetadata, url]);
+    }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
     if (!node.metadata?.content) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
-    if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} hydrateMediaPreview={hydrateMediaPreview} />;
+    if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} sourceUrl={url} sourceLoading={loading} />;
     if (!url) return <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />;
 
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
@@ -484,18 +484,18 @@ function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
     return <CanvasAudioPlayer node={node} theme={theme} />;
 }
 
-function InactiveVideoPreview({ node, theme, hydrateMediaPreview = false }: Pick<CanvasNodeContentProps, "node" | "theme" | "hydrateMediaPreview">) {
+function InactiveVideoPreview({ node, theme, sourceUrl, sourceLoading }: Pick<CanvasNodeContentProps, "node" | "theme"> & { sourceUrl: string; sourceLoading: boolean }) {
     const previewUrl = canvasNodeVideoPreviewUrl(node);
     const { updateMetadata } = useCanvasNodeActions();
     const updateMetadataRef = useRef(updateMetadata);
-    const [hydrating, setHydrating] = useState(false);
+    const [hydrating, setHydrating] = useState(() => !previewUrl && Boolean(node.metadata?.content));
 
     useEffect(() => {
         updateMetadataRef.current = updateMetadata;
     }, [updateMetadata]);
 
     useEffect(() => {
-        if (previewUrl || !hydrateMediaPreview || !node.metadata?.content || !updateMetadataRef.current) {
+        if (previewUrl || !node.metadata?.content || !updateMetadataRef.current) {
             setHydrating(false);
             return;
         }
@@ -510,12 +510,32 @@ function InactiveVideoPreview({ node, theme, hydrateMediaPreview = false }: Pick
                 if (!controller.signal.aborted) setHydrating(false);
             });
         return () => controller.abort();
-    }, [hydrateMediaPreview, node.id, node.metadata?.content, node.metadata?.storageKey, previewUrl]);
+    }, [node.id, node.metadata?.content, node.metadata?.storageKey, previewUrl]);
 
     if (previewUrl) {
         return <div className="relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black"><img src={previewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" /></div>;
     }
-    return <InactiveMediaCard icon={<Video className="size-7" />} title={node.title || "视频"} hint={hydrating ? "正在生成首帧" : "选择后加载视频"} theme={theme} />;
+    if (sourceUrl) {
+        return <div className="relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black">
+            <video
+                src={sourceUrl}
+                aria-label={`${node.title || "视频"} 首帧预览`}
+                muted
+                playsInline
+                preload="auto"
+                draggable={false}
+                className="pointer-events-none size-full select-none object-contain"
+                onLoadedMetadata={(event) => primePassiveVideoFrame(event.currentTarget)}
+                onLoadedData={(event) => primePassiveVideoFrame(event.currentTarget)}
+            />
+            {hydrating ? <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2 py-1 text-[var(--fs-tiny)] text-white/70 backdrop-blur">正在保存首帧</span> : null}
+        </div>;
+    }
+    return <InactiveMediaCard icon={<Video className="size-7" />} title={node.title || "视频"} hint={sourceLoading || hydrating ? "正在加载首帧" : "视频资源暂不可用"} theme={theme} />;
+}
+
+function primePassiveVideoFrame(video: HTMLVideoElement) {
+    if (video.currentTime === 0 && Number.isFinite(video.duration) && video.duration > 0) video.currentTime = Math.min(0.001, video.duration);
 }
 
 function InactiveMediaCard({ icon, title, hint, theme }: { icon: ReactNode; title: string; hint: string; theme: CanvasTheme }) {
@@ -535,7 +555,8 @@ function ImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, bat
     const nearViewport = useNearViewport(imageContainerRef);
     const { url, loading } = useNodeResourceUrl(node, nearViewport);
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
-    const { resizeNode, updateMetadata } = useCanvasNodeActions();
+    const { updateMediaNode } = useCanvasNodeActions();
+    const measuredSizeRef = useRef<{ width: number; height: number } | null>(null);
 
     /**
      * 让节点跟随图片真实比例。
@@ -548,23 +569,34 @@ function ImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, bat
      * 手动拉过（manualSize）或自由比例（freeResize）的节点只补记尺寸、不动宽高。
      */
     const fitToImage = (element: HTMLImageElement) => {
+        // LibTV 已提供原图尺寸和节点尺寸；960px 缩略图不能反向覆盖这些数据。
+        if (importedFromLibTV) return;
         const naturalWidth = element.naturalWidth;
         const naturalHeight = element.naturalHeight;
         if (!naturalWidth || !naturalHeight) return;
-        if (node.metadata?.naturalWidth !== naturalWidth || node.metadata?.naturalHeight !== naturalHeight) {
-            updateMetadata?.(node.id, { naturalWidth, naturalHeight });
-        }
-        if (node.metadata?.freeResize || node.metadata?.manualSize) return;
-        const size = fitNodeSize(naturalWidth, naturalHeight);
-        // 差不到 1px 就别动，避免无意义的状态写入。
-        if (Math.abs(size.width - node.width) < 1 && Math.abs(size.height - node.height) < 1) return;
-        resizeNode?.(node.id, size);
+        if (measuredSizeRef.current?.width === naturalWidth && measuredSizeRef.current.height === naturalHeight) return;
+        measuredSizeRef.current = { width: naturalWidth, height: naturalHeight };
+        updateMediaNode?.(node.id, (current) => {
+            const metadata = current.metadata;
+            const needsMetadata = metadata?.naturalWidth !== naturalWidth || metadata?.naturalHeight !== naturalHeight;
+            if (current.metadata?.freeResize || current.metadata?.manualSize) {
+                return needsMetadata ? { ...current, metadata: { ...metadata, naturalWidth, naturalHeight } } : current;
+            }
+            const size = fitNodeSize(naturalWidth, naturalHeight);
+            const needsResize = Math.abs(size.width - current.width) >= 1 || Math.abs(size.height - current.height) >= 1;
+            if (!needsMetadata && !needsResize) return current;
+            return {
+                ...current,
+                ...(needsResize ? size : {}),
+                metadata: needsMetadata ? { ...metadata, naturalWidth, naturalHeight } : metadata,
+            };
+        });
     };
 
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
             <div ref={imageContainerRef} className="h-full w-full overflow-hidden rounded-[var(--node-radius)]">
-                {url ? <img src={url} alt={node.title} loading={importedFromLibTV ? "eager" : "lazy"} decoding="async" draggable={false} onDragStart={(event) => event.preventDefault()} onLoad={(event) => fitToImage(event.currentTarget)} className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`} /> : <div className="grid size-full place-items-center" style={{ color: theme.node.muted }}>{loading ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}</div>}
+                {url ? <img src={url} alt={node.title} loading="lazy" decoding="async" draggable={false} onDragStart={(event) => event.preventDefault()} onLoad={(event) => fitToImage(event.currentTarget)} className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`} /> : <div className="grid size-full place-items-center" style={{ color: theme.node.muted }}>{loading ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}</div>}
             </div>
         </BatchFrame>
     );
@@ -584,18 +616,23 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
         : node.metadata?.previewContent
             || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
     const isRemoteResource = Boolean(resourceIdFromStorageKey(storageKey));
-    const [url, setUrl] = useState(isRemoteResource ? "" : fallback);
+    // Inline data URLs are already local, but decoding thousands of them is
+    // still expensive. Images must wait for the same viewport gate as remote
+    // resources; otherwise DOM virtualization does not reduce image work.
+    const isLazyVisual = node.type === CanvasNodeType.Image;
+    const [url, setUrl] = useState(isRemoteResource || isLazyVisual ? "" : fallback);
     const [loading, setLoading] = useState(isRemoteResource && eager);
 
     useEffect(() => {
         let cancelled = false;
         if (!isRemoteResource) {
-            setUrl(fallback);
+            setUrl(isLazyVisual && !eager ? "" : fallback);
             setLoading(false);
             return;
         }
         setUrl("");
         setLoading(eager);
+        // 只有进入视口或被激活的节点才下载远程媒体；缓存层会复用已有 Blob URL 和 in-flight 请求。
         const resolve = eager ? cacheResourceObjectUrl(storageKey) : getCachedResourceObjectUrl(storageKey);
         void resolve.then((cached) => {
             if (!cancelled) setUrl(cached || (eager ? fallback : ""));
@@ -605,7 +642,7 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
             if (!cancelled) setLoading(false);
         });
         return () => { cancelled = true; };
-    }, [eager, fallback, isRemoteResource, storageKey]);
+    }, [eager, fallback, isLazyVisual, isRemoteResource, storageKey]);
 
     return { url, loading };
 }

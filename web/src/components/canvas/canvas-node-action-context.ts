@@ -11,6 +11,10 @@ export type CanvasNodeActionContextValue = {
     deleteNode?: (node: CanvasNodeData) => void;
     /** 合并式更新节点 metadata；扩展节点（如调色）在自己的面板里改参数时用。 */
     updateMetadata?: (nodeId: string, patch: CanvasNodeMetadata) => void;
+    /** 更新单个节点；媒体尺寸回写使用它，避免触发全量节点时间戳归并。 */
+    updateNode?: (nodeId: string, update: (node: CanvasNodeData) => CanvasNodeData) => void;
+    /** 合并延迟提交媒体测量结果，避免首屏图片同时解码时反复刷新画布。 */
+    updateMediaNode?: (nodeId: string, update: (node: CanvasNodeData) => CanvasNodeData) => void;
     /** 改节点宽高；图片首次量到真实尺寸后按比例校正节点用。 */
     resizeNode?: (nodeId: string, size: { width: number; height: number }) => void;
     /** 打开节点级肖像排查工作台；任务生命周期由画布页面持有。 */

@@ -76,7 +76,7 @@ import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDra
 import { resolveCanvasEmptyStateKind } from "@/lib/canvas/canvas-starter";
 import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { createCanvasNode, getInputSummary, isHiddenBatchChild, persistCanvasWorkspaceMode, readCanvasWorkspaceMode } from "@/lib/canvas/canvas-project-domain";
-import { stampCanvasNodeChanges } from "@/lib/canvas/canvas-node-timestamps";
+import { stampCanvasNodeChanges, updateCanvasNode, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff";
 import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
@@ -92,7 +92,7 @@ import { CanvasProjectMediaDialogs } from "./canvas-project-media-dialogs";
 import { CanvasProjectSelectionToolbar } from "./canvas-project-selection-toolbar";
 import { CanvasProjectStatusDialogs } from "./canvas-project-status-dialogs";
 import { CanvasProjectWorldLayers } from "./canvas-project-world-layers";
-import { CanvasNodeActionContext } from "@/components/canvas/canvas-node-action-context";
+import { CanvasNodeActionContext, type CanvasNodeActionContextValue } from "@/components/canvas/canvas-node-action-context";
 import { bringCanvasNodeToFront, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import { PortraitClearanceModal } from "@/components/canvas/portrait-clearance/portrait-clearance-modal";
 import { CanvasNodeGraphContext, type CanvasNodeGraphContextValue } from "@/components/canvas/canvas-node-graph-context";
@@ -131,6 +131,7 @@ import {
     type CanvasFolderStyle,
     type CanvasFolderTheme,
     type CanvasNodeData,
+    type CanvasNodeMetadata,
     type CanvasMediaPerformanceMode,
     type StoryboardColumn,
     type StoryboardShotCount,
@@ -1386,6 +1387,45 @@ function InfiniteCanvasPage() {
         setToolbarNodeId(null);
         setPortraitClearanceNodeId(node.id);
     }, []);
+    const duplicateNodeFromContent = useCallback((node: CanvasNodeData) => duplicateNode(node.id), [duplicateNode]);
+    const deleteNodeFromContent = useCallback((node: CanvasNodeData) => deleteNodes(new Set([node.id])), [deleteNodes]);
+    const updateNodeFromContent = useCallback((nodeId: string, update: (node: CanvasNodeData) => CanvasNodeData) => {
+        setNodesState((current) => {
+            const next = updateCanvasNode(current, nodeId, update);
+            nodesRef.current = next;
+            return next;
+        });
+    }, []);
+    const pendingMediaUpdatesRef = useRef(new Map<string, (node: CanvasNodeData) => CanvasNodeData>());
+    const mediaUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const updateMediaNodeFromContent = useCallback((nodeId: string, update: (node: CanvasNodeData) => CanvasNodeData) => {
+        const previous = pendingMediaUpdatesRef.current.get(nodeId);
+        pendingMediaUpdatesRef.current.set(nodeId, previous ? (node) => update(previous(node)) : update);
+        if (mediaUpdateTimerRef.current) return;
+        mediaUpdateTimerRef.current = setTimeout(() => {
+            const updates = pendingMediaUpdatesRef.current;
+            pendingMediaUpdatesRef.current = new Map();
+            mediaUpdateTimerRef.current = null;
+            if (!updates.size) return;
+            setNodesState((current) => {
+                const next = updateCanvasNodes(current, updates);
+                nodesRef.current = next;
+                return next;
+            });
+        }, 120);
+    }, []);
+    const updateNodeMetadataFromContent = useCallback((nodeId: string, patch: CanvasNodeMetadata) => {
+        updateNodeFromContent(nodeId, (node) => ({ ...node, metadata: { ...node.metadata, ...patch } }));
+    }, [updateNodeFromContent]);
+    const canvasNodeActions = useMemo<CanvasNodeActionContextValue>(() => ({
+        download: downloadNodeImage,
+        duplicate: duplicateNodeFromContent,
+        deleteNode: deleteNodeFromContent,
+        updateMetadata: updateNodeMetadataFromContent,
+        updateNode: updateNodeFromContent,
+        updateMediaNode: updateMediaNodeFromContent,
+        openPortraitClearance,
+    }), [deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, openPortraitClearance, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent]);
     const { agentSnapshot, agentUndoCount, applyAgentOps, canUndoAgentOps, dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasAgentOperations({
         projectId,
         domainProjectId: currentProject?.projectId,
@@ -2202,7 +2242,7 @@ function InfiniteCanvasPage() {
                                 onFileDragLeave={handleFileDragLeave}
                                 onFileDragOver={handleFileDragOver}
                             >
-                                <CanvasNodeActionContext.Provider value={{ download: downloadNodeImage, duplicate: (node) => duplicateNode(node.id), deleteNode: (node) => deleteNodes(new Set([node.id])), updateMetadata: (nodeId, patch) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...patch } } : node))), resizeNode: (nodeId, size) => setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, width: size.width, height: size.height } : node))), openPortraitClearance }}>
+                                <CanvasNodeActionContext.Provider value={canvasNodeActions}>
                                 <CanvasNodeGraphContext.Provider value={nodeGraphContext}>
                                 <CanvasProjectWorldLayers
                                     projectId={projectId}
@@ -2562,6 +2602,7 @@ function InfiniteCanvasPage() {
                         onRedo={redoCanvas}
                         onPaste={pasteAtPosition}
                         onCopyNode={(nodeId) => copyNodesToClipboard(new Set([nodeId]))}
+                        onCreateGenerationCopy={(nodeId) => duplicateNode(nodeId, "copy")}
                         onDuplicate={duplicateNode}
                         onDeleteNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                         onDeleteConnection={deleteConnection}

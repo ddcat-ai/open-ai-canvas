@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -95,7 +94,7 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 		return nil, fmt.Errorf("create plugin package directory: %w", err)
 	}
 	center := &pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json"), packageDir: packageDir, plugins: make(map[string]pluginRecord)}
-	if err := center.bootstrapBundledPlugins(); err != nil {
+	if err := center.bootstrapOfficialPlugins(); err != nil {
 		return nil, err
 	}
 	if err := center.reload(); err != nil {
@@ -104,7 +103,7 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 	return center, nil
 }
 
-func (c *pluginRuntime) bootstrapBundledPlugins() error {
+func (c *pluginRuntime) bootstrapOfficialPlugins() error {
 	stored, err := c.readRegistry()
 	if err != nil {
 		return err
@@ -113,68 +112,68 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 	for _, record := range stored {
 		byID[record.ID] = record
 	}
-	items := protocol.Builtins().List("", "", true)
-	bundledIDs := make(map[string]struct{}, len(items)+2)
-	for _, metadata := range items {
-		bundledIDs[metadata.ID] = struct{}{}
-		protocol.AttachDocumentation(&metadata)
-		metadata.Installable = true
-		manifest, declarative := protocol.BundledManifest(metadata.ID)
-		existing := []byte(nil)
-		if record, ok := byID[metadata.ID]; ok {
-			existing = record.Raw
-			var installed protocol.Manifest
-			if err := json.Unmarshal(existing, &installed); err != nil {
-				return fmt.Errorf("decode bundled plugin %s: %w", metadata.ID, err)
-			}
-			expectedBackend := "host:" + metadata.ID
-			if declarative {
-				expectedBackend = "declarative"
-			}
-			if installed.Runtime.Backend != expectedBackend {
-				return fmt.Errorf("protocol id %q is reserved by a bundled plugin", metadata.ID)
-			}
-			if metadata.Enabled {
-				metadata.Enabled = installed.Metadata.Enabled
-			}
+	officialDir, err := officialPluginPackageDir()
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(officialDir)
+	if err != nil {
+		return fmt.Errorf("读取官方插件目录失败：%w", err)
+	}
+	officialIDs := make(map[string]struct{}, len(entries)+2)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+			continue
 		}
-		if declarative {
-			manifest.Metadata.Enabled = metadata.Enabled
-			manifest.Metadata.Installable = true
-		} else {
-			metadata.Execution = "host:" + metadata.ID
-			manifest = protocol.Manifest{
-				APIVersion:  "yingce.plugin/v1",
-				Metadata:    metadata,
-				Runtime:     protocol.ManifestRuntime{Backend: "host:" + metadata.ID},
-				Permissions: []string{"generation.run"},
-				Contributes: protocol.ManifestContributions{Providers: []protocol.ManifestProvider{{
-					ID: metadata.ID, Label: metadata.Name, Capabilities: metadata.Categories, Scopes: metadata.Scopes,
-					Parameters: metadata.Parameters, RequiresPublicMediaURLs: metadata.RequiresPublicMediaURLs,
-					Create: protocol.ManifestOperation{Method: "POST", Path: "/__host__/" + metadata.ID}, Response: protocol.ManifestResponse{},
-				}}},
-			}
-		}
-		data, err := json.Marshal(manifest)
+		packageData, err := os.ReadFile(filepath.Join(officialDir, entry.Name()))
 		if err != nil {
-			return fmt.Errorf("encode bundled protocol %s: %w", metadata.ID, err)
+			return fmt.Errorf("读取官方插件包 %s：%w", entry.Name(), err)
 		}
-		record := byID[metadata.ID]
-		if !bytes.Equal(record.Raw, data) {
-			now := time.Now().UTC()
-			if record.InstalledAt.IsZero() {
-				record.InstalledAt = now
+		pkg, err := protocol.ParsePluginPackage(packageData)
+		if err != nil {
+			return fmt.Errorf("校验官方插件包 %s：%w", entry.Name(), err)
+		}
+		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
+			return fmt.Errorf("官方插件 %q 不能依赖 host 执行器", pkg.Manifest.Metadata.ID)
+		}
+		if _, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil); err != nil {
+			return fmt.Errorf("加载官方插件 %q：%w", pkg.Manifest.Metadata.ID, err)
+		}
+		id := pkg.Manifest.Metadata.ID
+		if _, duplicate := officialIDs[id]; duplicate {
+			return fmt.Errorf("官方插件 ID %q 重复", id)
+		}
+		officialIDs[id] = struct{}{}
+		manifest := pkg.Manifest
+		record := byID[id]
+		if len(record.Raw) > 0 {
+			var previous protocol.Manifest
+			if err := json.Unmarshal(record.Raw, &previous); err == nil {
+				manifest.Metadata.Enabled = previous.Metadata.Enabled
 			}
-			record.UpdatedAt = now
 		}
-		record.ID, record.Raw, record.Source, record.PackagePath = metadata.ID, data, "bundled", ""
-		byID[metadata.ID] = record
+		manifestData, err := json.Marshal(manifest)
+		if err != nil {
+			return fmt.Errorf("编码官方插件 %q：%w", id, err)
+		}
+		hash := pluginHash(packageData)
+		packageName := hash + ".yingce-plugin"
+		if err := writePluginFile(filepath.Join(c.packageDir, packageName), packageData); err != nil {
+			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
+		}
+		now := time.Now().UTC()
+		if record.InstalledAt.IsZero() {
+			record.InstalledAt = now
+		}
+		record.ID, record.Raw, record.Source, record.FileName = id, manifestData, PluginOriginOfficial, entry.Name()
+		record.PackagePath, record.PackageSHA256, record.UpdatedAt = packageName, hash, now
+		byID[id] = record
 	}
 	for _, workflow := range bundledWorkflowPluginManifests() {
-		bundledIDs[workflow.Metadata.ID] = struct{}{}
+		officialIDs[workflow.Metadata.ID] = struct{}{}
 		data, err := json.Marshal(workflow)
 		if err != nil {
-			return fmt.Errorf("encode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+			return fmt.Errorf("encode official workflow plugin %s: %w", workflow.Metadata.ID, err)
 		}
 		record := byID[workflow.Metadata.ID]
 		if len(record.Raw) > 0 {
@@ -188,23 +187,20 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 				return fmt.Errorf("encode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
 			}
 		}
-		if !bytes.Equal(record.Raw, data) {
-			now := time.Now().UTC()
-			if record.InstalledAt.IsZero() {
-				record.InstalledAt = now
-			}
-			record.UpdatedAt = now
+		now := time.Now().UTC()
+		if record.InstalledAt.IsZero() {
+			record.InstalledAt = now
 		}
-		record.ID, record.Raw, record.Source, record.PackagePath = workflow.Metadata.ID, data, "bundled", ""
+		record.UpdatedAt = now
+		record.ID, record.Raw, record.Source, record.PackagePath = workflow.Metadata.ID, data, PluginOriginOfficial, ""
 		byID[workflow.Metadata.ID] = record
 	}
 	result := make([]pluginRegistryRecord, 0, len(byID))
 	for _, record := range byID {
-		if record.Source == "bundled" {
-			if _, exists := bundledIDs[record.ID]; !exists {
-				// Bundled records are derived from the current host registry. Dropping
-				// an obsolete record prevents a removed built-in protocol from surviving
-				// as a second, stale provider after a host upgrade.
+		if record.Source == "bundled" || record.Source == PluginOriginOfficial {
+			if _, exists := officialIDs[record.ID]; !exists {
+				// Official records are reconciled from repository packages on every
+				// startup, so removed packages cannot survive as stale providers.
 				continue
 			}
 		}
@@ -212,6 +208,36 @@ func (c *pluginRuntime) bootstrapBundledPlugins() error {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return c.writeRegistry(result)
+}
+
+func officialPluginPackageDir() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("CANVAS_OFFICIAL_PLUGIN_DIR")); configured != "" {
+		info, err := os.Stat(configured)
+		if err != nil || !info.IsDir() {
+			return "", fmt.Errorf("CANVAS_OFFICIAL_PLUGIN_DIR 不是可读目录：%s", configured)
+		}
+		return configured, nil
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	candidates := []string{"/app/plugin-packages"}
+	current := workingDir
+	for range 8 {
+		candidates = append(candidates, filepath.Join(current, "plugin-packages"))
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("未找到官方 plugin-packages 目录；请设置 CANVAS_OFFICIAL_PLUGIN_DIR")
 }
 
 func (c *pluginRuntime) reload() error {
@@ -249,9 +275,7 @@ func (c *pluginRuntime) reload() error {
 		return err
 	}
 	for id, record := range plugins {
-		adapters, loadErr := protocol.LoadInstalledProviders(record.Raw, func(execution string) (protocol.Adapter, bool) {
-			return protocol.Builtins().Resolve(execution)
-		})
+		adapters, loadErr := protocol.LoadInstalledProviders(record.Raw, nil)
 		if loadErr != nil {
 			record.Metadata.Enabled = false
 			record.Metadata.UnavailableReason = loadErr.Error()
@@ -326,8 +350,8 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	c.mu.RLock()
 	existing, exists := c.plugins[manifest.Metadata.ID]
 	c.mu.RUnlock()
-	if exists && existing.Source == "bundled" {
-		return PluginView{}, fmt.Errorf("内置插件 %q 不能通过上传覆盖", manifest.Metadata.ID)
+	if exists && existing.Source == PluginOriginOfficial {
+		return PluginView{}, fmt.Errorf("官方插件 %q 不能通过上传覆盖", manifest.Metadata.ID)
 	}
 	manifest.Metadata.Enabled = !exists || existing.Metadata.Enabled
 	manifestData, err := json.Marshal(manifest)
@@ -428,21 +452,13 @@ func (c *pluginRuntime) setEnabled(id string, enabled bool) (PluginView, error) 
 func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) PluginManifestView {
 	var manifest protocol.Manifest
 	_ = json.Unmarshal(raw, &manifest)
-	if source == "bundled" {
-		if adapter, ok := protocol.Builtins().Get(metadata.ID); ok {
-			current := adapter.Metadata()
-			current.Enabled = current.Enabled && metadata.Enabled
-			metadata = current
-		}
-		protocol.AttachDocumentation(&metadata)
-	}
 	if manifest.Metadata.ID == "" {
 		manifest.Metadata = metadata
 	}
 	return PluginManifestView{
 		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "yingce.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
-		Permissions: manifest.Permissions, Trusted: source == "bundled", Runtime: manifest.Runtime,
+		Permissions: manifest.Permissions, Trusted: source == PluginOriginOfficial, Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,
 	}
 }
@@ -456,8 +472,8 @@ func (c *pluginRuntime) uninstall(id string) error {
 	if !ok {
 		return fmt.Errorf("插件 %q 不存在", id)
 	}
-	if record.Source == "bundled" {
-		return fmt.Errorf("内置插件 %q 不能卸载，可停用该插件", id)
+	if record.Source == PluginOriginOfficial {
+		return fmt.Errorf("官方插件 %q 不能卸载，可停用该插件", id)
 	}
 	stored, err := c.readRegistry()
 	if err != nil {
@@ -533,9 +549,6 @@ func writePluginFile(path string, data []byte) error {
 }
 
 func pluginSource(metadata protocol.Metadata) string {
-	if _, ok := protocol.Builtins().Get(metadata.ID); ok {
-		return "bundled"
-	}
 	return "uploaded"
 }
 

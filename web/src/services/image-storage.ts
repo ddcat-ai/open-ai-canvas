@@ -19,9 +19,12 @@ const store = localforage.createInstance({ name: "infinite-canvas", storeName: "
 const objectUrls = new Map<string, string>();
 
 export async function uploadImage(input: string | Blob): Promise<UploadedImage> {
+    // 同一个逻辑上传在直传失败后会退回 IndexedDB，并由云端数据同步再次提交。
+    // 提前生成本地 key，确保两条路径向后端发送相同的幂等标识。
+    const storageKey = `image:${getActiveUserScope()}:${nanoid()}`;
     if (typeof input === "string" && shouldImportRemoteImage(input)) {
         try {
-            const resource = await importResourceFromUrl(input, "image");
+            const resource = await importResourceFromUrl(input, "image", { idempotencyKey: storageKey });
             return {
                 url: resource.publicUrl || resourceFileUrl(resource.id),
                 storageKey: resourceStorageKey(resource.id),
@@ -38,7 +41,7 @@ export async function uploadImage(input: string | Blob): Promise<UploadedImage> 
     const previewUrl = URL.createObjectURL(blob);
     const meta = await readImageMeta(previewUrl);
     try {
-        const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined });
+        const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey });
         await primeResourceBlobCache(resourceStorageKey(resource.id), blob).catch(() => "");
         URL.revokeObjectURL(previewUrl);
         return {
@@ -52,7 +55,6 @@ export async function uploadImage(input: string | Blob): Promise<UploadedImage> 
     } catch {
         // OSS is optional during local/self-hosted setup. Keep the existing local fallback.
     }
-    const storageKey = `image:${getActiveUserScope()}:${nanoid()}`;
     await store.setItem(storageKey, blob);
     const url = previewUrl;
     objectUrls.set(storageKey, url);

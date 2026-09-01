@@ -7,8 +7,8 @@ import { motion } from "motion/react";
 import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
-import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
-import { backendModelRuntimeRequired, runBackendToolGenerationTask } from "@/services/api/generation-task";
+import { type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
+import { runBackendToolGenerationTask } from "@/services/api/generation-task";
 import { imageToDataUrl } from "@/services/image-storage";
 import { isCanvasGenerationDurableAckError, persistCanvasCinematicSessionContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
@@ -32,7 +32,6 @@ import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendin
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { canvasAgentPostconditionMessage, previewCanvasAgentOps, summarizeCanvasAgentOps, verifyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentOperationImpact, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
-import { canvasAgentPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { buildCanvasWorkflowOps, looksLikeWorkflowRequest, type CanvasWorkflowInput } from "@/lib/canvas/canvas-agent-workflow";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
@@ -674,7 +673,7 @@ export function CanvasAssistantPanel({
             const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, messages, "required", userMessage.text, (text) => {
                 streamed = text;
                 if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            }, canvasAgentPromptCacheKey(sessionId));
+            });
             addOnlineLog("模型工具回复", result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
@@ -733,7 +732,7 @@ export function CanvasAssistantPanel({
         const next = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, nextMessages, "auto", "继续处理画布工具结果", (text) => {
             streamed = text;
             if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-        }, canvasAgentPromptCacheKey(sessionId));
+        });
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
@@ -1649,12 +1648,8 @@ function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
     return { type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments, ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}) };
 }
 
-async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void, promptCacheKey?: string) {
-    if (backendModelRuntimeRequired(config)) {
-        const result = await runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice, onDelta });
-        return result;
-    }
-    return requestToolResponse(config, messages, ONLINE_AGENT_TOOLS, toolChoice, onDelta, { promptCacheKey });
+async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void) {
+    return runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice, onDelta });
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {

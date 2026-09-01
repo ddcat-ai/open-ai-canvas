@@ -14,6 +14,8 @@
 
 - [肖像权可识别性排查画布插件实施规格](design/portrait-clearance-canvas-plugin.mdx)：TypeScript 重写、画布节点与全屏工作台、项目模型复用、本机 ONNX/百度识图/候选去重、任务合同、报告和验收方案。
 
+- [LLM、Image、Video 主流请求协议全景与影策兼容性调查](design/model-request-protocol-landscape.md)：主流原生协议、聚合网关、图片/视频异步任务、参考素材 role、当前插件映射缺口与 MiniMax H3 专项审计。
+
 ## 本地协作文档（不随仓库分发）
 
 - [beautifului 创作设计](beautifului-creation-design.md)：本地设计参考，未纳入版本控制。

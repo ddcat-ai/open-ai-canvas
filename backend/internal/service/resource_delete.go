@@ -72,17 +72,39 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 		if snapshotErr != nil {
 			return snapshotErr
 		}
+		sharedAssetResourceIDs := map[string]struct{}{}
 		for _, reference := range snapshot.Direct {
 			if _, exists := ownedIDSet[reference.ResourceID]; exists {
+				if reference.Kind == "素材" {
+					sharedAssetResourceIDs[reference.ResourceID] = struct{}{}
+					continue
+				}
 				usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
 			}
 		}
 		for _, document := range snapshot.Documents {
-			primaryReferenced := documentReferencesResources(document.PrimaryJSON, ownedIDSet)
-			secondaryReferenced := documentReferencesResources(document.SecondaryJSON, ownedIDSet)
-			if primaryReferenced || secondaryReferenced {
+			referencedIDs := documentReferencedResourceIDs(document.PrimaryJSON, ownedIDSet)
+			for resourceID := range documentReferencedResourceIDs(document.SecondaryJSON, ownedIDSet) {
+				referencedIDs[resourceID] = struct{}{}
+			}
+			if len(referencedIDs) > 0 {
+				if document.Kind == "素材" {
+					for resourceID := range referencedIDs {
+						sharedAssetResourceIDs[resourceID] = struct{}{}
+					}
+					continue
+				}
 				usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
 			}
+		}
+		if len(sharedAssetResourceIDs) > 0 {
+			deletableOwnedIDs := ownedIDs[:0]
+			for _, resourceID := range ownedIDs {
+				if _, shared := sharedAssetResourceIDs[resourceID]; !shared {
+					deletableOwnedIDs = append(deletableOwnedIDs, resourceID)
+				}
+			}
+			ownedIDs = deletableOwnedIDs
 		}
 	}
 	if message := resourceOccupiedMessage(usages); message != "" {
@@ -233,13 +255,18 @@ func isResourceLocatorField(field string) bool {
 }
 
 func documentReferencesResources(raw string, resourceIDs map[string]struct{}) bool {
+	return len(documentReferencedResourceIDs(raw, resourceIDs)) > 0
+}
+
+func documentReferencedResourceIDs(raw string, resourceIDs map[string]struct{}) map[string]struct{} {
+	matched := map[string]struct{}{}
 	raw = strings.TrimSpace(raw)
 	if raw == "" || len(resourceIDs) == 0 {
-		return false
+		return matched
 	}
+	found := map[string]struct{}{}
 	var value any
 	if err := json.Unmarshal([]byte(raw), &value); err == nil {
-		found := map[string]struct{}{}
 		if scalar, ok := value.(string); ok {
 			if resourceID := canvasResourceID(scalar); resourceID != "" {
 				found[resourceID] = struct{}{}
@@ -247,19 +274,16 @@ func documentReferencesResources(raw string, resourceIDs map[string]struct{}) bo
 		} else {
 			walkReferenceDocument(value, "", found)
 		}
-		for resourceID := range found {
-			if _, exists := resourceIDs[resourceID]; exists {
-				return true
-			}
+	} else if resourceID := canvasResourceID(raw); resourceID != "" {
+		// cover_url 等数据库列可以直接保存一个资源 URL，而不是 JSON。
+		found[resourceID] = struct{}{}
+	}
+	for resourceID := range found {
+		if _, exists := resourceIDs[resourceID]; exists {
+			matched[resourceID] = struct{}{}
 		}
-		return false
 	}
-	// cover_url 等数据库列可以直接保存一个资源 URL，而不是 JSON。
-	if resourceID := canvasResourceID(raw); resourceID != "" {
-		_, exists := resourceIDs[resourceID]
-		return exists
-	}
-	return false
+	return matched
 }
 
 func sortedReferenceIDs(values map[string]struct{}) []string {

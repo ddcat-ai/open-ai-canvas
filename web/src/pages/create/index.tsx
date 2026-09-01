@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
 import { Reorder } from "motion/react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { CanvasPromptOptimizerDrawer } from "@/components/canvas/canvas-prompt-optimizer-drawer";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
@@ -25,13 +26,12 @@ import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSi
 import { formatVideoResolutionLabel as videoResolutionLabel, VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { inferVideoOperation, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
-import { backendModelRuntimeRequired, isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
-import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
+import { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
-import { createTextReplayPublisher } from "@/lib/creation-text-replay";
 import { isLocalDreaminaWaitStopped, localDreaminaCancellationMessage } from "@/services/local-dreamina-task-projection";
-import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
+import { resolveResourceUrl } from "@/services/api/resources";
+import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
@@ -100,7 +100,6 @@ const qualityOptions = [
 ];
 const resolutionOptions = VIDEO_RESOLUTION_OPTIONS.map((value) => ({ value: String(value), label: videoResolutionLabel(value) }));
 const countOptions = ["1", "2", "3", "4"];
-const TEXT_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
 const conversationTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const messageTimeFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -172,7 +171,6 @@ export default function CreatePage() {
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
     const abortRef = useRef<AbortController | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const composerFocusRef = useRef<HTMLTextAreaElement>(null);
     const threadScrollRef = useRef<HTMLElement>(null);
     const followLatestMessageRef = useRef(true);
@@ -419,27 +417,6 @@ export default function CreatePage() {
             attachment: creationAttachmentFromImage(file, uploaded),
         };
     };
-    const addAttachments = (files: FileList | File[]) => {
-        if ((mode === "image" || mode === "video") && maxReferences === 0) {
-            toast.warning(mode === "image" ? "当前图片模型不支持参考图" : "当前模型不支持图生视频");
-            return;
-        }
-        const next = Array.from(files)
-            .filter((file) => creationFileAccepted(mode, file))
-            .slice(0, Math.max(0, maxReferences - attachments.length));
-        if (!next.length) return;
-        void Promise.allSettled(next.map(async (file) => {
-            const { asset, attachment } = await uploadCreationAsset(file);
-            if (asset) addAsset(asset);
-            return attachment;
-        })).then((settled) => {
-            const items = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
-            const failed = settled.filter((entry) => entry.status === "rejected");
-            if (items.length) setAttachments((current) => [...current, ...items].slice(0, maxReferences));
-            if (failed.length) toast.error(`${failed.length} 个参考素材上传失败，请重试`);
-        });
-    };
-
     const uploadLibraryAssets = async (files: FileList | File[]) => {
         const next = Array.from(files).filter((file) => creationFileAccepted(mode, file));
         if (!next.length) return [];
@@ -452,11 +429,6 @@ export default function CreatePage() {
         if (assetIds.length) toast.success(`${assetIds.length} 个素材已上传到素材库并自动选中`);
         if (failed.length) toast.error(`${failed.length} 个素材上传失败，请重试`);
         return assetIds;
-    };
-
-    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) addAttachments(event.target.files);
-        event.target.value = "";
     };
 
     const handleLibrarySelect = (selectedIds: string[]) => {
@@ -634,43 +606,22 @@ export default function CreatePage() {
         };
         try {
             if (mode === "text") {
-                if (backendModelRuntimeRequired(requestConfig)) {
-					const result = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTask({
-						mode: "text",
-						prompt: expandedPrompt,
-						config: requestConfig,
-						referenceImages,
-						referenceVideos,
-						referenceAudios,
-						textHistory: (activeConversation.messages || []).filter((item) => item.content.trim()).map((item) => ({ role: item.role, content: item.content })),
-						signal: requestLifecycle.signal,
-						metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
-						onTaskUpdate: bindTask,
-						onTextDelta: (text) => updateOriginAssistant((item) => ({ ...item, content: text })),
-						...retryContext,
-					}));
-					if (!result.text?.trim()) throw new Error("后端任务没有返回文本");
-					updateOriginAssistant((item) => ({ ...item, content: result.text || "" }));
-				} else {
-					const history = await Promise.all([...(activeConversation.messages || []), userMessage].map(async (item) => ({
-						role: item.role,
-						content: item.role === "user"
-							? await buildTextMessageContent(item)
-							: item.content,
-					})));
-					const replayPublisher = createTextReplayPublisher(requestConfig, text);
-					void replayPublisher.start();
-					let finalText = "";
-					await requestImageQuestion(requestConfig, history, (full) => {
-						finalText = full;
-						updateOriginAssistant((item) => ({ ...item, content: full }));
-						replayPublisher.publish(full);
-					}, {
-						signal: requestLifecycle.signal,
-						onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
-					});
-					replayPublisher.finish(finalText);
-				}
+                const result = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTask({
+                    mode: "text",
+                    prompt: expandedPrompt,
+                    config: requestConfig,
+                    referenceImages,
+                    referenceVideos,
+                    referenceAudios,
+                    textHistory: (activeConversation.messages || []).filter((item) => item.content.trim()).map((item) => ({ role: item.role, content: item.content })),
+                    signal: requestLifecycle.signal,
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
+                    onTaskUpdate: bindTask,
+                    onTextDelta: (value) => updateOriginAssistant((item) => ({ ...item, content: value })),
+                    ...retryContext,
+                }));
+                if (!result.text?.trim()) throw new Error("后端任务没有返回文本");
+                updateOriginAssistant((item) => ({ ...item, content: result.text || "", reasoning: result.reasoning }));
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
                 const settled = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTaskBatch({
@@ -915,8 +866,6 @@ export default function CreatePage() {
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
         onOpenLibrary: () => setLibraryOpen(true),
-        fileInputRef,
-        onFileChange: handleFileChange,
         onModeChange: selectMode,
         model: selectedModel,
         modelRequirements,
@@ -1110,7 +1059,9 @@ function CreationUserMessage({ item }: { item: CreationMessage }) {
             const kind = creationAttachmentKind(attachment);
             const previewable = kind === "image" || kind === "video";
             const url = attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "";
-            return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : url); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !url}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <img src={url} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
+            const imageUrl = kind === "image" ? resolveResourceUrl(attachment.storageKey, url) : "";
+            const previewUrl = kind === "image" ? imageUrl : url;
+            return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : previewUrl); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !previewUrl}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <CachedResourceImage storageKey={attachment.storageKey} src={imageUrl} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" decoding="async" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
         })}</div> : null}
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
     </article>;
@@ -1141,7 +1092,8 @@ function CreationMediaPending({ mode, ratio }: { mode: CreationMode; ratio?: str
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
     return <div className="creation-user-message-references" aria-label="本次引用">{references.map((reference) => {
         const Icon = reference.kind === "skill" ? Sparkles : reference.kind === "image" ? ImageIcon : reference.kind === "video" ? Film : reference.kind === "audio" ? Music2 : FileText;
-        return <span key={reference.id} className="creation-user-message-reference">{reference.previewUrl && reference.kind === "video" ? <video src={reference.previewUrl} muted playsInline preload="metadata" aria-label={reference.label} /> : reference.previewUrl && reference.kind === "image" ? <img src={reference.previewUrl} alt="" /> : <Icon />}<span>{reference.label}</span></span>;
+        const imageUrl = reference.kind === "image" ? resolveResourceUrl(reference.storageKey, reference.previewUrl) : reference.previewUrl;
+        return <span key={reference.id} className="creation-user-message-reference">{imageUrl && reference.kind === "video" ? <video src={imageUrl} muted playsInline preload="metadata" aria-label={reference.label} /> : imageUrl && reference.kind === "image" ? <CachedResourceImage storageKey={reference.storageKey} src={imageUrl} alt="" loading="lazy" decoding="async" /> : <Icon />}<span>{reference.label}</span></span>;
     })}</div>;
 }
 
@@ -1157,9 +1109,11 @@ function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
     const kind = creationAttachmentKind(item);
     const previewable = kind === "image" || kind === "video";
     const url = (kind === "video" ? item.url : item.previewUrl) || "";
-    const content = kind === "video" ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : kind === "image" ? <img src={item.previewUrl} alt={item.name} /> : <span className="creation-chat-file-icon">{kind === "audio" ? <Music2 /> : <FileText />}<em>{item.name}</em></span>;
+    const imageUrl = kind === "image" ? resolveResourceUrl(item.storageKey, item.previewUrl) : "";
+    const previewUrl = kind === "image" ? imageUrl : url;
+    const content = kind === "video" ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : kind === "image" ? <CachedResourceImage storageKey={item.storageKey} src={imageUrl} alt={item.name} loading="lazy" decoding="async" fallback={<span className="creation-chat-file-icon"><ImageIcon /></span>} /> : <span className="creation-chat-file-icon">{kind === "audio" ? <Music2 /> : <FileText />}<em>{item.name}</em></span>;
     return <div className="creation-reference-card-content">
-        {previewable ? <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", url)} aria-label={`放大预览 ${item.name}`} disabled={!url}>{content}<span aria-hidden="true"><Maximize2 /></span></button> : <div className="creation-reference-card-preview is-file" aria-label={item.name}>{content}</div>}
+        {previewable ? <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>{content}<span aria-hidden="true"><Maximize2 /></span></button> : <div className="creation-reference-card-preview is-file" aria-label={item.name}>{content}</div>}
         <button type="button" className="creation-reference-card-remove" onPointerDownCapture={(event) => event.stopPropagation()} onMouseDownCapture={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemove(item.id); }} aria-label={`移除 ${item.name}`}><X /></button>
     </div>;
 }
@@ -1181,8 +1135,6 @@ type ComposerProps = {
     onReplaceAttachment: (targetAttachmentId: string, replacement: CreationAttachment) => void;
     onReplaceReferenceFiles: (targetAttachmentId: string, files: File[]) => void;
     onOpenLibrary: () => void;
-    fileInputRef: RefObject<HTMLInputElement | null>;
-    onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onModeChange: (mode: CreationMode) => void;
     model: string;
     modelRequirements: ModelRequirements;
@@ -1218,7 +1170,8 @@ function CreationComposer(props: ComposerProps) {
     const attachmentTrackRef = useRef<HTMLUListElement>(null);
     const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
     const suppressAttachmentClickRef = useRef(false);
-    const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: false, isDragging: false });
+    const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: true, isDragging: false });
+    const previousAttachmentCountRef = useRef(props.attachments.length);
     const interactionBusy = props.busy || props.referenceReplacementBusy;
     const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
@@ -1268,7 +1221,10 @@ function CreationComposer(props: ComposerProps) {
         if (!isExpanded) setReferenceFilter("all");
     }, []);
     useEffect(() => {
+        const hadAttachments = previousAttachmentCountRef.current > 0;
         if (!props.attachments.length) setReferencePanelExpanded(false);
+        else if (!hadAttachments) setReferencePanelExpanded(true);
+        previousAttachmentCountRef.current = props.attachments.length;
         updateTrackScrollState();
     }, [props.attachments.length, setReferencePanelExpanded, updateTrackScrollState]);
     useEffect(() => {
@@ -1340,7 +1296,6 @@ function CreationComposer(props: ComposerProps) {
     };
     const composer = <section className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
-            <input ref={props.fileInputRef} type="file" hidden accept={creationUploadAccept(props.mode)} multiple onChange={props.onFileChange} />
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
                 {props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
@@ -1429,9 +1384,7 @@ function CreationComposer(props: ComposerProps) {
                         <span>优化</span>
                     </button>
                 </Tooltip> : null}
-                <Tooltip title="从本机上传附件"><button type="button" className="creation-chat-control" onClick={() => props.fileInputRef.current?.click()} disabled={interactionBusy || !referencesSupported} aria-label="从本机上传附件"><Paperclip /><span>附件</span></button></Tooltip>
-                <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-control" onClick={props.onOpenLibrary} disabled={interactionBusy || !referencesSupported} aria-label="打开素材库选择参考内容"><FolderOpen /><span>素材库</span></button></Tooltip>
-				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice variant="creation" />
+				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice={false} showOptionPrices variant="creation" />
                 {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                 {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
             </div>
@@ -1747,7 +1700,9 @@ function StoryboardBriefAttachments({ attachments }: { attachments: CreationAtta
         const kind = creationAttachmentKind(attachment);
         const previewable = kind === "image" || kind === "video";
         const url = attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "";
-        return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : url); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !url}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <img src={url} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
+        const imageUrl = kind === "image" ? resolveResourceUrl(attachment.storageKey, url) : "";
+        const previewUrl = kind === "image" ? imageUrl : url;
+        return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : previewUrl); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !previewUrl}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <CachedResourceImage storageKey={attachment.storageKey} src={imageUrl} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" decoding="async" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
     })}</div><CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} /></>;
 }
 
@@ -1793,44 +1748,6 @@ function conversationPreviewMessage(conversation: CreationConversation) {
         if (message.role === "user") return message;
     }
     return fallback;
-}
-
-async function buildTextMessageContent(item: CreationMessage) {
-    const content = expandCreationPrompt(item.content, item.references || [], item.attachments || []);
-    const attachments = item.attachments || [];
-    if (!attachments.length) return content;
-    const parts: AiTextContentPart[] = [{ type: "text", text: content }];
-    for (const attachment of attachments) {
-        if (isImageAttachment(attachment)) {
-            parts.push({ type: "image_url", image_url: { url: attachment.dataUrl || attachment.url || "" } });
-            continue;
-        }
-        const url = await creationAttachmentDataUrl(attachment);
-        parts.push({ type: "file_url", file_url: { url, name: attachment.name || "附件", mimeType: attachment.type || "application/octet-stream" } });
-    }
-    return parts;
-}
-
-async function creationAttachmentDataUrl(attachment: CreationAttachment) {
-    if ((attachment.bytes || 0) > TEXT_ATTACHMENT_MAX_BYTES) throw new Error(`${attachment.name} 超过 20MB，当前文本模型附件需要压缩后再上传`);
-    const attachmentUrl = attachment.url || "";
-    if (attachmentUrl.startsWith("data:")) return attachmentUrl;
-    const blob = attachment.storageKey ? await getMediaBlob(attachment.storageKey) : null;
-    if (blob) {
-        if (blob.size > TEXT_ATTACHMENT_MAX_BYTES) throw new Error(`${attachment.name} 超过 20MB，当前文本模型附件需要压缩后再上传`);
-        return blobToDataUrl(blob);
-    }
-    if (/^https:\/\//i.test(attachmentUrl)) return attachmentUrl;
-    throw new Error(`${attachment.name} 无法读取，请重新上传后再试`);
-}
-
-function blobToDataUrl(blob: Blob) {
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(reader.error || new Error("附件读取失败"));
-        reader.readAsDataURL(blob);
-    });
 }
 
 function isVideoAttachment(attachment: CreationAttachment): attachment is CreationAttachment & { url: string } {

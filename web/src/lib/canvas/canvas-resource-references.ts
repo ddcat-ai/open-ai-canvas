@@ -74,15 +74,54 @@ export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceRefe
     });
 }
 
-export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connections: CanvasConnection[], contextNodeId?: string | null) {
+export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connections: CanvasConnection[], contextNodeId?: string | null, targetNodes?: CanvasNodeData[]) {
     const contextNodes = contextNodeId ? getMentionResourceNodes(contextNodeId, nodes, connections) : [];
-    const globalReferences = labelResourceNodes(nodes.filter(isResourceNode), false);
+    const sourceNodes = targetNodes ? uniqueCanvasNodes([...targetNodes, ...contextNodes]) : nodes;
+    const globalReferences = labelResourceNodes(sourceNodes.filter(isResourceNode), false);
     const activeByNodeId = new Map(labelResourceNodes(contextNodes, true).map((reference) => [reference.nodeId, reference]));
     return globalReferences.map((reference) => activeByNodeId.get(reference.nodeId) || reference);
 }
 
+function uniqueCanvasNodes(nodes: CanvasNodeData[]) {
+    const seen = new Set<string>();
+    return nodes.filter((node) => {
+        if (seen.has(node.id)) return false;
+        seen.add(node.id);
+        return true;
+    });
+}
+
 export function buildNodeMentionReferences(node: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     return labelResourceNodes(getMentionResourceNodes(node.id, nodes, connections), true);
+}
+
+export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], connections: CanvasConnection[], targetNodes: CanvasNodeData[] = nodes) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const resourceInputsByTargetId = new Map<string, CanvasNodeData[]>();
+    const configTargetBySourceId = new Map<string, string>();
+    for (const connection of connections) {
+        const source = nodeById.get(connection.fromNodeId);
+        const target = nodeById.get(connection.toNodeId);
+        if (!source || !target) continue;
+        if (isResourceNode(source)) {
+            const inputs = resourceInputsByTargetId.get(target.id) || [];
+            inputs.push(source);
+            resourceInputsByTargetId.set(target.id, inputs);
+        }
+        if (target.type === CanvasNodeType.Config && !configTargetBySourceId.has(source.id)) {
+            configTargetBySourceId.set(source.id, target.id);
+        }
+    }
+
+    const referencesByNodeId = new Map<string, CanvasResourceReference[]>();
+    for (const node of targetNodes) {
+        const configTargetId = configTargetBySourceId.get(node.id);
+        const configInputs = configTargetId ? (resourceInputsByTargetId.get(configTargetId) || []).filter((input) => input.id !== node.id) : [];
+        const ownInputs = resourceInputsByTargetId.get(node.id) || [];
+        const inputs = configInputs.length ? configInputs : ownInputs.length ? ownInputs : isResourceNode(node) ? [node] : [];
+        referencesByNodeId.set(node.id, labelResourceNodes(inputs, true));
+    }
+    return referencesByNodeId;
 }
 
 export function buildOrderedCanvasResourceReferences(nodes: CanvasNodeData[], active = true) {

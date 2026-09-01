@@ -340,6 +340,7 @@ export type CanvasNodeMetadata = {
     versionLabel?: string;
     versionPrimary?: boolean;
     copiedFromNodeId?: string;
+    generationResultPlacement?: "replace-node" | "new-version";
     directorSceneId?: string;
     directorShotId?: string;
     directorPreviewNodeId?: string;

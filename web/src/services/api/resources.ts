@@ -62,6 +62,14 @@ export type ArkPrivateAssetSync = {
     status: "active" | string;
 };
 
+type ResourceUploadMeta = {
+    width?: number;
+    height?: number;
+    durationMs?: number;
+    fileName?: string;
+    idempotencyKey?: string;
+};
+
 const api = apiClient;
 const resourceCache = new Map<string, RemoteResource>();
 const resourceRequests = new Map<string, Promise<RemoteResource>>();
@@ -103,7 +111,7 @@ export function isResourceUrl(url?: string) {
     return path.startsWith(`${base}/resources/`) && path.endsWith("/file");
 }
 
-export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "audio" | "file", meta?: { width?: number; height?: number; durationMs?: number; fileName?: string }) {
+export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "audio" | "file", meta?: ResourceUploadMeta) {
     const formData = new FormData();
     const name = meta?.fileName || (file instanceof File ? file.name : `${kind}.${extensionFromMime(file.type, kind)}`);
     formData.append("kind", kind);
@@ -111,15 +119,20 @@ export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "
     if (meta?.width) formData.append("width", String(Math.round(meta.width)));
     if (meta?.height) formData.append("height", String(Math.round(meta.height)));
     if (meta?.durationMs) formData.append("durationMs", String(Math.round(meta.durationMs)));
-    const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData));
+    const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData, uploadRequestConfig(meta?.idempotencyKey)));
     resourceCache.set(resourceCacheKey(data.resource.id), data.resource);
     return data.resource;
 }
 
-export async function importResourceFromUrl(url: string, kind: "image" | "video" | "audio" | "file", meta?: { width?: number; height?: number; durationMs?: number }) {
-    const data = await request<{ resource: RemoteResource }>(api.post("/resources/import", { url, kind, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs }));
+export async function importResourceFromUrl(url: string, kind: "image" | "video" | "audio" | "file", meta?: Omit<ResourceUploadMeta, "fileName">) {
+    const data = await request<{ resource: RemoteResource }>(api.post("/resources/import", { url, kind, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs }, uploadRequestConfig(meta?.idempotencyKey)));
     resourceCache.set(resourceCacheKey(data.resource.id), data.resource);
     return data.resource;
+}
+
+function uploadRequestConfig(idempotencyKey?: string) {
+    const value = idempotencyKey?.trim();
+    return value ? { headers: { "X-Idempotency-Key": value } } : undefined;
 }
 
 export function getResource(id: string): Promise<RemoteResource> {

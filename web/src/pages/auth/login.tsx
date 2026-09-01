@@ -111,6 +111,6 @@ function AuthField({ label, htmlFor, action, children }: { label: string; htmlFo
 }
 
 function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/create";
+    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
     return value;
 }

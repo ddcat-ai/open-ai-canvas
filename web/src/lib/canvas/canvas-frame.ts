@@ -1,4 +1,5 @@
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position } from "@/types/canvas";
+import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
 
 export const FRAME_HEADER_HEIGHT = 36;
 export const FRAME_PADDING = 24;
@@ -52,21 +53,42 @@ export function findFrameDropTarget(nodes: CanvasNodeData[], draggedNodeIds: Set
     return (
         [...nodes]
             .reverse()
-            .find((frame) => {
-                if (!isFrameNode(frame) || (frame.metadata?.frame?.collapsed && !isCanvasFolderNode(frame)) || draggedNodeIds.has(frame.id)) return false;
-                const canContain = frame.metadata?.folder?.assetFolderId ? canLinkedFolderArchive : isCanvasFolderNode(frame) ? canFolderContain : canFrameContain;
-                if (!dragged.every(canContain)) return false;
-                const left = frame.position.x;
-                const top = frame.position.y + (isCanvasFolderNode(frame) && frame.metadata?.frame?.collapsed ? 0 : FRAME_HEADER_HEIGHT);
-                const right = frame.position.x + frame.width;
-                const bottom = frame.position.y + frame.height;
-                return dragged.every((node) => {
-                    const centerX = node.position.x + node.width / 2;
-                    const centerY = node.position.y + node.height / 2;
-                    return centerX >= left && centerX <= right && centerY >= top && centerY <= bottom;
-                });
-            })?.id || null
+            .find((frame) => isValidFrameDropTarget(frame, dragged, draggedNodeIds))?.id || null
     );
+}
+
+export type CanvasFrameDropIndex = CanvasSpatialIndex<CanvasNodeData>;
+
+export function buildCanvasFrameDropIndex(nodes: CanvasNodeData[]): CanvasFrameDropIndex {
+    return buildCanvasSpatialIndex(nodes.filter(isFrameNode).map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node })));
+}
+
+/** Finds a drop target using the drag preview offset without rebuilding all node positions. */
+export function findFrameDropTargetFromIndex(index: CanvasFrameDropIndex, draggedNodes: CanvasNodeData[], draggedNodeIds: Set<string>, offset: Position) {
+    if (!draggedNodes.length) return null;
+    const centers = draggedNodes.map((node) => ({ x: node.position.x + offset.x + node.width / 2, y: node.position.y + offset.y + node.height / 2 }));
+    const left = Math.min(...centers.map((center) => center.x)) - 0.01;
+    const top = Math.min(...centers.map((center) => center.y)) - 0.01;
+    const right = Math.max(...centers.map((center) => center.x)) + 0.01;
+    const bottom = Math.max(...centers.map((center) => center.y)) + 0.01;
+    return [...index.query({ left, top, right, bottom })]
+        .reverse()
+        .find((frame) => isValidFrameDropTarget(frame, draggedNodes, draggedNodeIds, offset))?.id || null;
+}
+
+function isValidFrameDropTarget(frame: CanvasNodeData, dragged: CanvasNodeData[], draggedNodeIds: Set<string>, offset: Position = { x: 0, y: 0 }) {
+    if (!isFrameNode(frame) || (frame.metadata?.frame?.collapsed && !isCanvasFolderNode(frame)) || draggedNodeIds.has(frame.id)) return false;
+    const canContain = frame.metadata?.folder?.assetFolderId ? canLinkedFolderArchive : isCanvasFolderNode(frame) ? canFolderContain : canFrameContain;
+    if (!dragged.every(canContain)) return false;
+    const left = frame.position.x;
+    const top = frame.position.y + (isCanvasFolderNode(frame) && frame.metadata?.frame?.collapsed ? 0 : FRAME_HEADER_HEIGHT);
+    const right = frame.position.x + frame.width;
+    const bottom = frame.position.y + frame.height;
+    return dragged.every((node) => {
+        const centerX = node.position.x + offset.x + node.width / 2;
+        const centerY = node.position.y + offset.y + node.height / 2;
+        return centerX >= left && centerX <= right && centerY >= top && centerY <= bottom;
+    });
 }
 
 export function applyFrameDrop(nodes: CanvasNodeData[], draggedNodeIds: Set<string>, frameId: string | null) {

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Modal, Select } from "antd";
-import { ArrowDownAZ, Clock3, Download, FileUp, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
@@ -12,13 +12,19 @@ import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
 import { CanvasCreateCard } from "@/components/canvas/canvas-project-card";
 import { CanvasFolderCard } from "@/components/canvas/canvas-folder-card";
+import { CanvasHistoryDrawer } from "@/components/canvas/canvas-history-drawer";
 import type { CanvasExportFile } from "@/types/canvas-export";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import type { CanvasNodeData } from "@/types/canvas";
+import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/canvas-drawing-storage";
-import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, saveRemoteUserDataNow, scheduleRemoteUserDataSync } from "@/services/user-data-sync";
 import { listProjects } from "@/services/api/projects";
+import { loadCanvasProjectPage } from "@/lib/workspace-route-modules";
+import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 
 export default function CanvasPage() {
     const { message } = App.useApp();
@@ -31,12 +37,15 @@ export default function CanvasPage() {
     const [projectFilter, setProjectFilter] = useState("all");
     const loadMoreRef = useRef<HTMLDivElement>(null);
     const [loadedProjectCount, setLoadedProjectCount] = useState(50);
+    const [openingProjectId, setOpeningProjectId] = useState("");
+    const openingProjectIdRef = useRef("");
     const hydrated = useCanvasStore((state) => state.hydrated);
     const projects = useCanvasStore((state) => state.projects);
     const importProject = useCanvasStore((state) => state.importProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
     const updateProject = useCanvasStore((state) => state.updateProject);
+    const [historyOpen, setHistoryOpen] = useState(false);
     const [associationOpen, setAssociationOpen] = useState(false);
     const [associationProjectId, setAssociationProjectId] = useState("");
     const projectQuery = useQuery({ queryKey: ["projects"], queryFn: () => listProjects() });
@@ -45,9 +54,19 @@ export default function CanvasPage() {
     const agentMode = mode === "new" || mode === "recent" || mode === "choose";
     const handoffMode = mode === "handoff";
     const forwardedQuery = agentMode || handoffMode ? `?${searchParams.toString()}` : "";
-    const enterProject = (id: string) => {
-        navigate(`/canvas/${id}${forwardedQuery}`);
-    };
+    const preloadProject = useCallback(() => {
+        void loadCanvasProjectPage();
+    }, []);
+    const enterProject = useCallback(
+        (id: string) => {
+            if (openingProjectIdRef.current) return;
+            openingProjectIdRef.current = id;
+            setOpeningProjectId(id);
+            preloadProject();
+            window.requestAnimationFrame(() => navigate(`/canvas/${id}${forwardedQuery}`));
+        },
+        [forwardedQuery, navigate, preloadProject],
+    );
     const createAndEnter = () => {
         void createCanvasProjectWithRemoteSync(`自由画布 ${projects.length + 1}`).then(({ id, syncError }) => {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
@@ -101,30 +120,95 @@ export default function CanvasPage() {
     };
     const importCanvas = async (file?: File) => {
         if (!file) return;
+        const hideLoading = message.loading({ content: "正在解压并准备导入画布...", duration: 0 });
         try {
             const zip = await readZip(file);
             const projectFile = zip.get("projects.json");
-            if (!projectFile) throw new Error("missing projects.json");
+            if (!projectFile) throw new Error("缺少 projects.json 元数据文件");
             const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
-            await Promise.all(
-                data.projects.flatMap((project) =>
-                    project.files.map(async (item) => {
-                        const blob = zip.get(item.path);
-                        if (!blob) return;
-                        const typedBlob = blob.type ? blob : blob.slice(0, blob.size, item.mimeType);
-                        await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
-                    }),
-                ),
-            );
-            await Promise.all(
-                data.projects.map(async (item) => {
-                    const drawingEngineById = new Map((item.drawingDocuments || []).map((document) => [document.drawingId, document.engine || "tldraw"]));
-                    const importedProjectId = importProject({
-                        ...item.project,
-                        nodes: item.project.nodes.map((node) =>
-                            node.type === "drawing" && node.metadata?.drawingId ? { ...node, metadata: { ...node.metadata, drawingEngine: drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" } } : node,
-                        ),
+            if (!Array.isArray(data.projects)) throw new Error("projects.json 中缺少画布列表");
+            for (const item of data.projects) {
+                if (!Array.isArray(item.files)) throw new Error(`画布「${item.project?.title || "未命名画布"}」的媒体清单无效`);
+                const missing = item.files.find((entry) => !zip.get(entry.path));
+                if (missing) throw new Error(`压缩包缺少媒体文件：${missing.path}`);
+            }
+            hideLoading();
+            const remoteSyncEnabled = hasRemoteUserDataSyncSession();
+            let remoteSyncWarning: unknown;
+
+            for (const item of data.projects) {
+                const totalFiles = item.files.length;
+                const importedProjectId = importProject({
+                    ...item.project,
+                    title: item.project.title || "导入画布",
+                    nodes: item.project.nodes || [],
+                });
+
+                if (totalFiles > 0) {
+                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, {
+                        projectId: importedProjectId,
+                        total: totalFiles,
+                        completed: 0,
+                        phase: "uploading",
+                        message: "正在上传媒体至云端",
                     });
+                }
+
+                try {
+                    const storageKeyMap = new Map<string, { storageKey: string; url: string }>();
+                    const concurrency = 4;
+                    let fileIndex = 0;
+                    const workers = new Array(Math.min(item.files.length, concurrency)).fill(null).map(async () => {
+                        while (fileIndex < item.files.length) {
+                            const current = fileIndex++;
+                            const fileItem = item.files[current];
+                            const blob = zip.get(fileItem.path)!;
+                            const mime = fileItem.mimeType || blob.type || "image/png";
+                            const typedBlob = blob.type ? blob : blob.slice(0, blob.size, mime);
+                            const kind: "image" | "video" | "audio" | "file" = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : mime.startsWith("audio/") ? "audio" : "file";
+
+                            try {
+                                const resource = await uploadResourceFile(typedBlob, kind, { fileName: fileItem.path.split("/").pop() });
+                                const newStorageKey = resourceStorageKey(resource.id);
+                                const newUrl = resourceFileUrl(resource.id);
+                                await primeResourceBlobCache(newStorageKey, typedBlob).catch(() => "");
+                                storageKeyMap.set(fileItem.storageKey, { storageKey: newStorageKey, url: newUrl });
+                            } catch (uploadErr) {
+                                console.warn("上传资源到后端失败，降级保存本地", uploadErr);
+                                const localUrl = await (fileItem.storageKey.startsWith("image:") ? setImageBlob(fileItem.storageKey, typedBlob) : setMediaBlob(fileItem.storageKey, typedBlob));
+                                if (localUrl) {
+                                    storageKeyMap.set(fileItem.storageKey, { storageKey: fileItem.storageKey, url: localUrl });
+                                }
+                            } finally {
+                                useSyncProgressStore.getState().incrementProjectCompleted(importedProjectId);
+                            }
+                        }
+                    });
+                    await Promise.all(workers);
+
+                    const drawingEngineById = new Map((item.drawingDocuments || []).map((document) => [document.drawingId, document.engine || "tldraw"]));
+                    const remapNodeMedia = (node: CanvasNodeData): CanvasNodeData => {
+                        const oldKey = node.metadata?.storageKey;
+                        const mapped = oldKey ? storageKeyMap.get(oldKey) : undefined;
+                        const isDeadBlob = (val?: string) => typeof val === "string" && val.startsWith("blob:");
+                        const nextStorageKey = mapped ? mapped.storageKey : oldKey && !isDeadBlob(oldKey) ? oldKey : undefined;
+                        const content = mapped ? mapped.url : isDeadBlob(node.metadata?.content) ? "" : node.metadata?.content;
+                        const previewContent = mapped ? mapped.url : isDeadBlob(node.metadata?.previewContent) ? "" : node.metadata?.previewContent;
+                        return {
+                            ...node,
+                            metadata: {
+                                ...node.metadata,
+                                ...(nextStorageKey !== undefined ? { storageKey: nextStorageKey } : {}),
+                                ...(content !== undefined ? { content } : {}),
+                                ...(previewContent !== undefined ? { previewContent } : {}),
+                                drawingEngine: node.type === "drawing" && node.metadata?.drawingId ? drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" : node.metadata?.drawingEngine,
+                            },
+                        };
+                    };
+
+                    const remappedNodes = (item.project.nodes || []).map(remapNodeMedia);
+                    updateProject(importedProjectId, { nodes: remappedNodes });
+
                     await Promise.all(
                         (item.drawingDocuments || []).map((document) => {
                             const previewFile = document.previewPath ? zip.get(document.previewPath) : undefined;
@@ -162,11 +246,36 @@ export default function CanvasPage() {
                             );
                         }),
                     );
-                }),
-            );
-            message.success(`已导入 ${data.projects.length} 个画布`);
-        } catch {
-            message.error("导入失败，请选择有效的画布压缩包");
+
+                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, {
+                        phase: "saving",
+                        message: remoteSyncEnabled ? "正在保存画布结构" : "正在保存本地画布",
+                    });
+                    await flushCanvasStorePersistence();
+                    if (remoteSyncEnabled) {
+                        try {
+                            await saveRemoteUserDataNow();
+                        } catch (syncError) {
+                            remoteSyncWarning ||= syncError;
+                            scheduleRemoteUserDataSync();
+                            console.warn("导入画布云端同步失败，等待自动重试", syncError);
+                        }
+                    }
+                } finally {
+                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
+                }
+            }
+
+            await flushCanvasStorePersistence();
+            if (remoteSyncWarning) {
+                message.warning(`已导入 ${data.projects.length} 个画布，云端同步未完成，将自动重试`);
+            } else {
+                message.success(remoteSyncEnabled ? `已导入 ${data.projects.length} 个画布并完成云端同步` : `已导入 ${data.projects.length} 个画布并保存到本地`);
+            }
+        } catch (error) {
+            hideLoading();
+            console.error("导入画布失败", error);
+            message.error(error instanceof Error ? `导入失败：${error.message}` : "导入失败，请选择有效的画布压缩包");
         } finally {
             if (inputRef.current) inputRef.current.value = "";
         }
@@ -275,6 +384,10 @@ export default function CanvasPage() {
                                 <span>{sortLabel}</span>
                             </button>
                         </Dropdown>
+                        <button type="button" className="canvas-library-filter flex items-center gap-1.5" onClick={() => setHistoryOpen(true)} aria-label="查看画布创建与变更历史时间线" title="查看画布创建与变更历史时间线">
+                            <History className="size-3.5 text-[var(--workspace-accent)]" />
+                            <span>历史</span>
+                        </button>
                         {keyword || projectFilter !== "all" || sort !== "updated" ? (
                             <button
                                 type="button"
@@ -342,15 +455,19 @@ export default function CanvasPage() {
                                 project={project}
                                 projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined}
                                 onClick={() => enterProject(project.id)}
+                                onPrefetch={preloadProject}
+                                opening={openingProjectId === project.id}
                             />
                         ))}
                     </CollectionGrid>
                 ) : (
                     <WorkspaceState icon="canvas" title="没有匹配的画布" description="换一个画布名称或重置筛选条件。" />
                 )}
-                {hydrated && visibleProjects.length ? <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
-                    {visibleProjects.length < filteredProjects.length ? `继续下滑加载更多（每页 50 条）` : `已加载全部 ${filteredProjects.length} 个画布`}
-                </div> : null}
+                {hydrated && visibleProjects.length ? (
+                    <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
+                        {visibleProjects.length < filteredProjects.length ? `继续下滑加载更多（每页 50 条）` : `已加载全部 ${filteredProjects.length} 个画布`}
+                    </div>
+                ) : null}
             </div>
 
             <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
@@ -372,6 +489,7 @@ export default function CanvasPage() {
                     onChange={setAssociationProjectId}
                 />
             </Modal>
+            <CanvasHistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
         </WorkspacePage>
     );
 }

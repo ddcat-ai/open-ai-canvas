@@ -38,6 +38,7 @@ type CanvasNodeContextMenuProps = {
     onRedo: () => void;
     onPaste: () => void;
     onCopyNode: () => void;
+    onCreateGenerationCopy: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
     onSaveAsset: () => void;
@@ -72,6 +73,7 @@ export function CanvasNodeContextMenu({
     onRedo,
     onPaste,
     onCopyNode,
+    onCreateGenerationCopy,
     onDuplicate,
     onDelete,
     onSaveAsset,
@@ -201,6 +203,7 @@ export function CanvasNodeContextMenu({
                                     <MenuButton icon={<Copy />} label="复制节点" shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
                                     {isImage ? <MenuButton icon={<Clipboard />} label="复制图片" disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
                                     <MenuButton icon={<Link2 />} label={isImage ? "复制图片地址" : "复制视频地址"} disabled={!canCopyMediaUrl} onClick={() => runAction(onCopyMediaUrl)} />
+                                    <MenuButton icon={<Copy />} label="创建生成副本" onClick={() => runAction(onCreateGenerationCopy)} />
                                     <MenuButton icon={<Layers3 />} label="创建参数变体" shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
                                     <MenuButton icon={<Trash2 />} label="删除节点" danger onClick={() => runAction(onDelete)} />
                                 </>

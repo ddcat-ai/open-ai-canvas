@@ -29,6 +29,33 @@ describe("workspace route loading", () => {
         expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(linkTo)}");
     });
 
+    test("keeps the creation page at root and preserves the create compatibility route", () => {
+        const router = source("../src/router.tsx");
+        const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
+
+        expect(router).toContain('{ path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
+        expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
+        expect(router).not.toContain('path: "/home"');
+        expect(router).not.toContain("HomePage");
+        expect(navigation).toContain('{ id: "home", title: "首页", icon: Home, to: "/" }');
+        expect(navigation).not.toContain('to: "/create"');
+        expect(navigation).not.toContain('to: "/home"');
+    });
+
+    test("preloads canvas detail and paints opening feedback before navigation", () => {
+        const modules = source("../src/lib/workspace-route-modules.ts");
+        const router = source("../src/router.tsx");
+        const canvasLibrary = source("../src/pages/canvas/index.tsx");
+        const canvasCard = source("../src/components/canvas/canvas-folder-card.tsx");
+
+        expect(modules).toContain('loadCanvasProjectPage = () => import("@/pages/canvas/project")');
+        expect(router).toContain("lazy(loadCanvasProjectPage)");
+        expect(canvasLibrary).toContain("setOpeningProjectId(id)");
+        expect(canvasLibrary).toContain("window.requestAnimationFrame(() => navigate(");
+        expect(canvasCard).toContain("onPointerEnter={onPrefetch}");
+        expect(canvasCard).toContain("正在打开");
+    });
+
     test("uses a quiet workspace skeleton for initial hydration", () => {
         const loader = source("../src/components/ui/aceternity/full-screen-loader.tsx");
         const css = source("../src/styles/globals.css");

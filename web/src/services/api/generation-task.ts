@@ -16,17 +16,6 @@ import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInput
 
 export { logicalModelIDForConfig };
 
-// 只要模型明确选择了请求协议，就统一交给后端协议运行时执行：逻辑模型
-// 由逻辑模型路由解析协议，系统渠道由 channelId 解析真实渠道模型，用户
-// 自建渠道则由所选协议插件负责第三方字段映射和结果解析。没有显式协议
-// 的旧配置继续保留前端直连兼容路径。
-export function backendModelRuntimeRequired(config: AiConfig) {
-    if ((config.taskWorkflowProvider || "model") !== "model") return true;
-    if (logicalModelIDForConfig(config)) return true;
-    const requestConfig = resolveModelRequestConfig(config, config.model);
-    return Boolean(requestConfig.channelId || requestConfig.interfaceType);
-}
-
 export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 
 export type BackendGenerationResult = {
@@ -47,7 +36,7 @@ type BackendGenerationTaskOptions = {
     referenceImages?: ReferenceImage[];
     referenceVideos?: ReferenceVideo[];
     referenceAudios?: ReferenceAudio[];
-    textHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+    textHistory?: Array<{ role: "user" | "assistant" | "system"; content: string }>;
     mask?: ReferenceImage;
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
@@ -119,6 +108,7 @@ export async function runBackendGenerationTask(
             dependencies,
         );
     }
+    assertBackendRuntimeConfigured(config, mode);
     const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
     return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate }, prepared, dependencies);
@@ -133,6 +123,7 @@ export async function submitBackendGenerationTask(
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (usesLocalDreamina(options.config)) throw new Error("本机即梦任务暂不支持后台提交");
+    assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);
     throwIfAborted(options.signal);
     return createBackendGenerationTask(options, prepared, dependencies);
@@ -161,7 +152,7 @@ export async function runBackendToolGenerationTask(options: {
             mode: "text",
             prompt: options.prompt,
             config: backendProviderConfig(options.config),
-            agentRequests: buildBackendToolRequests(options.messages, options.tools, options.toolChoice),
+            agentRequests: buildBackendToolRequests(options.messages, options.tools, options.toolChoice, options.config),
             metadata: { source: "canvas-online-agent" },
         },
     });
@@ -390,6 +381,13 @@ function usesLocalDreamina(config: AiConfig) {
     return (config.taskWorkflowProvider || "model") === "model" && isLocalDreaminaModel(config.model);
 }
 
+function assertBackendRuntimeConfigured(config: AiConfig, mode: BackendGenerationMode) {
+    if (resolveGenerationWorkflowExecution(config, mode)) return;
+    if (logicalModelIDForConfig(config)) return;
+    const requestConfig = resolveModelRequestConfig(config, config.model);
+    if (!requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议，请先在模型设置中选择协议插件");
+}
+
 function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 }
@@ -445,11 +443,27 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
             referenceVideos: prepared.referenceVideos,
             referenceAudios: prepared.referenceAudios,
             mask: prepared.mask,
-            metadata,
+            metadata: generationMetadata(config, metadata),
         },
     });
     onTaskUpdate?.(task);
     return task;
+}
+
+function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>) {
+    const channel = resolveModelChannel(config, config.model);
+    const model = modelOptionName(config.model);
+    const modelCost = channel.modelCosts?.find((item) => item.model === model);
+    const protocol = modelCost?.protocol || channel.interfaceType;
+    const defaults = modelCost?.defaultOptions;
+    if (!protocol || !defaults || !Object.keys(defaults).length) return metadata;
+    const existing = metadata?.providerOptions && typeof metadata.providerOptions === "object" && !Array.isArray(metadata.providerOptions)
+        ? metadata.providerOptions as Record<string, unknown>
+        : {};
+    const namespace = existing[protocol] && typeof existing[protocol] === "object" && !Array.isArray(existing[protocol])
+        ? existing[protocol] as Record<string, unknown>
+        : {};
+    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
 }
 
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {
@@ -530,6 +544,7 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
         audioInstructions: config.audioInstructions,
+        systemPrompt: config.systemPrompt,
     };
     if (logicalModelIDForConfig(config)) return generationOptions;
     return {
@@ -543,7 +558,7 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         model: requestConfig.model,
         ...generationOptions,
         capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
-        systemPrompt: "",
+        systemPrompt: config.systemPrompt,
     };
 }
 
@@ -583,7 +598,7 @@ function workflowProviderConfig(config: AiConfig, requestConfig: ReturnType<type
         runningHubWalletApiKey: "",
         runningHubUploadApiKey: runningHubActive ? config.runningHub.uploadApiKey || "" : "",
         capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
-        systemPrompt: "",
+        systemPrompt: config.systemPrompt,
     };
 }
 

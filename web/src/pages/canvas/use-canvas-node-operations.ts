@@ -340,13 +340,14 @@ export function useCanvasNodeOperations({
         setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
     }, [commitConnections, connectionsRef, setContextMenu, setSelectedConnectionId]);
 
-    const duplicateNode = useCallback((nodeId: string) => {
+    const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
         if (!source) return;
         const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : [source];
         const idMap = new Map(sources.map((node, index) => [node.id, `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`]));
-        const versionRootId = isFrameNode(source) ? undefined : source.metadata?.versionOfNodeId || source.id;
+        const versionRootId = duplicateMode === "variant" && !isFrameNode(source) ? source.metadata?.versionOfNodeId || source.id : undefined;
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
+        const copyTitle = duplicateMode === "copy" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
         const copiedNodes = sources.map((node) => {
             const metadata = isolateCopiedNodeMetadata(node, idMap);
             if (node.type === CanvasNodeType.Drawing) {
@@ -364,7 +365,7 @@ export function useCanvasNodeOperations({
             return {
                 ...node,
                 id: idMap.get(node.id)!,
-                title: node.id === source.id ? `${node.title.replace(/ · [A-Z]$/, "")} · ${versionLabel || "副本"}` : node.title,
+                title: node.id === source.id ? copyTitle || `${node.title.replace(/ · [A-Z]$/, "")} · ${versionLabel || "副本"}` : node.title,
                 position: { x: node.position.x + 36, y: node.position.y + 36 },
                 parentId: node.parentId ? idMap.get(node.parentId) || node.parentId : undefined,
                 metadata,
@@ -379,7 +380,7 @@ export function useCanvasNodeOperations({
         }
         const id = idMap.get(source.id)!;
         const nextNodes = [
-            ...nodesRef.current.map((node) => node.id === source.id && versionRootId && !node.metadata?.versionLabel ? { ...node, title: `${node.title} · A`, metadata: { ...node.metadata, versionOfNodeId: versionRootId, versionLabel: "A", versionPrimary: true } } : node),
+            ...nodesRef.current.map((node) => node.id === source.id && versionRootId && !node.metadata?.versionLabel ? { ...node, title: `${node.title} · A`, metadata: { ...node.metadata, versionOfNodeId: versionRootId, versionLabel: "A", versionPrimary: true, generationResultPlacement: "replace-node" as const } } : node),
             ...copiedNodes,
         ];
         commitNodes(nextNodes);

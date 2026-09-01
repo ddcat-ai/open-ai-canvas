@@ -182,7 +182,7 @@ function buildComposerGenerationContext(
                 if (input.type === "text") textBlocks.push(`【${label}】\n${input.text || ""}`);
                 else selectedInputs.push(input);
             }
-            nextPrompt += input.type === "text" ? `【${label}】` : label;
+            nextPrompt += input.type === "text" ? `【${label}】` : `@${label}`;
         } else nextPrompt += match[0];
         lastIndex = match.index + match[0].length;
     }

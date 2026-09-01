@@ -15,24 +15,100 @@ import (
 	"infinite-canvas/backend/internal/protocol"
 )
 
-func TestPluginViewIncludesDocumentationForEveryBundledProtocol(t *testing.T) {
+func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	plugins := center.list()
-	if len(plugins) != len(protocol.Builtins().List("", "", true))+2 {
-		t.Fatalf("plugin views = %d, builtins plus workflow plugins = %d", len(plugins), len(protocol.Builtins().List("", "", true))+2)
-	}
+	pluginsByID := make(map[string]PluginView, len(plugins))
 	for _, plugin := range plugins {
-		if plugin.Source != "bundled" {
+		pluginsByID[plugin.Manifest.ID] = plugin
+	}
+	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plugins) != len(packages)+2 {
+		t.Fatalf("plugin views = %d, official packages plus workflow plugins = %d", len(plugins), len(packages)+2)
+	}
+	for _, packagePath := range packages {
+		data, err := os.ReadFile(packagePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pkg, err := protocol.ParsePluginPackage(data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", filepath.Base(packagePath), err)
+		}
+		plugin, ok := pluginsByID[pkg.Manifest.Metadata.ID]
+		if !ok {
+			t.Errorf("fresh runtime did not install official plugin %q", pkg.Manifest.Metadata.ID)
 			continue
 		}
-		document := strings.TrimSpace(plugin.Manifest.Documentation)
-		if document == "" || !strings.Contains(document, "## 影策运行时合同") {
-			t.Errorf("bundled plugin %q has no complete documentation in PluginView", plugin.Manifest.ID)
+		if plugin.Source != PluginOriginOfficial {
+			t.Errorf("plugin %q source = %q, want official", plugin.Manifest.ID, plugin.Source)
+		}
+		expected := strings.TrimSpace(string(pkg.Files["README.md"])) + "\n\n---\n\n" + strings.TrimSpace(string(pkg.Files["docs/interface.md"]))
+		if strings.TrimSpace(plugin.Manifest.Documentation) != expected {
+			t.Errorf("freshly installed plugin %q did not expose its complete packaged documentation", plugin.Manifest.ID)
+		}
+		if !strings.Contains(plugin.Manifest.Documentation, "## Manifest 完整接口定义") {
+			t.Errorf("freshly installed plugin %q has no embedded full manifest contract", plugin.Manifest.ID)
 		}
 	}
+}
+
+func TestPluginRuntimeRefreshesExistingOfficialPackageDocumentation(t *testing.T) {
+	packagePath := filepath.Join("..", "..", "..", "plugin-packages", "openai-images.yingce-plugin")
+	packageData, err := os.ReadFile(packagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := protocol.ParsePluginPackage(packageData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := pkg.Manifest
+	stale.Metadata.Documentation = "# OpenAI Images\n\n旧版本摘要。"
+	stale.Metadata.Enabled = false
+	staleRaw, err := json.Marshal(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registryData, err := json.Marshal([]pluginRegistryRecord{{
+		ID: pkg.Manifest.Metadata.ID, Raw: staleRaw, Source: PluginOriginOfficial,
+		FileName: filepath.Base(packagePath), PackageSHA256: "stale-package-hash",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "plugin_registry.json"), registryData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	center, err := newPluginRuntime(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range center.list() {
+		if plugin.Manifest.ID != pkg.Manifest.Metadata.ID {
+			continue
+		}
+		expected := strings.TrimSpace(string(pkg.Files["README.md"])) + "\n\n---\n\n" + strings.TrimSpace(string(pkg.Files["docs/interface.md"]))
+		if strings.TrimSpace(plugin.Manifest.Documentation) != expected {
+			t.Fatal("existing official plugin kept stale documentation instead of importing the rebuilt package")
+		}
+		if plugin.Status != "disabled" {
+			t.Fatalf("official plugin enabled state was not preserved during refresh: %s", plugin.Status)
+		}
+		if plugin.SHA256 == "" || plugin.SHA256 == "stale-package-hash" {
+			t.Fatalf("official plugin package hash was not refreshed: %q", plugin.SHA256)
+		}
+		return
+	}
+	t.Fatal("refreshed OpenAI Images plugin is missing")
 }
 
 func TestBundledWorkflowPluginsControlAvailability(t *testing.T) {
@@ -121,16 +197,9 @@ func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 	}
 }
 
-func TestPluginRuntimeDropsRemovedBundledProtocol(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.yingce-plugin"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	pkg, err := protocol.ParsePluginPackage(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	registryData, err := json.Marshal([]pluginRegistryRecord{{ID: "autodl-comfyui", Raw: pkg.ManifestRaw, Source: "bundled"}})
+func TestPluginRuntimeDropsRemovedOfficialProtocol(t *testing.T) {
+	staleManifest := json.RawMessage(`{"apiVersion":"yingce.plugin/v2","id":"removed-official-protocol","version":"1.0.0","name":"Removed Official Protocol","author":"Test","documentation":"# Removed\n\n## 影策运行时合同","contributes":{"providers":[{"id":"removed-official-protocol","label":"Removed","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"prompt":{"$ref":"request.prompt"}}},"response":{"status":"pending"}}]}}`)
+	registryData, err := json.Marshal([]pluginRegistryRecord{{ID: "removed-official-protocol", Raw: staleManifest, Source: PluginOriginOfficial}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,26 +211,26 @@ func TestPluginRuntimeDropsRemovedBundledProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := center.registrySnapshot().Resolve("autodl-comfyui"); ok {
-		t.Fatal("removed bundled AutoDL protocol survived bootstrap")
+	if _, ok := center.registrySnapshot().Resolve("removed-official-protocol"); ok {
+		t.Fatal("removed official protocol survived bootstrap")
 	}
 }
 
-func TestAutoDLPluginPackageInstallsThroughUploadRuntime(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.yingce-plugin"))
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestAutoDLPluginPackageLoadsAsOfficialRuntime(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	plugin, err := center.install(data, "autodl-comfyui.yingce-plugin")
-	if err != nil {
-		t.Fatal(err)
+	var plugin *PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "autodl-comfyui" {
+			copy := item
+			plugin = &copy
+			break
+		}
 	}
-	if plugin.Status != "enabled" || plugin.Manifest.ID != "autodl-comfyui" || plugin.Package != protocol.PluginPackageFormat {
-		t.Fatalf("installed AutoDL plugin = %#v", plugin)
+	if plugin == nil || plugin.Status != "enabled" || plugin.Source != PluginOriginOfficial || plugin.Package != protocol.PluginPackageFormat {
+		t.Fatalf("official AutoDL plugin = %#v", plugin)
 	}
 	if !center.registrySnapshot().IsCapability("autodl-comfyui", protocol.CapabilityVideo) {
 		t.Fatal("AutoDL package provider was not registered")
@@ -222,6 +291,58 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	}
 	if result["mode"] != "video" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testing.T) {
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v2",
+		"id":"test-declarative-video-recovery","version":"1.0.0","name":"Test Declarative Video Recovery","author":"Test","documentation":"# Test Declarative Video Recovery",
+		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-recovery.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	createCalls := 0
+	pollCalls := 0
+	downloadCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			createCalls++
+			http.Error(w, "recovery must not create", http.StatusConflict)
+		case "/v1/videos/existing-task":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"existing-task","status":"completed"}`))
+		case "/v1/videos/existing-task/content":
+			downloadCalls++
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-declarative-video-recovery", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	ctx = withProtocolRegistry(ctx, center.registrySnapshot())
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok {
+		t.Fatal("declarative recovery adapter is unavailable")
+	}
+	result, status, err := queryProtocolAdapterVideoTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, "existing-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != string(protocol.StatusSucceeded) || result["mode"] != "video" || createCalls != 0 || pollCalls != 1 || downloadCalls != 1 {
+		t.Fatalf("recovery result=%#v status=%q calls=create:%d poll:%d download:%d", result, status, createCalls, pollCalls, downloadCalls)
 	}
 }
 

@@ -17,16 +17,19 @@ import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, typ
 import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, installRemoteUserDataAutoSync, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
 import { useUserStore } from "../src/stores/use-user-store";
+import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "../src/stores/canvas/use-canvas-history-store";
 
 test("creation recovery observes streaming text tasks after reload", () => {
-    const conversations = [{
-        id: "conversation-text-recovery",
-        messages: [
-            { id: "text-streaming", role: "assistant" as const, mode: "text", status: "streaming", taskIds: ["task-text"] },
-            { id: "text-done", role: "assistant" as const, mode: "text", status: "done", taskIds: ["task-text-done"] },
-            { id: "image-pending", role: "assistant" as const, mode: "image", status: "pending", taskIds: ["task-image"] },
-        ],
-    }];
+    const conversations = [
+        {
+            id: "conversation-text-recovery",
+            messages: [
+                { id: "text-streaming", role: "assistant" as const, mode: "text", status: "streaming", taskIds: ["task-text"] },
+                { id: "text-done", role: "assistant" as const, mode: "text", status: "done", taskIds: ["task-text-done"] },
+                { id: "image-pending", role: "assistant" as const, mode: "image", status: "pending", taskIds: ["task-image"] },
+            ],
+        },
+    ];
 
     expect(pendingCreationTaskIds(conversations)).toEqual(["task-text", "task-image"]);
     expect(pendingCreationTaskKey(conversations)).toContain("conversation-text-recovery:text-streaming:task-text");
@@ -788,9 +791,13 @@ test("generation Asset publication preserves an ordinary edit queued behind its 
     const effectKey = "materialize:stale-publication:0";
     let gateGenerationRead = false;
     let markGenerationReadStarted!: () => void;
-    const generationReadStarted = new Promise<void>((resolve) => { markGenerationReadStarted = resolve; });
+    const generationReadStarted = new Promise<void>((resolve) => {
+        markGenerationReadStarted = resolve;
+    });
     let releaseGenerationRead!: () => void;
-    const generationReadGate = new Promise<void>((resolve) => { releaseGenerationRead = resolve; });
+    const generationReadGate = new Promise<void>((resolve) => {
+        releaseGenerationRead = resolve;
+    });
     localforage.getItem = (async (key: string) => {
         const snapshot = values.get(key) ?? null;
         if (key === assetKey && gateGenerationRead) {
@@ -4251,6 +4258,7 @@ test("remote resource preparation never overwrites an edit made while upload is 
     const previousAssets = useAssetStore.getState().assets;
     const indexedValues = new Map<string, string>();
     const remoteWrites: Asset[] = [];
+    let resourceUploads = 0;
     let releaseUpload!: () => void;
     const uploadReleased = new Promise<void>((resolve) => {
         releaseUpload = resolve;
@@ -4280,6 +4288,7 @@ test("remote resource preparation never overwrites an edit made while upload is 
             return { data: { code: 0, data: { projects: [], assets: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
         }
         if (method === "post" && url === "/resources") {
+            resourceUploads += 1;
             uploadStartedResolve();
             await uploadReleased;
             return {
@@ -4343,6 +4352,7 @@ test("remote resource preparation never overwrites an edit made while upload is 
 
         expect(useAssetStore.getState().assets.find((item) => item.id === asset.id)?.title).toBe("edited during upload");
         expect(remoteWrites.at(-1)?.title).toBe("edited during upload");
+        expect(resourceUploads).toBe(1);
     } finally {
         releaseUpload();
         resetRemoteUserDataSync();
@@ -4467,6 +4477,60 @@ test("user session stays unhydrated until the remote baseline is durable", async
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
         apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("deleted canvas history rehydrates from the active account scope only", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousScope = getActiveUserScope();
+    const previousHistory = useCanvasHistoryStore.getState().deletedProjects;
+    const values = new Map<string, string>();
+    const localStorageValues = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            localStorage: {
+                getItem: (key: string) => localStorageValues.get(key) ?? null,
+                setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                removeItem: (key: string) => localStorageValues.delete(key),
+            },
+        },
+    });
+    localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        values.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
+
+    try {
+        setActiveUserScope("history-account-A");
+        useCanvasHistoryStore.setState({ deletedProjects: [] });
+        useCanvasHistoryStore.getState().recordDeletedProjects([storedCanvasProject("deleted-A", "账号 A 的历史")]);
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+        setActiveUserScope("history-account-B");
+        useCanvasHistoryStore.setState({ deletedProjects: [] });
+        useCanvasHistoryStore.getState().recordDeletedProjects([storedCanvasProject("deleted-B", "账号 B 的历史")]);
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+        setActiveUserScope("history-account-A");
+        await useCanvasHistoryStore.persist.rehydrate();
+        expect(useCanvasHistoryStore.getState().deletedProjects.map((item) => item.id)).toEqual(["deleted-A"]);
+
+        setActiveUserScope("history-account-B");
+        await useCanvasHistoryStore.persist.rehydrate();
+        expect(useCanvasHistoryStore.getState().deletedProjects.map((item) => item.id)).toEqual(["deleted-B"]);
+        expect(values.has(`${CANVAS_HISTORY_STORE_KEY}:user:history-account-A`)).toBe(true);
+        expect(values.has(`${CANVAS_HISTORY_STORE_KEY}:user:history-account-B`)).toBe(true);
+    } finally {
+        setActiveUserScope(previousScope);
+        useCanvasHistoryStore.setState({ deletedProjects: previousHistory });
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     }

@@ -94,7 +94,7 @@ func TestProtocolRequestURLCanResolveSameOriginRootPath(t *testing.T) {
 	}
 }
 
-func TestRunVideoTaskUsesHostBackedAgnesJSONProtocol(t *testing.T) {
+func TestRunVideoTaskUsesDeclarativeAgnesJSONProtocol(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -102,9 +102,9 @@ func TestRunVideoTaskUsesHostBackedAgnesJSONProtocol(t *testing.T) {
 	}
 	adapter, ok := center.registrySnapshot().Resolve("agnes-video")
 	if !ok {
-		t.Fatal("host-backed Agnes adapter is missing")
+		t.Fatal("declarative Agnes adapter is missing")
 	}
-	if metadata := adapter.Metadata(); metadata.Version != "1.2.0" || metadata.Execution != "host:agnes-video" || !metadata.RequiresPublicMediaURLs {
+	if metadata := adapter.Metadata(); metadata.Version != "2.0.0" || metadata.Execution != "declarative" || !metadata.RequiresPublicMediaURLs {
 		t.Fatalf("Agnes runtime metadata = %#v", metadata)
 	}
 
@@ -165,9 +165,54 @@ func TestRunVideoTaskUsesHostBackedAgnesJSONProtocol(t *testing.T) {
 	if !ok || video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
 		t.Fatalf("video = %#v", result["video"])
 	}
-	wantPaths := "POST /v1/videos,GET /agnesapi?video_id=video-1&model_name=agnes-video-2.5,GET /video.mp4"
+	wantPaths := "POST /v1/videos,GET /agnesapi?model_name=agnes-video-2.5&video_id=video-1,GET /video.mp4"
 	if got := strings.Join(paths, ","); got != wantPaths {
 		t.Fatalf("paths = %q, want %q", got, wantPaths)
+	}
+}
+
+func TestRunVideoTaskDownloadsAuthenticatedDeclarativeResult(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.URL.Path {
+		case "/v1/videos":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"video-1","status":"completed"}`))
+		case "/v1/videos/video-1/content":
+			if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+				t.Errorf("Authorization = %q", got)
+			}
+			if got := r.Header.Get("Accept"); got != "video/mp4" {
+				t.Errorf("Accept = %q", got)
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	result, err := runVideoTask(ctx, canvasGenerationInput{
+		Mode: "video", Prompt: "cinematic shot",
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", InterfaceType: "newapi", Model: "sora-2", VideoSeconds: "5", Size: "1280x720"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	video, _ := result["video"].(map[string]interface{})
+	if video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
+		t.Fatalf("video = %#v", video)
+	}
+	if got := strings.Join(paths, ","); got != "POST /v1/videos,GET /v1/videos/video-1/content" {
+		t.Fatalf("paths = %q", got)
 	}
 }
 

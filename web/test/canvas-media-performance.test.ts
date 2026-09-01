@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { resolveActiveCanvasMediaNodeId } from "../src/lib/canvas/canvas-performance-mode";
+import { canvasNodeRenderPadding, resolveActiveCanvasMediaNodeId } from "../src/lib/canvas/canvas-performance-mode";
 import { videoMetadata } from "../src/lib/canvas/canvas-generation-task-sync";
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "../src/lib/canvas/canvas-media-preview";
 import { collectImageStorageKeys } from "../src/services/image-storage";
@@ -14,7 +14,10 @@ const canvasNodeContentSource = readFileSync(resolve(import.meta.dir, "../src/co
 const canvasAudioPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-audio-player.tsx"), "utf8");
 const canvasMentionSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-resource-mention-textarea.tsx"), "utf8");
 const canvasNodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
+const canvasVideoPreviewSource = readFileSync(resolve(import.meta.dir, "../src/services/canvas-video-preview.ts"), "utf8");
 const videoPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/video-player.tsx"), "utf8");
+const canvasProjectSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+const globalStylesSource = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
 function node(id: string, type: CanvasNodeType): CanvasNodeData {
     return { id, type, title: id, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} };
@@ -41,6 +44,43 @@ describe("canvas dimension header rendering", () => {
     test("tracks live viewport scale without React width commits", () => {
         expect(canvasNodeSource).toContain("calc(var(--canvas-node-width) * var(--canvas-live-scale, 1))");
         expect(canvasNodeSource).toContain('"--canvas-node-width": `${node.width}px`');
+    });
+});
+
+describe("large canvas media rendering", () => {
+    test("keeps rendered nodes mounted longer than newly entering nodes", () => {
+        expect(canvasNodeRenderPadding(true, false)).toBe(128);
+        expect(canvasNodeRenderPadding(true, true)).toBe(640);
+        expect(canvasNodeRenderPadding(false, true)).toBeGreaterThan(canvasNodeRenderPadding(false, false));
+    });
+
+    test("does not eagerly load or resize LibTV thumbnails", () => {
+        expect(canvasNodeContentSource).toContain('loading="lazy"');
+        expect(canvasNodeContentSource).not.toContain('importedFromLibTV ? "eager"');
+        expect(canvasNodeContentSource).toContain("if (importedFromLibTV) return;");
+    });
+
+    test("keeps canvas node action context stable across viewport renders", () => {
+        expect(canvasProjectSource).toContain("const canvasNodeActions = useMemo<CanvasNodeActionContextValue>");
+        expect(canvasProjectSource).toContain("<CanvasNodeActionContext.Provider value={canvasNodeActions}>");
+    });
+
+    test("keeps node shells visible while panning and zooming", () => {
+        expect(globalStylesSource).not.toMatch(/\[data-canvas-viewport-interacting="true"\]\s+\.canvas-node-shell\s*\{[^}]*content-visibility:\s*hidden/);
+    });
+
+    test("lets inactive video nodes hydrate their own first-frame preview", () => {
+        expect(canvasNodeContentSource).toContain("if (previewUrl || !node.metadata?.content || !updateMetadataRef.current)");
+        expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
+        expect(canvasNodeContentSource).toContain("mediaActive || !hasPassivePreview");
+        expect(canvasNodeContentSource).toContain('muted\n                playsInline\n                preload="auto"');
+        expect(canvasNodeContentSource).toContain("onLoadedMetadata={(event) => primePassiveVideoFrame(event.currentTarget)}");
+        expect(canvasNodeContentSource).toContain("video.currentTime = Math.min(0.001, video.duration)");
+    });
+
+    test("allows failed or empty first-frame requests to retry", () => {
+        expect(canvasVideoPreviewSource).toContain("if (!preview) previewRequests.delete(requestKey)");
+        expect(canvasVideoPreviewSource).toContain("previewRequests.delete(requestKey);");
     });
 });
 

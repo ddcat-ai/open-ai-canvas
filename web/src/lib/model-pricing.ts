@@ -51,6 +51,25 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
     return matched;
 }
 
+export function priceTierSummaryLabel(tiers: ModelPriceTier[]) {
+    const unitPrices = (billingMode: ModelPriceTier["billingMode"]) =>
+        tiers
+            .filter((tier) => tier.billingMode === billingMode)
+            .map((tier) => tier.unitPriceMicrocredits / 1_000_000)
+            .filter((value) => Number.isFinite(value) && value >= 0);
+    const fixedRequestValues = unitPrices("fixed_request");
+    const perSecondValues = unitPrices("per_second");
+    if (fixedRequestValues.length) return formatPriceRange(fixedRequestValues, "积分");
+    if (perSecondValues.length) return formatPriceRange(perSecondValues, "积分/秒");
+    return tiers.some((tier) => tier.billingMode === "token") ? "按量预估" : "未配置";
+}
+
+export function formatPriceRange(values: number[], suffix: string) {
+    const unique = Array.from(new Set(values)).sort((left, right) => left - right);
+    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+    return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
+}
+
 export function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): { logicalModelID: string; intent: ModelRequestIntent } | undefined {
     if (!capability || !value) return undefined;
     const channel = resolveModelChannel(config, value);

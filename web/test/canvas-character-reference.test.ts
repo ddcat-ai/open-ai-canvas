@@ -43,3 +43,64 @@ describe("parseCharacterBreakdown", () => {
         expect(parseCharacterBreakdown(result).map((character) => character.name)).toEqual(["林夏", "吴奶奶"]);
     });
 });
+
+const characterCard = {
+    name: "林夏",
+    aliases: ["夏夏"],
+    role: "女主角，加班晚归的都市上班族",
+    appearance: "26岁东亚女性，短发",
+    clothing: "米色风衣",
+    physique: "年轻女性常规体态",
+    personality: "善良内敛",
+    props: "磁吸小夜灯",
+    consistencyPrompt: "短发，米色风衣",
+    multiViewPrompt: "正面、侧面、背面保持一致",
+    voiceLanguage: "中文普通话",
+    voiceAge: "26岁青年女性",
+    voiceTimbre: "温和",
+};
+
+describe("parseCharacterBreakdown 顶层形态兼容", () => {
+    test("接受顶层角色数组", () => {
+        expect(parseCharacterBreakdown(JSON.stringify([characterCard])).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("接受数组外再包一层", () => {
+        expect(parseCharacterBreakdown(JSON.stringify([[characterCard]])).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("接受每个角色单独包一层 characters", () => {
+        const payload = [{ characters: [characterCard] }];
+        expect(parseCharacterBreakdown(JSON.stringify(payload)).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("接受 characters 写成以角色名为键的对象", () => {
+        const payload = { characters: { 林夏: characterCard } };
+        expect(parseCharacterBreakdown(JSON.stringify(payload)).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("跳过数组里的非角色元素", () => {
+        const payload = [{ index: 1 }, characterCard];
+        expect(parseCharacterBreakdown(JSON.stringify(payload)).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("正文先列角色名数组时仍取到最终契约对象", () => {
+        const result = `本章角色：["林夏","陈默"]\n\n${JSON.stringify({ characters: [characterCard] })}`;
+        expect(parseCharacterBreakdown(result).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("顶层数组被 markdown 代码块包裹", () => {
+        const result = "```json\n" + JSON.stringify([characterCard]) + "\n```";
+        expect(parseCharacterBreakdown(result).map((character) => character.name)).toEqual(["林夏"]);
+    });
+
+    test("角色名单数组不是角色卡，继续向后寻找契约对象", () => {
+        const result = `旁白提到了名字：["林夏"]`;
+        expect(() => parseCharacterBreakdown(result)).toThrow(/符合契约的 JSON/);
+    });
+
+    test("角色缺少设定字段时报出角色名", () => {
+        const payload = [{ name: "林夏", role: "女主角" }];
+        expect(() => parseCharacterBreakdown(JSON.stringify(payload))).toThrow(/林夏/);
+    });
+});

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildAssetMentionReferences, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes } from "../src/lib/canvas/canvas-resource-references";
+import { buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes } from "../src/lib/canvas/canvas-resource-references";
 import { canvasNodeToAsset } from "../src/lib/canvas/canvas-node-asset";
 import { buildNodeGenerationInputs } from "../src/components/canvas/canvas-node-generation";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
@@ -177,6 +177,20 @@ describe("canvas resource mention slots", () => {
         const connections = nodes.slice(0, -1).map((node) => connection(node.id, target.id));
 
         expect(buildNodeMentionReferences(target, nodes, connections).map((reference) => reference.label)).toEqual(["图片1", "音频1", "图片2", "文本1"]);
+    });
+
+    test("批量索引保持直接引用和配置节点引用语义", () => {
+        const image = imageNode("image-a");
+        const audio = audioNode("audio-a");
+        const target = videoNode("target");
+        const config: CanvasNodeData = { id: "config", type: CanvasNodeType.Config, title: "config", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: {} };
+        const nodes = [image, audio, target, config];
+        const connections = [connection(image.id, target.id), connection(target.id, config.id), connection(audio.id, config.id)];
+        const references = buildCanvasNodeMentionReferenceMap(nodes, connections);
+
+        expect(references.get(target.id)?.map((reference) => reference.nodeId)).toEqual([audio.id]);
+        expect(references.get(config.id)?.map((reference) => reference.nodeId)).toEqual([target.id, audio.id]);
+        expect(references.get(image.id)?.map((reference) => reference.nodeId)).toEqual([image.id]);
     });
 
     test("素材库身份 token 保持稳定", () => {

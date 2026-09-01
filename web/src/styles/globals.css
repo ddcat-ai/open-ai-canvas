@@ -3860,6 +3860,8 @@
     .canvas-folder-preview .canvas-project-media img { filter: saturate(.94) contrast(1.02); transition: transform 420ms var(--motion-ease-out), filter 240ms ease-out; }
     .canvas-folder-card:hover .canvas-folder-preview .canvas-project-media img { filter: saturate(1) contrast(1.04); transform: scale(1.025); }
     .canvas-folder-preview .canvas-project-preview-canvas { background: var(--canvas-cover-surface); }
+    .canvas-folder-opening { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: var(--space-2); background: color-mix(in srgb, var(--background) 78%, transparent); color: var(--foreground); font-size: var(--fs-caption); font-weight: 600; backdrop-filter: blur(3px); }
+    .canvas-folder-card.is-opening { pointer-events: none; }
 
     .canvas-folder-body {
         display: flex;
@@ -9324,6 +9326,13 @@
         transition: none !important;
     }
 
+    /* 平移时优先保证世界层合成，暂时关闭每个媒体卡片的滤镜和阴影绘制。 */
+    [data-canvas-viewport-interacting="true"] :where(.canvas-node-shell, .canvas-frame-shell, .canvas-folder-preview, .canvas-folder-front, .aceternity-comet-card) {
+        box-shadow: none !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+    }
+
     /* 静止期用最终倍率重新排版 DOM，避免 Windows Chromium 复用交互期的低分辨率合成纹理。 */
     .canvas-world-layer {
         transform: translate(var(--canvas-live-x), var(--canvas-live-y)) scale(var(--canvas-live-scale-ratio));
@@ -10552,13 +10561,15 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-home .creation-reference-panel { width: fit-content; min-width: 0; max-width: 100%; margin: -2px 0 var(--space-2); }
 .creation-home .creation-reference-panel.is-expanded { width: 100%; }
 .creation-home .creation-reference-panel-header { display: flex; min-height: var(--space-8); flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
-.creation-home .creation-reference-filter-tabs { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; }
+.creation-home .creation-reference-filter-tabs { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: var(--space-3); overflow-x: auto; scrollbar-width: none; }
 .creation-home .creation-reference-filter-tabs::-webkit-scrollbar { display: none; }
 .creation-home .creation-reference-filter-tabs button,
-.creation-home .creation-reference-panel-actions button { min-height: var(--space-7); border: 0; border-radius: var(--r-md); background: transparent; color: var(--creation-muted); padding: 0 var(--space-3); font-size: var(--fs-caption); line-height: 1; white-space: nowrap; transition: background-color var(--motion-dur-fast-calc) ease, color var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-panel-actions button { min-height: var(--space-7); border: 0; border-radius: 0; background: transparent; color: var(--creation-muted); padding: 0 2px; font-size: var(--fs-caption); line-height: 1; white-space: nowrap; transition: color var(--motion-dur-fast-calc) ease, opacity var(--motion-dur-fast-calc) ease; }
 .creation-home .creation-reference-filter-tabs button:hover,
 .creation-home .creation-reference-filter-tabs button.is-active,
-.creation-home .creation-reference-panel-actions button:hover:not(:disabled) { background: var(--creation-surface-hover); color: var(--creation-text); }
+.creation-home .creation-reference-panel-actions button:hover:not(:disabled) { color: var(--creation-text); }
+.creation-home .creation-reference-filter-tabs button { position: relative; }
+.creation-home .creation-reference-filter-tabs button.is-active::after { position: absolute; right: 2px; bottom: -1px; left: 2px; height: 2px; border-radius: var(--r-full); background: var(--creation-text); content: ""; }
 .creation-home .creation-reference-filter-tabs button:focus-visible,
 .creation-home .creation-reference-panel-actions button:focus-visible,
 .creation-home .creation-reference-panel-expand:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: var(--space-half); }
@@ -10637,9 +10648,10 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-home .creation-reference-card-preview video { width: 100%; height: 100%; object-fit: cover; transition: transform var(--motion-dur-fast-calc) var(--motion-ease-out); }
 .creation-home .creation-reference-card-preview:hover img,
 .creation-home .creation-reference-card-preview:hover video { transform: scale(1.04); }
-.creation-home .creation-reference-card-preview > span { position: absolute; right: var(--space-1); bottom: var(--space-1); display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 72%, transparent); color: var(--color-neutral-0); opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease; }
-.creation-home .creation-reference-card-preview:hover > span,
-.creation-home .creation-reference-card-preview:focus-visible > span { opacity: 1; }
+.creation-home .creation-reference-card-preview > span:not(.cached-resource-image-shell) { position: absolute; right: var(--space-1); bottom: var(--space-1); display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 72%, transparent); color: var(--color-neutral-0); opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease; }
+.creation-home .creation-reference-card-preview:hover > span:not(.cached-resource-image-shell),
+.creation-home .creation-reference-card-preview:focus-visible > span:not(.cached-resource-image-shell) { opacity: 1; }
+.creation-home .creation-reference-card-preview > .cached-resource-image-shell { position: static; display: grid; width: 100%; height: 100%; place-items: center; }
 .creation-home .creation-reference-card-preview:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: calc(-1 * var(--stroke-2)); }
 .creation-home .creation-reference-card-remove { position: absolute; top: var(--space-1); right: var(--space-1); z-index: 1; display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border: 0; border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); padding: 0; opacity: 0; transition: opacity var(--motion-dur-fast-calc) ease, background-color var(--motion-dur-fast-calc) ease; }
 .creation-home .creation-reference-stack-card:hover .creation-reference-card-remove,
@@ -10804,6 +10816,23 @@ html:not(.dark) .creation-home .creation-chat-control:hover,
 html:not(.dark) .creation-home .creation-chat-control[aria-expanded="true"],
 html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover { background: rgba(28, 32, 37, .06) !important; }
 
+.creation-home .creation-chat-controls > .voice-recording-inline {
+    width: min(236px, calc(100vw - 120px));
+    max-width: 236px;
+    flex: 0 1 236px;
+    min-height: 30px;
+    height: 30px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 7px;
+    background: transparent !important;
+    padding: 0 2px;
+}
+.creation-home .creation-chat-controls > .voice-recording-inline > svg {
+    flex: 0 1 160px;
+    max-width: 160px;
+}
+
 .creation-chat-intro h1 > .creation-intro-emphasis {
     display: inline-block;
     margin: 0 4px;
@@ -10835,10 +10864,14 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-user-message-references { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .creation-user-message-reference { display: inline-flex; min-width: 0; max-width: 180px; height: 25px; align-items: center; gap: 5px; border-radius: 6px; background: rgba(255, 255, 255, .075); padding: 0 7px; color: var(--creation-muted); font-size: 10px; line-height: 1; }
 .creation-user-message-reference img, .creation-user-message-reference video { width: 17px; height: 17px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; }
+.creation-user-message-reference .cached-resource-image-shell { display: block; width: 17px; height: 17px; flex: 0 0 17px; overflow: hidden; border-radius: 4px; }
+.creation-user-message-reference .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .creation-user-message-reference svg { width: 12px; height: 12px; flex: 0 0 auto; }
 .creation-user-message-reference span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, .07); }
 .creation-user-message-attachments button { position: relative; width: 44px; height: 44px; flex: 0 0 auto; overflow: hidden; border: 0; border-radius: 7px; background: transparent; padding: 0; }
+.creation-user-message-attachments button > .cached-resource-image-shell { display: block; width: 100%; height: 100%; }
+.creation-user-message-attachments button > .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .creation-user-message-attachments button:focus-visible { outline: 2px solid var(--creation-text); outline-offset: 2px; }
 .creation-user-message-attachments button > span { position: absolute; right: 3px; bottom: 3px; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: rgba(0, 0, 0, .68); color: #fff; opacity: 0; transition: opacity 140ms ease; }
 .creation-user-message-attachments button:hover > span,
@@ -15589,28 +15622,38 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     .creation-home .creation-empty-suggest { grid-template-columns: 1fr; }
 }
 
-/* 空态布局收敛：banner 与下方对话列同宽，整组垂直居中；用首/末子项 auto margin 居中，
-   内容超高时自动 margin 归零、回到顶部对齐，避免 justify-content:center 在滚动容器里的裁切问题。 */
+/* 空态布局收敛：保持图片区、文案和输入区的文档流顺序，内容超高时由主区滚动承载。 */
+.creation-home .creation-empty-workspace {
+    justify-content: flex-start;
+}
+
+.creation-home .creation-empty-workspace > .creation-empty-art,
+.creation-home .creation-empty-workspace > .creation-chat-intro,
+.creation-home .creation-empty-workspace > .creation-empty-composer,
+.creation-home .creation-empty-workspace > .creation-empty-suggest {
+    flex: 0 0 auto;
+}
+
 .creation-empty-workspace > .creation-empty-art {
     width: min(820px, calc(100% - 28px));
     height: 200px;
-    margin: auto auto 20px;
+    margin: 0 auto 20px;
 }
 
 .creation-empty-workspace .creation-empty-art-frame.is-back { top: 18px; height: 146px; }
 .creation-empty-workspace .creation-empty-art-frame.is-main { top: 0; height: 182px; }
 .creation-empty-workspace .creation-empty-art-frame.is-front { top: 24px; height: 146px; }
 
-.creation-empty-workspace .creation-chat-intro { margin-top: 24px; margin-bottom: 18px; }
+.creation-empty-workspace .creation-chat-intro { margin: 0 auto 18px; }
 
-.creation-empty-workspace > .creation-empty-suggest { margin: 26px auto auto; }
+.creation-empty-workspace > .creation-empty-suggest { margin: 26px auto 0; }
 
 @media (max-width: 800px) {
     .creation-empty-workspace > .creation-empty-art { height: 168px; margin-bottom: 16px; }
     .creation-empty-workspace .creation-empty-art-frame.is-back { top: 14px; height: 122px; }
     .creation-empty-workspace .creation-empty-art-frame.is-main { top: 0; height: 152px; }
     .creation-empty-workspace .creation-empty-art-frame.is-front { top: 18px; height: 122px; }
-    .creation-empty-workspace .creation-chat-intro { margin-top: 18px; margin-bottom: 14px; }
+    .creation-empty-workspace .creation-chat-intro { margin-top: 0; margin-bottom: 14px; }
     .creation-empty-workspace > .creation-empty-suggest { margin-top: 20px; }
 }
 

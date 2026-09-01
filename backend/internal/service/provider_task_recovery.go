@@ -64,6 +64,7 @@ func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.Us
 
 func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, claimUserID string) (*ProviderTaskQueryResult, error) {
 	billing := s.taskBilling()
+	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	if task == nil || task.ID == "" {
 		return nil, BadAuthRequest("任务不存在")
 	}
@@ -79,6 +80,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if providerRequestID == "" {
 		return nil, BadAuthRequest("该任务没有可恢复的上游任务 ID")
 	}
+	wasRefunded := false
 	if task.BillingOrderID != "" {
 		order, err := s.repo.BillingOrder(task.BillingOrderID)
 		if err != nil {
@@ -87,9 +89,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		if order.UserID != task.UserID || order.TaskID != task.ID {
 			return nil, BadAuthRequest("任务与计费订单归属不一致")
 		}
-		if order.Status == model.BillingStatusRefunded {
-			return nil, BadAuthRequest("该任务已退款，不能恢复并重新扣费")
-		}
+		wasRefunded = order.Status == model.BillingStatusRefunded
 	}
 
 	decryptedInput, err := s.decryptTaskInputJSON(task.InputJSON)
@@ -104,8 +104,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if err != nil {
 		return nil, err
 	}
-	if config.InterfaceType != string(model.ChannelInterfaceNewAPIChannel2) {
-		return nil, BadAuthRequest("该任务不使用 NewAPI Video Generations 协议")
+	adapter, declarative := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !declarative && config.InterfaceType != string(model.ChannelInterfaceNewAPIChannel2) {
+		return nil, BadAuthRequest("该任务的请求协议不支持安全查询上游状态")
 	}
 	input.Config = config
 	task.InputJSON = decryptedInput
@@ -128,9 +129,20 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		}
 	}()
 
-	queryCtx := withProviderAnalytics(ctx, s, *task)
+	// 上游已成功后的完整媒体下载和本地入库可能持续数十秒。浏览器关闭抽屉、
+	// 页面刷新或代理断开都不应中断这项运维恢复，否则任务会再次停在
+	// failed/refunded。保留请求值用于审计，但把执行生命周期交给恢复租约控制。
+	recoveryCtx, cancelRecovery := providerTaskRecoveryContext(ctx)
+	defer cancelRecovery()
+	queryCtx := withProviderAnalytics(recoveryCtx, s, *task)
 	queryCtx = withProviderOutboundPolicy(queryCtx, input.Config)
-	result, providerStatus, err := queryNewAPIChannel2VideoTask(queryCtx, input, providerRequestID)
+	var result map[string]interface{}
+	var providerStatus string
+	if declarative {
+		result, providerStatus, err = queryProtocolAdapterVideoTask(queryCtx, input, adapter, providerRequestID)
+	} else {
+		result, providerStatus, err = queryNewAPIChannel2VideoTask(queryCtx, input, providerRequestID)
+	}
 	if err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "人工查询上游视频任务失败", err.Error())
 		return nil, err
@@ -160,19 +172,30 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		}
 		return nil, err
 	}
+	billingSettled := true
+	var billingErr error
+	if wasRefunded {
+		billingErr = billing.RestoreRefundedBilling(task.BillingOrderID, providerRequestID)
+	} else {
+		billingErr = billing.SettleBilling(task.BillingOrderID, providerRequestID)
+	}
+	if billingErr != nil {
+		billingSettled = false
+		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+billingErr.Error())
+		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但积分结算失败，已进入待核对", billingErr.Error())
+		if uncertainErr != nil {
+			return nil, errors.Join(billingErr, fmt.Errorf("记录任务恢复后的计费待核对状态失败：%w", uncertainErr))
+		}
+		return nil, billingErr
+	}
 	if err := s.RegisterTaskOutputFromTask(*task); err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但项目产物登记失败", err.Error())
+		return nil, fmt.Errorf("任务已恢复并完成扣费，但项目素材登记失败：%w", err)
 	}
-	billingSettled := true
-	if err := billing.SettleBilling(task.BillingOrderID, providerRequestID); err != nil {
-		billingSettled = false
-		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+err.Error())
-		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但积分结算失败，已进入待核对", err.Error())
-		if uncertainErr != nil {
-			return nil, errors.Join(err, fmt.Errorf("记录任务恢复后的计费待核对状态失败：%w", uncertainErr))
-		}
-	} else {
-		_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复并完成结算", providerStatus)
-	}
+	_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复、完成结算并登记项目产物", providerStatus)
 	return &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: providerStatus, Recovered: true, BillingSettled: billingSettled}, nil
+}
+
+func providerTaskRecoveryContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), providerTaskRecoveryLeaseDuration)
 }

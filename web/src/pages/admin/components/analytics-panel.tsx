@@ -77,6 +77,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [pricingWorkspaceOpen, setPricingWorkspaceOpen] = useState(false);
     const [pendingPricing, setPendingPricing] = useState<ModelPricing | null | undefined>(undefined);
     const [form] = Form.useForm<PricingFormValues>();
+    const pricingChannelId = Form.useWatch("channelId", form);
     const analyticsPageSize = 20;
 
     const filters = useMemo<AnalyticsFilters>(
@@ -148,11 +149,13 @@ export default function AnalyticsPanel({ users, channels }: Props) {
 
     const pricingModelOptions = useMemo(() => {
         const names = new Set<string>();
-        const sourceChannels = channels.filter((channel) => channel.enabled !== false);
+        const sourceChannels = channels.filter((channel) => channel.enabled !== false && (!pricingChannelId || channel.id === pricingChannelId));
         sourceChannels.forEach((channel) => channel.models?.forEach((name) => names.add(name)));
-        if (editingPricing?.model) names.add(editingPricing.model);
+        if (editingPricing?.model && (!pricingChannelId || editingPricing.channelId === pricingChannelId)) {
+            names.add(editingPricing.model);
+        }
         return [...names].sort().map((name) => ({ label: name, value: name }));
-    }, [channels, editingPricing?.model]);
+    }, [channels, editingPricing?.channelId, editingPricing?.model, pricingChannelId]);
 
     const preparePricingForm = (pricing: ModelPricing | null) => {
         setEditingPricing(pricing);
@@ -188,9 +191,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
 
     const handlePricingValuesChange = (changedValues: Partial<PricingFormValues>, values: PricingFormValues) => {
         if (Object.prototype.hasOwnProperty.call(changedValues, "channelId")) {
-            const nextModels = channels
-                .filter((channel) => channel.enabled !== false && (!values.channelId || channel.id === values.channelId))
-                .flatMap((channel) => channel.models || []);
+            const nextModels = channels.filter((channel) => channel.enabled !== false && (!values.channelId || channel.id === values.channelId)).flatMap((channel) => channel.models || []);
             if (values.model && !nextModels.includes(values.model)) form.setFieldValue("model", undefined);
             return;
         }
@@ -642,11 +643,30 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 />
             </Drawer>
 
-            <Modal rootClassName="admin-modal-root admin-analytics-pricing-modal" title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={760} zIndex={1200} destroyOnHidden>
+            <Modal
+                rootClassName="admin-modal-root admin-analytics-pricing-modal"
+                title={editingPricing ? "编辑模型价格" : "新增模型价格"}
+                open={pricingModalOpen}
+                onCancel={() => setPricingModalOpen(false)}
+                onOk={() => void savePricing()}
+                confirmLoading={savingPricing}
+                okText="保存"
+                cancelText="取消"
+                width={760}
+                zIndex={1200}
+                destroyOnHidden
+            >
                 <Form form={form} layout="vertical" requiredMark={false} onValuesChange={handlePricingValuesChange}>
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
                         <Form.Item name="model" label="模型" rules={[{ required: true, message: "请选择模型" }]}>
-                            <Select showSearch optionFilterProp="label" placeholder={pricingModelOptions.length ? "选择已启用模型" : "暂无已启用模型"} options={pricingModelOptions} disabled={!pricingModelOptions.length} onChange={handlePricingModelChange} />
+                            <Select
+                                showSearch
+                                optionFilterProp="label"
+                                placeholder={pricingModelOptions.length ? "选择已启用模型" : "暂无已启用模型"}
+                                options={pricingModelOptions}
+                                disabled={!pricingModelOptions.length}
+                                onChange={handlePricingModelChange}
+                            />
                         </Form.Item>
                         <Form.Item name="channelId" label="渠道范围">
                             <Select allowClear placeholder="全部渠道" options={channels.filter((channel) => channel.enabled !== false).map((channel) => ({ label: channel.name, value: channel.id }))} />

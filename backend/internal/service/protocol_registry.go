@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -14,6 +15,10 @@ import (
 
 type protocolRegistryContextKey struct{}
 
+var emptyProtocolRegistry, _ = protocol.NewRegistry()
+var officialFallbackRegistryOnce sync.Once
+var officialFallbackRegistry = emptyProtocolRegistry
+
 func withProtocolRegistry(ctx context.Context, registry *protocol.Registry) context.Context {
 	return context.WithValue(ctx, protocolRegistryContextKey{}, registry)
 }
@@ -21,7 +26,7 @@ func withProtocolRegistry(ctx context.Context, registry *protocol.Registry) cont
 func protocolAdapterForContext(ctx context.Context, id string) (protocol.Adapter, bool) {
 	registry, _ := ctx.Value(protocolRegistryContextKey{}).(*protocol.Registry)
 	if registry == nil {
-		registry = protocol.Builtins()
+		registry = emptyProtocolRegistry
 	}
 	return registry.Resolve(strings.TrimSpace(id))
 }
@@ -37,14 +42,18 @@ func declarativeProtocolAdapterForContext(ctx context.Context, id string) (proto
 func agentProtocolAdapterForContext(ctx context.Context, id string) (protocol.AgentAdapter, bool) {
 	registry, _ := ctx.Value(protocolRegistryContextKey{}).(*protocol.Registry)
 	if registry == nil {
-		registry = protocol.Builtins()
+		registry = emptyProtocolRegistry
 	}
 	adapter, ok := registry.Resolve(strings.TrimSpace(id))
 	if !ok || adapter.Metadata().Execution != "declarative" {
 		return nil, false
 	}
 	agentAdapter, ok := adapter.(protocol.AgentAdapter)
-	return agentAdapter, ok
+	if !ok {
+		return nil, false
+	}
+	capability, ok := adapter.(protocol.AgentCapability)
+	return agentAdapter, ok && capability.AgentAvailable()
 }
 
 type PluginProviderCatalogItem struct {
@@ -91,9 +100,6 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 }
 
 func canonicalProviderAdapter(registry *protocol.Registry, id string) (protocol.Adapter, bool) {
-	if adapter, ok := protocol.Builtins().Resolve(id); ok {
-		return adapter, true
-	}
 	return registry.Resolve(id)
 }
 
@@ -141,7 +147,44 @@ func (s *Service) protocolRegistry() *protocol.Registry {
 			return registry
 		}
 	}
-	return protocol.Builtins()
+	return loadOfficialFallbackRegistry()
+}
+
+func loadOfficialFallbackRegistry() *protocol.Registry {
+	officialFallbackRegistryOnce.Do(func() {
+		directory, err := officialPluginPackageDir()
+		if err != nil {
+			return
+		}
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			return
+		}
+		adapters := make([]protocol.Adapter, 0, len(entries))
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(directory, entry.Name()))
+			if err != nil {
+				return
+			}
+			pkg, err := protocol.ParsePluginPackage(data)
+			if err != nil {
+				return
+			}
+			providers, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil)
+			if err != nil {
+				return
+			}
+			adapters = append(adapters, providers...)
+		}
+		registry, err := protocol.NewRegistry(adapters...)
+		if err == nil {
+			officialFallbackRegistry = registry
+		}
+	})
+	return officialFallbackRegistry
 }
 
 func (s *Service) protocolMetadata(id string) (protocol.Metadata, bool) {

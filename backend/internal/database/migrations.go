@@ -10,11 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 3
+const CurrentSchemaVersion int64 = 4
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
+const resourceUploadKeyChecksum = "sha256:resource-upload-key-v4-20260901"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -44,6 +45,7 @@ var schemaMigrations = []migration{
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
+	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -87,6 +89,21 @@ func migrateSchemaV3(tx *gorm.DB) error {
 		}
 	}
 	return tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_project_asset_candidates_pending_identity ON project_asset_candidates(project_id, category, name_key) WHERE status = 'pending_confirmation' AND name_key <> ''").Error
+}
+
+func migrateSchemaV4(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.Resource{}) {
+		return fmt.Errorf("资源表不存在")
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "upload_key") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "UploadKey"); err != nil {
+			return fmt.Errorf("增加资源上传幂等列：%w", err)
+		}
+	}
+	if err := tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_resources_user_upload_key ON resources (user_id, upload_key)").Error; err != nil {
+		return fmt.Errorf("创建资源上传幂等索引：%w", err)
+	}
+	return nil
 }
 
 func MigrateSchema(db *gorm.DB) error {

@@ -37,31 +37,65 @@ const (
 )
 
 type MediaReference struct {
-	ID        string `json:"id,omitempty"`
-	URL       string `json:"url,omitempty"`
-	DataURL   string `json:"dataUrl,omitempty"`
-	Kind      string `json:"kind,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Ephemeral bool   `json:"ephemeral,omitempty"`
+	ID        string         `json:"id,omitempty"`
+	URL       string         `json:"url,omitempty"`
+	DataURL   string         `json:"dataUrl,omitempty"`
+	Kind      string         `json:"kind,omitempty"`
+	Role      string         `json:"role,omitempty"`
+	MIMEType  string         `json:"mimeType,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Order     int            `json:"order,omitempty"`
+	Weight    float64        `json:"weight,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	Ephemeral bool           `json:"ephemeral,omitempty"`
+}
+
+// OutputOptions is the provider-neutral output contract. Legacy top-level
+// fields remain on GenerationRequest while callers migrate; manifests receive
+// both projections and should prefer request.output for new plugins.
+type OutputOptions struct {
+	Count         int            `json:"count,omitempty"`
+	Duration      int            `json:"duration,omitempty"`
+	AspectRatio   string         `json:"aspectRatio,omitempty"`
+	Width         int            `json:"width,omitempty"`
+	Height        int            `json:"height,omitempty"`
+	Resolution    string         `json:"resolution,omitempty"`
+	Quality       string         `json:"quality,omitempty"`
+	FPS           float64        `json:"fps,omitempty"`
+	GenerateAudio bool           `json:"generateAudio,omitempty"`
+	Watermark     bool           `json:"watermark,omitempty"`
+	Format        string         `json:"format,omitempty"`
+	Options       map[string]any `json:"options,omitempty"`
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content any    `json:"content"`
 }
 
 // GenerationRequest is the platform contract shared by canvas, creation and agent.
 // Provider-specific fields belong in Extra and are never interpreted by the host.
 type GenerationRequest struct {
-	Model         string           `json:"model"`
-	Prompt        string           `json:"prompt,omitempty"`
-	Images        []MediaReference `json:"images,omitempty"`
-	Videos        []MediaReference `json:"videos,omitempty"`
-	Audios        []MediaReference `json:"audios,omitempty"`
-	Duration      int              `json:"duration,omitempty"`
-	AspectRatio   string           `json:"aspectRatio,omitempty"`
-	Resolution    string           `json:"resolution,omitempty"`
-	Quality       string           `json:"quality,omitempty"`
-	GenerateAudio bool             `json:"generateAudio,omitempty"`
-	Watermark     bool             `json:"watermark,omitempty"`
-	ImageCount    int              `json:"imageCount,omitempty"`
-	Operation     string           `json:"operation,omitempty"`
-	Extra         map[string]any   `json:"extra,omitempty"`
+	Capability      Capability                `json:"capability,omitempty"`
+	Model           string                    `json:"model"`
+	Prompt          string                    `json:"prompt,omitempty"`
+	Instructions    string                    `json:"instructions,omitempty"`
+	Messages        []Message                 `json:"messages,omitempty"`
+	Inputs          []MediaReference          `json:"inputs,omitempty"`
+	Images          []MediaReference          `json:"images,omitempty"`
+	Videos          []MediaReference          `json:"videos,omitempty"`
+	Audios          []MediaReference          `json:"audios,omitempty"`
+	Duration        int                       `json:"duration,omitempty"`
+	AspectRatio     string                    `json:"aspectRatio,omitempty"`
+	Resolution      string                    `json:"resolution,omitempty"`
+	Quality         string                    `json:"quality,omitempty"`
+	GenerateAudio   bool                      `json:"generateAudio,omitempty"`
+	Watermark       bool                      `json:"watermark,omitempty"`
+	ImageCount      int                       `json:"imageCount,omitempty"`
+	Operation       string                    `json:"operation,omitempty"`
+	Output          OutputOptions             `json:"output,omitempty"`
+	ProviderOptions map[string]map[string]any `json:"providerOptions,omitempty"`
+	Extra           map[string]any            `json:"extra,omitempty"`
 }
 
 type RequestContext struct {
@@ -78,12 +112,22 @@ type PollContext struct {
 }
 
 type RequestSpec struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	OriginPath  bool              `json:"originPath,omitempty"`
-	ContentType string            `json:"contentType"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Body        any               `json:"body,omitempty"`
+	Method      string              `json:"method"`
+	Path        string              `json:"path"`
+	OriginPath  bool                `json:"originPath,omitempty"`
+	ContentType string              `json:"contentType"`
+	Headers     map[string]string   `json:"headers,omitempty"`
+	Query       map[string][]string `json:"query,omitempty"`
+	Body        any                 `json:"body,omitempty"`
+	Files       []RequestFilePart   `json:"files,omitempty"`
+	Auth        ManifestAuth        `json:"auth,omitempty"`
+}
+
+type RequestFilePart struct {
+	Name      string         `json:"name"`
+	Filename  string         `json:"filename,omitempty"`
+	MIMEType  string         `json:"mimeType,omitempty"`
+	Reference MediaReference `json:"reference"`
 }
 
 type CreateResult struct {
@@ -156,12 +200,15 @@ type Manifest struct {
 	// These fields are the normalized provider projection used by the runtime.
 	// They are never serialized; provider execution is described only under
 	// contributes.providers.
-	Create        ManifestOperation      `json:"-"`
-	Agent         *ManifestOperation     `json:"-"`
-	Poll          *ManifestOperation     `json:"-"`
-	Cancel        *ManifestOperation     `json:"-"`
-	Response      ManifestResponse       `json:"-"`
-	AgentResponse *ManifestAgentResponse `json:"-"`
+	Create          ManifestOperation      `json:"-"`
+	Agent           *ManifestOperation     `json:"-"`
+	Poll            *ManifestOperation     `json:"-"`
+	Cancel          *ManifestOperation     `json:"-"`
+	ResultOperation *ManifestOperation     `json:"-"`
+	Response        ManifestResponse       `json:"-"`
+	AgentResponse   *ManifestAgentResponse `json:"-"`
+	Auth            ManifestAuth           `json:"-"`
+	Validations     []ManifestValidation   `json:"-"`
 }
 
 // Manifest JSON is the public plugin contract. Metadata is an internal
@@ -259,18 +306,31 @@ type ManifestProvider struct {
 	RequiresPublicMediaURLs bool                   `json:"requiresPublicMediaUrls,omitempty"`
 	Auth                    ManifestAuth           `json:"auth,omitempty"`
 	Parameters              []Parameter            `json:"parameters,omitempty"`
+	Validations             []ManifestValidation   `json:"validations,omitempty"`
 	Create                  ManifestOperation      `json:"create"`
 	Agent                   *ManifestOperation     `json:"agent,omitempty"`
 	Poll                    *ManifestOperation     `json:"poll,omitempty"`
 	Cancel                  *ManifestOperation     `json:"cancel,omitempty"`
+	Result                  *ManifestOperation     `json:"result,omitempty"`
 	Response                ManifestResponse       `json:"response"`
 	AgentResponse           *ManifestAgentResponse `json:"agentResponse,omitempty"`
 }
 
 type ManifestAuth struct {
-	Type   string `json:"type"`
-	Field  string `json:"field"`
-	Header string `json:"header,omitempty"`
+	Type        string `json:"type"`
+	Field       string `json:"field"`
+	SecretField string `json:"secretField,omitempty"`
+	Header      string `json:"header,omitempty"`
+	Prefix      string `json:"prefix,omitempty"`
+	Query       string `json:"query,omitempty"`
+	Username    string `json:"username,omitempty"`
+	Service     string `json:"service,omitempty"`
+	Region      string `json:"region,omitempty"`
+}
+
+type ManifestValidation struct {
+	Assert  any    `json:"assert"`
+	Message string `json:"message"`
 }
 
 type ManifestWorkflow struct {
@@ -306,6 +366,9 @@ type ManifestCommand struct {
 func (r RequestSpec) Validate() error {
 	if r.Method == "" || r.Path == "" {
 		return fmt.Errorf("protocol request spec is incomplete")
+	}
+	if len(r.Files) > 0 && r.ContentType != "multipart/form-data" {
+		return fmt.Errorf("protocol file parts require multipart/form-data")
 	}
 	return nil
 }

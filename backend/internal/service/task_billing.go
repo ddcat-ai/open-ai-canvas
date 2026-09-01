@@ -20,6 +20,7 @@ type taskBillingCoordinator struct {
 type taskBillingRepository interface {
 	MarkBillingRunning(orderID string) error
 	SettleBillingOrder(orderID string, providerRequestID string) error
+	RestoreRefundedBillingOrder(orderID string, providerRequestID string) error
 	RefundBillingOrder(orderID string, errorText string) error
 	MarkBillingUncertain(orderID string, errorText string) error
 	BillingOrder(orderID string) (*model.BillingOrder, error)
@@ -47,6 +48,13 @@ func (c *taskBillingCoordinator) SettleBilling(orderID string, providerRequestID
 		return nil
 	}
 	return c.repo.SettleBillingOrder(orderID, providerRequestID)
+}
+
+func (c *taskBillingCoordinator) RestoreRefundedBilling(orderID string, providerRequestID string) error {
+	if orderID == "" {
+		return nil
+	}
+	return c.repo.RestoreRefundedBillingOrder(orderID, providerRequestID)
 }
 
 func (c *taskBillingCoordinator) RefundBilling(orderID string, errorText string) error {

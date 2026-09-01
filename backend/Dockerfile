@@ -37,6 +37,7 @@ RUN mkdir -p /data && chown -R app:app /data
 COPY --from=backend-build /out/infinite-canvas-backend /usr/local/bin/infinite-canvas-backend
 COPY --from=backend-build /out/migrate-schema /usr/local/bin/migrate-schema
 COPY --from=backend-build /out/migrate-sqlite-postgres /usr/local/bin/migrate-sqlite-postgres
+COPY plugin-packages /app/plugin-packages
 
 USER app
 EXPOSE 8080

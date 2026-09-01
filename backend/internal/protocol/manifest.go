@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,10 +13,24 @@ import (
 )
 
 type ManifestOperation struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	ContentType string            `json:"contentType,omitempty"`
-	Fields      map[string]string `json:"fields,omitempty"`
+	Method              string             `json:"method"`
+	Path                string             `json:"path"`
+	PathTemplate        any                `json:"pathTemplate,omitempty"`
+	OriginPath          bool               `json:"originPath,omitempty"`
+	ContentType         string             `json:"contentType,omitempty"`
+	ContentTypeTemplate any                `json:"contentTypeTemplate,omitempty"`
+	Headers             map[string]any     `json:"headers,omitempty"`
+	Query               map[string]any     `json:"query,omitempty"`
+	Body                any                `json:"body,omitempty"`
+	Fields              map[string]string  `json:"fields,omitempty"`
+	Files               []ManifestFilePart `json:"files,omitempty"`
+}
+
+type ManifestFilePart struct {
+	Name     string `json:"name"`
+	Source   any    `json:"source"`
+	Filename any    `json:"filename,omitempty"`
+	MIMEType any    `json:"mimeType,omitempty"`
 }
 
 type ManifestResponse struct {
@@ -29,18 +44,28 @@ type ManifestResponse struct {
 	ResultPaths     []string `json:"resultPaths,omitempty"`
 	ResultKind      string   `json:"resultKind,omitempty"`
 	ResultEphemeral bool     `json:"resultEphemeral,omitempty"`
+	TaskID          any      `json:"taskId,omitempty"`
+	Status          any      `json:"status,omitempty"`
+	Message         any      `json:"message,omitempty"`
+	Text            any      `json:"text,omitempty"`
+	Reasoning       any      `json:"reasoning,omitempty"`
+	Images          any      `json:"images,omitempty"`
+	Videos          any      `json:"videos,omitempty"`
+	Audios          any      `json:"audios,omitempty"`
+	Usage           any      `json:"usage,omitempty"`
 }
 
 // ManifestAgentResponse describes the provider response shape for a
 // tool-capable text request. Tool call paths are resolved against each item in
 // ToolCallsPath.
 type ManifestAgentResponse struct {
-	TextPaths         []string `json:"textPaths,omitempty"`
-	ReasoningPaths    []string `json:"reasoningPaths,omitempty"`
-	ToolCallsPath     string   `json:"toolCallsPath,omitempty"`
-	ToolCallIDPaths   []string `json:"toolCallIdPaths,omitempty"`
-	ToolCallNamePaths []string `json:"toolCallNamePaths,omitempty"`
-	ToolCallArgsPaths []string `json:"toolCallArgumentsPaths,omitempty"`
+	TextPaths              []string `json:"textPaths,omitempty"`
+	ReasoningPaths         []string `json:"reasoningPaths,omitempty"`
+	ToolCallsPath          string   `json:"toolCallsPath,omitempty"`
+	ToolCallIDPaths        []string `json:"toolCallIdPaths,omitempty"`
+	ToolCallNamePaths      []string `json:"toolCallNamePaths,omitempty"`
+	ToolCallArgsPaths      []string `json:"toolCallArgumentsPaths,omitempty"`
+	ToolCallSignaturePaths []string `json:"toolCallThoughtSignaturePaths,omitempty"`
 }
 
 // AdapterResolver is used by the host to bind a shipped execution engine to a
@@ -133,6 +158,14 @@ type metadataAdapter struct {
 }
 
 func (a metadataAdapter) Metadata() Metadata { return a.metadata }
+func (a metadataAdapter) AgentAvailable() bool {
+	capability, ok := a.delegate.(AgentCapability)
+	return ok && capability.AgentAvailable()
+}
+func (a metadataAdapter) ResultAvailable() bool {
+	capability, ok := a.delegate.(ResultCapability)
+	return ok && capability.ResultAvailable()
+}
 func (a metadataAdapter) BuildCreate(ctx context.Context, c RequestContext) (RequestSpec, error) {
 	return a.delegate.BuildCreate(ctx, c)
 }
@@ -147,6 +180,13 @@ func (a metadataAdapter) ParsePoll(ctx context.Context, c PollContext, body []by
 }
 func (a metadataAdapter) BuildCancel(ctx context.Context, c PollContext) (RequestSpec, error) {
 	return a.delegate.BuildCancel(ctx, c)
+}
+func (a metadataAdapter) BuildResult(ctx context.Context, c PollContext) (RequestSpec, error) {
+	adapter, ok := a.delegate.(ResultAdapter)
+	if !ok {
+		return RequestSpec{}, unavailable(a.metadata)
+	}
+	return adapter.BuildResult(ctx, c)
 }
 func (a metadataAdapter) BuildAgent(ctx context.Context, c AgentRequestContext) (RequestSpec, error) {
 	adapter, ok := a.delegate.(AgentAdapter)
@@ -199,7 +239,7 @@ func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, err
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if strings.TrimSpace(manifest.APIVersion) != "yingce.plugin/v1" {
+	if version := strings.TrimSpace(manifest.APIVersion); version != "yingce.plugin/v1" && version != "yingce.plugin/v2" {
 		return fmt.Errorf("unsupported protocol manifest apiVersion %q", manifest.APIVersion)
 	}
 	if strings.TrimSpace(manifest.Metadata.ID) == "" || strings.TrimSpace(manifest.Metadata.Version) == "" {
@@ -220,44 +260,60 @@ func ValidateManifest(manifest Manifest) error {
 	if len(manifest.Contributes.Providers) == 0 {
 		return nil
 	}
-	provider := manifest.Contributes.Providers[0]
-	if strings.TrimSpace(provider.ID) == "" || strings.TrimSpace(provider.Label) == "" {
-		return fmt.Errorf("provider contribution requires id and label")
-	}
-	if len(provider.Capabilities) == 0 || len(provider.Scopes) == 0 {
-		return fmt.Errorf("provider contribution requires capabilities and scopes")
-	}
-	for _, capability := range provider.Capabilities {
-		if capability != CapabilityText && capability != CapabilityImage && capability != CapabilityVideo && capability != CapabilityAudio {
-			return fmt.Errorf("unsupported protocol capability %q", capability)
+	providerIDs := make(map[string]struct{}, len(manifest.Contributes.Providers))
+	for index, provider := range manifest.Contributes.Providers {
+		if strings.TrimSpace(provider.ID) == "" || strings.TrimSpace(provider.Label) == "" || !validManifestIdentifier(provider.ID) {
+			return fmt.Errorf("provider contribution %d requires a valid id and label", index)
 		}
-	}
-	for _, scope := range provider.Scopes {
-		switch scope {
-		case SurfaceAdminSystemChannel, SurfaceUserCustomChannel, SurfaceCanvas, SurfaceCreation, SurfaceAgent:
-		default:
-			return fmt.Errorf("unsupported protocol scope %q", scope)
+		if _, exists := providerIDs[provider.ID]; exists {
+			return fmt.Errorf("duplicate provider contribution %q", provider.ID)
 		}
-	}
-	if err := validateManifestOperation(provider.Create); err != nil {
-		return fmt.Errorf("create operation: %w", err)
-	}
-	if provider.Agent != nil {
-		if err := validateManifestOperation(*provider.Agent); err != nil {
-			return fmt.Errorf("agent operation: %w", err)
+		providerIDs[provider.ID] = struct{}{}
+		if len(provider.Capabilities) == 0 || len(provider.Scopes) == 0 {
+			return fmt.Errorf("provider contribution %q requires capabilities and scopes", provider.ID)
 		}
-		if provider.AgentResponse == nil {
-			return fmt.Errorf("agent response mapping is required when agent operation is declared")
+		for _, capability := range provider.Capabilities {
+			if capability != CapabilityText && capability != CapabilityImage && capability != CapabilityVideo && capability != CapabilityAudio {
+				return fmt.Errorf("unsupported protocol capability %q", capability)
+			}
 		}
-	}
-	if provider.Poll != nil {
-		if err := validateManifestOperation(*provider.Poll); err != nil {
-			return fmt.Errorf("poll operation: %w", err)
+		for _, scope := range provider.Scopes {
+			switch scope {
+			case SurfaceAdminSystemChannel, SurfaceUserCustomChannel, SurfaceCanvas, SurfaceCreation, SurfaceAgent:
+			default:
+				return fmt.Errorf("unsupported protocol scope %q", scope)
+			}
 		}
-	}
-	if provider.Cancel != nil {
-		if err := validateManifestOperation(*provider.Cancel); err != nil {
-			return fmt.Errorf("cancel operation: %w", err)
+		if err := validateManifestOperation(provider.Create); err != nil {
+			return fmt.Errorf("provider %q create operation: %w", provider.ID, err)
+		}
+		if provider.Agent != nil {
+			if err := validateManifestOperation(*provider.Agent); err != nil {
+				return fmt.Errorf("provider %q agent operation: %w", provider.ID, err)
+			}
+			if provider.AgentResponse == nil {
+				return fmt.Errorf("provider %q agent response mapping is required when agent operation is declared", provider.ID)
+			}
+		}
+		if provider.Poll != nil {
+			if err := validateManifestOperation(*provider.Poll); err != nil {
+				return fmt.Errorf("provider %q poll operation: %w", provider.ID, err)
+			}
+		}
+		if provider.Cancel != nil {
+			if err := validateManifestOperation(*provider.Cancel); err != nil {
+				return fmt.Errorf("provider %q cancel operation: %w", provider.ID, err)
+			}
+		}
+		if provider.Result != nil {
+			if err := validateManifestOperation(*provider.Result); err != nil {
+				return fmt.Errorf("provider %q result operation: %w", provider.ID, err)
+			}
+		}
+		for ruleIndex, rule := range provider.Validations {
+			if rule.Assert == nil || strings.TrimSpace(rule.Message) == "" {
+				return fmt.Errorf("provider %q validation %d requires assert and message", provider.ID, ruleIndex)
+			}
 		}
 	}
 	return nil
@@ -293,8 +349,11 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Agent = provider.Agent
 	manifest.Poll = provider.Poll
 	manifest.Cancel = provider.Cancel
+	manifest.ResultOperation = provider.Result
 	manifest.Response = provider.Response
 	manifest.AgentResponse = provider.AgentResponse
+	manifest.Auth = provider.Auth
+	manifest.Validations = provider.Validations
 	return nil
 }
 
@@ -320,8 +379,22 @@ func validateManifestOperation(operation ManifestOperation) error {
 	if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete && method != http.MethodPut {
 		return fmt.Errorf("unsupported HTTP method %q", operation.Method)
 	}
-	if !isRelativePath(operation.Path) {
+	if operation.PathTemplate == nil && !isRelativePath(operation.Path) {
 		return fmt.Errorf("path must be relative: %q", operation.Path)
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(defaultValue(operation.ContentType, "application/json"), ";")[0]))
+	switch contentType {
+	case "application/json", "multipart/form-data", "application/x-www-form-urlencoded", "application/octet-stream", "":
+	default:
+		return fmt.Errorf("unsupported content type %q", operation.ContentType)
+	}
+	if len(operation.Files) > 0 && operation.ContentTypeTemplate == nil && contentType != "multipart/form-data" {
+		return fmt.Errorf("file parts require multipart/form-data")
+	}
+	for _, file := range operation.Files {
+		if strings.TrimSpace(file.Name) == "" || file.Source == nil {
+			return fmt.Errorf("multipart file part requires name and source")
+		}
 	}
 	return nil
 }
@@ -329,18 +402,25 @@ func validateManifestOperation(operation ManifestOperation) error {
 type manifestAdapter struct{ manifest Manifest }
 
 func (a manifestAdapter) Metadata() Metadata { return a.manifest.Metadata }
+func (a manifestAdapter) AgentAvailable() bool {
+	return a.manifest.Agent != nil && a.manifest.AgentResponse != nil
+}
+func (a manifestAdapter) ResultAvailable() bool { return a.manifest.ResultOperation != nil }
 func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (RequestSpec, error) {
 	if len(a.manifest.Contributes.Providers) == 0 {
 		return RequestSpec{}, fmt.Errorf("plugin %s does not provide a provider", a.manifest.Metadata.ID)
 	}
-	return buildManifestOperation(a.manifest.Create, c.Request, ""), nil
+	if err := validateManifestRequest(a.manifest.Validations, c.Request); err != nil {
+		return RequestSpec{}, err
+	}
+	return buildManifestOperation(a.manifest.Create, a.manifest.Auth, c.Request, "")
 }
 func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (RequestSpec, error) {
 	if a.manifest.Agent == nil {
 		return RequestSpec{}, fmt.Errorf("protocol %s has no agent operation", a.manifest.Metadata.ID)
 	}
 	request := GenerationRequest{Model: c.Model, Extra: map[string]any{"agent": c.Request}}
-	return buildManifestOperation(*a.manifest.Agent, request, ""), nil
+	return buildManifestOperation(*a.manifest.Agent, a.manifest.Auth, request, "")
 }
 func (a manifestAdapter) ParseAgent(_ context.Context, body []byte) (AgentResult, error) {
 	if a.manifest.AgentResponse == nil {
@@ -355,18 +435,30 @@ func (a manifestAdapter) ParseAgent(_ context.Context, body []byte) (AgentResult
 	if response.ToolCallsPath == "" {
 		return result, nil
 	}
-	for _, item := range arrayValue(pathValue(payload, response.ToolCallsPath)) {
+	for index, item := range arrayValue(pathValue(payload, response.ToolCallsPath)) {
 		object, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		result.ToolCalls = append(result.ToolCalls, AgentToolCall{
-			ID:        firstPathValue(object, response.ToolCallIDPaths...),
-			Name:      firstPathValue(object, response.ToolCallNamePaths...),
-			Arguments: firstPathJSONValue(object, response.ToolCallArgsPaths...),
-		})
+		call := AgentToolCall{
+			ID:               firstPathValue(object, response.ToolCallIDPaths...),
+			Name:             firstPathValue(object, response.ToolCallNamePaths...),
+			Arguments:        firstPathJSONValue(object, response.ToolCallArgsPaths...),
+			ThoughtSignature: firstPathValue(object, response.ToolCallSignaturePaths...),
+		}
+		if strings.TrimSpace(call.Name) != "" {
+			if strings.TrimSpace(call.ID) == "" {
+				call.ID = syntheticAgentToolCallID(body, index)
+			}
+			result.ToolCalls = append(result.ToolCalls, call)
+		}
 	}
 	return result, nil
+}
+
+func syntheticAgentToolCallID(body []byte, index int) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s#%d", body, index)))
+	return fmt.Sprintf("call_%x", sum[:8])
 }
 func (a manifestAdapter) ParseCreate(_ context.Context, body []byte) (CreateResult, error) {
 	payload, err := decodeObject(body)
@@ -381,7 +473,7 @@ func (a manifestAdapter) BuildPoll(_ context.Context, c PollContext) (RequestSpe
 	}
 	request := c.Request
 	request.Model = c.Model
-	return buildManifestOperation(*a.manifest.Poll, request, c.TaskID), nil
+	return buildManifestOperation(*a.manifest.Poll, a.manifest.Auth, request, c.TaskID)
 }
 func (a manifestAdapter) ParsePoll(_ context.Context, c PollContext, body []byte) (PollResult, error) {
 	payload, err := decodeObject(body)
@@ -397,25 +489,60 @@ func (a manifestAdapter) BuildCancel(_ context.Context, c PollContext) (RequestS
 	}
 	request := c.Request
 	request.Model = c.Model
-	return buildManifestOperation(*a.manifest.Cancel, request, c.TaskID), nil
+	return buildManifestOperation(*a.manifest.Cancel, a.manifest.Auth, request, c.TaskID)
+}
+
+func (a manifestAdapter) BuildResult(_ context.Context, c PollContext) (RequestSpec, error) {
+	if a.manifest.ResultOperation == nil {
+		return RequestSpec{}, fmt.Errorf("protocol %s has no result operation", a.manifest.Metadata.ID)
+	}
+	request := c.Request
+	request.Model = c.Model
+	return buildManifestOperation(*a.manifest.ResultOperation, a.manifest.Auth, request, c.TaskID)
 }
 
 func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResult {
-	id := firstPathValue(payload, a.manifest.Response.TaskIDPaths...)
+	response := a.manifest.Response
+	env := map[string]any{"response": payload, "taskId": c.TaskID, "request": manifestRequestValues(c.Request)}
+	id := manifestResponseString(response.TaskID, env)
+	if id == "" {
+		id = firstPathValue(payload, response.TaskIDPaths...)
+	}
 	if id == "" {
 		id = c.TaskID
 	}
-	status := normalizeStatus(firstPathValue(payload, a.manifest.Response.StatusPaths...))
+	statusText := manifestResponseString(response.Status, env)
+	if statusText == "" {
+		statusText = firstPathValue(payload, response.StatusPaths...)
+	}
+	status := normalizeStatus(statusText)
 	if status == "" {
 		status = StatusPending
 	}
-	message := firstPathValue(payload, a.manifest.Response.MessagePaths...)
-	if manifestError(payload, a.manifest.Response.ErrorPaths...) {
+	message := manifestResponseString(response.Message, env)
+	if message == "" {
+		message = firstPathValue(payload, response.MessagePaths...)
+	}
+	if manifestError(payload, response.ErrorPaths...) {
 		status = StatusFailed
 	}
 	result := &Result{
-		Text:      firstPathValue(payload, a.manifest.Response.TextPaths...),
-		Reasoning: firstPathValue(payload, a.manifest.Response.ReasoningPaths...),
+		Text:      manifestResponseString(response.Text, env),
+		Reasoning: manifestResponseString(response.Reasoning, env),
+	}
+	if result.Text == "" {
+		result.Text = firstPathValue(payload, response.TextPaths...)
+	}
+	if result.Reasoning == "" {
+		result.Reasoning = firstPathValue(payload, response.ReasoningPaths...)
+	}
+	result.Images = manifestResponseMedia(response.Images, env, "image", response.ResultEphemeral)
+	result.Videos = manifestResponseMedia(response.Videos, env, "video", response.ResultEphemeral)
+	result.Audios = manifestResponseMedia(response.Audios, env, "audio", response.ResultEphemeral)
+	if response.Usage != nil {
+		if value, err := evaluateManifestValue(response.Usage, env); err == nil {
+			result.Usage = manifestObject(value)
+		}
 	}
 	paths := append([]string{}, a.manifest.Response.ResultURLPaths...)
 	paths = append(paths, a.manifest.Response.ResultPaths...)
@@ -439,6 +566,88 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 		result = nil
 	}
 	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}
+}
+
+func validateManifestRequest(rules []ManifestValidation, request GenerationRequest) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	env := map[string]any{"request": manifestRequestValues(request)}
+	for _, rule := range rules {
+		value, err := evaluateManifestValue(rule.Assert, env)
+		if err != nil {
+			return fmt.Errorf("协议参数校验表达式错误：%w", err)
+		}
+		if !manifestTruthy(value) {
+			return fmt.Errorf("%s", strings.TrimSpace(rule.Message))
+		}
+	}
+	return nil
+}
+
+func manifestResponseString(template any, env map[string]any) string {
+	if template == nil {
+		return ""
+	}
+	value, err := evaluateManifestValue(template, env)
+	if err != nil {
+		return ""
+	}
+	items := manifestArray(value)
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		if text := strings.TrimSpace(manifestString(item)); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+func manifestResponseMedia(template any, env map[string]any, kind string, ephemeral bool) []MediaReference {
+	if template == nil {
+		return nil
+	}
+	value, err := evaluateManifestValue(template, env)
+	if err != nil {
+		return nil
+	}
+	return mediaReferencesFromManifestValue(value, kind, ephemeral)
+}
+
+func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []MediaReference {
+	result := make([]MediaReference, 0)
+	for _, item := range manifestArray(value) {
+		switch typed := item.(type) {
+		case string:
+			trimmed := strings.TrimSpace(typed)
+			if trimmed == "" {
+				continue
+			}
+			reference := MediaReference{Kind: kind, Ephemeral: ephemeral}
+			if strings.HasPrefix(trimmed, "data:") {
+				reference.DataURL = trimmed
+			} else {
+				reference.URL = trimmed
+			}
+			result = append(result, reference)
+		case map[string]any:
+			reference := MediaReference{
+				ID: manifestString(typed["id"]), URL: manifestString(typed["url"]), DataURL: manifestString(typed["dataUrl"]),
+				Kind: defaultValue(manifestString(typed["kind"]), kind), Role: manifestString(typed["role"]), MIMEType: manifestString(typed["mimeType"]),
+				Name: manifestString(typed["name"]), Order: manifestInt(typed["order"]), Weight: manifestFloat(typed["weight"]), Ephemeral: ephemeral || manifestTruthy(typed["ephemeral"]),
+			}
+			if reference.URL == "" {
+				reference.URL = firstString(typed, "file_url", "fileUrl", "image_url", "imageUrl", "video_url", "videoUrl", "audio_url", "audioUrl", "uri")
+			}
+			if reference.DataURL == "" {
+				reference.DataURL = firstString(typed, "data_url", "b64_json")
+			}
+			if reference.URL != "" || reference.DataURL != "" {
+				result = append(result, reference)
+			}
+		}
+	}
+	return result
 }
 
 var (
@@ -494,22 +703,135 @@ func mediaPathValues(payload map[string]any, path string) []string {
 	return values
 }
 
-func buildManifestOperation(operation ManifestOperation, request GenerationRequest, taskID string) RequestSpec {
-	var body map[string]any
-	if len(operation.Fields) > 0 {
-		body = make(map[string]any, len(operation.Fields))
-	}
-	for key, expression := range operation.Fields {
-		value := manifestExpressionValue(expression, request, taskID)
-		if value == nil {
-			continue
+func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string) (RequestSpec, error) {
+	requestValues := manifestRequestValues(request)
+	env := map[string]any{"request": requestValues, "taskId": taskID}
+	var body any
+	if operation.Body != nil {
+		value, err := evaluateManifestValue(operation.Body, env)
+		if err != nil {
+			return RequestSpec{}, fmt.Errorf("evaluate request body: %w", err)
 		}
-		setMapPath(body, key, value)
+		body = normalizeManifestValue(value)
+	} else if len(operation.Fields) > 0 {
+		legacyBody := make(map[string]any, len(operation.Fields))
+		for key, expression := range operation.Fields {
+			value := manifestExpressionValue(expression, request, taskID)
+			if value == nil {
+				continue
+			}
+			setMapPath(legacyBody, key, value)
+		}
+		body = normalizeManifestValue(legacyBody)
 	}
-	normalizedBody := normalizeManifestValue(body).(map[string]any)
-	path := strings.ReplaceAll(operation.Path, "{{taskId}}", url.PathEscape(taskID))
+	pathValue := any(operation.Path)
+	if operation.PathTemplate != nil {
+		pathValue = operation.PathTemplate
+	}
+	evaluatedPath, err := evaluateManifestValue(pathValue, env)
+	if err != nil {
+		return RequestSpec{}, fmt.Errorf("evaluate request path: %w", err)
+	}
+	path := strings.ReplaceAll(manifestString(evaluatedPath), "{{taskId}}", url.PathEscape(taskID))
 	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
-	return RequestSpec{Method: strings.ToUpper(operation.Method), Path: path, ContentType: defaultValue(operation.ContentType, "application/json"), Body: normalizedBody}
+	path = interpolateManifestString(path, env)
+	if !isRelativePath(path) {
+		return RequestSpec{}, fmt.Errorf("evaluated request path must be relative: %q", path)
+	}
+	headers, err := evaluateManifestStringMap(operation.Headers, env)
+	if err != nil {
+		return RequestSpec{}, fmt.Errorf("evaluate request headers: %w", err)
+	}
+	query, err := evaluateManifestQuery(operation.Query, env)
+	if err != nil {
+		return RequestSpec{}, fmt.Errorf("evaluate request query: %w", err)
+	}
+	files, err := evaluateManifestFiles(operation.Files, env)
+	if err != nil {
+		return RequestSpec{}, err
+	}
+	contentTypeValue := any(operation.ContentType)
+	if operation.ContentTypeTemplate != nil {
+		contentTypeValue = operation.ContentTypeTemplate
+	}
+	evaluatedContentType, err := evaluateManifestValue(contentTypeValue, env)
+	if err != nil {
+		return RequestSpec{}, fmt.Errorf("evaluate request content type: %w", err)
+	}
+	contentType := defaultValue(manifestString(evaluatedContentType), "application/json")
+	return RequestSpec{Method: strings.ToUpper(operation.Method), Path: path, OriginPath: operation.OriginPath, ContentType: contentType, Headers: headers, Query: query, Body: body, Files: files, Auth: auth}, nil
+}
+
+func evaluateManifestStringMap(values map[string]any, env map[string]any) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(values))
+	for key, template := range values {
+		value, err := evaluateManifestValue(template, env)
+		if err != nil {
+			return nil, err
+		}
+		if text := strings.TrimSpace(manifestString(value)); text != "" {
+			result[key] = text
+		}
+	}
+	return result, nil
+}
+
+func evaluateManifestQuery(values map[string]any, env map[string]any) (map[string][]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := make(map[string][]string, len(values))
+	for key, template := range values {
+		value, err := evaluateManifestValue(template, env)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range manifestArray(value) {
+			if text := strings.TrimSpace(manifestString(item)); text != "" {
+				result[key] = append(result[key], text)
+			}
+		}
+	}
+	return result, nil
+}
+
+func evaluateManifestFiles(parts []ManifestFilePart, env map[string]any) ([]RequestFilePart, error) {
+	result := make([]RequestFilePart, 0)
+	for _, part := range parts {
+		source, err := evaluateManifestValue(part.Source, env)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate multipart file %q: %w", part.Name, err)
+		}
+		filename, err := evaluateManifestValue(part.Filename, env)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate multipart filename %q: %w", part.Name, err)
+		}
+		mimeType, err := evaluateManifestValue(part.MIMEType, env)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate multipart MIME type %q: %w", part.Name, err)
+		}
+		for index, value := range manifestArray(source) {
+			references := mediaReferencesFromManifestValue(value, "file", false)
+			for _, reference := range references {
+				name := strings.TrimSpace(manifestString(filename))
+				if name == "" {
+					name = reference.Name
+				}
+				if name == "" {
+					name = fmt.Sprintf("%s-%d", part.Name, index+1)
+				}
+				contentType := strings.TrimSpace(manifestString(mimeType))
+				if contentType == "" {
+					contentType = reference.MIMEType
+				}
+				result = append(result, RequestFilePart{Name: part.Name, Filename: name, MIMEType: contentType, Reference: reference})
+			}
+		}
+	}
+	return result, nil
 }
 
 func normalizeManifestValue(value any) any {
@@ -601,31 +923,81 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 			userContent = append(userContent, map[string]any{"type": "audio_url", "audio_url": map[string]any{"url": val}})
 		}
 	}
-	messages := make([]any, 0)
+	messages := make([]any, 0, len(request.Messages)+1)
+	for _, message := range request.Messages {
+		if strings.TrimSpace(message.Role) == "" || message.Content == nil {
+			continue
+		}
+		messages = append(messages, map[string]any{"role": message.Role, "content": message.Content})
+	}
 	if len(userContent) > 0 {
-		messages = append(messages, map[string]any{
-			"role":    "user",
-			"content": userContent,
-		})
+		content := any(userContent)
+		if len(userContent) == 1 && len(request.Images)+len(request.Videos)+len(request.Audios) == 0 {
+			content = request.Prompt
+		}
+		messages = append(messages, map[string]any{"role": "user", "content": content})
 	}
 
-	return map[string]any{
-		"model":         request.Model,
-		"prompt":        request.Prompt,
-		"messages":      messages,
-		"images":        manifestMediaValues(request.Images),
-		"videos":        manifestMediaValues(request.Videos),
-		"audios":        manifestMediaValues(request.Audios),
-		"imageCount":    request.ImageCount,
-		"duration":      request.Duration,
-		"aspectRatio":   request.AspectRatio,
-		"resolution":    request.Resolution,
-		"quality":       request.Quality,
-		"generateAudio": request.GenerateAudio,
-		"watermark":     request.Watermark,
-		"operation":     request.Operation,
-		"extra":         request.Extra,
+	inputs := request.Inputs
+	if len(inputs) == 0 {
+		inputs = append(inputs, request.Images...)
+		inputs = append(inputs, request.Videos...)
+		inputs = append(inputs, request.Audios...)
 	}
+	output := request.Output
+	if output.Count == 0 {
+		output.Count = request.ImageCount
+	}
+	if output.Duration == 0 {
+		output.Duration = request.Duration
+	}
+	if output.AspectRatio == "" {
+		output.AspectRatio = request.AspectRatio
+	}
+	if output.Resolution == "" {
+		output.Resolution = request.Resolution
+	}
+	if output.Quality == "" {
+		output.Quality = request.Quality
+	}
+	output.GenerateAudio = output.GenerateAudio || request.GenerateAudio
+	output.Watermark = output.Watermark || request.Watermark
+	outputValue, _ := requestAsManifestValue(output)
+
+	return map[string]any{
+		"capability":      request.Capability,
+		"model":           request.Model,
+		"prompt":          request.Prompt,
+		"instructions":    request.Instructions,
+		"messages":        messages,
+		"inputs":          manifestMediaValues(inputs),
+		"images":          manifestMediaValues(request.Images),
+		"videos":          manifestMediaValues(request.Videos),
+		"audios":          manifestMediaValues(request.Audios),
+		"imageCount":      request.ImageCount,
+		"duration":        request.Duration,
+		"aspectRatio":     request.AspectRatio,
+		"resolution":      request.Resolution,
+		"quality":         request.Quality,
+		"generateAudio":   request.GenerateAudio,
+		"watermark":       request.Watermark,
+		"operation":       request.Operation,
+		"output":          outputValue,
+		"providerOptions": request.ProviderOptions,
+		"extra":           request.Extra,
+	}
+}
+
+func requestAsManifestValue(value any) (any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal(encoded, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func manifestModelID(request GenerationRequest) string {
@@ -638,15 +1010,43 @@ func manifestModelID(request GenerationRequest) string {
 
 func manifestMediaValues(values []MediaReference) []any {
 	result := make([]any, 0, len(values))
-	for _, value := range values {
+	for index, value := range values {
+		order := value.Order
+		if order == 0 && index > 0 {
+			order = index
+		}
+		resolved := defaultValue(value.URL, value.DataURL)
 		result = append(result, map[string]any{
-			"url":       value.URL,
-			"dataUrl":   value.DataURL,
-			"kind":      value.Kind,
+			"id":       value.ID,
+			"url":      value.URL,
+			"dataUrl":  value.DataURL,
+			"value":    resolved,
+			"kind":     value.Kind,
+			"role":     value.Role,
+			"mimeType": value.MIMEType,
+			"name":     value.Name,
+			"order":    order,
+			"weight":   value.Weight,
+			"metadata": value.Metadata,
+			"source": map[string]any{
+				"type":     manifestMediaSourceType(value),
+				"value":    resolved,
+				"mimeType": value.MIMEType,
+			},
 			"ephemeral": value.Ephemeral,
 		})
 	}
 	return result
+}
+
+func manifestMediaSourceType(value MediaReference) string {
+	if value.DataURL != "" {
+		return "data"
+	}
+	if value.URL != "" {
+		return "url"
+	}
+	return "unknown"
 }
 
 func applyManifestTransform(value any, transform string, request GenerationRequest) any {
@@ -771,22 +1171,7 @@ func normalizeLegacyManifestVideoResolution(value string) string {
 }
 
 func pathValue(payload map[string]any, path string) any {
-	var value any = payload
-	for _, part := range strings.Split(strings.Trim(path, "."), ".") {
-		switch current := value.(type) {
-		case map[string]any:
-			value = current[part]
-		case []any:
-			index, err := strconv.Atoi(part)
-			if err != nil || index < 0 || index >= len(current) {
-				return nil
-			}
-			value = current[index]
-		default:
-			return nil
-		}
-	}
-	return value
+	return manifestPathValue(payload, path)
 }
 
 func arrayValue(value any) []any {

@@ -45,7 +45,10 @@ test("analytics keeps fixed range presets distinct and uses enabled channel mode
     expect(source).toContain("onChange={handlePricingModelChange}");
     expect(source).toContain('hasOwnProperty.call(changedValues, "model")');
     expect(source).toContain('if (matchingChannels.length) form.setFieldValue("channelId", matchingChannels[0].id)');
-    expect(source).toContain("const sourceChannels = channels.filter((channel) => channel.enabled !== false)");
+    expect(source).toContain("const sourceChannels = channels.filter(");
+    expect(source).toContain('Form.useWatch("channelId", form)');
+    expect(source).toContain("pricingChannelId");
+    expect(source).toContain("channel.id === pricingChannelId");
     expect(source).toContain('inputMode="decimal"');
     expect(source).toContain('className="admin-analytics-price-input"');
     expect(source).toContain('className="admin-analytics-price-field"');

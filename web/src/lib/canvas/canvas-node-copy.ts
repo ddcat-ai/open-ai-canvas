@@ -1,5 +1,5 @@
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
-import type { CanvasNodeData, CanvasNodeMetadata, StoryboardRow } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type StoryboardRow } from "@/types/canvas";
 
 const COPY_TITLE_SUFFIX = /^(.*)_copy(\d+)$/i;
 
@@ -62,6 +62,9 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     delete metadata.versionPrimary;
 
     metadata.copiedFromNodeId = node.id;
+    if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) {
+        metadata.generationResultPlacement = "replace-node";
+    }
     metadata.frame = node.metadata?.frame ? { ...node.metadata.frame } : undefined;
     metadata.referenceSetId = remapOwnedNodeId(node.metadata?.referenceSetId, idMap);
     metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds

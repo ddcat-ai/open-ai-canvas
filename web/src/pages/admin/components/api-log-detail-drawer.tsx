@@ -91,7 +91,7 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
             {canQueryProviderTask ? (
                 <div className="flex justify-end">
                     <Button icon={<RefreshCw className="size-4" />} loading={querying} onClick={onQueryProviderTask}>
-                        手动查询任务
+                        {querying ? "正在下载并入库" : "手动查询任务"}
                     </Button>
                 </div>
             ) : null}
