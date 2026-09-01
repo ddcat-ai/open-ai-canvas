@@ -15,17 +15,21 @@ import type {
     ToolResponseResult,
 } from "@/services/api/image-contracts";
 
-function resolveImageDataUrl(item: Record<string, unknown>) {
-    if (typeof item.b64_json === "string" && item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+function resolveImageDataUrl(item: Record<string, unknown>, defaultMimeType: string) {
+    if (typeof item.b64_json === "string" && item.b64_json) {
+        const responseMimeType = typeof item.mime_type === "string" ? item.mime_type : typeof item.mimeType === "string" ? item.mimeType : "";
+        const mimeType = responseMimeType.trim() ? responseMimeType.trim() : defaultMimeType;
+        return `data:${mimeType};base64,${item.b64_json}`;
+    }
     if (typeof item.url === "string" && item.url) return item.url;
     return null;
 }
 
-export function parseImagePayload(payload: ImageApiResponse) {
+export function parseImagePayload(payload: ImageApiResponse, defaultMimeType = "image/png") {
     if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "请求失败");
     const images =
         payload.data
-            ?.map(resolveImageDataUrl)
+            ?.map((item) => resolveImageDataUrl(item, defaultMimeType))
             .filter((value): value is string => Boolean(value))
             .map((dataUrl) => ({ id: nanoid(), dataUrl })) || [];
     if (images.length === 0) throw new Error("接口没有返回图片");

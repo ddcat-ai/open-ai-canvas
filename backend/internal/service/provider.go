@@ -1540,7 +1540,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 			writeField(writer, "response_format", "b64_json")
 		}
 		if imageParameterSupported(input.ImageCapability, "output_format") {
-			writeField(writer, "output_format", "png")
+			writeField(writer, "output_format", imageOutputFormat(input.Config.TransparentBackground))
 		}
 		if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
 			writeField(writer, "background", "transparent")
@@ -1577,7 +1577,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 			body["response_format"] = "b64_json"
 		}
 		if imageParameterSupported(input.ImageCapability, "output_format") {
-			body["output_format"] = "png"
+			body["output_format"] = imageOutputFormat(input.Config.TransparentBackground)
 		}
 		if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
 			body["background"] = "transparent"
@@ -1592,7 +1592,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 			return nil, err
 		}
 	}
-	images, err := imageDataURLs(payload)
+	images, err := imageDataURLs(payload, imageOutputMimeType(input.Config.TransparentBackground))
 	if err != nil {
 		return nil, err
 	}
@@ -5368,14 +5368,25 @@ func mediaBytes(media providerMedia) ([]byte, string, error) {
 	return raw, normalizedMediaMimeType(defaultString(mimeType, media.Type), raw), nil
 }
 
-func imageDataURLs(payload imageResponse) ([]map[string]string, error) {
+func imageDataURLs(payload imageResponse, defaultMimeType ...string) ([]map[string]string, error) {
 	if len(payload.Data) == 0 {
 		return nil, errors.New("接口没有返回图片")
 	}
 	images := make([]map[string]string, 0, len(payload.Data))
 	for _, item := range payload.Data {
 		if b64, ok := item["b64_json"].(string); ok && b64 != "" {
-			images = append(images, map[string]string{"dataUrl": "data:image/png;base64," + b64})
+			mimeType := "image/png"
+			if len(defaultMimeType) > 0 && strings.TrimSpace(defaultMimeType[0]) != "" {
+				mimeType = defaultMimeType[0]
+			}
+			responseMimeType, _ := item["mime_type"].(string)
+			if responseMimeType == "" {
+				responseMimeType, _ = item["mimeType"].(string)
+			}
+			if strings.TrimSpace(responseMimeType) != "" {
+				mimeType = strings.TrimSpace(responseMimeType)
+			}
+			images = append(images, map[string]string{"dataUrl": "data:" + mimeType + ";base64," + b64})
 			continue
 		}
 		if url, ok := item["url"].(string); ok && url != "" {

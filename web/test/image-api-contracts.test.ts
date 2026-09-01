@@ -16,10 +16,12 @@ describe("image api contracts", () => {
     });
 
     test("解包 b64_json、url 和业务错误", () => {
-        expect(parseImagePayload({ data: [{ b64_json: "abc" }, { url: "https://example.com/image.png" }] })).toEqual([
-            { id: expect.any(String), dataUrl: "data:image/png;base64,abc" },
+        expect(parseImagePayload({ data: [{ b64_json: "abc" }, { url: "https://example.com/image.png" }] }, "image/jpeg")).toEqual([
+            { id: expect.any(String), dataUrl: "data:image/jpeg;base64,abc" },
             { id: expect.any(String), dataUrl: "https://example.com/image.png" },
         ]);
+        expect(parseImagePayload({ data: [{ b64_json: "abc", mime_type: "image/png" }] }, "image/jpeg")[0].dataUrl).toBe("data:image/png;base64,abc");
+        expect(parseImagePayload({ data: [{ b64_json: "abc", mimeType: "image/webp" }] }, "image/jpeg")[0].dataUrl).toBe("data:image/webp;base64,abc");
         expect(() => parseImagePayload({ data: [] })).toThrow("接口没有返回图片");
         expect(() => parseImagePayload({ code: 1001, msg: "额度不足" })).toThrow("额度不足");
     });

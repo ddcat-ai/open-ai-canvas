@@ -48,6 +48,20 @@ func imageParameterSupported(profile *ImageCapabilityConfig, parameter string) b
 	return profile.OutputFormat.Supported
 }
 
+func imageOutputFormat(transparentBackground string) string {
+	if strings.EqualFold(strings.TrimSpace(transparentBackground), "true") {
+		return "png"
+	}
+	return "jpeg"
+}
+
+func imageOutputMimeType(transparentBackground string) string {
+	if imageOutputFormat(transparentBackground) == "png" {
+		return "image/png"
+	}
+	return "image/jpeg"
+}
+
 func imageQualitySupported(profile *ImageCapabilityConfig) bool {
 	return profile == nil || profile.Quality.Supported
 }

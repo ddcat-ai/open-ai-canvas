@@ -11,7 +11,13 @@ import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capab
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
 import { aiApiUrl, aiHeaders, geminiApiUrl, geminiHeaders, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
 
-const IMAGE_OUTPUT_FORMAT = "png";
+function imageOutputFormat(transparentBackground: string) {
+    return transparentBackground === "true" ? "png" : "jpeg";
+}
+
+function imageOutputMimeType(transparentBackground: string) {
+    return transparentBackground === "true" ? "image/png" : "image/jpeg";
+}
 import type { AiTextMessage, GeminiPart, ImageApiResponse, RequestOptions, ResponseApiPayload, ResponseFunctionTool, ResponseInputMessage, ToolChoice, ToolResponseResult } from "@/services/api/image-contracts";
 import { normalizeGrokImageResolution, normalizeQuality, normalizeVolcengineArkImageSize, resolveImageRequestSize, validateImageCapability } from "@/services/api/image-validation";
 import { parseGeminiImagePayload, parseImagePayload, readAxiosError } from "@/services/api/image-response";
@@ -116,11 +122,11 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                   ...(quality ? { quality } : {}),
                   ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
                   ...(imageProfile.responseFormat.supported ? { response_format: "b64_json" } : {}),
-                  ...(imageProfile.outputFormat.supported ? { output_format: IMAGE_OUTPUT_FORMAT } : {}),
+                  ...(imageProfile.outputFormat.supported ? { output_format: imageOutputFormat(normalizedImage.transparentBackground) } : {}),
                   ...(imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true" ? { background: "transparent" } : {}),
               };
         const responseData = isVolcengineArk ? await postVolcengineArkImage(requestConfig, payload, options) : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
-        const images = parseImagePayload(responseData);
+        const images = parseImagePayload(responseData, imageProfile.outputFormat.supported ? imageOutputMimeType(normalizedImage.transparentBackground) : "image/png");
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
@@ -209,7 +215,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
     if (imageProfile.responseFormat.supported) formData.set("response_format", "b64_json");
-    if (imageProfile.outputFormat.supported) formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+    if (imageProfile.outputFormat.supported) formData.set("output_format", imageOutputFormat(normalizedImage.transparentBackground));
     if (imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true") {
         formData.set("background", "transparent");
     }
@@ -226,7 +232,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     try {
         const request = channelRequest(requestConfig, aiApiUrl(requestConfig, "/images/edits"), aiHeaders(requestConfig));
         const response = await axios.post<ImageApiResponse>(request.url, formData, { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal });
-        const images = parseImagePayload(response.data);
+        const images = parseImagePayload(response.data, imageProfile.outputFormat.supported ? imageOutputMimeType(normalizedImage.transparentBackground) : "image/png");
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
