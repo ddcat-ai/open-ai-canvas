@@ -2,6 +2,7 @@ import { registerPlugin } from "@/lib/plugins/plugin-registry";
 import type { PluginManifestV2, RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import { registerEditorSlot } from "@/lib/plugins/editor-slot-registry";
 import { EditorTimelinePanel } from "./editor-timeline-panel";
+import { EditorPreviewMonitor } from "./editor-preview-monitor";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -15,7 +16,10 @@ const manifest: PluginManifestV2 = {
     trusted: true,
     runtime: { backend: "trusted-backend", web: "declarative" },
     contributes: {
-        editorSlots: [{ slot: "timeline-panel", priority: 0 }],
+        editorSlots: [
+            { slot: "timeline-panel", priority: 0 },
+            { slot: "preview-renderer", priority: 0 },
+        ],
     },
 };
 
@@ -31,4 +35,11 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "timeline-panel",
     render: () => <EditorTimelinePanel />,
+});
+
+// M3.2：插槽渲染函数 = 预览监视器（浏览器内近似预览 + 播放头）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "preview-renderer",
+    render: () => <EditorPreviewMonitor />,
 });
