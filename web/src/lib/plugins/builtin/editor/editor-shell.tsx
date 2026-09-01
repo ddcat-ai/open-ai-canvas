@@ -6,6 +6,7 @@ import { EditorPreviewMonitor } from "./editor-preview-monitor";
 import { EditorInspector } from "./editor-inspector";
 import { EditorAssetIngest } from "./editor-asset-ingest";
 import { EditorSubtitleTools } from "./editor-subtitle-tools";
+import { EditorTranscription } from "./editor-transcription";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -23,8 +24,8 @@ const manifest: PluginManifestV2 = {
             { slot: "timeline-panel", priority: 0 },
             { slot: "preview-renderer", priority: 0 },
             { slot: "inspector", priority: 0 },
-            { slot: "asset-ingest", priority: 0 },
             { slot: "subtitle-tool", priority: 0 },
+            { slot: "transcription-provider", priority: 0 },
         ],
     },
 };
@@ -68,4 +69,11 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "subtitle-tool",
     render: () => <EditorSubtitleTools />,
+});
+
+// M3.6：转写（mock ASR → 字幕轨道，M4 接后端任务客户端）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "transcription-provider",
+    render: () => <EditorTranscription />,
 });
