@@ -4,7 +4,7 @@
 // - previewGesture/commitGesture/cancelGesture：拖拽等连续手势期间只改渲染态，
 //   松手提交时一次性入历史（手势不逐帧污染撤销栈）
 
-import { create } from "zustand";
+import { create, type StoreApi, type UseBoundStore } from "zustand";
 
 import type { TimelineProject } from "@/types/timeline";
 import {
@@ -52,7 +52,7 @@ export type EditorStoreOptions = {
     debounceMs?: number;
 };
 
-export function createEditorStore(options: EditorStoreOptions = {}): EditorStore {
+export function createEditorStore(options: EditorStoreOptions = {}): UseBoundStore<StoreApi<EditorStore>> {
     const registry = options.registry ?? getEditorCommandRegistry();
     const saveTimeline = options.saveTimeline;
     const debounceMs = options.debounceMs ?? EDITOR_SAVE_DEBOUNCE_MS;
