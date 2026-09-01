@@ -4,6 +4,7 @@ import { registerEditorSlot } from "@/lib/plugins/editor-slot-registry";
 import { EditorTimelinePanel } from "./editor-timeline-panel";
 import { EditorPreviewMonitor } from "./editor-preview-monitor";
 import { EditorInspector } from "./editor-inspector";
+import { EditorAssetIngest } from "./editor-asset-ingest";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -21,6 +22,7 @@ const manifest: PluginManifestV2 = {
             { slot: "timeline-panel", priority: 0 },
             { slot: "preview-renderer", priority: 0 },
             { slot: "inspector", priority: 0 },
+            { slot: "asset-ingest", priority: 0 },
         ],
     },
 };
@@ -45,11 +47,16 @@ registerEditorSlot({
     slot: "preview-renderer",
     render: () => <EditorPreviewMonitor />,
 });
-
-
 // M3.3：插槽渲染函数 = 片段检查器（属性编辑入队可撤销）。
 registerEditorSlot({
     pluginId: manifest.id,
     slot: "inspector",
     render: () => <EditorInspector />,
+});
+
+// M3.4：插槽渲染函数 = 素材库（点击资产 → addClip 入轨）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "asset-ingest",
+    render: () => <EditorAssetIngest />,
 });
