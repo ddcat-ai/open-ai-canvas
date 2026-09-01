@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { canvasConnectionError } from "../src/lib/canvas/canvas-connection-policy";
 import { assertCanvasImageReferenceLimit, buildGenerationConfig, canvasImageReferenceLimitError, resolveCanvasGenerationModel } from "../src/lib/canvas/canvas-project-generation";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
-import { groupModelsByDisplayName, inferVideoOperation, modelCompatibilityError, modelGroupReferenceLimits, resolveCompatibleModel, resolveModelGenerationDefaults } from "../src/lib/model-selection";
+import { groupModelsByDisplayName, inferVideoOperation, modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions } from "../src/lib/model-selection";
 import { defaultConfig, normalizeModelOptionValue, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
@@ -53,6 +53,18 @@ function node(id: string, type: CanvasNodeType, generationMode?: "image" | "vide
 }
 
 describe("逻辑模型选择", () => {
+    test("技能上下文展开后按最终视频模型字符上限拒绝提交", () => {
+        const config = policyConfig();
+        const model = config.videoModels[0]!;
+        config.channels[0]!.modelCosts![0]!.capabilityConfig!.video!.references.promptMaxChars = 10_000;
+
+        const error = modelPromptLengthError(config, model, "video", "镜".repeat(23_142));
+
+        expect(error).toContain("最多 10000 个字符");
+        expect(error).toContain("完整提示词为 23142 个字符");
+        expect(error).toContain("不会自动截断");
+    });
+
     test("图片逻辑模型忽略全局视频时长，不应显示为不支持当前时长", () => {
         const model = "platform::gpt-image-2";
         const channel: ModelChannel = {
@@ -127,6 +139,59 @@ describe("逻辑模型选择", () => {
         };
 
         expect(resolveModelGenerationDefaults(config, model, "video", {}, { videoSeconds: "6" }).videoSeconds).toBe("15");
+    });
+
+    test("镜头视频不会向不支持同步音频的模型提交全局 true 默认值", () => {
+        const model = "platform::silent-video";
+        const profile = defaultModelCapabilityConfig(undefined, "silent-video");
+        profile.video!.generateAudio = { supported: false, default: false };
+        profile.video!.watermark = { supported: false, default: false };
+        const config: AiConfig = {
+            ...defaultConfig,
+            videoGenerateAudio: "true",
+            videoWatermark: "true",
+            channels: [{
+                id: "platform",
+                name: "平台模型",
+                baseUrl: "/api",
+                apiKey: "system",
+                apiFormat: "openai",
+                scope: "system",
+                models: ["silent-video"],
+                modelCosts: [{
+                    model: "silent-video",
+                    capability: "video",
+                    billingMode: "per_second",
+                    unitPriceMicrocredits: 1,
+                    logicalModelId: "silent-video",
+                    logicalCapabilitySpec: {
+                        version: 1,
+                        capability: "video",
+                        options: {
+                            videoGenerateAudio: { values: [false] },
+                            videoWatermark: { values: [false] },
+                        },
+                    },
+                    capabilityConfig: profile,
+                }],
+            }],
+            models: [model],
+            videoModels: [model],
+            videoModel: model,
+            model,
+        };
+
+        expect(resolveModelVideoBooleanOptions(config, model, {}, {
+            videoGenerateAudio: config.videoGenerateAudio,
+            videoWatermark: config.videoWatermark,
+        })).toEqual({ videoGenerateAudio: "false", videoWatermark: "false" });
+
+        profile.video!.generateAudio = { supported: true, default: true };
+        config.videoGenerateAudio = "false";
+        expect(resolveModelVideoBooleanOptions(config, model, {}, {
+            videoGenerateAudio: config.videoGenerateAudio,
+            videoWatermark: config.videoWatermark,
+        })).toEqual({ videoGenerateAudio: "true", videoWatermark: "false" });
     });
 
 

@@ -42,3 +42,20 @@ func TestContentModerationFailureRequiresExactProviderCode(t *testing.T) {
 		t.Fatal("generic HTTP 400 must remain retryable")
 	}
 }
+
+func TestProviderPayloadBusinessFailureRecognizesStringErrorCode(t *testing.T) {
+	code, message, failed := providerPayloadBusinessFailure(map[string]any{
+		"code": "RequestParameterIsWrong",
+		"data": nil,
+		"msg":  "参数: prompt 的长度: 23142 大于最大长度 10000",
+	})
+	if !failed || code != "RequestParameterIsWrong" || message != "参数: prompt 的长度: 23142 大于最大长度 10000" {
+		t.Fatalf("business failure = (%q, %q, %v)", code, message, failed)
+	}
+}
+
+func TestProviderPayloadBusinessFailureAcceptsStringSuccessCode(t *testing.T) {
+	if code, message, failed := providerPayloadBusinessFailure(map[string]any{"code": "Success", "data": map[string]any{"task_id": "task-1"}}); failed {
+		t.Fatalf("success payload was marked failed: (%q, %q)", code, message)
+	}
+}

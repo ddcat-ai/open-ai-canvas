@@ -27,10 +27,12 @@ export type ResolvedCanvasAppearance = {
     grid: string;
 };
 
+export const DEFAULT_CANVAS_BACKGROUND_MODE: CanvasBackgroundMode = "dots";
+
 const CANVAS_APPEARANCE_DEFAULT_KEY = "infinite-canvas:canvas-appearance-default";
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
-const CUSTOM_GRID_COLOR = "#B6B3B3";
-const CUSTOM_GRID_OPACITY = 70;
+const CUSTOM_GRID_COLOR: Record<CanvasColorTheme, string> = { light: "#000000", dark: "#AFAFAF" };
+const CUSTOM_GRID_OPACITY = 80;
 
 export function canvasAppearanceForTheme(theme: CanvasColorTheme, previous?: CanvasAppearance): CanvasAppearance {
     return previous?.custom?.baseTheme === theme ? { mode: theme, custom: previous.custom } : { mode: theme };
@@ -43,7 +45,7 @@ export function customCanvasAppearanceFromTheme(theme: CanvasColorTheme): Canvas
             baseTheme: theme,
             backgroundColor: canvasThemes[theme].canvas.background.toUpperCase(),
             backgroundBrightness: 0,
-            gridColor: CUSTOM_GRID_COLOR,
+            gridColor: CUSTOM_GRID_COLOR[theme],
             gridOpacity: CUSTOM_GRID_OPACITY,
         },
     };

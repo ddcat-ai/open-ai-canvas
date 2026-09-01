@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
+    DEFAULT_CANVAS_BACKGROUND_MODE,
     canvasAppearanceForTheme,
     customCanvasAppearanceFromTheme,
     enterCustomCanvasAppearance,
@@ -29,21 +30,25 @@ beforeEach(() => {
 });
 
 describe("canvas custom appearance", () => {
+    test("uses point grid as the default for new canvases", () => {
+        expect(DEFAULT_CANVAS_BACKGROUND_MODE).toBe("dots");
+    });
+
     test("inherits the active fixed theme the first time custom mode is selected", () => {
         const light = enterCustomCanvasAppearance(canvasAppearanceForTheme("light"), "light");
         expect(light).toEqual({
             mode: "custom",
             custom: {
                 baseTheme: "light",
-                backgroundColor: "#EDEEEE",
+                backgroundColor: "#F0F0F0",
                 backgroundBrightness: 0,
-                gridColor: "#B6B3B3",
-                gridOpacity: 70,
+                gridColor: "#000000",
+                gridOpacity: 80,
             },
         });
 
         const dark = enterCustomCanvasAppearance(canvasAppearanceForTheme("dark"), "dark");
-        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#262626", backgroundBrightness: 0, gridColor: "#B6B3B3", gridOpacity: 70 });
+        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#000000", backgroundBrightness: 0, gridColor: "#AFAFAF", gridOpacity: 80 });
     });
 
     test("restores a previous custom profile only under the same base theme", () => {
@@ -56,7 +61,7 @@ describe("canvas custom appearance", () => {
         expect(fixedDark.custom).toBeUndefined();
         expect(enterCustomCanvasAppearance(fixedDark, "dark").custom).toMatchObject({
             baseTheme: "dark",
-            backgroundColor: "#262626",
+            backgroundColor: "#000000",
         });
     });
 
@@ -136,6 +141,8 @@ describe("canvas custom appearance", () => {
 
     test("does not expose background opacity after legacy values are ignored", async () => {
         const controlsSource = await Bun.file(new URL("../src/components/canvas/canvas-appearance-controls.tsx", import.meta.url)).text();
+        expect(controlsSource).toContain('const LIGHT_PRESETS = ["#F0F0F0"');
+        expect(controlsSource).toContain('const DARK_PRESETS = ["#000000"');
         expect(controlsSource).not.toContain('label="背景透明度"');
         expect(controlsSource).toContain('aria-label="界面样式"');
         expect(controlsSource).toContain('label="网格强度"');

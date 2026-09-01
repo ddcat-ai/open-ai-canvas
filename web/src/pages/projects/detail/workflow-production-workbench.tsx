@@ -11,7 +11,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationOptions } from "@/lib/model-capabilities";
 import { modelQuoteRequest } from "@/lib/model-pricing";
 import { customShotTitle, formatShotOrdinal, normalizeDefaultShotTitle } from "@/lib/shot-label";
-import { modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { modelCompatibilityError, resolveCompatibleModel, resolveModelVideoBooleanOptions, type ModelRequirements } from "@/lib/model-selection";
 import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { submitBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteLogicalModel } from "@/services/api/logical-models";
@@ -145,6 +145,12 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const activeProfile = useMemo(() => modelCapabilityConfigFor(effectiveConfig, routedModel), [effectiveConfig, routedModel]);
     const videoProfile = generationCapability === "video" ? activeProfile.video : undefined;
     const imageProfile = generationCapability === "image" ? activeProfile.image : undefined;
+    const videoBooleanOptions = useMemo(() => generationCapability === "video"
+        ? resolveModelVideoBooleanOptions(effectiveConfig, routedModel, {}, {
+              videoGenerateAudio: effectiveConfig.videoGenerateAudio,
+              videoWatermark: effectiveConfig.videoWatermark,
+          })
+        : undefined, [effectiveConfig, generationCapability, routedModel]);
     const generationConfig = useMemo(() => ({
         ...effectiveConfig,
         model: routedModel,
@@ -154,7 +160,8 @@ export default function WorkflowProductionWorkbench(props: Props) {
         quality: imageQuality,
         vquality: resolution,
         videoSeconds: generationSeconds,
-    }), [aspectRatio, effectiveConfig, generationCapability, generationSeconds, imageQuality, resolution, routedModel]);
+        ...(videoBooleanOptions || {}),
+    }), [aspectRatio, effectiveConfig, generationCapability, generationSeconds, imageQuality, resolution, routedModel, videoBooleanOptions]);
     const priceChannel = resolveModelChannel(generationConfig, routedModel);
     const configuredCredits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
