@@ -38,7 +38,8 @@ function snapMs(deltaMs: number): number {
 }
 
 export function EditorTimelinePanel() {
-    const { project, history, isDirty, saving, saveError, undo, redo, previewGesture, commitGesture, cancelGesture } = useEditorStoreContext();
+    const { project, history, isDirty, saving, saveError, undo, redo, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip } =
+        useEditorStoreContext();
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState(0);
@@ -147,6 +148,8 @@ export function EditorTimelinePanel() {
                                             onGesture={previewGesture}
                                             onCommit={commitGesture}
                                             onCancel={cancelGesture}
+                                            selectedClipId={selectedClipId}
+                                            onSelectClip={selectClip}
                                         />
                                     ))}
                                 </div>
@@ -181,6 +184,8 @@ function TrackRow({
     onGesture,
     onCommit,
     onCancel,
+    selectedClipId,
+    onSelectClip,
 }: {
     track: TimelineTrack;
     project: TimelineProject;
@@ -188,6 +193,8 @@ function TrackRow({
     onGesture: (cmd: { op: string; payload: unknown }) => void;
     onCommit: () => void;
     onCancel: () => void;
+    selectedClipId: string | null;
+    onSelectClip: (id: string | null) => void;
 }) {
     const clips = project.clips.filter((c) => c.trackId === track.id);
     return (
@@ -199,9 +206,23 @@ function TrackRow({
                     <div className="text-[10px] text-foreground/40">{clips.length} 个片段</div>
                 </div>
             </div>
-            <div className="relative flex-1 overflow-hidden bg-foreground/2">
+            <div
+                className="relative flex-1 overflow-hidden bg-foreground/2"
+                onPointerDown={(e) => {
+                    if (e.target === e.currentTarget) onSelectClip(null);
+                }}
+            >
                 {clips.map((clip) => (
-                    <ClipItem key={clip.id} clip={clip} pxPerMs={pxPerMs} onGesture={onGesture} onCommit={onCommit} onCancel={onCancel} />
+                    <ClipItem
+                        key={clip.id}
+                        clip={clip}
+                        pxPerMs={pxPerMs}
+                        onGesture={onGesture}
+                        onCommit={onCommit}
+                        onCancel={onCancel}
+                        selected={selectedClipId === clip.id}
+                        onSelectClip={onSelectClip}
+                    />
                 ))}
             </div>
         </div>
@@ -224,16 +245,23 @@ function ClipItem({
     onGesture,
     onCommit,
     onCancel,
+    selected,
+    onSelectClip,
 }: {
     clip: TimelineClip;
     pxPerMs: number;
     onGesture: (cmd: { op: string; payload: unknown }) => void;
     onCommit: () => void;
     onCancel: () => void;
+    selected: boolean;
+    onSelectClip: (id: string | null) => void;
 }) {
     const gestureRef = useRef<GestureState | null>(null);
 
     const beginGesture = (e: React.PointerEvent, mode: Exclude<GestureMode, null>) => {
+        if (gestureRef.current) return;
+        onSelectClip(clip.id);
+        e.stopPropagation();
         if (gestureRef.current) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -295,11 +323,13 @@ function ClipItem({
     return (
         <div
             className={`group absolute top-1.5 bottom-1.5 select-none rounded-md border text-xs shadow-sm ${
-                isSubtitle
-                    ? "border-[var(--warning)]/40 bg-[var(--warning)]/15 text-[var(--warning)]"
-                    : isAudio
-                      ? "border-[var(--success)]/40 bg-[var(--success)]/15 text-[var(--success)]"
-                      : "border-[var(--workspace-accent)]/40 bg-[var(--workspace-accent)]/12 text-foreground/85"
+                selected
+                    ? "border-[var(--workspace-accent)] ring-1 ring-[var(--workspace-accent)]/60 bg-[var(--workspace-accent)]/25 text-foreground"
+                    : isSubtitle
+                      ? "border-[var(--warning)]/40 bg-[var(--warning)]/15 text-[var(--warning)]"
+                      : isAudio
+                        ? "border-[var(--success)]/40 bg-[var(--success)]/15 text-[var(--success)]"
+                        : "border-[var(--workspace-accent)]/40 bg-[var(--workspace-accent)]/12 text-foreground/85"
             }`}
             style={{ left, width, touchAction: "none" }}
             title={`${label} · ${formatTimelineTime(clip.startMs)} +${formatTimelineTime(clip.durationMs)}`}

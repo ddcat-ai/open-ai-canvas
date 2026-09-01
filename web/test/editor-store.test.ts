@@ -203,4 +203,26 @@ describe("editor store (gesture preview)", () => {
         expect(store.getState().project).toBe(before);
         expect(store.getState().saveError).toMatch(/unknown edit command op/);
     });
+
+    test("selectClip toggles selection without touching history or dirty state", async () => {
+        const store = createEditorStore({ saveTimeline: async () => undefined, debounceMs: 0 });
+        store.getState().load(makeProject());
+        expect(store.getState().selectedClipId).toBeNull();
+
+        store.getState().selectClip("clip-a");
+        expect(store.getState().selectedClipId).toBe("clip-a");
+        expect(store.getState().isDirty).toBe(false);
+        expect(store.getState().history?.undoStack).toHaveLength(0);
+
+        store.getState().selectClip(null);
+        expect(store.getState().selectedClipId).toBeNull();
+    });
+
+    test("load resets selection", async () => {
+        const store = createEditorStore({ saveTimeline: async () => undefined, debounceMs: 0 });
+        store.getState().load(makeProject());
+        store.getState().selectClip("clip-a");
+        store.getState().load(makeProject());
+        expect(store.getState().selectedClipId).toBeNull();
+    });
 });
