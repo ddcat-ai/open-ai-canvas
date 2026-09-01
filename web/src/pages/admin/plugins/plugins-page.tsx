@@ -9,7 +9,7 @@ import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
 import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
-import type { PluginManifest } from "@/lib/plugins/plugin-types";
+import type { PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import { fetchAdminPlugins, setPluginPlatformAvailability, uninstallPlugin, uploadPlugin, type AdminPluginState, type BackendPlugin, type PluginManagement } from "@/services/api/plugins";
 import { UploadPluginModal } from "@/pages/plugins/plugin-documentation-modals";
 
@@ -17,7 +17,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 
 type AdminPluginItem = {
-    manifest: PluginManifest;
+    manifest: PluginManifest | PluginManifestV2;
     source: string;
     management: PluginManagement;
     status?: string;

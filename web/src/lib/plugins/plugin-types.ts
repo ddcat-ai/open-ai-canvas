@@ -1,6 +1,35 @@
 import type { Asset } from "@/stores/use-asset-store";
 
 export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
+export const PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
+
+export type EditorSlotKind =
+    | "timeline-panel"
+    | "preview-renderer"
+    | "inspector"
+    | "asset-ingest"
+    | "subtitle-tool"
+    | "transcription-provider"
+    | "export-renderer"
+    | "ai-assistant";
+
+export type EditorSlotContribution = {
+    slot: EditorSlotKind;
+    priority?: number;
+};
+
+export type EditorPluginPermission = "timeline.read" | "timeline.command" | "export.run";
+
+export type PluginContributionsV2 = PluginContributions & {
+    editorSlots?: EditorSlotContribution[];
+};
+
+// 注意：必须把 permissions 一并 Omit 掉再完全替换，否则数组交叉类型会被归约为 v1 的 PluginPermission[]，v2 权限字面量无法赋值。
+export type PluginManifestV2 = Omit<PluginManifest, "apiVersion" | "contributes" | "permissions"> & {
+    apiVersion: typeof PLUGIN_API_VERSION_V2;
+    permissions: Array<PluginPermission | EditorPluginPermission>;
+    contributes: PluginContributionsV2;
+};
 
 export type PluginContributionKind = "provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export";
 export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings";
@@ -181,8 +210,8 @@ export type PluginHostServices = {
 };
 
 export type PluginHostContext = {
-    manifest: PluginManifest;
-    permissions: ReadonlySet<PluginPermission>;
+    manifest: PluginManifest | PluginManifestV2;
+    permissions: ReadonlySet<PluginPermission | EditorPluginPermission>;
     storage: PluginStorage;
     config: Readonly<PluginInstallation["config"]>;
     services?: PluginHostServices;
@@ -276,16 +305,20 @@ export type AssetSourceProvider = {
 };
 
 export type RegisteredPlugin = {
-    manifest: PluginManifest;
+    /** v1 或 v2 插件清单；v2 清单结构为 v1 超集（含 editorSlots 声明）。 */
+    manifest: PluginManifest | PluginManifestV2;
     source?: "bundled" | "uploaded" | string;
     activate?: (context: PluginHostContext) => Promise<void> | void;
     deactivate?: (context: PluginHostContext) => Promise<void> | void;
     createAssetSource?: (context: PluginHostContext) => AssetSourceProvider;
     createPromptOptimizer?: (context: PluginHostContext) => PromptOptimizerProvider;
+    /** v2 插件由注册器从 manifest 提取的编辑器插槽声明（v1 插件无此字段）。 */
+    editorSlots?: EditorSlotContribution[];
+    /** v2 插件 UI 插槽的实际渲染函数由插件 activate() 阶段经 registerEditorSlot 提供。 */
 };
 
 export type PluginInstallation = {
-    manifest: PluginManifest;
+    manifest: PluginManifest | PluginManifestV2;
     enabled: boolean;
     config: Record<string, string | number | boolean>;
     installedAt: string;
