@@ -21,6 +21,16 @@ import (
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
+
+func TestImageOutputFormatDefaultsToJpegAndPreservesTransparency(t *testing.T) {
+	if got := imageOutputFormat("false"); got != "jpeg" || imageOutputMimeType("false") != "image/jpeg" {
+		t.Fatalf("opaque image format = %q/%q, want jpeg/image/jpeg", got, imageOutputMimeType("false"))
+	}
+	if got := imageOutputFormat("true"); got != "png" || imageOutputMimeType("true") != "image/png" {
+		t.Fatalf("transparent image format = %q/%q, want png/image/png", got, imageOutputMimeType("true"))
+	}
+}
+
 const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 func TestProviderRequestErrorDetails(t *testing.T) {
@@ -1010,7 +1020,7 @@ func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 		if r.FormValue("model") != "gpt-image-2-high" || r.FormValue("prompt") != "make the reference clearer" || r.FormValue("n") != "1" {
 			t.Fatalf("form values = model:%q prompt:%q n:%q", r.FormValue("model"), r.FormValue("prompt"), r.FormValue("n"))
 		}
-		if r.FormValue("response_format") != "b64_json" || r.FormValue("output_format") != "png" || r.FormValue("size") != "1024x1024" {
+		if r.FormValue("response_format") != "b64_json" || r.FormValue("output_format") != "jpeg" || r.FormValue("size") != "1024x1024" {
 			t.Fatalf("format values = response_format:%q output_format:%q size:%q", r.FormValue("response_format"), r.FormValue("output_format"), r.FormValue("size"))
 		}
 		file, header, err := r.FormFile("image")
@@ -1042,7 +1052,7 @@ func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 		t.Fatalf("runImageTask() error = %v", err)
 	}
 	images, _ := result["images"].([]map[string]string)
-	if len(images) != 1 || images[0]["dataUrl"] != "data:image/png;base64,aGVsbG8=" {
+	if len(images) != 1 || images[0]["dataUrl"] != "data:image/jpeg;base64,aGVsbG8=" {
 		t.Fatalf("images = %#v", result["images"])
 	}
 }
