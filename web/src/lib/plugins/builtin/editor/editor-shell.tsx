@@ -8,6 +8,7 @@ import { EditorInspector } from "./editor-inspector";
 import { EditorAssetIngest } from "./editor-asset-ingest";
 import { EditorTranscription } from "./editor-transcription";
 import { EditorExport } from "./editor-export";
+import { EditorAiAssistant } from "./editor-ai-assistant";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -25,8 +26,11 @@ const manifest: PluginManifestV2 = {
             { slot: "timeline-panel", priority: 0 },
             { slot: "preview-renderer", priority: 0 },
             { slot: "inspector", priority: 0 },
+            { slot: "asset-ingest", priority: 0 },
+            { slot: "subtitle-tool", priority: 0 },
             { slot: "transcription-provider", priority: 0 },
             { slot: "export-renderer", priority: 0 },
+            { slot: "ai-assistant", priority: 0 },
         ],
     },
 };
@@ -84,4 +88,11 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "export-renderer",
     render: () => <EditorExport />,
+});
+
+// M3.8：AI 助手占位（M6 补实现 ai-command-schema + timeline-summary）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "ai-assistant",
+    render: () => <EditorAiAssistant />,
 });
