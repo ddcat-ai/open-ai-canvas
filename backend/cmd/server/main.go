@@ -121,6 +121,7 @@ func run(ctx context.Context) error {
 	handler.RegisterAdminUpdateRoutes(api, svc)
 	handler.RegisterAnnouncementRoutes(api, svc)
 	handler.RegisterFinanceRoutes(api, svc)
+	handler.RegisterPaymentRoutes(api, svc)
 	handler.RegisterLibTVRoutes(api, svc)
 	handler.RegisterTapNowRoutes(api, svc)
 	// 登录态模型目录代理：避免浏览器直连各上游时分别处理 CORS。

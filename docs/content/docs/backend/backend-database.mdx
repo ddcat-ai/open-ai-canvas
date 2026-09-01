@@ -15,7 +15,7 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 3。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引。
+当前结构版本为 4。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `credit_recharge_platform` 增加充值套餐、支付渠道及不可变配置版本、充值订单、支付通知和交易对账表，并为积分流水增加充值订单引用。
 
 版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
 
@@ -28,6 +28,21 @@ description: 影策后端核心持久化表与状态边界
 | `email_verification_codes` | 保存注册和密码重置的一次性邮箱验证码 | 只保存带用途隔离的 HMAC 哈希；验证码 10 分钟过期、只能消费一次，明文不进入数据库 |
 
 密码重置在单个数据库事务中条件消费 `password_reset` 验证码、更新 `users.password_hash` 并删除 `auth_sessions`。任一步失败都会回滚，不能出现密码已修改但旧会话仍有效，或验证码已消耗但密码未更新的部分状态。
+
+## 积分充值与支付对账
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `credit_packages` | 保存管理员配置的充值套餐 | 编辑时递增版本；订单复制价格、基础积分和赠送积分快照，历史订单不随套餐变化 |
+| `payment_channels` | 保存支付 Provider、方式、展示名、启用状态和当前配置版本指针 | 新配置保存后自动停用；只有配置摘要通过检查后才能重新启用 |
+| `payment_channel_config_versions` | 保存不可变支付配置版本 | 整体使用后端设置密钥加密；公开接口只返回版本和摘要，不回显密钥 |
+| `credit_recharge_orders` | 保存现金订单、套餐/渠道/配置快照和支付状态 | `(user_id, idempotency_key)` 唯一；不定义退款状态或退款金额；微信商户订单号固定不超过 32 字符 |
+| `payment_notification_events` | 保存微信通知事件、签名头和加密原文 | `(provider, event_id)` 唯一；重复通知可安全重放，只有验签和解密通过后进入到账事务 |
+| `payment_reconciliation_runs` / `payment_reconciliation_anomalies` | 保存按渠道、交易日执行的账单核对及异常 | 下载账单后校验微信返回的 SHA-256；缺单、金额差异、交易号差异和外部退款只记录异常，不触发退款 |
+
+现金支付转为积分只有 `ConfirmRechargePaid` 一条写路径。该路径在单个数据库事务中锁定订单、校验商户订单号、金额、币种和微信交易号，以 `credit_recharge:<order_id>` 唯一流水键写入 `credit_ledger_entries`，增加 `credit_accounts.available_microcredits`，再把订单更新为 `credited`。支付回调、用户主动查单和后台对账都复用该事务，因此重复消息不会重复加积分。
+
+功能开关 `creditRechargeEnabled` 默认为关闭。关闭后仅阻止读取充值目录和创建新订单；历史订单详情、主动查单、关单、微信异步通知和后台对账继续工作。支付渠道停用、归档或轮换配置也不切断旧订单：订单固定使用创建时的 `config_version_id`，通知 URL 同时携带渠道和配置版本。
 
 ## 技能包与版本
 

@@ -10,11 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 3
+const CurrentSchemaVersion int64 = 4
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
+const creditRechargePlatformChecksum = "sha256:credit-recharge-platform-v4-20260831-r1"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -44,6 +45,7 @@ var schemaMigrations = []migration{
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
+	{version: 4, name: "credit_recharge_platform", checksum: creditRechargePlatformChecksum, apply: migrateSchemaV4},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -87,6 +89,19 @@ func migrateSchemaV3(tx *gorm.DB) error {
 		}
 	}
 	return tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_project_asset_candidates_pending_identity ON project_asset_candidates(project_id, category, name_key) WHERE status = 'pending_confirmation' AND name_key <> ''").Error
+}
+
+func migrateSchemaV4(tx *gorm.DB) error {
+	return tx.AutoMigrate(
+		&model.CreditLedgerEntry{},
+		&model.CreditPackage{},
+		&model.PaymentChannel{},
+		&model.PaymentChannelConfigVersion{},
+		&model.CreditRechargeOrder{},
+		&model.PaymentNotificationEvent{},
+		&model.PaymentReconciliationRun{},
+		&model.PaymentReconciliationAnomaly{},
+	)
 }
 
 func MigrateSchema(db *gorm.DB) error {

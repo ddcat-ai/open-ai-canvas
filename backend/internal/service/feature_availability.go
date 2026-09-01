@@ -17,6 +17,7 @@ const (
 	FeatureShortDrama     = "shortDrama"
 	FeatureTaskCenter     = "taskCenter"
 	FeatureCredits        = "credits"
+	FeatureCreditRecharge = "creditRecharge"
 	FeatureCustomChannels = "customChannels"
 	FeatureFrontendModels = "frontendModels"
 	FeaturePluginCenter   = "pluginCenter"
@@ -27,6 +28,7 @@ type FeatureAvailability struct {
 	ShortDramaEnabled           bool `json:"shortDramaEnabled"`
 	TaskCenterEnabled           bool `json:"taskCenterEnabled"`
 	CreditsEnabled              bool `json:"creditsEnabled"`
+	CreditRechargeEnabled       bool `json:"creditRechargeEnabled"`
 	CustomChannelsEnabled       bool `json:"customChannelsEnabled"`
 	FrontendModelsEnabled       bool `json:"frontendModelsEnabled"`
 	PluginCenterEnabled         bool `json:"pluginCenterEnabled"`
@@ -47,6 +49,7 @@ func defaultFeatureAvailability() FeatureAvailability {
 		ShortDramaEnabled:           true,
 		TaskCenterEnabled:           true,
 		CreditsEnabled:              true,
+		CreditRechargeEnabled:       false,
 		CustomChannelsEnabled:       true,
 		FrontendModelsEnabled:       false,
 		PluginCenterEnabled:         true,
@@ -77,6 +80,14 @@ func (s *Service) UpdateFeatureAvailability(actor *model.User, value FeatureAvai
 	if err != nil {
 		return nil, err
 	}
+	if value.CreditRechargeEnabled && !before.CreditRechargeEnabled {
+		if !value.CreditsEnabled {
+			return nil, BadAuthRequest("请先启用积分功能，再启用积分充值")
+		}
+		if err := s.requireCreditRechargeReady(); err != nil {
+			return nil, err
+		}
+	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -94,6 +105,26 @@ func (s *Service) UpdateFeatureAvailability(actor *model.User, value FeatureAvai
 	return s.withRuntimeCapabilities(publicFeatureAvailability(&setting, value)), nil
 }
 
+func (s *Service) requireCreditRechargeReady() error {
+	packages, err := s.repo.ListEnabledCreditPackages()
+	if err != nil {
+		return err
+	}
+	if len(packages) == 0 {
+		return BadAuthRequest("请先在积分充值页面启用至少一个充值套餐")
+	}
+	channels, err := s.repo.ListEnabledPaymentChannels()
+	if err != nil {
+		return err
+	}
+	for _, channel := range channels {
+		if _, err := s.payments().Get(channel.Provider); err == nil {
+			return nil
+		}
+	}
+	return BadAuthRequest("请先配置、测试并启用至少一个支付渠道")
+}
+
 func (s *Service) FeatureEnabled(feature string) (bool, error) {
 	_, value, err := s.readFeatureAvailability()
 	if err != nil {
@@ -106,6 +137,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.TaskCenterEnabled, nil
 	case FeatureCredits:
 		return value.CreditsEnabled, nil
+	case FeatureCreditRecharge:
+		return value.CreditRechargeEnabled, nil
 	case FeatureCustomChannels:
 		return value.CustomChannelsEnabled, nil
 	case FeatureFrontendModels:
@@ -134,6 +167,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return Forbidden("任务中心暂未开放")
 	case FeatureCredits:
 		return Forbidden("积分功能暂未开放")
+	case FeatureCreditRecharge:
+		return Forbidden("积分充值暂未开放")
 	case FeatureCustomChannels:
 		return Forbidden("自定义渠道暂未开放")
 	case FeatureFrontendModels:

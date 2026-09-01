@@ -14,7 +14,7 @@ export type CreditAccount = {
 export type CreditLedgerEntry = {
     id: string;
     userId: string;
-    type: "redeem" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus";
+    type: "redeem" | "recharge" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus";
     amountMicrocredits: number;
     availableAfterMicrocredits: number;
     reservedAfterMicrocredits: number;
@@ -65,7 +65,7 @@ export type ChannelModel = {
     priceVersion: number;
     capabilityVersion?: number;
     capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
-	priceTiers: ChannelModelPriceTier[];
+    priceTiers: ChannelModelPriceTier[];
     createdAt: string;
     updatedAt: string;
 };
@@ -73,8 +73,8 @@ export type ChannelModel = {
 export type ChannelModelPriceTier = {
     id: string;
     channelModelId: string;
-	selector: Record<string, string>;
-	selectorKey: string;
+    selector: Record<string, string>;
+    selectorKey: string;
     resolution: string;
     videoSeconds: number;
     providerModelKey: string;
@@ -100,7 +100,7 @@ export type ChannelModelMutation = {
     protocol?: ChannelModel["protocol"];
     enabled?: boolean;
     capabilityConfig?: ChannelModel["capabilityConfig"];
-	priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
+    priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
     billingMode?: ChannelModel["billingMode"];
     unitPriceMicrocredits?: number;
     inputTokenPriceMicrocredits?: number;
@@ -219,6 +219,108 @@ export type BillingOrder = {
     updatedAt: string;
 };
 
+export type CreditPackage = {
+    id: string;
+    name: string;
+    description?: string;
+    currency: "CNY" | string;
+    amountFen: number;
+    baseMicrocredits: number;
+    bonusMicrocredits: number;
+    enabled: boolean;
+    sortOrder: number;
+    version: number;
+    archivedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaymentChannel = {
+    id: string;
+    provider: string;
+    method: string;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    sortOrder: number;
+    activeConfigVersionId?: string;
+    activeConfigVersion?: number;
+    configured?: boolean;
+    lastTestStatus?: "passed" | "failed" | "";
+    lastTestError?: string;
+    lastTestConfigDigest?: string;
+    lastTestedAt?: string;
+    archivedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type RechargeCatalogChannel = Pick<PaymentChannel, "id" | "provider" | "method" | "name" | "description" | "sortOrder">;
+
+export type PaymentProviderDescriptor = {
+    code: string;
+    name: string;
+    methods: string[];
+    configFields: Array<{ key: string; label: string; kind: "text" | "password" | "textarea"; required: boolean; secret: boolean; placeholder?: string }>;
+};
+
+export type RechargeOrderStatus = "created" | "prepay_running" | "awaiting_payment" | "prepay_uncertain" | "paid" | "credited" | "closed" | "failed" | "review_required";
+
+export type RechargeOrder = {
+    id: string;
+    userId?: string;
+    packageId: string;
+    packageName: string;
+    currency: string;
+    amountFen: number;
+    baseMicrocredits: number;
+    bonusMicrocredits: number;
+    totalMicrocredits: number;
+    channelId: string;
+    channelName: string;
+    provider: string;
+    method: string;
+    status: RechargeOrderStatus;
+    providerState?: string;
+    providerTransactionId?: string;
+    payPayload?: { type?: string; codeUrl?: string };
+    expiresAt?: string;
+    paidAt?: string;
+    creditedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaymentReconciliationRun = {
+    id: string;
+    channelId: string;
+    provider: string;
+    tradeDate: string;
+    status: "queued" | "running" | "succeeded" | "failed";
+    providerOrderCount: number;
+    providerAmountFen: number;
+    localOrderCount: number;
+    localAmountFen: number;
+    anomalyCount: number;
+    statementDigest?: string;
+    error?: string;
+    createdAt: string;
+    completedAt?: string;
+};
+
+export type PaymentReconciliationAnomaly = {
+    id: string;
+    runId: string;
+    orderId?: string;
+    type: string;
+    providerTransactionId?: string;
+    expectedAmountFen: number;
+    actualAmountFen: number;
+    detail?: string;
+    resolved: boolean;
+    createdAt: string;
+};
+
 export function getWallet(page = 1, limit = 30, type = "all") {
     return request<WalletSummary>(api.get("/wallet", { params: { type, page, limit } }));
 }
@@ -285,7 +387,7 @@ export function updateAdminChannelModel(channelId: string, id: string, input: Ch
 }
 
 export function deleteAdminChannelModel(channelId: string, id: string) {
-	return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
+    return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
 }
 
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; limit?: number };
@@ -324,4 +426,94 @@ export function resolveAdminBillingOrder(id: string, input: { action: "settle" |
 
 export function resolveAdminBillingOrders(input: { ids: string[]; action: "settle" | "refund"; note: string }) {
     return request<{ resolvedCount: number; failed: Array<{ id: string; message: string }> }>(api.post("/admin/billing-orders/batch-resolve", input));
+}
+
+export function getRechargeCatalog() {
+    return request<{ packages: CreditPackage[]; channels: RechargeCatalogChannel[] }>(api.get("/credit-recharge/catalog"));
+}
+
+export function createRechargeOrder(input: { packageId: string; channelId: string; idempotencyKey: string }) {
+    return request<{ order: RechargeOrder }>(api.post("/credit-recharge/orders", input));
+}
+
+export function listRechargeOrders(params: { page?: number; limit?: number } = {}) {
+    return request<{ orders: RechargeOrder[]; total: number; page: number; limit: number }>(api.get("/credit-recharge/orders", { params }));
+}
+
+export function getRechargeOrder(id: string) {
+    return request<{ order: RechargeOrder }>(api.get(`/credit-recharge/orders/${encodeURIComponent(id)}`));
+}
+
+export function syncRechargeOrder(id: string) {
+    return request<{ order: RechargeOrder }>(api.post(`/credit-recharge/orders/${encodeURIComponent(id)}/sync`));
+}
+
+export function closeRechargeOrder(id: string) {
+    return request<{ order: RechargeOrder }>(api.post(`/credit-recharge/orders/${encodeURIComponent(id)}/close`));
+}
+
+export function listPaymentProviders() {
+    return request<{ providers: PaymentProviderDescriptor[] }>(api.get("/admin/payment-providers"));
+}
+
+export function listPaymentChannels(params: { includeArchived?: boolean } = {}) {
+    return request<{ channels: PaymentChannel[] }>(api.get("/admin/payment-channels", { params }));
+}
+
+export function createPaymentChannel(input: { provider: string; method: string; name: string; description?: string; sortOrder?: number }) {
+    return request<{ channel: PaymentChannel }>(api.post("/admin/payment-channels", input));
+}
+
+export function updatePaymentChannel(id: string, input: { name: string; description?: string; enabled: boolean; sortOrder: number }) {
+    return request<{ channel: PaymentChannel }>(api.patch(`/admin/payment-channels/${encodeURIComponent(id)}`, input));
+}
+
+export function archivePaymentChannel(id: string) {
+    return request<{ archived: boolean }>(api.delete(`/admin/payment-channels/${encodeURIComponent(id)}`));
+}
+
+export function savePaymentChannelConfig(id: string, config: Record<string, unknown>) {
+    return request<{ configVersion: { id: string; channelId: string; version: number; configDigest: string; createdAt: string } }>(api.post(`/admin/payment-channels/${encodeURIComponent(id)}/config-versions`, { config }));
+}
+
+export function testPaymentChannel(id: string) {
+    return request<{ channel: PaymentChannel }>(api.post(`/admin/payment-channels/${encodeURIComponent(id)}/test`));
+}
+
+export function listCreditPackages() {
+    return request<{ packages: CreditPackage[] }>(api.get("/admin/credit-packages"));
+}
+
+export type CreditPackageMutation = Omit<CreditPackage, "id" | "version" | "archivedAt" | "createdAt" | "updatedAt"> & { expectedVersion?: number };
+
+export function createCreditPackage(input: CreditPackageMutation) {
+    return request<{ package: CreditPackage }>(api.post("/admin/credit-packages", input));
+}
+
+export function updateCreditPackage(id: string, input: CreditPackageMutation & { expectedVersion: number }) {
+    return request<{ package: CreditPackage }>(api.patch(`/admin/credit-packages/${encodeURIComponent(id)}`, input));
+}
+
+export function archiveCreditPackage(id: string) {
+    return request<{ archived: boolean }>(api.delete(`/admin/credit-packages/${encodeURIComponent(id)}`));
+}
+
+export function listAdminRechargeOrders(params: { status?: string; userId?: string; channelId?: string; page?: number; limit?: number } = {}) {
+    return request<{ orders: RechargeOrder[]; total: number; page: number; limit: number }>(api.get("/admin/recharge-orders", { params }));
+}
+
+export function reconcilePaymentChannel(input: { channelId: string; tradeDate: string }) {
+    return request<{ run: PaymentReconciliationRun; anomalies: PaymentReconciliationAnomaly[] }>(api.post("/admin/payment-reconciliation", input, { timeout: 120_000 }));
+}
+
+export function listPaymentReconciliationRuns(params: { channelId?: string; page?: number; limit?: number } = {}) {
+    return request<{ runs: PaymentReconciliationRun[]; total: number; page: number; limit: number }>(api.get("/admin/payment-reconciliation", { params }));
+}
+
+export function listPaymentReconciliationAnomalies(runId: string) {
+    return request<{ anomalies: PaymentReconciliationAnomaly[] }>(api.get(`/admin/payment-reconciliation/${encodeURIComponent(runId)}/anomalies`));
+}
+
+export function resolvePaymentReconciliationAnomaly(runId: string, anomalyId: string, note: string) {
+    return request<{ resolved: boolean }>(api.post(`/admin/payment-reconciliation/${encodeURIComponent(runId)}/anomalies/${encodeURIComponent(anomalyId)}/resolve`, { note }));
 }

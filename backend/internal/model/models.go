@@ -17,6 +17,9 @@ type ResourceDeletionStatus string
 type BillingStatus string
 type CreditLedgerType string
 type RedeemCodeStatus string
+type CreditRechargeOrderStatus string
+type PaymentNotificationStatus string
+type PaymentReconciliationStatus string
 type AnnouncementStatus string
 type AnnouncementLevel string
 type ProjectStatus string
@@ -119,6 +122,28 @@ const (
 	CreditLedgerAdminAdjust  CreditLedgerType = "admin_adjustment"
 	CreditLedgerSignupBonus  CreditLedgerType = "signup_bonus"
 	CreditLedgerCheckinBonus CreditLedgerType = "checkin_bonus"
+	CreditLedgerRecharge     CreditLedgerType = "recharge"
+
+	CreditRechargeOrderCreated         CreditRechargeOrderStatus = "created"
+	CreditRechargeOrderPrepayRunning   CreditRechargeOrderStatus = "prepay_running"
+	CreditRechargeOrderAwaitingPayment CreditRechargeOrderStatus = "awaiting_payment"
+	CreditRechargeOrderPrepayUncertain CreditRechargeOrderStatus = "prepay_uncertain"
+	CreditRechargeOrderPaid            CreditRechargeOrderStatus = "paid"
+	CreditRechargeOrderCredited        CreditRechargeOrderStatus = "credited"
+	CreditRechargeOrderClosed          CreditRechargeOrderStatus = "closed"
+	CreditRechargeOrderFailed          CreditRechargeOrderStatus = "failed"
+	CreditRechargeOrderReviewRequired  CreditRechargeOrderStatus = "review_required"
+
+	PaymentNotificationPending   PaymentNotificationStatus = "pending"
+	PaymentNotificationProcessed PaymentNotificationStatus = "processed"
+	PaymentNotificationDuplicate PaymentNotificationStatus = "duplicate"
+	PaymentNotificationRejected  PaymentNotificationStatus = "rejected"
+	PaymentNotificationFailed    PaymentNotificationStatus = "failed"
+
+	PaymentReconciliationQueued    PaymentReconciliationStatus = "queued"
+	PaymentReconciliationRunning   PaymentReconciliationStatus = "running"
+	PaymentReconciliationSucceeded PaymentReconciliationStatus = "succeeded"
+	PaymentReconciliationFailed    PaymentReconciliationStatus = "failed"
 
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"

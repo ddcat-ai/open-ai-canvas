@@ -22,6 +22,7 @@ const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logica
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
+const PaymentSettingsPage = lazy(() => import("@/pages/admin/payments/payment-settings-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
 const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
 const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
@@ -192,6 +193,7 @@ export const router = createBrowserRouter([
                     { path: "resources", element: deferred(<StorageResourcesPage />) },
                     { path: "credit-operations", element: deferred(<CreditOperationsPage />) },
                     { path: "redemption-codes", element: deferred(<RedemptionCodesPage />) },
+                    { path: "payments", element: deferred(<PaymentSettingsPage />) },
                     { path: "logs", element: deferred(<LogsPage />) },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
                     { path: "settings/drawing-engine", element: deferred(<DrawingEngineSettingsPage />) },

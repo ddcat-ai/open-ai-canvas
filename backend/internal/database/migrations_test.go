@@ -31,6 +31,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	if !db.Migrator().HasIndex(&model.ProjectAssetCandidate{}, "idx_project_asset_candidates_pending_identity") {
 		t.Fatal("schema migration v3 did not create candidate identity index")
 	}
+	if !db.Migrator().HasTable(&model.CreditRechargeOrder{}) || !db.Migrator().HasTable(&model.PaymentChannelConfigVersion{}) {
+		t.Fatal("schema migration v4 did not create recharge platform tables")
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
 	}

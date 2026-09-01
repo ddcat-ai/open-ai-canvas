@@ -21,6 +21,7 @@ type CreditLedgerEntry struct {
 	AvailableAfterMicrocredits int64            `json:"availableAfterMicrocredits"`
 	ReservedAfterMicrocredits  int64            `json:"reservedAfterMicrocredits"`
 	BillingOrderID             string           `json:"billingOrderId,omitempty" gorm:"index;size:36"`
+	RechargeOrderID            string           `json:"rechargeOrderId,omitempty" gorm:"index;size:36"`
 	RedeemCodeID               string           `json:"redeemCodeId,omitempty" gorm:"index;size:36"`
 	ActorUserID                string           `json:"actorUserId,omitempty" gorm:"index;size:36"`
 	Model                      string           `json:"model,omitempty" gorm:"size:120;index"`
