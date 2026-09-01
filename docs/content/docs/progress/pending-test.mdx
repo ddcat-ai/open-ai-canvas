@@ -5,6 +5,14 @@ description: 影策已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 编辑器（M2 命令状态机）
+
+- [x] 命令协议黄金文件：`editor-commands` 8 个黄金 op（addClip/moveClip/trimClip/splitClip/removeClip/setClipProperty/addSubtitle/removeSubtitle）全量快照比对通过；未知 op、非法 payload 一律抛错（fail-closed）且输入不可变。
+- [x] 快照撤销：`editor-history` 有界 200 层，undo 后新命令清空 redo；边界测试（0 层/200 层/undo 后 redo 清空）通过。
+- [x] 命令状态机 store：`editor-store` 命令入队→reducer→新状态，手势预览（previewGesture 连续预览/commitGesture 一次性入历史/cancelGesture 丢弃），1.5s 防抖保存（保存层依赖注入），保存串行链防旧快照覆盖，失败置 saveError 且保持 dirty；11 项测试通过。
+- [ ] 浏览器冒烟（待用户确认）：项目详情 → 剪辑成片 → 编辑器，拖拽片段移动、拖拽边缘裁剪（trim-start/trim-end）、撤销/重做按钮与缩放按钮；松手提交后可一次撤销；刷新后本地时间线（localforage scope 隔离）保留；状态栏显示 未保存/保存中/已保存/保存失败。
+- [ ] M2.4 手势与画布拖拽不冲突（时间线容器 `data-canvas-no-zoom`），快捷键（Cmd/Ctrl+Z）与全局冲突项待 M3 统一处理。
+
 ## 画布导入同步、素材回收站与历史
 
 - [x] 画布压缩包导入会先校验媒体完整性，并统一通过远端同步入口上传资源；失败时保持脏状态和自动重试，不再把浏览器本地 storage key 误报为已同步。
