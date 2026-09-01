@@ -3,6 +3,7 @@ import type { PluginManifestV2, RegisteredPlugin } from "@/lib/plugins/plugin-ty
 import { registerEditorSlot } from "@/lib/plugins/editor-slot-registry";
 import { EditorTimelinePanel } from "./editor-timeline-panel";
 import { EditorPreviewMonitor } from "./editor-preview-monitor";
+import { EditorInspector } from "./editor-inspector";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -19,6 +20,7 @@ const manifest: PluginManifestV2 = {
         editorSlots: [
             { slot: "timeline-panel", priority: 0 },
             { slot: "preview-renderer", priority: 0 },
+            { slot: "inspector", priority: 0 },
         ],
     },
 };
@@ -42,4 +44,12 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "preview-renderer",
     render: () => <EditorPreviewMonitor />,
+});
+
+
+// M3.3：插槽渲染函数 = 片段检查器（属性编辑入队可撤销）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "inspector",
+    render: () => <EditorInspector />,
 });
