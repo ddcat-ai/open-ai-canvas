@@ -586,6 +586,81 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
+	r.GET("/admin/esa/settings", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminESASetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/esa/settings", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.ESASettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateESASetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.POST("/admin/esa/test-connection", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.ESASettingRequest
+		_ = c.ShouldBindJSON(&req)
+		result, err := svc.TestESAConnection(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.GET("/admin/esa/sites", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		sites, err := svc.ESASites(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sites": sites})
+	})
+	r.GET("/admin/esa/overview", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		rangeKey := c.DefaultQuery("range", "today")
+		siteID := c.DefaultQuery("siteId", "all")
+		refresh := c.Query("refresh") == "true" || c.Query("refresh") == "1"
+		overview, err := svc.ESAOverview(user, rangeKey, siteID, refresh)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, overview)
+	})
 	r.GET("/admin/settings/drawing-engine", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

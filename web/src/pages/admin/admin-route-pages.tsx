@@ -13,6 +13,7 @@ const AccessSettingsPanel = lazy(() => import("./components/access-settings-pane
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 const StorageResourcesPanel = lazy(() => import("./components/storage-resources-panel"));
+const ESAMonitoringPanel = lazy(() => import("./esa/esa-monitoring-page"));
 
 function PageFallback({ label }: { label: string }) {
     return <div className="py-16 text-center text-sm text-foreground/50">正在读取{label}...</div>;
@@ -122,5 +123,13 @@ export function StorageResourcesPage() {
                 <StorageResourcesPanel />
             </Suspense>
         </AdminPageFrame>
+    );
+}
+
+export function ESAMonitoringPage() {
+    return (
+        <Suspense fallback={<PageFallback label="ESA 监控" />}>
+            <ESAMonitoringPanel />
+        </Suspense>
     );
 }
