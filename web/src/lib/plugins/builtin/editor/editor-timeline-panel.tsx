@@ -262,8 +262,6 @@ function ClipItem({
         if (gestureRef.current) return;
         onSelectClip(clip.id);
         e.stopPropagation();
-        if (gestureRef.current) return;
-        e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
         gestureRef.current = {
             mode,

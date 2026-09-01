@@ -60,7 +60,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
     }, [scope, projectId, store]);
 
     return (
-        <EditorStoreProvider store={store}>
+        <EditorStoreProvider store={store} host={{ projectId, assets: detail.assets }}>
             <div className="flex h-full min-h-0 flex-col">
                 <div className="min-h-0 flex-1">
                     {timelineSlots.length === 0 ? (
