@@ -19,9 +19,9 @@ describe("editor command registry (golden file)", () => {
         });
     }
 
-    test("knownOps lists the 8 golden ops", () => {
+    test("knownOps lists the 9 golden ops", () => {
         expect(createEditorCommandRegistry().knownOps().sort()).toEqual(
-            ["addClip", "addSubtitle", "moveClip", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip"].sort(),
+            ["addClip", "addSubtitle", "moveClip", "rebuildSubtitleClips", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip"].sort(),
         );
     });
 });
@@ -94,6 +94,21 @@ describe("editor command registry (fail-closed payload validation)", () => {
         expect(() => registry.apply(golden.base, { op: "addSubtitle", payload: { clip: { id: "x", kind: "video", nodeId: "n", trackId: "video-1", startMs: 0, durationMs: 1000 } } })).toThrow(/must be "subtitle"/);
         expect(() => registry.apply(golden.base, { op: "removeSubtitle", payload: { id: "clip-a" } })).toThrow(/not a subtitle clip/);
         expect(() => registry.apply(golden.base, { op: "removeSubtitle", payload: { id: "nope" } })).toThrow(/does not exist/);
+    });
+
+    test("rebuildSubtitleClips rejects bad entries, non-subtitle track, and no subtitle track", () => {
+        const entries = (extra: Record<string, unknown>) => [{ index: 0, startMs: 0, endMs: 1000, text: "ok", ...extra }];
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: entries({ index: -1 }) } })).toThrow(/non-negative integer/);
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: entries({ endMs: 0 }) } })).toThrow(/endMs must be greater than startMs/);
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: entries({ text: 42 }) } })).toThrow(/text must be a string/);
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: [...entries({}), ...entries({ index: 0 })] } })).toThrow(/duplicate entry index/);
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: [], trackId: "video-1" } })).toThrow(/not a subtitle track/);
+        const noSubtitle = { ...golden.base, tracks: golden.base.tracks.filter((t) => t.kind !== "subtitle") };
+        expect(() => registry.apply(noSubtitle, { op: "rebuildSubtitleClips", payload: { nodeId: "node-a", entries: [] } })).toThrow(/no subtitle track/);
+    });
+
+    test("rebuildSubtitleClips requires a non-empty nodeId", () => {
+        expect(() => registry.apply(golden.base, { op: "rebuildSubtitleClips", payload: { nodeId: "", entries: [] } })).toThrow(/nodeId/);
     });
 });
 

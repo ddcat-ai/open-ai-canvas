@@ -3,7 +3,7 @@
 // 未知 op 或非法 payload 一律抛错（fail-closed），保证可回放、可撤销、可黄金文件测试。
 // 插件可经宿主 API register 自定义 op，与内建命令共用同一注册表与校验纪律。
 
-import type { TimelineClip, TimelineProject } from "@/types/timeline";
+import type { SrtEntry, TimelineClip, TimelineProject } from "@/types/timeline";
 
 export type EditCommand = { op: string; payload: unknown };
 export type CommandHandler = (state: TimelineProject, payload: unknown) => TimelineProject;
@@ -31,6 +31,15 @@ export type SetClipPropertyPayload = {
 };
 export type AddSubtitlePayload = { clip: TimelineClip };
 export type RemoveSubtitlePayload = { id: string };
+/** 从节点权威 subtitleEntries 重建时间线条字幕 clip（§3.1 快照契约：单向显式同步，替换过期快照）。 */
+export type RebuildSubtitleClipsPayload = {
+    /** 画布节点 id（subtitleEntries 权威源）。 */
+    nodeId: string;
+    /** 权威字幕条目快照（按此重建，text 进入 clip 快照）。 */
+    entries: SrtEntry[];
+    /** 目标字幕轨道 id；缺省取第一个字幕轨道。 */
+    trackId?: string;
+};
 
 export const EDITOR_COMMAND_OPS = [
     "addClip",
@@ -41,6 +50,7 @@ export const EDITOR_COMMAND_OPS = [
     "setClipProperty",
     "addSubtitle",
     "removeSubtitle",
+    "rebuildSubtitleClips",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -198,6 +208,51 @@ function handleRemoveSubtitle(state: TimelineProject, payload: unknown): Timelin
     return withClips(state, state.clips.filter((c) => c.id !== id));
 }
 
+/** 校验 SrtEntry 数组：形状、区间、重复 index（fail-closed）。 */
+function assertSubtitleEntries(op: string, entries: unknown): asserts entries is SrtEntry[] {
+    if (!Array.isArray(entries)) fail(op, "entries must be an array of SrtEntry");
+    const seen = new Set<number>();
+    for (const entry of entries) {
+        if (typeof entry !== "object" || entry === null) fail(op, "entries must contain SrtEntry objects");
+        const e = entry as SrtEntry;
+        if (!Number.isInteger(e.index) || e.index < 0) fail(op, `entry index must be a non-negative integer, got ${e.index}`);
+        if (seen.has(e.index)) fail(op, `duplicate entry index ${e.index}`);
+        seen.add(e.index);
+        if (!Number.isFinite(e.startMs) || e.startMs < 0) fail(op, `entry ${e.index} startMs must be a non-negative finite number`);
+        if (!Number.isFinite(e.endMs) || e.endMs <= e.startMs) fail(op, `entry ${e.index} endMs must be greater than startMs`);
+        if (typeof e.text !== "string") fail(op, `entry ${e.index} text must be a string`);
+    }
+}
+
+/**
+ * 从节点权威 subtitleEntries 重建字幕 clip（§3.1 快照契约：单向显式同步）。
+ * 移除 nodeId 名下全部过期字幕快照，按 entries 重建；id 确定（nodeId:subtitle:index），
+ * 重跑即原地替换，不产生漂移。缺省轨道取第一个字幕轨。
+ */
+function handleRebuildSubtitleClips(state: TimelineProject, payload: unknown): TimelineProject {
+    const { nodeId, entries, trackId } = payload as RebuildSubtitleClipsPayload;
+    if (typeof nodeId !== "string" || nodeId.length === 0) fail("rebuildSubtitleClips", "nodeId must be a non-empty string");
+    assertSubtitleEntries("rebuildSubtitleClips", entries);
+
+    const explicitTrack = trackId !== undefined ? findTrackOrThrow("rebuildSubtitleClips", state, trackId) : null;
+    if (explicitTrack && explicitTrack.kind !== "subtitle") fail("rebuildSubtitleClips", `track "${trackId}" is not a subtitle track`);
+    const subtitleTrack = explicitTrack ?? state.tracks.find((t) => t.kind === "subtitle");
+    if (!subtitleTrack) fail("rebuildSubtitleClips", "no subtitle track available");
+
+    const rebuilt: TimelineClip[] = entries.map((entry) => ({
+        id: `${nodeId}:subtitle:${entry.index}`,
+        kind: "subtitle" as const,
+        nodeId,
+        trackId: subtitleTrack.id,
+        startMs: entry.startMs,
+        durationMs: entry.endMs - entry.startMs,
+        subtitleEntryIndex: entry.index,
+        text: entry.text,
+    }));
+    const clips = [...state.clips.filter((c) => !(c.kind === "subtitle" && c.nodeId === nodeId)), ...rebuilt];
+    return withClips(state, clips);
+}
+
 // ---------------------------------------------------------------------------
 // 注册表
 // ---------------------------------------------------------------------------
@@ -211,6 +266,7 @@ const BUILTIN_HANDLERS: ReadonlyArray<readonly [string, CommandHandler]> = [
     ["setClipProperty", handleSetClipProperty],
     ["addSubtitle", handleAddSubtitle],
     ["removeSubtitle", handleRemoveSubtitle],
+    ["rebuildSubtitleClips", handleRebuildSubtitleClips],
 ];
 
 /** 创建隔离的命令注册表（测试/黄金文件比对用独立实例）。 */

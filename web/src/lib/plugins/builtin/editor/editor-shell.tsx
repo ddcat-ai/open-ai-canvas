@@ -5,6 +5,7 @@ import { EditorTimelinePanel } from "./editor-timeline-panel";
 import { EditorPreviewMonitor } from "./editor-preview-monitor";
 import { EditorInspector } from "./editor-inspector";
 import { EditorAssetIngest } from "./editor-asset-ingest";
+import { EditorSubtitleTools } from "./editor-subtitle-tools";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -23,6 +24,7 @@ const manifest: PluginManifestV2 = {
             { slot: "preview-renderer", priority: 0 },
             { slot: "inspector", priority: 0 },
             { slot: "asset-ingest", priority: 0 },
+            { slot: "subtitle-tool", priority: 0 },
         ],
     },
 };
@@ -59,4 +61,11 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "asset-ingest",
     render: () => <EditorAssetIngest />,
+});
+
+// M3.5：插槽渲染函数 = 字幕工具（SRT 导入导出 + 从节点重建字幕快照）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "subtitle-tool",
+    render: () => <EditorSubtitleTools />,
 });

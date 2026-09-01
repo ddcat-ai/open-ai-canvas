@@ -237,6 +237,30 @@
         ],
         "durationMs": 8000
       }
+    },
+    {
+      "name": "rebuild-subtitle-clips-replaces-stale-snapshots",
+      "commands": [
+        { "op": "rebuildSubtitleClips", "payload": { "nodeId": "node-a", "entries": [ { "index": 0, "startMs": 500, "endMs": 2500, "text": "你好，影策" }, { "index": 1, "startMs": 3000, "endMs": 4200, "text": "第二句字幕" } ] } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          {"id": "video-1","kind": "video","label": "视频 1","order": 0},
+          {"id": "audio-1","kind": "audio","label": "音频 1","order": 1},
+          {"id": "subtitle-1","kind": "subtitle","label": "字幕 1","order": 2},
+          {"id": "video-2","kind": "video","label": "视频 2","order": 3}
+        ],
+        "clips": [
+          {"id": "clip-a","kind": "video","nodeId": "node-a","trackId": "video-1","startMs": 0,"durationMs": 5000,"sourceStartMs": 0,"sourceDurationMs": 10000,"volume": 1,"fadeInMs": 0,"fadeOutMs": 0},
+          {"id": "clip-b","kind": "video","nodeId": "node-b","trackId": "video-1","startMs": 5000,"durationMs": 3000,"sourceStartMs": 2000,"sourceDurationMs": 8000},
+          {"id": "clip-c","kind": "audio","nodeId": "node-audio","trackId": "audio-1","startMs": 1000,"durationMs": 4000,"sourceStartMs": 0,"sourceDurationMs": 4000,"volume": 0.8},
+          {"id": "node-a:subtitle:0","kind": "subtitle","nodeId": "node-a","trackId": "subtitle-1","startMs": 500,"durationMs": 2000,"subtitleEntryIndex": 0,"text": "你好，影策"},
+          {"id": "node-a:subtitle:1","kind": "subtitle","nodeId": "node-a","trackId": "subtitle-1","startMs": 3000,"durationMs": 1200,"subtitleEntryIndex": 1,"text": "第二句字幕"}
+        ],
+        "durationMs": 8000
+      }
     }
+
   ]
 }
