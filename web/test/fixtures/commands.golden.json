@@ -1,0 +1,242 @@
+{
+  "$comment": "编辑器命令黄金文件（Runbook M2.1 / 方案 §7.1）：命令序列 → 期望状态快照。修改命令语义必须同步更新此夹具，防止 reducer 漂移。",
+  "base": {
+    "version": 2,
+    "tracks": [
+      { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+      { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+      { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+      { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+    ],
+    "clips": [
+      { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+      { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+      { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+      { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+    ],
+    "durationMs": 8000
+  },
+  "cases": [
+    {
+      "name": "add-clip-appends-and-recomputes-duration",
+      "commands": [
+        { "op": "addClip", "payload": { "clip": { "id": "clip-d", "kind": "video", "nodeId": "node-d", "trackId": "video-1", "startMs": 8000, "durationMs": 2000, "sourceStartMs": 0, "sourceDurationMs": 2000 } } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" },
+          { "id": "clip-d", "kind": "video", "nodeId": "node-d", "trackId": "video-1", "startMs": 8000, "durationMs": 2000, "sourceStartMs": 0, "sourceDurationMs": 2000 }
+        ],
+        "durationMs": 10000
+      }
+    },
+    {
+      "name": "move-clip-keeps-duration",
+      "commands": [
+        { "op": "moveClip", "payload": { "id": "clip-a", "startMs": 2000 } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 2000, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 8000
+      }
+    },
+    {
+      "name": "move-clip-across-tracks",
+      "commands": [
+        { "op": "moveClip", "payload": { "id": "clip-b", "startMs": 3000, "trackId": "video-2" } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-2", "startMs": 3000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 6000
+      }
+    },
+    {
+      "name": "trim-clip-duration-within-source",
+      "commands": [
+        { "op": "trimClip", "payload": { "id": "clip-b", "durationMs": 2000 } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 2000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 7000
+      }
+    },
+    {
+      "name": "trim-clip-start-and-source",
+      "commands": [
+        { "op": "trimClip", "payload": { "id": "clip-b", "startMs": 5500, "durationMs": 2000, "sourceStartMs": 3000 } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5500, "durationMs": 2000, "sourceStartMs": 3000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 7500
+      }
+    },
+    {
+      "name": "split-clip-in-two-deterministic-ids",
+      "commands": [
+        { "op": "splitClip", "payload": { "id": "clip-a", "splitAtMs": 3000 } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 3000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-a:split:3000", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 3000, "durationMs": 2000, "sourceStartMs": 3000, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 8000
+      }
+    },
+    {
+      "name": "remove-clip-recomputes-duration",
+      "commands": [
+        { "op": "removeClip", "payload": { "id": "clip-c" } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 8000
+      }
+    },
+    {
+      "name": "set-clip-property-whitelist-fields",
+      "commands": [
+        { "op": "setClipProperty", "payload": { "id": "clip-a", "patch": { "volume": 0.5, "fadeInMs": 200, "fadeOutMs": 400 } } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 0.5, "fadeInMs": 200, "fadeOutMs": 400 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
+        ],
+        "durationMs": 8000
+      }
+    },
+    {
+      "name": "add-subtitle-clip",
+      "commands": [
+        { "op": "addSubtitle", "payload": { "clip": { "id": "sub-2", "kind": "subtitle", "nodeId": "node-b", "trackId": "subtitle-1", "startMs": 5200, "durationMs": 1800, "subtitleEntryIndex": 1, "text": "副标题字幕" } } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" },
+          { "id": "sub-2", "kind": "subtitle", "nodeId": "node-b", "trackId": "subtitle-1", "startMs": 5200, "durationMs": 1800, "subtitleEntryIndex": 1, "text": "副标题字幕" }
+        ],
+        "durationMs": 8000
+      }
+    },
+    {
+      "name": "remove-subtitle-clip",
+      "commands": [
+        { "op": "removeSubtitle", "payload": { "id": "sub-1" } }
+      ],
+      "expected": {
+        "version": 2,
+        "tracks": [
+          { "id": "video-1", "kind": "video", "label": "视频 1", "order": 0 },
+          { "id": "audio-1", "kind": "audio", "label": "音频 1", "order": 1 },
+          { "id": "subtitle-1", "kind": "subtitle", "label": "字幕 1", "order": 2 },
+          { "id": "video-2", "kind": "video", "label": "视频 2", "order": 3 }
+        ],
+        "clips": [
+          { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
+          { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
+          { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 }
+        ],
+        "durationMs": 8000
+      }
+    }
+  ]
+}

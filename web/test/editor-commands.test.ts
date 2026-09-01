@@ -1,12 +1,126 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-/**
- * 编辑器命令状态机测试骨架（M0.3）。
- * 真实命令实现于 M2.1 落地（web/src/lib/timeline/editor-commands.ts），
- * 届时替换本文件的占位用例为命令黄金文件断言。
- */
-describe("editor commands", () => {
-    test("skeleton placeholder", () => {
-        expect(true).toBe(true);
+import { createEditorCommandRegistry, getEditorCommandRegistry } from "../src/lib/timeline/editor-commands";
+import type { TimelineProject } from "../src/types/timeline";
+
+const golden = JSON.parse(readFileSync(join(import.meta.dir, "fixtures/commands.golden.json"), "utf8")) as {
+    base: TimelineProject;
+    cases: Array<{ name: string; commands: Array<{ op: string; payload: unknown }>; expected: TimelineProject }>;
+};
+
+describe("editor command registry (golden file)", () => {
+    for (const c of golden.cases) {
+        test(c.name, () => {
+            const registry = createEditorCommandRegistry();
+            const result = c.commands.reduce<TimelineProject>((state, cmd) => registry.apply(state, cmd), golden.base);
+            expect(result).toEqual(c.expected);
+        });
+    }
+
+    test("knownOps lists the 8 golden ops", () => {
+        expect(createEditorCommandRegistry().knownOps().sort()).toEqual(
+            ["addClip", "addSubtitle", "moveClip", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip"].sort(),
+        );
+    });
+});
+
+describe("editor command registry (immutability)", () => {
+    test("apply returns a new state and never mutates the input", () => {
+        const registry = createEditorCommandRegistry();
+        const before = JSON.stringify(golden.base);
+        const result = registry.apply(golden.base, { op: "moveClip", payload: { id: "clip-a", startMs: 2000 } });
+        expect(result).not.toBe(golden.base);
+        expect(result.clips).not.toBe(golden.base.clips);
+        expect(JSON.stringify(golden.base)).toBe(before);
+    });
+
+    test("rejected commands leave the input untouched", () => {
+        const registry = createEditorCommandRegistry();
+        const before = JSON.stringify(golden.base);
+        expect(() => registry.apply(golden.base, { op: "removeClip", payload: { id: "nope" } })).toThrow();
+        expect(JSON.stringify(golden.base)).toBe(before);
+    });
+});
+
+describe("editor command registry (fail-closed payload validation)", () => {
+    const registry = createEditorCommandRegistry();
+
+    test("unknown op throws", () => {
+        expect(() => registry.apply(golden.base, { op: "explodeEverything", payload: {} })).toThrow(/unknown edit command op "explodeEverything"/);
+    });
+
+    test("malformed command object throws", () => {
+        expect(() => registry.apply(golden.base, null as unknown as { op: string })).toThrow(/must be \{ op, payload \}/);
+        expect(() => registry.apply(golden.base, { payload: {} } as unknown as { op: string })).toThrow(/must be \{ op, payload \}/);
+    });
+
+    test("addClip rejects missing fields, negative start, subtitle kind, missing track", () => {
+        expect(() => registry.apply(golden.base, { op: "addClip", payload: { clip: { id: "x", kind: "video", nodeId: "n", trackId: "video-1", startMs: 0 } } })).toThrow(/durationMs/);
+        expect(() => registry.apply(golden.base, { op: "addClip", payload: { clip: { id: "x", kind: "video", nodeId: "n", trackId: "video-1", startMs: -1, durationMs: 1000 } } })).toThrow(/startMs/);
+        expect(() => registry.apply(golden.base, { op: "addClip", payload: { clip: { id: "x", kind: "subtitle", nodeId: "n", trackId: "subtitle-1", startMs: 0, durationMs: 1000 } } })).toThrow(/addSubtitle/);
+        expect(() => registry.apply(golden.base, { op: "addClip", payload: { clip: { id: "x", kind: "video", nodeId: "n", trackId: "missing-track", startMs: 0, durationMs: 1000 } } })).toThrow(/does not exist/);
+    });
+
+    test("moveClip rejects unknown clip, negative start, missing track", () => {
+        expect(() => registry.apply(golden.base, { op: "moveClip", payload: { id: "nope", startMs: 0 } })).toThrow(/does not exist/);
+        expect(() => registry.apply(golden.base, { op: "moveClip", payload: { id: "clip-a", startMs: -100 } })).toThrow(/startMs/);
+        expect(() => registry.apply(golden.base, { op: "moveClip", payload: { id: "clip-a", startMs: 0, trackId: "nope" } })).toThrow(/does not exist/);
+    });
+
+    test("trimClip rejects over-source and negative values", () => {
+        expect(() => registry.apply(golden.base, { op: "trimClip", payload: { id: "clip-b", durationMs: 9000 } })).toThrow(/exceeds sourceDurationMs/);
+        expect(() => registry.apply(golden.base, { op: "trimClip", payload: { id: "clip-b", startMs: 0, durationMs: 1000, sourceStartMs: 7500 } })).toThrow(/exceeds sourceDurationMs/);
+        expect(() => registry.apply(golden.base, { op: "trimClip", payload: { id: "clip-b", durationMs: 0 } })).toThrow(/positive/);
+        expect(() => registry.apply(golden.base, { op: "trimClip", payload: { id: "nope", durationMs: 1000 } })).toThrow(/does not exist/);
+    });
+
+    test("splitClip rejects out-of-range split points", () => {
+        expect(() => registry.apply(golden.base, { op: "splitClip", payload: { id: "clip-a", splitAtMs: 0 } })).toThrow(/strictly inside/);
+        expect(() => registry.apply(golden.base, { op: "splitClip", payload: { id: "clip-a", splitAtMs: 5000 } })).toThrow(/strictly inside/);
+        expect(() => registry.apply(golden.base, { op: "splitClip", payload: { id: "clip-a", splitAtMs: 9999 } })).toThrow(/strictly inside/);
+        expect(() => registry.apply(golden.base, { op: "splitClip", payload: { id: "nope", splitAtMs: 1000 } })).toThrow(/does not exist/);
+    });
+
+    test("setClipProperty rejects structural fields and empty patch", () => {
+        expect(() => registry.apply(golden.base, { op: "setClipProperty", payload: { id: "clip-a", patch: { trackId: "video-2" } } })).toThrow(/not editable/);
+        expect(() => registry.apply(golden.base, { op: "setClipProperty", payload: { id: "clip-a", patch: { startMs: 100 } } })).toThrow(/not editable/);
+        expect(() => registry.apply(golden.base, { op: "setClipProperty", payload: { id: "clip-a", patch: {} } })).toThrow(/must not be empty/);
+        expect(() => registry.apply(golden.base, { op: "setClipProperty", payload: { id: "nope", patch: { volume: 0.5 } } })).toThrow(/does not exist/);
+    });
+
+    test("addSubtitle rejects non-subtitle kind; removeSubtitle rejects non-subtitle clip", () => {
+        expect(() => registry.apply(golden.base, { op: "addSubtitle", payload: { clip: { id: "x", kind: "video", nodeId: "n", trackId: "video-1", startMs: 0, durationMs: 1000 } } })).toThrow(/must be "subtitle"/);
+        expect(() => registry.apply(golden.base, { op: "removeSubtitle", payload: { id: "clip-a" } })).toThrow(/not a subtitle clip/);
+        expect(() => registry.apply(golden.base, { op: "removeSubtitle", payload: { id: "nope" } })).toThrow(/does not exist/);
+    });
+});
+
+describe("editor command registry (plugin extension)", () => {
+    test("plugins can register custom ops and override builtin ops", () => {
+        const registry = createEditorCommandRegistry();
+        registry.register("pluginStamp", (state, payload) => {
+            const { tag } = payload as { tag: string };
+            return { ...state, clips: state.clips.map((c) => (c.id === tag ? { ...c, title: `stamped:${tag}` } : c)) };
+        });
+        const stamped = registry.apply(golden.base, { op: "pluginStamp", payload: { tag: "clip-a" } });
+        expect(stamped.clips.find((c) => c.id === "clip-a")?.title).toBe("stamped:clip-a");
+        expect(registry.knownOps()).toContain("pluginStamp");
+
+        // 覆盖内建 op：注册同名 handler 后以新语义执行（宿主不阻止，插件目录测试负责语义回归）
+        const before = registry.apply(golden.base, { op: "moveClip", payload: { id: "clip-a", startMs: 2000 } });
+        registry.register("moveClip", (state, payload) => {
+            const { id, startMs } = payload as { id: string; startMs: number };
+            return { ...state, clips: state.clips.map((c) => (c.id === id ? { ...c, startMs: startMs + 1000 } : c)) };
+        });
+        const after = registry.apply(golden.base, { op: "moveClip", payload: { id: "clip-a", startMs: 2000 } });
+        expect(before.clips.find((c) => c.id === "clip-a")?.startMs).toBe(2000);
+        expect(after.clips.find((c) => c.id === "clip-a")?.startMs).toBe(3000);
+    });
+
+    test("shared singleton registry is stable across getters", () => {
+        expect(getEditorCommandRegistry()).toBe(getEditorCommandRegistry());
+        expect(getEditorCommandRegistry().knownOps()).toContain("trimClip");
     });
 });
