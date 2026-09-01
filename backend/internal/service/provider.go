@@ -2441,6 +2441,22 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			}
 		}
 	}
+	// The declarative OpenAI Images plugin reads these fields from its provider
+	// namespace. Keep the canvas transparency setting authoritative so image
+	// edits and generations use the same output format.
+	if input.Mode == "image" && strings.EqualFold(strings.TrimSpace(input.Config.InterfaceType), "openai-image") {
+		options := request.ProviderOptions["openai-image"]
+		if options == nil {
+			options = make(map[string]any)
+			request.ProviderOptions["openai-image"] = options
+		}
+		options["output_format"] = imageOutputFormat(input.Config.TransparentBackground)
+		if input.Config.TransparentBackground == "true" {
+			options["background"] = "transparent"
+		} else {
+			delete(options, "background")
+		}
+	}
 	return request
 }
 

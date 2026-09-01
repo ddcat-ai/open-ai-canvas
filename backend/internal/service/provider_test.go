@@ -31,6 +31,44 @@ func TestImageOutputFormatDefaultsToJpegAndPreservesTransparency(t *testing.T) {
 	}
 }
 
+func TestProtocolRequestMapsImageOutputFormatToOpenAIPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, ok := center.registrySnapshot().Resolve("openai-image")
+	if !ok {
+		t.Fatal("openai image adapter is missing")
+	}
+	for _, test := range []struct {
+		name        string
+		transparent string
+		want        string
+	}{
+		{name: "opaque", transparent: "false", want: "jpeg"},
+		{name: "transparent", transparent: "true", want: "png"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := protocolRequestFromInput(canvasGenerationInput{
+				Mode:   "image",
+				Prompt: "change tone",
+				Config: providerConfig{InterfaceType: "openai-image", Model: "gpt-image-2", TransparentBackground: test.transparent, Count: "1", Size: "2048x2048"},
+			})
+			spec, err := adapter.BuildCreate(context.Background(), protocol.RequestContext{Request: request})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, ok := spec.Body.(map[string]any)
+			if !ok {
+				t.Fatalf("request body = %#v", spec.Body)
+			}
+			if got := body["output_format"]; got != test.want {
+				t.Fatalf("output_format = %#v, want %q; body=%#v", got, test.want, body)
+			}
+		})
+	}
+}
+
 const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 func TestProviderRequestErrorDetails(t *testing.T) {
