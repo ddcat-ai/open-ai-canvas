@@ -3,10 +3,11 @@ import type { PluginManifestV2, RegisteredPlugin } from "@/lib/plugins/plugin-ty
 import { registerEditorSlot } from "@/lib/plugins/editor-slot-registry";
 import { EditorTimelinePanel } from "./editor-timeline-panel";
 import { EditorPreviewMonitor } from "./editor-preview-monitor";
+import { EditorSubtitleTools } from "./editor-subtitle-tools";
 import { EditorInspector } from "./editor-inspector";
 import { EditorAssetIngest } from "./editor-asset-ingest";
-import { EditorSubtitleTools } from "./editor-subtitle-tools";
 import { EditorTranscription } from "./editor-transcription";
+import { EditorExport } from "./editor-export";
 
 const manifest: PluginManifestV2 = {
     apiVersion: "yingce.plugin/v2",
@@ -24,8 +25,8 @@ const manifest: PluginManifestV2 = {
             { slot: "timeline-panel", priority: 0 },
             { slot: "preview-renderer", priority: 0 },
             { slot: "inspector", priority: 0 },
-            { slot: "subtitle-tool", priority: 0 },
             { slot: "transcription-provider", priority: 0 },
+            { slot: "export-renderer", priority: 0 },
         ],
     },
 };
@@ -76,4 +77,11 @@ registerEditorSlot({
     pluginId: manifest.id,
     slot: "transcription-provider",
     render: () => <EditorTranscription />,
+});
+
+// M3.7：导出（渲染计划 + ffmpeg.wasm 降级，M4 接后端任务）。
+registerEditorSlot({
+    pluginId: manifest.id,
+    slot: "export-renderer",
+    render: () => <EditorExport />,
 });
