@@ -6,8 +6,10 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAntThemeConfig } from "@/lib/app-theme";
 
-const AUTH_VIDEO_URL = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4";
-const AUTH_VIDEO_POSTER = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg";
+// 本地化改造：默认改用 web/public/ 下的压缩副本（103MB HEVC -> 6.4MB H.264，离线可用且浏览器兼容更好）。
+// 想换回官方原片，只要在 web/.env.local 里设置 VITE_AUTH_VIDEO_URL / VITE_AUTH_VIDEO_POSTER 即可，无需改代码。
+const AUTH_VIDEO_URL = import.meta.env.VITE_AUTH_VIDEO_URL || "/auth-bg.mp4";
+const AUTH_VIDEO_POSTER = import.meta.env.VITE_AUTH_VIDEO_POSTER || "/auth-poster.jpg";
 const AUTH_TABS = [
     { key: "login", label: "登录" },
     { key: "register", label: "注册" },

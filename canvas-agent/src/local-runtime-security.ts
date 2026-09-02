@@ -219,6 +219,15 @@ export function runtimeErrorHandler(
         res.status(error.statusCode).json({ ok: false, code: error.code, message: error.message });
         return;
     }
+    // PATCH(agent-runtime-error-log): This catch-all used to swallow the real
+    // exception, so every unexpected failure looked like an opaque HTTP 500
+    // "本机运行时请求失败". Log the actual error (request path only - never
+    // headers, which carry the master token) so it can be diagnosed.
+    try {
+        const path = typeof _req?.url === "string" ? _req.url.split("?")[0] : "?";
+        console.error(`[runtime-error] ${path}`, error);
+    }
+    catch { /* logging must never break the error response */ }
     res.status(500).json({ ok: false, code: "runtime_internal_error", message: "本机运行时请求失败" });
 }
 

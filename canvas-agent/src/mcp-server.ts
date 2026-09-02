@@ -5,7 +5,10 @@ import { AGENT_PROMPT, loadConfig, type CanvasAgentConfig, VERSION } from "./con
 import { registerDreaminaMcp } from "./modules/dreamina-mcp.js";
 import { toolDescriptions, toolInputSchemas, toolNames, type ToolName } from "./schemas.js";
 
-type CanvasAgentToolResponse = { ok?: boolean; result?: unknown; error?: string };
+// PATCH(agent-mcp-error-passthrough): the runtime error envelope is
+// { ok:false, code, message } - `error` is only used by some paths, so code and
+// message must be part of the contract or they cannot be surfaced at all.
+type CanvasAgentToolResponse = { ok?: boolean; result?: unknown; error?: string; code?: string; message?: string };
 
 export async function startMcpServer(options: { canvasOnly?: boolean } = {}) {
     const config = loadConfig(true);
@@ -32,7 +35,17 @@ function registerCanvasTool(server: McpServer, config: CanvasAgentConfig, name: 
 async function postCanvasAgentTool(config: CanvasAgentConfig, name: ToolName, input: unknown) {
     const res = await fetch(`${config.url}/api/tools`, { method: "POST", headers: { "content-type": "application/json", "x-canvas-agent-token": config.token }, body: JSON.stringify({ name, input }) });
     const body = (await res.json()) as CanvasAgentToolResponse;
-    if (!body.ok) throw new Error(body.error || "tool call failed");
+    if (!body.ok) {
+        // PATCH(agent-mcp-error-passthrough): The runtime answers failures with
+        // {ok:false, code, message} - there is no `error` field, so the original
+        // `body.error || "tool call failed"` hid the real cause and every problem
+        // looked identical. Surface code + message instead.
+        const detail = [body.error, body.message].filter(Boolean).join(" - ");
+        throw new Error([
+            `tool call failed (${String(body.code ?? res.status)})`,
+            detail,
+        ].filter(Boolean).join(": "));
+    }
     return body.result;
 }
 

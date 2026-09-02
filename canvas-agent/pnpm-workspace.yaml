@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: set this to true or false
+  onnxruntime-node: set this to true or false
+  sharp: set this to true or false
+onlyBuiltDependencies:
+  - esbuild
+  - onnxruntime-node
+  - sharp
