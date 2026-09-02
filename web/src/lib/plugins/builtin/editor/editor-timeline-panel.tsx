@@ -5,7 +5,7 @@
 // 撤销/重做与保存状态移入宿主顶栏（Concat 主菜单区），本面板保留缩放与片段统计。
 
 import { useEffect, useRef, useState } from "react";
-import { Film, Magnet, Maximize, MousePointer2, Music2, Plus, Scissors, Slice, Subtitles, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Eye, EyeOff, Film, Magnet, Maximize, MousePointer2, Music2, Plus, Scissors, Slice, Subtitles, Trash2, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { useEditorStoreContext } from "@/components/editor/editor-context";
 import {
@@ -24,9 +24,10 @@ import type { TimelineClip, TimelineProject, TimelineTrack, TimelineTrackKind } 
 const MIN_VISUAL_END_MS = 1_000;
 const SNAP_MS = 10;
 const TRIM_HANDLE_PX = 8;
-// 轨道标签列宽度（w-40）。时间线内容宽度必须补上该列，否则片段区 flex-1 只到
-// trackWidth - 160，末端片段被 overflow-hidden 裁掉且无法滚动到达。
-const LABEL_COLUMN_PX = 160;
+// 轨道标签列宽度（w-48）：轨道徽标 + 轨道名 + 可见/静音/移除按钮。
+// 时间线内容宽度必须补上该列，否则片段区 flex-1 只到
+// trackWidth - 192，末端片段被 overflow-hidden 裁掉且无法滚动到达。
+const LABEL_COLUMN_PX = 192;
 // 剃刀/播放头分割两侧的最小保留时长（毫秒），避免切出空片段。
 const MIN_SPLIT_MS = 100;
 
@@ -124,6 +125,9 @@ export function EditorTimelinePanel() {
             const clip = project.clips.find((c) => c.id === selectedClipId);
             if (clip && clip.trackId === trackId) selectClip(null);
         }
+    };
+    const handleToggleTrackFlag = (trackId: string, flag: "visible" | "muted", value: boolean) => {
+        dispatch({ op: "setTrackFlag", payload: { trackId, flag, value } });
     };
 
     return (
@@ -315,6 +319,7 @@ export function EditorTimelinePanel() {
 
                                             removable={project.tracks.filter((t) => t.kind === track.kind).length > 1}
                                             onRemoveTrack={handleRemoveTrack}
+                                            onToggleTrackFlag={handleToggleTrackFlag}
                                             onSplitClip={(clipId, splitAtMs) =>
                                                 dispatch({ op: "splitClip", payload: { id: clipId, splitAtMs } })
                                             }
@@ -364,8 +369,8 @@ function TimelineRuler({
     };
     return (
         <div className="sticky top-0 z-10 flex h-6 shrink-0 w-full items-end border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)]">
-            {/* 左列占位与 TrackRow 轨道标签列（w-40）同宽，sticky 跟随横向滚动，保证 0ms 刻度与片段区起点对齐 */}
-            <div className="sticky left-0 z-10 w-40 shrink-0 self-stretch border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)]">
+            {/* 左列占位与 TrackRow 轨道标签列（w-48）同宽，sticky 跟随横向滚动，保证 0ms 刻度与片段区起点对齐 */}
+            <div className="sticky left-0 z-10 w-48 shrink-0 self-stretch border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)]">
                 {/* 当前播放头时码，跟随拖动实时刷新 */}
                 <span className="absolute bottom-1 right-2 text-[10px] tabular-nums text-[var(--director-danger)]">{formatTimelineTime(playheadMs)}</span>
             </div>
@@ -420,6 +425,7 @@ function TrackRow({
     onSplitClip,
     removable,
     onRemoveTrack,
+    onToggleTrackFlag,
 }: {
     track: TimelineTrack;
     project: TimelineProject;
@@ -435,31 +441,69 @@ function TrackRow({
     onSplitClip: (clipId: string, splitAtMs: number) => void;
     removable: boolean;
     onRemoveTrack: (trackId: string) => void;
+    onToggleTrackFlag: (trackId: string, flag: "visible" | "muted", value: boolean) => void;
 }) {
     const clips = project.clips.filter((c) => c.trackId === track.id);
     return (
         <div className="group flex h-16 border-b border-[var(--director-sequencer-border)]">
-            <div className="sticky left-0 z-10 flex w-40 shrink-0 items-center gap-2 border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+            <div className="sticky left-0 z-10 flex w-48 shrink-0 items-center gap-1 border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-2">
                 <TrackBadge kind={track.kind} />
-                <div className="min-w-0">
-                    <div className="truncate text-xs font-medium text-[var(--director-dock-fg-strong)]">{track.label}</div>
+                <div className="min-w-0 flex-1">
+                    <div
+                        className={`truncate text-xs font-medium ${
+                            track.visible === false
+                                ? "text-[var(--director-dock-fg)]"
+                                : "text-[var(--director-dock-fg-strong)]"
+                        }`}
+                    >
+                        {track.label}
+                    </div>
                     <div className="text-[10px] text-[var(--director-dock-fg)]">{clips.length} 个片段</div>
                 </div>
-
+                <button
+                    type="button"
+                    aria-label={track.visible === false ? "显示轨道" : "隐藏轨道"}
+                    title={track.visible === false ? "显示轨道" : "隐藏轨道"}
+                    aria-pressed={track.visible === false}
+                    onClick={() => onToggleTrackFlag(track.id, "visible", track.visible !== false)}
+                    className={`grid size-6 shrink-0 place-items-center rounded-md transition-colors ${
+                        track.visible === false
+                            ? "bg-[var(--director-control-hover)] text-[var(--director-dock-fg-strong)]"
+                            : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                    }`}
+                >
+                    {track.visible === false ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                </button>
+                <button
+                    type="button"
+                    aria-label={track.muted ? "取消静音" : "静音轨道"}
+                    title={track.muted ? "取消静音" : "静音轨道"}
+                    aria-pressed={track.muted === true}
+                    onClick={() => onToggleTrackFlag(track.id, "muted", !track.muted)}
+                    className={`grid size-6 shrink-0 place-items-center rounded-md transition-colors ${
+                        track.muted === true
+                            ? "bg-[var(--director-control-hover)] text-[var(--director-dock-fg-strong)]"
+                            : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                    }`}
+                >
+                    {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+                </button>
                 {removable && (
                     <button
                         type="button"
                         aria-label={`移除轨道 ${track.label}`}
                         title="移除轨道"
                         onClick={() => onRemoveTrack(track.id)}
-                        className="ml-auto grid size-6 shrink-0 place-items-center rounded-md text-[var(--director-dock-fg)] opacity-0 transition-opacity hover:bg-[var(--director-control-hover)] hover:text-[var(--director-danger)] focus-visible:opacity-100 group-hover:opacity-100"
+                        className="grid size-6 shrink-0 place-items-center rounded-md text-[var(--director-dock-fg)] opacity-0 transition-opacity hover:bg-[var(--director-control-hover)] hover:text-[var(--director-danger)] focus-visible:opacity-100 group-hover:opacity-100"
                     >
                         <X className="size-3.5" />
                     </button>
                 )}
             </div>
             <div
-                className={`relative flex-1 overflow-hidden bg-[var(--director-sequencer-grid)] ${razorActive ? "cursor-crosshair" : ""}`}
+                className={`relative flex-1 overflow-hidden bg-[var(--director-sequencer-grid)] transition-opacity ${
+                    razorActive ? "cursor-crosshair" : ""
+                } ${track.visible === false ? "opacity-40" : ""}`}
                 onPointerDown={(e) => {
                     if (razorActive) return;
                     if (e.target === e.currentTarget) onSelectClip(null);

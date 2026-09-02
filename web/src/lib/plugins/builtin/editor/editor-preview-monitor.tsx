@@ -14,9 +14,12 @@ import type { TimelineClip, TimelineProject } from "@/types/timeline";
 const PREVIEW_TICK_MS = 100;
 
 function getClipAtTime(project: TimelineProject, timeMs: number): TimelineClip | null {
+    // 隐藏轨道（visible === false）上的片段不参与预览合成。
+    const hiddenTrackIds = new Set(project.tracks.filter((t) => t.visible === false).map((t) => t.id));
+    const visible = (clip: TimelineClip) => !hiddenTrackIds.has(clip.trackId);
     return (
-        project.clips.find((clip) => clip.kind === "video" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
-        project.clips.find((clip) => clip.kind === "image" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
+        project.clips.find((clip) => visible(clip) && clip.kind === "video" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
+        project.clips.find((clip) => visible(clip) && clip.kind === "image" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
         null
     );
 }

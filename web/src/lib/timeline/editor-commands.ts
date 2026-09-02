@@ -37,6 +37,9 @@ export type AddTrackPayload = { kind: TimelineTrackKind };
 
 /** 移除整条轨道及其全部片段（removeTrack）。守卫：同 kind 至少保留一条轨道（防唯一字幕/视频轨被删光后编辑失锚）。 */
 export type RemoveTrackPayload = { trackId: string };
+
+/** 轨道开关（setTrackFlag）：可见性 / 静音。flag 白名单校验，fail-closed。 */
+export type SetTrackFlagPayload = { trackId: string; flag: "visible" | "muted"; value: boolean };
 export type RebuildSubtitleClipsPayload = {
     /** 画布节点 id（subtitleEntries 权威源）。 */
     nodeId: string;
@@ -58,6 +61,7 @@ export const EDITOR_COMMAND_OPS = [
     "rebuildSubtitleClips",
     "addTrack",
     "removeTrack",
+    "setTrackFlag",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -256,6 +260,18 @@ function handleRemoveTrack(state: TimelineProject, payload: unknown): TimelinePr
     };
 }
 
+function handleSetTrackFlag(state: TimelineProject, payload: unknown): TimelineProject {
+    const { trackId, flag, value } = payload as SetTrackFlagPayload;
+    if (typeof trackId !== "string" || trackId.length === 0) fail("setTrackFlag", "trackId must be a non-empty string");
+    if (flag !== "visible" && flag !== "muted") fail("setTrackFlag", "flag must be \"visible\" or \"muted\"");
+    if (typeof value !== "boolean") fail("setTrackFlag", "value must be a boolean");
+    findTrackOrThrow("setTrackFlag", state, trackId);
+    return {
+        ...state,
+        tracks: state.tracks.map((t) => (t.id === trackId ? { ...t, [flag]: value } : t)),
+    };
+}
+
 /** 校验 SrtEntry 数组：形状、区间、重复 index（fail-closed）。 */
 function assertSubtitleEntries(op: string, entries: unknown): asserts entries is SrtEntry[] {
     if (!Array.isArray(entries)) fail(op, "entries must be an array of SrtEntry");
@@ -316,6 +332,7 @@ const BUILTIN_HANDLERS: ReadonlyArray<readonly [string, CommandHandler]> = [
     ["removeSubtitle", handleRemoveSubtitle],
     ["addTrack", handleAddTrack],
     ["removeTrack", handleRemoveTrack],
+    ["setTrackFlag", handleSetTrackFlag],
     ["rebuildSubtitleClips", handleRebuildSubtitleClips],
 ];
 

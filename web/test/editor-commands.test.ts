@@ -19,9 +19,9 @@ describe("editor command registry (golden file)", () => {
         });
     }
 
-    test("knownOps lists the 11 golden ops", () => {
+    test("knownOps lists the 12 golden ops", () => {
         expect(createEditorCommandRegistry().knownOps().sort()).toEqual(
-            ["addClip", "addSubtitle", "moveClip", "rebuildSubtitleClips", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip", "addTrack", "removeTrack"].sort(),
+            ["addClip", "addSubtitle", "moveClip", "rebuildSubtitleClips", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip", "addTrack", "removeTrack", "setTrackFlag"].sort(),
         );
     });
 });
@@ -198,5 +198,46 @@ describe("editor command registry (removeTrack)", () => {
         expect(() =>
             registry.apply(golden.base, { op: "removeTrack", payload: { trackId: "no-such-track" } }),
         ).toThrow(/track/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// setTrackFlag
+// ---------------------------------------------------------------------------
+describe("editor command registry (setTrackFlag)", () => {
+    const registry = createEditorCommandRegistry();
+
+    test("sets visible/muted on the target track only (fail-closed on flag whitelist)", () => {
+        const base = golden.base;
+        const targetId = base.tracks[0].id;
+        const result = registry.apply(base, { op: "setTrackFlag", payload: { trackId: targetId, flag: "visible", value: false } });
+        const target = result.tracks.find((t) => t.id === targetId)!;
+        expect(target.visible).toBe(false);
+        // 非目标轨道不受影响。
+        for (const t of result.tracks) {
+            if (t.id !== targetId) expect(t.visible).not.toBe(false);
+        }
+        // 输入不被修改（apply 返回新状态，不改动传入 base）。
+        expect(base.tracks.find((t) => t.id === targetId)!.visible).toBeUndefined();
+    });
+
+    test("sets muted flag independently of visible", () => {
+        const result = registry.apply(golden.base, {
+            op: "setTrackFlag",
+            payload: { trackId: golden.base.tracks[0].id, flag: "muted", value: true },
+        });
+        expect(result.tracks[0].muted).toBe(true);
+    });
+
+    test("rejects unknown track, unknown flag, and non-boolean value", () => {
+        expect(() =>
+            registry.apply(golden.base, { op: "setTrackFlag", payload: { trackId: "no-such-track", flag: "visible", value: false } }),
+        ).toThrow(/track/);
+        expect(() =>
+            registry.apply(golden.base, { op: "setTrackFlag", payload: { trackId: golden.base.tracks[0].id, flag: "locked", value: true } }),
+        ).toThrow(/flag/);
+        expect(() =>
+            registry.apply(golden.base, { op: "setTrackFlag", payload: { trackId: golden.base.tracks[0].id, flag: "visible", value: "on" } }),
+        ).toThrow(/boolean/);
     });
 });
