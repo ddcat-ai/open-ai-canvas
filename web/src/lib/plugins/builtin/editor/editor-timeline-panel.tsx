@@ -56,14 +56,15 @@ type GestureState = {
 
 
 export function EditorTimelinePanel() {
-    const { project, dispatch, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip } =
+    const { project, dispatch, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip, transportMs, setTransportMs } =
         useEditorStoreContext();
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);
     const [activeTool, setActiveTool] = useState<TimelineTool>("select");
-    const [playheadMs, setPlayheadMs] = useState(0);
+    // 播放头与监视器共享同一 transport（store）：拖动标尺即时驱动监视器 seek，播放时监视器回写推进。
+    const playheadMs = transportMs;
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [addMenuOpen, setAddMenuOpen] = useState(false);
     // 点击不可移除轨道 X 时的原因提示（2.2s 后自动消失）。
@@ -120,7 +121,7 @@ export function EditorTimelinePanel() {
         selectClip(null);
     };
     const handleScrub = (ms: number) => {
-        setPlayheadMs(Math.max(0, Math.min(visualEndMs, Math.round(ms))));
+        setTransportMs(Math.max(0, Math.min(visualEndMs, Math.round(ms))));
     };
     const handleFitWidth = () => {
         const availViewport = Math.max(320, viewportWidth - LABEL_COLUMN_PX);

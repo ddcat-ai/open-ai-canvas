@@ -42,6 +42,7 @@ type ProjectAssetSummary struct {
 	FolderID         string                   `json:"folderId,omitempty"`
 	Position         int                      `json:"position"`
 	StorageKey       string                   `json:"storageKey,omitempty"`
+	DurationMs       int64                    `json:"durationMs,omitempty"`
 	PreviewText      string                   `json:"previewText,omitempty"`
 	UpdatedAt        time.Time                `json:"updatedAt"`
 	Source           string                   `json:"source,omitempty"`
@@ -553,8 +554,8 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 	if err != nil {
 		return ProjectAssetSummary{}, err
 	}
-	storageKey, previewText, source := projectAssetPreview(asset.PayloadJSON)
-	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, FolderID: link.FolderID, Position: link.Position, StorageKey: storageKey, PreviewText: previewText, UpdatedAt: asset.UpdatedAt, Source: source}
+	storageKey, previewText, source, durationMs := projectAssetPreview(asset.PayloadJSON)
+	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, FolderID: link.FolderID, Position: link.Position, StorageKey: storageKey, PreviewText: previewText, DurationMs: durationMs, UpdatedAt: asset.UpdatedAt, Source: source}
 	if asset.Category == model.AssetCategoryCharacter && asset.PrimaryVersionID != "" {
 		card, cardErr := s.characterCard(userID, asset)
 		if cardErr != nil {
@@ -565,20 +566,22 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 	return summary, nil
 }
 
-func projectAssetPreview(payloadJSON string) (string, string, string) {
+func projectAssetPreview(payloadJSON string) (string, string, string, int64) {
 	var payload struct {
 		Data struct {
 			StorageKey string `json:"storageKey"`
 			Content    string `json:"content"`
 			Source     string `json:"source"`
+			DurationMs int64  `json:"durationMs"`
 		} `json:"data"`
 	}
 	if json.Unmarshal([]byte(payloadJSON), &payload) != nil {
-		return "", "", ""
+		return "", "", "", 0
 	}
 	previewRunes := []rune(strings.TrimSpace(payload.Data.Content))
 	if len(previewRunes) > 240 {
 		previewRunes = append(previewRunes[:240], '…')
 	}
-	return strings.TrimSpace(payload.Data.StorageKey), string(previewRunes), strings.TrimSpace(payload.Data.Source)
+	return strings.TrimSpace(payload.Data.StorageKey), string(previewRunes), strings.TrimSpace(payload.Data.Source), payload.Data.DurationMs
+
 }

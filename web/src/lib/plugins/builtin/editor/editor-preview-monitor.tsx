@@ -2,6 +2,13 @@
 // 浏览器内近似预览：真实媒体帧（storageKey → resolveMediaUrl）+ 播放头 + 时间码。
 // 近似渲染与导出（M3.7 的 buildTimelineRenderPlan）共享同一条"片段→媒体"解析路径，
 // 但这里只做时序呈现，不承诺像素级预览——像素级交给导出任务（M4）。
+//
+// 播放模型：时间线 transport（store.transportMs）与监视器共享。
+// - 本地 playbackRef 以 rAF 逐帧推进（60fps 时间码），节流回写 store（~80ms），
+//   驱动时间线播放头；外部 scrub（时间线标尺）经 transportMs 回推本地时钟。
+// - <video> 元素从动于时钟：播放时 play()、暂停时 pause()、位置偏差 > 阈值才硬 seek，
+//   播放速率同步 playbackRate —— 画面与声音由浏览器管线真实推进（不再纯读时间码）。
+// - 静音跟随所在音频/视频轨道（muted），不再硬编码 muted（否则"有声音"永远不成立）。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Film, Gauge, Pause, Play, SkipBack, SkipForward, StepBack, StepForward } from "lucide-react";
@@ -12,7 +19,12 @@ import { resolveMediaUrl } from "@/services/file-storage";
 import { playbackVariantUrl, refreshResource, resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { TimelineClip, TimelineProject } from "@/types/timeline";
 
-const PREVIEW_TICK_MS = 100;
+// 本地播放时钟 → store.transportMs 的回写节流（毫秒）。太密会让时间线面板每帧重渲染。
+const STORE_PUSH_INTERVAL_MS = 80;
+// 外部 seek 与本地时钟差超过该值（毫秒）视为"拖动跳转"：先暂停再跟随，避免播放中抢时钟。
+const SEEK_JUMP_MS = 500;
+// 视频元素位置校正阈值（秒）：仅当偏差超过该值才硬 seek，避免逐帧写 currentTime。
+const VIDEO_SEEK_TOLERANCE_S = 0.35;
 
 function getClipAtTime(project: TimelineProject, timeMs: number): TimelineClip | null {
     // 隐藏轨道（visible === false）上的片段不参与预览合成。
@@ -50,19 +62,31 @@ function useClipMediaUrl(clip: TimelineClip | null): string | null {
     return url;
 }
 
+/** clip 内部当前应播放的源时间（毫秒）：transport 相对 clip 起点 + 源起点偏移。 */
+function clipSourceTimeMs(clip: TimelineClip, transportMs: number): number {
+    return Math.max(0, transportMs - clip.startMs + (clip.sourceStartMs ?? 0));
+}
+
 export function EditorPreviewMonitor() {
-    const { project, selectedClipId } = useEditorStoreContext();
+    const { project, transportMs, setTransportMs } = useEditorStoreContext();
     const durationMs = project?.durationMs ?? 0;
+
+    // 本地播放时钟（毫秒）：逐帧刷新本组件；播放态节流回写 store 驱动时间线播放头。
     const [playbackMs, setPlaybackMs] = useState(0);
+    const playbackRef = useRef(0);
     const [playing, setPlaying] = useState(false);
+    const playingRef = useRef(false);
     const [speed, setSpeed] = useState(1);
     const speedRef = useRef(1);
     const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
     const rafRef = useRef<number | null>(null);
     const lastTickRef = useRef<number | null>(null);
+    const lastStorePushRef = useRef(0);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
 
     const activeClip = project ? getClipAtTime(project, playbackMs) : null;
     const activeMediaUrl = useClipMediaUrl(activeClip);
+    const activeTrack = project?.tracks.find((t) => t.id === activeClip?.trackId) ?? null;
 
     // 播放回退：H.264 原件直接播放；H.265/HEVC 原件多数浏览器无法解码（黑屏），
     // <video> onError 后切换后端 playback 转码副本（variant=playback），副本就绪前轮询。
@@ -100,7 +124,10 @@ export function EditorPreviewMonitor() {
             } catch {
                 if (cancelled) return;
                 failures += 1;
-                if (failures >= 4) window.clearInterval(timer);
+                if (failures >= 4) {
+                    window.clearInterval(timer);
+                    setMediaErrorHint("兼容版本生成服务暂不可达，请稍后重新打开预览重试。");
+                }
             }
         }, 2500);
         return () => {
@@ -110,65 +137,117 @@ export function EditorPreviewMonitor() {
     }, [mediaTier, mediaResourceId]);
 
     const handleMediaError = () => {
-        if (mediaTier === "primary" && mediaResourceId) {
+        // 图片/无资源：无播放副本可切，仅提示。
+        if (activeClip?.kind !== "video" || !mediaResourceId) {
+            setMediaErrorHint("该媒体无法解码，可下载原片后用本地播放器观看。");
+            return;
+        }
+        if (mediaTier === "primary") {
             // 原件解码失败（大概率 H.265）：切后端 playback 副本。
             setMediaTier("variant");
             setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
-        } else if (mediaTier === "variant" && mediaResourceId) {
+        } else {
             // 副本尚未就绪时后端回退原件仍会失败；轮询 effect 会在就绪后重载。
             setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
-        } else {
-            setMediaErrorHint("该媒体无法解码，可下载原片后用本地播放器观看。");
         }
     };
 
-    const videoSrc = mediaTier === "variant" && mediaResourceId ? playbackVariantUrl(mediaResourceId) : activeMediaUrl;
+    const isVideoClip = activeClip?.kind === "video";
+    const videoSrc = isVideoClip && mediaResourceId && mediaTier === "variant" ? playbackVariantUrl(mediaResourceId) : isVideoClip ? activeMediaUrl : null;
+    const imageSrc = activeClip?.kind === "image" ? activeMediaUrl : null;
+    const videoMuted = activeTrack?.muted === true;
+
+    const syncPlayback = useCallback(
+        (ms: number) => {
+            const t = Math.max(0, Math.min(durationMs, Math.round(ms)));
+            playbackRef.current = t;
+            setPlaybackMs(t);
+            setTransportMs(t);
+        },
+        [durationMs, setTransportMs],
+    );
 
     const stop = useCallback(() => {
+        playingRef.current = false;
         setPlaying(false);
         if (rafRef.current !== null) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;
         }
         lastTickRef.current = null;
-    }, []);
+        lastStorePushRef.current = 0;
+        const v = videoRef.current;
+        if (v && !v.paused) v.pause();
+        setTransportMs(playbackRef.current);
+    }, [setTransportMs]);
+
+    // 外部 transport 变化（时间线标尺 scrub / 跳转）：回推本地时钟；
+    // 播放中大幅跳动视为拖动跳转，先暂停避免与本地时钟互相抢写。
+    useEffect(() => {
+        if (transportMs === playbackRef.current) return;
+        if (playingRef.current) {
+            // 播放中收到的 transport 写入只可能是自身节流回写或外部 scrub；
+            // 大幅跳动视为拖动/跳转：暂停并跟随。小幅忽略，避免本地时钟被旧回写值拉回（回跳）。
+            if (Math.abs(transportMs - playbackRef.current) > SEEK_JUMP_MS) {
+                stop();
+                playbackRef.current = transportMs;
+                setPlaybackMs(transportMs);
+            }
+            return;
+        }
+        playbackRef.current = transportMs;
+        setPlaybackMs(transportMs);
+        // stop 已是最新引用；transportMs 为唯一驱动源
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transportMs]);
 
     const toggle = useCallback(() => {
         if (!project || durationMs <= 0) return;
-        if (playing) {
+        if (playingRef.current) {
             stop();
             return;
         }
+        // 停在末尾再点播放：从头开始。
+        if (playbackRef.current >= durationMs - 50) {
+            playbackRef.current = 0;
+            setPlaybackMs(0);
+            setTransportMs(0);
+        }
+        playingRef.current = true;
+        lastTickRef.current = null;
         setPlaying(true);
         const tick = (now: number) => {
             if (lastTickRef.current === null) lastTickRef.current = now;
             const delta = now - lastTickRef.current;
             lastTickRef.current = now;
-            setPlaybackMs((prev) => {
-                const next = prev + delta * speedRef.current;
-                if (next >= durationMs) {
-                    stop();
-                    return durationMs;
-                }
-                return next;
-            });
+            const next = Math.min(durationMs, Math.max(0, playbackRef.current + delta * speedRef.current));
+            playbackRef.current = next;
+            setPlaybackMs(next);
+            if (now - lastStorePushRef.current >= STORE_PUSH_INTERVAL_MS) {
+                lastStorePushRef.current = now;
+                setTransportMs(next);
+            }
+            if (next >= durationMs) {
+                stop();
+                return;
+            }
             rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
-    }, [playing, durationMs, project, stop]);
+    }, [durationMs, project, stop, setTransportMs]);
 
     // 项目切换/时长变化时重置播放
     useEffect(() => {
-        setPlaybackMs(0);
+        syncPlayback(0);
         stop();
-    }, [project, stop]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [project, durationMs]);
 
     useEffect(() => () => stop(), [stop]);
 
-
     const stepBy = (deltaMs: number) => {
-        if (!project) return;
-        setPlaybackMs((prev) => Math.min(durationMs, Math.max(0, prev + deltaMs)));
+        if (!project || durationMs <= 0) return;
+        syncPlayback(playbackRef.current + deltaMs);
     };
 
     const changeSpeed = (next: number) => {
@@ -176,21 +255,76 @@ export function EditorPreviewMonitor() {
         setSpeed(next);
     };
 
+    // —— <video> 从动驱动 ——
+
+    const applyVideoPosition = (v: HTMLVideoElement) => {
+        if (!activeClip || activeClip.kind !== "video") return;
+        const targetS = clipSourceTimeMs(activeClip, playbackRef.current) / 1000;
+        const maxS = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : targetS;
+        const t = Math.min(targetS, maxS);
+        if (Math.abs(v.currentTime - t) > VIDEO_SEEK_TOLERANCE_S) v.currentTime = t;
+    };
+
+    // 时钟推进/外部 seek：校正视频位置（播放同速时偏差小，几乎不触发硬 seek）。
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v || !isVideoClip) return;
+        if (v.readyState < HTMLMediaElement.HAVE_METADATA) return;
+        applyVideoPosition(v);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playbackMs, mediaTier, variantReadyTick, activeClip?.id]);
+
+    // 播放/暂停：真实驱动浏览器管线（画面 + 声音）。
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v || !isVideoClip) return;
+        if (playing) {
+            const p = v.play();
+            if (p) p.catch(() => {
+                // 浏览器 autoplay/格式限制：onError 已接管提示与回退。
+            });
+        } else if (!v.paused) {
+            v.pause();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playing, mediaTier, variantReadyTick, activeClip?.id, videoSrc]);
+
+    // 变速：同步视频播放速率，保持音画与时钟一致。
+    useEffect(() => {
+        const v = videoRef.current;
+        if (v && isVideoClip) v.playbackRate = speed;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [speed, mediaTier, variantReadyTick, activeClip?.id]);
+
+    const handleLoadedMetadata = () => {
+        const v = videoRef.current;
+        if (!v) return;
+        applyVideoPosition(v);
+        if (playingRef.current) {
+            const p = v.play();
+            if (p) p.catch(() => {});
+        }
+    };
+
+    // 源素材比片段短：video 提前播完 → 把时钟对齐到片段结尾，让后续片段/结束自然衔接。
+    const handleVideoEnded = () => {
+        if (!activeClip || activeClip.kind !== "video") return;
+        const clipEndMs = activeClip.startMs + activeClip.durationMs;
+        if (clipEndMs >= durationMs - 50) {
+            stop();
+            syncPlayback(durationMs);
+        } else {
+            syncPlayback(clipEndMs);
+        }
+    };
+
+    const showEmpty = !activeClip || (!videoSrc && !imageSrc);
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--director-sequencer-surface)]">
             {/* 预览画面：恒黑舞台，占满控制条以上剩余空间（Concat 监视器风格） */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
-                {activeClip && videoSrc ? (
-                    <video
-                        key={`${activeClip.id}:${mediaTier}:${variantReadyTick}`}
-                        src={videoSrc}
-                        className="max-h-full max-w-full rounded-md object-contain shadow-lg"
-                        muted
-                        playsInline
-                        preload="metadata"
-                        onError={handleMediaError}
-                    />
-                ) : (
+                {showEmpty ? (
                     <div className="flex flex-col items-center gap-3 text-center">
                         <div className="grid size-14 place-items-center rounded-xl bg-white/10">
                             <Film className="size-6 text-white/60" />
@@ -203,7 +337,28 @@ export function EditorPreviewMonitor() {
                                 : "时间线暂无片段，导入素材后在此预览"}
                         </div>
                     </div>
-                )}
+                ) : isVideoClip && videoSrc ? (
+                    <video
+                        key={`v:${activeClip!.id}:${mediaTier}:${variantReadyTick}`}
+                        ref={videoRef}
+                        src={videoSrc}
+                        muted={videoMuted}
+                        playsInline
+                        preload="auto"
+                        className="max-h-full max-w-full rounded-md object-contain shadow-lg"
+                        onError={handleMediaError}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onEnded={handleVideoEnded}
+                    />
+                ) : imageSrc ? (
+                    <img
+                        key={`i:${activeClip!.id}`}
+                        src={imageSrc}
+                        alt=""
+                        className="max-h-full max-w-full rounded-md object-contain shadow-lg"
+                        onError={handleMediaError}
+                    />
+                ) : null}
                 {mediaErrorHint && (
                     <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-black/70 px-4 py-3 backdrop-blur">
                         <p className="text-xs leading-relaxed text-white/90">{mediaErrorHint}</p>
@@ -237,7 +392,7 @@ export function EditorPreviewMonitor() {
                         type="button"
                         aria-label="回到开头"
                         title="回到开头"
-                        onClick={() => setPlaybackMs(0)}
+                        onClick={() => syncPlayback(0)}
                         disabled={!project || durationMs <= 0}
                         className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
@@ -280,7 +435,7 @@ export function EditorPreviewMonitor() {
                         type="button"
                         aria-label="跳到结尾"
                         title="跳到结尾"
-                        onClick={() => setPlaybackMs(durationMs)}
+                        onClick={() => syncPlayback(durationMs)}
                         disabled={!project || durationMs <= 0}
                         className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
@@ -324,7 +479,6 @@ export function EditorPreviewMonitor() {
                     )}
                 </div>
             </div>
-
         </div>
     );
 }

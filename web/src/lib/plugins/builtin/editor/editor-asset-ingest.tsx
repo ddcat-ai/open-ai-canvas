@@ -24,8 +24,9 @@ import { defaultAssetCategoryForKind } from "@/lib/asset-category";
 import { makeClipFromAsset } from "@/lib/timeline/asset-ingest";
 import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_SUBTITLE_TRACK_ID, DEFAULT_VIDEO_TRACK_ID } from "@/lib/timeline/timeline-tracks";
 import { linkProjectAsset } from "@/services/api/projects";
-import { uploadResourceFile } from "@/services/api/resources";
+import { uploadResourceFile, type ResourceUploadMeta } from "@/services/api/resources";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { probeMediaDurationMs } from "@/lib/media-metadata";
 import type { ProjectAsset } from "@/services/api/projects";
 import type { TimelineProject } from "@/types/timeline";
 
@@ -148,7 +149,9 @@ export function EditorAssetIngest() {
             // 逐文件导入：单文件失败不中断整批，汇总失败数提示。
             for (const { file, kind } of media) {
                 try {
-                    const resource = await uploadResourceFile(file, kind);
+                    // 上传前探测真实时长（视频/音频），随 meta 入库供时间线片段使用。
+                    const durationMs = await probeMediaDurationMs(file);
+                    const resource = await uploadResourceFile(file, kind, durationMs !== undefined ? { durationMs } : undefined);
                     if (resource.status === "failed") {
                         failed += 1;
                         setImportError(resource.error || `「${file.name}」上传失败`);

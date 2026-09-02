@@ -33,6 +33,9 @@ export type EditorStore = {
     /** 当前选中片段 id（检查器/预览联动；纯 UI 状态，不入命令历史）。 */
     selectedClipId: string | null;
     selectClip: (id: string | null) => void;
+    /** 播放头位置（监视器与时间线面板共享的 transport，毫秒；纯 UI 状态，不入命令历史）。 */
+    transportMs: number;
+    setTransportMs: (ms: number) => void;
     /** 加载/切换项目：重置历史与保存状态（数据由外部传入，不触发保存）。 */
     load: (project: TimelineProject) => void;
     /** 应用一条编辑命令（唯一修改入口）。 */
@@ -100,15 +103,18 @@ export function createEditorStore(options: EditorStoreOptions = {}): UseBoundSto
             saveError: null,
             lastSavedAt: null,
             selectedClipId: null,
+            transportMs: 0,
 
             selectClip: (id) => set({ selectedClipId: id }),
+
+            setTransportMs: (ms) => set({ transportMs: Number.isFinite(ms) ? Math.max(0, Math.round(ms)) : 0 }),
 
             load: (project) => {
                 if (saveTimer) {
                     clearTimeout(saveTimer);
                     saveTimer = null;
                 }
-                set({ project, history: createEditorHistory(project), inPreview: false, isDirty: false, saving: false, saveError: null, lastSavedAt: null, selectedClipId: null });
+                set({ project, history: createEditorHistory(project), inPreview: false, isDirty: false, saving: false, saveError: null, lastSavedAt: null, selectedClipId: null, transportMs: 0 });
             },
 
             dispatch: (cmd) => {

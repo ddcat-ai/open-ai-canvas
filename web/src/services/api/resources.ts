@@ -65,7 +65,7 @@ export type ArkPrivateAssetSync = {
     status: "active" | string;
 };
 
-type ResourceUploadMeta = {
+export type ResourceUploadMeta = {
     width?: number;
     height?: number;
     durationMs?: number;

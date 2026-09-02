@@ -65,6 +65,7 @@ export type ProjectAsset = {
     folderId?: string;
     position: number;
     storageKey?: string;
+    durationMs?: number;
     previewText?: string;
     updatedAt: string;
     character?: CharacterCardSummary;
