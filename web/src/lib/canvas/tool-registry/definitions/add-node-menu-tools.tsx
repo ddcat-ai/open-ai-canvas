@@ -1,7 +1,7 @@
-import { Folder, FolderOpen, Layers3, Palette, UploadCloud, UserRound, Workflow } from "lucide-react";
+import { Blocks, Folder, FolderOpen, Layers3, Palette, UploadCloud, UserRound, Workflow } from "lucide-react";
 
-import { getNodeIcon, getNodeLabel } from "@/lib/canvas/node-registry";
-import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
+import { getNodeIcon, getNodeLabel, listCreatableNodeDefinitions } from "@/lib/canvas/node-registry";
+import { registerAddNodeMenuCommandProvider, registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType } from "@/types/canvas";
 
 /** 真正创建节点的命令，文案与图标统一取自节点注册表。 */
@@ -32,3 +32,18 @@ export const addNodeMenuCommands: AddNodeMenuCommand[] = [
 ];
 
 registerAddNodeMenuCommands(addNodeMenuCommands);
+
+// 插件贡献的画布节点（如肖像排查）随插件启用状态动态进入菜单：
+// 安装/启用发生在运行时，不能进上面的静态表；未提供 enabledPluginIds 的调用方不显示插件节点。
+registerAddNodeMenuCommandProvider((ctx) =>
+    listCreatableNodeDefinitions()
+        .filter((def) => def.plugin && ctx.enabledPluginIds?.has(def.plugin.pluginId))
+        .map((def, index) => ({
+            id: def.type,
+            label: def.label,
+            icon: def.icon ?? <Blocks />,
+            section: "node" as const,
+            defaultOrder: 90 + index,
+            run: (runCtx) => runCtx.handlers.onAddExtensionNode(def.type),
+        })),
+);
