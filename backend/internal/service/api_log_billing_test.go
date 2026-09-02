@@ -37,12 +37,13 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	}
 
 	logs := []model.ApiCallLog{
-		{ID: "log-settled", UserID: "user-1", BillingOrderID: "settled", Capability: "text"},
-		{ID: "log-reserved", UserID: "user-1", BillingOrderID: "reserved", Capability: "text"},
-		{ID: "log-uncertain", UserID: "user-1", BillingOrderID: "uncertain", Capability: "text"},
-		{ID: "log-refunded", UserID: "user-1", BillingOrderID: "refunded", Capability: "text"},
-		{ID: "log-missing", UserID: "user-1", BillingOrderID: "missing", Capability: "text"},
-		{ID: "log-other-user", UserID: "user-1", BillingOrderID: "other-user", Capability: "text"},
+		{ID: "log-settled", UserID: "user-1", BillingOrderID: "settled", Capability: "text", Billable: true},
+		{ID: "log-reserved", UserID: "user-1", BillingOrderID: "reserved", Capability: "text", Billable: true},
+		{ID: "log-uncertain", UserID: "user-1", BillingOrderID: "uncertain", Capability: "text", Billable: true},
+		{ID: "log-refunded", UserID: "user-1", BillingOrderID: "refunded", Capability: "text", Billable: true},
+		{ID: "log-missing", UserID: "user-1", BillingOrderID: "missing", Capability: "text", Billable: true},
+		{ID: "log-other-user", UserID: "user-1", BillingOrderID: "other-user", Capability: "text", Billable: true},
+		{ID: "log-download", UserID: "user-1", BillingOrderID: "settled", Capability: "image", RequestKind: "download", Billable: false},
 	}
 
 	svc := &Service{repo: repository.New(db)}
@@ -56,6 +57,7 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	assertBillingSnapshot(t, logs[3], true, model.BillingStatusRefunded, 0)
 	assertBillingSnapshot(t, logs[4], false, "", 0)
 	assertBillingSnapshot(t, logs[5], false, "", 0)
+	assertBillingSnapshot(t, logs[6], false, "", 0)
 }
 
 func assertBillingSnapshot(t *testing.T, log model.ApiCallLog, available bool, status model.BillingStatus, amount int64) {

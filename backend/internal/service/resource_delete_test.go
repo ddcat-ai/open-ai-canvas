@@ -312,6 +312,98 @@ func TestExpiredArchivedAssetCleanupRespectsCanvasReferencesAndUsesDeletionOutbo
 	}
 }
 
+func TestDetachedResourceCleanupRemovesOrphanAndKeepsAssetBackedResource(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	old := time.Now().Add(-48 * time.Hour)
+	orphan := model.Resource{
+		ID: "resource-detached", UserID: "user-1", Status: model.ResourceStatusReady,
+		Provider: "unsupported-test-provider", ObjectKey: "users/user-1/image/detached.png",
+		CreatedAt: old, UpdatedAt: old,
+	}
+	backed := model.Resource{
+		ID: "resource-backed", UserID: "user-1", Status: model.ResourceStatusReady,
+		Provider: "local", ObjectKey: "users/user-1/image/backed.png",
+		CreatedAt: old, UpdatedAt: old,
+	}
+	asset := model.Asset{
+		ID: "asset-backed", UserID: "user-1", Title: "素材库图片",
+		PayloadJSON: `{"data":{"storageKey":"resource:resource-backed"}}`, CreatedAt: old, UpdatedAt: old,
+	}
+	for _, item := range []any{&orphan, &backed, &asset} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.cleanupDetachedUserResources("user-1", []model.Resource{orphan, backed}); err != nil {
+		t.Fatalf("cleanupDetachedUserResources() error = %v", err)
+	}
+
+	var orphanCount, backedCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", orphan.ID).Count(&orphanCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", backed.ID).Count(&backedCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if orphanCount != 0 || backedCount != 1 {
+		t.Fatalf("cleanup result: orphan=%d backed=%d", orphanCount, backedCount)
+	}
+}
+
+func TestResourceCleanupCandidatesUseStatusSpecificRetention(t *testing.T) {
+	_, db, _ := newResourceDeletionTestService(t)
+	now := time.Now()
+	resources := []model.Resource{
+		{ID: "pending-old", UserID: "user-1", Status: model.ResourceStatusPending, CreatedAt: now, UpdatedAt: now.Add(-2 * time.Hour)},
+		{ID: "pending-fresh", UserID: "user-1", Status: model.ResourceStatusPending, CreatedAt: now, UpdatedAt: now.Add(-30 * time.Minute)},
+		{ID: "ready-old", UserID: "user-1", Status: model.ResourceStatusReady, CreatedAt: now.Add(-25 * time.Hour), UpdatedAt: now},
+		{ID: "ready-fresh", UserID: "user-1", Status: model.ResourceStatusReady, CreatedAt: now.Add(-23 * time.Hour), UpdatedAt: now},
+	}
+	for index := range resources {
+		if err := db.Create(&resources[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	candidates, err := repository.New(db).ResourceCleanupCandidates(now.Add(-time.Hour), now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, resource := range candidates {
+		ids[resource.ID] = true
+	}
+	if !ids["pending-old"] || !ids["ready-old"] || ids["pending-fresh"] || ids["ready-fresh"] {
+		t.Fatalf("cleanup candidates = %#v", ids)
+	}
+}
+
+func TestDetachedFailedResourceWithoutObjectKeyNeedsNoDeletionJob(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{
+		ID: "resource-failed-empty", UserID: "user-1", Status: model.ResourceStatusFailed,
+		CreatedAt: time.Now().Add(-2 * time.Hour), UpdatedAt: time.Now().Add(-2 * time.Hour),
+	}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.cleanupDetachedUserResources(resource.UserID, []model.Resource{resource}); err != nil {
+		t.Fatal(err)
+	}
+	var resourceCount, jobCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if resourceCount != 0 || jobCount != 0 {
+		t.Fatalf("cleanup result: resource=%d jobs=%d", resourceCount, jobCount)
+	}
+}
+
 func newResourceDeletionTestService(t *testing.T) (*Service, *gorm.DB, string) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})

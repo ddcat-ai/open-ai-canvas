@@ -33,6 +33,25 @@ test("announcement editor preserves image and pinned fields through edit and sav
     expect(safetySource).toContain("pinned?: boolean");
 });
 
+test("plugin upload owns native drops and price availability text remains readable", async () => {
+    const [pluginSource, adminCss] = await Promise.all([
+        Bun.file(new URL("../src/pages/plugins/plugin-documentation-modals.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+    ]);
+    const toggleCss = sourceSection(adminCss, ".admin-price-tier-toggle span {", ".admin-model-editor-add-tier.ant-btn {");
+
+    expect(pluginSource).toContain("event.preventDefault()");
+    expect(pluginSource).toContain("onDragOver={(event)");
+    expect(pluginSource).toContain("onDrop={handlePluginDrop}");
+    expect(pluginSource).toContain("点击选择插件文件，也可拖拽到此处");
+    expect(pluginSource).toContain("释放文件以上传插件");
+    expect(pluginSource).toContain("isDraggingPlugin");
+    expect(compactSource(adminCss)).toContain(".admin-price-tier-controls { display: grid !important; grid-template-columns: minmax(0, 1fr);");
+    expect(toggleCss).toContain("overflow-wrap: anywhere;");
+    expect(toggleCss).toContain("white-space: normal;");
+    expect(toggleCss).not.toContain("text-overflow: ellipsis;");
+});
+
 test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {
     const source = compactSource(await Bun.file(new URL("../src/pages/admin/components/analytics-panel.tsx", import.meta.url)).text());
 
@@ -192,9 +211,15 @@ test("request logs display user credit billing independently from upstream cost"
 
     const billingSummary = sourceSection(listSource, "function BillingSummary", "function MediaResult");
     expect(listSource).toContain('title: "积分计费"');
+    expect(listSource).toContain('title: "请求阶段 / 状态"');
+    expect(listSource).toContain('description="模型生成、状态查询与结果下载；仅计费调用扣除积分"');
     expect(billingSummary).toContain("billingAmountMicrocredits");
     expect(billingSummary).toContain("billingAvailable");
+    expect(billingSummary).toContain("!log.billable");
+    expect(billingSummary).toContain("不计费");
     expect(billingSummary).not.toContain("costAvailable");
+    expect(detailSource).toContain('["请求阶段", requestKindText(log.requestKind)]');
+    expect(detailSource).toContain('["计费属性", log.billable ? "计费调用" : "不计费"]');
     expect(detailSource).toContain('["积分计费", billingText(log)]');
     expect(detailSource).toContain('["上游成本", log.costAvailable');
     expect(apiSource).toContain("billingAmountMicrocredits: number");

@@ -59,7 +59,7 @@ func TestRegisterTaskOutputFromTaskPersistsMediaAssetAndArtifactIdempotently(t *
 	if err := db.Create(&resource).Error; err != nil {
 		t.Fatal(err)
 	}
-	task := model.Task{ID: "workflow-video-task-1", UserID: "user-1", ProjectID: project.ID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+	task := model.Task{ID: "ac745990450a86d3365eb92ec26f378e", UserID: "user-1", ProjectID: project.ID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
 		InputJSON:  `{"metadata":{"workflowStepId":"` + videoStep.ID + `","domainProjectId":"` + project.ID + `","unitId":"` + unit.ID + `","shotId":"` + shot.ID + `","shotRevisionId":"` + submittedRevisionID + `","artifactType":"video","role":"output","artifactMetadata":{"model":"MiniMax-H3"}}}`,
 		ResultJSON: `{"mode":"video","video":{"resourceId":"resource-video-1","storageKey":"resource:resource-video-1","mimeType":"video/mp4"}}`, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&task).Error; err != nil {
@@ -71,16 +71,37 @@ func TestRegisterTaskOutputFromTaskPersistsMediaAssetAndArtifactIdempotently(t *
 	if err := service.RegisterTaskOutputFromTask(task); err != nil {
 		t.Fatal(err)
 	}
-	for table, query := range map[string]string{
-		"assets":                "id = 'workflow-asset-workflow-video-task-1'",
-		"project_asset_links":   "asset_id = 'workflow-asset-workflow-video-task-1'",
-		"asset_representations": "task_id = 'workflow-video-task-1' AND role = 'output'",
-		"shot_artifacts":        "task_id = 'workflow-video-task-1' AND type = 'video'",
-	} {
+	assetID := workflowGeneratedEntityID("asset", task.ID)
+	versionID := workflowGeneratedEntityID("version", task.ID)
+	checks := []struct {
+		table string
+		where string
+		value string
+	}{
+		{table: "assets", where: "id = ?", value: assetID},
+		{table: "project_asset_links", where: "asset_id = ?", value: assetID},
+		{table: "asset_representations", where: "task_id = ? AND role = 'output'", value: task.ID},
+		{table: "shot_artifacts", where: "task_id = ? AND type = 'video'", value: task.ID},
+	}
+	for _, check := range checks {
 		var count int64
-		if err := db.Table(table).Where(query).Count(&count).Error; err != nil || count != 1 {
-			t.Fatalf("%s count = %d, error = %v", table, count, err)
+		if err := db.Table(check.table).Where(check.where, check.value).Count(&count).Error; err != nil || count != 1 {
+			t.Fatalf("%s count = %d, error = %v", check.table, count, err)
 		}
+	}
+	var asset model.Asset
+	if err := db.First(&asset, "id = ?", assetID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(asset.PrimaryVersionID) > 36 || asset.PrimaryVersionID != versionID {
+		t.Fatalf("primary version ID = %q, want %q with at most 36 characters", asset.PrimaryVersionID, versionID)
+	}
+	var version model.AssetVersion
+	if err := db.First(&version, "id = ?", versionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(version.ID) > 36 {
+		t.Fatalf("asset version ID length = %d, want at most 36", len(version.ID))
 	}
 	var artifact model.ShotArtifact
 	if err := db.First(&artifact, "task_id = ?", task.ID).Error; err != nil {

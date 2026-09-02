@@ -77,6 +77,39 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 	}
 }
 
+func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
+	payload := []byte("yingce-storage-test")
+	stream := &ossObjectStream{
+		body:          io.NopCloser(strings.NewReader(string(payload))),
+		statusCode:    http.StatusOK,
+		contentLength: int64(len(payload)),
+	}
+	if err := verifyOSSConnectionRead(stream, payload); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOSSConnectionReadRejectsUnexpectedContent(t *testing.T) {
+	payload := []byte("yingce-storage-test")
+	stream := &ossObjectStream{
+		body:          io.NopCloser(strings.NewReader("error page")),
+		statusCode:    http.StatusOK,
+		contentLength: 10,
+	}
+	err := verifyOSSConnectionRead(stream, payload)
+	if err == nil {
+		t.Fatal("verifyOSSConnectionRead() error = nil")
+	}
+	if !errors.Is(err, errOSSConnectionReadMismatch) {
+		t.Fatalf("verifyOSSConnectionRead() error = %v", err)
+	}
+	publicErr := storageConnectionTestError(tencentCOSProvider, "Range 读取", err)
+	var appErr *AppError
+	if !errors.As(publicErr, &appErr) || !strings.Contains(appErr.Message, "忽略、改写了 Range 请求") {
+		t.Fatalf("storageConnectionTestError() = %#v", publicErr)
+	}
+}
+
 func TestTencentCOSConnectionTestReturnsActionableAuthError(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

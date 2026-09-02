@@ -10,12 +10,39 @@ export type AssetStorageDocument = {
 
 export function normalizeAssetRecord(asset: Asset): Asset {
     const category = normalizeAssetCategory(asset.category, defaultAssetCategoryForKind(asset.kind));
-    if (Array.isArray(asset.tags) && asset.tags.every((tag) => typeof tag === "string") && asset.category === category) return asset;
+    const folderId = typeof asset.folderId === "string" ? asset.folderId.trim() : "";
+    const normalizedData = normalizeAssetData(asset);
+    if (Array.isArray(asset.tags) && asset.tags.every((tag) => typeof tag === "string") && asset.category === category && (asset.folderId || "") === folderId && normalizedData === asset.data) return asset;
     return {
         ...asset,
         tags: Array.isArray(asset.tags) ? asset.tags.filter((tag): tag is string => typeof tag === "string") : [],
+        folderId: folderId || undefined,
         category,
-    };
+        data: normalizedData,
+    } as Asset;
+}
+
+function normalizeAssetData(asset: Asset): Asset["data"] {
+    const raw = asset.data && typeof asset.data === "object" ? asset.data as Record<string, unknown> : {};
+    const numberValue = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+    if (asset.kind === "text") return typeof raw.content === "string" ? asset.data : { content: "" };
+    if (asset.kind === "image") {
+        if (typeof raw.dataUrl === "string" && typeof raw.width === "number" && typeof raw.height === "number") return asset.data;
+        return { dataUrl: typeof raw.dataUrl === "string" ? raw.dataUrl : asset.coverUrl || "", storageKey: typeof raw.storageKey === "string" ? raw.storageKey : undefined, width: numberValue(raw.width), height: numberValue(raw.height), bytes: numberValue(raw.bytes), mimeType: typeof raw.mimeType === "string" ? raw.mimeType : "image/*" };
+    }
+    if (asset.kind === "video") {
+        if (typeof raw.url === "string" && typeof raw.width === "number" && typeof raw.height === "number") return asset.data;
+        return { url: typeof raw.url === "string" ? raw.url : asset.coverUrl || "", storageKey: typeof raw.storageKey === "string" ? raw.storageKey : undefined, width: numberValue(raw.width), height: numberValue(raw.height), durationMs: numberValue(raw.durationMs), hasAudio: raw.hasAudio === true, bytes: numberValue(raw.bytes), mimeType: typeof raw.mimeType === "string" ? raw.mimeType : "video/*" };
+    }
+    if (asset.kind === "audio") {
+        if (typeof raw.url === "string") return asset.data;
+        return { url: "", storageKey: typeof raw.storageKey === "string" ? raw.storageKey : undefined, durationMs: numberValue(raw.durationMs), bytes: numberValue(raw.bytes), mimeType: typeof raw.mimeType === "string" ? raw.mimeType : "audio/*" };
+    }
+    if (asset.kind === "model") {
+        if (typeof raw.url === "string" && typeof raw.fileName === "string") return asset.data;
+        return { url: "", storageKey: typeof raw.storageKey === "string" ? raw.storageKey : undefined, bytes: numberValue(raw.bytes), mimeType: typeof raw.mimeType === "string" ? raw.mimeType : "model/*", fileName: typeof raw.fileName === "string" ? raw.fileName : asset.title || "未命名模型" };
+    }
+    return asset.data;
 }
 
 function normalizeAssets(assets: Asset[]) {

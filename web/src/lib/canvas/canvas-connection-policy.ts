@@ -1,5 +1,5 @@
 import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
-import { getNodeGenerationMode, getNodeInputKind } from "@/lib/canvas/node-registry";
+import { getNodeAcceptedInputKind, getNodeGenerationMode, getNodeInputKind } from "@/lib/canvas/node-registry";
 import type { AiConfig } from "@/stores/use-config-store";
 import { type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
@@ -12,6 +12,12 @@ type CanvasConnectionPolicyOptions = {
 export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[], connections: CanvasConnection[], candidate: ConnectionCandidate, options: CanvasConnectionPolicyOptions = {}) {
     const target = nodes.find((node) => node.id === candidate.toNodeId);
     if (!target) return "找不到连线目标节点";
+    const acceptedInputKind = getNodeAcceptedInputKind(target.type);
+    if (acceptedInputKind) {
+        const source = nodes.find((node) => node.id === candidate.fromNodeId);
+        const sourceKind = source ? getNodeInputKind(source.type) : undefined;
+        if (sourceKind !== acceptedInputKind) return `${acceptedInputKindLabel(acceptedInputKind)}节点只接受${acceptedInputKindLabel(acceptedInputKind)}输入`;
+    }
     const mode = getNodeGenerationMode(target);
     if (!mode) return "";
     const input = connectionInputSummary(target.id, nodes, connections, candidate);
@@ -29,6 +35,13 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
     if (mode === "audio" && input.characterCount > 1) return "角色配音一次只能连接一个角色卡";
     if (mode === "audio" && (input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0)) return "音频生成节点只接受文本或单个角色卡输入";
     return "";
+}
+
+function acceptedInputKindLabel(kind: "image" | "video" | "audio" | "text") {
+    if (kind === "image") return "图片";
+    if (kind === "video") return "视频";
+    if (kind === "audio") return "音频";
+    return "文本";
 }
 
 export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], candidate?: ConnectionCandidate): ModelInputSummary {

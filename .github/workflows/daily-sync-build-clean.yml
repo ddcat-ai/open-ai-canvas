@@ -1,0 +1,151 @@
+name: Daily Sync, Build & Keep Latest Images
+
+on:
+  schedule:
+    # Every day at 03:00 Asia/Shanghai (19:00 UTC on the previous day).
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: daily-sync-build-clean-main
+  cancel-in-progress: false
+
+jobs:
+  sync-upstream:
+    name: Sync upstream main to this fork
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.sync.outputs.commit }}
+
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Sync upstream main
+        id: sync
+        shell: bash
+        env:
+          PUSH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/ddcat-ai/open-ai-canvas.git 2>/dev/null || true
+          git fetch upstream main
+
+          if git merge-base --is-ancestor HEAD upstream/main; then
+            git merge --ff-only upstream/main
+          else
+            git merge --no-edit upstream/main
+          fi
+
+          git remote set-url origin "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD:main
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build-images:
+    name: Build ${{ matrix.image }}
+    needs: sync-upstream
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: open-ai-canvas-web
+            dockerfile: Dockerfile
+          - image: open-ai-canvas-backend
+            dockerfile: backend/Dockerfile
+
+    steps:
+      - name: Checkout synchronized fork commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.sync-upstream.outputs.commit }}
+          fetch-depth: 1
+
+      - name: Resolve build version
+        id: build-info
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository owner
+        id: repo-owner
+        shell: bash
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.build-info.outputs.version }}
+            type=sha,prefix=sha-
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # Unraid deployment target: publish one self-contained amd64 manifest.
+          # Disable Buildx attestations so GHCR stores no extra index/child manifests
+          # that version cleanup could orphan.
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: true
+          build-args: |
+            BUILD_VERSION=${{ steps.build-info.outputs.version }}
+            BUILD_COMMIT=${{ needs.sync-upstream.outputs.commit }}
+            BUILD_TIME=${{ steps.build-info.outputs.build_time }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  cleanup-packages:
+    name: Keep latest ${{ matrix.package-name }} package version
+    needs: build-images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-name:
+          - open-ai-canvas-web
+          - open-ai-canvas-backend
+
+    steps:
+      - name: Delete old container package versions
+        uses: actions/delete-package-versions@v5
+        with:
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          package-name: ${{ matrix.package-name }}
+          package-type: container
+          min-versions-to-keep: 1
+          delete-only-untagged-versions: "false"

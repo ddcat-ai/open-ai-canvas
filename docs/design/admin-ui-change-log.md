@@ -1140,3 +1140,15 @@
 - 验证结果：八个目标源码/样式/记录文件通过定向 Prettier；全量 `npx tsc --noEmit` 为 0 错误；Vite 8.1.5 生产构建成功转换 12,695 个模块并在约 4.63 秒完成，仅保留项目既有的大分块提示。使用现有已登录 Chrome 会话访问当前源码开发服务；账号真实项目数为 0，未创建或修改测试项目。五个详情 URL 均以不存在项目做只读错误态检查，稳定显示“项目不可用”和返回操作；亮色与暗色分别覆盖 1280×800、1440×900、1920×1080 三档真实 CSS 视口，文档和 main 横向溢出均为 0，错误表面宽 760px，亮色为 `rgb(255,255,255)`、暗色为 `rgb(26,29,32)`。有数据态、归档态、章节编辑态和五页业务动作因真实账号无项目且禁止写业务数据，以完整 JSX/CSS 结构检查、历史状态机核对、全量类型和生产构建作为验证边界；没有伪造接口或业务记录。控制台仅出现批次 132 已记录的 Ant `App cssVar` 与 `Modal maskClosable` 既有警告，没有本批运行错误。
 - 潜在影响：项目详情首屏增加约 76～86px 当前视图身份层，章节编辑区可用高度相应减少但仍由单一 flex 区域内部滚动；设置和资产页新增一级表面与细边界，1920px 下内容不再无限拉伸。顶部项目状态与当前 view 更醒目，页面 h1→h2→说明顺序稳定。接口请求、业务状态、路由、数据、权限和移动端均不变。
 - 逐项回滚：修改前八个原件、SHA-256、校验文件和恢复步骤位于 `.local/ui-change-backups/batch-133/MANIFEST.md` 与 `MANIFEST.sha256`。回滚前先保留后续修改，再按原相对路径逐项恢复并运行 `shasum -a 256 -c MANIFEST.sha256`；完整回滚最后恢复本记录。不需要初始化、提交或依赖 Git。
+
+## 批次 134：外观管理 Logo 外框开关与无框尺寸统一
+
+- 日期时间：2026-09-02 17:04:34 +0800
+- 目的：修复“禁用 Logo 后面的圆角矩形外框”复选框与后台现有布尔设置视觉不一致的问题，并让关闭外框后的品牌 Logo 等比放大到原外框可用区域；保持原导航占位、深浅 Logo 选择、品牌加载时序、接口和保存方式不变。
+- 修改前状况：外观管理单独使用 Ant Checkbox，而登录注册、功能开放等后台布尔设置已经统一使用主题化 Ant Switch；页面只给 Checkbox 外层文字加样式，控件自身状态与其他模块不一致。关闭外框仅清除容器背景、边框、圆角和阴影，实际 Logo 仍保持 `size-5`，因此在 32～38px 导航容器内显得偏小；44px 预览容器也仍固定显示 28px Logo。
+- 涉及文件：`web/src/pages/admin/settings/appearance-settings-page.tsx`、`web/src/styles/admin-ui.css`、`web/src/styles/globals.css`、`web/test/appearance-bootstrap.test.ts`、`docs/content/docs/overview/features.mdx`、`docs/content/docs/progress/pending-test.mdx`、`docs/design/admin-ui-change-log.md`。未修改后端、外观 schema、API、数据库、上传与重置逻辑、导航容器尺寸或操作人现有品牌配置。
+- 具体改动：外框选项复用后台已有 Ant Switch 和集中主题 token，采用“说明文案 + 当前状态文字 + 右侧开关”的现有设置行方向，开启表示禁用外框，`checked` 与 `logoFrameEnabled` 继续按反向关系转换；补充 `aria-label` 和说明关联。关闭外框时，共享 `BrandLogoFrame` 的直接图片或 SVG 子元素宽高提升到容器 `100%`，继续由 `object-fit: contain` 等比适配，因此工作台 32px、管理后台 32～38px 及折叠态均复用各自原容器，不发生布局跳动；深浅模式预览同步由 28px 放大到完整 44px 可用区域。窄屏选项行改为上下排列，状态与开关仍保持两端对齐。
+- 修改前基线：`appearance-settings-page.tsx` 为 `a9e133fb76e046b8775f284279f054e78d86fda8f1bfa08f73bb54a9c9c82447`，`admin-ui.css` 为 `c0fa61947300287f059ae3b0f987d685c4ab9b52f620923ee8f8713d0dbdcd88`，`globals.css` 为 `7c6cdba67750029ee959055a8d70e013c0cadfd05aaaf7dd398b42ea6f83ac48`，`appearance-bootstrap.test.ts` 为 `23f02b574541bd09c31785bf72d80d9968f9d14e70a7cfc6ecf643dcc7866ff9`，两份功能文档分别为 `7d7b0b46252a9c7a9787d99e7b6018b14ef8df189f7a0332f66f00804d89f537` 与 `4d58b9eb3db6110c30e12a6e41d371c6680fd51655bd11525c679b7cf03fbf10`；原件保存在 `.local/ui-change-backups/batch-134/`。
+- 验证结果：目标文件定向 Prettier 与 `git diff --check` 通过；固定 Bun 1.3.13、提交的 `bun.lock` 和干净依赖环境运行外观、后台、对象存储与找回密码四组专项测试，23 项全部通过、194 个断言无失败，TypeScript `tsc --noEmit` 为 0 错误。生产 Docker 多阶段构建转换 13,499 个模块并成功生成镜像，只保留项目既有的大分块提示。独立前端烟测返回 200，确认初始 HTML 不含内置品牌与 `/logo.svg`，新尺寸选择器已进入打包 CSS；真实管理员页面的深浅主题截图仍按 `docs/content/docs/progress/pending-test.mdx` 保留为人工验证项，不伪造登录态或业务配置。
+- 潜在影响：关闭外框后，宽或高较小、透明留白较多的 Logo 会在原容器范围内明显变大，但仍保持自身比例且不会溢出；如素材文件本身带有透明边距，视觉内容不会强制裁切到满边。开关仍属于外观页面草稿，需要点击原有“保存修改”才写入服务端；没有改成即时保存。
+- 逐项回滚：先使用 `.local/ui-change-backups/batch-134/` 中对应原件逐项恢复本批六个源码/文档文件，再恢复本台账并执行其 `MANIFEST.sha256` 校验；恢复前如文件已包含后续批次，先复制当前版本。本批不依赖 Git 历史做本地回滚。
