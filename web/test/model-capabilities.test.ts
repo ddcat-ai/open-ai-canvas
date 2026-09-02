@@ -61,3 +61,80 @@ test("modelCapabilityConfigFor falls back to the channel interfaceType when a mo
     assert.deepEqual(profile.resolutions, ["768p", "1080p"]);
     assert.equal(profile.defaultResolution, "768p");
 });
+
+test("modelCapabilityConfigFor reconciles a stale saved generic resolutions list for H3 via relay", () => {
+    // A model previously saved through the model manager carried a full generic
+    // capabilityConfig (480p..2160p, default 720p). H3 cannot actually serve those
+    // tiers, so the merge must reconcile them back to the authoritative 768p/1080p
+    // instead of letting the stale array hide 768p in the generation dropdown.
+    const genericVideo = defaultModelCapabilityConfig("newapi-channel-2").video!;
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["minimax_h3"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [
+                        { model: "minimax_h3", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } },
+                    ],
+                },
+            ],
+        },
+        "relay::minimax_h3",
+    ).video!;
+
+    assert.deepEqual(profile.resolutions, ["768p", "1080p"]);
+    assert.equal(profile.defaultResolution, "768p");
+});
+
+test("modelCapabilityConfigFor preserves a deliberately narrowed H3 relay resolution set", () => {
+    // A user who intentionally kept only 768p for an H3 model must keep that choice;
+    // reconciliation only resets stale *generic* tiers, not deliberate subsets.
+    const genericVideo = defaultModelCapabilityConfig("newapi-channel-2").video!;
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["minimax_h3"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [
+                        {
+                            model: "minimax_h3",
+                            capability: "video",
+                            protocol: "newapi-channel-2",
+                            capabilityConfig: { version: 1, video: { ...genericVideo, resolutions: ["768p"], defaultResolution: "768p" } },
+                        },
+                    ],
+                },
+            ],
+        },
+        "relay::minimax_h3",
+    ).video!;
+
+    assert.deepEqual(profile.resolutions, ["768p"]);
+    assert.equal(profile.defaultResolution, "768p");
+});
+
+test("modelCapabilityConfigFor leaves non-H3 relay models on their saved generic tiers", () => {
+    // A plain relay model that genuinely supports the generic tiers must not be
+    // reconciled to 768p just because its channel is a relay.
+    const genericVideo = defaultModelCapabilityConfig("newapi-channel-2").video!;
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["some-video-model"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [{ model: "some-video-model", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } }],
+                },
+            ],
+        },
+        "relay::some-video-model",
+    ).video!;
+
+    assert.deepEqual(profile.resolutions, ["480p", "720p", "1080p", "1440p", "2160p"]);
+    assert.equal(profile.defaultResolution, "720p");
+});

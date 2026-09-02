@@ -254,6 +254,37 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     return image;
 }
 
+// MiniMax Hailuo H3 判定：模型名命中 minimax_h3 / MiniMax-H3 / hailuo-h3 等
+// 拼写，且经 NewAPI 风格中转（协议来自模型 cost 或渠道 interfaceType）时，
+// 该模型真实支持的档位只有 768p / 1080p（2K），无 720p。
+// 该判定在 defaultModelCapabilityConfig（默认档位）与 modelCapabilityConfigFor
+// （合并已固化 capabilityConfig）两处共用，确保旧固化配置里残留的通用档位
+// 不会继续把 768p 挡在生成下拉之外。
+const RELAY_PROTOCOLS = ["newapi", "newapi-channel-1", "newapi-channel-2"] as const;
+const HAILUO_H3_RESOLUTIONS = ["768p", "1080p"] as const;
+
+export function isHailuoH3ViaRelay(protocol: ModelProtocol | undefined, model: string): boolean {
+    const normalizedModel = model.trim().toLowerCase();
+    return (
+        (RELAY_PROTOCOLS as readonly string[]).includes(protocol ?? "") &&
+        /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/.test(normalizedModel)
+    );
+}
+
+// 仅当协议/模型真实只支持某组档位时（H3 经中转 = 768p/1080p），把已固化配置里
+// 的通用/过期档位规整到权威档位，防止无 720p 的模型被 UI 引导到会被上游拒收的档位。
+// 规则：保存列表里只要混入任一非权威档位（如通用基线里的 720p/480p），说明它是过期
+// 快照，直接回落权威档位；若已是权威档位的子集（用户刻意收窄），则保留其选择。
+function reconcileSavedResolutions(protocol: ModelProtocol | undefined, model: string, video: VideoCapabilityConfig): VideoCapabilityConfig {
+    if (!isHailuoH3ViaRelay(protocol, model)) return video;
+    const authoritative = HAILUO_H3_RESOLUTIONS;
+    const saved = (video.resolutions || []).map(normalizeCapabilityString).filter(Boolean);
+    const hasInvalidTier = saved.some((value) => !(authoritative as readonly string[]).includes(value));
+    const resolutions = !saved.length || hasInvalidTier ? [...authoritative] : saved;
+    const defaultResolution = resolutions.includes(normalizeCapabilityString(video.defaultResolution)) ? normalizeCapabilityString(video.defaultResolution) : resolutions[0];
+    return { ...video, resolutions, defaultResolution };
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
@@ -347,9 +378,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     // wrongly ships 720p, which upstream rejects with "unsupported H3
     // resolution". Pin the relay config to 768p/1080p and default to 768p so
     // longer shots (up to 15s) stay valid; 1080p/2K caps at ~8s.
-    const normalizedModel = model.trim().toLowerCase();
-    const isHailuoH3ViaRelay = ["newapi", "newapi-channel-1", "newapi-channel-2"].includes(protocol ?? "") && /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/.test(normalizedModel);
-    if (isHailuoH3ViaRelay) {
+    if (isHailuoH3ViaRelay(protocol, model)) {
         video.references.maxImages = 9;
         video.references.maxVideos = 3;
         video.references.maxVideoDurationSeconds = 15;
@@ -395,7 +424,11 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     if (!cost?.capabilityConfig) return fallback;
     const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
     const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;
-    const video = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video;
+    // 已固化的 capabilityConfig 里可能残留模型升级/档位调整前的过期 resolutions
+    // （如 H3 经中转被存成通用 480p..2160p）。合并后按协议+模型名规整到权威档位，
+    // 避免 UI 提供模型根本不支持、会被上游拒收的分辨率。
+    const mergedVideo = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video!;
+    const video = reconcileSavedResolutions(protocol, modelName, mergedVideo);
     const configuredImage = capabilityConfig.image;
     const image = configuredImage
         ? (() => {
