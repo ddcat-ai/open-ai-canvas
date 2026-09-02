@@ -26,6 +26,8 @@ type OSSConnectionTestResult struct {
 	TestedDigest string    `json:"testedDigest"`
 }
 
+var errOSSConnectionReadMismatch = errors.New("对象存储读取内容不一致")
+
 func (s *Service) TestAdminOSSSetting(actor *model.User, req OSSSettingRequest) (*OSSConnectionTestResult, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
@@ -110,11 +112,7 @@ func verifyOSSConnection(value ossSettingValue, testKey string) error {
 	if err != nil {
 		rangeErr = err
 	} else {
-		data, readErr := io.ReadAll(io.LimitReader(stream.body, 5))
-		closeErr := stream.body.Close()
-		if readErr != nil || closeErr != nil || string(data) != "ying" {
-			rangeErr = errors.New("对象存储 Range 读取测试失败")
-		}
+		rangeErr = verifyOSSConnectionRead(stream, payload)
 	}
 	if err := deleteOSSObject(testValue, testKey); err != nil {
 		return storageConnectionTestError(testValue.Provider, "删除", err)
@@ -123,6 +121,34 @@ func verifyOSSConnection(value ossSettingValue, testKey string) error {
 		return storageConnectionTestError(testValue.Provider, "Range 读取", rangeErr)
 	}
 	return nil
+}
+
+func verifyOSSConnectionRead(stream *ossObjectStream, payload []byte) error {
+	if stream == nil || stream.body == nil {
+		return fmt.Errorf("%w：响应为空", errOSSConnectionReadMismatch)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(stream.body, int64(len(payload)+1)))
+	closeErr := stream.body.Close()
+	if readErr != nil {
+		return fmt.Errorf("对象存储响应读取失败：%w", readErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("对象存储响应关闭失败：%w", closeErr)
+	}
+
+	// HTTP 允许服务端忽略 Range 并返回 200 + 完整对象。应用的资源代理也会
+	// 原样透传这种响应，因此连接测试应同时接受完整读取与标准的 206 分段读取。
+	switch stream.statusCode {
+	case http.StatusPartialContent:
+		if len(payload) >= 4 && bytes.Equal(data, payload[:4]) {
+			return nil
+		}
+	case http.StatusOK:
+		if bytes.Equal(data, payload) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w（HTTP %d，读取 %d 字节）", errOSSConnectionReadMismatch, stream.statusCode, len(data))
 }
 
 func storageConnectionTestError(provider string, operation string, cause error) error {
@@ -145,6 +171,9 @@ func storageConnectionTestError(provider string, operation string, cause error) 
 	var networkErr net.Error
 	if errors.As(cause, &networkErr) && networkErr.Timeout() {
 		return WrapAppError(http.StatusGatewayTimeout, fmt.Sprintf("%s %s测试超时，请检查 Endpoint 和服务端网络", providerName, operation), cause)
+	}
+	if operation == "Range 读取" && errors.Is(cause, errOSSConnectionReadMismatch) {
+		return WrapAppError(http.StatusBadGateway, fmt.Sprintf("%s Range 读取返回的数据与刚写入对象不一致，请检查 Endpoint 或出网代理是否忽略、改写了 Range 请求", providerName), cause)
 	}
 
 	if provider == tencentCOSProvider {
