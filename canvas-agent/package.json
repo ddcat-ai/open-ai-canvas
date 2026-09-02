@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@openai/codex": "^0.149.1",
+    "@openai/codex": "^0.151.0",
     "docx": "^9.5.1",
     "express": "^5.2.1",
     "json-canonicalize": "2.0.0",
