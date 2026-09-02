@@ -2,16 +2,21 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"gorm.io/gorm"
 )
 
 type LinkProjectAssetRequest struct {
 	AssetID  string  `json:"assetId"`
 	Category string  `json:"category"`
 	FolderID *string `json:"folderId"`
+	// Title 媒体导入场景下由前端携带原始文件名；已有资产时忽略。
+	Title string `json:"title"`
 }
 
 type UpdateProjectAssetRequest struct {
@@ -39,6 +44,7 @@ type ProjectAssetSummary struct {
 	StorageKey       string                   `json:"storageKey,omitempty"`
 	PreviewText      string                   `json:"previewText,omitempty"`
 	UpdatedAt        time.Time                `json:"updatedAt"`
+	Source           string                   `json:"source,omitempty"`
 	Character        *CharacterCardSummary    `json:"character,omitempty"`
 }
 
@@ -99,8 +105,16 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	}
 	assetID := strings.TrimSpace(req.AssetID)
 	asset, err := s.repo.AssetForUser(userID, assetID)
-	if err != nil {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return ProjectAssetSummary{}, err
+	}
+	if asset == nil {
+		// 媒体导入只落 resources 表；首次链接时按资源元数据合成资产记录，
+		// 避免“资源存在但无资产记录”导致导入永远失败。
+		asset, err = s.assetFromUploadedResource(userID, assetID, req.Title)
+		if err != nil {
+			return ProjectAssetSummary{}, err
+		}
 	}
 	category := model.AssetCategory(strings.TrimSpace(req.Category))
 	if category == "" {
@@ -154,6 +168,63 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 		return s.projectAssetSummary(userID, projectID, current)
 	}
 	return s.projectAssetSummary(userID, projectID, asset)
+}
+
+// assetFromUploadedResource 把媒体导入上传的 Resource 合成/补齐为资产记录并落库。
+// 幂等：资产已存在（例如并发重试）时按资源元数据补齐字段。
+func (s *Service) assetFromUploadedResource(userID string, resourceID string, title string) (*model.Asset, error) {
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err != nil {
+		return nil, err
+	}
+	if resource.Kind == "" {
+		return nil, BadAuthRequest("资源缺少媒体类型，无法导入")
+	}
+	payload, err := json.Marshal(map[string]any{
+		"data": map[string]any{
+			"storageKey": "resource:" + resource.ID,
+			"mimeType":   resource.MimeType,
+			"kind":       resource.Kind,
+			"size":       resource.Size,
+			"width":      resource.Width,
+			"height":     resource.Height,
+			"durationMs": resource.DurationMs,
+			"status":     resource.Status,
+			"mediaType":  resource.Kind,
+			"source":     "uploaded",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = mediaTitleFallback(resource)
+	}
+	asset := &model.Asset{
+		ID:          resource.ID,
+		UserID:      userID,
+		Kind:        resource.Kind,
+		Category:    model.NormalizeAssetCategory("", resource.Kind),
+		Status:      model.AssetVersionStatusConfirmed,
+		Title:       title,
+		PayloadJSON: string(payload),
+		CreatedAt:   resource.CreatedAt,
+		UpdatedAt:   resource.UpdatedAt,
+	}
+	if err := s.repo.UpsertAsset(asset); err != nil {
+		return nil, err
+	}
+	return s.repo.AssetForUser(userID, resource.ID)
+}
+
+// mediaTitleFallback 资源无文件名时的展示标题：未命名 + 媒体类型 + 分辨率。
+func mediaTitleFallback(resource *model.Resource) string {
+	base := "未命名" + resource.Kind
+	if resource.Width > 0 && resource.Height > 0 {
+		base += fmt.Sprintf(" %dx%d", resource.Width, resource.Height)
+	}
+	return base
 }
 
 func (s *Service) UnlinkProjectAsset(userID string, projectID string, assetID string) error {
@@ -482,8 +553,8 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 	if err != nil {
 		return ProjectAssetSummary{}, err
 	}
-	storageKey, previewText := projectAssetPreview(asset.PayloadJSON)
-	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, FolderID: link.FolderID, Position: link.Position, StorageKey: storageKey, PreviewText: previewText, UpdatedAt: asset.UpdatedAt}
+	storageKey, previewText, source := projectAssetPreview(asset.PayloadJSON)
+	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, FolderID: link.FolderID, Position: link.Position, StorageKey: storageKey, PreviewText: previewText, UpdatedAt: asset.UpdatedAt, Source: source}
 	if asset.Category == model.AssetCategoryCharacter && asset.PrimaryVersionID != "" {
 		card, cardErr := s.characterCard(userID, asset)
 		if cardErr != nil {
@@ -494,19 +565,20 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 	return summary, nil
 }
 
-func projectAssetPreview(payloadJSON string) (string, string) {
+func projectAssetPreview(payloadJSON string) (string, string, string) {
 	var payload struct {
 		Data struct {
 			StorageKey string `json:"storageKey"`
 			Content    string `json:"content"`
+			Source     string `json:"source"`
 		} `json:"data"`
 	}
 	if json.Unmarshal([]byte(payloadJSON), &payload) != nil {
-		return "", ""
+		return "", "", ""
 	}
 	previewRunes := []rune(strings.TrimSpace(payload.Data.Content))
 	if len(previewRunes) > 240 {
 		previewRunes = append(previewRunes[:240], '…')
 	}
-	return strings.TrimSpace(payload.Data.StorageKey), string(previewRunes)
+	return strings.TrimSpace(payload.Data.StorageKey), string(previewRunes), strings.TrimSpace(payload.Data.Source)
 }

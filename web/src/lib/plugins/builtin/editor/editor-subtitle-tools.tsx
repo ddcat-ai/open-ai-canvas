@@ -63,36 +63,35 @@ export function EditorSubtitleTools() {
     };
 
     return (
-        <div className="flex h-full flex-col bg-[var(--workspace-surface)]">
-            <SubtitleHeader title="字幕工具" />
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="mb-3 rounded-md border border-border/60 bg-foreground/3 p-2.5">
+        <div className="flex h-full flex-col bg-[var(--director-sequencer-surface)]">
+            <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="mb-3 rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground/85">时间线字幕</span>
-                        <span className="text-[10px] text-foreground/40">{subtitleClips.length} 条</span>
+                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">时间线字幕</span>
+                        <span className="text-[10px] text-[var(--director-dock-fg)]/60">{subtitleClips.length} 条</span>
                     </div>
                     {subtitleClips.length === 0 ? (
-                        <p className="mt-2 text-[11px] leading-relaxed text-foreground/40">暂无字幕快照。粘贴 SRT 导入后，字幕会重建到时间线。</p>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">暂无字幕快照。粘贴 SRT 导入后，字幕会重建到时间线。</p>
                     ) : (
                         <ul className="mt-2 space-y-1">
                             {subtitleClips.slice(0, 6).map((clip) => (
                                 <SubtitleRow key={clip.id} clip={clip} />
                             ))}
                             {subtitleClips.length > 6 && (
-                                <li className="pt-1 text-[10px] text-foreground/35">…共 {subtitleClips.length} 条</li>
+                                <li className="pt-1 text-[10px] text-[var(--director-dock-fg)]/50">…共 {subtitleClips.length} 条</li>
                             )}
                         </ul>
                     )}
                 </div>
 
                 <label className="mb-3 block">
-                    <span className="mb-1 block text-[11px] text-foreground/55">SRT 文本（导入）</span>
+                    <span className="mb-1 block text-[11px] text-[var(--director-dock-fg)]/70">SRT 文本（导入）</span>
                     <textarea
                         value={srtText}
                         onChange={(e) => setSrtText(e.target.value)}
                         rows={8}
                         placeholder={"1\n00:00:00,500 --> 00:00:02,500\n你好，影策"}
-                        className="w-full resize-y rounded-md border border-border/60 bg-foreground/3 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-foreground/85 outline-none focus:border-[var(--workspace-accent)]/60"
+                        className="w-full resize-y rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] px-2 py-1.5 font-mono text-[11px] leading-relaxed text-[var(--director-dock-fg-strong)] outline-none focus:border-[var(--workspace-accent)]/60"
                     />
                 </label>
 
@@ -101,7 +100,7 @@ export function EditorSubtitleTools() {
                         type="button"
                         onClick={importSrt}
                         disabled={!srtText.trim()}
-                        className="flex-1 rounded-md bg-[var(--workspace-accent)] px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                        className="flex-1 rounded-md bg-[var(--director-accent)] px-2 py-1.5 text-xs font-medium text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)] disabled:opacity-40"
                     >
                         导入（重建字幕）
                     </button>
@@ -109,43 +108,36 @@ export function EditorSubtitleTools() {
                         type="button"
                         onClick={exportSrt}
                         disabled={subtitleClips.length === 0}
-                        className="flex-1 rounded-md border border-border/60 px-2 py-1.5 text-xs text-foreground/60 hover:bg-foreground/5 disabled:opacity-40"
+                        className="flex-1 rounded-md border border-[var(--director-sequencer-border)] px-2 py-1.5 text-xs text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:opacity-40"
                     >
                         导出 SRT
                     </button>
                 </div>
 
-                <div className="rounded-md border border-border/60 bg-foreground/3 p-2.5">
+                <div className="rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground/85">AI 高亮</span>
-                        <span className="rounded-full bg-foreground/8 px-1.5 py-0.5 text-[10px] text-foreground/50">M6</span>
+                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">AI 高亮</span>
+                        <span className="rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] text-[var(--director-dock-fg)]/80">M6</span>
                     </div>
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-foreground/40">
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
                         AI 字幕高亮与关键词标注将在 M6（ai-assistant 插件 + ai.text 权限）接入。
                     </p>
                 </div>
 
-                {message && <p className="mt-2 text-[11px] text-foreground/50">{message}</p>}
+                {message && <p className="mt-2 text-[11px] text-[var(--director-dock-fg)]/70">{message}</p>}
             </div>
         </div>
     );
 }
 
-function SubtitleHeader({ title }: { title: string }) {
-    return (
-        <div className="flex h-9 shrink-0 items-center border-b border-border/60 px-3">
-            <span className="text-xs font-medium text-foreground/75">{title}</span>
-        </div>
-    );
-}
 
 function SubtitleRow({ clip }: { clip: TimelineClip }) {
     return (
-        <li className="flex items-baseline gap-2 rounded border border-border/40 bg-foreground/2 px-1.5 py-1">
-            <span className="shrink-0 tabular-nums text-[10px] text-foreground/40">
+        <li className="flex items-baseline gap-2 rounded border border-[var(--director-sequencer-border)]/70 bg-[var(--director-control-hover)]/60 px-1.5 py-1">
+            <span className="shrink-0 tabular-nums text-[10px] text-[var(--director-dock-fg)]/60">
                 {formatTimelineTime(clip.startMs)} – {formatTimelineTime(clip.startMs + clip.durationMs)}
             </span>
-            <span className="truncate text-[11px] text-foreground/75">{clip.text ?? ""}</span>
+            <span className="truncate text-[11px] text-[var(--director-dock-fg)]/80">{clip.text ?? ""}</span>
         </li>
     );
 }

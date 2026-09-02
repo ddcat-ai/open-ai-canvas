@@ -13,6 +13,34 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [ ] 浏览器冒烟（待用户确认）：项目详情 → 剪辑成片 → 编辑器，拖拽片段移动、拖拽边缘裁剪（trim-start/trim-end）、撤销/重做按钮与缩放按钮；松手提交后可一次撤销；刷新后本地时间线（localforage scope 隔离）保留；状态栏显示 未保存/保存中/已保存/保存失败。
 - [ ] M2.4 手势与画布拖拽不冲突（时间线容器 `data-canvas-no-zoom`），快捷键（Cmd/Ctrl+Z）与全局冲突项待 M3 统一处理。
 
+## 编辑器（M3 预设插件八连）
+
+- [x] 命令层新增 `rebuildSubtitleClips`（9 个黄金 op）：从节点权威 subtitleEntries 重建字幕快照，确定性 id（nodeId:subtitle:index）重复导入原地替换；非法 entries（index/startMs/endMs/text/重复 index）与非法轨道（非字幕轨/无字幕轨）fail-closed；黄金文件追加用例通过（26 项）。
+- [x] M3.1~M3.4：timeline-panel（选中联动 + 撤销/重做/缩放 UI）、preview-monitor（buildTimelineRenderPlan 预览）、inspector（setClipProperty 可撤销）、asset-ingest（addClip 入轨）插件与 editor.tsx 三段式接线已提交。
+- [x] M3.5 subtitle-tools：SRT 粘贴导入（parseSrt → rebuildSubtitleClips 重建快照）、当前时间线字幕导出 .srt（serializeSrtEntries 往返一致）；AI 高亮占位（M6 接入）。
+- [x] M3.6 transcription：确定性 mock 转写（mockTranscriptionEntries 同输入同输出，3 项测试），结果按 ADR-0004 协议重建到字幕轨道；M4 替换真实任务客户端。
+- [x] M3.7 export：渲染计划（buildTimelineRenderPlan 与画布同源）+ ffmpeg.wasm 降级导出（exportTimelineToMp4 带进度）；悬空 nodeId 源按计划跳过。
+- [x] M3.8：editor.tsx 全 8 槽三段式渲染（左素材/转写，中预览/时间线，右检查器/字幕/导出/AI）+ ai-assistant 占位（M6）；typecheck 零错误、专项 53/53、全量 build 通过。
+- [ ] 浏览器三段式冒烟（待用户确认）：编辑器六个区域（时间线/预览/检查器/素材库/字幕/转写/导出）逐区域可见可操作；拖拽/裁剪/撤销重做回归；SRT 导入导出往返；mock 转写落轨；导出面板显示渲染计划。
+
+## 编辑器 UI 打磨（主题/布局/导入媒体）
+
+- [x] 主题联动修复：globals.css `.dark` 块未闭合导致 `.editor-workbench` 规则被 CSS 嵌套吞并、浅暗主题三栏配色反转；补齐花括号后编译产物恢复顶层两规则，director token 明暗两主题齐备。
+- [x] 播放条修复：预览卡与时间线卡容器补 `flex flex-col`，恢复 absolute 播放条的高度链。
+- [x] 时间线右端截断修复：内容宽度改为 `trackWidth + 标签列(160px)`，标尺左列占位与轨道标签列改为 sticky（`left-0` + 不透明底），滚动到最右端时末端片段完整可见；容器宽度监听改用 ResizeObserver。
+- [x] 顶部栏图标化：删除「剪辑工作台」标题 + Film 图标 + 分隔线等死图标；导出按钮改为纯图标（aria-label/title 保留）。
+- [x] 媒体导入失败修复：`linkProjectAsset` 原来只认 assets 表记录，而上传只落 resources 表，导入必然 404。后端 `LinkProjectAsset` 在资产不存在时按资源元数据（storageKey/mimeType/kind/宽高/时长/状态）合成资产记录并幂等补齐（`UpsertAsset`），`Title` 透传原始文件名；资源与资产都不存在时仍 fail-closed。前端导入调用补传 `title: file.name`。
+- [x] 后端新增 `TestLinkProjectAssetCreatesAssetFromUploadedResource` 与 `TestLinkProjectAssetMissingResourceKeepsFailingClosed` 专项测试；前端 typecheck、生产构建、后端全量测试通过。
+- [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
+- [x] 对象存储上传降级：OSS 上传失败（密钥失效、配置错误、网络故障、设置被删）自动回退本地存储并同步改写资源记录，本地媒体导入不再因外部存储故障整体失败；覆盖新上传与重试两条路径。专项测试 2 个（OSS 不可用降级成功 + 本地路径不受他人 OSS 设置影响），后端全量测试通过。
+- [ ] 用户浏览器 re-test（对象存储降级）：重新启动后端后再次导入视频，应显示成功且素材出现在媒体面板；资源走本地存储（`provider=local`）。
+- [x] 编辑器 UI 打磨（第 36 条 5 项）：① 时间线/监视器分隔条拖拽方向反转（上拖=时间线变大）；② 导出按钮图标去蓝（灰白描边风格），媒体面板来源徽章去蓝，轨道类型徽章保留语义色；③ 时间线 pxPerMs 独立化（不再随时长漂移），末片段向右拖轨道随内容等比扩展不再被钉住（新增守护测试 3 例）；④ 监视器控制条重做为 Concat 风格：回到开头/退 1s/播放/进 1s/到结尾五键传输组 + 播放速度展开菜单（0.5x/1x/1.5x/2x）+ 进度条，全部灰白描边；⑤ 检查器重做为 Concat 风格：分组小标题（片段/基本/转场）+ 紧凑控件 + sunken 滑块（新增 .editor-slider），全部使用 director token 随主题联动。
+- [ ] 用户浏览器 re-test（第 36 条）：上拖分隔条时间线变大；导出按钮与监视器控制条图标均为灰白描边风格；时间线末片段可正常向右拖拽且轨道随内容扩展；监视器速度菜单展开选择生效；检查器分组与滑块在明暗两主题下配色一致（无主题不同步）。
+- [x] 媒体面板改版：资产按来源分组（「本地上传」/「项目素材」），顶部提供 全部/项目素材/本地上传 筛选 Tab；分组头可折叠、资产行可展开查看详情（类型/分类/来源/预览文本）并一键添加到时间线；每项带来源徽章与计数徽章。后端 `projectAssetSummary` 透出 `source`（上传链路写入 `uploaded`），前端 `ProjectAsset` 类型补 `source?: string`，仅展示层使用，后端读取不再查询本地存储。
+- [x] 时间线横跨编辑面板全宽：时间线卡从内容区独立出来，与左栏+预览+右栏同处编辑面板，横跨从左到右全宽（含拖拽高度分隔条）；左栏收窄到 256px、右栏 320px，为全宽时间线腾出空间。
+- [x] 主题明暗一致性：媒体面板分组/筛选/徽章/展开详情全部使用 director token（surface/control-hover/dock-fg/sequencer-border），无新增硬编码色值；后端 `source` 字段不参与任何配色。前端 typecheck、生产构建、后端全量测试通过。
+- [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
+
 ## 画布导入同步、素材回收站与历史
 
 - [x] 画布压缩包导入会先校验媒体完整性，并统一通过远端同步入口上传资源；失败时保持脏状态和自动重试，不再把浏览器本地 storage key 误报为已同步。

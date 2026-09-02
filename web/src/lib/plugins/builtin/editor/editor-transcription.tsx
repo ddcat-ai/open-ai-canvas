@@ -50,26 +50,22 @@ export function EditorTranscription() {
     };
 
     return (
-        <div className="flex h-full flex-col bg-[var(--workspace-surface)]">
-            <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/60 px-3">
-                <span className="text-xs font-medium text-foreground/75">转写</span>
-                <span className="rounded-full bg-foreground/8 px-1.5 py-0.5 text-[10px] text-foreground/50">M4 接入</span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="flex h-full flex-col bg-[var(--director-sequencer-surface)]">
+            <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-3">
                 {audioAssets.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
-                        <AudioLines className="size-5 text-foreground/30" />
-                        <p className="text-xs text-foreground/45">项目暂无音频素材</p>
-                        <p className="max-w-[200px] text-[11px] leading-relaxed text-foreground/35">素材库加入音频后可转写自动字幕</p>
+                        <AudioLines className="size-5 text-[var(--director-dock-fg)]/40" />
+                        <p className="text-xs text-[var(--director-dock-fg)]/60">项目暂无音频素材</p>
+                        <p className="max-w-[200px] text-[11px] leading-relaxed text-[var(--director-dock-fg)]/45">素材库加入音频后可转写自动字幕</p>
                     </div>
                 ) : (
                     <>
                         <label className="mb-2 block">
-                            <span className="mb-1 block text-[11px] text-foreground/55">音频素材</span>
+                            <span className="mb-1 block text-[11px] text-[var(--director-dock-fg)]/70">音频素材</span>
                             <select
                                 value={selectedId ?? ""}
                                 onChange={(e) => setSelectedId(e.target.value)}
-                                className="w-full rounded-md border border-border/60 bg-foreground/3 px-2 py-1.5 text-xs text-foreground/85 outline-none focus:border-[var(--workspace-accent)]/60"
+                                className="w-full rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] px-2 py-1.5 text-xs text-[var(--director-dock-fg-strong)] outline-none focus:border-[var(--workspace-accent)]/60 [&>option]:bg-[var(--director-sequencer-surface-raised)] [&>option]:text-[var(--director-dock-fg-strong)]"
                             >
                                 {audioAssets.map((a) => (
                                     <option key={a.id} value={a.id}>
@@ -83,16 +79,16 @@ export function EditorTranscription() {
                             type="button"
                             onClick={transcribe}
                             disabled={!selected || running}
-                            className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--workspace-accent)] px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                            className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--director-accent)] px-2 py-1.5 text-xs font-medium text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)] disabled:opacity-40"
                         >
                             {running && <Loader2 className="size-3.5 animate-spin" />}
                             {running ? "转写中…" : "转写自动字幕"}
                         </button>
 
-                        <p className="mt-2 text-[11px] leading-relaxed text-foreground/40">
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
                             M3.6 为确定性 mock 转写；M4 接后端任务客户端（whisper.cpp / 云 ASR）后替换来源，结果同样写入字幕轨道。
                         </p>
-                        {message && <p className="mt-2 text-[11px] text-foreground/50">{message}</p>}
+                        {message && <p className="mt-2 text-[11px] text-[var(--director-dock-fg)]/70">{message}</p>}
                     </>
                 )}
             </div>

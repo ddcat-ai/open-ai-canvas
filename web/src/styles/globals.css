@@ -473,6 +473,18 @@
     --director-control-hover: rgba(255, 255, 255, 0.09);
     --director-swatch-inset: rgba(0, 0, 0, 0.18);
 
+    /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
+    --director-workspace-bg: #0b0d0f;
+    --director-accent: #4f8cff;
+    --director-accent-hover: #6ba0ff;
+    --director-on-accent: #ffffff;
+    --director-success: #34d399;
+    --director-warning: #fbbf24;
+    --director-danger: #f87171;
+    --director-success-soft: rgba(52, 211, 153, 0.14);
+    --director-warning-soft: rgba(251, 191, 36, 0.14);
+    --director-danger-soft: rgba(248, 113, 113, 0.14);
+
     /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
     --cn-type-image: var(--palette-node-image);
     --cn-type-video: var(--palette-node-video);
@@ -611,6 +623,60 @@
     --director-dock-active-surface: rgba(255, 255, 255, 0.14);
     --director-control-hover: rgba(255, 255, 255, 0.09);
     --director-swatch-inset: rgba(0, 0, 0, 0.18);
+
+    /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
+    --director-workspace-bg: #0b0d0f;
+    --director-accent: #4f8cff;
+    --director-accent-hover: #6ba0ff;
+    --director-on-accent: #ffffff;
+    --director-success: #34d399;
+    --director-warning: #fbbf24;
+    --director-danger: #f87171;
+    --director-success-soft: rgba(52, 211, 153, 0.14);
+    --director-warning-soft: rgba(251, 191, 36, 0.14);
+    --director-danger-soft: rgba(248, 113, 113, 0.14);
+}
+
+
+/* 剪辑工作台：跟随明暗主题的表面（作用域覆盖 director 常暗 token；canvas 导演工作台全局值不受影响）*/
+.editor-workbench {
+    --director-sequencer-surface: #fbfcfe;
+    --director-sequencer-surface-raised: #f1f4f7;
+    --director-sequencer-border: rgba(15, 23, 42, 0.12);
+    --director-sequencer-muted: rgba(15, 23, 42, 0.5);
+    --director-sequencer-grid: rgba(15, 23, 42, 0.07);
+    --director-dock-surface: rgba(255, 255, 255, 0.96);
+    --director-dock-fg: rgba(15, 23, 42, 0.62);
+    --director-dock-fg-strong: rgba(15, 23, 42, 0.94);
+    --director-dock-active-surface: rgba(15, 23, 42, 0.12);
+    --director-control-hover: rgba(15, 23, 42, 0.06);
+    --director-swatch-inset: rgba(0, 0, 0, 0.12);
+    --director-workspace-bg: #e9edf2;
+}
+.dark .editor-workbench {
+    --director-sequencer-surface: #111315;
+    --director-sequencer-surface-raised: #191c1f;
+    --director-sequencer-border: rgba(255, 255, 255, 0.11);
+    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --director-dock-surface: rgba(17, 19, 21, 0.92);
+    --director-dock-fg: rgba(255, 255, 255, 0.62);
+    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --director-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --director-control-hover: rgba(255, 255, 255, 0.09);
+    --director-swatch-inset: rgba(0, 0, 0, 0.18);
+    --director-workspace-bg: #0b0d0f;
+}
+
+/* 全屏编辑：workbench 全屏时铺满视口（背景沿用工作区底色） */
+.editor-workbench:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background: var(--director-workspace-bg);
+}
+
+
+.dark {
 
     /* --- Shadow dark 覆盖（暗色下黑影不可见，改用白色微影制造抬升感，审计 D4/P2-D2）---
        组件 token（--node-shadow/--dock-shadow/--panel-shadow/--modal-shadow）均引用
@@ -16453,4 +16519,77 @@ html:not(.dark) .creation-home .creation-user-message { background: transparent;
     .creation-home .creation-media-result { padding-left: 0; }
     .creation-home .creation-media-pending { width: min(var(--creation-media-pending-max-width), 100%); margin-left: 0; }
     .creation-home .creation-media-error { width: 100%; margin-left: 0; }
+}
+
+/* --- 编辑器工作台细滚动条（Concat thin-scroll 参照：8px 细轨 + 圆角滑块，明暗面板通用）--- */
+.director-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.director-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.director-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.director-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+.director-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+}
+.director-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* --- 编辑器 sunken 滑块（Concat 参照：凹陷轨道 + 圆点滑块，跟随主题 token）--- */
+.editor-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 18px;
+    background: transparent;
+    cursor: pointer;
+}
+.editor-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--director-sequencer-border);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.editor-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -5px;
+    height: 14px;
+    width: 14px;
+    border-radius: 9999px;
+    background: var(--director-dock-fg-strong);
+    border: 2px solid var(--director-sequencer-surface);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+    transition: transform 0.12s ease;
+}
+.editor-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+.editor-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--director-sequencer-border);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.editor-slider::-moz-range-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 9999px;
+    background: var(--director-dock-fg-strong);
+    border: 2px solid var(--director-sequencer-surface);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
 }

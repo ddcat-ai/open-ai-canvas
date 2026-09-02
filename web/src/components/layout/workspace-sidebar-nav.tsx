@@ -45,7 +45,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
         {
             items: [
                 { id: "home", title: "首页", icon: Home, to: "/" },
-                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
+toolItem("projects", "/projects"),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
                 toolItem("assets", "/assets"),

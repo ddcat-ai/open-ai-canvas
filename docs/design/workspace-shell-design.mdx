@@ -44,7 +44,7 @@
 1. **工作区切换器** `WorkspaceSwitcher`：品牌 mark（`size-8`、`--r-sm` 圆角、`InfinityIcon`）+「影策」wordmark + 副标题「创作工作台」（`--fs-label`、42% 灰）→ 点击展开切换浮层 `.app-workspace-nav-popover`（无阴影，1px 边框 + 实底背景）。
 2. **快速搜索**：`h-9`、`--r-lg` 圆角、`bg-foreground/5` 浅底；占位文字与 `Search` 图标均为 `text-muted-foreground`（语义占位色）；hover 加深至 `bg-foreground/[.07]` + 70%；右侧常驻 `⌘K` kbd 提示（复用导航项 kbd 合同）；点击打开命令面板。
 3. **分组导航区** `.app-workspace-sidebar-scroll-area`（`flex-1` 滚动，滚动条隐藏）：
-   - 无标题分组（首页/创作/画布…核心入口）**常驻展示，不折叠**。
+   - 无标题分组（首页 / 短剧创作 / 画布 / 任务中心 / 资产…核心入口）**常驻展示，不折叠**；「短剧创作」入口（`/projects`）**常驻**（不随 `shortDramaEnabled` 隐藏，该开关仅作部署级兜底：关闭时由 `RequireFeature` 提示「暂未开放」而非隐藏入口）；「任务中心」等按功能开关条件渲染（`workspace-sidebar-nav.tsx` `buildNav`）。
    - 有标题分组渲染为 `NavGroup`（见 §2.3）。
 4. **Footer**（设置分区 + 退出登录）：无分隔线（见 §2.5）。
 

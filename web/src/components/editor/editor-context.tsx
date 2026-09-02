@@ -15,6 +15,8 @@ export type EditorHostContextValue = {
     projectId: string;
     /** 项目资产列表（M3.4 asset-ingest 消费；由宿主在进入编辑器时获取）。 */
     assets: ProjectAsset[];
+    /** 重新拉取项目资产（导入媒体后刷新列表）。 */
+    refreshAssets: () => Promise<void>;
 };
 
 const EditorStoreContext = createContext<EditorStoreHook | null>(null);

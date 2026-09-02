@@ -2,15 +2,16 @@
 // 渲染链路：store.project（当前命令状态）→ 轨道/片段绝对定位 → 拖拽手势
 // （moveClip / trimClip）经 previewGesture 逐帧预览、commitGesture 一次性入历史。
 // 手势数学与渲染同源（同一 pxPerMs），保证拖拽所见即所得。
+// 撤销/重做与保存状态移入宿主顶栏（Concat 主菜单区），本面板保留缩放与片段统计。
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Redo2, Scissors, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Film, Music2, Scissors, Subtitles, ZoomIn, ZoomOut } from "lucide-react";
 
 import { useEditorStoreContext } from "@/components/editor/editor-context";
 import {
     formatTimelineTime,
     getRulerTickStep,
-    getTimelineTrackWidth,
+    getTimelinePxPerMs,
     getTimelineVisualEndMs,
     zoomIn,
     zoomOut,
@@ -21,6 +22,9 @@ import type { TimelineClip, TimelineProject, TimelineTrack } from "@/types/timel
 const MIN_VISUAL_END_MS = 1_000;
 const SNAP_MS = 10;
 const TRIM_HANDLE_PX = 8;
+// 轨道标签列宽度（w-40）。时间线内容宽度必须补上该列，否则片段区 flex-1 只到
+// trackWidth - 160，末端片段被 overflow-hidden 裁掉且无法滚动到达。
+const LABEL_COLUMN_PX = 160;
 
 type GestureMode = "move" | "trim-start" | "trim-end" | null;
 
@@ -38,7 +42,7 @@ function snapMs(deltaMs: number): number {
 }
 
 export function EditorTimelinePanel() {
-    const { project, history, isDirty, saving, saveError, undo, redo, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip } =
+    const { project, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip } =
         useEditorStoreContext();
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -47,89 +51,65 @@ export function EditorTimelinePanel() {
 
     useEffect(() => {
         const el = containerRef.current;
-        if (el) setViewportWidth(el.clientWidth);
+        if (!el) return;
+        setViewportWidth(el.clientWidth);
+        const observer = new ResizeObserver((entries) => {
+            const width = entries[0]?.contentRect.width;
+            if (width) setViewportWidth(width);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
     }, []);
 
-    if (!project) return <div className="flex h-full items-center justify-center text-sm text-foreground/45">时间线未加载</div>;
+    if (!project) return <div className="flex h-full items-center justify-center text-sm text-[var(--director-dock-fg)]">时间线未加载</div>;
 
     const visualEndMs = Math.max(MIN_VISUAL_END_MS, getTimelineVisualEndMs(project.clips));
-    const trackWidth = getTimelineTrackWidth(visualEndMs, zoomLevel, viewportWidth);
-    const pxPerMs = trackWidth / visualEndMs;
+    // 像素/毫秒由缩放级别独立决定（不随时长漂移）：拖动片段时轨道随内容等比扩展，
+    // 手势映射与渲染同源，末片段向右拖不再被旧实现（trackWidth 随时长阶梯跳变）钉住。
+    const pxPerMs = getTimelinePxPerMs(zoomLevel);
+    const trackWidth = Math.max(viewportWidth, Math.ceil(visualEndMs * pxPerMs));
+    // 内容宽度 = 逻辑轨道宽度 + 标签列；标签列 sticky 固定后，滚动到最右端时
+    // 末端片段仍完整可见（flex-1 片段区 = 内容宽度 - 标签列 ≥ 轨道宽度）。
+    const contentWidth = Math.max(viewportWidth, trackWidth + LABEL_COLUMN_PX);
 
     const visualTracks = getVisualTracks(project.tracks);
     const audioTracks = getAudioTracks(project.tracks);
     const subtitleTracks = getSubtitleTracks(project.tracks);
 
-    const canUndo = (history?.undoStack.length ?? 0) > 0;
-    const canRedo = (history?.redoStack.length ?? 0) > 0;
-
     return (
-        <div className="flex h-full min-h-0 flex-col bg-[var(--workspace-surface)]">
-            {/* 工具条 */}
-            <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-3">
-                <button
-                    type="button"
-                    aria-label="撤销"
-                    title="撤销（Cmd/Ctrl+Z）"
-                    onClick={undo}
-                    disabled={!canUndo}
-                    className="grid size-7 place-items-center rounded-md text-foreground/70 hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-35"
-                >
-                    <Undo2 className="size-4" />
-                </button>
-                <button
-                    type="button"
-                    aria-label="重做"
-                    title="重做（Cmd/Ctrl+Shift+Z）"
-                    onClick={redo}
-                    disabled={!canRedo}
-                    className="grid size-7 place-items-center rounded-md text-foreground/70 hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-35"
-                >
-                    <Redo2 className="size-4" />
-                </button>
-                <div className="mx-1 h-4 w-px bg-border/60" />
+        <div className="flex h-full min-h-0 flex-col bg-[var(--director-sequencer-surface)]">
+            {/* 工具条：缩放 + 片段统计（撤销/重做在宿主顶栏） */}
+            <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
                 <button
                     type="button"
                     aria-label="缩小时间线"
                     onClick={() => setZoomLevel((z) => zoomOut(z))}
-                    className="grid size-7 place-items-center rounded-md text-foreground/70 hover:bg-foreground/8"
+                    className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
                 >
                     <ZoomOut className="size-4" />
                 </button>
-                <span className="w-10 text-center text-xs tabular-nums text-foreground/50">{Math.round(zoomLevel * 100)}%</span>
+                <span className="w-10 text-center text-xs tabular-nums text-[var(--director-dock-fg)]">{Math.round(zoomLevel * 100)}%</span>
                 <button
                     type="button"
                     aria-label="放大时间线"
                     onClick={() => setZoomLevel((z) => zoomIn(z))}
-                    className="grid size-7 place-items-center rounded-md text-foreground/70 hover:bg-foreground/8"
+                    className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
                 >
                     <ZoomIn className="size-4" />
                 </button>
                 <div className="flex-1" />
-                {saveError ? (
-                    <span className="flex items-center gap-1 text-xs text-[var(--danger)]" title={saveError}>
-                        保存失败
-                    </span>
-                ) : saving ? (
-                    <span className="flex items-center gap-1 text-xs text-foreground/50">
-                        <Loader2 className="size-3 animate-spin" /> 保存中…
-                    </span>
-                ) : isDirty ? (
-                    <span className="text-xs text-foreground/50">未保存</span>
-                ) : (
-                    <span className="text-xs text-foreground/40">已保存</span>
-                )}
+                <span className="text-xs tabular-nums text-[var(--director-dock-fg)]">片段 {project.clips.length}</span>
             </div>
 
             {/* 时间线主体 */}
-            <div ref={containerRef} className="min-h-0 flex-1 overflow-auto" data-canvas-no-zoom>
+            <div ref={containerRef} className="director-scroll min-h-0 flex-1 overflow-auto bg-[var(--director-sequencer-surface)]" data-canvas-no-zoom>
                 {project.clips.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-foreground/45">
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--director-dock-fg)]">
                         <Scissors className="size-8" />
                         <p className="text-sm">时间线暂无片段，从素材库拖入或后续接入画布节点</p>
                     </div>
                 ) : (
-                    <div className="min-w-full" style={{ width: trackWidth }}>
+                    <div className="min-w-full" style={{ width: contentWidth }}>
                         <TimelineRuler pxPerMs={pxPerMs} endMs={visualEndMs} />
                         {[
                             { label: "视觉轨道", tracks: visualTracks },
@@ -166,13 +146,17 @@ function TimelineRuler({ pxPerMs, endMs }: { pxPerMs: number; endMs: number }) {
     const ticks: number[] = [];
     for (let t = 0; t <= endMs; t += step) ticks.push(t);
     return (
-        <div className="sticky top-0 z-10 flex h-6 shrink-0 items-end border-b border-border/60 bg-[var(--workspace-surface)] px-2" style={{ width: endMs * pxPerMs }}>
-            {ticks.map((t) => (
-                <div key={t} className="relative" style={{ left: t * pxPerMs - 1 }}>
-                    <div className="h-2 w-px bg-foreground/25" />
-                    <span className="absolute left-1 top-2.5 whitespace-nowrap text-[10px] tabular-nums text-foreground/45">{formatTimelineTime(t)}</span>
-                </div>
-            ))}
+        <div className="sticky top-0 z-10 flex h-6 shrink-0 w-full items-end border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)]">
+            {/* 左列占位与 TrackRow 轨道标签列（w-40）同宽，sticky 跟随横向滚动，保证 0ms 刻度与片段区起点对齐 */}
+            <div className="sticky left-0 z-10 w-40 shrink-0 self-stretch border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)]" />
+            <div className="relative h-full flex-1">
+                {ticks.map((t) => (
+                    <div key={t} className="absolute bottom-0" style={{ left: t * pxPerMs - 1 }}>
+                        <div className="h-2 w-px bg-[var(--director-sequencer-muted)]" />
+                        <span className="absolute bottom-2.5 left-1 whitespace-nowrap text-[10px] tabular-nums text-[var(--director-dock-fg)]">{formatTimelineTime(t)}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
@@ -198,16 +182,16 @@ function TrackRow({
 }) {
     const clips = project.clips.filter((c) => c.trackId === track.id);
     return (
-        <div className="flex h-16 border-b border-border/40">
-            <div className="flex w-36 shrink-0 items-center gap-2 border-r border-border/40 bg-foreground/3 px-3">
+        <div className="flex h-16 border-b border-[var(--director-sequencer-border)]">
+            <div className="sticky left-0 z-10 flex w-40 shrink-0 items-center gap-2 border-r border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
                 <TrackBadge kind={track.kind} />
                 <div className="min-w-0">
-                    <div className="truncate text-xs font-medium text-foreground/80">{track.label}</div>
-                    <div className="text-[10px] text-foreground/40">{clips.length} 个片段</div>
+                    <div className="truncate text-xs font-medium text-[var(--director-dock-fg-strong)]">{track.label}</div>
+                    <div className="text-[10px] text-[var(--director-dock-fg)]">{clips.length} 个片段</div>
                 </div>
             </div>
             <div
-                className="relative flex-1 overflow-hidden bg-foreground/2"
+                className="relative flex-1 overflow-hidden bg-[var(--director-sequencer-grid)]"
                 onPointerDown={(e) => {
                     if (e.target === e.currentTarget) onSelectClip(null);
                 }}
@@ -230,13 +214,17 @@ function TrackRow({
 }
 
 function TrackBadge({ kind }: { kind: TimelineTrack["kind"] }) {
-    const color =
+    const cls =
         kind === "video" || kind === "image"
-            ? "bg-[var(--workspace-accent)]/80"
+            ? "text-[var(--director-dock-fg)]"
             : kind === "audio"
-              ? "bg-[var(--success)]/80"
-              : "bg-[var(--warning)]/80";
-    return <div className={`size-2.5 shrink-0 rounded-sm ${color}`} title={kind} />;
+              ? "text-[var(--director-success)]"
+              : "text-[var(--director-warning)]";
+    return (
+        <div className={`grid size-6 shrink-0 place-items-center rounded-md bg-[var(--director-dock-active-surface)] ${cls}`} title={kind}>
+            {kind === "subtitle" ? <Subtitles className="size-3.5" /> : kind === "audio" ? <Music2 className="size-3.5" /> : <Film className="size-3.5" />}
+        </div>
+    );
 }
 
 function ClipItem({
@@ -322,12 +310,12 @@ function ClipItem({
         <div
             className={`group absolute top-1.5 bottom-1.5 select-none rounded-md border text-xs shadow-sm ${
                 selected
-                    ? "border-[var(--workspace-accent)] ring-1 ring-[var(--workspace-accent)]/60 bg-[var(--workspace-accent)]/25 text-foreground"
+                    ? "border-[var(--director-accent)] ring-1 ring-[var(--director-accent)]/60 bg-[var(--director-accent)]/25 text-[var(--director-dock-fg-strong)]"
                     : isSubtitle
-                      ? "border-[var(--warning)]/40 bg-[var(--warning)]/15 text-[var(--warning)]"
+                      ? "border-[var(--director-warning)]/40 bg-[var(--director-warning)]/15 text-[var(--director-warning)]"
                       : isAudio
-                        ? "border-[var(--success)]/40 bg-[var(--success)]/15 text-[var(--success)]"
-                        : "border-[var(--workspace-accent)]/40 bg-[var(--workspace-accent)]/12 text-foreground/85"
+                        ? "border-[var(--director-success)]/40 bg-[var(--director-success)]/15 text-[var(--director-success)]"
+                        : "border-[var(--director-sequencer-border)] bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
             }`}
             style={{ left, width, touchAction: "none" }}
             title={`${label} · ${formatTimelineTime(clip.startMs)} +${formatTimelineTime(clip.durationMs)}`}

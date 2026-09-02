@@ -64,49 +64,45 @@ export function EditorExport() {
     if (!project) return null;
 
     return (
-        <div className="flex h-full flex-col bg-[var(--workspace-surface)]">
-            <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/60 px-3">
-                <span className="text-xs font-medium text-foreground/75">导出</span>
-                <span className="rounded-full bg-foreground/8 px-1.5 py-0.5 text-[10px] text-foreground/50">M4 后端任务</span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="mb-3 rounded-md border border-border/60 bg-foreground/3 p-2.5">
+        <div className="flex h-full flex-col bg-[var(--director-sequencer-surface)]">
+            <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="mb-3 rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground/85">渲染计划</span>
-                        <span className="text-[10px] text-foreground/40">{plan ? `${plan.steps.length} 步` : "—"}</span>
+                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">渲染计划</span>
+                        <span className="text-[10px] text-[var(--director-dock-fg)]/60">{plan ? `${plan.steps.length} 步` : "—"}</span>
                     </div>
                     {plan && plan.steps.length > 0 ? (
                         <ul className="mt-2 space-y-1">
                             {plan.steps.slice(0, 8).map((step, index) => (
-                                <li key={index} className="flex items-center gap-2 text-[11px] text-foreground/60">
-                                    <span className="shrink-0 rounded bg-foreground/8 px-1 py-0.5 font-mono text-[9px] uppercase text-foreground/45">
+                                <li key={index} className="flex items-center gap-2 text-[11px] text-[var(--director-dock-fg)]/70">
+                                    <span className="shrink-0 rounded bg-[var(--director-dock-active-surface)] px-1 py-0.5 font-mono text-[9px] uppercase text-[var(--director-dock-fg)]/80">
                                         {step.kind}
                                     </span>
                                     <span className="truncate">{step.description}</span>
                                 </li>
                             ))}
                             {plan.steps.length > 8 && (
-                                <li className="pt-0.5 text-[10px] text-foreground/35">…共 {plan.steps.length} 步</li>
+                                <li className="pt-0.5 text-[10px] text-[var(--director-dock-fg)]/50">…共 {plan.steps.length} 步</li>
                             )}
                         </ul>
                     ) : (
-                        <p className="mt-2 text-[11px] text-foreground/40">时间线没有可渲染的视频片段。</p>
+                        <p className="mt-2 text-[11px] text-[var(--director-dock-fg)]/55">时间线没有可渲染的视频片段。</p>
                     )}
                 </div>
 
-                <div className="mb-3 flex items-center justify-between rounded-md border border-border/60 bg-foreground/3 px-2.5 py-2 text-[11px] text-foreground/55">
+                <div className="mb-3 flex items-center justify-between rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] px-2.5 py-2 text-[11px] text-[var(--director-dock-fg)]/70">
                     <span className="flex items-center gap-1.5">
-                        <PackageOpen className="size-3.5 text-foreground/40" />
+                        <PackageOpen className="size-3.5 text-[var(--director-dock-fg)]/60" />
                         渲染源
                     </span>
-                    <span className="tabular-nums text-foreground/70">{sources.length} 个</span>
+                    <span className="tabular-nums text-[var(--director-dock-fg)]/80">{sources.length} 个</span>
                 </div>
 
                 <button
                     type="button"
                     onClick={exportMp4}
                     disabled={sources.length === 0 || state.phase === "running"}
-                    className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--workspace-accent)] px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                    className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--director-accent)] px-2 py-1.5 text-xs font-medium text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)] disabled:opacity-40"
                 >
                     {state.phase === "running" ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -118,27 +114,27 @@ export function EditorExport() {
 
                 {state.phase === "running" && (
                     <div className="mt-3">
-                        <div className="mb-1 flex justify-between text-[10px] text-foreground/50">
+                        <div className="mb-1 flex justify-between text-[10px] text-[var(--director-dock-fg)]/70">
                             <span>{state.detail}</span>
                             <span className="tabular-nums">{state.percent}%</span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-foreground/8">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--director-control-hover)]">
                             <div
-                                className="h-full rounded-full bg-[var(--workspace-accent)] transition-all"
+                                className="h-full rounded-full bg-[var(--director-accent)] transition-all"
                                 style={{ width: `${state.percent}%` }}
                             />
                         </div>
                     </div>
                 )}
 
-                {state.phase === "done" && <p className="mt-2 text-[11px] text-[var(--workspace-accent)]">{state.detail}</p>}
-                {state.phase === "error" && <p className="mt-2 text-[11px] text-red-500">{state.detail}</p>}
+                {state.phase === "done" && <p className="mt-2 text-[11px] text-[var(--director-success)]">{state.detail}</p>}
+                {state.phase === "error" && <p className="mt-2 text-[11px] text-[var(--director-danger)]">{state.detail}</p>}
 
-                <p className="mt-3 text-[11px] leading-relaxed text-foreground/40">
+                <p className="mt-3 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
                     M3.7 使用 ffmpeg.wasm 本地降级导出；M4 接入后端渲染任务（异步任务客户端）后，同一渲染计划提交远端执行。
                 </p>
                 {sources.length === 0 && (
-                    <p className="mt-1 text-[11px] text-foreground/40">悬空引用片段（节点已删除）按计划跳过，不影响其余片段导出。</p>
+                    <p className="mt-1 text-[11px] text-[var(--director-dock-fg)]/55">悬空引用片段（节点已删除）按计划跳过，不影响其余片段导出。</p>
                 )}
             </div>
         </div>

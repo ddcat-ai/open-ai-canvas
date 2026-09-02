@@ -16,6 +16,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -492,12 +493,7 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, false, err
 	}
 	var etag string
-	if provider == "local" {
-		filePath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(objectKey))
-		err = writeLocalResourceObject(filePath, body)
-	} else {
-		etag, err = putOSSObject(setting, objectKey, mimeType, size, body)
-	}
+	etag, err = s.storeResourceObject(&resource, fileName, body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		resource.Status = model.ResourceStatusFailed
@@ -546,6 +542,48 @@ func writeLocalResourceObject(filePath string, body io.Reader) error {
 	return closeErr
 }
 
+// storeResourceObject 写入资源物理对象。对象存储不可用（配置错误、密钥失效、网络
+// 故障、设置被删）时自动降级为本地存储并同步改写资源记录，保证上传写路径不因外部
+// 存储故障整体失败。对象存储失败后 body 会被重新读取，须支持 Seek。
+func (s *Service) storeResourceObject(resource *model.Resource, fileName string, body io.Reader) (string, error) {
+	if resource == nil {
+		return "", errors.New("资源不存在")
+	}
+	if resource.Provider == "local" {
+		return "", writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)), body)
+	}
+	setting, settingErr := s.ossSettingForResource(resource.UserID, resource)
+	var etag string
+	var putErr error
+	if settingErr == nil {
+		etag, putErr = putOSSObject(setting, resource.ObjectKey, resource.MimeType, resource.Size, body)
+	}
+	if putErr == nil && settingErr == nil {
+		return etag, nil
+	}
+	fallbackErr := putErr
+	if fallbackErr == nil {
+		fallbackErr = settingErr
+	}
+	if seeker, ok := body.(io.Seeker); ok {
+		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
+			return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储时重置读取位置失败：%w", seekErr))
+		}
+	}
+	localKey := localObjectKey(resource.UserID, resource.Kind, fileName, resource.MimeType, time.Now())
+	resource.Provider = "local"
+	resource.ObjectKey = localKey
+	resource.Endpoint = ""
+	resource.Bucket = ""
+	resource.StorageSettingID = ""
+	resource.ETag = ""
+	if localErr := writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(localKey)), body); localErr != nil {
+		return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储失败：%w", localErr))
+	}
+	log.Printf("object storage upload degraded to local storage: resource=%s error=%v", resource.ID, fallbackErr)
+	return "", nil
+}
+
 func (s *Service) retryStoredResource(userID string, resource *model.Resource, kind string, mimeType string, size int64, body io.Reader) (*model.Resource, error) {
 	if resource == nil {
 		return nil, errors.New("资源不存在")
@@ -585,15 +623,7 @@ func (s *Service) retryStoredResource(userID string, resource *model.Resource, k
 		return nil, err
 	}
 	var etag string
-	if resource.Provider == "local" {
-		err = writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)), body)
-	} else {
-		var setting ossSettingValue
-		setting, err = s.ossSettingForResource(userID, resource)
-		if err == nil {
-			etag, err = putOSSObject(setting, resource.ObjectKey, resource.MimeType, resource.Size, body)
-		}
-	}
+	etag, err = s.storeResourceObject(resource, "", body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		s.releaseRetryUploadQuota(userID, day, size)

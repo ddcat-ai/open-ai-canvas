@@ -4,6 +4,8 @@ node_modules/
 docs/*
 !docs/design/
 !docs/index.md
+!docs/adr/
+!docs/plans/
 .env*
 !.env.example
 data/
