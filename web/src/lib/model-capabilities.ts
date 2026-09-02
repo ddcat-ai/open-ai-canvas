@@ -341,6 +341,26 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.defaultResolution = "720P";
         video.operations.push("reference_to_video", "audio_to_video");
     }
+    // MiniMax Hailuo H3 (minimax_h3 / MiniMax-H3 / hailuo-*) only exposes
+    // 768p and 1080p (2K) tiers. When routed through a NewAPI-style relay
+    // (newapi / newapi-channel-1 / newapi-channel-2) the generic default
+    // wrongly ships 720p, which upstream rejects with "unsupported H3
+    // resolution". Pin the relay config to 768p/1080p and default to 768p so
+    // longer shots (up to 15s) stay valid; 1080p/2K caps at ~8s.
+    const normalizedModel = model.trim().toLowerCase();
+    const isHailuoH3ViaRelay = ["newapi", "newapi-channel-1", "newapi-channel-2"].includes(protocol ?? "") && /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/.test(normalizedModel);
+    if (isHailuoH3ViaRelay) {
+        video.references.maxImages = 9;
+        video.references.maxVideos = 3;
+        video.references.maxVideoDurationSeconds = 15;
+        video.references.maxVideoBytes = 200 * 1024 * 1024;
+        video.duration = { selection: "enum", values: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], default: 6 };
+        video.ratios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+        video.resolutions = ["768p", "1080p"];
+        video.defaultResolution = "768p";
+        video.generateAudio = { supported: true, default: true };
+        video.watermark = { supported: true, default: false };
+    }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 
