@@ -412,3 +412,59 @@ describe("public channel model catalog", () => {
         expect(body.resolution_name).toBe("768p竖");
     });
 });
+
+describe("video model dropdown membership via protocol fallback", () => {
+    test("includes minimax_h3 in the video list from its minimax-video protocol even with no capability tag", () => {
+        const channel = createModelChannel({
+            id: "mm",
+            name: "MiniMax",
+            baseUrl: "https://api.minimaxi.com",
+            apiKey: "synthetic-test-key",
+            apiFormat: "openai",
+            interfaceType: "minimax-video",
+            models: ["minimax_h3"],
+        });
+        // Mimic a user who added the model but never tagged an explicit capability;
+        // the self-describing minimax-video protocol must place it under video.
+        channel.modelCosts = [
+            {
+                model: "minimax_h3",
+                capability: "video" as const,
+                protocol: "minimax-video",
+                billingMode: "fixed_request",
+                unitPriceMicrocredits: 0,
+            },
+        ];
+        const config = normalizeConfigSnapshot({
+            config: { ...defaultConfig, channels: [channel], channelMode: "local" },
+        }).config;
+
+        expect(selectableModelsByCapability(config, "video")).toContain("mm::minimax_h3");
+        expect(selectableModelsByCapability(config, "text")).not.toContain("mm::minimax_h3");
+    });
+
+    test("drops minimax_h3 from the video list when its protocol is a text protocol", () => {
+        const channel = createModelChannel({
+            id: "mm",
+            name: "MiniMax",
+            baseUrl: "https://api.minimaxi.com",
+            apiKey: "synthetic-test-key",
+            apiFormat: "openai",
+            models: ["minimax_h3"],
+        });
+        channel.modelCosts = [
+            {
+                model: "minimax_h3",
+                capability: "video" as const,
+                protocol: "chat-completion",
+                billingMode: "fixed_request",
+                unitPriceMicrocredits: 0,
+            },
+        ];
+        const config = normalizeConfigSnapshot({
+            config: { ...defaultConfig, channels: [channel], channelMode: "local" },
+        }).config;
+
+        expect(selectableModelsByCapability(config, "video")).not.toContain("mm::minimax_h3");
+    });
+});
