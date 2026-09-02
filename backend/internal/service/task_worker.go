@@ -130,6 +130,12 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 		return terminal.handleAlreadyCancelled(*latest)
 	}
 
+	// 时间线转写由本地 whisper.cpp 执行，不经计费与模型渠道路由，
+	// 在进入通用生成流程前按类型分叉到独立执行器。
+	if task.Type == model.TaskTypeTimelineTranscription {
+		return w.processTimelineTranscription(task, ctx)
+	}
+
 	task.Stage = "调用生成模型"
 	task.Progress = 35
 	if taskUsesUpstreamReportedProgress(task.Type) {
@@ -231,6 +237,9 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 		return time.Duration(policy.AudioTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_text"):
 		return time.Duration(policy.TextTimeoutMinutes) * time.Minute
+	case taskType == model.TaskTypeTimelineTranscription:
+		// 本地转写受媒体时长影响，给出独立宽松超时。
+		return 20 * time.Minute
 	default:
 		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
 	}
