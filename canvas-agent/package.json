@@ -26,7 +26,7 @@
     "json-canonicalize": "2.0.0",
     "onnxruntime-node": "^1.22.0",
     "playwright-core": "^1.55.0",
-    "sharp": "^0.34.3",
+    "sharp": "^0.35.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {
