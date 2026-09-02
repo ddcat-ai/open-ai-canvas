@@ -20,6 +20,7 @@ const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pag
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
@@ -184,6 +185,7 @@ export const router = createBrowserRouter([
                     { path: "channels", element: deferred(<ChannelsPage />) },
                     { path: "models", element: <RequireFeature feature="frontendModelsEnabled">{deferred(<LogicalModelsPage />)}</RequireFeature> },
                     { path: "plugins", element: deferred(<AdminPluginsPage />) },
+                    { path: "payments", element: deferred(<AdminPaymentsPage />) },
                     { path: "prompt-templates", element: deferred(<StoryboardPromptsPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: deferred(<AnnouncementsPage />) },

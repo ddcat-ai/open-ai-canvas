@@ -55,6 +55,8 @@
 | <img src="assets/user-rou.jpg" alt="Rou" width="80"> | Rou | [rou325089@163.com](mailto:rou325089@163.com) | 上善若水 |
 | <img src="assets/user-vv.jpg" alt="vv" width="80"> | vv<br><sub>dy/xhs：荣灵</sub> | [2838033228@qq.com](mailto:2838033228@qq.com) | 就是水水 |
 | <img src="assets/user-dominic1556.jpg" alt="Dominic1556" width="80"> | Dominic1556 | [184026530@qq.com](mailto:184026530@qq.com) | Done is better than perfect |
+| <img src="assets/user-yuxi.jpg" alt="宇熙" width="80"> | 宇熙 | [53121904@qq.com](mailto:53121904@qq.com) | 年轻的时候不狂，老了拿什么回忆 |
+| <img src="assets/user-yingzi.png" alt="影子" width="80"> | 影子 | [305818148@qq.com](mailto:305818148@qq.com) | 年纪大佬才明白人要顺势而为。 |
 
 ## 交流与反馈
 

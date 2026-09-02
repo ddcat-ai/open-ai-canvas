@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -251,7 +252,18 @@ func (s *Service) InstallPlugin(data []byte, fileName string) (PluginView, error
 	if s.pluginRuntime == nil {
 		return PluginView{}, fmt.Errorf("插件运行时未初始化")
 	}
-	return s.pluginRuntime.install(data, fileName)
+	parsed, err := protocol.ParsePluginPackage(data)
+	if err != nil {
+		return PluginView{}, err
+	}
+	if err := s.ensurePaymentPluginLifecycle(parsed.Manifest); err != nil {
+		return PluginView{}, err
+	}
+	plugin, err := s.pluginRuntime.install(data, fileName)
+	if err == nil {
+		s.refreshPaymentRegistry()
+	}
+	return plugin, err
 }
 
 func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName string) (PluginView, error) {
@@ -264,6 +276,9 @@ func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName
 	}
 	if _, reserved := officialApplicationPolicies[parsed.Manifest.Metadata.ID]; reserved {
 		return PluginView{}, fmt.Errorf("插件 ID %q 由官方应用保留", parsed.Manifest.Metadata.ID)
+	}
+	if _, reserved := systemPaymentPolicies[parsed.Manifest.Metadata.ID]; reserved && !isPaymentPluginManifest(parsed.Manifest) {
+		return PluginView{}, fmt.Errorf("插件 ID %q 由系统支付插件保留", parsed.Manifest.Metadata.ID)
 	}
 	plugin, err := s.InstallPlugin(data, fileName)
 	if err != nil {
@@ -305,14 +320,90 @@ func (s *Service) SetPluginEnabled(id string, enabled bool) (PluginView, error) 
 	if s.pluginRuntime == nil {
 		return PluginView{}, fmt.Errorf("插件运行时未初始化")
 	}
-	return s.pluginRuntime.setEnabled(id, enabled)
+	plugin, err := s.pluginRuntime.setEnabled(id, enabled)
+	if err == nil {
+		s.refreshPaymentRegistry()
+	}
+	return plugin, err
 }
 
 func (s *Service) UninstallPlugin(id string) error {
 	if s.pluginRuntime == nil {
 		return fmt.Errorf("插件运行时未初始化")
 	}
-	return s.pluginRuntime.uninstall(id)
+	if err := s.ensurePaymentPluginCanBeRemoved(id); err != nil {
+		return err
+	}
+	err := s.pluginRuntime.uninstall(id)
+	if err == nil {
+		s.refreshPaymentRegistry()
+	}
+	return err
+}
+
+func (s *Service) ensurePaymentPluginLifecycle(next protocol.Manifest) error {
+	if s.repo == nil || s.pluginRuntime == nil || len(next.Contributes.PaymentProviders) == 0 {
+		return nil
+	}
+	s.pluginRuntime.mu.RLock()
+	current, exists := s.pluginRuntime.plugins[next.Metadata.ID]
+	s.pluginRuntime.mu.RUnlock()
+	if !exists {
+		return nil
+	}
+	var currentManifest protocol.Manifest
+	if err := json.Unmarshal(current.Raw, &currentManifest); err != nil {
+		return fmt.Errorf("读取现有插件 %q：%w", next.Metadata.ID, err)
+	}
+	if len(currentManifest.Contributes.PaymentProviders) == 0 || strings.TrimSpace(currentManifest.Metadata.Version) == strings.TrimSpace(next.Metadata.Version) {
+		return nil
+	}
+	count, err := s.repo.ActivePaymentOrderCountForPlugin(currentManifest.Metadata.ID, currentManifest.Metadata.Version)
+	if err != nil {
+		return fmt.Errorf("检查插件 %q 未完成订单：%w", current.Metadata.ID, err)
+	}
+	if count > 0 {
+		return fmt.Errorf("支付插件 %q 仍有 %d 个未完成订单，暂不能升级", current.Metadata.ID, count)
+	}
+	return nil
+}
+
+func (s *Service) ensurePaymentPluginCanBeRemoved(id string) error {
+	if s.repo == nil || s.pluginRuntime == nil {
+		return nil
+	}
+	s.pluginRuntime.mu.RLock()
+	record, exists := s.pluginRuntime.plugins[strings.TrimSpace(id)]
+	s.pluginRuntime.mu.RUnlock()
+	if !exists {
+		return nil
+	}
+	var manifest protocol.Manifest
+	if err := json.Unmarshal(record.Raw, &manifest); err != nil {
+		return fmt.Errorf("读取插件 %q：%w", id, err)
+	}
+	if len(manifest.Contributes.PaymentProviders) == 0 {
+		return nil
+	}
+	count, err := s.repo.ActivePaymentOrderCountForPlugin(manifest.Metadata.ID, "")
+	if err != nil {
+		return fmt.Errorf("检查插件 %q 未完成订单：%w", id, err)
+	}
+	if count > 0 {
+		return fmt.Errorf("支付插件 %q 仍有 %d 个未完成订单，暂不能卸载", id, count)
+	}
+	return nil
+}
+
+func (s *Service) refreshPaymentRegistry() {
+	if s.pluginRuntime == nil {
+		return
+	}
+	if registry := s.pluginRuntime.paymentRegistrySnapshot(); registry != nil {
+		s.registrationMu.Lock()
+		s.paymentRegistry = registry
+		s.registrationMu.Unlock()
+	}
 }
 
 func (s *Service) UninstallPluginForAdmin(actor *model.User, id string) error {

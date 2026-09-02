@@ -14,10 +14,12 @@ const (
 	PluginPortraitClearance   = "portrait-clearance"
 
 	PluginOriginOfficial = "official"
+	PluginOriginSystem   = "system"
 	PluginOriginUploaded = "uploaded"
 
 	PluginKindProtocol    = "protocol"
 	PluginKindApplication = "application"
+	PluginKindPayment     = "payment"
 
 	PluginScopeSystem = "system"
 	PluginScopeUser   = "user"
@@ -75,6 +77,17 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 	},
 }
 
+var systemPaymentPolicies = map[string]PluginManagementView{
+	PaymentPluginWeChatNative: {
+		Origin: PluginOriginSystem, Kind: PluginKindPayment,
+		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
+	},
+	PaymentPluginAlipayPage: {
+		Origin: PluginOriginSystem, Kind: PluginKindPayment,
+		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
+	},
+}
+
 func pluginManagement(pluginID string, source string) PluginManagementView {
 	if strings.TrimSpace(source) == PluginOriginUploaded {
 		return PluginManagementView{
@@ -85,6 +98,9 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 	if policy, ok := officialApplicationPolicies[strings.TrimSpace(pluginID)]; ok {
 		return policy
 	}
+	if policy, ok := systemPaymentPolicies[strings.TrimSpace(pluginID)]; ok {
+		return policy
+	}
 	return PluginManagementView{
 		Origin: PluginOriginOfficial, Kind: PluginKindProtocol,
 		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
@@ -92,9 +108,16 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 }
 
 func knownPluginIDs(items []PluginView) []string {
-	seen := make(map[string]struct{}, len(items)+len(officialApplicationPolicies))
-	ids := make([]string, 0, len(items)+len(officialApplicationPolicies))
+	seen := make(map[string]struct{}, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))
+	ids := make([]string, 0, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))
 	for id := range officialApplicationPolicies {
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for id := range systemPaymentPolicies {
+		if _, exists := seen[id]; exists {
+			continue
+		}
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
@@ -135,7 +158,7 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 	source := "bundled"
 	if hasRuntime {
 		source = runtimePlugin.Source
-	} else if _, known := officialApplicationPolicies[pluginID]; !known {
+	} else if !isKnownRuntimeOptionalPlugin(pluginID) {
 		return PluginStateView{}, fmt.Errorf("插件 %q 不存在", pluginID)
 	}
 	policy := pluginManagement(pluginID, source)
@@ -254,7 +277,7 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 	source := "bundled"
 	if hasRuntime {
 		source = runtimePlugin.Source
-	} else if _, known := officialApplicationPolicies[pluginID]; !known {
+	} else if !isKnownRuntimeOptionalPlugin(pluginID) {
 		return AdminPluginStateView{}, fmt.Errorf("插件 %q 不存在", pluginID)
 	}
 	policy := pluginManagement(pluginID, source)
@@ -286,6 +309,14 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 		return AdminPluginStateView{}, err
 	}
 	return states[pluginID], nil
+}
+
+func isKnownRuntimeOptionalPlugin(pluginID string) bool {
+	if _, known := officialApplicationPolicies[pluginID]; known {
+		return true
+	}
+	_, known := systemPaymentPolicies[pluginID]
+	return known
 }
 
 func (s *Service) RequirePluginForUser(userID string, pluginID string) error {

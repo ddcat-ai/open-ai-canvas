@@ -82,7 +82,7 @@ export default function LogsPage() {
         },
         { title: "能力", dataIndex: "capability", width: 88, render: capabilityText },
         { title: "结果", width: 118, render: (_, log) => <MediaResult log={log} onPreview={(url, kind) => setMediaPreview({ url, kind, title: `${capabilityText(log.capability)}结果` })} /> },
-        { title: "调用状态", width: 160, render: (_, log) => <CallStatus log={log} /> },
+        { title: "请求阶段 / 状态", width: 160, render: (_, log) => <CallStatus log={log} /> },
         {
             title: "错误信息",
             width: 260,
@@ -125,7 +125,7 @@ export default function LogsPage() {
     return (
         <AdminPageFrame
             title="请求明细"
-            description="上游调用与积分计费"
+            description="模型生成、状态查询与结果下载；仅计费调用扣除积分"
             actions={
                 <AdminExportButton
                     exportFile={() => exportAdminApiLogs({ keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
@@ -258,6 +258,7 @@ function formatDuration(value: number) {
 }
 
 function BillingSummary({ log }: { log: ApiCallLog }) {
+    if (!log.billable) return <span className="text-foreground/45">不计费</span>;
     if (!log.billingAvailable) return <span className="text-foreground/35">未扣积分</span>;
     const status = log.billingStatus || "reserved";
     const statusLabel = ({ settled: "已结算", refunded: "已退回", uncertain: "待核对", running: "运行中", reserved: "已预授权" } as const)[status];
@@ -308,8 +309,14 @@ function CallStatus({ log }: { log: ApiCallLog }) {
     const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
     return (
         <div>
+            <div className="mb-1 text-xs font-medium text-foreground/70">{requestKindText(log.requestKind)}</div>
             <AdminStatusBadge label={failed ? "失败" : processing ? "处理中" : "成功"} tone={failed ? "error" : processing ? "warning" : "success"} />
             {log.capability === "video" ? <div className="mt-1 text-xs tabular-nums text-foreground/45">已轮询 {log.pollCount || 0} 次</div> : null}
         </div>
     );
+}
+
+function requestKindText(value: ApiCallLog["requestKind"]) {
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", repair: "结果修复" };
+    return labels[value] || "上游请求";
 }

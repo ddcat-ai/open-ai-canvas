@@ -12,8 +12,8 @@ import {
 } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode, CanvasColorTheme, CanvasTheme } from "@/lib/canvas-theme";
 
-const LIGHT_PRESETS = ["#EDEEEE", "#F3DCE5", "#EEE5D8", "#DFE9E6"];
-const DARK_PRESETS = ["#262626", "#30272B", "#302D26", "#25302E"];
+const LIGHT_PRESETS = ["#F0F0F0", "#F3DCE5", "#EEE5D8", "#DFE9E6"];
+const DARK_PRESETS = ["#000000", "#30272B", "#302D26", "#25302E"];
 
 export function CanvasAppearanceControls({
     appearance,

@@ -13,7 +13,7 @@ import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, normalizeCanvasAppearance, resolveCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, isCanvasFolderNode, isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
@@ -93,7 +93,7 @@ export default function SharedCanvasPage() {
             setAppearance(nextAppearance);
             appliedShareTheme = canvasAppearanceBaseTheme(nextAppearance, themeBeforeShare);
             useThemeStore.getState().setTheme(appliedShareTheme);
-            setBackgroundMode(project.backgroundMode || "lines");
+            setBackgroundMode(project.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE);
             const initial = project.viewport || { x: 0, y: 0, k: 1 };
             viewportRef.current = initial;
             setViewport(initial);

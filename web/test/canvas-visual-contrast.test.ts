@@ -11,7 +11,7 @@ describe("canvas visual contrast", () => {
     });
 
     test("changes only the canvas substrate while retaining original surfaces", () => {
-        expect(canvasThemes.light.canvas.background).toBe("#edeeee");
+        expect(canvasThemes.light.canvas.background).toBe("#f0f0f0");
         expect(canvasThemes.light.node.fill).toBe("#ffffff");
         expect(canvasThemes.light.node.edge).toBe("rgba(15,23,42,.16)");
         expect(canvasThemes.light.node.shadow).toBe("0 6px 18px rgba(15,23,42,.08)");
@@ -19,7 +19,7 @@ describe("canvas visual contrast", () => {
         expect(canvasThemes.light.toolbar.panel).toBe("rgba(255,255,255,.94)");
         expect(canvasThemes.light.spatial.elevated).toBe("rgba(255,255,255,.94)");
 
-        expect(canvasThemes.dark.canvas.background).toBe("#262626");
+        expect(canvasThemes.dark.canvas.background).toBe("#000000");
         expect(canvasThemes.dark.node.fill).toBe("#181818");
         expect(canvasThemes.dark.node.edge).toBe("rgba(255,255,255,.18)");
         expect(canvasThemes.dark.node.shadow).toBe("0 8px 24px rgba(0,0,0,.34)");
@@ -30,10 +30,10 @@ describe("canvas visual contrast", () => {
     });
 
     test("pins intentional grid tokens while retaining canvas grid opacity", async () => {
-        expect(canvasThemes.light.canvas.dot).toBe("rgba(15,23,42,.20)");
-        expect(canvasThemes.light.canvas.line).toBe("rgba(15,23,42,.15)");
-        expect(canvasThemes.dark.canvas.dot).toBe("rgba(205,205,205,.28)");
-        expect(canvasThemes.dark.canvas.line).toBe("rgba(205,205,205,.28)");
+        expect(canvasThemes.light.canvas.dot).toBe("rgba(0,0,0,.80)");
+        expect(canvasThemes.light.canvas.line).toBe("rgba(0,0,0,.80)");
+        expect(canvasThemes.dark.canvas.dot).toBe("rgba(175,175,175,.80)");
+        expect(canvasThemes.dark.canvas.line).toBe("rgba(175,175,175,.80)");
 
         const source = await Bun.file(new URL("../src/components/canvas/infinite-canvas.tsx", import.meta.url)).text();
         expect(source).toContain('opacity: mode === "dots" ? 0.34 : 0.46');

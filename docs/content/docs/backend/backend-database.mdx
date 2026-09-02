@@ -85,6 +85,18 @@ description: 影策后端核心持久化表与状态边界
 - `idx_project_asset_candidates_project_unit_status`、`idx_project_asset_candidates_project_status_category`：章节候选和待确认分类队列。
 - `idx_tasks_user_project_created`：项目任务恢复读取。
 
+## 支付与插件版本
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `topup_products` | 保存服务端维护的充值商品、金额和积分快照 | 客户端只能提交商品 ID；金额和积分由 service 读取，不能由请求覆盖 |
+| `payment_provider_configs` | 保存支付插件某个渠道配置的不可变版本 | `provider_id + version` 唯一；密钥只保存加密密文；`plugin_id` / `plugin_version` 记录配置对应的插件版本 |
+| `payment_orders` | 保存充值订单、幂等键、渠道交易号和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本 |
+| `payment_notifications` | 保存已验签的支付通知收件箱 | 以渠道事件 ID 幂等；只保存用于异步入账的标准化证据，重复通知不会重复发放积分 |
+| `payment_reconciliation_runs` / `payment_reconciliation_items` | 保存渠道账单下载和对账结果 | 账单只能作为发现线索，金额、币种和交易号仍需由插件查单确认；历史订单继续绑定原插件版本 |
+
+支付宝、微信及后续聚合平台都只作为支付插件包提供 `yingce.payment/v1` 适配器，宿主数据库不保存平台专用字段。插件升级不会改写历史订单的 `plugin_version`；存在未完成订单时，原插件版本和配置必须继续可解析通知、查单和关单。
+
 ## 模型渠道与目录
 
 | 表 | 用途 | 关键边界 |

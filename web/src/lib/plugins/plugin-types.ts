@@ -31,8 +31,8 @@ export type PluginManifestV2 = Omit<PluginManifest, "apiVersion" | "contributes"
     contributes: PluginContributionsV2;
 };
 
-export type PluginContributionKind = "provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export";
-export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings";
+export type PluginContributionKind = "provider" | "payment-provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export";
+export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings" | "wallet";
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
 export type ProtocolScope = "admin.system-channel" | "user.custom-channel" | "canvas" | "creation" | "agent" | string;
 export type PluginRuntime = "declarative" | "sandbox" | "worker" | "trusted-backend";
@@ -89,6 +89,13 @@ export type PluginWorkflowContribution = {
     parameters: PluginParameter[];
     defaults?: Record<string, string | number | boolean>;
 };
+export type PluginPaymentProviderContribution = {
+    id: string;
+    label: string;
+    icon: string;
+    checkoutMode: "qr_code" | "redirect";
+    expiryPolicy: { defaultMinutes: number; minMinutes: number; maxMinutes: number };
+};
 export type PluginCanvasNodeContribution = {
     id: string;
     label: string;
@@ -105,6 +112,7 @@ export type PluginTransformContribution = {
 };
 export type PluginContributions = {
     providers?: PluginProviderContribution[];
+    paymentProviders?: PluginPaymentProviderContribution[];
     workflows?: PluginWorkflowContribution[];
     canvasNodes?: PluginCanvasNodeContribution[];
     transforms?: PluginTransformContribution[];
@@ -126,6 +134,10 @@ export type PluginPermission =
     | "ai.text"
     | "media.read"
     | "usage.read"
+    | "payment.create"
+    | "payment.query"
+    | "payment.close"
+    | "payment.reconcile"
     | "external.open";
 
 export type PluginManifest = {
@@ -153,9 +165,7 @@ export type PluginStorage = {
     remove(key: string): Promise<void>;
 };
 
-export type PluginTextContentPart =
-    | { type: "text"; text: string }
-    | { type: "image_url"; image_url: { url: string } };
+export type PluginTextContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
 export type PluginTextMessage = {
     role: "system" | "user" | "assistant";
@@ -247,10 +257,7 @@ export type PromptOptimizationResult = {
 };
 
 export type PromptOptimizerProvider = {
-    optimize: (
-        input: PromptOptimizationInput,
-        options?: { signal?: AbortSignal; onDelta?: (text: string) => void },
-    ) => Promise<PromptOptimizationResult>;
+    optimize: (input: PromptOptimizationInput, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }) => Promise<PromptOptimizationResult>;
 };
 
 export type AssetSourceQuery = {

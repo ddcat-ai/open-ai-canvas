@@ -612,7 +612,73 @@
     transition: border-color var(--motion-instant) ease-out, transform var(--motion-instant) var(--motion-ease-out);
 }
 
-.workflow-preview-media:hover { transform: scale(1.005); }
+.workflow-preview-media-button {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-lg);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.workflow-preview-media-button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+.workflow-preview-media-button:hover .workflow-preview-media { transform: scale(1.005); }
+
+.workflow-preview-expand,
+.workflow-video-play {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: color-mix(in srgb, #101114 74%, transparent);
+    box-shadow: 0 2px 10px color-mix(in srgb, #000 24%, transparent);
+    transition: opacity var(--motion-instant) var(--motion-ease-out), transform var(--motion-instant) var(--motion-ease-out);
+}
+
+.workflow-preview-expand {
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--r-md);
+    opacity: .78;
+}
+
+.workflow-video-play {
+    top: 50%;
+    left: 50%;
+    width: 48px;
+    height: 48px;
+    border: 1px solid color-mix(in srgb, #fff 30%, transparent);
+    border-radius: var(--r-full);
+    transform: translate(-50%, -50%) scale(.96);
+    opacity: .94;
+}
+
+.workflow-preview-media-button:hover .workflow-preview-expand,
+.workflow-preview-media-button:focus-visible .workflow-preview-expand,
+.workflow-video-poster:hover .workflow-video-play,
+.workflow-video-poster:focus-visible .workflow-video-play {
+    opacity: 1;
+}
+
+.workflow-video-poster:hover .workflow-video-play,
+.workflow-video-poster:focus-visible .workflow-video-play { transform: translate(-50%, -50%) scale(1); }
+
+.workflow-image-preview-modal {
+    display: block;
+    width: 100%;
+    max-height: min(76vh, 760px);
+    object-fit: contain;
+    background: var(--workspace-surface-strong);
+}
 
 .workflow-media-empty {
     display: grid;
