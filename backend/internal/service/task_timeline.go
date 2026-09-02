@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 // timeline 转写任务输入，由画布提交，字段与前端契约一致。
@@ -184,4 +186,55 @@ func extForMime(mime string) string {
 	default:
 		return ".bin"
 	}
+}
+
+// TimelineTranscriptionCreateRequest 是画布提交字幕转写任务的入参。
+type TimelineTranscriptionCreateRequest struct {
+	ResourceID string `json:"resourceId"`
+	Language   string `json:"language"`
+	ProjectID  string `json:"projectId"`
+}
+
+// CreateTimelineTranscriptionTask 创建时间线字幕转写任务：转写由本地
+// whisper.cpp 执行，不经模型路由与计费；创建时校验功能门控、资源归属
+// 与可转写类型，排队计入 active 限额。
+func (s *Service) CreateTimelineTranscriptionTask(userID string, req TimelineTranscriptionCreateRequest) (*model.Task, error) {
+	if s.IsDraining() {
+		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
+	}
+	if err := s.RequireFeature(FeatureTimelineTranscription); err != nil {
+		return nil, err
+	}
+	resourceID := strings.TrimSpace(req.ResourceID)
+	if resourceID == "" {
+		return nil, BadAuthRequest("必须指定待转写媒体")
+	}
+	resource, err := s.Resource(userID, resourceID)
+	if err != nil || resource == nil {
+		return nil, BadAuthRequest("无法读取待转写媒体，可能已被删除")
+	}
+	if !isTranscribableMime(resource.MimeType) {
+		return nil, BadAuthRequest("仅支持音视频文件转写")
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	input := timelineTranscriptionInput{ResourceID: resourceID, Language: strings.TrimSpace(req.Language)}
+	inputJSON, _ := json.Marshal(input)
+	task := model.Task{
+		ID: newID(), UserID: userID, ProjectID: req.ProjectID,
+		Type: model.TaskTypeTimelineTranscription, Status: model.TaskStatusQueued,
+		Stage: "等待队列调度", Progress: 5, Prompt: "字幕转写",
+		Provider: "local", Model: "whisper.cpp", InputJSON: string(inputJSON),
+	}
+	if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
+		if errors.Is(err, repository.ErrActiveTaskLimit) {
+			return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+		}
+		return nil, err
+	}
+	s.recordActivity(userID, "task", 1)
+	_ = s.log(userID, task.ID, "info", "字幕转写任务已进入队列", "")
+	return taskForOutput(task), nil
 }
