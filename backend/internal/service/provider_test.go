@@ -2454,6 +2454,15 @@ func TestValidateGenerationInterfaceRejectsMismatchedType(t *testing.T) {
 	}
 }
 
+func TestNormalizeGenerationInterfaceMigratesLegacyGeminiImageTasks(t *testing.T) {
+	if got := normalizeGenerationInterface("image", "gemini-generate-content"); got != "gemini-image" {
+		t.Fatalf("normalizeGenerationInterface(image) = %q, want gemini-image", got)
+	}
+	if got := normalizeGenerationInterface("text", "gemini-generate-content"); got != "gemini-generate-content" {
+		t.Fatalf("normalizeGenerationInterface(text) = %q, want gemini-generate-content", got)
+	}
+}
+
 func TestProcessTaskValidatesInterfaceBeforeHydratingMedia(t *testing.T) {
 	input := canvasGenerationInput{
 		Mode:            "video",
