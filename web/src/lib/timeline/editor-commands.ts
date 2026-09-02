@@ -220,7 +220,7 @@ function handleRemoveSubtitle(state: TimelineProject, payload: unknown): Timelin
 }
 
 /** 轨道种类的基础标签；新增轨道 label = 基础标签 + 同种类现有轨道数 + 1。 */
-const TRACK_KIND_BASE_LABELS: Record<TimelineTrackKind, string> = {
+export const TRACK_KIND_BASE_LABELS: Record<TimelineTrackKind, string> = {
     video: "视频",
     image: "图片",
     text: "文本",

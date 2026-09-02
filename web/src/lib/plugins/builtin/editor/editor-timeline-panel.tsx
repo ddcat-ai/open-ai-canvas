@@ -18,6 +18,7 @@ import {
     zoomOut,
 } from "@/lib/timeline/timeline-view";
 import { getAudioTracks, getSubtitleTracks, getVisualTracks } from "@/lib/timeline/timeline-tracks";
+import { TRACK_KIND_BASE_LABELS } from "@/lib/timeline/editor-commands";
 import { computeSnap } from "@/lib/timeline/timeline-snap";
 import type { TimelineClip, TimelineProject, TimelineTrack, TimelineTrackKind } from "@/types/timeline";
 
@@ -30,6 +31,9 @@ const TRIM_HANDLE_PX = 8;
 const LABEL_COLUMN_PX = 192;
 // 剃刀/播放头分割两侧的最小保留时长（毫秒），避免切出空片段。
 const MIN_SPLIT_MS = 100;
+
+// 不可移除轨道的原因文案（title 悬停与点击提示共用，单一来源）。
+const trackRemoveBlockedReason = (kind: TimelineTrack["kind"]) => `${TRACK_KIND_BASE_LABELS[kind]}轨道至少保留一条，无法移除`;
 
 // 工具条按钮颜色角色（唯一来源，各按钮内不得重复字面量颜色）：
 // 常态 = 次级前景 + hover 弱背景；选中/按下 = 反白块 + 强前景（中性，无 accent 蓝图标）。
@@ -62,6 +66,8 @@ export function EditorTimelinePanel() {
     const [playheadMs, setPlayheadMs] = useState(0);
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [addMenuOpen, setAddMenuOpen] = useState(false);
+    // 点击不可移除轨道 X 时的原因提示（2.2s 后自动消失）。
+    const [removeBlockedHint, setRemoveBlockedHint] = useState<{ id: number; text: string } | null>(null);
 
     useEffect(() => {
         const el = containerRef.current;
@@ -74,6 +80,12 @@ export function EditorTimelinePanel() {
         observer.observe(el);
         return () => observer.disconnect();
     }, []);
+
+    useEffect(() => {
+        if (!removeBlockedHint) return;
+        const timer = window.setTimeout(() => setRemoveBlockedHint(null), 2200);
+        return () => window.clearTimeout(timer);
+    }, [removeBlockedHint]);
 
     if (!project) return <div className="flex h-full items-center justify-center text-sm text-[var(--director-dock-fg)]">时间线未加载</div>;
 
@@ -130,8 +142,12 @@ export function EditorTimelinePanel() {
         dispatch({ op: "setTrackFlag", payload: { trackId, flag, value } });
     };
 
+    const handleRemoveTrackBlocked = (kind: TimelineTrack["kind"]) => {
+        setRemoveBlockedHint({ id: Date.now(), text: trackRemoveBlockedReason(kind) });
+    };
+
     return (
-        <div className="flex h-full min-h-0 flex-col bg-[var(--director-sequencer-surface)]">
+        <div className="relative flex h-full min-h-0 flex-col bg-[var(--director-sequencer-surface)]">
             {/* 工具条：左侧编辑工具，右侧缩放/时码（撤销/重做在宿主顶栏） */}
             <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
                 {/* 工具模式：选择 / 剃刀 */}
@@ -318,7 +334,8 @@ export function EditorTimelinePanel() {
                                             onSelectClip={selectClip}
 
                                             removable={project.tracks.filter((t) => t.kind === track.kind).length > 1}
-                                            onRemoveTrack={handleRemoveTrack}
+                                             onRemoveTrack={handleRemoveTrack}
+                                             onRemoveBlocked={handleRemoveTrackBlocked}
                                             onToggleTrackFlag={handleToggleTrackFlag}
                                             onSplitClip={(clipId, splitAtMs) =>
                                                 dispatch({ op: "splitClip", payload: { id: clipId, splitAtMs } })
@@ -338,6 +355,18 @@ export function EditorTimelinePanel() {
                         </div>
                     </div>
                 )}
+
+            {/* 点击不可移除轨道 X 时的原因提示（短暂居中浮现，不拦截交互） */}
+            {removeBlockedHint && (
+                <div
+                    key={removeBlockedHint.id}
+                    role="status"
+                    aria-live="polite"
+                    className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3 py-1.5 text-xs text-[var(--director-dock-fg-strong)] shadow-lg"
+                >
+                    {removeBlockedHint.text}
+                </div>
+            )}
             </div>
         </div>
     );
@@ -425,6 +454,7 @@ function TrackRow({
     onSplitClip,
     removable,
     onRemoveTrack,
+    onRemoveBlocked,
     onToggleTrackFlag,
 }: {
     track: TimelineTrack;
@@ -441,6 +471,7 @@ function TrackRow({
     onSplitClip: (clipId: string, splitAtMs: number) => void;
     removable: boolean;
     onRemoveTrack: (trackId: string) => void;
+    onRemoveBlocked: (kind: TimelineTrack["kind"]) => void;
     onToggleTrackFlag: (trackId: string, flag: "visible" | "muted", value: boolean) => void;
 }) {
     const clips = project.clips.filter((c) => c.trackId === track.id);
@@ -465,7 +496,7 @@ function TrackRow({
                     aria-label={track.visible === false ? "显示轨道" : "隐藏轨道"}
                     title={track.visible === false ? "显示轨道" : "隐藏轨道"}
                     aria-pressed={track.visible === false}
-                    onClick={() => onToggleTrackFlag(track.id, "visible", track.visible !== false)}
+                    onClick={() => onToggleTrackFlag(track.id, "visible", track.visible === false)}
                     className={`grid size-6 shrink-0 place-items-center rounded-md transition-colors ${
                         track.visible === false
                             ? "bg-[var(--director-control-hover)] text-[var(--director-dock-fg-strong)]"
@@ -488,17 +519,19 @@ function TrackRow({
                 >
                     {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
                 </button>
-                {removable && (
-                    <button
-                        type="button"
-                        aria-label={`移除轨道 ${track.label}`}
-                        title="移除轨道"
-                        onClick={() => onRemoveTrack(track.id)}
-                        className="grid size-6 shrink-0 place-items-center rounded-md text-[var(--director-dock-fg)] opacity-0 transition-opacity hover:bg-[var(--director-control-hover)] hover:text-[var(--director-danger)] focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                        <X className="size-3.5" />
-                    </button>
-                )}
+                <button
+                    type="button"
+                    aria-label={`移除轨道 ${track.label}`}
+                    title={removable ? "移除轨道" : trackRemoveBlockedReason(track.kind)}
+                    onClick={() => (removable ? onRemoveTrack(track.id) : onRemoveBlocked(track.kind))}
+                    className={`grid size-6 shrink-0 place-items-center rounded-md transition-opacity ${
+                        removable
+                            ? "text-[var(--director-dock-fg)] opacity-0 hover:bg-[var(--director-control-hover)] hover:text-[var(--director-danger)] focus-visible:opacity-100 group-hover:opacity-100"
+                            : "cursor-not-allowed text-[var(--director-dock-fg)] opacity-40 hover:bg-[var(--director-control-hover)] hover:opacity-100 focus-visible:opacity-100"
+                    }`}
+                >
+                    <X className="size-3.5" />
+                </button>
             </div>
             <div
                 className={`relative flex-1 overflow-hidden bg-[var(--director-sequencer-grid)] transition-opacity ${
