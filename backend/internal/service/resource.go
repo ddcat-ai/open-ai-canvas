@@ -1555,7 +1555,11 @@ func newOSSRequest(method string, setting ossSettingValue, objectKey string, con
 		return nil, err
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
-	req, err := http.NewRequest(method, baseURL.String(), body)
+	// 请求体必须用 no-op close 包装：服务端提前返回（如 OSS 签名 403）时
+	// http.Transport 会关闭未发完的 Request.Body，若直接传入 *os.File 等
+	// 调用方持有的文件，后续“降级本地存储”的 Seek 重读将因 file already
+	// closed 失败。NopCloser 让 Transport 的关闭成为空操作，底层文件保持可用。
+	req, err := http.NewRequest(method, baseURL.String(), io.NopCloser(body))
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -92,6 +94,47 @@ func TestAliyunOSSUploadRequestStillUsesEndpointWhenCDNConfigured(t *testing.T) 
 	}
 	if req.URL.Host != "private-bucket.oss-cn-test.aliyuncs.com" || req.URL.Path != "/users/u-1/image/test.png" {
 		t.Fatalf("Aliyun OSS upload URL = %q", req.URL.String())
+	}
+}
+
+func TestNewOSSRequestBodyCloseDoesNotCloseCallerFile(t *testing.T) {
+	// 服务端提前返回 403（不读 body）时，http.Transport 会关闭 Request.Body。
+	// newOSSRequest 必须用 no-op close 包装请求体，否则调用方持有的 *os.File
+	// 会被关掉，OSS 失败后的“降级本地存储”Seek 重读将报 file already closed。
+	f, err := os.CreateTemp(t.TempDir(), "merged")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString("payload-bytes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	req, err := newOSSRequest(http.MethodPut, ossSettingValue{
+		Provider: aliyunOSSProvider, Endpoint: "https://oss-cn-test.aliyuncs.com",
+		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}, "users/u-1/video/clip.mp4", "video/mp4", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Body == nil {
+		t.Fatal("newOSSRequest() body is nil")
+	}
+	// 模拟 Transport 在服务端提前响应后关闭请求体：
+	if err := req.Body.Close(); err != nil {
+		t.Fatalf("close request body: %v", err)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		t.Fatalf("caller file was closed by transport: %v", err)
+	}
+	got, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "payload-bytes" {
+		t.Fatalf("payload after body close = %q", got)
 	}
 }
 
