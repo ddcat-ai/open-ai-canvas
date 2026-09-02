@@ -48,7 +48,10 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [x] 轨道操作按钮（Concat 对齐）：时间线轨道行头新增「移除轨道」X 按钮（hover/键盘 focus 显现，danger 强调，仅该 kind 非最后一条时可用）；新增 `removeTrack` 黄金命令——每类轨道至少保留一条（删除该 kind 最后一条会被守卫拒绝），删除时级联移除轨道上全部片段、无悬挂引用，undo/redo 可重放；`editor-commands.ts` golden ops 10→11（`removeTrack`），新增 3 条单测（级联删除并保留其余 / 最后一条拒绝 / 未知 trackId 拒绝）。
 - [x] 资源上传 400 修复：`POST /api/resources` 在文件超过 MaxBytesReader 上限（单文件限制 50MB +1MB 缓冲）时 `FormFile` 返回英文 `http: request body too large` → 现翻译为与 service 配额校验一致的中文「单个上传文件必须小于 50MB」（`backend/internal/handler/user_data.go`），前端可正常展示失败原因而非裸 400。
 - [x] antd Modal `maskClosable` deprecation 清理：5 处改用 `mask={{ closable: … }}`（canvas-upload-modal / asset-library-picker-modal / projects index「AI 生成章节」/ skill-editor-drawer / skill-install-modal）。
-- [ ] 用户浏览器 re-test（轨道移除与上传）：hover 轨道行头出现 X，点击移除非最后一条轨道后其与片段消失且可 undo；该 kind 仅剩一条时行头不出现 X；移除轨道后选中片段同步取消；导入超过 50MB 的本地视频提示中文大小限制（而非裸 400）。
+- [ ] 用户浏览器 re-test（轨道移除与上传）：hover 轨道行头出现 X，点击移除非最后一条轨道后其与片段消失且可 undo；该 kind 仅剩一条时行头不出现 X；移除轨道后选中片段同步取消；导入超过 50MB 的本地视频不再报 400、可正常入库（见下方分片导入复测）。
+- [x] 本地媒体导入对齐 Concat 分片化：前端 `uploadResourceFile` 超过 50MB 自动切分片上传（8MB/片、失败整传重试、回调进度）；后端新增分片会话三接口 `POST /api/resources/uploads`（开始）、`PUT /api/resources/uploads/:id/chunks/:index`（逐片原始二进制）、`POST /api/resources/uploads/:id/complete`（合并落库，复用 UploadResourceFile 幂等/落盘/探测，保留上传中唯一键 → 提示“上传中请稍候”）；单片上限 8MB 使文件整体不再受 multipart 单请求限制，普通本地视频可导入。
+- [x] 上传默认配额放宽：运行时默认策略 `DailyUploadMB` 200→2048、`StoredFileGB` 2→20（管理员后台仍可调回）；`UploadResourceFile` 经 `reserveChunkedUploadQuota` 豁免单文件大小上限、仅受日/总量约束；`upload_quota_test.go` 对总量文案、daily 上限文案与逻辑按新默认同步，`resource_upload_session.go` 分片会话（内存 TTL 90min、并发/单片限长防护、超总量提前拒绝），新增路由注册测试。
+- [ ] 用户浏览器 re-test（分片导入）：本地选择 >50MB 的视频导入成功并入库（进度可见、失败自动整传重试）；断网重连后重试完成；<50MB 小文件仍走原 multipart 路径无回归；重复导入同一文件命中幂等返回原资源不重复占额度；超日限/总量时提示中文配额文案。
 - [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
 
 ## 画布导入同步、素材回收站与历史
@@ -758,3 +761,14 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [ ] 确认最近项目表格的搜索、状态筛选、排序与分页行为，行点击进入项目概览；无项目时显示创建入口。
 - [ ] 确认快捷创建与工作流面板入口可用，工作流提示显示最近项目阶段与章节完成度。
 - [ ] 验证浅色/深色主题与窄窗口（表格横向滚动、统计卡换行）下可读可操作。
+
+## 编辑器 Concat 风格打磨第 36 条（5 项 UI）
+
+已实施完成，需要浏览器最终确认：
+
+- [x] 前端 TypeScript 检查通过；`web/test/timeline-view.test.ts` 3 个守护测试通过；git 工作区干净。
+- [ ] 时间线面板与监视器的分隔条拖拽方向：向上拖拽时间线面板应变大（已反转，拖拽中无反向）。
+- [ ] 顶部工具栏图标（含导出）与时间线轨道徽标、片段未选中态不再使用蓝色填充，风格与 img-10 参考统一；片段选中态仍以 accent 蓝标识。
+- [ ] 时间线最后一个片段可向左、向右双向拖拽，右侧不再固定不动；拖动过程中时间刻度不漂移（pxPerMs 仅由缩放决定）。
+- [ ] 监视器底部控制条为 Concat img-14 风格：SkipBack/StepBack/Play/StepForward/SkipForward 五键 + 变速菜单（0.5x–2x）+ 进度条行与时间码；图标在恒黑监视器上为白色，无蓝色。
+- [ ] 右侧检查器为 Concat img-15 风格：属性行水平排列（标签左、控件右）、Section 分组标题、输入框 h-7 rounded-[7px]、凹嵌式滑块；浅色/深色主题下均无主题不同步。

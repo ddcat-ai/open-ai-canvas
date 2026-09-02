@@ -309,7 +309,43 @@ func (s *Service) UploadResource(userID string, header *multipart.FileHeader, ki
 	return resource, err
 }
 
-func detectUploadedMimeType(file multipart.File, fileName string, declared string) string {
+// UploadResourceFile 接收已完整落盘的本地文件（分片上传合并后调用），语义与 UploadResource 一致；
+// 唯一差异是豁免“单文件大小上限”——分片会话已在 handler 按片校验，此处只受日上传与账号存储总量约束。
+func (s *Service) UploadResourceFile(userID string, fileName string, size int64, kind string, width int, height int, durationMs int64, file io.ReadSeeker, uploadIdentity ...string) (*model.Resource, error) {
+	if file == nil || size <= 0 {
+		return nil, BadAuthRequest("请选择要上传的文件")
+	}
+	uploadKey := normalizedResourceUploadKey(uploadIdentity)
+	existing, err := s.resourceForUploadKey(userID, uploadKey)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == model.ResourceStatusReady {
+		return existing, nil
+	}
+	if existing != nil && existing.Status == model.ResourceStatusPending {
+		return nil, resourceUploadInProgress()
+	}
+	mimeType := detectUploadedMimeType(file, fileName, "")
+	if existing != nil {
+		return s.retryStoredResource(userID, existing, kind, mimeType, size, file)
+	}
+	day, err := s.reserveChunkedUploadQuota(userID, size)
+	if err != nil {
+		return nil, err
+	}
+	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, file, uploadKey)
+	if err != nil {
+		s.releaseUserUploadQuota(userID, day, size)
+	} else if stored {
+		s.commitUserUploadQuota(userID, size)
+	} else {
+		s.releaseUserUploadQuota(userID, day, size)
+	}
+	return resource, err
+}
+
+func detectUploadedMimeType(file io.ReadSeeker, fileName string, declared string) string {
 	declared = strings.TrimSpace(strings.Split(declared, ";")[0])
 	if declared != "" && declared != "application/octet-stream" {
 		return declared
