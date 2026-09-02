@@ -1053,6 +1053,25 @@ func (r *Repository) Resources(userID string, limit int) ([]model.Resource, erro
 	return resources, err
 }
 
+// PlaybackPendingVideos 返回本地存储、就绪但尚无播放副本判定结果的视频
+// （H.264 需标记 none、H.265 需触发转码）。
+func (r *Repository) PlaybackPendingVideos(limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	err := r.db.Where("kind = ? AND status = ? AND provider = ? AND (playback_status = ? OR playback_status IS NULL)",
+		"video", model.ResourceStatusReady, "local", "").Order("created_at asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
+// ResetStuckPlaybackTranscodes 服务重启时把卡在 processing 的转码记录重置回待判定
+// （进程崩溃后转码 goroutine 随进程消亡，状态永远停在 processing）。
+func (r *Repository) ResetStuckPlaybackTranscodes() error {
+	return r.db.Model(&model.Resource{}).
+		Where("playback_status = ?", model.PlaybackStatusProcessing).
+		Updates(map[string]any{"playback_status": "", "playback_error": ""}).Error
+}
 func (r *Repository) Assets(userID string) ([]model.Asset, error) {
 	var assets []model.Asset
 	err := r.db.Order("updated_at desc").Find(&assets, "user_id = ?", userID).Error

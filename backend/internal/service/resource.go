@@ -559,6 +559,7 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, true, errors.Join(err, fmt.Errorf("清理已上传资源对象失败：%w", cleanupErr))
 	}
 	s.recordActivity(userID, "resource", 1)
+	s.maybeStartPlaybackTranscode(&resource)
 	return &resource, true, nil
 }
 

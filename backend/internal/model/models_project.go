@@ -35,6 +35,11 @@ type Resource struct {
 	Height           int    `json:"height"`
 	DurationMs       int64  `json:"durationMs"`
 	ETag             string `json:"etag" gorm:"size:160"`
+	// 浏览器兼容播放副本（HEVC/H.265 原片在 Chrome 等无法解码，由 ffmpeg 转 H.264）：
+	// PlaybackStatus: none|processing|ready|failed；PlaybackObjectKey 为本地播放目录下的文件名。
+	PlaybackStatus    string `json:"playbackStatus" gorm:"index;size:24"`
+	PlaybackObjectKey string `json:"playbackObjectKey"`
+	PlaybackError     string `json:"playbackError" gorm:"type:text"`
 	// UploadKey 是客户端逻辑上传身份的摘要；NULL 表示不参与幂等约束。
 	UploadKey *string   `json:"-" gorm:"size:64;uniqueIndex:idx_resources_user_upload_key,priority:2"`
 	Error     string    `json:"error"`

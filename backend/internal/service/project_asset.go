@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
 	"gorm.io/gorm"
+	"infinite-canvas/backend/internal/model"
 )
 
 type LinkProjectAssetRequest struct {

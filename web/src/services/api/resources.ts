@@ -19,7 +19,10 @@ export type RemoteResource = {
     height?: number;
     durationMs?: number;
     etag?: string;
-    error?: string;
+	playbackStatus?: string;
+	playbackObjectKey?: string;
+	playbackError?: string;
+	error?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -221,6 +224,17 @@ export function getResource(id: string): Promise<RemoteResource> {
     return task;
 }
 
+// refreshResource 绕过缓存强制拉取资源最新状态（转码副本就绪轮询用），并回写缓存。
+export function refreshResource(id: string): Promise<RemoteResource> {
+    const cacheKey = resourceCacheKey(id);
+    return request<{ resource: RemoteResource }>(api.get(`/resources/${encodeURIComponent(id)}`))
+        .then((data) => {
+            resourceCache.set(cacheKey, data.resource);
+            missingResourceIds.delete(cacheKey);
+            return data.resource;
+        });
+}
+
 export async function getResourceOSSUrl(storageKey?: string) {
     const id = resourceIdFromStorageKey(storageKey);
     if (!id) throw new Error("当前媒体尚未上传到后端资源存储");
@@ -253,6 +267,13 @@ export function resolveResourceUrl(storageKey?: string, fallback = "") {
     // 资源引用本身已经包含稳定 ID；恢复/展示阶段不需要再查一遍元数据。
     // 需要 publicUrl、mime 或尺寸时必须显式调用 getResource，避免隐式 N+1。
     return id ? resourceFileUrl(id) : fallback;
+}
+
+// playbackVariantUrl 返回浏览器兼容播放副本 URL（H.265→H.264 转码结果）。
+// 副本就绪前由后端回退原件，调用方再按需降级。
+export function playbackVariantUrl(id: string) {
+    const base = String(apiBaseURL).replace(/\/+$/, "");
+    return `${base}/resources/${encodeURIComponent(id)}/file?variant=playback`;
 }
 
 export async function getResourceBlob(storageKey: string) {

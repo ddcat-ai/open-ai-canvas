@@ -9,6 +9,7 @@ import { ChevronDown, Film, Gauge, Pause, Play, SkipBack, SkipForward, StepBack,
 import { useEditorStoreContext } from "@/components/editor/editor-context";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { playbackVariantUrl, refreshResource, resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { TimelineClip, TimelineProject } from "@/types/timeline";
 
 const PREVIEW_TICK_MS = 100;
@@ -62,6 +63,66 @@ export function EditorPreviewMonitor() {
 
     const activeClip = project ? getClipAtTime(project, playbackMs) : null;
     const activeMediaUrl = useClipMediaUrl(activeClip);
+
+    // 播放回退：H.264 原件直接播放；H.265/HEVC 原件多数浏览器无法解码（黑屏），
+    // <video> onError 后切换后端 playback 转码副本（variant=playback），副本就绪前轮询。
+    const storageKey = activeClip?.directMedia?.storageKey;
+    const mediaResourceId = storageKey ? resourceIdFromStorageKey(storageKey) : null;
+    const [mediaTier, setMediaTier] = useState<"primary" | "variant">("primary");
+    const [variantReadyTick, setVariantReadyTick] = useState(0);
+    const [mediaErrorHint, setMediaErrorHint] = useState<string | null>(null);
+
+    useEffect(() => {
+        setMediaTier("primary");
+        setVariantReadyTick(0);
+        setMediaErrorHint(null);
+    }, [activeClip?.id, storageKey, activeMediaUrl]);
+
+    useEffect(() => {
+        if (mediaTier !== "variant" || !mediaResourceId) return;
+        let cancelled = false;
+        let failures = 0;
+        const timer = window.setInterval(async () => {
+            try {
+                const res = await refreshResource(mediaResourceId);
+                if (cancelled) return;
+                if (res.playbackStatus === "ready") {
+                    setMediaErrorHint(null);
+                    setVariantReadyTick((n) => n + 1);
+                    window.clearInterval(timer);
+                } else if (res.playbackStatus === "failed") {
+                    setMediaErrorHint("兼容副本生成失败，可下载原片后用本地播放器观看。");
+                    window.clearInterval(timer);
+                } else {
+                    setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
+                }
+                failures = 0;
+            } catch {
+                if (cancelled) return;
+                failures += 1;
+                if (failures >= 4) window.clearInterval(timer);
+            }
+        }, 2500);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [mediaTier, mediaResourceId]);
+
+    const handleMediaError = () => {
+        if (mediaTier === "primary" && mediaResourceId) {
+            // 原件解码失败（大概率 H.265）：切后端 playback 副本。
+            setMediaTier("variant");
+            setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
+        } else if (mediaTier === "variant" && mediaResourceId) {
+            // 副本尚未就绪时后端回退原件仍会失败；轮询 effect 会在就绪后重载。
+            setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
+        } else {
+            setMediaErrorHint("该媒体无法解码，可下载原片后用本地播放器观看。");
+        }
+    };
+
+    const videoSrc = mediaTier === "variant" && mediaResourceId ? playbackVariantUrl(mediaResourceId) : activeMediaUrl;
 
     const stop = useCallback(() => {
         setPlaying(false);
@@ -119,14 +180,15 @@ export function EditorPreviewMonitor() {
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--director-sequencer-surface)]">
             {/* 预览画面：恒黑舞台，占满控制条以上剩余空间（Concat 监视器风格） */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
-                {activeClip && activeMediaUrl ? (
+                {activeClip && videoSrc ? (
                     <video
-                        key={activeClip.id}
-                        src={activeMediaUrl}
+                        key={`${activeClip.id}:${mediaTier}:${variantReadyTick}`}
+                        src={videoSrc}
                         className="max-h-full max-w-full rounded-md object-contain shadow-lg"
                         muted
                         playsInline
                         preload="metadata"
+                        onError={handleMediaError}
                     />
                 ) : (
                     <div className="flex flex-col items-center gap-3 text-center">
@@ -140,6 +202,20 @@ export function EditorPreviewMonitor() {
                                     : "播放头位于空白处"
                                 : "时间线暂无片段，导入素材后在此预览"}
                         </div>
+                    </div>
+                )}
+                {mediaErrorHint && (
+                    <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-black/70 px-4 py-3 backdrop-blur">
+                        <p className="text-xs leading-relaxed text-white/90">{mediaErrorHint}</p>
+                        {mediaResourceId && (
+                            <a
+                                href={resourceFileUrl(mediaResourceId)}
+                                download
+                                className="text-[11px] underline decoration-white/40 underline-offset-2 text-white/70 hover:text-white"
+                            >
+                                下载原片用本地播放器观看
+                            </a>
+                        )}
                     </div>
                 )}
                 {activeClip && (

@@ -278,16 +278,24 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		resource := delivery.Resource
 		etag := resourceResponseETag(resource)
+		// variant=playback：serve 浏览器兼容播放副本（H.265→H.264 转码）。
+		// 副本就绪时用独立 ETag 后缀，避免浏览器拿原件缓存命中 304 而继续黑屏。
+		usePlayback := c.Query("variant") == "playback" && resource.Provider == "local" &&
+			resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != ""
+		serveETag := etag
+		if usePlayback {
+			serveETag = etag + ":pb"
+		}
 		// 私有资源允许浏览器保存响应，但每次复用前必须重新鉴权；304 会在读取 OSS 前返回。
 		c.Header("Cache-Control", "private, no-cache")
-		c.Header("ETag", etag)
+		c.Header("ETag", serveETag)
 		c.Header("Accept-Ranges", "bytes")
 		c.Header("X-Content-Type-Options", "nosniff")
 		if resource.Kind == "file" {
 			c.Header("Content-Disposition", "attachment")
 			c.Header("Content-Security-Policy", "sandbox")
 		}
-		if ifNoneMatch(c.GetHeader("If-None-Match"), etag) {
+		if ifNoneMatch(c.GetHeader("If-None-Match"), serveETag) {
 			c.Status(http.StatusNotModified)
 			return
 		}
@@ -295,7 +303,31 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if ifRange := strings.TrimSpace(c.GetHeader("If-Range")); ifRange != "" && ifRange != etag {
 			rangeHeader = ""
 		}
-		stream, err := svc.OpenResourceRange(user.ID, resource.ID, rangeHeader)
+		var stream *service.ResourceStream
+		if usePlayback {
+			stream, err = svc.OpenResourcePlaybackRange(user.ID, resource.ID)
+			if err == nil {
+				resource = stream.Resource // MimeType 已置 video/mp4
+			} else if errors.Is(err, service.ErrPlaybackNotReady) {
+				// 副本尚未就绪：回退原件，并撤销 :pb 后缀，保证副本就绪后
+				// 浏览器不会拿原件缓存命中 304 而继续黑屏。
+				c.Header("ETag", etag)
+				stream, err = svc.OpenResourceRange(user.ID, resource.ID, rangeHeader)
+				if err != nil {
+					failService(c, err)
+					return
+				}
+			} else {
+				failService(c, err)
+				return
+			}
+		} else {
+			stream, err = svc.OpenResourceRange(user.ID, resource.ID, rangeHeader)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+		}
 		if err != nil {
 			failService(c, err)
 			return
