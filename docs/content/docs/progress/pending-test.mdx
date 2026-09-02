@@ -774,3 +774,13 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [ ] 时间线最后一个片段可向左、向右双向拖拽，右侧不再固定不动；拖动过程中时间刻度不漂移（pxPerMs 仅由缩放决定）。
 - [ ] 监视器底部控制条为 Concat img-14 风格：SkipBack/StepBack/Play/StepForward/SkipForward 五键 + 变速菜单（0.5x–2x）+ 进度条行与时间码；图标在恒黑监视器上为白色，无蓝色。
 - [ ] 右侧检查器为 Concat img-15 风格：属性行水平排列（标签左、控件右）、Section 分组标题、输入框 h-7 rounded-[7px]、凹嵌式滑块；浅色/深色主题下均无主题不同步。
+
+## 媒体导入失败根治（分片上传 + OSS 降级修复）
+
+已实施，代码/单测/编译验证通过，需要浏览器最终确认：
+
+- [ ] 后端 `go build`/`go vet` 通过；`resource_test.go` 新增 OSS body close 回归测试通过；handler/service 包测试通过。
+- [ ] 重新导入 >50MB 视频（如 92MB 样例），确认前端分片上传（POST /uploads → PUT chunks → POST complete）全程无 400，且进度条显示百分比。
+- [ ] OSS 配置密钥仍不匹配（历史 403 SignatureDoesNotMatch）时，确认上传自动降级写入本地存储（provider=local）并导入成功，不再报"导入失败"。
+- [ ] 在用户设置里修正阿里云 OSS AccessKeySecret（当前配置的密钥从未验证通过，8/16 起所有 OSS 上传均 403）后，确认资源改回写入 OSS。
+- [ ] 确认配额默认值已放宽（日 2048MB、总量 20GB，仅当无 runtime_policy 记录时生效）；超过日配额时前端提示为中文而非裸 400。
