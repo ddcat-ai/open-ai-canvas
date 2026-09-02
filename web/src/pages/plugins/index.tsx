@@ -647,7 +647,7 @@ function providerCapabilitiesFor(manifest: PluginManifest | PluginManifestV2) {
     return [...new Set((manifest.contributes.providers || []).flatMap((provider) => provider.capabilities))];
 }
 
-function pluginMatchesCategory(manifest: PluginManifest, category: string) {
+function pluginMatchesCategory(manifest: PluginManifest | PluginManifestV2, category: string) {
     const providerCapabilities = providerCapabilitiesFor(manifest);
     const isPaymentProtocol = Boolean(manifest.contributes.paymentProviders?.length);
     if (category === "payment") return isPaymentProtocol;
