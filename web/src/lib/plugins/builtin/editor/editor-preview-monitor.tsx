@@ -183,7 +183,6 @@ export function EditorPreviewMonitor() {
                             playing
                                 ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
                                 : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
-                        }`
                         }`}
                     >
                         {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
