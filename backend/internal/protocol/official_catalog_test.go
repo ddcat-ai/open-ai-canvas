@@ -431,3 +431,37 @@ func manifestTestBody(t *testing.T, spec RequestSpec) map[string]any {
 	}
 	return body
 }
+
+func TestOfficialArkSeedreamMapsAspectRatioToPixelSize(t *testing.T) {
+	adapter := officialPackageAdapter(t, "volcengine-ark-seedream.yingce-plugin", "volcengine-ark-image")
+	tests := []struct {
+		name, aspectRatio, wantSize string
+	}{
+		{name: "ratio maps to 2K pixels", aspectRatio: "1:1", wantSize: "2048x2048"},
+		{name: "landscape ratio", aspectRatio: "16:9", wantSize: "2560x1440"},
+		{name: "auto maps to 2k tier", aspectRatio: "auto", wantSize: "2k"},
+		{name: "pixel size passes through", aspectRatio: "1920x1080", wantSize: "1920x1080"},
+		{name: "tier passes through", aspectRatio: "4k", wantSize: "4k"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedream-5-0-260128", Prompt: "circle", AspectRatio: tt.aspectRatio}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if create.Path != "/api/v3/images/generations" {
+				t.Fatalf("Seedream create = %#v", create)
+			}
+			if body := manifestTestBody(t, create); body["size"] != tt.wantSize {
+				t.Fatalf("Seedream size = %#v, want %q", body["size"], tt.wantSize)
+			}
+		})
+	}
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedream-5-0-260128", Prompt: "circle"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manifestTestBody(t, create)["size"]; ok {
+		t.Fatalf("Seedream must omit size when no ratio is requested")
+	}
+}
