@@ -116,6 +116,31 @@ export function useCanvasUpload({
         }
     }, [canvasId, domainProjectId, message, queryClient, setNodes]);
 
+    const persistTimelineMedia = useCallback(async (media: TimelineDirectMedia) => {
+        const type = media.kind === "audio" ? CanvasNodeType.Audio : media.kind === "video" ? CanvasNodeType.Video : CanvasNodeType.Image;
+        const defaults = NODE_DEFAULT_SIZE[type];
+        const node: CanvasNodeData = {
+            id: media.id,
+            type,
+            title: media.title,
+            position: { x: 0, y: 0 },
+            width: media.width || defaults.width,
+            height: media.height || defaults.height,
+            metadata: {
+                content: media.url || media.dataUrl || media.content || "",
+                storageKey: media.storageKey,
+                naturalWidth: media.width,
+                naturalHeight: media.height,
+                durationMs: media.durationMs,
+                bytes: media.bytes,
+                mimeType: media.mimeType,
+            },
+        };
+        const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-upload" });
+        if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+        return result.assetId;
+    }, [canvasId, domainProjectId, queryClient]);
+
     const createImageFileNode = useCallback(async (file: File, position: Position) => {
         const progress = startUploadStatus("上传图片", "读取图片文件", domainProjectId ? 4 : 3);
         try {
@@ -343,7 +368,7 @@ export function useCanvasUpload({
             try {
                 if (isAudioFile(file)) {
                     const audio = await uploadMediaFile(file, "audio");
-                    created.push({
+                    const media: TimelineDirectMedia = {
                         id: `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                         kind: "audio",
                         title: file.name,
@@ -352,10 +377,12 @@ export function useCanvasUpload({
                         durationMs: audio.durationMs,
                         bytes: audio.bytes,
                         mimeType: audio.mimeType,
-                    });
+                    };
+                    media.assetId = await persistTimelineMedia(media);
+                    created.push(media);
                 } else {
                     const video = await uploadMediaFile(file, "video");
-                    created.push({
+                    const media: TimelineDirectMedia = {
                         id: `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                         kind: "video",
                         title: file.name,
@@ -366,7 +393,9 @@ export function useCanvasUpload({
                         durationMs: video.durationMs,
                         bytes: video.bytes,
                         mimeType: video.mimeType,
-                    });
+                    };
+                    media.assetId = await persistTimelineMedia(media);
+                    created.push(media);
                 }
             } catch (error) {
                 message.error(error instanceof Error ? `素材上传失败：${error.message}` : "素材上传失败");
@@ -374,7 +403,7 @@ export function useCanvasUpload({
         }
         if (created.length) message.success(`已上传 ${created.length} 个素材到时间线`);
         return created;
-    }, [message]);
+    }, [message, persistTimelineMedia]);
 
     // 组装能力闭环：把时间线合成结果（MP4 Blob）上传并创建为新的视频节点放回画布，
     // 复用上传/持久化/选中逻辑，新节点可继续编辑字幕与样式。

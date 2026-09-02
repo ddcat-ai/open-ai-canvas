@@ -989,9 +989,17 @@ func (r *Repository) UserStoredFileBytes(userID string) (int64, error) {
 	var total int64
 	err := r.db.Raw(`
 		SELECT
-			(SELECT COALESCE(SUM(size), 0) FROM resources WHERE user_id = ?)
+			COALESCE((
+				SELECT SUM(physical_resources.size)
+				FROM (
+					SELECT MAX(size) AS size
+					FROM resources
+					WHERE user_id = ? AND status = ?
+					GROUP BY COALESCE(NULLIF(provider, ''), 'local'), endpoint, bucket, object_key
+				) AS physical_resources
+			), 0)
 			+ (SELECT COALESCE(SUM(size), 0) FROM session_files WHERE user_id = ?)
-	`, userID, userID).Scan(&total).Error
+	`, userID, model.ResourceStatusReady, userID).Scan(&total).Error
 	return total, err
 }
 
@@ -1053,6 +1061,19 @@ func (r *Repository) Resources(userID string, limit int) ([]model.Resource, erro
 	return resources, err
 }
 
+func (r *Repository) ResourceCleanupCandidates(incompleteBefore time.Time, readyBefore time.Time, limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	err := r.db.Where(
+		"(status IN ? AND updated_at <= ?) OR (status = ? AND created_at <= ?)",
+		[]model.ResourceStatus{model.ResourceStatusPending, model.ResourceStatusFailed}, incompleteBefore,
+		model.ResourceStatusReady, readyBefore,
+	).Order("created_at asc, id asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
 func (r *Repository) Assets(userID string) ([]model.Asset, error) {
 	var assets []model.Asset
 	err := r.db.Order("updated_at desc").Find(&assets, "user_id = ?", userID).Error
@@ -1071,6 +1092,15 @@ func (r *Repository) AssetForUser(userID string, id string) (*model.Asset, error
 		return nil, err
 	}
 	return &asset, nil
+}
+
+func (r *Repository) AssetsForUserIDs(userID string, ids []string) ([]model.Asset, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var assets []model.Asset
+	err := r.db.Find(&assets, "user_id = ? AND id IN ?", userID, ids).Error
+	return assets, err
 }
 
 func (r *Repository) UpsertAsset(asset *model.Asset) error {

@@ -18,6 +18,7 @@ import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, installR
 import { apiClient } from "../src/services/api/request";
 import { useUserStore } from "../src/stores/use-user-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "../src/stores/canvas/use-canvas-history-store";
+import { repairMissingCanvasAssets } from "../src/services/canvas-asset-repair";
 
 test("creation recovery observes streaming text tasks after reload", () => {
     const conversations = [
@@ -4531,6 +4532,127 @@ test("deleted canvas history rehydrates from the active account scope only", asy
         useCanvasHistoryStore.setState({ deletedProjects: previousHistory });
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("canvas asset repair backfills node and timeline media with one shared asset", () => {
+    const previousProjects = useCanvasStore.getState().projects;
+    const previousAssets = useAssetStore.getState().assets;
+    const storageKey = "resource:historical-canvas-media";
+    const project: CanvasProject = {
+        ...storedCanvasProject("canvas-needs-asset-repair", "历史画布"),
+        nodes: [
+            {
+                id: "image-node",
+                type: CanvasNodeType.Image,
+                title: "历史图片",
+                position: { x: 0, y: 0 },
+                width: 320,
+                height: 180,
+                metadata: { content: "/api/resources/historical-canvas-media/file", storageKey },
+            },
+        ],
+        timeline: {
+            version: 2,
+            tracks: [],
+            clips: [
+                {
+                    id: "timeline-clip",
+                    kind: "image",
+                    nodeId: "timeline-image",
+                    trackId: "track-1",
+                    startMs: 0,
+                    durationMs: 1000,
+                    directMedia: { id: "timeline-image", kind: "image", title: "时间线图片", storageKey, url: "/api/resources/historical-canvas-media/file" },
+                },
+            ],
+            durationMs: 1000,
+        },
+    };
+
+    try {
+        useAssetStore.getState().replaceAssets([]);
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [project] }));
+        const result = withCanvasStorePersistenceSuppressed(() => repairMissingCanvasAssets());
+        const repaired = useCanvasStore.getState().projects[0];
+        const nodeAssetId = repaired?.nodes[0]?.metadata?.assetId;
+        const timelineAssetId = repaired?.timeline?.clips[0]?.directMedia?.assetId;
+
+        expect(result).toEqual({ createdAssets: 1, updatedProjects: 1 });
+        expect(useAssetStore.getState().assets).toHaveLength(1);
+        expect(nodeAssetId).toBeTruthy();
+        expect(timelineAssetId).toBe(nodeAssetId);
+        expect(useAssetStore.getState().assets[0]?.kind).toBe("image");
+        expect(useAssetStore.getState().assets[0]?.data.storageKey).toBe(storageKey);
+    } finally {
+        useAssetStore.getState().replaceAssets(previousAssets);
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+    }
+});
+
+test("login repair persists the missing asset before its canvas", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const previousAssets = useAssetStore.getState().assets;
+    const writes: Array<{ kind: "asset" | "canvas"; body: Record<string, unknown> }> = [];
+    const project: CanvasProject = {
+        ...storedCanvasProject("canvas-remote-ghost", "待修复画布"),
+        nodes: [
+            {
+                id: "remote-image",
+                type: CanvasNodeType.Image,
+                title: "远端图片",
+                position: { x: 0, y: 0 },
+                width: 320,
+                height: 180,
+                metadata: { content: "/api/resources/remote-ghost/file", storageKey: "resource:remote-ghost" },
+            },
+        ],
+    };
+
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+        },
+    });
+    localforage.getItem = (async () => null) as typeof localforage.getItem;
+    localforage.setItem = (async (_key: string, value: string) => value) as typeof localforage.setItem;
+    apiClient.defaults.adapter = async (config) => {
+        const url = String(config.url || "");
+        const method = String(config.method || "get").toLowerCase();
+        if (url.includes("user-data/snapshot")) {
+            return { data: { code: 0, data: { projects: [project], assets: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        const body = (typeof config.data === "string" ? JSON.parse(config.data) : config.data) as Record<string, unknown>;
+        if (method === "put" && url.startsWith("/assets/")) writes.push({ kind: "asset", body });
+        else if (method === "put" && url.startsWith("/canvas-projects/")) writes.push({ kind: "canvas", body });
+        else throw new Error(`unexpected request: ${method} ${url}`);
+        return { data: { code: 0, data: {}, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+
+    try {
+        resetRemoteUserDataSync();
+        await syncRemoteUserData("account-repair-order");
+        expect(writes.map((item) => item.kind)).toEqual(["asset", "canvas"]);
+        const asset = writes[0]?.body.asset as Asset;
+        const canvas = writes[1]?.body.project as CanvasProject;
+        expect(asset.data.storageKey).toBe("resource:remote-ghost");
+        expect(canvas.nodes[0]?.metadata?.assetId).toBe(asset.id);
+    } finally {
+        resetRemoteUserDataSync();
+        useAssetStore.getState().replaceAssets(previousAssets);
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     }
