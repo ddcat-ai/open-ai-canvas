@@ -20,6 +20,7 @@ import {
     Mail,
     MessageSquareText,
     Moon,
+    Palette,
     Paintbrush,
     PlugZap,
     RadioTower,
@@ -36,6 +37,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
+import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { getAdminAntThemeConfig } from "@/lib/app-theme";
@@ -43,6 +45,7 @@ import { cn } from "@/lib/utils";
 import "@/styles/admin-ui.css";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 type AdminNavigationItem = {
     path: string;
@@ -81,6 +84,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
+            { path: "/admin/settings/appearance", label: "外观管理", description: "品牌、Logo 与登录影片", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
@@ -103,6 +107,7 @@ function isAdminNavigationPath(pathname: string, navigationPath: string) {
 }
 
 export function AdminShell() {
+    const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
 
@@ -129,12 +134,8 @@ export function AdminShell() {
                         <Tooltip mouseEnterDelay={0.1} title={collapsed ? "查看更新日志" : undefined} placement="right" rootClassName="app-workspace-sidebar-tooltip">
                             <AppChangelogButton
                                 className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
-                                icon={
-                                    <span className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background">
-                                        <InfinityIcon className="size-4" />
-                                    </span>
-                                }
-                                label="影策"
+                                icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
+                                label={appearance.brandName}
                                 showLabel={!collapsed}
                                 showVersion={!collapsed}
                                 labelClassName="admin-sidebar-brand-title"
