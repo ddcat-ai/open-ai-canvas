@@ -39,7 +39,7 @@
         "@tiptap/extension-text-align": "^3.28.0",
         "@tiptap/extension-text-style": "^3.28.0",
         "@tiptap/react": "^3.28.0",
-        "@tiptap/starter-kit": "^3.28.0",
+        "@tiptap/starter-kit": "^3.30.5",
         "@uiw/react-codemirror": "^4.25.11",
         "@vidstack/react": "1.15.6",
         "antd": "^6.5.1",
