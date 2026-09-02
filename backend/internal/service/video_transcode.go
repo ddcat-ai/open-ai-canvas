@@ -158,14 +158,24 @@ func boxBodies(data []byte, want string) []int {
 // maybeStartPlaybackTranscode 由上传就绪路径调用；H.265 且 ffmpeg 可用时置
 // processing 并异步转码。H.264 直接标记 none，避免每次上传重复探测。
 func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
-	if resource == nil || resource.Kind != "video" || resource.Provider != "local" ||
-		resource.Status != model.ResourceStatusReady {
+	if resource == nil || resource.Kind != "video" {
+		return
+	}
+	// 远端存储（OSS 等）不落本地副本：标 none 表示无需转码，前端按原生播放/直链处理，
+	// 避免状态留空被当成 processing 无限轮询（markPlaybackNone 幂等）。
+	if resource.Provider != "local" || resource.Status != model.ResourceStatusReady {
+		if resource.Provider != "local" {
+			markPlaybackNone(s, resource)
+		}
 		return
 	}
 	if resource.PlaybackStatus != "" && resource.PlaybackStatus != model.PlaybackStatusNone {
 		return
 	}
+	// 不可转码场景（无 ffmpeg）落 none：状态为空会被前端当成 processing 无限轮询，
+	// 也会让启动回填每次重试探测。none 表示"无需转码"，按原生播放处理。
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		markPlaybackNone(s, resource)
 		return
 	}
 	src := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
@@ -176,10 +186,20 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 			return
 		}
 		go s.runPlaybackTranscode(resource.UserID, resource.ID, src)
-	case videoCodecH264:
-		resource.PlaybackStatus = model.PlaybackStatusNone
-		_ = s.repo.SaveResource(resource)
+	case videoCodecH264, videoCodecAV1, videoCodecVP9, videoCodecMPEG4, "":
+		// H.264 浏览器可直接解码；AV1/VP9/MPEG4 暂不转码；探针读不出编码（非 mp4 /
+		// moov 在尾部 / 加密容器）也无法处理 —— 均标 none，避免重复探测与前端无限轮询。
+		markPlaybackNone(s, resource)
 	}
+}
+
+// markPlaybackNone 将资源标记为无需播放副本（幂等，写失败不影响上传主流程）。
+func markPlaybackNone(s *Service, resource *model.Resource) {
+	if resource.PlaybackStatus == model.PlaybackStatusNone {
+		return
+	}
+	resource.PlaybackStatus = model.PlaybackStatusNone
+	_ = s.repo.SaveResource(resource)
 }
 
 // runPlaybackTranscode 转码本地原件到 playback/<id>.mp4 并回写状态（幂等按 id 重载）。

@@ -106,6 +106,7 @@ export function EditorPreviewMonitor() {
         if (mediaTier !== "variant" || !mediaResourceId) return;
         let cancelled = false;
         let failures = 0;
+        let polls = 0;
         const timer = window.setInterval(async () => {
             try {
                 const res = await refreshResource(mediaResourceId);
@@ -116,6 +117,16 @@ export function EditorPreviewMonitor() {
                     window.clearInterval(timer);
                 } else if (res.playbackStatus === "failed") {
                     setMediaErrorHint("兼容副本生成失败，可下载原片后用本地播放器观看。");
+                    window.clearInterval(timer);
+                } else if (res.playbackStatus === "none") {
+                    // 后端判定无需转码（远端存储/无 ffmpeg/编码不可处理）：无副本可等，
+                    // 停轮询回到原件原生播放，避免"正在生成"永挂。
+                    setMediaTier("primary");
+                    setMediaErrorHint(null);
+                    window.clearInterval(timer);
+                } else if ((polls += 1) >= 120) {
+                    // processing 上限保护（约 5 分钟）：转码异常卡死时不再无限轮询。
+                    setMediaErrorHint("兼容版本生成超时，可下载原片后用本地播放器观看。");
                     window.clearInterval(timer);
                 } else {
                     setMediaErrorHint("视频编码此浏览器暂不支持，正在生成兼容版本（H.264）…");
