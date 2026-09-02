@@ -235,7 +235,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 	taskIDs := make([]string, 0, len(logs))
 	seenTaskIDs := make(map[string]struct{}, len(logs))
 	for _, log := range logs {
-		if log.BillingOrderID != "" {
+		if log.Billable && log.BillingOrderID != "" {
 			if _, exists := seenBillingOrderIDs[log.BillingOrderID]; !exists {
 				seenBillingOrderIDs[log.BillingOrderID] = struct{}{}
 				billingOrderIDs = append(billingOrderIDs, log.BillingOrderID)
@@ -277,13 +277,15 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 			logs[index].UserDisplayName = user.DisplayName
 			logs[index].UserAccount = user.Username
 		}
-		if order, exists := billingOrderByID[logs[index].BillingOrderID]; exists && order.UserID == logs[index].UserID {
-			logs[index].BillingAvailable = true
-			logs[index].BillingStatus = order.Status
-			if order.Status == model.BillingStatusSettled {
-				logs[index].BillingAmount = order.ActualAmountMicrocredits
-			} else if order.Status != model.BillingStatusRefunded {
-				logs[index].BillingAmount = order.ReservedAmountMicrocredits
+		if logs[index].Billable {
+			if order, exists := billingOrderByID[logs[index].BillingOrderID]; exists && order.UserID == logs[index].UserID {
+				logs[index].BillingAvailable = true
+				logs[index].BillingStatus = order.Status
+				if order.Status == model.BillingStatusSettled {
+					logs[index].BillingAmount = order.ActualAmountMicrocredits
+				} else if order.Status != model.BillingStatusRefunded {
+					logs[index].BillingAmount = order.ReservedAmountMicrocredits
+				}
 			}
 		}
 		if task, exists := taskByID[logs[index].TaskID]; exists && task.UserID == logs[index].UserID {

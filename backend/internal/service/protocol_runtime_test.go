@@ -29,8 +29,26 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plugins) != len(packages)+2 {
-		t.Fatalf("plugin views = %d, official packages plus workflow plugins = %d", len(plugins), len(packages)+2)
+	bundledCount := len(bundledWorkflowPluginManifests())
+	packageIDs := make(map[string]bool, len(packages))
+	for _, packagePath := range packages {
+		data, err := os.ReadFile(packagePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pkg, err := protocol.ParsePluginPackage(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		packageIDs[pkg.Manifest.Metadata.ID] = true
+	}
+	for _, manifest := range bundledPaymentPluginManifests() {
+		if !packageIDs[manifest.Metadata.ID] {
+			bundledCount++
+		}
+	}
+	if len(plugins) != len(packages)+bundledCount {
+		t.Fatalf("plugin views = %d, official packages plus bundled plugins = %d", len(plugins), len(packages)+bundledCount)
 	}
 	for _, packagePath := range packages {
 		data, err := os.ReadFile(packagePath)
@@ -46,8 +64,12 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 			t.Errorf("fresh runtime did not install official plugin %q", pkg.Manifest.Metadata.ID)
 			continue
 		}
-		if plugin.Source != PluginOriginOfficial {
-			t.Errorf("plugin %q source = %q, want official", plugin.Manifest.ID, plugin.Source)
+		expectedSource := PluginOriginOfficial
+		if isSystemPaymentPluginID(plugin.Manifest.ID) {
+			expectedSource = PluginOriginSystem
+		}
+		if plugin.Source != expectedSource {
+			t.Errorf("plugin %q source = %q, want %s", plugin.Manifest.ID, plugin.Source, expectedSource)
 		}
 		expected := strings.TrimSpace(string(pkg.Files["README.md"])) + "\n\n---\n\n" + strings.TrimSpace(string(pkg.Files["docs/interface.md"]))
 		if strings.TrimSpace(plugin.Manifest.Documentation) != expected {
@@ -214,6 +236,32 @@ func TestPluginRuntimeDropsRemovedOfficialProtocol(t *testing.T) {
 	if _, ok := center.registrySnapshot().Resolve("removed-official-protocol"); ok {
 		t.Fatal("removed official protocol survived bootstrap")
 	}
+}
+
+func TestPluginRuntimeRejectsPersistedUploadedPaymentProvider(t *testing.T) {
+	manifest := json.RawMessage(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-payment-provider","version":"1.0.0","name":"Uploaded Payment Provider","author":"Test","enabled":true,"runtime":{"backend":"host:untrusted-payment"},"contributes":{"paymentProviders":[{"id":"untrusted-payment","label":"Untrusted Payment","icon":"brand:untrusted","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
+	registryData, err := json.Marshal([]pluginRegistryRecord{{ID: "uploaded-payment-provider", Raw: manifest, Source: "uploaded"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "plugin_registry.json"), registryData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	center, err := newPluginRuntime(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range center.list() {
+		if plugin.Manifest.ID != "uploaded-payment-provider" {
+			continue
+		}
+		if plugin.Status != "invalid" || !strings.Contains(plugin.Error, "系统宿主适配器") {
+			t.Fatalf("persisted uploaded payment plugin = %#v", plugin)
+		}
+		return
+	}
+	t.Fatal("persisted uploaded payment plugin was not retained as invalid")
 }
 
 func TestAutoDLPluginPackageLoadsAsOfficialRuntime(t *testing.T) {

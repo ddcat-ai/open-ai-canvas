@@ -344,6 +344,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		if err := s.RequireWorkflowPluginForInterface(input.Config.InterfaceType); err != nil {
 			return nil, err
 		}
+		if err := validateWorkflowProviderPromptLength(input); err != nil {
+			return nil, err
+		}
 		if err := validateWorkflowProviderConfig(input.Mode, input.Config); err != nil {
 			return nil, err
 		}
@@ -2385,6 +2388,12 @@ func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationIn
 }
 
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
+	resolution := strings.TrimSpace(input.Config.VQuality)
+	if input.Mode == "video" {
+		if declared := videoResolutionNameRequest(input.VideoCapability, resolution); declared != "" {
+			resolution = declared
+		}
+	}
 	request := protocol.GenerationRequest{
 		Capability:    protocol.Capability(input.Mode),
 		Model:         input.Config.Model,
@@ -2394,7 +2403,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
 		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
 		AspectRatio:   input.Config.Size,
-		Resolution:    input.Config.VQuality,
+		Resolution:    resolution,
 		Quality:       input.Config.Quality,
 		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),
 		Watermark:     parseBool(input.Config.VideoWatermark, false),
@@ -4950,8 +4959,7 @@ func doJSON(req *http.Request, target interface{}) error {
 		}
 	}
 	if payload, ok := target.(*map[string]interface{}); ok {
-		if code, ok := (*payload)["code"].(float64); ok && code != 0 {
-			rawMessage := stringField(*payload, "msg")
+		if _, rawMessage, failed := providerPayloadBusinessFailure(*payload); failed {
 			return providerPayloadError{raw: rawMessage, message: providerPayloadErrorMessage(rawMessage)}
 		}
 		if errValue, ok := (*payload)["error"].(map[string]interface{}); ok && stringField(errValue, "message") != "" {
@@ -5138,12 +5146,16 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	if requestErr != nil || statusCode < 200 || statusCode >= 300 {
 		status = model.ApiCallStatusFailed
 		errorCode, errorText = providerRequestErrorDetails(requestErr)
+	} else if businessCode, businessMessage, failed := providerResponseBusinessFailure(responseBody); failed {
+		status = model.ApiCallStatusFailed
+		errorCode = businessCode
+		errorText = businessMessage
 	}
 	requestKind := providerRequestKind(req.Method, req.URL.Path)
 	if metadata.RequestKind != "" {
 		requestKind = metadata.RequestKind
 	}
-	if requestErr == nil && statusCode >= 200 && statusCode < 300 && (requestKind == "create" || requestKind == "poll") && (metadata.Capability == "image" || metadata.Capability == "video") {
+	if status == model.ApiCallStatusSucceeded && (requestKind == "create" || requestKind == "poll") && (metadata.Capability == "image" || metadata.Capability == "video") {
 		metadata.Service.syncProviderTaskProgress(metadata.TaskID, responseBody)
 	}
 	apiFormat := "openai"

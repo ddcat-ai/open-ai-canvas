@@ -37,6 +37,39 @@ func TestValidateImageTaskDoesNotApplyQualityPromptLimitToGrokLite(t *testing.T)
 	}
 }
 
+func TestValidateVideoTaskRejectsPromptAboveCapabilityLimit(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("autodl-comfyui", "MiniMax H3").Video
+	profile.References.PromptMaxChars = 10_000
+	input := canvasGenerationInput{
+		Mode:   "video",
+		Prompt: strings.Repeat("镜", 23_142),
+		Config: providerConfig{Model: "MiniMax H3", VideoSeconds: "15", Size: "16:9", VQuality: "768p横"},
+	}
+
+	err := validateVideoTask(profile, input)
+	if err == nil || !strings.Contains(err.Error(), "最多 10000 个字符") || !strings.Contains(err.Error(), "23142 个字符") || !strings.Contains(err.Error(), "不会自动截断") {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}
+
+func TestValidateTaskCapabilityRejectsWorkflowPromptAboveConfiguredLimit(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("runninghub-workflow-video", "workflow-video")
+	profile.Video.References.PromptMaxChars = 10_000
+	input := map[string]any{
+		"mode":   "video",
+		"prompt": strings.Repeat("镜", 10_001),
+		"config": map[string]any{
+			"interfaceType":    "runninghub-workflow-video",
+			"capabilityConfig": profile,
+		},
+	}
+
+	err := (&Service{}).ValidateTaskCapability(input)
+	if err == nil || !strings.Contains(err.Error(), "完整提示词为 10001 个字符") {
+		t.Fatalf("ValidateTaskCapability() error = %v", err)
+	}
+}
+
 func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 	profile := DefaultImageCapabilityConfig("openai-image", "gpt-image-2")
 	profile.Size.AllowCustom = true

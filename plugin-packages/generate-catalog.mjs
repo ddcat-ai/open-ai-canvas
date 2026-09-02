@@ -86,7 +86,7 @@ function add(spec) {
 add({
   id: "openai-chat-completions", providerId: "chat-completion", name: "OpenAI Chat Completions", vendor: "OpenAI", capability: "text",
   baseUrl: "https://api.openai.com", auth: bearer, params: textParams,
-  create: jsonCreate("/v1/chat/completions", {
+  create: jsonCreate("/chat/completions", {
     model: ref("request.model"), messages: ref("request.messages"),
     temperature: omit(ref("request.providerOptions.chat-completion.temperature")),
     top_p: omit(ref("request.providerOptions.chat-completion.top_p")),
@@ -103,7 +103,7 @@ add({
     top_logprobs: omit(ref("request.providerOptions.chat-completion.top_logprobs")),
     user: omit(ref("request.providerOptions.chat-completion.user"))
   }),
-  agent: jsonCreate("/v1/chat/completions", { $merge: [ref("request.extra.agent.chatCompletion"), { model: ref("request.model") }] }),
+  agent: jsonCreate("/chat/completions", { $merge: [ref("request.extra.agent.chatCompletion"), { model: ref("request.model") }] }),
   agentResponse: { textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], toolCallsPath: "choices.0.message.tool_calls", toolCallIdPaths: ["id"], toolCallNamePaths: ["function.name"], toolCallArgumentsPaths: ["function.arguments"] },
   response: { status: "succeeded", textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
@@ -111,7 +111,7 @@ add({
 add({
   id: "openai-responses", providerId: "openai-response", name: "OpenAI Responses", vendor: "OpenAI", capability: "text",
   baseUrl: "https://api.openai.com", auth: bearer, params: textParams,
-  create: jsonCreate("/v1/responses", {
+  create: jsonCreate("/responses", {
     model: ref("request.model"), input: ref("request.messages"), instructions: omit(ref("request.instructions")),
     temperature: omit(ref("request.providerOptions.openai-response.temperature")),
     top_p: omit(ref("request.providerOptions.openai-response.top_p")),
@@ -123,7 +123,7 @@ add({
     stream: omit(ref("request.providerOptions.openai-response.stream")), truncation: omit(ref("request.providerOptions.openai-response.truncation")),
     user: omit(ref("request.providerOptions.openai-response.user"))
   }),
-  agent: jsonCreate("/v1/responses", { $merge: [ref("request.extra.agent.responses"), { model: ref("request.model") }] }),
+  agent: jsonCreate("/responses", { $merge: [ref("request.extra.agent.responses"), { model: ref("request.model") }] }),
   agentResponse: { textPaths: ["output_text"], reasoningPaths: ["reasoning.summary.0.text"], toolCallsPath: "output", toolCallIdPaths: ["call_id", "id"], toolCallNamePaths: ["name"], toolCallArgumentsPaths: ["arguments"] },
   response: { status: "succeeded", textPaths: ["output_text"], reasoningPaths: ["reasoning.summary.0.text"], usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
@@ -249,11 +249,18 @@ add({
   response: { status: "succeeded", images: map(ref("response.data"), "item", { url: omit(ref("item.url")), dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] }) }), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
 
+const arkSeedreamRatioSizes = [
+  ["auto", "2k"], ["1:1", "2048x2048"], ["4:3", "2304x1728"], ["3:4", "1728x2304"], ["16:9", "2560x1440"], ["9:16", "1440x2560"],
+  ["3:2", "2496x1664"], ["2:3", "1664x2496"], ["21:9", "3024x1296"]
+];
+
 add({
   id: "volcengine-ark-seedream", providerId: "volcengine-ark-image", name: "Volcengine Ark Seedream Images", vendor: "Volcengine", capability: "image",
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: imageParams,
   create: jsonCreate("/api/v3/images/generations", {
-    model: ref("request.model"), prompt: ref("request.prompt"), size: omit(ref("request.aspectRatio")),
+    model: ref("request.model"), prompt: ref("request.prompt"),
+    // Ark 的 size 只接受 WIDTHxHEIGHT 或 2k/3k/4k；统一层的比例值在这里换算成 2K 档像素尺寸，像素或档位值原样透传。
+    size: omit({ $switch: { cases: arkSeedreamRatioSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: ref("request.aspectRatio") } }),
     image: omit(map(ref("request.images"), "media", ref("media.value"))),
     sequential_image_generation: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation")),
     sequential_image_generation_options: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation_options")),

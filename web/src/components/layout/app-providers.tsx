@@ -9,6 +9,7 @@ import { ClientRootInit } from "@/components/layout/client-root-init";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { fetchPluginRuntimeState, setUserPluginEnabled } from "@/services/api/plugins";
@@ -17,6 +18,7 @@ import { useUserStore } from "@/stores/use-user-store";
 export function AppProviders({ children }: { children: ReactNode }) {
     const theme = useThemeStore((state) => state.theme);
     const dark = theme === "dark";
+    const appearance = useAppearanceStore((state) => state.appearance);
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
     const setPluginStates = usePluginStore((state) => state.setPluginStates);
@@ -38,8 +40,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
         let cancelled = false;
         void fetchPluginRuntimeState()
             .then(async ({ statuses, states }) => {
-                const legacyEnabledIds = usePluginStore.getState().installations
-                    .filter((installation) => installation.enabled && states[installation.manifest.id]?.canToggle && !states[installation.manifest.id]?.userConfigured)
+                const legacyEnabledIds = usePluginStore
+                    .getState()
+                    .installations.filter((installation) => installation.enabled && states[installation.manifest.id]?.canToggle && !states[installation.manifest.id]?.userConfigured)
                     .map((installation) => installation.manifest.id);
                 if (legacyEnabledIds.length) {
                     try {
@@ -69,7 +72,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = theme;
-    }, [dark, theme]);
+        applyAppearanceMetadata(appearance);
+    }, [appearance, dark, theme]);
 
     // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
     // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。

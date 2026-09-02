@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -27,9 +28,47 @@ func providerFailureDetails(payload map[string]any) (string, string) {
 		}
 		if message == "" {
 			message = strings.TrimSpace(stringField(candidate, "message"))
+			if message == "" {
+				message = strings.TrimSpace(stringField(candidate, "msg"))
+			}
 		}
 	}
 	return code, truncateRunes(message, 500)
+}
+
+func providerResponseBusinessFailure(responseBody []byte) (string, string, bool) {
+	if len(responseBody) == 0 {
+		return "", "", false
+	}
+	var payload map[string]any
+	if json.Unmarshal(responseBody, &payload) != nil {
+		return "", "", false
+	}
+	return providerPayloadBusinessFailure(payload)
+}
+
+func providerPayloadBusinessFailure(payload map[string]any) (string, string, bool) {
+	if errorValue, ok := payload["error"].(map[string]any); ok {
+		code, message := providerFailureDetails(map[string]any{"error": errorValue})
+		if code != "" || message != "" {
+			return code, message, true
+		}
+	}
+	if !providerBusinessCodeFailed(payload["code"]) {
+		return "", "", false
+	}
+	code, message := providerFailureDetails(payload)
+	return code, message, true
+}
+
+func providerBusinessCodeFailed(value any) bool {
+	code := strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+	switch code {
+	case "", "0", "success", "succeeded", "ok", "<nil>":
+		return false
+	default:
+		return true
+	}
 }
 
 func normalizedProviderErrorCode(value any) string {

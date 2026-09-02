@@ -2,7 +2,7 @@ import { startTransition, useCallback, useEffect, useRef, useState, type Dispatc
 import { App } from "antd";
 import { useNavigate } from "react-router";
 
-import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, normalizeCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
@@ -103,7 +103,7 @@ export function useCanvasProjectLifecycle({
                 chatSessions: restoredSessions,
                 activeChatId: project.activeChatId || null,
                 canvasAppearance: restoredAppearance,
-                backgroundMode: project.backgroundMode || "dots",
+                backgroundMode: project.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE,
                 showImageInfo: project.showImageInfo || false,
             };
             nodesRef.current = snapshot.nodes;

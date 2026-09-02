@@ -14,6 +14,8 @@
 
 - [肖像权可识别性排查画布插件实施规格](design/portrait-clearance-canvas-plugin.mdx)：TypeScript 重写、画布节点与全屏工作台、项目模型复用、本机 ONNX/百度识图/候选去重、任务合同、报告和验收方案。
 
+- [AI 审美批改画布插件方案](design/ai-art-critique-solution.md)：云端视觉分析、并行 Reviewer、问题定位、AI 修改提示词与前端 SVG 标注的职责边界和交互设计。
+
 - [LLM、Image、Video 主流请求协议全景与影策兼容性调查](design/model-request-protocol-landscape.md)：主流原生协议、聚合网关、图片/视频异步任务、参考素材 role、当前插件映射缺口与 MiniMax H3 专项审计。
 
 ## 本地协作文档（不随仓库分发）
@@ -24,6 +26,7 @@
 
 功能、代码地图、待办、待测试分别维护在以下页面；尚未建立的专题会在对应任务中补齐：
 
+- [AI 审美批改画布插件](content/docs/plugins/ai-art-critique.mdx)
 - [功能](content/docs/overview/features.mdx)
 - [本地开发](content/docs/backend/local-development.mdx)
 - [后端数据库](content/docs/backend/backend-database.mdx)
