@@ -129,11 +129,11 @@ func TestOfficialAgentProfilesMapToolRequestsAndResponses(t *testing.T) {
 		name, packageName, providerID, marker, wantPath, response, wantID, wantSignature string
 	}{
 		{
-			name: "openai-chat", packageName: "openai-chat-completions.yingce-plugin", providerID: "chat-completion", marker: "chat", wantPath: "/v1/chat/completions", wantID: "call-chat",
+			name: "openai-chat", packageName: "openai-chat-completions.yingce-plugin", providerID: "chat-completion", marker: "chat", wantPath: "/chat/completions", wantID: "call-chat",
 			response: `{"choices":[{"message":{"content":"chat answer","tool_calls":[{"id":"call-chat","function":{"name":"canvas_get_state","arguments":"{\"scope\":\"all\"}"}}]}}]}`,
 		},
 		{
-			name: "openai-responses", packageName: "openai-responses.yingce-plugin", providerID: "openai-response", marker: "responses", wantPath: "/v1/responses", wantID: "call-responses",
+			name: "openai-responses", packageName: "openai-responses.yingce-plugin", providerID: "openai-response", marker: "responses", wantPath: "/responses", wantID: "call-responses",
 			response: `{"output_text":"responses answer","output":[{"type":"message"},{"type":"function_call","call_id":"call-responses","name":"canvas_get_state","arguments":"{\"scope\":\"all\"}"}]}`,
 		},
 		{

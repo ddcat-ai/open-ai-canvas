@@ -86,7 +86,7 @@ function add(spec) {
 add({
   id: "openai-chat-completions", providerId: "chat-completion", name: "OpenAI Chat Completions", vendor: "OpenAI", capability: "text",
   baseUrl: "https://api.openai.com", auth: bearer, params: textParams,
-  create: jsonCreate("/v1/chat/completions", {
+  create: jsonCreate("/chat/completions", {
     model: ref("request.model"), messages: ref("request.messages"),
     temperature: omit(ref("request.providerOptions.chat-completion.temperature")),
     top_p: omit(ref("request.providerOptions.chat-completion.top_p")),
@@ -103,7 +103,7 @@ add({
     top_logprobs: omit(ref("request.providerOptions.chat-completion.top_logprobs")),
     user: omit(ref("request.providerOptions.chat-completion.user"))
   }),
-  agent: jsonCreate("/v1/chat/completions", { $merge: [ref("request.extra.agent.chatCompletion"), { model: ref("request.model") }] }),
+  agent: jsonCreate("/chat/completions", { $merge: [ref("request.extra.agent.chatCompletion"), { model: ref("request.model") }] }),
   agentResponse: { textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], toolCallsPath: "choices.0.message.tool_calls", toolCallIdPaths: ["id"], toolCallNamePaths: ["function.name"], toolCallArgumentsPaths: ["function.arguments"] },
   response: { status: "succeeded", textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
@@ -111,7 +111,7 @@ add({
 add({
   id: "openai-responses", providerId: "openai-response", name: "OpenAI Responses", vendor: "OpenAI", capability: "text",
   baseUrl: "https://api.openai.com", auth: bearer, params: textParams,
-  create: jsonCreate("/v1/responses", {
+  create: jsonCreate("/responses", {
     model: ref("request.model"), input: ref("request.messages"), instructions: omit(ref("request.instructions")),
     temperature: omit(ref("request.providerOptions.openai-response.temperature")),
     top_p: omit(ref("request.providerOptions.openai-response.top_p")),
@@ -123,7 +123,7 @@ add({
     stream: omit(ref("request.providerOptions.openai-response.stream")), truncation: omit(ref("request.providerOptions.openai-response.truncation")),
     user: omit(ref("request.providerOptions.openai-response.user"))
   }),
-  agent: jsonCreate("/v1/responses", { $merge: [ref("request.extra.agent.responses"), { model: ref("request.model") }] }),
+  agent: jsonCreate("/responses", { $merge: [ref("request.extra.agent.responses"), { model: ref("request.model") }] }),
   agentResponse: { textPaths: ["output_text"], reasoningPaths: ["reasoning.summary.0.text"], toolCallsPath: "output", toolCallIdPaths: ["call_id", "id"], toolCallNamePaths: ["name"], toolCallArgumentsPaths: ["arguments"] },
   response: { status: "succeeded", textPaths: ["output_text"], reasoningPaths: ["reasoning.summary.0.text"], usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
