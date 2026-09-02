@@ -101,9 +101,6 @@ export function EditorPreviewMonitor() {
 
     useEffect(() => () => stop(), [stop]);
 
-    const scrub = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPlaybackMs(Number(e.target.value));
-    };
 
     const stepBy = (deltaMs: number) => {
         if (!project) return;
@@ -116,9 +113,9 @@ export function EditorPreviewMonitor() {
     };
 
     return (
-        <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-black/70">
-            {/* 预览画面（占满整卡，Concat 监视器恒黑） */}
-            <div className="absolute inset-0 flex items-center justify-center overflow-hidden p-6">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--director-sequencer-surface)]">
+            {/* 预览画面：恒黑舞台，占满控制条以上剩余空间（Concat 监视器风格） */}
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
                 {activeClip && activeMediaUrl ? (
                     <video
                         key={activeClip.id}
@@ -149,11 +146,12 @@ export function EditorPreviewMonitor() {
                 )}
             </div>
 
-            {/* 播放控制：叠加在画面底部（Concat 式），不占独立行，拖拽拉高预览时始终贴画面底 */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pb-2.5 pt-8">
-                <span className="shrink-0 text-xs tabular-nums text-white/90">
+            {/* 播放控制条：画面下方的独立一行（Concat 布局），不悬浮叠加、无进度条；
+                播放/暂停用反白块 + 图标形态（Play/Pause）表达状态，图标保持中性（无 accent 蓝）。 */}
+            <div className="grid h-11 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+                <span className="truncate text-xs tabular-nums text-[var(--director-dock-fg)]">
                     {formatTimelineTime(playbackMs)}
-                    <span className="text-white/50"> / {formatTimelineTime(durationMs)}</span>
+                    <span className="opacity-60"> / {formatTimelineTime(durationMs)}</span>
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5">
                     <button
@@ -162,7 +160,7 @@ export function EditorPreviewMonitor() {
                         title="回到开头"
                         onClick={() => setPlaybackMs(0)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <SkipBack className="size-4" />
                     </button>
@@ -172,7 +170,7 @@ export function EditorPreviewMonitor() {
                         title="后退 1 秒"
                         onClick={() => stepBy(-1000)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <StepBack className="size-4" />
                     </button>
@@ -181,7 +179,12 @@ export function EditorPreviewMonitor() {
                         aria-label={playing ? "暂停" : "播放"}
                         onClick={toggle}
                         disabled={durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md bg-white/15 text-white transition-colors hover:bg-white/25 disabled:pointer-events-none disabled:opacity-35"
+                        className={`grid size-7 place-items-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+                            playing
+                                ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
+                                : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                        }`
+                        }`}
                     >
                         {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
                     </button>
@@ -191,7 +194,7 @@ export function EditorPreviewMonitor() {
                         title="前进 1 秒"
                         onClick={() => stepBy(1000)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <StepForward className="size-4" />
                     </button>
@@ -201,28 +204,18 @@ export function EditorPreviewMonitor() {
                         title="跳到结尾"
                         onClick={() => setPlaybackMs(durationMs)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <SkipForward className="size-4" />
                     </button>
                 </div>
-                <input
-                    type="range"
-                    min={0}
-                    max={Math.max(durationMs, 1)}
-                    step={10}
-                    value={Math.min(playbackMs, Math.max(durationMs, 1))}
-                    onChange={scrub}
-                    className="h-1 min-w-0 flex-1 accent-white/90"
-                    aria-label="播放头"
-                />
-                <div className="relative shrink-0">
+                <div className="relative justify-self-end">
                     <button
                         type="button"
                         aria-label="播放速度"
                         title="播放速度"
                         onClick={() => setSpeedMenuOpen((v) => !v)}
-                        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+                        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
                     >
                         <Gauge className="size-3.5" />
                         <span className="tabular-nums">{speed}x</span>
@@ -231,7 +224,7 @@ export function EditorPreviewMonitor() {
                     {speedMenuOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setSpeedMenuOpen(false)} />
-                            <div className="absolute bottom-full right-0 z-50 mb-1 w-24 overflow-hidden rounded-md border border-white/10 bg-neutral-900 py-1 shadow-xl">
+                            <div className="absolute bottom-full right-0 z-50 mb-1 w-24 overflow-hidden rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] py-1 shadow-xl">
                                 {[0.5, 1, 1.5, 2].map((s) => (
                                     <button
                                         key={s}
@@ -240,10 +233,12 @@ export function EditorPreviewMonitor() {
                                             changeSpeed(s);
                                             setSpeedMenuOpen(false);
                                         }}
-                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] transition-colors hover:bg-white/10 ${s === speed ? "text-white" : "text-white/70"}`}
+                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] transition-colors hover:bg-[var(--director-control-hover)] ${
+                                            s === speed ? "text-[var(--director-dock-fg-strong)]" : "text-[var(--director-dock-fg)]"
+                                        }`}
                                     >
                                         <span>{s}x</span>
-                                        {s === speed && <span className="text-white/50">✓</span>}
+                                        {s === speed && <span className="opacity-60">✓</span>}
                                     </button>
                                 ))}
                             </div>
@@ -251,6 +246,7 @@ export function EditorPreviewMonitor() {
                     )}
                 </div>
             </div>
+
         </div>
     );
 }

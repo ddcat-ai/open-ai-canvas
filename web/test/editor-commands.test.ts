@@ -19,9 +19,9 @@ describe("editor command registry (golden file)", () => {
         });
     }
 
-    test("knownOps lists the 9 golden ops", () => {
+    test("knownOps lists the 11 golden ops", () => {
         expect(createEditorCommandRegistry().knownOps().sort()).toEqual(
-            ["addClip", "addSubtitle", "moveClip", "rebuildSubtitleClips", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip"].sort(),
+            ["addClip", "addSubtitle", "moveClip", "rebuildSubtitleClips", "removeClip", "removeSubtitle", "setClipProperty", "splitClip", "trimClip", "addTrack", "removeTrack"].sort(),
         );
     });
 });
@@ -137,5 +137,66 @@ describe("editor command registry (plugin extension)", () => {
     test("shared singleton registry is stable across getters", () => {
         expect(getEditorCommandRegistry()).toBe(getEditorCommandRegistry());
         expect(getEditorCommandRegistry().knownOps()).toContain("trimClip");
+    });
+});
+
+describe("editor command registry (addTrack)", () => {
+    const registry = createEditorCommandRegistry();
+
+    test("adds a track with deterministic id/order/label and keeps existing state", () => {
+        const before = JSON.stringify(golden.base);
+        const result = registry.apply(golden.base, { op: "addTrack", payload: { kind: "audio" } });
+        const added = result.tracks[result.tracks.length - 1];
+        expect(added.kind).toBe("audio");
+        expect(added.order).toBe(Math.max(...golden.base.tracks.map((t) => t.order)) + 1);
+        expect(added.label).toBeTruthy();
+        expect(added.id).toBeTruthy();
+        expect(result.tracks.length).toBe(golden.base.tracks.length + 1);
+        expect(result.clips).toEqual(golden.base.clips);
+        expect(JSON.stringify(golden.base)).toBe(before);
+    });
+
+    test("same input always appends the same track (determinism for undo/redo replay)", () => {
+        const first = registry.apply(golden.base, { op: "addTrack", payload: { kind: "video" } });
+        const second = registry.apply(golden.base, { op: "addTrack", payload: { kind: "video" } });
+        expect(first).toEqual(second);
+    });
+
+    test("rejects unknown kinds", () => {
+        expect(() => registry.apply(golden.base, { op: "addTrack", payload: { kind: "burn" } })).toThrow(/kind/);
+    });
+});
+
+describe("editor command registry (removeTrack)", () => {
+    const registry = createEditorCommandRegistry();
+
+    test("removes the track and cascades its clips, keeps the rest", () => {
+        const base = golden.base;
+        // 先加一条 audio 轨作为可删目标（默认夹具每 kind 仅 1 条，受最后一条守卫保护）。
+        const withExtra = registry.apply(base, { op: "addTrack", payload: { kind: "audio" } });
+        const victim = withExtra.tracks[withExtra.tracks.length - 1];
+        const seeded = {
+            ...withExtra,
+            clips: [...withExtra.clips, { ...withExtra.clips[0], id: "clip-on-removed", trackId: victim.id }],
+        };
+        const result = registry.apply(seeded, { op: "removeTrack", payload: { trackId: victim.id } });
+        expect(result.tracks.some((t) => t.id === victim.id)).toBe(false);
+        expect(result.clips.some((c) => c.trackId === victim.id)).toBe(false);
+        expect(result.clips.some((c) => c.id === "clip-on-removed")).toBe(false);
+        expect(result.tracks.length).toBe(withExtra.tracks.length - 1);
+        expect(result.clips.length).toBe(seeded.clips.length - 1);
+    });
+
+    test("refuses to remove the last track of a kind", () => {
+        const base = golden.base;
+        const target = base.tracks.find((t) => base.tracks.filter((x) => x.kind === t.kind).length === 1);
+        expect(target).toBeTruthy();
+        expect(() => registry.apply(base, { op: "removeTrack", payload: { trackId: target.id } })).toThrow(/last/);
+    });
+
+    test("rejects an unknown track id", () => {
+        expect(() =>
+            registry.apply(golden.base, { op: "removeTrack", payload: { trackId: "no-such-track" } }),
+        ).toThrow(/track/);
     });
 });

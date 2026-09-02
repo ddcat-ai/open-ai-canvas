@@ -3,7 +3,7 @@
 // 未知 op 或非法 payload 一律抛错（fail-closed），保证可回放、可撤销、可黄金文件测试。
 // 插件可经宿主 API register 自定义 op，与内建命令共用同一注册表与校验纪律。
 
-import type { SrtEntry, TimelineClip, TimelineProject } from "@/types/timeline";
+import type { SrtEntry, TimelineClip, TimelineProject, TimelineTrack, TimelineTrackKind } from "@/types/timeline";
 
 export type EditCommand = { op: string; payload: unknown };
 export type CommandHandler = (state: TimelineProject, payload: unknown) => TimelineProject;
@@ -32,6 +32,11 @@ export type SetClipPropertyPayload = {
 export type AddSubtitlePayload = { clip: TimelineClip };
 export type RemoveSubtitlePayload = { id: string };
 /** 从节点权威 subtitleEntries 重建时间线条字幕 clip（§3.1 快照契约：单向显式同步，替换过期快照）。 */
+/** 新增空轨道（addTrack）。id/order/label 由 handler 按当前状态确定，保证 undo/redo 重放确定性。 */
+export type AddTrackPayload = { kind: TimelineTrackKind };
+
+/** 移除整条轨道及其全部片段（removeTrack）。守卫：同 kind 至少保留一条轨道（防唯一字幕/视频轨被删光后编辑失锚）。 */
+export type RemoveTrackPayload = { trackId: string };
 export type RebuildSubtitleClipsPayload = {
     /** 画布节点 id（subtitleEntries 权威源）。 */
     nodeId: string;
@@ -51,6 +56,8 @@ export const EDITOR_COMMAND_OPS = [
     "addSubtitle",
     "removeSubtitle",
     "rebuildSubtitleClips",
+    "addTrack",
+    "removeTrack",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -208,6 +215,47 @@ function handleRemoveSubtitle(state: TimelineProject, payload: unknown): Timelin
     return withClips(state, state.clips.filter((c) => c.id !== id));
 }
 
+/** 轨道种类的基础标签；新增轨道 label = 基础标签 + 同种类现有轨道数 + 1。 */
+const TRACK_KIND_BASE_LABELS: Record<TimelineTrackKind, string> = {
+    video: "视频",
+    image: "图片",
+    text: "文本",
+    audio: "音频",
+    subtitle: "字幕",
+};
+
+function handleAddTrack(state: TimelineProject, payload: unknown): TimelineProject {
+    const { kind } = payload as AddTrackPayload;
+    if (!(kind in TRACK_KIND_BASE_LABELS)) {
+        fail("addTrack", `track kind must be one of "video" | "image" | "text" | "audio" | "subtitle", got "${String(kind)}"`);
+    }
+    // id/order/label 都由当前状态确定：同一撤销/重放路径永远得到同一结果（确定性）。
+    let index = state.tracks.filter((t) => t.kind === kind).length + 1;
+    let id = `${kind}-${index}`;
+    while (state.tracks.some((t) => t.id === id)) {
+        index += 1;
+        id = `${kind}-${index}`;
+    }
+    const order = state.tracks.reduce((max, t) => Math.max(max, t.order), -1) + 1;
+    const track: TimelineTrack = { id, kind, label: `${TRACK_KIND_BASE_LABELS[kind]} ${index}`, order };
+    return { ...state, tracks: [...state.tracks, track] };
+}
+
+function handleRemoveTrack(state: TimelineProject, payload: unknown): TimelineProject {
+    const { trackId } = payload as RemoveTrackPayload;
+    if (typeof trackId !== "string" || trackId.length === 0) fail("removeTrack", "trackId must be a non-empty string");
+    const track = findTrackOrThrow("removeTrack", state, trackId);
+    // 每类轨道至少保留一条：删除最后一条会让吸附目标、字幕重建等编辑操作失锚。
+    const lastOfKind = state.tracks.filter((t) => t.kind === track.kind).length <= 1;
+    if (lastOfKind) fail("removeTrack", `cannot remove the last "${track.kind}" track`);
+    // 轨道上片段随轨道一并移除（moveClip/trimClip/splitClip 均已按 trackId 归属，无悬挂引用）。
+    return {
+        ...state,
+        tracks: state.tracks.filter((t) => t.id !== trackId),
+        clips: state.clips.filter((c) => c.trackId !== trackId),
+    };
+}
+
 /** 校验 SrtEntry 数组：形状、区间、重复 index（fail-closed）。 */
 function assertSubtitleEntries(op: string, entries: unknown): asserts entries is SrtEntry[] {
     if (!Array.isArray(entries)) fail(op, "entries must be an array of SrtEntry");
@@ -266,6 +314,8 @@ const BUILTIN_HANDLERS: ReadonlyArray<readonly [string, CommandHandler]> = [
     ["setClipProperty", handleSetClipProperty],
     ["addSubtitle", handleAddSubtitle],
     ["removeSubtitle", handleRemoveSubtitle],
+    ["addTrack", handleAddTrack],
+    ["removeTrack", handleRemoveTrack],
     ["rebuildSubtitleClips", handleRebuildSubtitleClips],
 ];
 

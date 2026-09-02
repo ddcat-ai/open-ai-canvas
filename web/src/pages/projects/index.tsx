@@ -274,7 +274,7 @@ export default function ProjectsPage() {
                 onClose={() => setStylePickerOpen(false)}
                 onSelect={(preset) => { setSelectedStyle(preset); setStylePickerOpen(false); }}
             />
-            <Modal className="library-modal" title="AI 生成章节" open={generating} footer={null} closable={false} maskClosable={false} keyboard={false} width={760}>
+            <Modal className="library-modal" title="AI 生成章节" open={generating} footer={null} closable={false} mask={{ closable: false }} keyboard={false} width={760}>
                 <div className="app-story-generating">
                     <div className="app-story-generating-head">
                         <span className="app-story-generating-mark"><Sparkles className="size-4" /></span>

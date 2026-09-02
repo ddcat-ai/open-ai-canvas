@@ -39,6 +39,16 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [x] 媒体面板改版：资产按来源分组（「本地上传」/「项目素材」），顶部提供 全部/项目素材/本地上传 筛选 Tab；分组头可折叠、资产行可展开查看详情（类型/分类/来源/预览文本）并一键添加到时间线；每项带来源徽章与计数徽章。后端 `projectAssetSummary` 透出 `source`（上传链路写入 `uploaded`），前端 `ProjectAsset` 类型补 `source?: string`，仅展示层使用，后端读取不再查询本地存储。
 - [x] 时间线横跨编辑面板全宽：时间线卡从内容区独立出来，与左栏+预览+右栏同处编辑面板，横跨从左到右全宽（含拖拽高度分隔条）；左栏收窄到 256px、右栏 320px，为全宽时间线腾出空间。
 - [x] 主题明暗一致性：媒体面板分组/筛选/徽章/展开详情全部使用 director token（surface/control-hover/dock-fg/sequencer-border），无新增硬编码色值；后端 `source` 字段不参与任何配色。前端 typecheck、生产构建、后端全量测试通过。
+- [x] 时间线面板补齐 Concat 风格工具栏与编辑交互（对齐第 2 条 runbook 与 `Concat/desktop/.../TimelinePanel.tsx`）：新增 选择/剃刀 工具切换（剃刀点击分割、非字幕片段、边缘留 100ms）、播放头时码只读显示与标尺拖动 scrub、分割播放头处、删除选中片段、磁吸开关（默认开）、加轨道下拉（视频/音频/字幕，`addTrack` 黄金命令确定性生成 id/order/label，undo/redo 可重放）、适应宽度（`getFitTimelineZoom`）；工具栏布局重排为 Concat 顶部条结构。`editor-commands.ts` golden ops 由 9 增到 10（`addTrack`）。
+- [x] 磁吸失效修复：片段拖拽移动分支原本只保留「左边缘目标与右边缘目标同时命中」的结果，单边命中（如最后一个片段右边缘无目标）或双目标取整后偏移为 0（原始位置已在目标上）时整组吸附被丢弃，表现为「第一个和第二个片段能吸附、后续片段与剃刀分割出的片段都吸不住」。改为以 `computeSnap` 返回的 `targets.length` 判定命中、左右候选独立比较取更近者，单边命中与零偏移命中均可正常吸附。
+- [ ] 用户浏览器 re-test（时间线工具栏与磁吸）：拖拽任意片段（含剃刀分割出的片段）靠近其他片段边缘或播放头时磁吸生效且可吸附回自身原位置；剃刀点击在指针处分割；分割按钮在播放头落在片段中段时可用；删除选中片段后再次拖拽正常；加轨道后新轨道带确定性标签与序号；适应宽度后内容恰好铺满可视宽度；磁吸关闭后拖拽自由、无取整跳动。
+- [x] 工具按钮选中态样式修正：时间线工具栏 选择/剃刀/磁吸 的按下态原来是蓝色背景块，改为「仅图标变 accent 色、无背景块」；颜色职责收敛为 `TOOL_FG_IDLE` / `TOOL_FG_ACTIVE` 两常量（唯一来源），工具栏与加轨道下拉不再散落重复的颜色字面量。
+- [x] 监视器播放条重构（Concat 布局）：删除叠加在画面底部的渐变进度条与 `<input type=range>` scrub；改为画面下方独立一行 `grid h-11 grid-cols-[1fr_auto_1fr]`：左 播放头/总时长时码、中 回开头/退 1s/播放暂停/进 1s/到结尾（播放态仅图标变 accent）、右 速度菜单（0.5x/1x/1.5x/2x，带 Gauge 图标与展开箭头）。
+- [ ] 用户浏览器 re-test（选中态与播放条）：点击 选择/剃刀/磁吸 时只看到图标变色（无蓝底块），深色/浅色主题一致；监视器底部控制条不悬浮于画面、无进度条，播放态播放图标变主题强调色，速度菜单展开/选择生效，拖拽分隔条改变监视器高度时画面区域与控制条高度正常。
+- [x] 轨道操作按钮（Concat 对齐）：时间线轨道行头新增「移除轨道」X 按钮（hover/键盘 focus 显现，danger 强调，仅该 kind 非最后一条时可用）；新增 `removeTrack` 黄金命令——每类轨道至少保留一条（删除该 kind 最后一条会被守卫拒绝），删除时级联移除轨道上全部片段、无悬挂引用，undo/redo 可重放；`editor-commands.ts` golden ops 10→11（`removeTrack`），新增 3 条单测（级联删除并保留其余 / 最后一条拒绝 / 未知 trackId 拒绝）。
+- [x] 资源上传 400 修复：`POST /api/resources` 在文件超过 MaxBytesReader 上限（单文件限制 50MB +1MB 缓冲）时 `FormFile` 返回英文 `http: request body too large` → 现翻译为与 service 配额校验一致的中文「单个上传文件必须小于 50MB」（`backend/internal/handler/user_data.go`），前端可正常展示失败原因而非裸 400。
+- [x] antd Modal `maskClosable` deprecation 清理：5 处改用 `mask={{ closable: … }}`（canvas-upload-modal / asset-library-picker-modal / projects index「AI 生成章节」/ skill-editor-drawer / skill-install-modal）。
+- [ ] 用户浏览器 re-test（轨道移除与上传）：hover 轨道行头出现 X，点击移除非最后一条轨道后其与片段消失且可 undo；该 kind 仅剩一条时行头不出现 X；移除轨道后选中片段同步取消；导入超过 50MB 的本地视频提示中文大小限制（而非裸 400）。
 - [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
 
 ## 画布导入同步、素材回收站与历史
