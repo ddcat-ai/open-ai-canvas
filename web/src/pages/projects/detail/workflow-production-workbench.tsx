@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { App, Button, Empty, Form, Image, Input, InputNumber, Segmented, Select, Tag } from "antd";
-import { Box, ChevronDown, ChevronLeft, ChevronRight, Download, Film, Image as ImageIcon, Layers3, List, Play, Plus, RefreshCcw, Save, Search, SlidersHorizontal, Trash2, UsersRound, WandSparkles, X } from "lucide-react";
+import { App, Button, Empty, Form, Image, Input, InputNumber, Modal, Segmented, Select, Tag } from "antd";
+import { Box, ChevronDown, ChevronLeft, ChevronRight, Download, Film, Image as ImageIcon, Layers3, List, Maximize2, Play, Plus, RefreshCcw, Save, Search, SlidersHorizontal, Trash2, UsersRound, WandSparkles, X } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
@@ -13,6 +13,7 @@ import { modelQuoteRequest } from "@/lib/model-pricing";
 import { customShotTitle, formatShotOrdinal, normalizeDefaultShotTitle } from "@/lib/shot-label";
 import { modelCompatibilityError, resolveCompatibleModel, resolveModelVideoBooleanOptions, type ModelRequirements } from "@/lib/model-selection";
 import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
+import { captureVideoPoster } from "@/lib/video-poster";
 import { submitBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteLogicalModel } from "@/services/api/logical-models";
 import { type GenerationTask } from "@/services/api/task-center";
@@ -85,6 +86,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const [leftTab, setLeftTab] = useState<"assets" | "episodes" | "shots">("episodes");
     const [previewTab, setPreviewTab] = useState<"latest" | "history">("latest");
     const [previewArtifactId, setPreviewArtifactId] = useState("");
+    const [imagePreviewArtifact, setImagePreviewArtifact] = useState<ShotArtifact | null>(null);
     const [editorDirty, setEditorDirty] = useState(false);
     const [submittingShotIds, setSubmittingShotIds] = useState<Set<string>>(() => new Set());
     const [taskClock, setTaskClock] = useState(() => Date.now());
@@ -242,6 +244,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
             continuityNotes: revision?.continuityNotes || "",
         });
         setPreviewArtifactId("");
+        setImagePreviewArtifact(null);
         setEditorDirty(!revision || videoPrompt !== revision.videoPrompt);
     }, [effectiveConfig, form, generationCapability, initialModel, revision?.id, selectedShot?.id, shotAssetReferenceContext.mentionReferences]);
 
@@ -567,13 +570,26 @@ export default function WorkflowProductionWorkbench(props: Props) {
                         />
                     </header>
                     <div className="workflow-preview-scroll thin-scrollbar">
-                        {previewTab === "latest" ? <LatestPreview artifact={previewArtifact} emptyText={stageCopy.empty} /> : <ArtifactHistory artifacts={artifacts} activeId={previewArtifact?.id} onSelect={(artifact) => { setPreviewArtifactId(artifact.id); setPreviewTab("latest"); }} />}
+                        {previewTab === "latest" ? <LatestPreview artifact={previewArtifact} emptyText={stageCopy.empty} onPreviewImage={setImagePreviewArtifact} /> : <ArtifactHistory artifacts={artifacts} activeId={previewArtifact?.id} onSelect={(artifact) => { setPreviewArtifactId(artifact.id); setPreviewTab("latest"); }} />}
                         <div className="workflow-preview-summary"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium">当前产物</span><ArtifactStatus artifact={newestArtifact} compact /></div><div className="mt-1 text-[var(--fs-micro)] text-foreground/45">{newestArtifact ? `${formatDuration(selectedShot.durationMs)} · ${resolution}p · v${newestArtifact.version}` : "当前镜头还没有生成产物"}</div></div>
                         <div className="workflow-preview-actions"><Button icon={<RefreshCcw className="size-3.5" />} loading={selectedShotSubmitting || shotTask?.status === "queued" || shotTask?.status === "running"} onClick={() => void generateArtifact()}>重新生成</Button><Button icon={<Download className="size-3.5" />} disabled={!previewArtifact?.resourceId} onClick={() => previewArtifact?.resourceId && void downloadArtifact(previewArtifact, selectedShot.title, message.error)}>下载{activeStage === "video" ? "视频" : "图片"}</Button></div>
                         <ArtifactHistory artifacts={artifacts.slice(0, 4)} activeId={previewArtifact?.id} onSelect={(artifact) => setPreviewArtifactId(artifact.id)} compact />
                     </div>
                 </aside>
             </div>
+
+            <Modal
+                open={Boolean(imagePreviewArtifact?.resourceId)}
+                title={imagePreviewArtifact?.type === "action_board" ? "动作预演预览" : "分镜图预览"}
+                footer={null}
+                centered
+                destroyOnHidden
+                width="min(960px, calc(100vw - 32px))"
+                onCancel={() => setImagePreviewArtifact(null)}
+                styles={{ body: { padding: 0 } }}
+            >
+                {imagePreviewArtifact?.resourceId ? <img className={`workflow-image-preview-modal ${imagePreviewArtifact.type === "action_board" ? "grayscale" : ""}`} src={resourceFileUrl(imagePreviewArtifact.resourceId)} alt={imagePreviewArtifact.type === "action_board" ? "动作预演大图" : "分镜图大图"} /> : null}
+            </Modal>
 
             <ShotTimeline activeStage={activeStage} detail={detail} shots={shots} selectedShotId={selectedShot.id} submittingShotIds={submittingShotIds} onSelectShot={requestShotSelection} onAddShot={requestAddShot} addingShot={addingShot} />
         </div>
@@ -669,11 +685,43 @@ function BoundAssets({ detail, shotId, changing, onUnlink }: { detail: ProjectDe
     );
 }
 
-function LatestPreview({ artifact, emptyText }: { artifact?: ShotArtifact; emptyText: string }) {
+function LatestPreview({ artifact, emptyText, onPreviewImage }: { artifact?: ShotArtifact; emptyText: string; onPreviewImage: (artifact: ShotArtifact) => void }) {
     if (!artifact?.resourceId) return <div className="workflow-media-empty"><span><Play className="size-7" /></span><p>{emptyText}</p></div>;
     const src = resourceFileUrl(artifact.resourceId);
-    if (artifact.type === "video") return <video className="workflow-preview-media" src={src} controls preload="metadata" />;
-    return <img className={`workflow-preview-media ${artifact.type === "action_board" ? "grayscale" : ""}`} src={src} alt="镜头生成预览" loading="eager" />;
+    if (artifact.type === "video") return <VideoArtifactPreview src={src} title="镜头视频" />;
+    return <button type="button" className="workflow-preview-media-button" onClick={() => onPreviewImage(artifact)} aria-label={artifact.type === "action_board" ? "点击预览动作预演" : "点击预览分镜图"}>
+        <img className={`workflow-preview-media ${artifact.type === "action_board" ? "grayscale" : ""}`} src={src} alt="镜头生成预览" loading="eager" />
+        <span className="workflow-preview-expand" aria-hidden="true"><Maximize2 className="size-4" /></span>
+    </button>;
+}
+
+function VideoArtifactPreview({ src, title }: { src: string; title: string }) {
+    const [posterUrl, setPosterUrl] = useState("");
+    const [playing, setPlaying] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        let objectUrl = "";
+        setPosterUrl("");
+        setPlaying(false);
+        void captureVideoPoster(src, { maxWidth: 960 })
+            .then((captured) => {
+                if (!active || !captured.poster) return;
+                objectUrl = URL.createObjectURL(captured.poster);
+                setPosterUrl(objectUrl);
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [src]);
+
+    if (playing) return <video className="workflow-preview-media" src={src} poster={posterUrl || undefined} controls autoPlay playsInline preload="metadata" aria-label={title} />;
+    return <button type="button" className="workflow-preview-media-button workflow-video-poster" onClick={() => setPlaying(true)} aria-label={`点击播放${title}`}>
+        {posterUrl ? <img className="workflow-preview-media" src={posterUrl} alt={`${title}首帧`} /> : <video className="workflow-preview-media" src={src} muted playsInline preload="auto" aria-hidden="true" />}
+        <span className="workflow-video-play" aria-hidden="true"><Play className="size-6" fill="currentColor" /></span>
+    </button>;
 }
 
 function ArtifactHistory({ artifacts, activeId, onSelect, compact = false }: { artifacts: ShotArtifact[]; activeId?: string; onSelect: (artifact: ShotArtifact) => void; compact?: boolean }) {

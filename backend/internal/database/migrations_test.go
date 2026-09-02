@@ -120,7 +120,7 @@ func TestMigrateSchemaV4AddsResourceUploadKeyToExistingSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Ready || status.Current != 4 {
+	if !status.Ready || status.Current != CurrentSchemaVersion {
 		t.Fatalf("unexpected schema status: %#v", status)
 	}
 

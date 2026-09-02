@@ -104,13 +104,26 @@ func validatePluginPackagePath(name string) (string, error) {
 	if name == "" || strings.ContainsRune(name, '\\') || strings.HasPrefix(name, "/") || path.IsAbs(name) || path.Clean(name) != name || strings.HasPrefix(name, "../") || name == ".." {
 		return "", fmt.Errorf("invalid plugin package path %q", name)
 	}
-	if name == "manifest.json" || strings.HasPrefix(name, "web/") || strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "docs/") || name == "README.md" || name == "LICENSE" {
+	if name == "manifest.json" || strings.HasPrefix(name, "web/") || strings.HasPrefix(name, "backend/") || strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "docs/") || name == "README.md" || name == "LICENSE" {
 		return name, nil
 	}
 	return "", fmt.Errorf("plugin package path %q is outside the allowed package roots", name)
 }
 
 func validatePluginPackageRuntime(manifest Manifest, files map[string][]byte) error {
+	backend := strings.TrimSpace(manifest.Runtime.Backend)
+	if backend == "rpc" || backend == "wasm" {
+		entry := strings.TrimSpace(manifest.Runtime.BackendEntry)
+		if !strings.HasPrefix(entry, "backend/") || path.Clean(entry) != entry {
+			return fmt.Errorf("manifest.runtime.backendEntry must point inside backend/")
+		}
+		if _, ok := files[entry]; !ok {
+			return fmt.Errorf("manifest runtime backend entry %q is missing from package", entry)
+		}
+		if backend == "wasm" && !strings.HasSuffix(strings.ToLower(entry), ".wasm") {
+			return fmt.Errorf("wasm backend entry must have .wasm extension")
+		}
+	}
 	if strings.TrimSpace(manifest.Entry) == "" {
 		if strings.TrimSpace(manifest.Runtime.Web) != "" {
 			return fmt.Errorf("manifest.runtime.web requires manifest.entry")

@@ -23,6 +23,7 @@ import { createDirectorActor, createDirectorBillboard, createDirectorCamera, cre
 import { describeDirectorSaveStatus, resolveDirectorCloseOutcome, shouldBlockDirectorUnload, shouldOfferDirectorDraftRecovery } from "@/lib/canvas/director/director-save-wiring";
 import { useDirectorSaveCoordinator } from "@/components/canvas/director/use-director-save-coordinator";
 import { uploadMediaFile } from "@/services/file-storage";
+import { saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
 import { useDirectorWorkbenchStore } from "@/stores/canvas/use-director-workbench-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -418,6 +419,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
         if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
         const uploaded = await uploadMediaFile(file, "model");
         const assetId = addAsset({ kind: "model", title: file.name.replace(/\.(glb|gltf)$/i, ""), coverUrl: "", tags: ["3D模型"], source: "导演台", data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: file.name }, metadata: { source: "director" } });
+        await saveRemoteUserDataNow();
         const asset = useAssetStore.getState().assets.find((item): item is ModelAsset => item.id === assetId && item.kind === "model");
         if (asset) addModelAsset(asset);
         message.success("3D 模型已加入场景和素材库");

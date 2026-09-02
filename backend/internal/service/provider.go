@@ -2388,6 +2388,12 @@ func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationIn
 }
 
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
+	resolution := strings.TrimSpace(input.Config.VQuality)
+	if input.Mode == "video" {
+		if declared := videoResolutionNameRequest(input.VideoCapability, resolution); declared != "" {
+			resolution = declared
+		}
+	}
 	request := protocol.GenerationRequest{
 		Capability:    protocol.Capability(input.Mode),
 		Model:         input.Config.Model,
@@ -2397,7 +2403,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
 		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
 		AspectRatio:   input.Config.Size,
-		Resolution:    input.Config.VQuality,
+		Resolution:    resolution,
 		Quality:       input.Config.Quality,
 		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),
 		Watermark:     parseBool(input.Config.VideoWatermark, false),

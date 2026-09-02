@@ -23,6 +23,7 @@ import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
 import { deleteAssetWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 type LibraryAsset = Exclude<Asset, { kind: "entity" }>;
 
@@ -1058,6 +1059,7 @@ const assetsEmptyBannerFrames = [
 ];
 
 function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; onImport: () => void; onGoCanvas: () => void }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return (
         <div className="assets-empty">
             <div className="assets-empty-banner" aria-hidden="true">
@@ -1068,7 +1070,7 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                     </figure>
                 ))}
                 <span className="assets-empty-banner-caption">
-                    <span>影策素材库</span>把每次创作的结果，留档成可复用的资产
+                    <span>{brandName}素材库</span>把每次创作的结果，留档成可复用的资产
                 </span>
             </div>
             <div className="assets-empty-cards">

@@ -1,0 +1,17 @@
+.admin-list-toolbar .ant-btn.admin-toolbar-primary-action {
+    border-color: var(--btn-solid-bg) !important;
+    background: var(--btn-solid-bg) !important;
+    color: var(--btn-solid-fg) !important;
+}
+
+.admin-list-toolbar .ant-btn.admin-toolbar-primary-action:not(:disabled):hover {
+    border-color: var(--btn-solid-hover-bg) !important;
+    background: var(--btn-solid-hover-bg) !important;
+    color: var(--btn-solid-fg) !important;
+}
+
+.admin-list-toolbar .ant-btn.admin-toolbar-primary-action:not(:disabled):active {
+    border-color: var(--btn-solid-active-bg) !important;
+    background: var(--btn-solid-active-bg) !important;
+    color: var(--btn-solid-fg) !important;
+}

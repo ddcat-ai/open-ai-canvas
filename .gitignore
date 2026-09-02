@@ -4,6 +4,14 @@ node_modules/
 docs/*
 !docs/design/
 !docs/index.md
+# Keep the new plugin design spec versioned without unignoring generated docs.
+!docs/content/
+docs/content/*
+!docs/content/docs/
+docs/content/docs/*
+!docs/content/docs/plugins/
+docs/content/docs/plugins/*
+!docs/content/docs/plugins/ai-art-critique.mdx
 .env*
 !.env.example
 data/
@@ -41,3 +49,4 @@ assets/prototypes/.*.drawio.bkp
 camera_language_guide.md
 .superdesign
 .playwright-cli/
+/project-memory/

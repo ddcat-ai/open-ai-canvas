@@ -17,8 +17,8 @@ export type BackendPlugin = {
 export type WorkflowPluginStatus = "enabled" | "disabled" | "invalid" | string;
 
 export type PluginManagement = {
-    origin: "official" | "uploaded";
-    kind: "protocol" | "application";
+    origin: "official" | "system" | "uploaded";
+    kind: "protocol" | "application" | "payment";
     activationScope: "system" | "user";
     configurationScope: "none" | "system" | "user";
 };

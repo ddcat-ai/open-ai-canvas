@@ -82,6 +82,11 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 		return UserDataSummary{}, existingErr
 	}
+	if existing != nil && existing.PayloadJSON != asset.PayloadJSON {
+		if err := s.validateAssetCanvasReferences(userID, asset); err != nil {
+			return UserDataSummary{}, err
+		}
+	}
 	existingBytes := int64(0)
 	if existing != nil {
 		existingBytes = int64(len([]byte(existing.PayloadJSON)))
@@ -139,6 +144,9 @@ func (s *Service) ReplaceUserAssets(userID string, req AssetsSyncRequest) ([]jso
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
+	if err := s.validateAssetReplacementCanvasReferences(userID, assets); err != nil {
+		return nil, err
+	}
 	usage, err := s.repo.UserStorageUsage(userID)
 	if err != nil {
 		return nil, err
@@ -200,6 +208,9 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
+	if err := s.validateCanvasMediaAssets(userID, raw); err != nil {
+		return UserDataSummary{}, err
+	}
 	existing, existingErr := s.repo.CanvasProjectForUser(userID, project.ID)
 	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 		return UserDataSummary{}, existingErr
@@ -245,6 +256,11 @@ func (s *Service) ReplaceUserCanvasProjects(userID string, req CanvasProjectsSyn
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
+	for _, raw := range req.Projects {
+		if err := s.validateCanvasMediaAssets(userID, raw); err != nil {
+			return nil, err
+		}
+	}
 	usage, err := s.repo.UserStorageUsage(userID)
 	if err != nil {
 		return nil, err

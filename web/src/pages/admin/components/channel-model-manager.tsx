@@ -746,7 +746,7 @@ function PriceTierFields({
                             <div className="admin-price-tier-toggle">
                                 <div>
                                     <strong>可供用户使用</strong>
-                                    <span>关闭后保留配置，但用户请求不再匹配这档价格</span>
+                                    <span>开启后参与用户请求匹配；关闭后仅保留配置，不参与计费匹配</span>
                                 </div>
                                 <Switch
                                     aria-label="可供用户使用"

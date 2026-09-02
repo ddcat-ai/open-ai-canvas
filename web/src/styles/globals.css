@@ -1155,6 +1155,11 @@
         box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
     }
 
+    .brand-logo-frame[data-logo-frame-enabled="false"] > :is(img, svg) {
+        width: 100%;
+        height: 100%;
+    }
+
 
 
     /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */

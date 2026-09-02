@@ -10,12 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 4
+const CurrentSchemaVersion int64 = 5
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
 const resourceUploadKeyChecksum = "sha256:resource-upload-key-v4-20260901"
+const paymentTopupChecksum = "sha256:payment-topup-v5-20260902"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -46,6 +47,7 @@ var schemaMigrations = []migration{
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
 	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
+	{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -102,6 +104,21 @@ func migrateSchemaV4(tx *gorm.DB) error {
 	}
 	if err := tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_resources_user_upload_key ON resources (user_id, upload_key)").Error; err != nil {
 		return fmt.Errorf("创建资源上传幂等索引：%w", err)
+	}
+	return nil
+}
+
+func migrateSchemaV5(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(
+		&model.CreditLedgerEntry{},
+		&model.TopupProduct{},
+		&model.PaymentProviderConfig{},
+		&model.PaymentOrder{},
+		&model.PaymentNotification{},
+		&model.PaymentReconciliationRun{},
+		&model.PaymentReconciliationItem{},
+	); err != nil {
+		return fmt.Errorf("创建积分支付与对账结构：%w", err)
 	}
 	return nil
 }

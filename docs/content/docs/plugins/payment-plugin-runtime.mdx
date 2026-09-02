@@ -1,0 +1,64 @@
+# 支付插件运行时
+
+支付渠道通过 `.yingce-plugin` 包接入。宿主只负责订单、幂等、配置加密、回调收件箱、积分入账和对账；插件负责渠道协议转换。
+
+## 包结构
+
+```text
+my-payment.yingce-plugin
+├── manifest.json
+├── backend/provider
+├── assets/icon.svg
+└── docs/README.md
+```
+
+Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通过 `runtime.backendEntry` 指定后端入口。当前版本首先启用 `rpc`：宿主以一次 JSON 请求启动入口进程，进程返回一次 JSON 响应。WASM 使用相同的 `yingce.payment/v1` 数据契约，运行时启用后即可复用插件实现。
+
+## 标准操作
+
+入口进程接收以下操作名：
+
+| 操作 | 返回值 |
+| --- | --- |
+| `validate_config` | 空数据；失败返回 `ok:false` |
+| `create_order` | `Checkout`：`mode`、`value`、`expiresAt` |
+| `query_order` | 标准 `Result` |
+| `close_order` | 标准 `Result` |
+| `verify_notification` | `Notification`，请求体通过 `bodyBase64` 传入 |
+| `download_trade_bill` | `BillRecord[]` |
+
+请求固定带有 `version: "yingce.payment/v1"`。插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
+
+## Manifest 示例
+
+```json
+{
+  "apiVersion": "yingce.plugin/v1",
+  "id": "example-aggregate-payment",
+  "name": "Example 聚合支付",
+  "version": "1.0.0",
+  "author": "Example",
+  "enabled": true,
+  "runtime": { "backend": "rpc", "backendEntry": "backend/provider" },
+  "configuration": {
+    "fields": [
+      { "name": "merchantId", "type": "string", "required": true },
+      { "name": "secret", "type": "password", "required": true, "secret": true }
+    ]
+  },
+  "contributes": {
+    "paymentProviders": [{
+      "id": "example-qr",
+      "label": "Example 聚合支付",
+      "icon": "assets/icon.svg",
+      "checkoutMode": "qr_code",
+      "identityFields": ["merchantId"],
+      "expiryPolicy": { "defaultMinutes": 30, "minMinutes": 5, "maxMinutes": 1440 },
+      "notificationSuccess": { "status": 204 },
+      "notificationFailure": { "status": 400 }
+    }]
+  }
+}
+```
+
+历史订单绑定插件版本和包哈希。升级不会替换未完结订单所需的运行文件；宿主检测到未完结订单时会拒绝支付插件升级或卸载，直到订单进入终态。签名根、WASM 执行器和通用网络白名单将在后续安全阶段加入。

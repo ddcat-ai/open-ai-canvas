@@ -117,3 +117,105 @@ func TestValidateSyncedPayloadRejectsNestedInlineMedia(t *testing.T) {
 		}
 	}
 }
+
+func TestCanvasMediaAssetReferencesCollectsNodesAndTimeline(t *testing.T) {
+	raw := json.RawMessage(`{
+		"nodes":[
+			{"type":"image","metadata":{"assetId":"asset-image","storageKey":"resource:resource-image"}},
+			{"type":"text","metadata":{"assetId":"asset-text","content":"/api/resources/not-media/file"}},
+			{"type":"video","metadata":{"content":"https://cdn.example.com/external.mp4"}}
+		],
+		"timeline":{"clips":[
+			{"directMedia":{"kind":"audio","assetId":"asset-audio","url":"/api/resources/resource-audio/file"}},
+			{"directMedia":{"kind":"text","content":"/api/resources/not-timeline-media/file"}}
+		]}
+	}`)
+
+	references, err := canvasMediaAssetReferences(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(references) != 2 {
+		t.Fatalf("references = %#v", references)
+	}
+	if references[0].AssetID != "asset-image" || references[0].ResourceID != "resource-image" {
+		t.Fatalf("node reference = %#v", references[0])
+	}
+	if references[1].AssetID != "asset-audio" || references[1].ResourceID != "resource-audio" {
+		t.Fatalf("timeline reference = %#v", references[1])
+	}
+}
+
+func TestValidateCanvasMediaAssetsRejectsResourceWithoutAsset(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{
+		ID: "resource-canvas-orphan", UserID: "user-1", Status: model.ResourceStatusReady,
+		Provider: "local", ObjectKey: "users/user-1/image/orphan.png",
+	}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	raw := json.RawMessage(`{
+		"id":"canvas-1",
+		"nodes":[{"id":"node-1","type":"image","metadata":{"storageKey":"resource:resource-canvas-orphan","content":"/api/resources/resource-canvas-orphan/file"}}]
+	}`)
+
+	err := svc.validateCanvasMediaAssets("user-1", raw)
+	if err == nil || !strings.Contains(err.Error(), "尚未进入素材库") {
+		t.Fatalf("validateCanvasMediaAssets() error = %v", err)
+	}
+}
+
+func TestValidateCanvasMediaAssetsAcceptsMatchingNodeAndTimelineAssets(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resources := []model.Resource{
+		{ID: "resource-node", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/image/node.png"},
+		{ID: "resource-timeline", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/video/timeline.mp4"},
+	}
+	assets := []model.Asset{
+		{ID: "asset-node", UserID: "user-1", PayloadJSON: `{"id":"asset-node","data":{"storageKey":"resource:resource-node"}}`},
+		{ID: "asset-timeline", UserID: "user-1", PayloadJSON: `{"id":"asset-timeline","data":{"url":"/api/resources/resource-timeline/file"}}`},
+	}
+	for index := range resources {
+		if err := db.Create(&resources[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index := range assets {
+		if err := db.Create(&assets[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw := json.RawMessage(`{
+		"id":"canvas-1",
+		"nodes":[{"id":"node-1","type":"image","metadata":{"assetId":"asset-node","storageKey":"resource:resource-node"}}],
+		"timeline":{"clips":[{"id":"clip-1","directMedia":{"kind":"video","assetId":"asset-timeline","storageKey":"resource:resource-timeline"}}]}
+	}`)
+
+	if err := svc.validateCanvasMediaAssets("user-1", raw); err != nil {
+		t.Fatalf("validateCanvasMediaAssets() error = %v", err)
+	}
+}
+
+func TestValidateCanvasMediaAssetsRejectsMismatchedAsset(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resources := []model.Resource{
+		{ID: "resource-canvas", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/image/canvas.png"},
+		{ID: "resource-other", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/image/other.png"},
+	}
+	for index := range resources {
+		if err := db.Create(&resources[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	asset := model.Asset{ID: "asset-wrong", UserID: "user-1", PayloadJSON: `{"data":{"storageKey":"resource:resource-other"}}`}
+	if err := db.Create(&asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	raw := json.RawMessage(`{"nodes":[{"type":"image","metadata":{"assetId":"asset-wrong","storageKey":"resource:resource-canvas"}}]}`)
+
+	err := svc.validateCanvasMediaAssets("user-1", raw)
+	if err == nil || !strings.Contains(err.Error(), "不一致") {
+		t.Fatalf("validateCanvasMediaAssets() error = %v", err)
+	}
+}
