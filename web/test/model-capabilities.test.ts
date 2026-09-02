@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // Bun 直接执行 TypeScript 测试时需要保留扩展名；生产 tsconfig 不包含 test/。
-import { defaultModelCapabilityConfig, normalizeVideoValue } from "../src/lib/model-capabilities.ts";
+import { defaultModelCapabilityConfig, modelCapabilityConfigFor, normalizeVideoValue } from "../src/lib/model-capabilities.ts";
 
 test("switching to MiniMax H3 replaces an unsupported 720p value with 768P", () => {
     const profile = defaultModelCapabilityConfig("minimax-video", "MiniMax-H3").video!;
@@ -38,4 +38,26 @@ test("H3 spellings all route to the relay 768p/1080p override", () => {
         assert.deepEqual(profile.resolutions, ["768p", "1080p"], `expected override for ${name}`);
         assert.equal(profile.defaultResolution, "768p", `expected 768p default for ${name}`);
     }
+});
+
+test("modelCapabilityConfigFor falls back to the channel interfaceType when a model has no per-model protocol", () => {
+    // A relay channel declares newapi-channel-2 at the channel level; the H3 model
+    // entry carries no per-model protocol. The effective protocol must still come
+    // from the channel interfaceType so 768p/1080p is offered in the resolution picker.
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["minimax_h3"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [{ model: "minimax_h3", capability: "video" }],
+                },
+            ],
+        },
+        "relay::minimax_h3",
+    ).video!;
+
+    assert.deepEqual(profile.resolutions, ["768p", "1080p"]);
+    assert.equal(profile.defaultResolution, "768p");
 });
