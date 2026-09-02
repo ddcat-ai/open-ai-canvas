@@ -65,7 +65,7 @@
         "recharts": "^3.9.2",
         "remark-gfm": "^4.0.1",
         "shadcn": "^4.13.1",
-        "streamdown": "^2.5.0",
+        "streamdown": "^2.6.0",
         "tailwind-merge": "^3.6.0",
         "tailwindcss": "^4.3.3",
         "three": "^0.185.1",
