@@ -27,7 +27,7 @@
     "onnxruntime-node": "^1.22.0",
     "playwright-core": "^1.55.0",
     "sharp": "^0.34.3",
-    "zod": "^3.25.76"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -36,7 +36,7 @@
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "zod": "3.25.76"
+    "zod": "4.5.4"
   },
   "engines": {
     "node": ">=18"
