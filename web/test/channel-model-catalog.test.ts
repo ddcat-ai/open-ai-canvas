@@ -8,7 +8,9 @@ import { CanvasVideoSettingsPopover } from "../src/components/canvas/canvas-vide
 import { VideoSettingsPanel } from "../src/components/video-settings-panel";
 import { canvasThemes } from "../src/lib/canvas-theme";
 import { mergeFetchedChannelModelCosts, type ChannelModelCatalogItem } from "../src/lib/channel-model-catalog";
-import { defaultModelCapabilityConfig, pluginWorkflowCapabilityConfig } from "../src/lib/model-capabilities";
+import { defaultModelCapabilityConfig, pluginWorkflowCapabilityConfig, resolveModelProtocolPreset } from "../src/lib/model-capabilities";
+import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
+import { buildModelProtocolPatch } from "../src/pages/settings/channel-model-protocol-preset";
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
 import { fetchChannelModels } from "../src/services/api/image";
 import { createVideoGenerationTask } from "../src/services/api/video";
@@ -32,6 +34,42 @@ const omniCatalog: ChannelModelCatalogItem = {
         aspectRatio: [{ value: "16:9" }, { value: "9:16" }],
         durationSeconds: [{ value: "8" }, { value: "10" }],
     },
+};
+
+const autoDlVideoProtocol: ModelProtocolDefinition = {
+    value: "autodl-comfyui",
+    label: "AutoDL ComfyUI 视频",
+    vendor: "AutoDL",
+    capability: "video",
+    create: "POST /workflow/run",
+    contentType: "application/json",
+    poll: "GET /workflow/status/{id}",
+    media: "result.video",
+    workflows: [
+        {
+            id: "minimax_h3_lightx2v_no_pic",
+            label: "MiniMax H3 文生视频",
+            providerId: "autodl-comfyui",
+            capability: "video",
+            parameters: [
+                { name: "prompt", type: "string", required: true, mapping: "prompt" },
+                { name: "duration", type: "integer", mapping: "duration" },
+                { name: "resolution", type: "string", mapping: "resolution", values: ["480p竖", "768p竖", "480p横", "768p横"] },
+            ],
+            defaults: { duration: 5, resolution: "768p竖" },
+        },
+    ],
+};
+
+const xaiVideoProtocol: ModelProtocolDefinition = {
+    value: "xai-video",
+    label: "xAi Video",
+    vendor: "xAI",
+    capability: "video",
+    create: "POST /videos/generations",
+    contentType: "application/json",
+    poll: "GET /videos/{id}",
+    media: "video.url",
 };
 
 function configForCatalog(catalog: ChannelModelCatalogItem[], input: Partial<AiConfig> = {}) {
@@ -81,6 +119,71 @@ describe("public channel model catalog", () => {
         expect(profile.resolutions).toEqual(["480p竖", "480p横"]);
         expect(profile.defaultResolution).toBe("480p竖");
         expect(profile.duration).toEqual({ selection: "enum", values: [5], default: 5 });
+    });
+
+    test("resolves an installed protocol workflow preset for the current model", () => {
+        const preset = resolveModelProtocolPreset("autodl-comfyui", "minimax_h3_lightx2v_no_pic", [autoDlVideoProtocol, xaiVideoProtocol]);
+
+        expect(preset.workflowMatched).toBe(true);
+        expect(preset.defaultOptions).toEqual({ duration: 5, resolution: "768p竖" });
+        expect(preset.capabilityConfig?.video).toMatchObject({
+            duration: { selection: "enum", values: [5], default: 5 },
+            ratios: [],
+            defaultRatio: "",
+            resolutions: ["480p竖", "768p竖", "480p横", "768p横"],
+            defaultResolution: "768p竖",
+        });
+    });
+
+    test("restores AutoDL workflow parameters after switching through xAi Video", () => {
+        const definitions = [autoDlVideoProtocol, xaiVideoProtocol];
+        const model = "minimax_h3_lightx2v_no_pic";
+        const initialPreset = resolveModelProtocolPreset("autodl-comfyui", model, definitions);
+        const initial = {
+            model,
+            protocol: "autodl-comfyui",
+            capability: "video" as const,
+            billingMode: "fixed_request" as const,
+            capabilityConfig: initialPreset.capabilityConfig,
+            defaultOptions: initialPreset.defaultOptions,
+        };
+
+        const xaiResult = buildModelProtocolPatch({ model, capability: "video", protocol: "xai-video", billingMode: initial.billingMode, definitions });
+        expect(xaiResult.patch).toBeDefined();
+        const xaiConfig = { ...initial, ...xaiResult.patch! };
+        expect(xaiConfig.protocol).toBe("xai-video");
+        expect(xaiConfig.billingMode).toBe("fixed_request");
+        expect(xaiConfig.capabilityConfig).toEqual(defaultModelCapabilityConfig("xai-video", model));
+        expect(xaiConfig.defaultOptions).toEqual({});
+
+        const autoDlResult = buildModelProtocolPatch({ model, capability: "video", protocol: "autodl-comfyui", billingMode: xaiConfig.billingMode, definitions });
+        expect(autoDlResult.patch).toBeDefined();
+        const restored = { ...xaiConfig, ...autoDlResult.patch! };
+
+        expect(restored.protocol).toBe("autodl-comfyui");
+        expect(restored.defaultOptions).toEqual({ duration: 5, resolution: "768p竖" });
+        expect(restored.capabilityConfig?.video).toMatchObject({
+            duration: { selection: "enum", values: [5], default: 5 },
+            ratios: [],
+            defaultRatio: "",
+            resolutions: ["480p竖", "768p竖", "480p横", "768p横"],
+            defaultResolution: "768p竖",
+        });
+    });
+
+    test("rejects a workflow protocol when it does not declare the current model", () => {
+        const result = buildModelProtocolPatch({
+            model: "unknown-workflow",
+            capability: "video",
+            protocol: "autodl-comfyui",
+            billingMode: "fixed_request",
+            definitions: [autoDlVideoProtocol],
+        });
+
+        expect(result.patch).toBeUndefined();
+        expect(result.preset.capabilityConfig).toBeUndefined();
+        expect(result.preset.defaultOptions).toEqual({});
+        expect(result.preset.incompatibleReason).toContain("unknown-workflow");
     });
 
     test("preserves six public capabilities without expanding compatibility IDs", async () => {

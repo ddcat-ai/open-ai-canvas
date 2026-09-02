@@ -9,6 +9,7 @@ import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, modelProtocolSupportsTokenBilling, type ModelProtocol, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { modelOptionName, type ModelChannel } from "@/stores/use-config-store";
+import { buildModelProtocolPatch } from "./channel-model-protocol-preset";
 
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
 
@@ -188,11 +189,20 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     capability={activeCapability}
                                     value={activeProtocol}
                                     protocols={availableProtocols}
-                                    onChange={(nextProtocol) => updateCost(activeModel, {
-                                        protocol: nextProtocol,
-                                        billingMode: activeBillingMode === "token" && !modelProtocolSupportsTokenBilling(activeCapability, nextProtocol) ? "fixed_request" : activeBillingMode,
-                                        capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
-                                    })}
+                                    onChange={(nextProtocol) => {
+                                        const result = buildModelProtocolPatch({
+                                            model: activeModel,
+                                            capability: activeCapability,
+                                            protocol: nextProtocol,
+                                            billingMode: activeBillingMode,
+                                            definitions: availableProtocols,
+                                        });
+                                        if (!result.patch) {
+                                            message.warning(result.preset.incompatibleReason || "当前模型不支持该请求协议");
+                                            return;
+                                        }
+                                        updateCost(activeModel, result.patch);
+                                    }}
                                 />
                             </section>
                         ) : null}
