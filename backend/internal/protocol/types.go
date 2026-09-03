@@ -266,8 +266,9 @@ func (m *Manifest) UnmarshalJSON(data []byte) error {
 }
 
 type ManifestRuntime struct {
-	Backend string `json:"backend,omitempty"`
-	Web     string `json:"web,omitempty"`
+	Backend      string `json:"backend,omitempty"`
+	BackendEntry string `json:"backendEntry,omitempty"`
+	Web          string `json:"web,omitempty"`
 }
 
 type ManifestConfiguration struct {
@@ -279,22 +280,47 @@ type ManifestField struct {
 	Type        string   `json:"type"`
 	Label       string   `json:"label,omitempty"`
 	Required    bool     `json:"required,omitempty"`
+	Secret      bool     `json:"secret,omitempty"`
 	Default     any      `json:"default,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Values      []string `json:"values,omitempty"`
 }
 
 type ManifestContributions struct {
-	Providers      []ManifestProvider   `json:"providers,omitempty"`
-	Workflows      []ManifestWorkflow   `json:"workflows,omitempty"`
-	CanvasNodes    []ManifestCanvasNode `json:"canvasNodes,omitempty"`
-	Transforms     []ManifestTransform  `json:"transforms,omitempty"`
-	Commands       []ManifestCommand    `json:"commands,omitempty"`
-	AssetSources   []string             `json:"assetSources,omitempty"`
-	UsageObservers []string             `json:"usageObservers,omitempty"`
-	AICapabilities []string             `json:"aiCapabilities,omitempty"`
-	Agents         []string             `json:"agents,omitempty"`
-	ImportExport   []string             `json:"importExport,omitempty"`
+	Providers        []ManifestProvider        `json:"providers,omitempty"`
+	PaymentProviders []ManifestPaymentProvider `json:"paymentProviders,omitempty"`
+	Workflows        []ManifestWorkflow        `json:"workflows,omitempty"`
+	CanvasNodes      []ManifestCanvasNode      `json:"canvasNodes,omitempty"`
+	Transforms       []ManifestTransform       `json:"transforms,omitempty"`
+	Commands         []ManifestCommand         `json:"commands,omitempty"`
+	AssetSources     []string                  `json:"assetSources,omitempty"`
+	UsageObservers   []string                  `json:"usageObservers,omitempty"`
+	AICapabilities   []string                  `json:"aiCapabilities,omitempty"`
+	Agents           []string                  `json:"agents,omitempty"`
+	ImportExport     []string                  `json:"importExport,omitempty"`
+}
+
+type ManifestPaymentProvider struct {
+	ID                  string                      `json:"id"`
+	Label               string                      `json:"label"`
+	Icon                string                      `json:"icon"`
+	CheckoutMode        string                      `json:"checkoutMode"`
+	ExpiryPolicy        ManifestPaymentExpiryPolicy `json:"expiryPolicy"`
+	IdentityFields      []string                    `json:"identityFields,omitempty"`
+	NotificationSuccess ManifestPaymentResponse     `json:"notificationSuccess,omitempty"`
+	NotificationFailure ManifestPaymentResponse     `json:"notificationFailure,omitempty"`
+}
+
+type ManifestPaymentExpiryPolicy struct {
+	DefaultMinutes int `json:"defaultMinutes"`
+	MinMinutes     int `json:"minMinutes"`
+	MaxMinutes     int `json:"maxMinutes"`
+}
+
+type ManifestPaymentResponse struct {
+	Status      int    `json:"status,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	Body        string `json:"body,omitempty"`
 }
 
 type ManifestProvider struct {

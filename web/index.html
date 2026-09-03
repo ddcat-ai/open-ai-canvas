@@ -3,9 +3,41 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="description" content="影策，让一个故事从文字走向银幕。面向 AI 影视与短剧创作的开源工作台。" />
-        <link rel="icon" href="/logo.svg" />
-        <title>影策</title>
+        <meta name="description" content="AI 影视与短剧创作工作台" />
+        <title>正在加载</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                background: #0b0c10;
+            }
+            #root:empty {
+                min-height: 100vh;
+            }
+            #root:empty::after {
+                content: "";
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                width: 20px;
+                height: 20px;
+                margin: -10px 0 0 -10px;
+                border: 2px solid rgba(255, 255, 255, 0.16);
+                border-top-color: rgba(255, 255, 255, 0.72);
+                border-radius: 999px;
+                animation: appearance-bootstrap-spin 0.8s linear infinite;
+            }
+            @keyframes appearance-bootstrap-spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #root:empty::after {
+                    animation: none;
+                }
+            }
+        </style>
         <script>
             try {
                 var s = JSON.parse(localStorage.getItem("infinite-canvas:theme_store") || "{}");

@@ -7,6 +7,7 @@ import { useWorkspaceTopBarContent } from "@/components/layout/workspace-top-bar
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const PAGE_TITLES: Record<string, string> = {
     home: "首页",
@@ -21,6 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -28,7 +30,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
     const extension = useWorkspaceTopBarContent();
 
     const slug = pathname.split("/").filter(Boolean)[0];
-    const pageTitle = (slug && PAGE_TITLES[slug]) || "影策";
+    const pageTitle = (slug && PAGE_TITLES[slug]) || brandName;
 
     return (
         <header className={`app-workspace-topbar flex shrink-0 items-center justify-between gap-2 px-3 sm:px-4 ${extension ? "has-extension" : ""}`}>
@@ -37,7 +39,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
                     {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
                 </button>
                 <nav className={`${extension ? "hidden 2xl:flex" : "flex"} min-w-0 items-center gap-2 text-[var(--fs-caption)] text-foreground/50`} aria-label="当前位置">
-                    <Link to="/" className="shrink-0 font-medium text-foreground/70 transition-colors hover:text-foreground">影策</Link>
+                    <Link to="/" className="shrink-0 font-medium text-foreground/70 transition-colors hover:text-foreground">{brandName}</Link>
                     <span className="shrink-0 text-foreground/30">/</span>
                     <span className="truncate font-medium text-foreground">{pageTitle}</span>
                 </nav>

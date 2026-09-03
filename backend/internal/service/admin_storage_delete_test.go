@@ -69,6 +69,26 @@ func TestDeleteAdminResourcesBlocksAnnouncementImage(t *testing.T) {
 	assertModelCount(t, db, &model.Resource{}, "id = ?", 1, resource.ID)
 }
 
+func TestDeleteAdminResourcesBlocksDarkAppearanceLogo(t *testing.T) {
+	svc, db, _, admin := newAdminStorageDeleteTestService(t)
+	resource := model.Resource{ID: "appearance-logo", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "appearance/logo.png", MimeType: "image/png"}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, DarkLogoResourceID: resource.ID, LogoFrameEnabled: true, SkinID: defaultAppearanceSkinID}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.DeleteAdminResources(admin, AdminResourceDeleteRequest{ResourceIDs: []string{resource.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Deleted) != 0 || len(result.Blocked) != 1 || len(result.Blocked[0].References) != 1 || result.Blocked[0].References[0].Kind != "外观" {
+		t.Fatalf("result = %#v", result)
+	}
+	assertModelCount(t, db, &model.Resource{}, "id = ?", 1, resource.ID)
+}
+
 func TestDeleteAdminResourcesKeepsSharedPhysicalObject(t *testing.T) {
 	svc, db, _, admin := newAdminStorageDeleteTestService(t)
 	resources := []model.Resource{

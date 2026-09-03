@@ -9,6 +9,7 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
+import { repairMissingCanvasAssets } from "@/services/canvas-asset-repair";
 
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
@@ -25,6 +26,7 @@ let acknowledgedProjects = new Map<string, CanvasProject>();
 const LOCAL_STORAGE_KEY_PATTERN = /^(image|video|audio|file|video-reference|audio-reference):/;
 
 export async function syncRemoteUserData(userId?: string | null) {
+    let repairedCanvasAssets = false;
     await withRemoteUserDataSyncExclusive(async () => {
         activeRemoteUserId = userId || "";
         acknowledgedProjects.clear();
@@ -42,6 +44,8 @@ export async function syncRemoteUserData(userId?: string | null) {
             // 这里只替换结构化记录，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
             useCanvasStore.getState().replaceProjects(snapshot.projects);
             useAssetStore.getState().replaceAssets(snapshot.assets);
+            const repair = repairMissingCanvasAssets();
+            repairedCanvasAssets = repair.createdAssets > 0 || repair.updatedProjects > 0;
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
             acknowledgedProjects = new Map(snapshot.projects.map((project) => [project.id, project]));
             acknowledgedAssets = new Map(snapshot.assets.map((asset) => [asset.id, asset]));
@@ -51,6 +55,7 @@ export async function syncRemoteUserData(userId?: string | null) {
             throw error;
         }
     });
+    if (repairedCanvasAssets) await saveRemoteUserDataNow();
 }
 
 export function installRemoteUserDataAutoSync() {
@@ -166,6 +171,9 @@ export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
         for (const proj of remainingProjects) {
             for (const node of proj.nodes) {
                 if (node.metadata?.assetId) activeAssetIds.add(node.metadata.assetId);
+            }
+            for (const clip of proj.timeline?.clips || []) {
+                if (clip.directMedia?.assetId) activeAssetIds.add(clip.directMedia.assetId);
             }
         }
         let assetChanged = false;
@@ -314,6 +322,9 @@ async function drainRemoteUserDataChanges() {
 }
 
 async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
+    // 中央兜底：任何调用方只要把持久媒体写进画布，提交前都会先补齐素材记录与 assetId。
+    // 页面级入口仍主动入库，以便立即反馈；这里负责阻止遗漏入口形成远端幽灵资源。
+    repairMissingCanvasAssets();
     const currentProjects = useCanvasStore.getState().projects;
     const currentAssets = useAssetStore.getState().assets;
     const dirtyProjects = currentProjects.filter((project) => !sameEntitySnapshot(acknowledgedProjects.get(project.id), project));
@@ -326,6 +337,13 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
 
     // 转换后的 resource: 引用只属于发往服务端的 payload，不能反写整份实时 store。
     // 已确认快照记录的是本次上传所依据的本地实体；上传期间的新编辑会在下一轮继续提交。
+    // 素材先于画布提交。这样画布中的 resource: 引用一旦成为远端事实，
+    // 对应 Asset 已经存在，刷新或换设备不会出现只占容量、不见素材的窗口。
+    for (const source of dirtyAssets) {
+        const remotePayload = await ensureRemoteResourceReferences(assetForRemoteSync(source), uploaded);
+        await upsertRemoteAsset(remotePayload);
+        acknowledgedAssets.set(source.id, source);
+    }
     for (const source of dirtyProjects) {
         const keysToUpload = collectLocalMediaKeys(source);
         const total = keysToUpload.length;
@@ -363,11 +381,6 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
             }
             throw error;
         }
-    }
-    for (const source of dirtyAssets) {
-        const remotePayload = await ensureRemoteResourceReferences(assetForRemoteSync(source), uploaded);
-        await upsertRemoteAsset(remotePayload);
-        acknowledgedAssets.set(source.id, source);
     }
     for (const id of deletedProjectIds) {
         await deleteRemoteCanvasProject(id);

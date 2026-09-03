@@ -71,7 +71,12 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
         store.updateAsset(asset.id, { category: declaredCategory });
         asset = useAssetStore.getState().assets.find((item) => item.id === asset?.id) || asset;
     }
-    if (!options.domainProjectId) return { assetId: asset.id, created, linkedToProject: false };
+    if (!options.domainProjectId) {
+        // 个人画布也必须在返回成功前把素材提交到服务端，不能只依赖延迟自动同步。
+        await saveRemoteUserDataNow();
+        throwIfAborted(options.signal);
+        return { assetId: asset.id, created, linkedToProject: false };
+    }
     await syncAssetToProject(asset.id, options.domainProjectId, declaredCategory, options.folderId, options.signal);
     return { assetId: asset.id, created, linkedToProject: true };
 }

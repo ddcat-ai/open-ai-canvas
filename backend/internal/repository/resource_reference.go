@@ -103,6 +103,46 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "画布", ID: canvas.ID, Title: canvas.Title, PrimaryJSON: canvas.PayloadJSON})
 	}
 
+	var tasks []model.Task
+	if err := r.db.Select("id", "prompt", "input_json", "result_json").Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
+		return snapshot, err
+	}
+	for _, task := range tasks {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务", ID: task.ID, Title: task.Prompt, PrimaryJSON: task.InputJSON, SecondaryJSON: task.ResultJSON})
+	}
+
+	var sessions []model.Session
+	if err := r.db.Select("id", "prompt", "canvas_snapshot_json", "canvas_ops_json").Where("user_id = ?", userID).Find(&sessions).Error; err != nil {
+		return snapshot, err
+	}
+	for _, session := range sessions {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "会话", ID: session.ID, Title: session.Prompt, PrimaryJSON: session.CanvasSnapshotJSON, SecondaryJSON: session.CanvasOpsJSON})
+	}
+
+	var messages []model.Message
+	if err := r.db.Select("id", "content", "payload").Where("user_id = ?", userID).Find(&messages).Error; err != nil {
+		return snapshot, err
+	}
+	for _, message := range messages {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "会话消息", ID: message.ID, Title: message.Content, PrimaryJSON: message.Payload})
+	}
+
+	var taskLogs []model.TaskLog
+	if err := r.db.Select("id", "message", "payload").Where("user_id = ?", userID).Find(&taskLogs).Error; err != nil {
+		return snapshot, err
+	}
+	for _, taskLog := range taskLogs {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务日志", ID: taskLog.ID, Title: taskLog.Message, PrimaryJSON: taskLog.Payload})
+	}
+
+	var results []model.Result
+	if err := r.db.Select("id", "kind", "url", "payload").Where("user_id = ?", userID).Find(&results).Error; err != nil {
+		return snapshot, err
+	}
+	for _, result := range results {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务结果", ID: result.ID, Title: result.Kind, PrimaryJSON: result.URL, SecondaryJSON: result.Payload})
+	}
+
 	var projects []model.Project
 	if err := r.db.Where("user_id = ?", userID).Find(&projects).Error; err != nil {
 		return snapshot, err
@@ -220,6 +260,22 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 	for _, artifact := range artifacts {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "镜头产物", ID: artifact.ID, Title: artifact.Title, ResourceID: artifact.ResourceID})
+	}
+
+	var announcements []model.Announcement
+	if err := r.db.Where("created_by = ? AND image_resource_id IN ?", userID, resourceIDs).Find(&announcements).Error; err != nil {
+		return snapshot, err
+	}
+	for _, announcement := range announcements {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "公告", ID: announcement.ID, Title: announcement.Title, ResourceID: announcement.ImageResourceID})
+	}
+
+	var announcementDrafts []model.AnnouncementImageDraft
+	if err := r.db.Where("user_id = ? AND resource_id IN ?", userID, resourceIDs).Find(&announcementDrafts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, draft := range announcementDrafts {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "公告草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
 	}
 	return snapshot, nil
 }

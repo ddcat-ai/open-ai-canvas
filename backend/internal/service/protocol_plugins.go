@@ -13,10 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"infinite-canvas/backend/internal/payment"
 	"infinite-canvas/backend/internal/protocol"
 )
 
-const protocolPluginMaxBytes = protocol.PluginManifestMaxBytes
+const (
+	protocolPluginMaxBytes  = protocol.PluginManifestMaxBytes
+	paymentRuntimeReadyFile = ".ready"
+)
 
 // PluginView is the backend representation consumed by the single frontend
 // plugin center. Protocol-specific runtime data is nested under Protocol so
@@ -66,12 +70,13 @@ type pluginRecord struct {
 }
 
 type pluginRuntime struct {
-	mu           sync.RWMutex
-	mutationMu   sync.Mutex
-	registryPath string
-	packageDir   string
-	plugins      map[string]pluginRecord
-	registry     *protocol.Registry
+	mu              sync.RWMutex
+	mutationMu      sync.Mutex
+	registryPath    string
+	packageDir      string
+	plugins         map[string]pluginRecord
+	registry        *protocol.Registry
+	paymentRegistry *payment.Registry
 }
 
 type pluginRegistryRecord struct {
@@ -94,7 +99,7 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 		return nil, fmt.Errorf("create plugin package directory: %w", err)
 	}
 	center := &pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json"), packageDir: packageDir, plugins: make(map[string]pluginRecord)}
-	if err := center.bootstrapOfficialPlugins(); err != nil {
+	if err := center.bootstrapBuiltInPlugins(); err != nil {
 		return nil, err
 	}
 	if err := center.reload(); err != nil {
@@ -103,7 +108,7 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 	return center, nil
 }
 
-func (c *pluginRuntime) bootstrapOfficialPlugins() error {
+func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 	stored, err := c.readRegistry()
 	if err != nil {
 		return err
@@ -120,7 +125,7 @@ func (c *pluginRuntime) bootstrapOfficialPlugins() error {
 	if err != nil {
 		return fmt.Errorf("读取官方插件目录失败：%w", err)
 	}
-	officialIDs := make(map[string]struct{}, len(entries)+2)
+	builtInIDs := make(map[string]struct{}, len(entries)+2)
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
 			continue
@@ -136,14 +141,16 @@ func (c *pluginRuntime) bootstrapOfficialPlugins() error {
 		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
 			return fmt.Errorf("官方插件 %q 不能依赖 host 执行器", pkg.Manifest.Metadata.ID)
 		}
-		if _, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil); err != nil {
-			return fmt.Errorf("加载官方插件 %q：%w", pkg.Manifest.Metadata.ID, err)
+		if len(pkg.Manifest.Contributes.PaymentProviders) == 0 {
+			if _, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil); err != nil {
+				return fmt.Errorf("加载官方插件 %q：%w", pkg.Manifest.Metadata.ID, err)
+			}
 		}
 		id := pkg.Manifest.Metadata.ID
-		if _, duplicate := officialIDs[id]; duplicate {
+		if _, duplicate := builtInIDs[id]; duplicate {
 			return fmt.Errorf("官方插件 ID %q 重复", id)
 		}
-		officialIDs[id] = struct{}{}
+		builtInIDs[id] = struct{}{}
 		manifest := pkg.Manifest
 		record := byID[id]
 		if len(record.Raw) > 0 {
@@ -165,42 +172,56 @@ func (c *pluginRuntime) bootstrapOfficialPlugins() error {
 		if record.InstalledAt.IsZero() {
 			record.InstalledAt = now
 		}
-		record.ID, record.Raw, record.Source, record.FileName = id, manifestData, PluginOriginOfficial, entry.Name()
+		source := PluginOriginOfficial
+		if _, systemPayment := systemPaymentPolicies[id]; systemPayment {
+			source = PluginOriginSystem
+		}
+		record.ID, record.Raw, record.Source, record.FileName = id, manifestData, source, entry.Name()
 		record.PackagePath, record.PackageSHA256, record.UpdatedAt = packageName, hash, now
 		byID[id] = record
 	}
-	for _, workflow := range bundledWorkflowPluginManifests() {
-		officialIDs[workflow.Metadata.ID] = struct{}{}
-		data, err := json.Marshal(workflow)
-		if err != nil {
-			return fmt.Errorf("encode official workflow plugin %s: %w", workflow.Metadata.ID, err)
+	bundledManifests := append(bundledWorkflowPluginManifests(), bundledPaymentPluginManifests()...)
+	for _, bundled := range bundledManifests {
+		builtInIDs[bundled.Metadata.ID] = struct{}{}
+		if existing, exists := byID[bundled.Metadata.ID]; exists && existing.PackagePath != "" && isSystemPaymentPluginID(bundled.Metadata.ID) {
+			// An official package is the executable source of truth. The bundled
+			// manifest remains only as a fallback when the package is unavailable.
+			continue
 		}
-		record := byID[workflow.Metadata.ID]
+		data, err := json.Marshal(bundled)
+		if err != nil {
+			return fmt.Errorf("encode built-in plugin %s: %w", bundled.Metadata.ID, err)
+		}
+		record := byID[bundled.Metadata.ID]
 		if len(record.Raw) > 0 {
 			var installed protocol.Manifest
 			if err := json.Unmarshal(record.Raw, &installed); err != nil {
-				return fmt.Errorf("decode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+				return fmt.Errorf("decode built-in plugin %s: %w", bundled.Metadata.ID, err)
 			}
-			workflow.Metadata.Enabled = installed.Metadata.Enabled
-			data, err = json.Marshal(workflow)
+			bundled.Metadata.Enabled = installed.Metadata.Enabled
+			data, err = json.Marshal(bundled)
 			if err != nil {
-				return fmt.Errorf("encode bundled workflow plugin %s: %w", workflow.Metadata.ID, err)
+				return fmt.Errorf("encode built-in plugin %s: %w", bundled.Metadata.ID, err)
 			}
 		}
 		now := time.Now().UTC()
 		if record.InstalledAt.IsZero() {
 			record.InstalledAt = now
 		}
+		source := PluginOriginOfficial
+		if _, systemPayment := systemPaymentPolicies[bundled.Metadata.ID]; systemPayment {
+			source = PluginOriginSystem
+		}
 		record.UpdatedAt = now
-		record.ID, record.Raw, record.Source, record.PackagePath = workflow.Metadata.ID, data, PluginOriginOfficial, ""
-		byID[workflow.Metadata.ID] = record
+		record.ID, record.Raw, record.Source, record.PackagePath = bundled.Metadata.ID, data, source, ""
+		byID[bundled.Metadata.ID] = record
 	}
 	result := make([]pluginRegistryRecord, 0, len(byID))
 	for _, record := range byID {
-		if record.Source == "bundled" || record.Source == PluginOriginOfficial {
-			if _, exists := officialIDs[record.ID]; !exists {
-				// Official records are reconciled from repository packages on every
-				// startup, so removed packages cannot survive as stale providers.
+		if isBuiltInPluginSource(record.Source) {
+			if _, exists := builtInIDs[record.ID]; !exists {
+				// Built-in records are reconciled from repository packages and host
+				// manifests on every startup, so removed plugins cannot survive stale.
 				continue
 			}
 		}
@@ -208,6 +229,20 @@ func (c *pluginRuntime) bootstrapOfficialPlugins() error {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return c.writeRegistry(result)
+}
+
+func isSystemPaymentPluginID(id string) bool {
+	_, ok := systemPaymentPolicies[strings.TrimSpace(id)]
+	return ok
+}
+
+func isBuiltInPluginSource(source string) bool {
+	switch strings.TrimSpace(source) {
+	case "bundled", PluginOriginOfficial, PluginOriginSystem:
+		return true
+	default:
+		return false
+	}
 }
 
 func officialPluginPackageDir() (string, error) {
@@ -265,7 +300,7 @@ func (c *pluginRuntime) reload() error {
 			return fmt.Errorf("duplicate installed protocol %q", metadata.ID)
 		}
 		packageSHA256 := storedRecord.PackageSHA256
-		if packageSHA256 == "" {
+		if packageSHA256 == "" && strings.TrimSpace(storedRecord.PackagePath) == "" {
 			packageSHA256 = pluginHash(data)
 		}
 		plugins[metadata.ID] = pluginRecord{Raw: data, Metadata: metadata, Source: storedRecord.Source, FileName: storedRecord.FileName, PackagePath: storedRecord.PackagePath, PackageSHA256: packageSHA256, SHA256: packageSHA256, InstalledAt: storedRecord.InstalledAt, UpdatedAt: storedRecord.UpdatedAt, Status: "invalid"}
@@ -275,6 +310,38 @@ func (c *pluginRuntime) reload() error {
 		return err
 	}
 	for id, record := range plugins {
+		var manifest protocol.Manifest
+		if err := json.Unmarshal(record.Raw, &manifest); err != nil {
+			record.Error = err.Error()
+			plugins[id] = record
+			continue
+		}
+		if len(manifest.Contributes.PaymentProviders) > 0 && record.Source == PluginOriginUploaded {
+			backend := strings.TrimSpace(manifest.Runtime.Backend)
+			if strings.HasPrefix(backend, "host:") {
+				record.Metadata.Enabled = false
+				record.Status = "invalid"
+				record.Error = "首期支付插件只能使用系统宿主适配器"
+				plugins[id] = record
+				continue
+			}
+			if backend != "rpc" && backend != "wasm" {
+				record.Metadata.Enabled = false
+				record.Status = "invalid"
+				record.Error = "上传支付插件必须声明 rpc 或 wasm 后端"
+				plugins[id] = record
+				continue
+			}
+		}
+		if len(manifest.Contributes.PaymentProviders) > 0 && len(manifest.Contributes.Providers) == 0 {
+			if record.Metadata.Enabled {
+				record.Status = "enabled"
+			} else {
+				record.Status = "disabled"
+			}
+			plugins[id] = record
+			continue
+		}
 		adapters, loadErr := protocol.LoadInstalledProviders(record.Raw, nil)
 		if loadErr != nil {
 			record.Metadata.Enabled = false
@@ -310,7 +377,150 @@ func (c *pluginRuntime) reload() error {
 	}
 	c.plugins = plugins
 	c.registry = registry
+	// Payment adapters are loaded exclusively from validated plugin packages.
+	// An empty registry is intentional when the official package is unavailable;
+	// payment writes must fail closed instead of silently using host code.
+	basePayment, registryErr := payment.NewRegistry()
+	if registryErr != nil {
+		return registryErr
+	}
+	dynamicPayments := make([]payment.Provider, 0)
+	for id, record := range plugins {
+		if (record.Source != PluginOriginUploaded && record.Source != PluginOriginOfficial && record.Source != PluginOriginSystem) || !record.Metadata.Enabled || record.Status != "enabled" {
+			continue
+		}
+		var manifest protocol.Manifest
+		if err := json.Unmarshal(record.Raw, &manifest); err != nil || len(manifest.Contributes.PaymentProviders) == 0 {
+			continue
+		}
+		if strings.TrimSpace(manifest.Runtime.Backend) != "rpc" {
+			record.Status = "invalid"
+			record.Error = "wasm 支付运行时尚未启用"
+			plugins[id] = record
+			continue
+		}
+		packageData, readErr := os.ReadFile(filepath.Join(c.packageDir, filepath.Base(record.PackagePath)))
+		if readErr != nil {
+			record.Status = "invalid"
+			record.Error = "支付插件包文件不存在"
+			plugins[id] = record
+			continue
+		}
+		packageSHA256 := pluginHash(packageData)
+		if expected := strings.TrimSpace(record.PackageSHA256); expected != "" && !strings.EqualFold(expected, packageSHA256) {
+			record.Status = "invalid"
+			record.Error = "支付插件包完整性校验失败"
+			plugins[id] = record
+			continue
+		}
+		record.PackageSHA256 = packageSHA256
+		record.SHA256 = packageSHA256
+		plugins[id] = record
+		pkg, parseErr := protocol.ParsePluginPackage(packageData)
+		if parseErr != nil {
+			record.Status = "invalid"
+			record.Error = parseErr.Error()
+			plugins[id] = record
+			continue
+		}
+		runtimeDir, materializeErr := materializePaymentBackend(c.packageDir, packageSHA256, pkg)
+		if materializeErr != nil {
+			record.Status = "invalid"
+			record.Error = materializeErr.Error()
+			plugins[id] = record
+			continue
+		}
+		for _, contribution := range manifest.Contributes.PaymentProviders {
+			provider, providerErr := payment.NewRPCProvider(payment.DescriptorFromManifest(manifest, contribution), runtimeDir, manifest.Runtime.BackendEntry)
+			if providerErr != nil {
+				record.Status = "invalid"
+				record.Error = providerErr.Error()
+				continue
+			}
+			dynamicPayments = append(dynamicPayments, provider)
+		}
+	}
+	dynamicIDs := make(map[string]struct{}, len(dynamicPayments))
+	for _, provider := range dynamicPayments {
+		dynamicIDs[provider.Descriptor().ID] = struct{}{}
+	}
+	baseProviders := make([]payment.Provider, 0)
+	for _, provider := range basePayment.Providers() {
+		if _, replaced := dynamicIDs[provider.Descriptor().ID]; !replaced {
+			baseProviders = append(baseProviders, provider)
+		}
+	}
+	providers := append(baseProviders, dynamicPayments...)
+	c.paymentRegistry, err = payment.NewRegistry(providers...)
+	if err != nil {
+		return err
+	}
+	c.plugins = plugins
 	return nil
+}
+
+func materializePaymentBackend(packageDir, hash string, pkg protocol.PluginPackage) (string, error) {
+	digest := strings.ToLower(strings.TrimSpace(hash))
+	if len(digest) != sha256.Size*2 {
+		return "", errors.New("支付插件包摘要无效")
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return "", errors.New("支付插件包摘要无效")
+	}
+
+	runtimeRoot := filepath.Join(packageDir, "runtime")
+	root := filepath.Join(runtimeRoot, digest)
+	backendEntry := strings.TrimSpace(pkg.Manifest.Runtime.BackendEntry)
+	if paymentRuntimeReady(root, digest, backendEntry) {
+		return root, nil
+	}
+	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
+		return "", fmt.Errorf("创建支付插件运行目录失败：%w", err)
+	}
+	temporaryRoot, err := os.MkdirTemp(runtimeRoot, ".payment-runtime-")
+	if err != nil {
+		return "", fmt.Errorf("创建支付插件临时运行目录失败：%w", err)
+	}
+	defer os.RemoveAll(temporaryRoot)
+
+	for name, content := range pkg.Files {
+		if !strings.HasPrefix(name, "backend/") || strings.HasSuffix(name, "/") {
+			continue
+		}
+		target := filepath.Join(temporaryRoot, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(target, content, 0o700); err != nil {
+			return "", fmt.Errorf("写入支付插件运行文件失败：%w", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(temporaryRoot, paymentRuntimeReadyFile), []byte(digest+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("写入支付插件运行状态失败：%w", err)
+	}
+	if err := os.Rename(temporaryRoot, root); err != nil {
+		if paymentRuntimeReady(root, digest, backendEntry) {
+			return root, nil
+		}
+		// Digest directories are immutable once ready. An unmarked directory can
+		// only be residue from an interrupted extraction and is safe to replace.
+		if removeErr := os.RemoveAll(root); removeErr != nil {
+			return "", fmt.Errorf("清理未完成的支付插件运行目录失败：%w", removeErr)
+		}
+		if renameErr := os.Rename(temporaryRoot, root); renameErr != nil {
+			return "", fmt.Errorf("发布支付插件运行目录失败：%w", renameErr)
+		}
+	}
+	return root, nil
+}
+
+func paymentRuntimeReady(root, digest, backendEntry string) bool {
+	ready, err := os.ReadFile(filepath.Join(root, paymentRuntimeReadyFile))
+	if err != nil || strings.TrimSpace(string(ready)) != digest {
+		return false
+	}
+	entry, err := os.Stat(filepath.Join(root, filepath.FromSlash(backendEntry)))
+	return err == nil && !entry.IsDir()
 }
 
 func (c *pluginRuntime) list() []PluginView {
@@ -330,6 +540,12 @@ func (c *pluginRuntime) registrySnapshot() *protocol.Registry {
 	return c.registry
 }
 
+func (c *pluginRuntime) paymentRegistrySnapshot() *payment.Registry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.paymentRegistry
+}
+
 func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error) {
 	c.mutationMu.Lock()
 	defer c.mutationMu.Unlock()
@@ -344,14 +560,16 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	if strings.HasPrefix(strings.TrimSpace(manifest.Runtime.Backend), "host:") {
 		return PluginView{}, errors.New("上传插件不能使用宿主内置执行器")
 	}
-	if _, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil); err != nil {
-		return PluginView{}, err
+	if len(manifest.Contributes.PaymentProviders) == 0 {
+		if _, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil); err != nil {
+			return PluginView{}, err
+		}
 	}
 	c.mu.RLock()
 	existing, exists := c.plugins[manifest.Metadata.ID]
 	c.mu.RUnlock()
-	if exists && existing.Source == PluginOriginOfficial {
-		return PluginView{}, fmt.Errorf("官方插件 %q 不能通过上传覆盖", manifest.Metadata.ID)
+	if exists && isBuiltInPluginSource(existing.Source) && !isPaymentPluginManifest(manifest) {
+		return PluginView{}, fmt.Errorf("内置插件 %q 不能通过上传覆盖", manifest.Metadata.ID)
 	}
 	manifest.Metadata.Enabled = !exists || existing.Metadata.Enabled
 	manifestData, err := json.Marshal(manifest)
@@ -407,6 +625,11 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	return PluginView{}, errors.New("插件保存后未加载")
 }
 
+func isPaymentPluginManifest(manifest protocol.Manifest) bool {
+	backend := strings.TrimSpace(manifest.Runtime.Backend)
+	return len(manifest.Contributes.PaymentProviders) > 0 && (backend == "rpc" || backend == "wasm")
+}
+
 func (c *pluginRuntime) setEnabled(id string, enabled bool) (PluginView, error) {
 	c.mutationMu.Lock()
 	defer c.mutationMu.Unlock()
@@ -458,7 +681,7 @@ func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) P
 	return PluginManifestView{
 		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "yingce.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
-		Permissions: manifest.Permissions, Trusted: source == PluginOriginOfficial, Runtime: manifest.Runtime,
+		Permissions: manifest.Permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,
 	}
 }
@@ -472,8 +695,8 @@ func (c *pluginRuntime) uninstall(id string) error {
 	if !ok {
 		return fmt.Errorf("插件 %q 不存在", id)
 	}
-	if record.Source == PluginOriginOfficial {
-		return fmt.Errorf("官方插件 %q 不能卸载，可停用该插件", id)
+	if isBuiltInPluginSource(record.Source) {
+		return fmt.Errorf("内置插件 %q 不能卸载，可停用该插件", id)
 	}
 	stored, err := c.readRegistry()
 	if err != nil {

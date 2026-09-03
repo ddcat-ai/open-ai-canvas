@@ -14,7 +14,7 @@ import { CanvasCreateCard } from "@/components/canvas/canvas-project-card";
 import { CanvasFolderCard } from "@/components/canvas/canvas-folder-card";
 import { CanvasHistoryDrawer } from "@/components/canvas/canvas-history-drawer";
 import type { CanvasExportFile } from "@/types/canvas-export";
-import type { CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
@@ -25,6 +25,7 @@ import { loadCanvasProjectPage } from "@/lib/workspace-route-modules";
 import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
+import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 
 export default function CanvasPage() {
     const { message } = App.useApp();
@@ -206,8 +207,69 @@ export default function CanvasPage() {
                         };
                     };
 
-                    const remappedNodes = (item.project.nodes || []).map(remapNodeMedia);
-                    updateProject(importedProjectId, { nodes: remappedNodes });
+                    let remappedNodes = (item.project.nodes || []).map(remapNodeMedia);
+                    let remappedTimeline = item.project.timeline
+                        ? {
+                              ...item.project.timeline,
+                              clips: item.project.timeline.clips.map((clip) => {
+                                  const directMedia = clip.directMedia;
+                                  if (!directMedia?.storageKey) return clip;
+                                  const mapped = storageKeyMap.get(directMedia.storageKey);
+                                  return mapped
+                                      ? {
+                                            ...clip,
+                                            directMedia: { ...directMedia, storageKey: mapped.storageKey, url: mapped.url, dataUrl: directMedia.dataUrl ? mapped.url : directMedia.dataUrl, content: directMedia.content ? mapped.url : directMedia.content },
+                                        }
+                                      : clip;
+                              }),
+                          }
+                        : undefined;
+                    updateProject(importedProjectId, { nodes: remappedNodes, timeline: remappedTimeline });
+
+                    const assetIdByStorageKey = new Map<string, string>();
+                    for (let index = 0; index < remappedNodes.length; index += 1) {
+                        const node = remappedNodes[index];
+                        const isMedia = node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio;
+                        if (!isMedia || !node.metadata?.content) continue;
+                        const storageKey = node.metadata.storageKey || "";
+                        let assetId = storageKey ? assetIdByStorageKey.get(storageKey) : undefined;
+                        if (!assetId) {
+                            const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                            assetId = result.assetId;
+                            if (storageKey) assetIdByStorageKey.set(storageKey, assetId);
+                        }
+                        remappedNodes[index] = { ...node, metadata: { ...node.metadata, assetId } };
+                    }
+                    if (remappedTimeline) {
+                        const clips: typeof remappedTimeline.clips = [];
+                        for (const clip of remappedTimeline.clips) {
+                            const media = clip.directMedia;
+                            const content = media?.url || media?.dataUrl || media?.content || "";
+                            if (!media || media.assetId || !media.storageKey || !content || media.kind === "text") {
+                                clips.push(clip);
+                                continue;
+                            }
+                            let assetId = assetIdByStorageKey.get(media.storageKey);
+                            if (!assetId) {
+                                const type = media.kind === "audio" ? CanvasNodeType.Audio : media.kind === "video" ? CanvasNodeType.Video : CanvasNodeType.Image;
+                                const node: CanvasNodeData = {
+                                    id: media.id,
+                                    type,
+                                    title: media.title,
+                                    position: { x: 0, y: 0 },
+                                    width: media.width || 320,
+                                    height: media.height || (type === CanvasNodeType.Audio ? 120 : 240),
+                                    metadata: { content, storageKey: media.storageKey, naturalWidth: media.width, naturalHeight: media.height, durationMs: media.durationMs, bytes: media.bytes, mimeType: media.mimeType },
+                                };
+                                const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                                assetId = result.assetId;
+                                assetIdByStorageKey.set(media.storageKey, assetId);
+                            }
+                            clips.push({ ...clip, directMedia: { ...media, assetId } });
+                        }
+                        remappedTimeline = { ...remappedTimeline, clips };
+                    }
+                    updateProject(importedProjectId, { nodes: remappedNodes, timeline: remappedTimeline });
 
                     await Promise.all(
                         (item.drawingDocuments || []).map((document) => {

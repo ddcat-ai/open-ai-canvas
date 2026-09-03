@@ -96,3 +96,7 @@ export function getNodeGenerationMode(node: CanvasNodeData) {
 export function getNodeInputKind(type: CanvasNodeTypeId) {
     return definitions.get(type)?.inputKind;
 }
+
+export function getNodeAcceptedInputKind(type: CanvasNodeTypeId) {
+    return definitions.get(type)?.acceptsInputKind;
+}

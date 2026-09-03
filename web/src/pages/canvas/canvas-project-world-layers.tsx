@@ -112,6 +112,8 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         toScrollTop={props.scriptScrollTopById[to.id] || 0}
                         active={props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
                         visualMode="hover-only"
+                        // 拖动预览由 Leafer 图形层逐帧同步；隐藏这层静态 SVG 描边，避免两套位置叠出残影。
+                        hideVisual={props.isNodeDragging}
                         onSelect={() => props.onConnectionSelect(connection.id)}
                         onContextMenu={(event) => props.onConnectionContextMenu(event, connection.id)}
                     />

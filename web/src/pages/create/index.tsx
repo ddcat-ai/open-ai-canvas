@@ -40,6 +40,7 @@ import { loadCreationConversations, pendingCreationTaskIds, pendingCreationTaskK
 import { recoverCreationTextTask } from "@/services/creation-text-task-recovery";
 import { modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
@@ -135,6 +136,7 @@ function completedCreationGenerationTask(input: { taskId: string; task?: Generat
 
 export default function CreatePage() {
     const { message: toast, modal } = App.useApp();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const config = useEffectiveConfig();
     const promptOptimizerInstallation = usePluginStore((state) => state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID));
     const promptOptimizerEnabled = usePluginStore((state) => state.pluginStates[PROMPT_OPTIMIZER_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID)?.enabled));
@@ -902,8 +904,8 @@ export default function CreatePage() {
                 <CreationEmptyBanner />
                 <div className="creation-chat-intro">
                     <span className="creation-intro-signal" aria-hidden="true" />
-                    <p>影策 · AI 影视创作工作台</p>
-                    <h1>把脑海里的画面，<span className="creation-intro-emphasis"><span className="is-pink">交给影策</span><span className="is-blue">拍出来</span></span></h1>
+                    <p>{brandName} · AI 影视创作工作台</p>
+                    <h1>把脑海里的画面，<span className="creation-intro-emphasis"><span className="is-pink">交给{brandName}</span><span className="is-blue">拍出来</span></span></h1>
                 </div>
                 <div className="creation-empty-composer">
                     <CreationComposer {...composerProps} variant="empty" />
@@ -1035,10 +1037,11 @@ function CreationWorkspaceToolbar({ viewMode, onViewModeChange, onNewConversatio
 }
 
 function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     if (item.role === "user") return <CreationUserMessage item={item} />;
     const mode = item.mode || "text";
     const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
-    const heading = <><span className="creation-message-mark"><Sparkles /></span><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : "影策 AI"}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `影策正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</>;
+    const heading = <><span className="creation-message-mark"><Sparkles /></span><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : `${brandName} AI`}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `${brandName}正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</>;
     const toolStatus: GenerationToolStatus = item.status === "pending" ? "running" : item.status === "error" ? "error" : item.status === "cancelled" ? "cancelled" : "completed";
     return <article className={`creation-assistant-message is-${mode}`}>
         {mode === "text" ? <><div className="creation-message-heading">{heading}</div>{item.reasoning ? <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} /> : null}<div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div></> : <GenerationToolCard status={toolStatus} isBulk={(item.resultUrls?.length || Number(item.settings?.count) || 1) > 1} heading={heading}><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} /></GenerationToolCard>}
@@ -1086,7 +1089,8 @@ function MediaResult({ item, onRetryFailure, onCreateVariant }: { item: Creation
 }
 
 function CreationMediaPending({ mode, ratio }: { mode: CreationMode; ratio?: string }) {
-    return <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite"><span className="creation-media-pending-icon"><Sparkles /></span><span className="sr-only">影策正在生成{mode === "video" ? "视频" : "图像"}</span></div>;
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    return <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite"><span className="creation-media-pending-icon"><Sparkles /></span><span className="sr-only">{brandName}正在生成{mode === "video" ? "视频" : "图像"}</span></div>;
 }
 
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
@@ -1533,12 +1537,13 @@ const creationEmptyBannerFrames = [
 ];
 
 function CreationEmptyBanner() {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return <div className="creation-empty-art" aria-hidden="true">
         {creationEmptyBannerFrames.map((frame, index) => <figure key={frame.caption} className={`creation-empty-art-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
             <img src={frame.src} alt="" />
             <span>{frame.caption}</span>
         </figure>)}
-        <span className="creation-empty-art-caption"><span>影策</span>把每一帧，交给镜头导演</span>
+        <span className="creation-empty-art-caption"><span>{brandName}</span>把每一帧，交给镜头导演</span>
     </div>;
 }
 
@@ -1563,10 +1568,10 @@ function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt:
 
 type CreationThinking = { title: string; hint: string; steps: string[] };
 
-function thinkingFor(mode: CreationMode): CreationThinking {
-    if (mode === "image") return { title: "正在为你画这一镜", hint: "影策正在理解你的构图意图，并把画面交给模型出图。", steps: ["理解构图", "定调画风", "生成画面"] };
-    if (mode === "text") return { title: "正在为你写这段", hint: "影策正在梳理你的创作脉络，组织语言与结构。", steps: ["梳理脉络", "组织语言", "输出段落"] };
-    return { title: "正在为你拍这一镜", hint: "影策正在拆解你的镜头脚本，设计运镜与光线，并交给模型渲染成片。", steps: ["拆解镜头", "设计运镜", "定调布光", "渲染成片"] };
+function thinkingFor(mode: CreationMode, brandName: string): CreationThinking {
+    if (mode === "image") return { title: "正在为你画这一镜", hint: `${brandName}正在理解你的构图意图，并把画面交给模型出图。`, steps: ["理解构图", "定调画风", "生成画面"] };
+    if (mode === "text") return { title: "正在为你写这段", hint: `${brandName}正在梳理你的创作脉络，组织语言与结构。`, steps: ["梳理脉络", "组织语言", "输出段落"] };
+    return { title: "正在为你拍这一镜", hint: `${brandName}正在拆解你的镜头脚本，设计运镜与光线，并交给模型渲染成片。`, steps: ["拆解镜头", "设计运镜", "定调布光", "渲染成片"] };
 }
 
 function directorNoteFor(mode: CreationMode, settings: CreationSettings): string {
@@ -1617,6 +1622,7 @@ function StoryboardToolbar({ shots, activeIndex, composing, onSelect, onBeginCom
 }
 
 function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure, onCreateVariant }: { shot: CreationShot; shotNumber: number; modelName: string; busy: boolean; onRetryFailure: () => void; onCreateVariant: () => void }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const user = shot.user;
     const result = shot.result;
     const status = result?.status || "queued";
@@ -1656,11 +1662,11 @@ function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure,
                         </div>
                     </div>
                 </div> : null}
-                {briefVisible && user ? <div className="storyboard-workbench-handoff" aria-hidden="true"><span className="storyboard-workbench-handoff-rail" /><span className="storyboard-workbench-handoff-badge"><ArrowDown />交给影策 AI</span><span className="storyboard-workbench-handoff-rail" /></div> : null}
+                {briefVisible && user ? <div className="storyboard-workbench-handoff" aria-hidden="true"><span className="storyboard-workbench-handoff-rail" /><span className="storyboard-workbench-handoff-badge"><ArrowDown />交给{brandName} AI</span><span className="storyboard-workbench-handoff-rail" /></div> : null}
                 <div className="storyboard-workbench-turn is-ai">
                     <span className="storyboard-workbench-ai-avatar"><Clapperboard /></span>
                     <div className="storyboard-workbench-turn-copy">
-                        <div className="storyboard-workbench-turn-meta"><span className="storyboard-workbench-turn-role is-ai"><Sparkles />影策 AI</span>{modelName ? <span className="storyboard-workbench-turn-model">{modelName}</span> : null}{result?.createdAt ? <time className="storyboard-workbench-turn-time" dateTime={result.createdAt}>{formatMessageTime(result.createdAt)}</time> : null}</div>
+                        <div className="storyboard-workbench-turn-meta"><span className="storyboard-workbench-turn-role is-ai"><Sparkles />{brandName} AI</span>{modelName ? <span className="storyboard-workbench-turn-model">{modelName}</span> : null}{result?.createdAt ? <time className="storyboard-workbench-turn-time" dateTime={result.createdAt}>{formatMessageTime(result.createdAt)}</time> : null}</div>
                         <div className="storyboard-workbench-turn-bubble">
                             <StoryboardShotResult result={result} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} canvasPath={canvasPath} canvasHandoffAvailable={Boolean(canvasHandoffPath)} />
                         </div>
@@ -1672,6 +1678,7 @@ function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure,
 }
 
 function StoryboardNextShotCard({ shotNumber, onCancel }: { shotNumber: number; onCancel: () => void }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return <article className="storyboard-workbench-card is-next">
         <header className="storyboard-workbench-card-head">
             <div className="storyboard-workbench-card-heading">
@@ -1687,7 +1694,7 @@ function StoryboardNextShotCard({ shotNumber, onCancel }: { shotNumber: number; 
                 <span className="storyboard-workbench-next-panel-icon"><Clapperboard /></span>
                 <div className="storyboard-workbench-next-panel-copy">
                     <strong>{formatShotOrdinal(shotNumber - 1)} 等待你的脚本</strong>
-                    <span>在下方写下这一镜的镜头、画面或故事。影策会拆解脚本、设计运镜并渲染成片，这一镜会作为 {formatShotOrdinal(shotNumber - 1)} 自动加入镜头轨道。</span>
+                    <span>在下方写下这一镜的镜头、画面或故事。{brandName}会拆解脚本、设计运镜并渲染成片，这一镜会作为 {formatShotOrdinal(shotNumber - 1)} 自动加入镜头轨道。</span>
                 </div>
             </div>
         </div>
@@ -1707,6 +1714,7 @@ function StoryboardBriefAttachments({ attachments }: { attachments: CreationAtta
 }
 
 function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, canvasPath, canvasHandoffAvailable }: { result?: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; canvasPath: string; canvasHandoffAvailable: boolean }) {
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const openPreview = (url: string, type: "image" | "video") => { setPreviewType(type); setPreviewUrl(url); };
@@ -1715,7 +1723,7 @@ function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, canvasP
     const status = result.status || "queued";
     const resultUrls = result.resultUrls || [];
     if (status === "pending" || status === "queued") {
-        const thinking = thinkingFor(mode);
+        const thinking = thinkingFor(mode, brandName);
         return <div className="storyboard-workbench-pending"><div className="storyboard-workbench-thinking">
             <span className="storyboard-workbench-thinking-copy"><strong>{thinking.title}</strong><span>{thinking.hint}</span></span>
             <span className="storyboard-workbench-pipeline" aria-hidden="true">{thinking.steps.map((step, index) => <em key={step} style={{ "--step": index } as CSSProperties}><i>{String(index + 1).padStart(2, "0")}</i>{step}</em>)}</span>

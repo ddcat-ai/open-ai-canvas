@@ -27,6 +27,25 @@ jobs:
       - name: Run Go tests
         run: go test ./...
 
+  payment-plugins:
+    name: Payment plugin artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical payment packages
+        env:
+          PAYMENT_PLUGIN_SMOKE_TEST: "1"
+        run: sh plugin-packages/verify-payment-packages.sh linux amd64
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and execute payment packages for every image platform
+        run: >-
+          docker buildx build
+          --platform linux/amd64,linux/arm64
+          --target payment-package-smoke
+          --file backend/Dockerfile
+          .
+
   web:
     name: Web checks
     runs-on: ubuntu-latest

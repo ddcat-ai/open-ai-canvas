@@ -542,6 +542,12 @@
     border-color: var(--workspace-accent);
 }
 
+.plugin-upload-dropzone-shell.is-dragging .plugin-upload-dropzone.ant-upload-wrapper .ant-upload-drag {
+    border-color: var(--workspace-accent);
+    background: color-mix(in srgb, var(--workspace-accent) 11%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 24%, transparent);
+}
+
 .plugin-upload-dropzone-icon {
     width: 30px;
     height: 30px;

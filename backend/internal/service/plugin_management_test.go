@@ -69,3 +69,10 @@ func TestUploadedManifestCannotClaimUserActivationScope(t *testing.T) {
 		t.Fatalf("uploaded plugin policy = %#v", policy)
 	}
 }
+
+func TestArtCritiqueIsUserToggleableApplication(t *testing.T) {
+	policy := pluginManagement(PluginAIArtCritique, "bundled")
+	if policy.Origin != PluginOriginOfficial || policy.Kind != PluginKindApplication || policy.ActivationScope != PluginScopeUser || policy.ConfigurationScope != PluginConfigurationNone {
+		t.Fatalf("AI art critique policy = %#v", policy)
+	}
+}

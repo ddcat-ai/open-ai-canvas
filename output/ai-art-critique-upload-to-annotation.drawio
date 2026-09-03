@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="图片上传到审美批注">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="lane1" value="用户与画布 UI" style="swimlane;html=1;rounded=1;startSize=32;horizontal=0;fillColor=#f5f7fb;strokeColor=#b8c2d1;fontStyle=1;fontColor=#26364a;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="350" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="lane2" value="Canvas 状态与插件宿主" style="swimlane;html=1;rounded=1;startSize=32;horizontal=0;fillColor=#f5f7fb;strokeColor=#b8c2d1;fontStyle=1;fontColor=#26364a;" vertex="1" parent="1">
+          <mxGeometry x="410" y="30" width="390" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="lane3" value="AI 请求与结果校验" style="swimlane;html=1;rounded=1;startSize=32;horizontal=0;fillColor=#f5f7fb;strokeColor=#b8c2d1;fontStyle=1;fontColor=#26364a;" vertex="1" parent="1">
+          <mxGeometry x="830" y="30" width="390" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="lane4" value="报告展示与 SVG 批注" style="swimlane;html=1;rounded=1;startSize=32;horizontal=0;fillColor=#f5f7fb;strokeColor=#b8c2d1;fontStyle=1;fontColor=#26364a;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="30" width="390" height="900" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n1" value="上传图片&#xa;或已有图片资源" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#26364a;" vertex="1" parent="lane1"><mxGeometry x="60" y="80" width="230" height="60" as="geometry" /></mxCell>
+        <mxCell id="n2" value="图片节点生成/保存&#xa;content · previewContent · storageKey&#xa;宽高与 MIME 信息" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#26364a;" vertex="1" parent="lane1"><mxGeometry x="40" y="190" width="270" height="90" as="geometry" /></mxCell>
+        <mxCell id="n3" value="连接到 AI 审美批改节点" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#26364a;" vertex="1" parent="lane1"><mxGeometry x="60" y="340" width="230" height="60" as="geometry" /></mxCell>
+        <mxCell id="n4" value="点击“开始 AI 批改”" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#26364a;" vertex="1" parent="lane1"><mxGeometry x="60" y="470" width="230" height="60" as="geometry" /></mxCell>
+        <mxCell id="n5" value="查看报告&#xa;图片 + 标注 + 问题建议" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#26364a;" vertex="1" parent="lane1"><mxGeometry x="60" y="760" width="230" height="70" as="geometry" /></mxCell>
+
+        <mxCell id="n6" value="Manifest 注册&#xa;ai-art-critique&#xa;仅接受 image / 隐藏输出端口" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#26364a;" vertex="1" parent="lane2"><mxGeometry x="55" y="80" width="280" height="80" as="geometry" /></mxCell>
+        <mxCell id="n7" value="连线策略校验&#xa;目标 acceptsInputKind = image" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#26364a;" vertex="1" parent="lane2"><mxGeometry x="75" y="230" width="240" height="90" as="geometry" /></mxCell>
+        <mxCell id="n8" value="解析上游图片&#xa;计算 sourceFingerprint&#xa;报告与图片版本绑定" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#26364a;" vertex="1" parent="lane2"><mxGeometry x="55" y="450" width="280" height="80" as="geometry" /></mxCell>
+        <mxCell id="n9" value="读取媒体资源&#xa;imageToDataUrl / resolveImageUrl&#xa;生成可发送的 data URL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#26364a;" vertex="1" parent="lane2"><mxGeometry x="55" y="590" width="280" height="80" as="geometry" /></mxCell>
+        <mxCell id="n10" value="写回节点状态&#xa;running → completed / failed&#xa;metadata.artCritique" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#26364a;" vertex="1" parent="lane2"><mxGeometry x="55" y="750" width="280" height="80" as="geometry" /></mxCell>
+
+        <mxCell id="n11" value="组装多模态消息&#xa;system Prompt + 图片 image_url&#xa;注入 Rubric 2026-08-v1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#26364a;" vertex="1" parent="lane3"><mxGeometry x="55" y="80" width="280" height="90" as="geometry" /></mxCell>
+        <mxCell id="n12" value="requestToolResponse()&#xa;复用现有模型渠道与请求适配" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#26364a;" vertex="1" parent="lane3"><mxGeometry x="55" y="230" width="280" height="70" as="geometry" /></mxCell>
+        <mxCell id="n13" value="模型函数工具返回&#xa;submit_art_critique&#xa;summary / strengths / issues" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#26364a;" vertex="1" parent="lane3"><mxGeometry x="55" y="360" width="280" height="80" as="geometry" /></mxCell>
+        <mxCell id="n14" value="本地解析与安全校验&#xa;JSON / 枚举 / 长度 / 坐标 0..1&#xa;不完整区域 → global" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#26364a;" vertex="1" parent="lane3"><mxGeometry x="55" y="510" width="280" height="90" as="geometry" /></mxCell>
+        <mxCell id="n15" value="问题排序与裁剪&#xa;severity + confidence&#xa;最多保留 5 个重点问题" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#26364a;" vertex="1" parent="lane3"><mxGeometry x="55" y="660" width="280" height="80" as="geometry" /></mxCell>
+
+        <mxCell id="n16" value="ArtCritiqueReport&#xa;结构化报告落盘到节点状态" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#26364a;" vertex="1" parent="lane4"><mxGeometry x="55" y="80" width="280" height="70" as="geometry" /></mxCell>
+        <mxCell id="n17" value="生成 SVG Overlay&#xa;box → polygon&#xa;point / global&#xa;标签碰撞与位置布局" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#26364a;" vertex="1" parent="lane4"><mxGeometry x="55" y="230" width="280" height="90" as="geometry" /></mxCell>
+        <mxCell id="n18" value="Modal 双栏报告&#xa;左：原图与批注&#xa;右：总结、优点、问题、修改动作" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#26364a;" vertex="1" parent="lane4"><mxGeometry x="55" y="390" width="280" height="90" as="geometry" /></mxCell>
+        <mxCell id="n19" value="用户点击标注/问题&#xa;筛选类别、查看建议&#xa;原图保持不变" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#26364a;" vertex="1" parent="lane4"><mxGeometry x="55" y="550" width="280" height="80" as="geometry" /></mxCell>
+        <mxCell id="n20" value="输入指纹变化？&#xa;是 → stale，提示重新批改&#xa;否 → 继续查看历史报告" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#26364a;" vertex="1" parent="lane4"><mxGeometry x="75" y="700" width="240" height="90" as="geometry" /></mxCell>
+
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="n1" target="n2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="图片资源" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="n2" target="n3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="连接请求" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d79b00;" edge="1" parent="1" source="n3" target="n7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="通过" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n7" target="n4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="点击运行" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d79b00;" edge="1" parent="1" source="n4" target="n8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;" edge="1" parent="1" source="n8" target="n9"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" value="data URL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="n9" target="n11"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="n11" target="n12"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="n12" target="n13"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" value="结构化 JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;" edge="1" parent="1" source="n13" target="n14"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" value="校验通过" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;" edge="1" parent="1" source="n14" target="n15"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12" value="报告" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n15" target="n16"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e13" value="保存 completed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n16" target="n10"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e14" value="显示报告" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n16" target="n17"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e15" value="可交互标注" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n17" target="n18"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" edge="1" parent="1" source="n18" target="n19"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e17" value="刷新/重新打开时校验" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;" edge="1" parent="1" source="n19" target="n20"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e18" value="需要重新批改" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#b85450;" edge="1" parent="1" source="n20" target="n4"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="180" y="855"/><mxPoint x="180" y="500"/></Array></mxGeometry></mxCell>
+        <mxCell id="e19" value="继续查看" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#82b366;" edge="1" parent="1" source="n20" target="n5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e20" value="未通过：拒绝连线" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#b85450;" edge="1" parent="1" source="n7" target="n3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="430" y="340"/><mxPoint x="430" y="420"/></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

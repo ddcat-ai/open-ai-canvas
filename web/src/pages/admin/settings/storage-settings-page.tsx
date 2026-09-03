@@ -6,6 +6,7 @@ import { useBlocker } from "react-router";
 import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
 import { cn } from "@/lib/utils";
 import { getAdminOSSSetting, testAdminOSSConnection, updateAdminOSSSetting, type AdminOSSSetting } from "@/services/api/auth";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
@@ -38,6 +39,7 @@ const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; de
 
 export default function StorageSettingsPage() {
     const { message, modal } = App.useApp();
+    const brandSlug = useAppearanceStore((state) => state.appearance.brandSlug);
     const [setting, setSetting] = useState<AdminOSSSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -185,6 +187,15 @@ export default function StorageSettingsPage() {
     const requestModeChange = (nextMode: StorageMode) => {
         if (!setting || nextMode === draftMode || saving || refreshing) return;
         applyMode(nextMode);
+    };
+
+    const useBrandPathPrefix = () => {
+        if (!setting || saving || refreshing) return;
+        const current = form.getFieldsValue(true);
+        form.setFieldValue("pathPrefix", brandSlug);
+        setDirty(hasStorageChanges({ ...current, pathPrefix: brandSlug }, setting));
+        setTestStale(true);
+        setSaveError("");
     };
 
     const save = async (values: OSSFormValues) => {
@@ -483,8 +494,15 @@ export default function StorageSettingsPage() {
                                             <Form.Item name="bucket" label="Bucket">
                                                 <Input autoComplete="off" placeholder={draftMode === "qiniu" ? "七牛云存储空间名称" : "对象存储 Bucket"} />
                                             </Form.Item>
-                                            <Form.Item name="pathPrefix" label="路径前缀" extra="可留空；保存时自动去除首尾斜杠。">
-                                                <Input autoComplete="off" placeholder="例如：canvas" />
+                                            <Form.Item label="路径前缀" extra={`可自行填写；也可采用外观管理中的英文品牌标识 ${brandSlug}。保存时自动去除首尾斜杠。`}>
+                                                <div className="admin-storage-address-control">
+                                                    <Form.Item name="pathPrefix" noStyle>
+                                                        <Input autoComplete="off" placeholder={`例如：${brandSlug}`} />
+                                                    </Form.Item>
+                                                    <Button disabled={saving || refreshing || form.getFieldValue("pathPrefix") === brandSlug} onClick={useBrandPathPrefix}>
+                                                        使用品牌标识
+                                                    </Button>
+                                                </div>
                                             </Form.Item>
                                         </div>
                                     </div>
