@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Home, Infinity as InfinityIcon, LogOut, PanelLeftOpen, Plus, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, ChevronRight, FlaskConical, Home, Infinity as InfinityIcon, LogOut, PanelLeftOpen, Plus, Search, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
@@ -48,6 +48,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
             items: [
                 { id: "home", title: "首页", icon: Home, to: "/" },
                 ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
+                ...(features.shortDramaEnabled ? [{ id: "brew", title: "酿造工坊", icon: FlaskConical, to: "/brew" } as WorkspaceNavItem] : []),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
                 toolItem("assets", "/assets"),
