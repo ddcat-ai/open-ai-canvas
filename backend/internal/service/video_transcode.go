@@ -181,10 +181,13 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 	src := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
 	switch probeVideoCodec(src) {
 	case videoCodecH265:
-		resource.PlaybackStatus = model.PlaybackStatusProcessing
-		if err := s.repo.SaveResource(resource); err != nil {
+		// 原子抢占（空/none → processing）：并发上传 + 回填、多实例同抢时
+		// 仅一个能成功置位，其余直接返回，避免重复转码。
+		claimed, err := s.repo.ClaimPlaybackTranscode(resource.ID)
+		if err != nil || !claimed {
 			return
 		}
+		resource.PlaybackStatus = model.PlaybackStatusProcessing
 		go s.runPlaybackTranscode(resource.UserID, resource.ID, src)
 	case videoCodecH264, videoCodecAV1, videoCodecVP9, videoCodecMPEG4, "":
 		// H.264 浏览器可直接解码；AV1/VP9/MPEG4 暂不转码；探针读不出编码（非 mp4 /
@@ -204,6 +207,16 @@ func markPlaybackNone(s *Service, resource *model.Resource) {
 
 // runPlaybackTranscode 转码本地原件到 playback/<id>.mp4 并回写状态（幂等按 id 重载）。
 func (s *Service) runPlaybackTranscode(userID string, resourceID string, src string) {
+	// 转码 goroutine 意外 panic 时把状态落 failed，避免 processing 卡死到下次重启。
+	defer func() {
+		if r := recover(); r != nil {
+			if res, err := s.repo.ResourceForUser(userID, resourceID); err == nil && res != nil {
+				res.PlaybackStatus = model.PlaybackStatusFailed
+				res.PlaybackError = clipText(fmt.Sprintf("转码 panic：%v", r), 1000)
+				_ = s.repo.SaveResource(res)
+			}
+		}
+	}()
 	status := model.PlaybackStatusFailed
 	objectKey := ""
 	var errText string

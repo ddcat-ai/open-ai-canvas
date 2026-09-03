@@ -1065,6 +1065,20 @@ func (r *Repository) PlaybackPendingVideos(limit int) ([]model.Resource, error) 
 	return resources, err
 }
 
+// ClaimPlaybackTranscode 原子地把待判定（空/none）视频置为 processing，返回是否抢占成功。
+// 多实例或多 goroutine 并发转同一资源时仅一个能成功置位，其余返回 false 直接放弃，
+// 避免重复转码同一份文件。
+func (r *Repository) ClaimPlaybackTranscode(id string) (bool, error) {
+	res := r.db.Model(&model.Resource{}).
+		Where("id = ? AND (playback_status = ? OR playback_status IS NULL OR playback_status = ?)",
+			id, "", model.PlaybackStatusNone).
+		Updates(map[string]any{"playback_status": model.PlaybackStatusProcessing, "playback_error": ""})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
 // ResetStuckPlaybackTranscodes 服务重启时把卡在 processing 的转码记录重置回待判定
 // （进程崩溃后转码 goroutine 随进程消亡，状态永远停在 processing）。
 func (r *Repository) ResetStuckPlaybackTranscodes() error {

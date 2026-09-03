@@ -1560,7 +1560,13 @@ func newOSSRequest(method string, setting ossSettingValue, objectKey string, con
 	// http.Transport 会关闭未发完的 Request.Body，若直接传入 *os.File 等
 	// 调用方持有的文件，后续“降级本地存储”的 Seek 重读将因 file already
 	// closed 失败。NopCloser 让 Transport 的关闭成为空操作，底层文件保持可用。
-	req, err := http.NewRequest(method, baseURL.String(), io.NopCloser(body))
+	// GET/HEAD/DELETE 等无请求体的调用传入 nil body；NopCloser(nil) 会产生非 nil 的
+	// Body 包装 nil reader，Go 1.26 发送前 body 探测会直接 nil 解引用崩溃。
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = io.NopCloser(body)
+	}
+	req, err := http.NewRequest(method, baseURL.String(), reqBody)
 	if err != nil {
 		return nil, err
 	}
