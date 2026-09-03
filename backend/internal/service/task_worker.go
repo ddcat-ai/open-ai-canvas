@@ -135,6 +135,9 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 	if task.Type == model.TaskTypeTimelineTranscription {
 		return w.processTimelineTranscription(task, ctx)
 	}
+	if task.Type == model.TaskTypeTimelineRender {
+		return w.processTimelineRender(task, ctx)
+	}
 
 	task.Stage = "调用生成模型"
 	task.Progress = 35
@@ -240,6 +243,9 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	case taskType == model.TaskTypeTimelineTranscription:
 		// 本地转写受媒体时长影响，给出独立宽松超时。
 		return 20 * time.Minute
+	case taskType == model.TaskTypeTimelineRender:
+		// 渲染是整条时间线的重编码，耗时随长度线性增长。
+		return 60 * time.Minute
 	default:
 		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
 	}

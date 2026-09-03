@@ -75,6 +75,29 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, task)
 	})
+	r.POST("/timeline/renders", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "timeline-render:"+user.ID, policy.Request.TaskCreatePerMinute, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<20)
+		var req service.TimelineRenderCreateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		task, err := svc.CreateTimelineRenderTask(user.ID, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, task)
+	})
 	r.GET("/tasks", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
