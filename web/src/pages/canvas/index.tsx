@@ -26,9 +26,11 @@ import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/servi
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 export default function CanvasPage() {
     const { message } = App.useApp();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -497,7 +499,7 @@ export default function CanvasPage() {
                                 移出项目
                             </Button>
                         ) : null}
-                        <Button size="small" disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(selectedProjects, `影策画布-${selectedIds.length}个画布`)}>
+                        <Button size="small" disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(selectedProjects, `${brandName}画布-${selectedIds.length}个画布`)}>
                             导出
                         </Button>
                         <Button size="small" danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>

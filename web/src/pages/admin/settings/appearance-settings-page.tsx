@@ -1,11 +1,13 @@
 import { App, Button, Form, Input, Skeleton, Switch } from "antd";
-import { Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Sun, Type, Undo2, Upload } from "lucide-react";
+import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Search, Sun, Type, Undo2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useBlocker } from "react-router";
 
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/admin-ui";
 import { cn } from "@/lib/utils";
+import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
+import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
@@ -30,6 +32,14 @@ export default function AppearanceSettingsPage() {
     const [authHeroTitle, setAuthHeroTitle] = useState("");
     const [authHeroDescription, setAuthHeroDescription] = useState("");
     const [logoFrameEnabled, setLogoFrameEnabled] = useState(true);
+    const [skinId, setSkinId] = useState("classic");
+    const [skinThemes, setSkinThemes] = useState<SkinDefinition[]>([DEFAULT_CLASSIC_SKIN]);
+    const [seoTitle, setSeoTitle] = useState("");
+    const [seoDescription, setSeoDescription] = useState("");
+    const [seoKeywords, setSeoKeywords] = useState("");
+    const [footerCopyright, setFooterCopyright] = useState("");
+    const [icpFilingEnabled, setIcpFilingEnabled] = useState(false);
+    const [icpFilingNumber, setIcpFilingNumber] = useState("");
     const [files, setFiles] = useState<DraftFiles>(EMPTY_FILES);
     const [resets, setResets] = useState<ResetState>(EMPTY_RESETS);
     const [loading, setLoading] = useState(true);
@@ -52,6 +62,14 @@ export default function AppearanceSettingsPage() {
             normalizeDraftCopy(authHeroTitle) !== setting?.authHeroTitle ||
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
             logoFrameEnabled !== setting?.logoFrameEnabled ||
+            skinId !== setting?.skinId ||
+            JSON.stringify(skinThemes) !== JSON.stringify(setting?.skinThemes) ||
+            normalizeSingleLine(seoTitle) !== setting?.seoTitle ||
+            normalizeDraftCopy(seoDescription) !== setting?.seoDescription ||
+            normalizeSingleLine(seoKeywords) !== setting?.seoKeywords ||
+            normalizeSingleLine(footerCopyright) !== setting?.footerCopyright ||
+            icpFilingEnabled !== setting?.icpFilingEnabled ||
+            normalizeSingleLine(icpFilingNumber) !== setting?.icpFilingNumber ||
             Object.values(files).some(Boolean) ||
             Object.values(resets).some(Boolean));
     const blocker = useBlocker(dirty && !saving && !restoring);
@@ -63,6 +81,15 @@ export default function AppearanceSettingsPage() {
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
         setLogoFrameEnabled(value.logoFrameEnabled);
+        const themes = value.skinThemes.map((theme) => normalizeSkinDefinition(theme));
+        setSkinThemes(themes.length ? themes : [cloneSkinDefinition(DEFAULT_CLASSIC_SKIN)]);
+        setSkinId(themes.some((theme) => theme.id === value.skinId) ? value.skinId : "classic");
+        setSeoTitle(value.seoTitle);
+        setSeoDescription(value.seoDescription);
+        setSeoKeywords(value.seoKeywords);
+        setFooterCopyright(value.footerCopyright);
+        setIcpFilingEnabled(value.icpFilingEnabled);
+        setIcpFilingNumber(value.icpFilingNumber);
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         setLoadError("");
@@ -101,8 +128,8 @@ export default function AppearanceSettingsPage() {
     useEffect(() => {
         if (blocker.state !== "blocked") return;
         modal.confirm({
-            title: "放弃外观调整？",
-            content: "当前品牌信息、登录页文案或媒体文件尚未保存，离开后草稿会丢失。线上外观不会改变。",
+            title: "放弃站点及外观调整？",
+            content: "当前品牌、SEO、备案、皮肤或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -163,6 +190,14 @@ export default function AppearanceSettingsPage() {
         setAuthHeroTitle(setting.authHeroTitle);
         setAuthHeroDescription(setting.authHeroDescription);
         setLogoFrameEnabled(setting.logoFrameEnabled);
+        setSkinId(setting.skinId);
+        setSkinThemes(setting.skinThemes.map((theme) => cloneSkinDefinition(theme)));
+        setSeoTitle(setting.seoTitle);
+        setSeoDescription(setting.seoDescription);
+        setSeoKeywords(setting.seoKeywords);
+        setFooterCopyright(setting.footerCopyright);
+        setIcpFilingEnabled(setting.icpFilingEnabled);
+        setIcpFilingNumber(setting.icpFilingNumber);
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         Object.values(inputRefs).forEach((ref) => {
@@ -178,7 +213,7 @@ export default function AppearanceSettingsPage() {
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前品牌信息、登录页文案和待上传文件。",
+            content: "重新读取会丢弃当前品牌、SEO、备案、皮肤和待上传文件。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -190,7 +225,7 @@ export default function AppearanceSettingsPage() {
         if (!setting?.configured || saving || refreshing || restoring) return;
         modal.confirm({
             title: "恢复影策默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面和皮肤配置会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面、SEO、备案和皮肤主题会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -221,6 +256,11 @@ export default function AppearanceSettingsPage() {
         const nextBrandSlug = brandSlug.trim().toLocaleLowerCase();
         const nextAuthHeroTitle = normalizeDraftCopy(authHeroTitle);
         const nextAuthHeroDescription = normalizeDraftCopy(authHeroDescription);
+        const nextSeoTitle = normalizeSingleLine(seoTitle);
+        const nextSeoDescription = normalizeDraftCopy(seoDescription);
+        const nextSeoKeywords = normalizeSingleLine(seoKeywords);
+        const nextFooterCopyright = normalizeSingleLine(footerCopyright);
+        const nextIcpFilingNumber = normalizeSingleLine(icpFilingNumber);
         if (!nextBrandName || Array.from(nextBrandName).length > 40) {
             message.error("品牌名称必须为 1 到 40 个字符");
             return;
@@ -235,6 +275,27 @@ export default function AppearanceSettingsPage() {
         }
         if (Array.from(nextAuthHeroDescription).length > 160 || hasUnsupportedControlCharacter(nextAuthHeroDescription)) {
             message.error("登录页说明文案不能超过 160 个字符，可使用换行");
+            return;
+        }
+        for (const [value, label, max] of [
+            [nextSeoTitle, "SEO 标题", 70],
+            [nextSeoDescription, "SEO 描述", 200],
+            [nextSeoKeywords, "SEO 关键词", 300],
+            [nextFooterCopyright, "版权信息", 160],
+            [nextIcpFilingNumber, "备案号", 64],
+        ] as const) {
+            if (Array.from(value).length > max || hasUnsupportedControlCharacter(value)) {
+                message.error(`${label}不能超过 ${max} 个字符，且不能包含控制字符`);
+                return;
+            }
+        }
+        if (icpFilingEnabled && !nextIcpFilingNumber) {
+            message.error("显示备案号前请先填写备案号");
+            return;
+        }
+        const skinError = validateSkinDrafts(skinThemes, skinId);
+        if (skinError) {
+            message.error(skinError);
             return;
         }
         setSaving(true);
@@ -263,14 +324,21 @@ export default function AppearanceSettingsPage() {
                 logoFrameEnabled,
                 authVideoResourceId: ids.video,
                 authVideoPosterResourceId: ids.poster,
-                skinId: setting.skinId,
+                skinId,
+                skinThemes,
+                seoTitle: nextSeoTitle,
+                seoDescription: nextSeoDescription,
+                seoKeywords: nextSeoKeywords,
+                footerCopyright: nextFooterCopyright,
+                icpFilingEnabled,
+                icpFilingNumber: nextIcpFilingNumber,
             });
             applySetting(updated);
             commitPublicAppearance(updated.public);
             Object.values(inputRefs).forEach((ref) => {
                 if (ref.current) ref.current.value = "";
             });
-            message.success("外观配置已保存并立即生效");
+            message.success("站点及外观配置已保存并立即生效");
         } catch (error) {
             const detail = error instanceof Error ? error.message : "保存外观配置失败";
             if (uploadedIDs.length) {
@@ -291,9 +359,43 @@ export default function AppearanceSettingsPage() {
     const darkLogoSelected = Boolean(files["logo-dark"] || (!resets["logo-dark"] && setting?.darkLogoResourceId));
     const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
+    const draftBrandName = brandName.trim() || "站点名称";
+    const selectedSkin = skinThemes.find((skin) => skin.id === skinId) || skinThemes[0] || DEFAULT_CLASSIC_SKIN;
+
+    const changeSkin = (next: SkinDefinition) => {
+        if (next.locked) return;
+        setSkinThemes((current) => current.map((theme) => (theme.id === next.id ? next : theme)));
+    };
+
+    const duplicateSkin = (sourceID: string) => {
+        if (skinThemes.length >= 16) return;
+        const source = skinThemes.find((theme) => theme.id === sourceID) || DEFAULT_CLASSIC_SKIN;
+        const copy = duplicateSkinDefinition(
+            source,
+            skinThemes.map((theme) => theme.id),
+        );
+        setSkinThemes((current) => [...current, copy]);
+        setSkinId(copy.id);
+    };
+
+    const deleteSkin = (targetID: string) => {
+        const target = skinThemes.find((theme) => theme.id === targetID);
+        if (!target || target.locked) return;
+        modal.confirm({
+            title: `删除主题“${target.name}”？`,
+            content: "删除会随本页其他调整一起保存；保存前仍可点击“撤销调整”恢复。若它当前启用，将自动切回经典黑白。",
+            okText: "删除主题",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: () => {
+                setSkinThemes((current) => current.filter((theme) => theme.id !== targetID));
+                if (skinId === targetID) setSkinId("classic");
+            },
+        });
+    };
 
     return (
-        <AdminPageFrame title="外观管理" description="统一设置平台品牌、登录页内容与媒体，并为后续皮肤库保留扩展入口" scroll>
+        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、搜索信息、备案展示与全站皮肤主题" scroll>
             {loading ? (
                 <AppearanceSkeleton />
             ) : loadError || !setting ? (
@@ -317,10 +419,10 @@ export default function AppearanceSettingsPage() {
                         <div className="admin-appearance-command-copy" aria-live="polite">
                             <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <strong>{dirty ? "外观配置有调整待保存" : "外观配置已与服务端同步"}</strong>
+                                    <strong>{dirty ? "站点配置有调整待保存" : "站点及外观已与服务端同步"}</strong>
                                     <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                                 </div>
-                                <p>{dirty ? "品牌、文案和媒体只在本页预览；保存后才会应用到公开页面。" : "保存后公开页面会在应用渲染前读取新配置，不会先闪现旧品牌。"}</p>
+                                <p>{dirty ? "品牌、SEO、备案、皮肤和媒体只在本页预览；保存后才会应用。" : "公开页面会在应用渲染前读取品牌与皮肤，不会先闪现旧站点身份。"}</p>
                             </div>
                         </div>
                         <div className="admin-appearance-command-actions">
@@ -497,16 +599,86 @@ export default function AppearanceSettingsPage() {
 
                     <SettingsSectionCard
                         className="admin-appearance-section"
-                        icon={<Type className="size-4" aria-hidden="true" />}
-                        title="3. 皮肤方案"
-                        description="当前版本先统一使用经典皮肤；后续颜色、字体、圆角和组件密度会作为独立皮肤包管理。"
-                        status={<AdminStatusBadge label="经典皮肤" tone="info" />}
+                        icon={<Search className="size-4" aria-hidden="true" />}
+                        title="3. SEO 信息"
+                        description="配置浏览器标题、搜索摘要和关键词；留空时标题与描述会自动跟随当前站点名称。"
+                        status={<AdminStatusBadge label={seoTitle || seoDescription || seoKeywords ? "已自定义" : "自动跟随品牌"} tone={seoTitle || seoDescription || seoKeywords ? "success" : "neutral"} />}
                     >
-                        <div className="admin-appearance-skin-note">
-                            <span>当前皮肤</span>
-                            <strong>{setting.skinId === "classic" ? "经典皮肤（Classic）" : setting.skinId}</strong>
-                            <small>皮肤方案与品牌内容分离，后续切换皮肤时不会覆盖品牌名、英文标识、Logo、登录页文案或媒体。</small>
+                        <Form className="admin-appearance-form admin-appearance-section-form" layout="vertical" requiredMark={false} disabled={saving || refreshing || restoring}>
+                            <div className="admin-appearance-form-grid">
+                                <Form.Item label="SEO 标题" extra="建议简洁描述站点用途；留空时使用站点名称。">
+                                    <Input value={seoTitle} maxLength={70} showCount placeholder={draftBrandName} onChange={(event) => setSeoTitle(event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="SEO 关键词" extra="以逗号分隔；Google 不使用该标签排名，仍可供其他工具读取。">
+                                    <Input value={seoKeywords} maxLength={300} showCount placeholder="AI 影视, AI 短剧, 创作工作台" onChange={(event) => setSeoKeywords(event.target.value)} />
+                                </Form.Item>
+                            </div>
+                            <Form.Item label="SEO 描述" extra="建议用一到两句话准确概括站点，避免重复堆砌关键词；留空时自动生成品牌描述。">
+                                <Input.TextArea
+                                    value={seoDescription}
+                                    maxLength={200}
+                                    showCount
+                                    autoSize={{ minRows: 3, maxRows: 5 }}
+                                    placeholder={`${draftBrandName}，面向 AI 影视与短剧创作的工作台。`}
+                                    onChange={(event) => setSeoDescription(event.target.value)}
+                                />
+                            </Form.Item>
+                        </Form>
+                    </SettingsSectionCard>
+
+                    <SettingsSectionCard
+                        className="admin-appearance-section"
+                        icon={<Globe2 className="size-4" aria-hidden="true" />}
+                        title="4. 首页页尾与备案"
+                        description="配置公开登录首页底部的版权和备案信息；备案号启用后固定链接工信部备案管理系统。"
+                        status={<AdminStatusBadge label={icpFilingEnabled ? "展示备案号" : "未展示备案号"} tone={icpFilingEnabled ? "success" : "neutral"} />}
+                    >
+                        <div className="admin-appearance-section-form admin-appearance-footer-settings">
+                            <Form className="admin-appearance-form" layout="vertical" requiredMark={false} disabled={saving || refreshing || restoring}>
+                                <Form.Item label="版权信息" extra="留空时自动使用当前年份和站点名称。">
+                                    <Input
+                                        prefix={<Copyright className="size-3.5" aria-hidden="true" />}
+                                        value={footerCopyright}
+                                        maxLength={160}
+                                        showCount
+                                        placeholder={`© ${new Date().getFullYear()} ${draftBrandName}. All rights reserved.`}
+                                        onChange={(event) => setFooterCopyright(event.target.value)}
+                                    />
+                                </Form.Item>
+                                <Form.Item label="备案号" extra="请填写真实备案号，例如“蜀ICP备XXXXXXXX号”；系统不会替你申请或核验备案。">
+                                    <Input value={icpFilingNumber} maxLength={64} showCount placeholder="例如：蜀ICP备XXXXXXXX号" onChange={(event) => setIcpFilingNumber(event.target.value)} />
+                                </Form.Item>
+                            </Form>
+                            <div className="admin-appearance-logo-frame-option">
+                                <div className="admin-appearance-logo-frame-copy">
+                                    <strong>在首页底部显示备案号</strong>
+                                    <p id="appearance-icp-help">启用后，备案号会显示在登录、注册和找回密码页底部，并链接至 https://beian.miit.gov.cn/ 供公众查询。</p>
+                                </div>
+                                <div className="admin-appearance-logo-frame-control">
+                                    <span>{icpFilingEnabled ? "已显示" : "未显示"}</span>
+                                    <Switch checked={icpFilingEnabled} disabled={saving || refreshing || restoring} aria-label="在首页底部显示备案号" aria-describedby="appearance-icp-help" onChange={setIcpFilingEnabled} />
+                                </div>
+                            </div>
                         </div>
+                    </SettingsSectionCard>
+
+                    <SettingsSectionCard
+                        className="admin-appearance-section"
+                        icon={<Type className="size-4" aria-hidden="true" />}
+                        title="5. 皮肤主题"
+                        description="默认主题保持项目原始样式且不可更改；其他主题可新建、复制、改名、删除，并分别定义浅色、深色、控件样式与交互反馈。"
+                        status={<AdminStatusBadge label={selectedSkin.name} tone="info" />}
+                    >
+                        <SkinThemeEditor
+                            themes={skinThemes}
+                            selectedID={skinId}
+                            disabled={saving || refreshing || restoring}
+                            onSelect={setSkinId}
+                            onCreate={() => duplicateSkin("classic")}
+                            onDuplicate={duplicateSkin}
+                            onDelete={deleteSkin}
+                            onChange={changeSkin}
+                        />
                     </SettingsSectionCard>
                 </div>
             )}
@@ -623,8 +795,29 @@ function normalizeDraftCopy(value: string) {
     return value.replace(/\r\n?/g, "\n").trim();
 }
 
+function normalizeSingleLine(value: string) {
+    return value.replace(/\r\n?/g, " ").trim();
+}
+
 function hasUnsupportedControlCharacter(value: string) {
     return Array.from(value).some((character) => character !== "\n" && /[\u0000-\u001f\u007f]/.test(character));
+}
+
+function validateSkinDrafts(themes: SkinDefinition[], selectedID: string) {
+    if (!themes.length || themes.length > 16) return "皮肤主题数量必须为 1 到 16 套";
+    const ids = new Set<string>();
+    for (const theme of themes) {
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(theme.id) || ids.has(theme.id)) return "皮肤主题 ID 无效或重复";
+        ids.add(theme.id);
+        if (!theme.name.trim() || Array.from(theme.name.trim()).length > 40) return "皮肤主题名称必须为 1 到 40 个字符";
+        if (Array.from(theme.description.trim()).length > 100) return "皮肤主题说明不能超过 100 个字符";
+        const invalidColor = [...Object.values(theme.tokens.light), ...Object.values(theme.tokens.dark)].some((color) => !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color));
+        if (invalidColor) return `主题“${theme.name}”存在无效颜色，请使用 6 或 8 位十六进制色值`;
+        if (theme.tokens.components.controlHeightSmall > theme.tokens.components.controlHeight || theme.tokens.components.controlHeight > theme.tokens.components.controlHeightLarge) return `主题“${theme.name}”的控件高度顺序无效`;
+        if (theme.tokens.components.motionFast > theme.tokens.components.motionNormal) return `主题“${theme.name}”的快速动效不能慢于常规动效`;
+    }
+    if (!ids.has("classic") || !ids.has(selectedID)) return "默认主题或当前启用主题不存在";
+    return "";
 }
 
 function formatBytes(bytes: number) {

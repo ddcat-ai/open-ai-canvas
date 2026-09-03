@@ -41,7 +41,7 @@ curl "{channel_base_url}/v1/videos/generations" \
 
 ## 创建、查询与下载
 
-创建响应需包含 `request_id` 或其他统一解析器支持的任务字段。查询完成后从视频数组或 `video_url/result_url/url` 读取媒体。当前没有 cancel adapter；关闭影策弹窗不会取消上游生成。结果 URL 应及时转存，不能假定永久有效。
+创建响应需包含 `request_id` 或其他统一解析器支持的任务字段。查询完成后从视频数组或 `video_url/result_url/url` 读取媒体。当前没有 cancel adapter；关闭宿主弹窗不会取消上游生成。结果 URL 应及时转存，不能假定永久有效。
 
 ## 错误处理
 

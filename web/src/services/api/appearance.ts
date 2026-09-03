@@ -1,4 +1,5 @@
 import { apiClient, request } from "@/services/api/request";
+import type { SkinDefinition } from "@/lib/skin-themes";
 
 export type PublicAppearance = {
     schemaVersion: number;
@@ -12,6 +13,13 @@ export type PublicAppearance = {
     authVideoUrl: string;
     authVideoPosterUrl: string;
     skinId: string;
+    activeSkin: SkinDefinition;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    footerCopyright: string;
+    icpFilingEnabled: boolean;
+    icpFilingNumber: string;
     logoConfigured: boolean;
     darkLogoConfigured: boolean;
     authVideoConfigured: boolean;
@@ -33,6 +41,13 @@ export type AdminAppearance = {
     authVideoResourceId: string;
     authVideoPosterResourceId: string;
     skinId: string;
+    skinThemes: SkinDefinition[];
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    footerCopyright: string;
+    icpFilingEnabled: boolean;
+    icpFilingNumber: string;
     public: PublicAppearance;
     configured: boolean;
     updatedBy?: string;
@@ -61,7 +76,26 @@ export async function getAdminAppearance(signal?: AbortSignal) {
 }
 
 export async function updateAdminAppearance(
-    input: Pick<AdminAppearance, "brandName" | "brandSlug" | "authHeroTitle" | "authHeroDescription" | "logoResourceId" | "darkLogoResourceId" | "logoFrameEnabled" | "authVideoResourceId" | "authVideoPosterResourceId" | "skinId">,
+    input: Pick<
+        AdminAppearance,
+        | "brandName"
+        | "brandSlug"
+        | "authHeroTitle"
+        | "authHeroDescription"
+        | "logoResourceId"
+        | "darkLogoResourceId"
+        | "logoFrameEnabled"
+        | "authVideoResourceId"
+        | "authVideoPosterResourceId"
+        | "skinId"
+        | "skinThemes"
+        | "seoTitle"
+        | "seoDescription"
+        | "seoKeywords"
+        | "footerCopyright"
+        | "icpFilingEnabled"
+        | "icpFilingNumber"
+    >,
 ) {
     const result = await request<{ setting: AdminAppearance }>(apiClient.patch("/admin/settings/appearance", input));
     return result.setting;

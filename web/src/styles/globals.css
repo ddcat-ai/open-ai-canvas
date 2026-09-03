@@ -44,10 +44,10 @@
     --palette-node-skill: oklch(0.7 0.17 55);          /* 橙色 400 — 技能 */
 
     /* 状态色（用 --palette- 前缀避免循环引用）*/
-    --palette-status-success: oklch(0.7 0.17 155);
-    --palette-status-error: oklch(0.65 0.22 25);
-    --palette-status-loading: oklch(0.62 0.18 250);
-    --palette-status-warning: oklch(0.75 0.15 85);
+    --palette-status-success: #16a34a;
+    --palette-status-error: #dc2626;
+    --palette-status-loading: #2563eb;
+    --palette-status-warning: #d97706;
 
     /* --- 2. 间距（4px 栅格 + 半距）--- */
     --space-0: 0px;
@@ -177,12 +177,15 @@
     --control-selected-border: rgba(17, 17, 17, 0.18);
     --control-check-bg: #171717;
     --control-check-fg: #ffffff;
-    --control-switch-checked-bg: #171717;
-    --control-switch-checked-hover-bg: #303030;
+    --control-switch-checked-bg: #16a34a;
+    --control-switch-checked-hover-bg: #15803d;
     --control-switch-checked-handle: #ffffff;
-    --control-switch-off-bg: rgba(17, 17, 17, 0.22);
-    --control-switch-off-hover-bg: rgba(17, 17, 17, 0.3);
+    --control-switch-off-bg: #b8b8b8;
+    --control-switch-off-hover-bg: #9f9f9f;
     --control-switch-off-handle: #ffffff;
+    --destructive-hover: #b91c1c;
+    --destructive-active: #991b1b;
+    --destructive-foreground: #ffffff;
     --control-disabled-bg: rgba(17, 17, 17, 0.05);
     --control-disabled-fg: rgba(17, 17, 17, 0.36);
     --control-focus-ring: color-mix(in srgb, var(--ring) 72%, transparent);
@@ -255,6 +258,30 @@
     --glass-alpha: 0.94;
     --glass-alpha-strong: 0.97;
     --glass-border-alpha: 0.78;
+
+    /* 站点皮肤对登录页的组件级入口；经典皮肤保持原始值。 */
+    --auth-page-bg: #08090c;
+    --auth-panel-bg: #0b0c10;
+    --auth-card-bg: rgba(18, 19, 24, 0.94);
+    --auth-accent: rgba(147, 197, 253, 0.8);
+    --auth-muted: rgba(255, 255, 255, 0.45);
+
+    /* 可配置皮肤的组件入口。经典主题保持这些项目原始值；自定义主题在
+       React 启动前由公开外观配置覆盖，页面和组件只消费这些语义变量。 */
+    --icon-foreground: #3f3f46;
+    --icon-muted: #a1a1aa;
+    --icon-active: #171717;
+    --control-radius: 6px;
+    --button-radius: 6px;
+    --input-radius: 6px;
+    --card-radius: 12px;
+    --overlay-radius: 12px;
+    --menu-radius: 8px;
+    --checkbox-radius: 4px;
+    --control-border-width: 1px;
+    --focus-ring-width: 2px;
+    --icon-size: 16px;
+    --theme-hover-lift: 1px;
 }
 
 /* prefers-reduced-motion 降级（对应 #99 三级降级策略 L1）*/
@@ -292,6 +319,100 @@
 .no-motion .creation-intro-word,
 .no-motion .creation-intro-signal {
     animation: none;
+}
+
+.auth-scene {
+    background: var(--auth-page-bg);
+}
+
+.auth-scene-form-pane {
+    background: var(--auth-panel-bg);
+}
+
+.auth-scene-video-blend {
+    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--auth-panel-bg) 68%, transparent) 58%, var(--auth-panel-bg) 100%);
+}
+
+.auth-scene-card {
+    background: var(--auth-card-bg);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+}
+
+.auth-scene-eyebrow {
+    color: var(--auth-accent);
+}
+
+.auth-scene-muted {
+    color: var(--auth-muted);
+}
+
+.auth-scene-return {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.auth-scene-return:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.site-compliance-footer {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    text-align: center;
+}
+
+.site-compliance-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: inherit;
+    text-decoration: none;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.site-compliance-footer a:hover,
+.site-compliance-footer a:focus-visible {
+    color: var(--foreground);
+}
+
+.site-compliance-footer a:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 68%, transparent);
+    outline-offset: 3px;
+}
+
+.site-compliance-footer svg {
+    width: 11px;
+    height: 11px;
+}
+
+.site-compliance-footer.is-auth {
+    min-height: 54px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: color-mix(in srgb, var(--auth-panel-bg) 88%, transparent);
+    color: rgba(255, 255, 255, 0.48);
+    backdrop-filter: blur(14px);
+}
+
+.site-compliance-footer.is-auth a:hover,
+.site-compliance-footer.is-auth a:focus-visible {
+    color: rgba(255, 255, 255, 0.86);
+}
+
+@media (max-width: 640px) {
+    .site-compliance-footer {
+        flex-direction: column;
+        gap: var(--space-1);
+    }
 }
 
 /* 动效计算函数（实际 duration = base * motion-scale）*/
@@ -507,7 +628,7 @@
     --muted-foreground: oklch(0.556 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
+    --destructive: #dc2626;
     --input: oklch(0.922 0 0);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
@@ -541,7 +662,14 @@
     --muted-foreground: oklch(0.708 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
+    --destructive: #f87171;
+    --destructive-hover: #fca5a5;
+    --destructive-active: #ef4444;
+    --destructive-foreground: #2b0808;
+    --palette-status-success: #4ade80;
+    --palette-status-error: #f87171;
+    --palette-status-loading: #60a5fa;
+    --palette-status-warning: #fbbf24;
     --input: oklch(1 0 0 / 15%);
     --workspace-canvas: var(--background);
     --workspace-page: var(--workspace-canvas);
@@ -679,11 +807,11 @@
     --control-selected-border: rgba(255, 255, 255, 0.18);
     --control-check-bg: #f5f5f5;
     --control-check-fg: #131313;
-    --control-switch-checked-bg: #f5f5f5;
-    --control-switch-checked-hover-bg: #ffffff;
-    --control-switch-checked-handle: #131313;
-    --control-switch-off-bg: rgba(255, 255, 255, 0.22);
-    --control-switch-off-hover-bg: rgba(255, 255, 255, 0.3);
+    --control-switch-checked-bg: #22c55e;
+    --control-switch-checked-hover-bg: #4ade80;
+    --control-switch-checked-handle: #071a0f;
+    --control-switch-off-bg: #525252;
+    --control-switch-off-hover-bg: #686868;
     --control-switch-off-handle: #f5f5f5;
     --control-disabled-bg: rgba(255, 255, 255, 0.06);
     --control-disabled-fg: rgba(255, 255, 255, 0.38);
@@ -693,13 +821,13 @@
    Layer 3: Component — 引用 Semantic，某组件专属
    ------------------------------------------------------------------------- */
 :root {
-    /* 插件可用性开关：状态色只服务插件页，不改变其他设置开关的中性语义。 */
-    --plugin-switch-checked-bg: #15803d;
-    --plugin-switch-checked-hover-bg: #16a34a;
-    --plugin-switch-checked-handle: #ffffff;
-    --plugin-switch-off-bg: #d4d4d8;
-    --plugin-switch-off-hover-bg: #a1a1aa;
-    --plugin-switch-off-handle: #52525b;
+    /* 插件页也消费统一的主题开关合同，不再维护一套脱离主题的固定色。 */
+    --plugin-switch-checked-bg: var(--control-switch-checked-bg);
+    --plugin-switch-checked-hover-bg: var(--control-switch-checked-hover-bg);
+    --plugin-switch-checked-handle: var(--control-switch-checked-handle);
+    --plugin-switch-off-bg: var(--control-switch-off-bg);
+    --plugin-switch-off-hover-bg: var(--control-switch-off-hover-bg);
+    --plugin-switch-off-handle: var(--control-switch-off-handle);
 
     /* Library 卡片组件：所有作品库共用同一表面和状态合同。 */
     --library-surface: var(--card-surface);
@@ -831,15 +959,6 @@
     --flow-step-track-height: var(--stroke-2);    /* 2px 状态轨道高 */
     --flow-step-track-width: var(--space-5);      /* 20px 轨道段长 */
     --flow-step-current-glow: 0 0 0 4px var(--cn-active-stroke-soft); /* 当前节点光晕 */
-}
-
-.dark {
-    --plugin-switch-checked-bg: #16a34a;
-    --plugin-switch-checked-hover-bg: #22c55e;
-    --plugin-switch-checked-handle: #ffffff;
-    --plugin-switch-off-bg: #3f3f46;
-    --plugin-switch-off-hover-bg: #52525b;
-    --plugin-switch-off-handle: #f4f4f5;
 }
 
 @layer base {
@@ -1886,6 +2005,9 @@
        这里是全应用唯一的状态配对层，确保任何容器和 Portal 中都保持对比。 */
     :where(.ant-switch.ant-switch-checked) {
         background: var(--control-switch-checked-bg) !important;
+        box-shadow:
+            inset 0 0 0 1px color-mix(in srgb, var(--control-switch-checked-bg) 70%, var(--foreground)),
+            0 0 0 2px color-mix(in srgb, var(--control-switch-checked-bg) 15%, transparent);
     }
 
     :where(.ant-switch.ant-switch-checked:not(.ant-switch-disabled)):hover {
@@ -1898,6 +2020,7 @@
 
     :where(.ant-switch:not(.ant-switch-checked)) {
         background: var(--control-switch-off-bg) !important;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 18%, transparent);
     }
 
     :where(.ant-switch:not(.ant-switch-checked):not(.ant-switch-disabled)):hover {
@@ -2401,8 +2524,8 @@
     }
 
     .creation-submit-button.is-stopping {
-        background: #c84646;
-        color: white;
+        background: var(--destructive);
+        color: var(--destructive-foreground);
     }
 
     .creation-new-button:focus-visible,
@@ -3421,10 +3544,10 @@
     .creation-message-mark svg { width: 18px; height: 18px; }
     .creation-message-model { max-width: min(400px, 48vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .creation-message-state { border-radius: 6px; background: rgba(255, 255, 255, .08); padding: 3px 6px; color: var(--creation-muted); }
-    .creation-message-state.is-error { background: rgba(185, 61, 61, .18); color: #ec7474; }
+    .creation-message-state.is-error { background: color-mix(in srgb, var(--palette-status-error) 18%, transparent); color: var(--palette-status-error); }
     .creation-message-content { padding: 14px 0 0 42px; color: var(--creation-text); font-size: 15px; line-height: 1.8; }
     .creation-message-content > span { color: var(--creation-muted); }
-    .creation-message-error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 15px 0 0 42px; color: #ef5350; font-size: 14px; line-height: 1.6; }
+    .creation-message-error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 15px 0 0 42px; color: var(--palette-status-error); font-size: 14px; line-height: 1.6; }
     .creation-message-error button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 8px; background: rgba(255, 255, 255, .06); color: var(--creation-text); padding: 6px 9px; font-size: 12px; transition: background-color 140ms ease; }
     .creation-message-error button:hover { background: rgba(255, 255, 255, .11); }
     .creation-message-error button svg { width: 14px; height: 14px; }
@@ -5084,7 +5207,7 @@
         backdrop-filter: blur(8px);
         transition: background-color 180ms ease-out, color 180ms ease-out, transform 180ms var(--motion-ease-out);
     }
-    .project-library-cover-delete:hover { background: rgba(190, 30, 30, 0.82); color: #ffffff; transform: scale(1.06); }
+    .project-library-cover-delete:hover { background: color-mix(in srgb, var(--destructive) 86%, transparent); color: var(--destructive-foreground); transform: scale(1.06); }
     .project-library-cover-icon { position: relative; z-index: 1; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-md); background: var(--project-library-icon-surface); color: color-mix(in srgb, var(--foreground) 58%, transparent); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
     .project-library-cover-icon svg { width: 26px; height: 26px; }
     .project-library-cover-ratio, .project-library-cover-stage { position: absolute; z-index: 2; bottom: 14px; border-radius: var(--r-full); background: color-mix(in srgb, var(--background) 62%, transparent); padding: 5px 10px; color: color-mix(in srgb, var(--foreground) 74%, transparent); font-size: var(--fs-tiny); backdrop-filter: blur(8px); }
@@ -10892,9 +11015,9 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 
 .creation-message-content { max-width: 800px; padding: 14px 0 0 34px; color: var(--creation-text); font-size: 15px; line-height: 1.8; }
 
-.creation-message-error { display: flex; max-width: 760px; align-items: center; gap: 10px; padding: 16px 0 0 34px; color: #ee8585; font-size: 13px; line-height: 1.6; }
-.creation-message-error button { display: inline-flex; height: 28px; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: rgba(226, 96, 96, .12); color: #ef8b8b; padding: 0 8px; font-size: 11px; }
-.creation-message-error button:hover { background: rgba(226, 96, 96, .2); }
+.creation-message-error { display: flex; max-width: 760px; align-items: center; gap: 10px; padding: 16px 0 0 34px; color: var(--palette-status-error); font-size: 13px; line-height: 1.6; }
+.creation-message-error button { display: inline-flex; height: 28px; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--palette-status-error) 12%, transparent); color: var(--palette-status-error); padding: 0 8px; font-size: 11px; }
+.creation-message-error button:hover { background: color-mix(in srgb, var(--palette-status-error) 20%, transparent); }
 
 .creation-media-pending,
 .creation-media-empty { display: inline-flex; min-height: 42px; align-items: center; gap: 8px; margin: 14px 0 0 34px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, .055); padding: 0 12px; color: var(--creation-muted); font-size: 12px; }
@@ -14839,7 +14962,7 @@ html:not(.dark) .creation-history-drawer-root {
 .creation-home .storyboard-workbench-rail-row-shot { color: var(--creation-text); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; font-weight: 560; }
 .creation-home .storyboard-workbench-rail-row-state { border-radius: 999px; background: rgba(148, 163, 184, .18); color: var(--creation-muted); padding: 1px 7px; font-size: var(--fs-micro); letter-spacing: .04em; white-space: nowrap; }
 .creation-home .storyboard-workbench-rail-row-state.is-pending { background: rgba(148, 163, 184, .22); }
-.creation-home .storyboard-workbench-rail-row-state.is-error { background: color-mix(in srgb, #ef5350 14%, transparent); color: #ef5350; }
+.creation-home .storyboard-workbench-rail-row-state.is-error { background: color-mix(in srgb, var(--palette-status-error) 14%, transparent); color: var(--palette-status-error); }
 .creation-home .storyboard-workbench-rail-row-state.is-done { background: rgba(148, 163, 184, .28); color: var(--creation-text); }
 .creation-home .storyboard-workbench-rail-row-title { overflow: hidden; color: var(--creation-text); font-size: var(--fs-body); text-overflow: ellipsis; white-space: nowrap; }
 .creation-home .storyboard-workbench-rail-row.is-draft .storyboard-workbench-rail-row-title { color: inherit; }
@@ -14913,7 +15036,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     box-shadow: none;
 }
 
-.creation-home .storyboard-workbench-card.is-error { background: color-mix(in srgb, #ef5350 6%, var(--creation-surface)); }
+.creation-home .storyboard-workbench-card.is-error { background: color-mix(in srgb, var(--palette-status-error) 6%, var(--creation-surface)); }
 
 .creation-home .storyboard-workbench-card-head {
     display: flex;
@@ -14983,7 +15106,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 
 .creation-home .storyboard-workbench-card-state svg { width: 12px; height: 12px; }
 .creation-home .storyboard-workbench-card-state.is-pending { background: color-mix(in srgb, var(--creation-accent) 12%, transparent); color: var(--creation-accent); }
-.creation-home .storyboard-workbench-card-state.is-error { background: color-mix(in srgb, #ef5350 12%, transparent); color: #ef5350; }
+.creation-home .storyboard-workbench-card-state.is-error { background: color-mix(in srgb, var(--palette-status-error) 12%, transparent); color: var(--palette-status-error); }
 .creation-home .storyboard-workbench-card-state.is-done { background: color-mix(in srgb, var(--creation-text) 8%, transparent); color: var(--creation-muted); }
 
 .creation-home .storyboard-workbench-card-actions {
@@ -15076,9 +15199,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     gap: 10px;
     border: 0;
     border-radius: 12px;
-    background: color-mix(in srgb, #ef5350 7%, transparent);
+    background: color-mix(in srgb, var(--palette-status-error) 7%, transparent);
     padding: 13px 15px;
-    color: #ef8b8b;
+    color: var(--palette-status-error);
     font-size: var(--fs-caption);
     line-height: 1.6;
 }
@@ -15090,14 +15213,14 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     gap: 5px;
     border: 0;
     border-radius: 6px;
-    background: color-mix(in srgb, #ef5350 14%, transparent);
-    color: #ef8b8b;
+    background: color-mix(in srgb, var(--palette-status-error) 14%, transparent);
+    color: var(--palette-status-error);
     padding: 0 9px;
     font-size: var(--fs-label);
     cursor: pointer;
 }
 
-.creation-home .storyboard-workbench-error button:hover { background: color-mix(in srgb, #ef5350 24%, transparent); }
+.creation-home .storyboard-workbench-error button:hover { background: color-mix(in srgb, var(--palette-status-error) 24%, transparent); }
 .creation-home .storyboard-workbench-error svg { width: 13px; height: 13px; }
 .creation-home .storyboard-workbench-text { max-width: none; padding: 0; }
 

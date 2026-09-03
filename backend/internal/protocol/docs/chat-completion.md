@@ -1,6 +1,6 @@
 # OpenAI Chat Completions
 
-Chat Completions 是基于 `messages` 的同步或流式文本协议。影策默认把提示词包装成一条 `user` 消息；需要多轮上下文、工具调用或结构化输出时，通过模型扩展参数传入完整 OpenAI 字段。
+Chat Completions 是基于 `messages` 的同步或流式文本协议。宿主默认把提示词包装成一条 `user` 消息；需要多轮上下文、工具调用或结构化输出时，通过模型扩展参数传入完整 OpenAI 字段。
 
 ## 接口、鉴权与请求模式
 
@@ -12,7 +12,7 @@ Authorization: Bearer <API_KEY>
 Content-Type: application/json
 ```
 
-官方服务的 Base URL 通常以 `/v1` 结尾；在影策中应以渠道实际配置为准。同步请求返回单个 JSON；`stream: true` 时上游返回 SSE，影策文本任务流负责转发和组装事件。
+官方服务的 Base URL 通常以 `/v1` 结尾；在宿主中应以渠道实际配置为准。同步请求返回单个 JSON；`stream: true` 时上游返回 SSE，宿主文本任务流负责转发和组装事件。
 
 ## 模型与兼容边界
 

@@ -145,6 +145,7 @@ export type EmailSetting = {
     encryption: "starttls" | "tls" | "none";
     fromEmail: string;
     fromName: string;
+    fromNameInherited: boolean;
     hasPassword: boolean;
     updatedBy?: string;
     createdAt?: string;

@@ -473,7 +473,7 @@ func TestBuiltinDocumentationMatchesTextRequestShape(t *testing.T) {
 }
 
 func TestEveryBuiltinHasDetailedDocumentation(t *testing.T) {
-	requiredSections := []string{"## 接口", "## 模型", "## 参数", "## 官方", "## 影策运行时合同"}
+	requiredSections := []string{"## 接口", "## 模型", "## 参数", "## 官方", "## 宿主运行时合同"}
 	for _, metadata := range Builtins().List("", "", true) {
 		t.Run(metadata.ID, func(t *testing.T) {
 			AttachDocumentation(&metadata)
