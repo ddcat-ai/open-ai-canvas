@@ -7,16 +7,23 @@ package payment
 // transaction; the process only translates a payment provider protocol.
 
 import (
+	"bytes"
 	"context"
+	"debug/elf"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -36,7 +43,7 @@ func NewRPCProvider(descriptor Descriptor, packageDir, entry string) (*RPCProvid
 	if strings.TrimSpace(descriptor.ID) == "" || strings.TrimSpace(descriptor.PluginID) == "" {
 		return nil, errors.New("payment plugin descriptor requires id and plugin id")
 	}
-	if filepath.IsAbs(entry) || filepath.Clean(entry) != entry || !strings.HasPrefix(entry, "backend/") {
+	if filepath.IsAbs(entry) || path.Clean(entry) != entry || !strings.HasPrefix(entry, "backend/") {
 		return nil, errors.New("payment plugin entry must be relative to backend/")
 	}
 	if strings.TrimSpace(packageDir) == "" {
@@ -69,11 +76,18 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 	if p == nil || strings.TrimSpace(p.command) == "" {
 		return errors.New("payment plugin runtime is unavailable")
 	}
-	if _, err := exec.LookPath(p.command); err != nil {
-		return fmt.Errorf("payment plugin executable unavailable: %w", err)
+	info, err := os.Stat(p.command)
+	if err != nil {
+		return p.startError(err)
 	}
-	if _, err := filepath.Abs(p.command); err != nil {
-		return err
+	if info.IsDir() {
+		return p.startError(fmt.Errorf("payment plugin executable is a directory: %w", syscall.EACCES))
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		return p.startError(fmt.Errorf("payment plugin executable has no execute bit: %w", syscall.EACCES))
+	}
+	if err := validatePaymentExecutablePlatform(p.command); err != nil {
+		return p.startError(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, pluginRPCTimeout)
 	defer cancel()
@@ -94,10 +108,10 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return &ProviderError{Code: "plugin_start_failed", Message: "支付插件启动失败", Temporary: true, Cause: err}
+		return p.startError(err)
 	}
 	data, readErr := io.ReadAll(io.LimitReader(stdout, pluginRPCMaxOutput+1))
-	errData, _ := io.ReadAll(io.LimitReader(stderr, 64<<10))
+	_, _ = io.ReadAll(io.LimitReader(stderr, 64<<10))
 	waitErr := cmd.Wait()
 	if readErr != nil {
 		return &ProviderError{Code: "plugin_read_failed", Message: "读取支付插件响应失败", Temporary: true, Cause: readErr}
@@ -109,15 +123,11 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 		return &ProviderError{Code: "plugin_timeout", Message: "支付插件执行超时", Temporary: true, Cause: ctx.Err()}
 	}
 	if waitErr != nil {
-		message := strings.TrimSpace(string(errData))
-		if message == "" {
-			message = "支付插件进程异常退出"
-		}
-		return &ProviderError{Code: "plugin_process_failed", Message: message, Temporary: true, Cause: waitErr}
+		return &ProviderError{Code: "plugin_process_failed", Message: "支付插件进程异常退出", Temporary: true, Cause: waitErr}
 	}
 	var response rpcResponse
 	if err := json.Unmarshal(data, &response); err != nil {
-		return fmt.Errorf("支付插件响应不是有效 JSON：%w", err)
+		return &ProviderError{Code: "plugin_invalid_response", Message: "支付插件返回了无效响应", Temporary: true, Cause: err}
 	}
 	if !response.OK {
 		message := response.Message
@@ -136,6 +146,90 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 		return fmt.Errorf("解析支付插件数据失败：%w", err)
 	}
 	return nil
+}
+
+func (p *RPCProvider) startError(cause error) error {
+	providerErr := classifyPaymentPluginStartError(cause)
+	log.Printf(
+		"payment plugin executable failed: provider=%q plugin=%q host=%s/%s command=%q code=%s error=%v",
+		p.descriptor.ID,
+		p.descriptor.PluginID,
+		runtime.GOOS,
+		runtime.GOARCH,
+		p.command,
+		providerErr.Code,
+		cause,
+	)
+	return providerErr
+}
+
+func classifyPaymentPluginStartError(cause error) *ProviderError {
+	switch {
+	case errors.Is(cause, os.ErrNotExist), errors.Is(cause, syscall.ENOENT), errors.Is(cause, exec.ErrNotFound):
+		return &ProviderError{Code: "plugin_executable_missing", Message: "支付插件可执行文件或其运行时加载器不可用", Cause: cause}
+	case errors.Is(cause, os.ErrPermission), errors.Is(cause, syscall.EACCES):
+		return &ProviderError{Code: "plugin_permission_denied", Message: "支付插件没有执行权限", Cause: cause}
+	case errors.Is(cause, syscall.ENOEXEC):
+		return &ProviderError{Code: "plugin_exec_format_error", Message: "支付插件可执行文件与当前操作系统或 CPU 架构不兼容", Cause: cause}
+	default:
+		return &ProviderError{Code: "plugin_start_failed", Message: "支付插件启动失败", Temporary: true, Cause: cause}
+	}
+}
+
+func validatePaymentExecutablePlatform(command string) error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	file, err := os.Open(command)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var magic [4]byte
+	if _, err := io.ReadFull(file, magic[:]); err != nil {
+		return fmt.Errorf("payment plugin executable header is incomplete: %w", syscall.ENOEXEC)
+	}
+	if bytes.Equal(magic[:2], []byte{'M', 'Z'}) {
+		return fmt.Errorf("payment plugin executable is Windows PE on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+	}
+	if isMachOMagic(magic) {
+		return fmt.Errorf("payment plugin executable is Mach-O on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+	}
+	if !bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'}) {
+		// Scripts and other kernel-supported executable formats are left to
+		// cmd.Start. Unknown binary data will be classified from ENOEXEC there.
+		return nil
+	}
+
+	binary, err := elf.NewFile(file)
+	if err != nil {
+		return fmt.Errorf("payment plugin ELF header is invalid: %w", syscall.ENOEXEC)
+	}
+	defer binary.Close()
+	expected, ok := expectedPaymentELFMachine(runtime.GOARCH)
+	if binary.Class != elf.ELFCLASS64 || (ok && binary.Machine != expected) {
+		return fmt.Errorf("payment plugin ELF architecture mismatch: host=linux/%s class=%s machine=%s: %w", runtime.GOARCH, binary.Class, binary.Machine, syscall.ENOEXEC)
+	}
+	return nil
+}
+
+func isMachOMagic(magic [4]byte) bool {
+	return magic == [4]byte{0xfe, 0xed, 0xfa, 0xce} ||
+		magic == [4]byte{0xce, 0xfa, 0xed, 0xfe} ||
+		magic == [4]byte{0xfe, 0xed, 0xfa, 0xcf} ||
+		magic == [4]byte{0xcf, 0xfa, 0xed, 0xfe}
+}
+
+func expectedPaymentELFMachine(arch string) (elf.Machine, bool) {
+	switch arch {
+	case "amd64":
+		return elf.EM_X86_64, true
+	case "arm64":
+		return elf.EM_AARCH64, true
+	default:
+		return elf.EM_NONE, false
+	}
 }
 
 func (p *RPCProvider) ValidateConfig(config Config) error {

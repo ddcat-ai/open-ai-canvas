@@ -5,6 +5,13 @@ description: 影策已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 支付插件跨平台构建
+
+- [x] 微信与支付宝 provider 已使用同一 target-aware 构建脚本完成 `CGO_ENABLED=0` 的 linux/amd64、linux/arm64 交叉编译；目录 provider 与 `.yingce-plugin` 内 provider 的 ELF 架构和内容一致性校验通过。
+- [x] 包内外产物一致性、完整包摘要缓存、同版本 provider 更新失效、未完成解包恢复等专项测试通过；RPC 错误映射的跨平台单元测试通过。
+- [ ] 在 Linux CI 完成无文件、无权限、错误格式、异常退出与无效 JSON 的 RPC 进程测试，并使用 Docker Buildx/QEMU 执行 `payment-package-smoke` 的 amd64/arm64 双平台构建，确认目标容器内两个 provider 均能真实执行无效 JSON 冒烟请求。
+- [ ] 保留含旧 Mach-O runtime 的生产 `/data` 卷升级到修复镜像，确认启动后自动选择新 package digest，管理后台保存微信和支付宝配置进入真实凭证校验。
+
 ## 平台外观管理
 
 管理后台已新增“系统配置 → 外观管理”，并让公开品牌配置在应用渲染前完成解析；以下真实浏览器与媒体场景需要持续确认：
