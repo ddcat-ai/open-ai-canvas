@@ -153,6 +153,20 @@ func TestFetchAdminChannelModelsReaddsDeletedModel(t *testing.T) {
 	}
 }
 
+func TestChannelCatalogAPIFormatUsesGeminiForOfficialEndpoint(t *testing.T) {
+	for _, baseURL := range []string{
+		"https://generativelanguage.googleapis.com",
+		"https://generativelanguage.googleapis.com/v1beta",
+	} {
+		if got := channelCatalogAPIFormat(baseURL, "openai"); got != "gemini" {
+			t.Fatalf("channelCatalogAPIFormat(%q) = %q, want gemini", baseURL, got)
+		}
+	}
+	if got := channelCatalogAPIFormat("https://api.example.com/v1", "openai"); got != "openai" {
+		t.Fatalf("custom channel format = %q, want openai", got)
+	}
+}
+
 func TestSaveAdminChannelModelRejectsActiveDuplicateKey(t *testing.T) {
 	svc, db := newChannelModelTestService(t)
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}

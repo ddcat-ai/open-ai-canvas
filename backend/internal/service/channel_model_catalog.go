@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -100,6 +101,14 @@ type ChannelModelCatalogOptions struct {
 type ChannelModelCatalogOption struct {
 	Value string `json:"value"`
 	Label string `json:"label,omitempty"`
+}
+
+func channelCatalogAPIFormat(baseURL string, storedFormat string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err == nil && strings.EqualFold(parsed.Hostname(), "generativelanguage.googleapis.com") {
+		return "gemini"
+	}
+	return strings.ToLower(strings.TrimSpace(storedFormat))
 }
 
 func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]ChannelModelCatalogItem, error) {
