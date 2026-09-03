@@ -74,9 +74,9 @@ export function EditorTranscription() {
         setMessage(null);
         setProgressLabel("排队中…");
         try {
-	const created = await createTimelineTranscriptionTask({
-		resourceId,
-	});
+            const created = await createTimelineTranscriptionTask({
+                resourceId,
+            });
             const done = await waitForGenerationTask(created.id, {
                 timeoutMs: WHISPER_WAIT_TIMEOUT_MS,
                 intervalMs: 2000,
