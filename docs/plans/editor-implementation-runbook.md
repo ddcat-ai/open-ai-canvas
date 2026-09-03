@@ -2,7 +2,9 @@
 
 > 配套文档：[编辑器预设插件化实施规格](../plans/editor-preset-plugin-implementation.md)（目标架构与接口）与 [ADR-0001 ~ 0007](../adr/)（决策）。本文件只解决一个问题：**按什么顺序、以什么粒度动手，让每一步都可验证、可回退、看得见进度**。
 >
-> 状态：2026-09-01 制定。M0（壳+骨架）、M1（SDK v2 + 插槽链路）、M2（命令状态机）、M3（预设插件八连 + 全插槽接线）已完成并提交（`feat(editor)` 系列）；M3 浏览器三段式冒烟待用户确认后进入 M4。
+> 状态：2026-09-01 制定。M0–M3 已完成并提交；M4.1（转写后端：本地 whisper.cpp HTTP，
+> `CANVAS_WHISPER_BASE_URL`）e9d1b8ad/bf26ebb1、M4.2（渲染后端：`POST /api/timeline/renders`）
+> 3f16d13b、M4.3（转写前端回写，真实任务替换 mock）fd5e8139 均已提交。
 
 ## 0. 执行原则（为什么这样拆）
 
@@ -75,9 +77,9 @@
 
 | 步骤 | 改动文件 | 内容 | 验证 | 完成标准 |
 |---|---|---|---|---|
-| M4.1 | `backend/internal/service/`、`backend/internal/handler/`、`backend/internal/model/`（转写相关） | 转写异步任务：任务入队（复用现有任务队列/配额，`models_task.go` / `task_output.go`）、whisper.cpp 或云 ASR 可插拔 provider（`provider/` 接口）、结果 SRT 回写（字幕轨道更新走 service 层） | `cd backend && go test ./...` | 任务生命周期（排队/执行/失败重试/配额）测试通过；敏感 Key 不进日志 |
-| M4.2 | 同上（渲染相关） | 渲染任务：接收 `buildTimelineRenderPlan` 计划 → 服务端 ffmpeg 执行 → 产物入资源存储 | `go test ./...` | 渲染任务可执行、产物可回源；计划格式与前端同源（§3 契约） |
-| M4.3 | `web/src/services/api/`（任务客户端） | 转写/渲染任务客户端：创建/轮询/SSE 进度（复用文本任务 SSE 模式）；接入 editor-transcription / editor-export（去 mock） | typecheck + 浏览器端到端 | 前端发任务→进度→结果回时间线/导出全链路通 |
+| M4.1 | `backend/`：`task_timeline.go` + `transcription_whisper.go`；路由 POST `/api/timeline/transcriptions`（注册于 `RegisterTaskRoutes`） | 转写异步任务：`CreateTimelineTranscriptionTask`（feature 门控/资源归属/可转写类型校验）配额入队（local/whisper.cpp，不走模型路由与计费）；worker 顶部按类型分叉 `processTimelineTranscription`，本地 whisper.cpp HTTP 转写，结果 `ResultJSON{segments,srt,language}` 落盘 | 转写相关单测 PASS（`go test ./internal/service/ ./internal/handler/`） | 未配置 `CANVAS_WHISPER_BASE_URL` 时任务明确失败并提示 |
+| M4.2 | `backend/`：`task_render.go` + `timeline_render_plan.go`；路由 POST `/api/timeline/renders`（注册于 `RegisterTaskRoutes`） | 渲染任务：接收 v2 快照 → `buildRenderPlan`（含可渲染媒体校验）→ 服务端 ffmpeg 合成 → 产物入资源存储，`ResultJSON` 记 resourceId | render 单测 PASS | 60 分钟超时；`CANVAS_FFMPEG_PATH` 或 PATH |
+| M4.3 | `web/src/services/api/timeline-tasks.ts` + `editor-transcription.tsx` | 转写任务客户端：创建 → `waitForGenerationTask` 轮询（25min）→ 结果 segments 映射 SrtEntry 写入字幕轨道（去 mock） | typecheck 通过 | 浏览器端到端：发任务→进度→字幕入轨待用户确认 |
 
 ### M5 权限执行（横切，fail-closed）
 
@@ -142,7 +144,7 @@ M0（壳+骨架）──▶ M1（SDK v2 + 插槽链路）
 | M1.3 注册器 v1/v2 分支 | 破坏既有 v1 插件（eagle/prompt-optimizer/workflows/portrait-clearance） | 分支隔离 + 既有测试全量回归；异常时 revert 该 commit（v1 路径零改动原则） |
 | M3.8 detail.tsx 接线 | editor 视图影响其余 6 视图 | 视图按 id 分发，editor 分支独立渲染；回退 = revert M3.8，其余插件贡献无损 |
 | M5.2 权限收紧 | v1 插件未声明新权限域被误拒 | **fail-closed 只针对新权限域**（timeline.* / export.run / ai.text），v1 既有权限语义一字不动；先加测试再接入 |
-| M4.1 转写 provider | whisper.cpp 部署路径未定 | 按 ADR-0004 插件化 provider 接口，先接云 ASR 或 stub，本地 whisper 列为 M4 后续项 |
+| M4.1 转写 provider | ~~部署路径未定~~ 已定：本地 whisper.cpp HTTP（`CANVAS_WHISPER_BASE_URL`），不接云 ASR | 语音数据不出本机；未配置仅影响转写任务（任务明确失败并提示） |
 | M2.4 手势 echo 与画布拖拽冲突 | 时间线内拖拽与画布手势系统互扰 | 复用画布事件忽略选择器约定（modal/popover/dropdown）与 `data-canvas-no-zoom` 边界，冒烟清单含快捷键不冲突项 |
 
 ## 7. 里程碑验收顺序（推荐推进节奏）
