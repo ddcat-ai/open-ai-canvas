@@ -1,0 +1,18 @@
+{
+  "$comment": "AI 命令 schema 黄金文件（Runbook M6.1）：schemaVersion 与 op 集必须与 ai-command-schema.ts 及 M2.1 命令注册表一致。修改命令语义必须同步更新此夹具，防止 AI 提示词契约与 reducer 漂移。",
+  "schemaVersion": 1,
+  "ops": [
+    "addClip",
+    "moveClip",
+    "trimClip",
+    "splitClip",
+    "removeClip",
+    "setClipProperty",
+    "addSubtitle",
+    "removeSubtitle",
+    "rebuildSubtitleClips",
+    "addTrack",
+    "removeTrack",
+    "setTrackFlag"
+  ]
+}

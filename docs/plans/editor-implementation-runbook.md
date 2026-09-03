@@ -93,8 +93,8 @@
 
 | 步骤 | 改动文件 | 内容 | 验证 | 完成标准 |
 |---|---|---|---|---|
-| M6.1 | `web/src/lib/timeline/ai-command-schema.ts` + `web/test/fixtures/ai-commands.golden.json`（新建） | per-op 命令 JSON schema（与 M2.1 handler 同源维护）、`aiCommandSchemaVersion` 版本化；fail-closed 校验函数 | 新增 `web/test/ai-command-schema.test.ts` | 合法/非法 payload 全覆盖；单条非法整批拒绝；错误回填格式稳定 |
-| M6.2 | `web/src/lib/timeline/timeline-summary.ts`（新建） | 时间线结构化精简摘要（轨道/片段/时长/关键属性，不含媒体二进制） | 新增 `web/test/timeline-summary.test.ts` | 摘要确定性强（同输入同输出）；大对象排除 |
+| M6.1 | `web/src/lib/timeline/ai-command-schema.ts` + `web/test/fixtures/ai-commands.golden.json`（新建） | per-op 命令 JSON schema（与 M2.1 handler 同源维护）、`aiCommandSchemaVersion` 版本化；fail-closed 校验函数 | 新增 `web/test/ai-command-schema.test.ts` | 合法/非法 payload 全覆盖；单条非法整批拒绝；错误回填格式稳定 ✅（14 用例全绿；golden op 集与 EDITOR_COMMAND_OPS 黄金同步断言通过） |
+| M6.2 | `web/src/lib/timeline/timeline-summary.ts`（新建） | 时间线结构化精简摘要（轨道/片段/时长/关键属性，不含媒体二进制） | 新增 `web/test/timeline-summary.test.ts` | 摘要确定性强（同输入同输出）；大对象排除 ✅（16 用例全绿；折叠上限/中文字幕统计/空态覆盖） |
 | M6.3 | `web/src/lib/plugins/builtin/editor/editor-ai-assistant.ts` | AI 助手：对话面板（right，复用画布 agent 聊天 UI 交互模式）、命令执行链路（≤3 条直执行 / >3 条 diff 预览待确认）、只读问答（timeline.read） | typecheck + M6.1/M6.2 测试 + 浏览器冒烟 | 自然语言→命令→撤销全链路；非法命令回填错误；与画布会话上下文隔离 |
 
 ## 3. 依赖关系
