@@ -69,7 +69,18 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 			return nil, snapshotErr
 		}
 		for resourceID, references := range adminResourceReferences(snapshot, userResources) {
-			blockedByID[resourceID] = AdminResourceDeleteBlocked{ID: resourceID, Reason: "资源仍被业务数据引用", References: references}
+			blocking := make([]AdminResourceReferenceView, 0, len(references))
+			for _, reference := range references {
+				if reference.Kind == "公告草稿" {
+					// 公告草稿及其资源绑定在删除事务内级联清理，不构成阻塞引用。
+					continue
+				}
+				blocking = append(blocking, reference)
+			}
+			if len(blocking) == 0 {
+				continue
+			}
+			blockedByID[resourceID] = AdminResourceDeleteBlocked{ID: resourceID, Reason: "资源仍被业务数据引用", References: blocking}
 		}
 	}
 	announcementReferences, err := s.repo.AnnouncementResourceReferences(resourceIDs)
