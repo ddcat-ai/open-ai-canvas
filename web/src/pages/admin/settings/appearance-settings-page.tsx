@@ -499,13 +499,13 @@ export default function AppearanceSettingsPage() {
                         className="admin-appearance-section"
                         icon={<Type className="size-4" aria-hidden="true" />}
                         title="3. 皮肤方案"
-                        description="当前版本先统一使用经典皮肤；后续颜色、字体、圆角和组件密度会作为独立皮肤包管理。"
-                        status={<AdminStatusBadge label="经典皮肤" tone="info" />}
+                        description="当前提供经典与酿笑坊两套皮肤；后续颜色、字体、圆角和组件密度会作为独立皮肤包管理。"
+                        status={<AdminStatusBadge label={setting.skinId === "classic" ? "经典皮肤" : "酿笑坊皮肤"} tone="info" />}
                     >
                         <div className="admin-appearance-skin-note">
                             <span>当前皮肤</span>
-                            <strong>{setting.skinId === "classic" ? "经典皮肤（Classic）" : setting.skinId}</strong>
-                            <small>皮肤方案与品牌内容分离，后续切换皮肤时不会覆盖品牌名、英文标识、Logo、登录页文案或媒体。</small>
+                            <strong>{setting.skinId === "classic" ? "经典皮肤（Classic）" : "酿笑坊皮肤（Niangxiao · navy/gold/teal）"}</strong>
+                            <small>皮肤方案与品牌内容分离，切换皮肤时不会覆盖品牌名、英文标识、Logo、登录页文案或媒体。</small>
                         </div>
                     </SettingsSectionCard>
                 </div>

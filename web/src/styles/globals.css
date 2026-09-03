@@ -16476,3 +16476,136 @@ html:not(.dark) .creation-home .creation-user-message { background: transparent;
     .creation-home .creation-media-pending { width: min(var(--creation-media-pending-max-width), 100%); margin-left: 0; }
     .creation-home .creation-media-error { width: 100%; margin-left: 0; }
 }
+
+/* ============================================================
+   皮肤包：酿笑坊（Niangxiao）—— navy #0a2540 / gold #c9a961 / teal #0d9488
+   本地化改造：通过 <html data-skin="niangxiao"> 挂载，仅覆盖颜色 token，
+   不改动布局、字体与组件结构；切回 classic 即恢复上游原貌。
+   ============================================================ */
+
+/* —— 亮色模式：暖纸底 + 藏青墨字 + 青碧点缀 —— */
+html[data-skin="niangxiao"]:not(.dark) {
+    --background: #f7f4ec;
+    --foreground: #0a2540;
+    --card: #fffdf8;
+    --card-foreground: #0a2540;
+    --popover: #fffdf8;
+    --popover-foreground: #0a2540;
+    --primary: #0a2540;
+    --primary-foreground: #f7f4ec;
+    --secondary: #ede8da;
+    --secondary-foreground: #0a2540;
+    --muted: #ede8da;
+    --muted-foreground: #5a6b7f;
+    --accent: #e2efe9;
+    --accent-foreground: #0a2540;
+    --input: #d9d3c3;
+    --border: rgba(10, 37, 64, 0.14);
+    --ring: rgba(13, 148, 136, 0.55);
+    --btn-solid-bg: #0a2540;
+    --btn-solid-fg: #f7f4ec;
+
+    --workspace-canvas: #f7f4ec;
+    --workspace-page: var(--workspace-canvas);
+    --workspace-navigation: #f1ede2;
+    --workspace-content: var(--workspace-canvas);
+    --workspace-surface: #fffdf8;
+    --workspace-surface-strong: #fffdf8;
+    --workspace-border: rgba(10, 37, 64, 0.13);
+    --workspace-border-strong: rgba(10, 37, 64, 0.22);
+    --workspace-grid-line: rgba(10, 37, 64, 0.05);
+    --workspace-accent: #0a2540;
+    --workspace-accent-soft: rgba(10, 37, 64, 0.07);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 11%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    --workspace-nav-active-indicator: color-mix(in srgb, var(--workspace-accent) 78%, transparent);
+
+    --bg: #f7f4ec;
+    --fg: #0a2540;
+    --border-semantic: rgba(10, 37, 64, 0.16);
+    --bg-secondary: #f1ede2;
+    --bg-tertiary: #e9e4d6;
+    --surface: #fffdf8;
+    --surface-hover: rgba(10, 37, 64, 0.05);
+    --surface-active: rgba(10, 37, 64, 0.09);
+
+    --sidebar: #f1ede2;
+    --sidebar-foreground: #0a2540;
+    --sidebar-accent: rgba(13, 148, 136, 0.1);
+    --sidebar-accent-foreground: #0a2540;
+    --sidebar-border: rgba(10, 37, 64, 0.12);
+    --sidebar-ring: rgba(13, 148, 136, 0.55);
+}
+
+/* —— 暗色模式：深海军蓝底 + 藏青卡面 + 鎏金强调 —— */
+html[data-skin="niangxiao"].dark {
+    --background: #0a1e33;
+    --foreground: #e6edf5;
+    --card: #102a46;
+    --card-foreground: #e6edf5;
+    --popover: #102a46;
+    --popover-foreground: #e6edf5;
+    --primary: #c9a961;
+    --primary-foreground: #0a2540;
+    --secondary: #143354;
+    --secondary-foreground: #e6edf5;
+    --muted: #143354;
+    --muted-foreground: #9db4cc;
+    --accent: #143354;
+    --accent-foreground: #e6edf5;
+    --input: rgba(157, 180, 204, 0.22);
+    --border: rgba(157, 180, 204, 0.16);
+    --ring: rgba(201, 169, 97, 0.6);
+    --btn-solid-bg: #c9a961;
+    --btn-solid-fg: #0a2540;
+
+    --workspace-canvas: #0a1e33;
+    --workspace-page: var(--workspace-canvas);
+    --workspace-navigation: #081829;
+    --workspace-content: var(--workspace-canvas);
+    --workspace-surface: #102a46;
+    --workspace-surface-strong: #133256;
+    --workspace-border: rgba(157, 180, 204, 0.14);
+    --workspace-border-strong: rgba(157, 180, 204, 0.26);
+    --workspace-grid-line: rgba(157, 180, 204, 0.06);
+    --workspace-accent: #c9a961;
+    --workspace-accent-soft: rgba(201, 169, 97, 0.14);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    --workspace-nav-active-indicator: color-mix(in srgb, var(--workspace-accent) 82%, transparent);
+
+    --bg: #0a1e33;
+    --fg: #e6edf5;
+    --border-semantic: rgba(157, 180, 204, 0.18);
+    --bg-secondary: #0d2339;
+    --bg-tertiary: #122c48;
+    --surface: #102a46;
+    --surface-hover: rgba(201, 169, 97, 0.08);
+    --surface-active: rgba(201, 169, 97, 0.13);
+
+    --sidebar: #081829;
+    --sidebar-foreground: #c7d6e6;
+    --sidebar-primary: var(--btn-solid-bg);
+    --sidebar-primary-foreground: var(--btn-solid-fg);
+    --sidebar-accent: rgba(201, 169, 97, 0.12);
+    --sidebar-accent-foreground: #e6edf5;
+    --sidebar-border: rgba(157, 180, 204, 0.13);
+    --sidebar-ring: rgba(201, 169, 97, 0.6);
+}
+
+/* 酿笑坊暗色：选区与滚动条同步鎏金/藏青 */
+html[data-skin="niangxiao"].dark ::selection {
+    background: rgba(201, 169, 97, 0.32);
+    color: #f5efdf;
+}
+
+/* 酿笑坊：登录卡片从上游中性黑改为藏青染色，与工作台皮肤呼应 */
+html[data-skin="niangxiao"] .auth-card-dark {
+    background-color: rgba(13, 33, 58, 0.94) !important;
+    box-shadow: 0 28px 80px rgba(2, 12, 24, 0.5) !important;
+}
+
+html[data-skin="niangxiao"] .auth-card-tabs .ant-tabs-tab-active .ant-tabs-tab-btn,
+html[data-skin="niangxiao"] .auth-card-tabs .ant-tabs-tab.ant-tabs-tab-active {
+    color: #d8b96e;
+}
