@@ -16,6 +16,7 @@ import {
 import type { ProjectAsset, ProjectDetail } from "@/services/api/projects";
 import { listProjectAssets } from "@/services/api/projects";
 import { useEditorSlots, type EditorSlotRegistration } from "@/lib/plugins/editor-slot-registry";
+import { pluginMayRenderEditorSlot } from "@/lib/plugins/plugin-permission-check";
 import { EditorStoreProvider } from "@/components/editor/editor-context";
 import { createEditorStore } from "@/stores/editor/editor-store";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
@@ -48,9 +49,12 @@ function createEditorSeed(projectId: string): TimelineProject {
     });
 }
 
-/** 插槽堆叠：渲染某区域的全部插槽贡献；无贡献时显示空态（停用插件可见）。 */
+/** 插槽堆叠：渲染该区域权限通过的插槽贡献（fail-closed，M5.2）；
+ *  缺权限插件不渲染，改为一行诊断提示；无贡献时显示空态（停用插件可见）。 */
 function SlotStack({ slots, emptyHint }: { slots: EditorSlotRegistration[]; emptyHint: string }) {
-    if (slots.length === 0) {
+    const allowed = slots.filter((slot) => pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
+    const denied = slots.filter((slot) => !pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
+    if (allowed.length === 0 && denied.length === 0) {
         return (
             <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 px-4 text-center">
                 <p className="max-w-md text-sm text-[var(--director-dock-fg)]">{emptyHint}</p>
@@ -59,11 +63,30 @@ function SlotStack({ slots, emptyHint }: { slots: EditorSlotRegistration[]; empt
     }
     return (
         <>
-            {slots.map((slot) => (
+            {allowed.map((slot) => (
                 <div key={slot.id} className="min-h-0 flex-1 overflow-hidden">
                     {slot.render({ pluginId: slot.pluginId })}
                 </div>
             ))}
+            {denied.map((slot) => {
+                const verdict = pluginMayRenderEditorSlot(slot.pluginId, slot.slot);
+                const missing =
+                    verdict.allowed === false && verdict.reason === "missing-permission" ? verdict.missing : null;
+                return (
+                    <div
+                        key={slot.id}
+                        title={`插件 ${slot.pluginId} 缺少 ${missing ?? "注册"}，已按 fail-closed 拒绝渲染`}
+                        className="flex min-h-8 shrink-0 items-center gap-2 bg-[var(--director-danger)]/10 px-3 text-[11px] text-[var(--director-danger)]"
+                    >
+                        <AlertTriangle className="size-3 shrink-0" />
+                        <span className="truncate">
+                            {missing
+                                ? `插件 ${slot.pluginId} 缺少 ${missing} 权限，已停用该面板。`
+                                : `插件 ${slot.pluginId} 未注册，已停用该面板。`}
+                        </span>
+                    </div>
+                );
+            })}
         </>
     );
 }

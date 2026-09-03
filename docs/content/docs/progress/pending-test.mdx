@@ -23,6 +23,14 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [x] M3.8：editor.tsx 全 8 槽三段式渲染（左素材/转写，中预览/时间线，右检查器/字幕/导出/AI）+ ai-assistant 占位（M6）；typecheck 零错误、专项 53/53、全量 build 通过。
 - [ ] 浏览器三段式冒烟（待用户确认）：编辑器六个区域（时间线/预览/检查器/素材库/字幕/转写/导出）逐区域可见可操作；拖拽/裁剪/撤销重做回归；SRT 导入导出往返；mock 转写落轨；导出面板显示渲染计划。
 
+## M5（编辑器插件权限执行，fail-closed）
+
+- [x] M5.1：plugin-permission-check.ts 新建——8 插槽→最小权限表（timeline.read/timeline.command/export.run 三类域）+ pluginMayRenderEditorSlot / assertEditorPermission fail-closed 判定；测试 10 用例（表完整性/空权限拒绝/未注册拒绝/缺权限拒绝含 missing 域/editor-shell 真实回归 8 插槽可渲染）全绿。
+
+- [x] M5.1：`plugin-permission-check.ts` 新建——8 插槽→最小权限表（timeline.read/timeline.command/export.run 三类域）+ `pluginMayRenderEditorSlot`/`assertEditorPermission` fail-closed 判定；测试 10 用例（表完整性/空权限拒绝/未注册拒绝/缺权限拒绝含 missing 域/editor-shell 真实回归 8 插槽可渲染）全绿。
+- [x] M5.2 执行路径接入：editor.tsx SlotStack 渲染前过滤——缺权限插槽不渲染、改显一行诊断条（含缺失域）；editor-shell manifest 权限补全为 timeline.read/timeline.command/export.run；tsc 全绿、全量 bun test 失败集与改动前一致（零新增回归）。边界：宿主全局命令（editor-commands，v1 语义）与宿主 UI 手势不经过此校验，仅 v2 插件插槽贡献与后续 M6 AI 命令代发通道受约束——ADR-0007「v1 权限语义一字不动」。
+- [ ] M5 浏览器验证（待用户确认）：停用/注册一个缺 timeline.command 权限的第三方插件时对应面板被拒渲染并显示诊断；editor-shell 全部 8 面板正常。
+
 ## M4（后端转写/渲染任务）
 
 - [x] M4.1 执行侧（e9d1b8ad）：本地 whisper.cpp HTTP（`CANVAS_WHISPER_BASE_URL`）转写；语音数据不出本机；未配置时任务明确失败并提示设置；`processClaimedTask` 顶部按类型分叉、旁路计费/模型路由，20 分钟超时；ffmpeg 预处理 16k 单声道 wav；`verbose_json` 解码/`formatSRTTimestamp`/`buildTimelineSRT` 单测 PASS。

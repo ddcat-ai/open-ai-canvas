@@ -18,7 +18,7 @@ const manifest: PluginManifestV2 = {
     description: "编辑器预设插件垂直切片：注册时间线面板插槽，验证 v2 插件插槽注册→渲染链路。",
     author: "影策团队",
     surfaces: ["fullscreen"],
-    permissions: ["timeline.read"],
+    permissions: ["timeline.read", "timeline.command", "export.run"],
     trusted: true,
     runtime: { backend: "trusted-backend", web: "declarative" },
     contributes: {

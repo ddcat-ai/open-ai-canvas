@@ -85,8 +85,9 @@
 
 | 步骤 | 改动文件 | 内容 | 验证 | 完成标准 |
 |---|---|---|---|---|
-| M5.1 | `web/src/lib/plugins/plugin-permission-check.ts`（新建） | 纯函数：`checkPermission(plugin, required, context)`——声明缺失 → 拒绝（fail-closed）；`timeline.write` 拆分为 `timeline.read`/`timeline.command` 粒度 | 新增 `web/test/plugin-permission-check.test.ts` | 缺失/越权/边界测试通过 |
+| M5.1 | `web/src/lib/plugins/plugin-permission-check.ts`（新建） | 纯函数：`checkPermission(plugin, required, context)`——声明缺失 → 拒绝（fail-closed）；`timeline.write` 拆分为 `timeline.read`/`timeline.command` 粒度 | 新增 `web/test/plugin-permission-check.test.ts`（10 用例，含 editor-shell 真实回归） | 缺失/越权/边界测试通过 ✅ |
 | M5.2 | 接入执行路径：`editor-slot-registry` 渲染时 + 命令队列入口 + 模型调用 | 插槽渲染校验、命令入队校验、AI 命令校验（`timeline.command` 未声明 → 拒绝） | `bun test test/plugin-permission-check.test.ts test/editor-*.test.ts`；**v1 插件全量既有测试回归** | 未声明权限的写操作被拒；v1 插件行为零回归（权限语义不收紧存量） |
+| M5.3 | **执行路径接入（边界说明）**：`web/src/pages/projects/detail/editor.tsx` SlotStack fail-closed 过滤（缺权限插槽 → 一行诊断条，不渲染）；`editor-shell` manifest 权限补全为 `timeline.read/timeline.command/export.run` | 命令队列入口与模型调用是**宿主全局命令**（M2 editor-commands 注册表，v1 语义）；v2 插件不代发宿主命令，仅贡献插槽。M5 权限域（timeline.*/export.run）只约束 v2 插件插槽贡献与后续 M6 AI 命令代发通道，宿主 UI 手势不受权限校验——与 ADR-0007「v1 权限语义一字不动」一致 | editor-shell 8 插槽真实回归可渲染；全量 bun test 无新增失败 | 缺权限插槽被拒渲染且有诊断；editor-shell 权限齐备可渲染全部 8 插槽 ✅ |
 
 ### M6 AI 编辑交互（ADR-0007）
 
