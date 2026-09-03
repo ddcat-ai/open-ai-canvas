@@ -25,11 +25,16 @@ description: 影策已实现功能的手工验证清单与未确认边界
 
 ## M5（编辑器插件权限执行，fail-closed）
 
-- [x] M5.1：plugin-permission-check.ts 新建——8 插槽→最小权限表（timeline.read/timeline.command/export.run 三类域）+ pluginMayRenderEditorSlot / assertEditorPermission fail-closed 判定；测试 10 用例（表完整性/空权限拒绝/未注册拒绝/缺权限拒绝含 missing 域/editor-shell 真实回归 8 插槽可渲染）全绿。
 
 - [x] M5.1：`plugin-permission-check.ts` 新建——8 插槽→最小权限表（timeline.read/timeline.command/export.run 三类域）+ `pluginMayRenderEditorSlot`/`assertEditorPermission` fail-closed 判定；测试 10 用例（表完整性/空权限拒绝/未注册拒绝/缺权限拒绝含 missing 域/editor-shell 真实回归 8 插槽可渲染）全绿。
 - [x] M5.2 执行路径接入：editor.tsx SlotStack 渲染前过滤——缺权限插槽不渲染、改显一行诊断条（含缺失域）；editor-shell manifest 权限补全为 timeline.read/timeline.command/export.run；tsc 全绿、全量 bun test 失败集与改动前一致（零新增回归）。边界：宿主全局命令（editor-commands，v1 语义）与宿主 UI 手势不经过此校验，仅 v2 插件插槽贡献与后续 M6 AI 命令代发通道受约束——ADR-0007「v1 权限语义一字不动」。
 - [ ] M5 浏览器验证（待用户确认）：停用/注册一个缺 timeline.command 权限的第三方插件时对应面板被拒渲染并显示诊断；editor-shell 全部 8 面板正常。
+
+## M6（AI 编辑助手：schema + 摘要 + 面板）
+
+- [x] M6.1：`ai-command-schema.ts` 新建——AI 命令 JSON 解析（容忍 markdown fence/前后杂讯/字符串内括号）、批级 dry-run 预检（走 M2 命令注册表，任一非法整批拒绝并报下标与 op）、12-op LLM 提示词契约（`AI_EDITING_OP_CATALOG` + `buildAiEditingSystemPrompt`）、`AI_COMMAND_SCHEMA_VERSION` 版本化；`ai-commands.golden.json` 固化 op 集与 registry 黄金同步（漂移即测试失败）；20 用例全绿。
+- [x] M6.2：`timeline-summary.ts` 新建——确定性中文摘要（轨道按 order 排序逐行、片段逐行含 id/kind/时间区间、字幕字数统计、空态提示）；片段行数超限折叠（SUMMARY_MAX_CLIP_LINES）；同输入同输出；10 用例全绿。
+- [ ] M6.3 AI 助手面板真实现（待用户确认模型源后单列）：editor-ai-assistant.tsx 从占位替换为对话 + 时间线摘要喂上下文 → LLM 输出经 parseAiCommandPlan → dry-run 校验 → ≤3 条直执行 / >3 条预览确认 → 命令代发走 `assertEditorPermission`（M5 通道）。
 
 ## M4（后端转写/渲染任务）
 
