@@ -30,7 +30,8 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [x] M4.2 渲染任务（3f16d13b）：`POST /api/timeline/renders` → `CreateTimelineRenderTask`：`buildRenderPlan` 校验 ≥1 可渲染媒体 → 配额入队（local/ffmpeg）；worker 分叉 `processTimelineRender`（60 分钟超时）：ffmpeg 合成 → 产物写资源存储 → `ResultJSON{resourceId,...}`；计划/失败快路径测试 PASS。
 - [x] M4.3 前端字幕回写（fd5e8139）：`timeline-tasks.ts` 客户端 + `editor-transcription.tsx` 真实任务替换 mock；资源范围放宽到音视频；`resourceId` 由 `storageKey` 推导；`waitForGenerationTask` 显式 25 分钟超时轮询；结果 segments → SrtEntry → `rebuildSubtitleClips` 落字幕轨；typecheck 通过。
 - [ ] 浏览器端到端（待用户确认，需本机 whisper.cpp server）：媒体面板选音视频素材 → 转写 → 进度可见 → 完成后字幕分段入轨可编辑；错误路径（未配置/删除素材/非音视频/活跃任务上限/功能未开放）提示可读。
-- [ ] M4.2 渲染浏览器验证（待用户确认，需 ffmpeg 可用）：导出面板触发渲染任务 → 轮询进度 → 完成后可播放/下载渲染产物。
+- [x] M4.2 渲染前端接线：`timeline-tasks.ts` 增 `createTimelineRenderTask`（timeline 整传 TimelineProject v2，与后端 renderProject 契约同构）；`editor-export.tsx` 主路径改提交 `POST /api/timeline/renders` → `waitForGenerationTask` 轮询（62min）→ ResultJSON.resourceId 内嵌预览/下载；ffmpeg.wasm 降级保留；tsc 全绿、无新增测试失败。
+- [ ] M4.2 渲染浏览器验证（待用户确认，需 ffmpeg 可用）：导出面板「渲染成片（服务端）」→ 轮询进度 → 完成后内嵌预览/下载渲染产物；无后端时「本地导出」ffmpeg.wasm 仍可用。
 - [ ] 文档回写（已提交）：`docs/plans/m4-transcription-render-design.md` §2 决策 3/4/5 按“单一池 + 类型分叉”与旁路终态修正；端点统一为复数 `/api/timeline/transcriptions` 与 `/api/timeline/renders`（注册于 `RegisterTaskRoutes`）；`auth.go` 前缀白名单补 `timeline`。
 
 ## 编辑器 UI 打磨（主题/布局/导入媒体）
