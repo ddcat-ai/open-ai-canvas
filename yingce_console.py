@@ -66,6 +66,11 @@ SERVICES = [
             "CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS": "127.0.0.1,localhost",
             # 安全：必须锁 127.0.0.1，否则局域网可直接访问后端
             "CANVAS_BACKEND_ADDR": "127.0.0.1:8080",
+            # 桌面本机渠道能力开关：不设它，勾了「允许本机渠道」的渠道
+            # （GLM 代理 http://127.0.0.1:8787）一律报
+            # 「不允许访问本机、内网或链路本地地址」。
+            # 两项条件必须同时满足：本开关=true 且 addr 显式绑 127.0.0.1。
+            "CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED": "true",
             "CANVAS_CORS_ORIGINS": "http://localhost:3000",
             "CANVAS_DATA_PATH": "./data",
         },
