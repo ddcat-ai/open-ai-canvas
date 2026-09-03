@@ -1,13 +1,16 @@
-import { ChevronDown, ChevronRight, Home, Infinity as InfinityIcon, LogOut, PanelLeftOpen, Plus, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, ChevronRight, Infinity as InfinityIcon, LogOut, PanelLeftOpen, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
-import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
+import "@/lib/plugins/builtin";
+import { WORKBENCH_PLUGIN_ID, workbenchPlugin } from "@/lib/plugins/builtin/workbench";
 import { cn } from "@/lib/utils";
+import { getAvailableWorkspaceSidebarItems, loadWorkspaceSidebarLayout, normalizeWorkspaceSidebarLayout, orderWorkspaceSidebarItems, WORKSPACE_SIDEBAR_LAYOUT_CHANGED_EVENT, type WorkspaceSidebarLayout } from "@/lib/workspace-sidebar-layout";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
+import { usePluginStore } from "@/stores/use-plugin-store";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
@@ -30,6 +33,7 @@ type WorkspaceNavGroup = {
 /** 设置页分区子项，沿用 /settings?section=<key> 路由合同。 */
 const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "local-cli", label: "本机工具" },
+    { key: "workbench", label: "自定义区域" },
     { key: "channels", label: "自定义渠道" },
     { key: "models", label: "模型选择" },
     { key: "preferences", label: "生成偏好" },
@@ -37,33 +41,32 @@ const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "storage", label: "我的对象存储" },
 ];
 
-function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
-    const tool = navigationTools.find((item) => item.slug === slug);
-    return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
-}
-
-function buildNav(features: FeatureAvailability, balance: string, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability, balance: string, isAdmin: boolean, layout: WorkspaceSidebarLayout, workbenchEnabled: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+    const availableItems = getAvailableWorkspaceSidebarItems(features, isAdmin);
+    const effectiveLayout = workbenchEnabled ? normalizeWorkspaceSidebarLayout(layout) : normalizeWorkspaceSidebarLayout(undefined);
+    const visibleItems = orderWorkspaceSidebarItems(availableItems, effectiveLayout).filter((item) => !effectiveLayout.hidden.includes(item.id));
+    const itemToNavItem = (item: (typeof availableItems)[number]): WorkspaceNavItem => ({
+        id: item.id,
+        title: item.label,
+        icon: item.icon,
+        to: item.route,
+        ...(item.id === "wallet" ? { badge: balance } : {}),
+    });
+    const primaryItems = visibleItems.filter((item) => item.group === "primary").map(itemToNavItem);
+    const managementItems = visibleItems.filter((item) => item.group === "management").map(itemToNavItem);
     const groups: WorkspaceNavGroup[] = [
-        {
-            items: [
-                { id: "home", title: "首页", icon: Home, to: "/" },
-                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
-                toolItem("canvas", "/canvas"),
-                ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
-                toolItem("assets", "/assets"),
-            ],
-        },
-        {
-            heading: "工作台管理",
-            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled || isAdmin ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet"), badge: balance }] : [])],
-        },
+        { items: primaryItems },
+        ...(managementItems.length ? [{ heading: "工作台管理", items: managementItems }] : []),
     ];
 
     const settingsSections = SETTINGS_SECTIONS.filter((section) => section.key !== "channels" || features.customChannelsEnabled);
     const footer: WorkspaceNavItem[] = [
         ...(isAdmin ? [{ id: "admin", title: "管理员后台", icon: ShieldCheck, to: "/admin" }] : []),
         {
-            ...toolItem("settings", "/settings"),
+            id: "settings",
+            title: "设置",
+            icon: Settings,
+            to: "/settings",
             children: settingsSections.map((section) => ({
                 id: `settings:${section.key}`,
                 title: section.label,
@@ -298,12 +301,30 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const features = useUserStore((state) => state.features);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const installations = usePluginStore((state) => state.installations);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
     const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { handleLogout } = useWorkspaceLogout();
 
     const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 
-    const { groups, footer } = useMemo(() => buildNav(features, balance, user?.role === "admin"), [features, balance, user?.role]);
+    const [sidebarLayout, setSidebarLayout] = useState<WorkspaceSidebarLayout>(() => loadWorkspaceSidebarLayout());
+    const workbenchInstallation = installations.find((item) => item.manifest.id === WORKBENCH_PLUGIN_ID);
+    const workbenchEnabled = pluginStates[WORKBENCH_PLUGIN_ID]?.effectiveEnabled
+        ?? workbenchInstallation?.enabled
+        ?? workbenchPlugin.manifest.defaultEnabled === true;
+
+    useEffect(() => {
+        setSidebarLayout(loadWorkspaceSidebarLayout());
+    }, [user?.id]);
+
+    useEffect(() => {
+        const handleLayoutChange = () => setSidebarLayout(loadWorkspaceSidebarLayout());
+        window.addEventListener(WORKSPACE_SIDEBAR_LAYOUT_CHANGED_EVENT, handleLayoutChange);
+        return () => window.removeEventListener(WORKSPACE_SIDEBAR_LAYOUT_CHANGED_EVENT, handleLayoutChange);
+    }, []);
+
+    const { groups, footer } = useMemo(() => buildNav(features, balance, user?.role === "admin", sidebarLayout, workbenchEnabled), [balance, features, sidebarLayout, user?.role, workbenchEnabled]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");

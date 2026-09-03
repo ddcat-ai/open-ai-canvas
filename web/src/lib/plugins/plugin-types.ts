@@ -2,8 +2,8 @@ import type { Asset } from "@/stores/use-asset-store";
 
 export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
 
-export type PluginContributionKind = "provider" | "payment-provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export";
-export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings" | "wallet";
+export type PluginContributionKind = "provider" | "payment-provider" | "workflow" | "canvas-node" | "transform" | "command" | "asset-source" | "usage-observer" | "ai-capability" | "agent" | "import-export" | "workbench";
+export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings" | "wallet" | "sidebar";
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
 export type ProtocolScope = "admin.system-channel" | "user.custom-channel" | "canvas" | "creation" | "agent" | string;
 export type PluginRuntime = "declarative" | "sandbox" | "worker" | "trusted-backend";
@@ -85,6 +85,16 @@ export type PluginTransformContribution = {
     output: "provider-request" | "media";
     runtime: PluginRuntime;
 };
+export type PluginWorkbenchContribution = {
+    id: string;
+    label: string;
+    description?: string;
+    icon?: string;
+    route: string;
+    kind?: "entry";
+    group?: "primary" | "management";
+    order?: number;
+};
 export type PluginContributions = {
     providers?: PluginProviderContribution[];
     paymentProviders?: PluginPaymentProviderContribution[];
@@ -97,6 +107,7 @@ export type PluginContributions = {
     aiCapabilities?: string[];
     agents?: string[];
     importExport?: string[];
+    workbench?: PluginWorkbenchContribution[];
 };
 export type PluginPermission =
     | "canvas.read"
@@ -129,6 +140,8 @@ export type PluginManifest = {
     surfaces?: PluginSurface[];
     permissions: PluginPermission[];
     trusted?: boolean;
+    /** Built-in declarative plugins may opt into an enabled-on-first-install default. */
+    defaultEnabled?: boolean;
     configuration?: { fields: PluginField[] };
     runtime?: { backend?: PluginRuntime; web?: PluginRuntime };
     contributes: PluginContributions;

@@ -34,6 +34,10 @@ func TestApplicationPluginUsesUserStateUnderPlatformAvailability(t *testing.T) {
 	if !initial.PlatformAvailable || initial.UserEnabled || initial.EffectiveEnabled || !initial.CanToggle {
 		t.Fatalf("initial RunningHub state = %#v", initial)
 	}
+	workbench := states[PluginWorkbench]
+	if !workbench.PlatformAvailable || !workbench.UserEnabled || !workbench.EffectiveEnabled || !workbench.CanToggle {
+		t.Fatalf("initial workbench state = %#v", workbench)
+	}
 
 	enabled, err := svc.SetUserPluginEnabled(user, WorkflowPluginRunningHub, true)
 	if err != nil {

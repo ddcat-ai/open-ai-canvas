@@ -261,7 +261,10 @@ func ValidateManifest(manifest Manifest) error {
 		return fmt.Errorf("unsupported plugin backend %q", backend)
 	}
 	if len(manifest.Contributes.Providers) == 0 {
-		return validatePaymentProviderContributions(manifest)
+		if err := validatePaymentProviderContributions(manifest); err != nil {
+			return err
+		}
+		return validateWorkbenchContributions(manifest)
 	}
 	providerIDs := make(map[string]struct{}, len(manifest.Contributes.Providers))
 	for index, provider := range manifest.Contributes.Providers {
@@ -319,7 +322,10 @@ func ValidateManifest(manifest Manifest) error {
 			}
 		}
 	}
-	return validatePaymentProviderContributions(manifest)
+	if err := validatePaymentProviderContributions(manifest); err != nil {
+		return err
+	}
+	return validateWorkbenchContributions(manifest)
 }
 
 func validatePaymentProviderContributions(manifest Manifest) error {
@@ -398,7 +404,36 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 }
 
 func hasNonProviderContribution(contributes ManifestContributions) bool {
-	return len(contributes.PaymentProviders) > 0 || len(contributes.Workflows) > 0 || len(contributes.CanvasNodes) > 0 || len(contributes.Transforms) > 0 || len(contributes.Commands) > 0 || len(contributes.AssetSources) > 0 || len(contributes.UsageObservers) > 0 || len(contributes.AICapabilities) > 0 || len(contributes.Agents) > 0 || len(contributes.ImportExport) > 0
+	return len(contributes.PaymentProviders) > 0 || len(contributes.Workbench) > 0 || len(contributes.Workflows) > 0 || len(contributes.CanvasNodes) > 0 || len(contributes.Transforms) > 0 || len(contributes.Commands) > 0 || len(contributes.AssetSources) > 0 || len(contributes.UsageObservers) > 0 || len(contributes.AICapabilities) > 0 || len(contributes.Agents) > 0 || len(contributes.ImportExport) > 0
+}
+
+func validateWorkbenchContributions(manifest Manifest) error {
+	seen := make(map[string]struct{}, len(manifest.Contributes.Workbench))
+	for index, item := range manifest.Contributes.Workbench {
+		id := strings.TrimSpace(item.ID)
+		label := strings.TrimSpace(item.Label)
+		route := strings.TrimSpace(item.Route)
+		if id == "" || !validManifestIdentifier(id) || label == "" {
+			return fmt.Errorf("workbench contribution %d requires a valid id and label", index)
+		}
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("duplicate workbench contribution %q", id)
+		}
+		seen[id] = struct{}{}
+		if len(label) > 160 || len(item.Description) > 500 || len(item.Icon) > 80 {
+			return fmt.Errorf("workbench contribution %q has an oversized label, description, or icon", id)
+		}
+		if route == "" || !isRelativePath(route) || len(route) > 512 {
+			return fmt.Errorf("workbench contribution %q requires an internal relative route", id)
+		}
+		if item.Kind != "" && item.Kind != "entry" {
+			return fmt.Errorf("workbench contribution %q has unsupported kind %q", id, item.Kind)
+		}
+		if item.Group != "" && item.Group != "primary" && item.Group != "management" {
+			return fmt.Errorf("workbench contribution %q has unsupported group %q", id, item.Group)
+		}
+	}
+	return nil
 }
 
 func operationSummary(operation ManifestOperation) string {

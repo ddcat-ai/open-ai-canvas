@@ -39,7 +39,7 @@ export const usePluginStore = create<PluginStore>()(
                     const timestamp = now();
                     const next: PluginInstallation = current
                         ? { ...current, manifest, updatedAt: timestamp }
-                        : { manifest, enabled: false, config: {}, installedAt: timestamp, updatedAt: timestamp };
+                        : { manifest, enabled: manifest.defaultEnabled === true, config: {}, installedAt: timestamp, updatedAt: timestamp };
                     return { hydrated: true, installations: [...state.installations.filter((item) => item.manifest.id !== manifest.id), next] };
                 }),
             setEnabled: (pluginId, enabled) =>

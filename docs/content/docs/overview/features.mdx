@@ -69,6 +69,19 @@ description: 影策当前已实现的核心工作台能力与使用入口
 - `web/src/services/plugin-host.ts`：将插件文本请求接入宿主现有模型渠道。
 - `web/src/pages/create/index.tsx`、`web/src/components/canvas/canvas-node-prompt-panel.tsx`：两个入口的接入。
 
+## 可自定义工作台导航
+
+内置工作台插件将常用创作入口统一交给宿主渲染。用户可以在设置页的“自定义区域”（`/settings?section=workbench`）预览侧边栏，分别控制入口显示状态，并通过拖拽或上下按钮调整同一分组内的顺序；“恢复默认”可以还原初始布局。
+
+布局只属于当前账号在当前浏览器中的界面偏好，按账号 scope 保存在本机浏览器，不会上传素材、密钥或插件代码。功能开关不可用的入口不会展示；工作台入口使用宿主预注册的内部路由，插件不能直接注入工作区脚本。
+
+### 相关实现
+
+- `web/src/lib/workspace-sidebar-layout.ts`：入口清单、分组、布局归一化、排序和账号 scope 存储。
+- `web/src/lib/plugins/builtin/workbench.ts`：内置工作台插件 Manifest。
+- `web/src/components/layout/workspace-sidebar-nav.tsx`：按功能开关和用户布局渲染侧边栏。
+- `web/src/pages/settings/workbench-settings-pane.tsx`：预览、显示切换、排序和恢复默认。
+
 ## 用户诊断包导出
 
 设置页的“问题诊断”入口和任务失败快捷入口支持导出脱敏诊断包，帮助普通用户提交问题时保留足够的排障上下文。

@@ -1,0 +1,326 @@
+.settings-workbench-pane {
+    min-width: 0;
+    padding-bottom: 1.5rem;
+}
+
+.settings-workbench-pane .settings-pane-header {
+    align-items: flex-start;
+}
+
+.settings-workbench-save-state {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.settings-workbench-preview-section,
+.settings-workbench-list-section {
+    margin-top: 1.25rem;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-surface) 58%, transparent);
+    padding: 1rem;
+}
+
+.settings-workbench-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.settings-workbench-section-heading h3 {
+    margin: 0;
+    color: var(--foreground);
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+
+.settings-workbench-section-heading p {
+    margin: 0.3rem 0 0;
+    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.55;
+}
+
+.settings-workbench-section-heading > span {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: var(--fs-label);
+    line-height: 2rem;
+}
+
+.settings-sidebar-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-width: 32rem;
+    padding: 0.75rem;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--workspace-surface-strong) 68%, transparent);
+}
+
+.settings-sidebar-preview-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.settings-sidebar-preview-heading,
+.settings-sidebar-group-title {
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.settings-sidebar-preview-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.settings-sidebar-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 2.15rem;
+    border-radius: var(--r-sm);
+    padding: 0.35rem 0.6rem;
+    color: color-mix(in srgb, var(--foreground) 68%, transparent);
+    font-size: var(--fs-body);
+}
+
+.settings-sidebar-preview-item:first-child {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.settings-sidebar-group-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.settings-sidebar-group-list + .settings-sidebar-group-list {
+    margin-top: 1.1rem;
+}
+
+.settings-sidebar-group-title {
+    margin: 0 0 0.65rem 0.2rem;
+}
+
+.settings-workbench-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-workbench-row {
+    display: flex;
+    position: relative;
+    min-width: 0;
+    align-items: center;
+    gap: 0.65rem;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--workspace-surface) 76%, transparent);
+    padding: 0.62rem 0.65rem;
+    margin-top: 0.35rem;
+    transition: transform 260ms var(--ease-product-enter), border-color var(--motion-state) var(--ease-product-enter), background-color var(--motion-state) var(--ease-product-enter), opacity var(--motion-state) var(--ease-product-enter), box-shadow 220ms var(--ease-product-enter);
+}
+
+.settings-workbench-row.is-first-in-group {
+    margin-top: 0;
+}
+
+.settings-workbench-row::before,
+.settings-workbench-row::after {
+    position: absolute;
+    right: 0.65rem;
+    left: 0.65rem;
+    height: 1px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+    box-shadow: 0 0 0.45rem color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transform: scaleX(0.72);
+    transition: opacity var(--motion-state) var(--ease-product-enter), transform var(--motion-state) var(--ease-product-enter);
+}
+
+.settings-workbench-row::before {
+    top: -0.2rem;
+}
+
+.settings-workbench-row::after {
+    bottom: -0.2rem;
+}
+
+.settings-workbench-row.is-drop-before::before,
+.settings-workbench-row.is-drop-after::after {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+.settings-workbench-row:hover {
+    border-color: var(--workspace-border);
+    background: var(--workspace-surface);
+}
+
+.settings-workbench-row.is-dragging {
+    border-color: var(--workspace-border-strong);
+    background: var(--workspace-surface);
+    box-shadow: 0 0.65rem 1.25rem color-mix(in srgb, var(--foreground) 14%, transparent);
+    opacity: 0.74;
+    transform: translate3d(0, -2px, 0) scale(1.005);
+    z-index: 1;
+}
+
+.settings-workbench-row.is-drag-over {
+    border-color: var(--workspace-accent);
+}
+
+.settings-workbench-row.is-hidden {
+    opacity: 0.52;
+}
+
+.settings-workbench-drag-handle {
+    display: grid;
+    flex: 0 0 auto;
+    width: 1.35rem;
+    place-items: center;
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    cursor: grab;
+}
+
+.settings-workbench-row:active .settings-workbench-drag-handle {
+    cursor: grabbing;
+}
+
+.settings-workbench-row-icon {
+    display: grid;
+    width: 1.9rem;
+    height: 1.9rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--r-sm);
+    background: var(--workspace-accent-soft);
+    color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.settings-workbench-row-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.settings-workbench-row-copy strong {
+    color: var(--foreground);
+    font-size: var(--fs-body);
+    font-weight: 550;
+}
+
+.settings-workbench-row-copy span {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-workbench-row-controls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.settings-workbench-order-buttons {
+    display: flex;
+    gap: 0.15rem;
+}
+
+.settings-workbench-order-buttons button {
+    display: grid;
+    width: 1.65rem;
+    height: 1.65rem;
+    place-items: center;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+    cursor: pointer;
+}
+
+.settings-workbench-order-buttons button:hover:not(:disabled) {
+    border-color: var(--workspace-border-strong);
+    color: var(--foreground);
+}
+
+.settings-workbench-order-buttons button:disabled {
+    cursor: not-allowed;
+    opacity: 0.28;
+}
+
+.settings-workbench-note {
+    margin: 0.85rem 0 0;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.65;
+}
+
+.settings-workbench-preview-empty {
+    border: 1px dashed var(--workspace-border-strong);
+    border-radius: var(--r-sm);
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    padding: 1rem;
+    font-size: var(--fs-label);
+    text-align: center;
+}
+
+@media (max-width: 720px) {
+    .settings-workbench-section-heading {
+        flex-direction: column;
+    }
+
+    .settings-workbench-section-heading > span {
+        line-height: 1.4;
+    }
+
+    .settings-workbench-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .settings-workbench-row-copy {
+        min-width: calc(100% - 6rem);
+    }
+
+    .settings-workbench-row-controls {
+        width: 100%;
+        justify-content: flex-end;
+        padding-left: 3.2rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-workbench-row,
+    .settings-workbench-row::before,
+    .settings-workbench-row::after {
+        transition: none;
+    }
+
+    .settings-workbench-row.is-dragging {
+        box-shadow: none;
+        transform: none;
+    }
+}

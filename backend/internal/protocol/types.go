@@ -289,6 +289,7 @@ type ManifestField struct {
 type ManifestContributions struct {
 	Providers        []ManifestProvider        `json:"providers,omitempty"`
 	PaymentProviders []ManifestPaymentProvider `json:"paymentProviders,omitempty"`
+	Workbench        []ManifestWorkbench       `json:"workbench,omitempty"`
 	Workflows        []ManifestWorkflow        `json:"workflows,omitempty"`
 	CanvasNodes      []ManifestCanvasNode      `json:"canvasNodes,omitempty"`
 	Transforms       []ManifestTransform       `json:"transforms,omitempty"`
@@ -298,6 +299,17 @@ type ManifestContributions struct {
 	AICapabilities   []string                  `json:"aiCapabilities,omitempty"`
 	Agents           []string                  `json:"agents,omitempty"`
 	ImportExport     []string                  `json:"importExport,omitempty"`
+}
+
+type ManifestWorkbench struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	Route       string `json:"route"`
+	Kind        string `json:"kind,omitempty"`
+	Group       string `json:"group,omitempty"`
+	Order       int    `json:"order,omitempty"`
 }
 
 type ManifestPaymentProvider struct {

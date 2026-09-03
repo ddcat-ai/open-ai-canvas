@@ -1171,6 +1171,7 @@ function CreationComposer(props: ComposerProps) {
     const [referenceFilter, setReferenceFilter] = useState<CreationReferenceFilter>("all");
     const [canDragReferences, setCanDragReferences] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
+    const [draggingReferenceId, setDraggingReferenceId] = useState<string | null>(null);
     const attachmentTrackRef = useRef<HTMLUListElement>(null);
     const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
     const suppressAttachmentClickRef = useRef(false);
@@ -1333,31 +1334,38 @@ function CreationComposer(props: ComposerProps) {
                                 aria-label="参考内容轨道"
                                 onScroll={updateTrackScrollState}
                             >
-                                {visibleAttachments.map((item) => <Reorder.Item<CreationAttachment>
+                                {visibleAttachments.map((item) => <li
                                     key={item.id}
-                                    value={item}
-                                    layout="position"
-                                    drag={trackState.isExpanded && canDragReferences && !interactionBusy}
                                     className="creation-reference-stack-card"
-                                    onPointerDown={beginCardDrag}
-                                    onPointerMove={moveCardDrag}
-                                    onPointerUp={endCardDrag}
-                                    onPointerCancel={endCardDrag}
-                                    onDragStart={() => { setDropTargetReferenceId(null); setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true })); }}
-                                    onDrag={(_, info) => {
-                                        if (creationAttachmentKind(item) !== "image") return;
-                                        const target = imageReferenceAtPoint(info.point.x, info.point.y);
-                                        setDropTargetReferenceId(target?.attachmentId !== item.id ? target?.id || null : null);
-                                    }}
-                                    onDragEnd={(_, info) => {
-                                        const target = creationAttachmentKind(item) === "image" ? imageReferenceAtPoint(info.point.x, info.point.y) : undefined;
-                                        setDropTargetReferenceId(null);
-                                        setTrackState((current) => ({ ...current, isDragging: false, isExpanded: true }));
-                                        if (target?.attachmentId && target.attachmentId !== item.id) props.onReplaceAttachment(target.attachmentId, item);
-                                    }}
+                                    data-dragging={draggingReferenceId === item.id ? "true" : undefined}
                                 >
-                                    <CreationAttachmentThumbnail item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />
-                                </Reorder.Item>)}
+                                    <Reorder.Item<CreationAttachment, "div">
+                                        value={item}
+                                        layout={trackState.isExpanded ? "position" : undefined}
+                                        drag={trackState.isExpanded && canDragReferences && !interactionBusy}
+                                        as="div"
+                                        className="creation-reference-stack-card-motion"
+                                        onPointerDown={beginCardDrag}
+                                        onPointerMove={moveCardDrag}
+                                        onPointerUp={endCardDrag}
+                                        onPointerCancel={endCardDrag}
+                                        onDragStart={() => { setDropTargetReferenceId(null); setDraggingReferenceId(item.id); setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true })); }}
+                                        onDrag={(_, info) => {
+                                            if (creationAttachmentKind(item) !== "image") return;
+                                            const target = imageReferenceAtPoint(info.point.x, info.point.y);
+                                            setDropTargetReferenceId(target?.attachmentId !== item.id ? target?.id || null : null);
+                                        }}
+                                        onDragEnd={(_, info) => {
+                                            const target = creationAttachmentKind(item) === "image" ? imageReferenceAtPoint(info.point.x, info.point.y) : undefined;
+                                            setDropTargetReferenceId(null);
+                                            setDraggingReferenceId(null);
+                                            setTrackState((current) => ({ ...current, isDragging: false, isExpanded: true }));
+                                            if (target?.attachmentId && target.attachmentId !== item.id) props.onReplaceAttachment(target.attachmentId, item);
+                                        }}
+                                    >
+                                        <CreationAttachmentThumbnail item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />
+                                    </Reorder.Item>
+                                </li>)}
                                 {!visibleAttachments.length && props.attachments.length ? <li className="creation-reference-filter-empty">该类型暂无参考内容</li> : null}
                                 {referencesSupported ? <li className="creation-reference-add-slot"><Tooltip title={addReferenceLabel}><button type="button" className="creation-reference-add-button" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip></li> : null}
                             </Reorder.Group>

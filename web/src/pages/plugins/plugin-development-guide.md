@@ -1,6 +1,6 @@
 # 上传统一插件包
 
-影策只有一种插件：一个版本化 Manifest 描述一个插件包可以向宿主贡献的全部能力。Provider、工作流、画布节点、媒体转换、素材源、Agent 和命令都写在同一个 `contributes` 下；运行时可以不同，但不会再出现“协议插件”和“UI 插件”两套清单。
+影策只有一种插件：一个版本化 Manifest 描述一个插件包可以向宿主贡献的全部能力。Provider、工作流、画布节点、侧边栏工作台入口、媒体转换、素材源、Agent 和命令都写在同一个 `contributes` 下；运行时可以不同，但不会再出现“协议插件”和“UI 插件”两套清单。
 
 ## 1. 包格式
 
@@ -60,6 +60,7 @@ my-plugin.yingce-plugin
 - `canvasNodes` 声明节点 ID、默认尺寸和 schema。`renderer` 为 `declarative` 时使用宿主 schema renderer；`sandbox` 由隔离运行时承载。
 - `transforms` 声明媒体或生成请求转换，必须匹配清单权限和受控 runtime。
 - `assetSources`、`usageObservers`、`agents`、`commands` 和 `importExport` 是同一清单的其他贡献面。
+- `workbench` 声明侧边栏入口时只能使用宿主内部路由；宿主会负责入口渲染、用户排序/显隐和功能开关，不执行插件脚本。可用 `group: "primary"` 或 `group: "management"` 选择分组。
 
 一个插件可以同时声明多种贡献，但 ID 必须在插件包内唯一，并且所有贡献共享同一个安装、启停、权限和版本生命周期。
 

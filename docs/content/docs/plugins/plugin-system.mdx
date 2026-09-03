@@ -85,6 +85,10 @@ Eagle 插件属于此类，具体方案见第 8 节。
 
 为 Codex、Claude 或其他 Agent 暴露画布工具。这一类与网页插件可以协同，但仍使用独立的 Agent / MCP 安全边界。
 
+### 4.7 侧边栏工作台插件
+
+通过 `contributes.workbench` 声明式提供侧边栏入口。宿主负责渲染入口、校验内部路由并应用用户的排序和显隐设置；插件不能把任意脚本注入工作区。入口可通过 `group` 进入主导航或“工作台管理”分组，与插件本身共享启用状态，布局偏好按用户保存在本机浏览器。
+
 ## 5. 插件包与清单
 
 插件以一个统一的 `.yingce-plugin` 包作为入口。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
@@ -120,7 +124,7 @@ eagle-asset-connector.yingce-plugin
 - `id`：全局唯一，使用小写 kebab-case；安装后不能随意变更。
 - `version`：遵循 SemVer，用于更新和回滚判断。
 - `apiVersion`：固定为 `yingce.plugin/v1`，不接受旧版本或平行 Manifest。
-- `contributes`：声明 provider、workflow、canvasNodes、transforms、assetSources、agents 等能力。
+- `contributes`：声明 provider、workflow、canvasNodes、workbench、transforms、assetSources、agents 等能力。
 - `permissions`：最小权限集合，宿主在安装和首次使用时展示。
 - `dependencies`：插件依赖的其他插件或宿主能力。
 - `integrity`：用于校验远程产物是否被替换。

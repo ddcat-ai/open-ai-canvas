@@ -8,6 +8,7 @@ import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
 import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
+import { WORKBENCH_PLUGIN_ID } from "@/lib/plugins/builtin/workbench";
 import { ART_CRITIQUE_PLUGIN_ID } from "@/lib/art-critique/contracts";
 import type { PluginManifest, RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
@@ -29,6 +30,7 @@ const categoryLabels: Record<string, string> = {
     "usage-observer": "用量观察",
     agent: "智能体",
     "import-export": "导入导出",
+    workbench: "工作台",
 };
 
 const surfaceLabels: Record<string, string> = {
@@ -36,6 +38,7 @@ const surfaceLabels: Record<string, string> = {
     fullscreen: "全屏工作台",
     hybrid: "混合接入",
     "asset-source": "素材库",
+    sidebar: "侧边栏工作台",
 };
 
 const permissionLabels: Record<string, string> = {
@@ -619,7 +622,7 @@ function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
 }
 
 function isOfficialApplicationPlugin(pluginId: string) {
-    return [RUNNINGHUB_PLUGIN_ID, COMFYUI_PLUGIN_ID, EAGLE_PLUGIN_ID, PROMPT_OPTIMIZER_PLUGIN_ID, "portrait-clearance", ART_CRITIQUE_PLUGIN_ID].includes(pluginId);
+    return [RUNNINGHUB_PLUGIN_ID, COMFYUI_PLUGIN_ID, EAGLE_PLUGIN_ID, PROMPT_OPTIMIZER_PLUGIN_ID, "portrait-clearance", ART_CRITIQUE_PLUGIN_ID, WORKBENCH_PLUGIN_ID].includes(pluginId);
 }
 
 function pluginSourceLabel(plugin: RegisteredPlugin, state?: PluginState) {
@@ -642,6 +645,7 @@ function contributionKindsFor(manifest: PluginManifest): string[] {
     if (contributions.usageObservers?.length) kinds.push("usage-observer");
     if (contributions.agents?.length) kinds.push("agent");
     if (contributions.importExport?.length) kinds.push("import-export");
+    if (contributions.workbench?.length) kinds.push("workbench");
     return kinds;
 }
 
