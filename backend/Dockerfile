@@ -1,14 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
-ARG BUILDPLATFORM
-ARG TARGETPLATFORM
-
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS payment-package-build
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=$GOPROXY
 
@@ -28,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
       ./plugin-packages/build-packages.sh --payments-only; \
     sh ./plugin-packages/verify-payment-packages.sh "$TARGETOS" "$TARGETARCH"
 
-FROM --platform=$TARGETPLATFORM alpine:3.22 AS payment-package-smoke
+FROM alpine:3.22 AS payment-package-smoke
 
 ARG TARGETOS
 ARG TARGETARCH
