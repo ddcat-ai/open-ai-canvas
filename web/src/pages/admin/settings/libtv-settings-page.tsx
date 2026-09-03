@@ -5,6 +5,7 @@ import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { getAdminLibTVSetting, testAdminLibTV, updateAdminLibTVSetting, type AdminLibTVSetting } from "@/services/api/libtv";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
@@ -12,6 +13,7 @@ type ConnectionTestStatus = "idle" | "testing" | "success" | "error";
 
 export default function LibTVSettingsPage() {
     const { message, modal } = App.useApp();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const [setting, setSetting] = useState<AdminLibTVSetting | null>(null);
     const [enabled, setEnabled] = useState(false);
     const [token, setToken] = useState("");
@@ -311,7 +313,7 @@ export default function LibTVSettingsPage() {
                         className="admin-third-party-section admin-third-party-credential-section"
                         icon={<KeyRound className="size-4" aria-hidden="true" />}
                         title="1. 配置 LibTV 服务端访问凭据"
-                        description="Token 只提交到影策服务端，保存后浏览器不会再收到或显示明文。"
+                        description={`Token 只提交到${brandName}服务端，保存后浏览器不会再收到或显示明文。`}
                         status={<AdminStatusBadge label={credentialDraftLabel} tone={clearTokenDraft ? "warning" : draftHasToken ? "success" : "neutral"} />}
                         footer={!draftHasToken ? <ThirdPartySaveFooter setting={setting} dirty={dirty} saving={saving} refreshing={refreshing} onReset={resetDraft} onSave={submitSave} /> : undefined}
                     >
@@ -399,7 +401,7 @@ export default function LibTVSettingsPage() {
                                 <span aria-hidden="true">→</span>
                                 <FlowStep icon={<Wifi className="size-4" />} label="读取画布" detail="按 UUID 请求" />
                                 <span aria-hidden="true">→</span>
-                                <FlowStep icon={<CloudDownload className="size-4" />} label="导入影策" detail="生成节点与连线" />
+                                <FlowStep icon={<CloudDownload className="size-4" />} label={`导入${brandName}`} detail="生成节点与连线" />
                             </div>
                         </SettingsSectionCard>
                     </div>
@@ -411,7 +413,7 @@ export default function LibTVSettingsPage() {
                             className="admin-third-party-section admin-third-party-test-card"
                             icon={<Wifi className="size-4" aria-hidden="true" />}
                             title="3. 验证已保存的 LibTV 凭据"
-                            description="使用服务端当前保存的 Token 发起一次只读请求，不会向 LibTV 或当前影策画布写入内容。"
+                            description={`使用服务端当前保存的 Token 发起一次只读请求，不会向 LibTV 或当前${brandName}画布写入内容。`}
                             status={<TestStatus status={testStatus} />}
                         >
                             <div className="admin-third-party-test-controls">

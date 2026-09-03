@@ -1,6 +1,6 @@
 # Claude Messages API
 
-Claude Messages 使用无状态 `messages` 请求生成内容。影策默认创建一条 `user` 消息、设置 `max_tokens: 4096`，并自动添加 `anthropic-version: 2023-06-01`。系统提示使用顶层 `system`，不能伪装成 `system` 角色消息。
+Claude Messages 使用无状态 `messages` 请求生成内容。宿主默认创建一条 `user` 消息、设置 `max_tokens: 4096`，并自动添加 `anthropic-version: 2023-06-01`。系统提示使用顶层 `system`，不能伪装成 `system` 角色消息。
 
 ## 接口、鉴权与版本头
 
@@ -13,7 +13,7 @@ anthropic-version: 2023-06-01
 Content-Type: application/json
 ```
 
-影策的通用渠道中转也可能以 Bearer 方式连接兼容网关；直连 Anthropic 时必须按官方 `x-api-key` 规则配置渠道。版本头由适配器固定添加，Beta 能力需要额外头部时当前插件不会自动猜测。
+宿主的通用渠道中转也可能以 Bearer 方式连接兼容网关；直连 Anthropic 时必须按官方 `x-api-key` 规则配置渠道。版本头由适配器固定添加，Beta 能力需要额外头部时当前插件不会自动猜测。
 
 ## 模型与兼容边界
 
@@ -23,7 +23,7 @@ Content-Type: application/json
 
 {{PARAMETERS}}
 
-`extra` 可透传 `max_tokens`、`system`、`messages`、`temperature`、`top_p`、`top_k`、`tools`、`tool_choice` 和 `stream`。`extra.messages` 替换默认消息数组。`max_tokens` 是必需的上游字段，未覆盖时影策发送 4096。
+`extra` 可透传 `max_tokens`、`system`、`messages`、`temperature`、`top_p`、`top_k`、`tools`、`tool_choice` 和 `stream`。`extra.messages` 替换默认消息数组。`max_tokens` 是必需的上游字段，未覆盖时宿主发送 4096。
 
 ## 请求示例
 

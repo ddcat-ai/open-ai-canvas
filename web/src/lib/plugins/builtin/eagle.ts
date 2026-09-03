@@ -12,7 +12,7 @@ export const EAGLE_DEFAULT_BASE_URL = "http://127.0.0.1:41595";
 
 const eaglePluginDocumentation = `# Eagle 素材库
 
-Eagle 插件把桌面 Eagle 资料库接入影策素材面板。浏览器不会直接访问 Eagle：所有读取、搜索、下载和写入请求先到影策后端，再由后端访问管理员配置的 Eagle Local API 地址。
+Eagle 插件把桌面 Eagle 资料库接入站点素材面板。浏览器不会直接访问 Eagle：所有读取、搜索、下载和写入请求先到站点后端，再由后端访问管理员配置的 Eagle Local API 地址。
 
 ## 使用前准备
 
@@ -21,30 +21,30 @@ Eagle 插件把桌面 Eagle 资料库接入影策素材面板。浏览器不会�
 3. 以管理员身份进入插件设置，填写 Base URL 并读取文件夹。
 4. 保存配置后，在素材库选择 Eagle 来源，即可浏览和导入素材。
 
-> Eagle 必须保持运行。关闭客户端、切换资料库或修改本地 API 端口后，影策会收到连接失败，不能用空列表掩盖。
+> Eagle 必须保持运行。关闭客户端、切换资料库或修改本地 API 端口后，站点会收到连接失败，不能用空列表掩盖。
 
-## 影策后端接口
+## 站点后端接口
 
-| 操作 | 影策接口 | 用途 |
+| 操作 | 站点接口 | 用途 |
 | --- | --- | --- |
 | 读取资料库 | \`GET /api/plugins/eagle/library?baseUrl=...\` | 获取 Eagle 版本、资料库名称和文件夹树 |
 | 列出素材 | \`GET /api/plugins/eagle/items\` | 按文件夹、关键词和分页读取素材 |
 | 缩略图 | \`GET /api/plugins/eagle/items/{id}/thumbnail\` | 代理 Eagle 缩略图 |
-| 原文件 | \`GET /api/plugins/eagle/items/{id}/file\` | 下载并导入影策资源存储 |
+| 原文件 | \`GET /api/plugins/eagle/items/{id}/file\` | 下载并导入站点资源存储 |
 | 写入素材 | \`POST /api/plugins/eagle/items?baseUrl=...\` | 把图片、视频或音频写回 Eagle |
 | 创建文件夹 | \`POST /api/plugins/eagle/folders?baseUrl=...\` | 在 Eagle 中创建目录 |
 
-这些是影策内部登录态 API，使用 Cookie 鉴权；不要把它们当作 Eagle 官方接口直接调用。
+这些是站点内部登录态 API，使用 Cookie 鉴权；不要把它们当作 Eagle 官方接口直接调用。
 
 ## 浏览与搜索
 
 插件读取 Eagle 文件夹树并生成完整层级路径。素材列表支持 \`folderId\`、\`keyword\`、\`limit\`、\`offset\`。文件夹列表在当前插件实例内缓存；创建文件夹后会失效并重新读取。切换 Eagle 资料库时应重新打开插件设置确认目录。
 
-## 导入到影策
+## 导入到站点
 
-导入时，后端代理下载 Eagle 原文件，前端再写入影策自己的图片或媒体存储。图片保留可识别的宽高和 MIME；视频、音频和其他模型文件保留字节数、扩展名、Eagle item ID、文件夹和来源元数据。
+导入时，后端代理下载 Eagle 原文件，前端再写入站点自己的图片或媒体存储。图片保留可识别的宽高和 MIME；视频、音频和其他模型文件保留字节数、扩展名、Eagle item ID、文件夹和来源元数据。
 
-| Eagle 内容 | 影策结果 | 当前限制 |
+| Eagle 内容 | 站点结果 | 当前限制 |
 | --- | --- | --- |
 | 图片 | 图片素材 | 使用原图，不把缩略图当成品 |
 | 视频 | 视频素材 | 元数据缺宽高时使用 1280×720 展示兜底，不改写原文件 |
@@ -54,9 +54,9 @@ Eagle 插件把桌面 Eagle 资料库接入影策素材面板。浏览器不会�
 
 ## 写回 Eagle
 
-插件可把影策图片、视频或音频转换为 data URL，再调用 Eagle 添加素材。已有本地 Blob 优先直接读取；只有没有本地副本时才下载远程生成地址。默认单个手动上传文件不超过 96 MB，且 MIME 必须以 \`image/\`、\`video/\` 或 \`audio/\` 开头。
+插件可把站点图片、视频或音频转换为 data URL，再调用 Eagle 添加素材。已有本地 Blob 优先直接读取；只有没有本地副本时才下载远程生成地址。默认单个手动上传文件不超过 96 MB，且 MIME 必须以 \`image/\`、\`video/\` 或 \`audio/\` 开头。
 
-启用“自动上传生成结果”后，生成资产可以写入配置的目标文件夹。自动写回失败必须显示为写回失败，不应把“影策已保存”误报为“Eagle 已保存”。
+启用“自动上传生成结果”后，生成资产可以写入配置的目标文件夹。自动写回失败必须显示为写回失败，不应把“站点已保存”误报为“Eagle 已保存”。
 
 ## 配置字段
 
@@ -97,9 +97,9 @@ export const eagleAssetPlugin: RegisteredPlugin = {
         publishedAt: "2026-08-21",
         updatedAt: "2026-08-22",
         apiVersion: "yingce.plugin/v1",
-        description: "把 Eagle 作为影策的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
+        description: "把 Eagle 作为站点的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
         documentation: eaglePluginDocumentation,
-        author: "影策社区",
+        author: "开源社区",
         permissions: ["asset.read", "asset.search", "asset.upload", "external.open"],
         trusted: true,
         configuration: {

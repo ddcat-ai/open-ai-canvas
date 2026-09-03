@@ -1,6 +1,6 @@
 # OpenAI Audio Speech
 
-该插件调用 OpenAI 风格的同步文字转语音接口，把影策提示词映射为 `input`。当前只发送模型与文本，声音、格式、语速和其他 TTS 选项尚未纳入 adapter。
+该插件调用 OpenAI 风格的同步文字转语音接口，把宿主提示词映射为 `input`。当前只发送模型与文本，声音、格式、语速和其他 TTS 选项尚未纳入 adapter。
 
 ## 接口与鉴权
 
@@ -14,7 +14,7 @@ Content-Type: application/json
 
 ## 模型、声音与输出格式
 
-模型、voice、格式、单次文本长度、流式能力和价格以 OpenAI 或兼容渠道实际文档为准。当前影策 metadata 没有声明参数表，这意味着只有 `model` 和 `prompt` 的内部映射稳定，不意味着上游没有必填 `voice`。若上游要求 voice，管理员必须先扩展 adapter，不能依赖未白名单的字段自动透传。
+模型、voice、格式、单次文本长度、流式能力和价格以 OpenAI 或兼容渠道实际文档为准。当前宿主 metadata 没有声明参数表，这意味着只有 `model` 和 `prompt` 的内部映射稳定，不意味着上游没有必填 `voice`。若上游要求 voice，管理员必须先扩展 adapter，不能依赖未白名单的字段自动透传。
 
 ## 参数与字段映射
 

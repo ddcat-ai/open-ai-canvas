@@ -49,7 +49,7 @@ curl "{channel_base_url}/v2/query/video_generation/task_xxx" \
   -H "Authorization: Bearer <MINIMAX_API_KEY>"
 ```
 
-当前 V2 官方成功响应在 `task.content.url` 返回视频地址，通用 parser 会先合并 `task`，再从 `content.url` 提取结果。官方仅允许查询最近 7 天任务，视频 URL 有时效，应立即转存。当前 adapter 尚未发送参考视频、参考音频、`callback_url` 或 `aigc_watermark`；虽然 V2 上游支持这些字段，影策不能宣称已支持。
+当前 V2 官方成功响应在 `task.content.url` 返回视频地址，通用 parser 会先合并 `task`，再从 `content.url` 提取结果。官方仅允许查询最近 7 天任务，视频 URL 有时效，应立即转存。当前 adapter 尚未发送参考视频、参考音频、`callback_url` 或 `aigc_watermark`；虽然 V2 上游支持这些字段，宿主不能宣称已支持。
 
 ## 官方资料
 

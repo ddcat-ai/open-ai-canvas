@@ -9,7 +9,7 @@ const manifest: PluginManifest = {
     name: "AI 审美批改",
     version: "0.1.0",
     description: "分析图片的构图、色彩、光线和比例问题，输出结构化批改报告与可视化标注。",
-    author: "影策团队",
+    author: "内置工具",
     surfaces: ["node", "fullscreen"],
     permissions: ["canvas.read", "canvas.write", "media.read", "ai.text"],
     trusted: true,

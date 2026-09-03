@@ -1,6 +1,6 @@
 # OpenAI Responses API
 
-Responses API 是 OpenAI 当前统一的文本与工具调用接口，输入使用 `input`，可同时承载简单字符串、结构化消息和工具回合。影策默认发送字符串提示词，并从同步响应的 `output_text` 或 `output[]` 中提取文本。
+Responses API 是 OpenAI 当前统一的文本与工具调用接口，输入使用 `input`，可同时承载简单字符串、结构化消息和工具回合。宿主默认发送字符串提示词，并从同步响应的 `output_text` 或 `output[]` 中提取文本。
 
 ## 接口、鉴权与请求模式
 

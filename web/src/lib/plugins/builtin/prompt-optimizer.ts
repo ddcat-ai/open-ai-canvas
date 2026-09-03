@@ -61,7 +61,7 @@ const manifest: PluginManifest = {
     version: "0.3.0",
     apiVersion: "yingce.plugin/v1",
     description: "把模糊的生图想法整理成可执行、可比较、适配当前模型的提示词。",
-    author: "影策团队",
+    author: "内置工具",
     permissions: ["canvas.read", "canvas.write", "ai.text"],
     trusted: true,
     runtime: { web: "trusted-backend" },
@@ -69,7 +69,7 @@ const manifest: PluginManifest = {
 };
 
 const systemPrompt = [
-    "你是影策工作台里的提示词导演，负责把用户模糊的视觉想法整理成可以直接交给生成模型的提示词。",
+    "你是当前创作工作台里的提示词导演，负责把用户模糊的视觉想法整理成可以直接交给生成模型的提示词。",
     "只优化表达和可执行性，不擅自改变用户明确写出的主体、身份、动作、数量、时代、地点、画幅比例或安全边界。",
     "优先使用具体可视化语言：主体与关系、构图与景别、动作、环境、材质、光线、色彩、镜头和风格。",
     "如果输入已经足够明确，保持原意并做克制的精修；如果信息不足，把不确定项写入 assumptions，不要假装知道。",

@@ -1,6 +1,6 @@
 # OpenAI Images
 
-OpenAI Images 插件实现 JSON 文生图请求，并解析 OpenAI Images 风格的 `data[]` 响应。上游官方还提供 multipart 图像编辑接口，但当前影策适配器的创建路径只构造 `/v1/images/generations`；详情中列出编辑接口是为了说明协议能力，不代表当前画布已发送编辑请求。
+OpenAI Images 插件实现 JSON 文生图请求，并解析 OpenAI Images 风格的 `data[]` 响应。上游官方还提供 multipart 图像编辑接口，但当前宿主适配器的创建路径只构造 `/v1/images/generations`；详情中列出编辑接口是为了说明协议能力，不代表当前画布已发送编辑请求。
 
 ## 接口与鉴权
 
@@ -63,7 +63,7 @@ curl "{channel_base_url}/v1/images/edits" \
   -F "prompt=保持人物一致，改成雨夜街道"
 ```
 
-该示例是上游协议参考；在影策中使用前必须补 multipart 构造、参考图数量与 MIME 校验、编辑响应测试。
+该示例是上游协议参考；在宿主中使用前必须补 multipart 构造、参考图数量与 MIME 校验、编辑响应测试。
 
 ## 官方资料
 

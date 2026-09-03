@@ -9,7 +9,7 @@ const manifest: PluginManifest = {
     name: "肖像权可识别性排查",
     version: "0.1.0",
     description: "对虚拟人和人物图片执行本地人脸预检、网络候选排查与审慎风险报告。",
-    author: "影策团队",
+    author: "内置工具",
     surfaces: ["node", "fullscreen"],
     permissions: [
         "canvas.read",

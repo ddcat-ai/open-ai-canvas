@@ -60,7 +60,7 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                         <span className="plugin-upload-panel-icon"><CloudUpload className="size-5" /></span>
                         <div>
                             <h2>安装插件包</h2>
-                            <p>选择统一影策插件包，安装后会立即进入插件中心。</p>
+                            <p>选择统一站点插件包，安装后会立即进入插件中心。</p>
                         </div>
                     </div>
                     <div

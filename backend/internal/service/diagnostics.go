@@ -233,14 +233,15 @@ func (s *Service) ExportDiagnosticBundle(userID string, req DiagnosticExportRequ
 		RedactionVersion: diagnosticRedactionVersion, Truncated: collection.Truncated,
 		Counts: diagnosticCounts{ClientEvents: len(collection.ClientEvents), Tasks: len(collection.Tasks), TaskLogs: len(collection.TaskLogs), APICalls: len(collection.APICalls)},
 	}
-	data, err := buildDiagnosticZIP(bundleID, manifest, collection)
+	brandName, brandSlug := s.appearanceIdentity()
+	data, err := buildDiagnosticZIP(brandName, bundleID, manifest, collection)
 	if err != nil {
 		return nil, err
 	}
 	if len(data) > diagnosticMaxBundleBytes {
 		return nil, BadAuthRequest("诊断包超过 10 MB，请缩短时间范围后重试")
 	}
-	fileName := fmt.Sprintf("yingce-diagnostics-%s-%s.zip", time.Now().UTC().Format("20060102-150405"), bundleID)
+	fileName := fmt.Sprintf("%s-diagnostics-%s-%s.zip", brandSlug, time.Now().UTC().Format("20060102-150405"), bundleID)
 	return &DiagnosticBundle{BundleID: bundleID, FileName: fileName, Data: data}, nil
 }
 
@@ -372,7 +373,7 @@ func sanitizeDiagnosticAPICall(log model.ApiCallLog) diagnosticAPICallRecord {
 	}
 }
 
-func buildDiagnosticZIP(bundleID string, manifest diagnosticManifest, collection *diagnosticCollection) ([]byte, error) {
+func buildDiagnosticZIP(brandName string, bundleID string, manifest diagnosticManifest, collection *diagnosticCollection) ([]byte, error) {
 	var buffer bytes.Buffer
 	archive := zip.NewWriter(&buffer)
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")
@@ -383,7 +384,7 @@ func buildDiagnosticZIP(bundleID string, manifest diagnosticManifest, collection
 		return nil, err
 	}
 	newline := string(rune(10))
-	readme := fmt.Sprintf("影策用户诊断包%s%s诊断编号：%s%s时间范围：%s 至 %s%s%s该文件由用户主动导出，仅包含有限时间范围内的脱敏诊断摘要。%s", newline, newline, bundleID, newline, collection.Window.From.Format(time.RFC3339), collection.Window.To.Format(time.RFC3339), newline, newline, newline)
+	readme := fmt.Sprintf("%s 用户诊断包%s%s诊断编号：%s%s时间范围：%s 至 %s%s%s该文件由用户主动导出，仅包含有限时间范围内的脱敏诊断摘要。%s", brandName, newline, newline, bundleID, newline, collection.Window.From.Format(time.RFC3339), collection.Window.To.Format(time.RFC3339), newline, newline, newline)
 	if err := writeDiagnosticZipFile(archive, "README.txt", []byte(readme)); err != nil {
 		return nil, err
 	}

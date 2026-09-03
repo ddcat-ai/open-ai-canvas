@@ -1,0 +1,100 @@
+# 站点及外观与皮肤主题设计合同
+
+## 1. 目标与边界
+
+本模块让部署方在不修改源码的前提下管理站点身份、登录页内容、搜索摘要、首页收尾信息与全站皮肤。默认 `classic` 皮肤必须等同项目既有样式；自定义品牌不得在首次渲染、邮件、诊断包、素材插件或后台说明中短暂或持续露出内置品牌。
+
+技术兼容标识不属于品牌文案：仓库名、容器/升级器路径、剪贴板协议、localStorage key、插件 API version、数据库基线校验值和 User-Agent 可以继续使用 `open-ai-canvas` 或 `infinite-canvas`。英文品牌标识只用于新资源路径建议，不能自动改写已有对象存储前缀或历史资源。
+
+## 2. 领域模型
+
+| 分组     | 字段                           | 行为                                                                              |
+| -------- | ------------------------------ | --------------------------------------------------------------------------------- |
+| 品牌     | `brandName`、`brandSlug`       | 中文/展示名称进入页面、邮件、导出与诊断说明；slug 用于安全的路径建议              |
+| Logo     | 浅色 Logo、深色 Logo、外框开关 | 两套可独立上传；只有一套时双主题复用；关闭外框时在原占位内等比放大                |
+| 登录页   | 主标题、说明、视频、封面       | 登录/注册/找回密码共用；自定义视频无自定义封面时使用中性背景，不回退旧封面        |
+| SEO      | 标题、描述、关键词             | 标题/描述用于搜索摘要；关键词保留给其他搜索引擎或站内扩展，不宣称影响 Google 排名 |
+| 首页收尾 | 版权信息、备案开关、备案号     | 备案号只有在显式开启且非空时显示，并链接工信部备案系统                            |
+| 皮肤     | `skinId`、`skinThemes`         | 选择当前皮肤并维护主题库；每套同时定义亮色、暗色与组件参数                        |
+
+配置继续存储在 `system_settings.appearance` JSON 中，schema version 为 6，不增加关系型数据库迁移。旧配置缺失 SEO、版权、备案、主题库、独立开关状态或破坏性操作交互色时，运行时会按原有主色、控件色和危险色向后补齐；只有管理员保存后才写回数据库。管理接口返回完整 `skinThemes`，公开接口只返回当前 `activeSkin`，避免将未启用的运营草稿暴露给前台。
+
+## 3. 皮肤架构
+
+皮肤采用三层令牌和一个受控运行时适配层：
+
+1. Primitive：色值、透明度、圆角数值。
+2. Semantic：`background`、`foreground`、`surface`、`workspace-accent`、`danger`、`border` 等用途。
+3. Component：按钮、输入、卡片、弹层、菜单与复选框圆角，以及控件高度、描边、焦点环、图标、字重、悬停抬升、动效和阴影。
+4. Adapter：将同一份语义令牌同时映射到 CSS Custom Properties 和 Ant Design 全局/组件 token。
+
+皮肤合同位于 `backend/internal/service/appearance_skins.go`，前端映射位于 `web/src/lib/skin-themes.ts`。页面不得按皮肤 ID 写条件样式；业务组件只能消费语义 token。`classic` 在运行时不写覆盖变量，使既有 `globals.css` 与 `app-theme.ts` 保持原样式唯一事实源；服务端会逐字段比对经典主题，任何删除或伪造修改都会被拒绝。其他主题均为可编辑数据，用根节点 CSS 变量覆盖自研组件语义层，并向 Ant Design `ConfigProvider` 提供同一套颜色、交互状态、圆角、尺寸、动效和阴影值。
+
+主题库初始包含：
+
+- 经典黑白：项目原始样式，默认值且永久只读。
+- 创作室青橙、暖调柿棕、品牌紫蓝：作为开箱即用的初始数据，管理员可改名、编辑、复制或删除，不是写死的特殊主题。
+
+每套主题包含浅色/深色各 50 项颜色令牌，覆盖页面、表面、文字、边界、普通控件、主操作、选中态、开关开/关轨道与滑块、图标、成功/警告/危险/信息状态、危险操作 hover/active/前景、画布、后台与登录场景；另含 17 项组件参数，覆盖六类圆角、三档控件高度、描边、焦点环、图标尺寸、按钮字重、悬停抬升、两档动效和阴影。主题总数上限为 16，颜色只接受 6/8 位 HEX，数值均有服务端范围与相互关系校验，不接受任意 CSS、选择器、URL、表达式或脚本。
+
+管理员后台左侧导航是自定义菜单，现已显式消费“菜单圆角”参数；编辑器预览同步展示后台菜单样例，确保参数修改可以被直接确认。
+
+主题卡色带不是装饰性样例：它按页面/表面/文字/边界/控件/主操作/状态等实际使用频次列出浅色与深色令牌的全部去重色值，固定宽度内按顺序截断尾部。青瓷工作室、暖柿纸境、霓光紫境三套预置主题分别维护完整的浅深色、开关与状态配色；经典黑白仍是不可编辑的系统基线。
+
+管理员可从经典参数完整复制一套新主题，也可复制任意自定义主题；复制后得到新 ID 和独立深拷贝。创建、重命名、编辑、启用与删除都属于同一页草稿，保存时一次提交；删除当前主题会把草稿切回经典主题。颜色变化不能成为唯一状态信息，主题卡同时使用边界、勾选图标与文字表达选中。
+
+实现依据采用业界通用的 design token 分层方式：Design Tokens Community Group 规范定义分组、类型与别名；Style Dictionary 强调平台无关的层级令牌；Ant Design 提供 Seed/Map/Alias 与组件 token，并建议用 CSS variables 支持动态切换；浏览器原生 Custom Properties 负责级联到自研组件。当前不引入 Style Dictionary 构建依赖，避免在单应用中增加无收益的生成链，但数据模型保留以后导入/导出标准令牌文件的空间。
+
+## 4. 首屏与品牌一致性
+
+`index.html` 保持中性标题和无品牌 Logo。`main.tsx` 必须先请求 `/api/public/appearance`，完成归一化、皮肤变量和 metadata 应用后，才能动态导入 React 应用。请求失败时才使用内置默认；自定义视频没有自定义封面时绝不加载内置海报。该顺序同时避免品牌文字、Logo、封面和色系闪现旧值。
+
+运行时品牌投影包括：
+
+- 登录、注册、找回密码页及邮件标题、正文、默认发件人名称。
+- 普通工作区、管理端、素材插件、第三方导入说明。
+- 画布批量导出、诊断 ZIP 的文件名和 README。
+- 浏览器 title、description、keywords、Open Graph、Twitter Card、theme-color、favicon 与 canonical。
+
+邮件“发件人名称”留空表示继承站点名；历史配置若仍为内置品牌，也按继承处理。管理员明确填写其他名称时保留独立值。
+
+## 5. SEO 与备案合同
+
+SEO 标题建议控制在 70 字符内，描述 200 字符内，关键词 300 字符内。Google 支持 title 与 description，但忽略 `meta keywords`；界面必须如实说明关键词不保证影响 Google 排名。客户端路由切换后 canonical 使用当前 origin 与 path，不包含查询串或 hash。
+
+备案展示默认关闭。开启时必须填写备案号，页脚显示原样备案号并使用 `https://beian.miit.gov.cn/`，新窗口打开且设置 `noopener noreferrer`。不自动补造省份、序号或公安备案；版权和备案独立控制。
+
+参考：
+
+- [Ant Design 定制主题](https://ant.design/docs/react/customize-theme/?theme=dark)
+- [Google 标题链接规范](https://developers.google.com/search/docs/appearance/title-link)
+- [Google 支持的 meta 标签](https://developers.google.com/search/docs/crawling-indexing/special-tags)
+- [工信部互联网信息服务管理规定](https://scca.miit.gov.cn/cms_files/filemanager/doc/201911/07d641dd71f54b519736e8d9e32b1dc7.pdf)
+
+## 6. 后台交互合同
+
+后台入口名称为“站点及外观”，继续复用系统设置页的页面框架、状态操作栏、`SettingsSectionCard`、Ant Form/Input/Switch 与统一保存模型。五个顺序固定为：品牌识别、登录页内容与媒体、SEO 信息、首页收尾与备案、皮肤主题。主题编辑器由主题库、身份编辑、浅/深模式切换、实时控件预览、语义颜色分组和组件参数分组组成；默认主题展示锁定原因，自定义主题显示复制与删除动作。
+
+所有调整先形成页面草稿；只有点击“保存修改”才上传新资源并提交配置。保存响应成为新基线。离开、刷新覆盖和恢复内置品牌需要沿用现有未保存保护；恢复操作不删除已经上传的存储资源。皮肤卡必须可键盘操作，并以 radio/`aria-checked` 语义暴露选中状态。原生取色器只在点击颜色方块本身时打开；点击字段名称、说明或 HEX 输入不会代理触发系统取色器。取色器与 HEX 输入共享同一字段，非法中间值允许留在草稿中便于继续编辑，但前端保存校验和后端权威校验都会阻止其生效。
+
+## 7. 验收清单
+
+- 全仓用户可见 `影策` 只允许出现在内置默认值和“恢复影策默认”动作。
+- 自定义站点名同时进入注册邮件、密码重置邮件和继承型发件人名称。
+- 自定义品牌首次加载不闪现内置名称、Logo、视频封面或经典皮肤。
+- `classic` 不写任何覆盖变量，管理端和伪造请求都不能修改或删除；三套初始扩展主题可以编辑和删除。
+- 可从经典或任意当前主题复制出完整独立副本；新建、改名、编辑、启用、删除、撤销和刷新后的状态一致。
+- 50×2 项颜色和 17 项控件参数经前后端校验，非法 HEX、越界数值、重复/非法 ID、超过 16 套、缺少当前主题均拒绝保存。
+- 自定义主题同时驱动 CSS variables 与 Ant Design token；按钮、输入、选择、菜单、开关、勾选框、卡片、弹层、图标和状态色的同类实例保持一致。
+- 开关开启和关闭均有独立轨道、悬停和滑块色；开启态还同时使用边界与外环反馈，不能只靠滑块位移表达。危险删除操作使用危险色的常态、悬停、按下和前景组合，警告提示统一消费主题警告色。
+- SEO/版权/备案字段经前后端归一化、长度校验、存储、公开接口和 DOM metadata/页脚完整投影。
+- 备案开关关闭时不渲染链接；开启且有号时链接只指向工信部备案系统。
+- 亮暗主题、1600×1000 与 1278×900 后台视口无横向溢出，键盘焦点、hover、active 与减少动画偏好可用。
+
+## 8. 主题研究参考
+
+- [Design Tokens Community Group 格式规范](https://www.designtokens.org/tr/2025.10/format/)
+- [Style Dictionary：Design tokens](https://styledictionary.com/info/tokens/)
+- [Ant Design：定制主题与动态切换](https://ant.design/docs/react/customize-theme/?theme=dark)
+- [Ant Design：CSS Variables](https://5x.ant.design/docs/react/css-variables/)
+- [MDN：Using CSS custom properties](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties)
