@@ -1,0 +1,178 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "grsai-image",
+  "name": "Grsai图像",
+  "version": "1.0.0",
+  "author": "影策自定义",
+  "description": "Grsai中转站图像生成协议，支持gpt-image-2系列和nano-banana系列模型。",
+  "documentation": "# Grsai图像协议插件\n\nGrsai中转站图像生成协议，适配 Grsai /v1/api/generate 异步接口。\n\n## 接口说明\n\n- 创建任务：POST /v1/api/generate\n- 查询任务：GET /v1/api/result?id={task_id}\n- 鉴权：Authorization: Bearer <apiKey>\n\n## 请求字段\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| model | string | 图像模型ID（gpt-image-2, gpt-image-2-vip, nano-banana-pro等） |\n| prompt | string | 生成提示词 |\n| replyType | string | 固定值 async |\n| aspectRatio | string | 宽高比（gpt-image系列） |\n| imageSize | string | 图像尺寸（nano-banana系列，1K/2K/4K） |\n| images | string[] | 参考图片URL列表（图生图） |\n\n## 响应字段\n\n- 任务ID：id / task_id / taskId\n- 状态：status / state（pending/processing/succeeded/failed/violation）\n- 图片结果：results[].url / data / url\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "grsai-image",
+        "label": "Grsai图像",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://grsai.dakka.com.cn",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "Grsai图像模型ID"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "图像生成提示词"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "mapping": "aspectRatio",
+            "description": "宽高比（gpt-image系列）"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "mapping": "imageSize",
+            "description": "图像尺寸（nano-banana系列）"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "参考图片URL列表（图生图）"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/api/generate",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "replyType": "async",
+            "aspectRatio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "imageSize": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
+            "images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.images"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/api/result?id={{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.fail_reason"
+              }
+            ]
+          },
+          "images": {
+            "$coalesce": [
+              {
+                "$ref": "response.results"
+              },
+              {
+                "$ref": "response.data"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

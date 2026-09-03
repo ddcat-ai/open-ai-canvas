@@ -126,7 +126,7 @@ function managedModelChannels(models: PublicLogicalModel[]) {
             inputTokenPriceMicrocredits: item.inputPriceMicrocredits,
             outputTokenPriceMicrocredits: item.outputPriceMicrocredits,
             cachedTokenPriceMicrocredits: item.cachedPriceMicrocredits,
-            capabilityConfig: projectLogicalCapability(item.capabilitySpec, item.defaultOptions),
+            capabilityConfig: projectLogicalCapability(item.capabilitySpec, item.defaultOptions, item.capabilityProfiles),
             logicalModelId: item.id,
             logicalCapabilitySpec: item.capabilitySpec,
             logicalCapabilityProfiles: item.capabilityProfiles,
@@ -196,7 +196,7 @@ function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChan
     });
 }
 
-function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
+function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>, profiles?: CapabilitySpec[]): ModelCapabilityConfig {
     const projected = defaultModelCapabilityConfig();
     if (spec.capability === "image" && projected.image) {
         projected.image.references.maxImages = spec.inputs?.image?.max ?? 0;
@@ -232,7 +232,17 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
         projected.video.defaultRatio = concreteDefault(defaults.size, projected.video.ratios, "");
         projected.video.resolutions = stringValues(spec.options?.vquality || spec.options?.resolution);
         projected.video.defaultResolution = String(defaults.vquality ?? projected.video.resolutions[0] ?? "");
-        projected.video.generateAudio = booleanOption(spec.options?.videoGenerateAudio, defaults.videoGenerateAudio);
+        // 合并渠道规格：默认规格不支持音频但某渠道支持时，启用并默认打开
+        const audioSpec = spec.options?.videoGenerateAudio;
+        const audioSupportedBySpec = (audioSpec?.values || []).some((v) => v === true || v === "true");
+        const audioSupportedByProfile = profiles?.some((p) =>
+            (p.options?.videoGenerateAudio?.values || []).some((v) => v === true || v === "true"),
+        );
+        if (!audioSupportedBySpec && audioSupportedByProfile) {
+            projected.video.generateAudio = { supported: true, default: true };
+        } else {
+            projected.video.generateAudio = booleanOption(audioSpec, defaults.videoGenerateAudio);
+        }
         projected.video.watermark = booleanOption(spec.options?.videoWatermark, defaults.videoWatermark);
     }
     return projected;

@@ -33,8 +33,8 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "creditsEnabled",
-        title: "积分计费",
-        description: "控制钱包入口及新任务的积分预授权与结算。",
+        title: "余额计费",
+        description: "控制钱包入口及新任务的余额预授权与结算。",
         icon: <Coins className="size-4" aria-hidden="true" />,
     },
     {
@@ -151,8 +151,8 @@ export default function FeatureAvailabilityPanel() {
         if (!savedFeatures || saving || savedFeatures[key] === enabled) return;
         if (key === "creditsEnabled" && !enabled) {
             modal.confirm({
-                title: "关闭用户积分功能？",
-                content: "保存后新创建的任务和系统渠道请求将不再扣减积分；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
+                title: "关闭用户余额功能？",
+                content: "保存后新创建的任务和系统渠道请求将不再扣减余额；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
                 okText: "确认关闭",
                 cancelText: "取消",
                 okButtonProps: { danger: true },

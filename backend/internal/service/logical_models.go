@@ -28,10 +28,10 @@ type LogicalModelRequest struct {
 	SortOrder               int    `json:"sortOrder"`
 	PricePolicy             string `json:"pricePolicy"`
 	BillingMode             string `json:"billingMode"`
-	UnitPriceMicrocredits   int64  `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	UnitPriceMicrocredits   float64  `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits  float64  `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits float64  `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits float64  `json:"cachedPriceMicrocredits"`
 	// LegacyModelIDs 只用于将用户本地保存的旧目录选择迁移到当前模型家族，
 	// 不能用它重写任务、账单或路由尝试中的不可变快照。
 	LegacyModelIDs []string              `json:"legacyModelIds"`
@@ -58,13 +58,13 @@ type PublicLogicalModel struct {
 	SortOrder               int                           `json:"sortOrder"`
 	PricePolicy             string                        `json:"pricePolicy"`
 	PricingMode             string                        `json:"pricingMode"`
-	DisplayPrice            *int64                        `json:"displayPrice,omitempty"`
+	DisplayPrice            *float64                        `json:"displayPrice,omitempty"`
 	PriceLabel              string                        `json:"priceLabel"`
 	BillingMode             string                        `json:"billingMode"`
-	UnitPriceMicrocredits   int64                         `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits  int64                         `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits int64                         `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits int64                         `json:"cachedPriceMicrocredits"`
+	UnitPriceMicrocredits   float64                         `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits  float64                         `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits float64                         `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits float64                         `json:"cachedPriceMicrocredits"`
 	PriceTiers              []PublicLogicalModelPriceTier `json:"priceTiers"`
 	LegacyModelIDs          []string                      `json:"legacyModelIds"`
 	CapabilitySpec          CapabilitySpec                `json:"capabilitySpec"`
@@ -81,10 +81,10 @@ type PublicLogicalModelPriceTier struct {
 	Resolution                   string            `json:"resolution"`
 	VideoSeconds                 int               `json:"videoSeconds"`
 	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64             `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64             `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64             `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64             `json:"cachedTokenPriceMicrocredits"`
 }
 
 type AdminLogicalRoute struct {
@@ -220,7 +220,7 @@ func publicLogicalModelPriceTiers(cached cachedLogicalModel) []PublicLogicalMode
 			if selectorErr != nil {
 				continue
 			}
-			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
+			key := fmt.Sprintf("%s:%s:%v:%v:%v:%v", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
 			if seen[key] {
 				continue
 			}
@@ -1090,7 +1090,7 @@ func numericRange(minimum float64, maximum float64, step float64) OptionConstrai
 
 // computeModelPriceDisplay 计算模型的价格展示信息
 // 返回：pricingMode, displayPrice, priceLabel
-func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogicalModelPriceTier) (string, *int64, string) {
+func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogicalModelPriceTier) (string, *float64, string) {
 	if model.PricePolicy == "channel" {
 		// 跟随渠道价格
 		if len(priceTiers) == 0 {
@@ -1128,7 +1128,7 @@ func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogic
 }
 
 // getTierDisplayPrice 获取价格档的展示价格
-func getTierDisplayPrice(tier PublicLogicalModelPriceTier) int64 {
+func getTierDisplayPrice(tier PublicLogicalModelPriceTier) float64 {
 	if tier.BillingMode == "fixed_request" || tier.BillingMode == "per_second" {
 		return tier.UnitPriceMicrocredits
 	}

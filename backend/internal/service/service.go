@@ -62,8 +62,10 @@ const taskWorkerConcurrency = 3
 const taskLogPayloadLimit = 4000
 
 type CreateSessionRequest struct {
-	ProjectID      string                    `json:"projectId"`
-	Prompt         string                    `json:"prompt"`
+	ProjectID       string                    `json:"projectId"`
+	DomainProjectID string                    `json:"domainProjectId,omitempty"`
+	UnitID          string                    `json:"unitId,omitempty"`
+	Prompt          string                    `json:"prompt"`
 	CanvasSnapshot map[string]any            `json:"canvasSnapshot"`
 	References     []string                  `json:"references"`
 	Requirements   string                    `json:"requirements"`

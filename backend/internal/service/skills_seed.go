@@ -13,6 +13,31 @@ import (
 //go:embed seed/skills.json
 var builtinSkillsJSON []byte
 
+//go:embed seed/skills/storyboard-director.md
+var storyboardDirectorSkillMD []byte
+
+//go:embed seed/skills/canvas-core.md
+var canvasCoreSkillMD []byte
+
+// defaultFirstPartySkillIDs 是第一方默认技能，所有用户无需手动添加即可在Agent中使用。
+// canvas-core 是所有画布任务的公共执行手册，始终注入；storyboard-director 由前端按意图激活。
+var defaultFirstPartySkillIDs = map[string]struct{}{
+	"canvas-core":         {},
+	"storyboard-director": {},
+}
+
+// firstPartySkillMD 把第一方技能ID映射到其规范源文件，保证单一事实来源。
+var firstPartySkillMD = map[string][]byte{
+	"canvas-core":         canvasCoreSkillMD,
+	"storyboard-director": storyboardDirectorSkillMD,
+}
+
+// isDefaultFirstPartySkill 判断技能ID是否为第一方默认技能。
+func isDefaultFirstPartySkill(skillID string) bool {
+	_, ok := defaultFirstPartySkillIDs[skillID]
+	return ok
+}
+
 type builtinSkillDefinition struct {
 	SkillID       string               `json:"skill_id"`
 	SkillName     string               `json:"skill_name"`
@@ -42,6 +67,13 @@ func (s *Service) EnsureBuiltinSkills() error {
 	}
 	if len(definitions) == 0 {
 		return fmt.Errorf("内置技能不能为空")
+	}
+
+	// 用规范源文件覆盖第一方技能的指令内容，确保单一来源
+	for i := range definitions {
+		if md, ok := firstPartySkillMD[definitions[i].SkillID]; ok {
+			definitions[i].Instruction = string(md)
+		}
 	}
 
 	seen := make(map[string]struct{}, len(definitions))

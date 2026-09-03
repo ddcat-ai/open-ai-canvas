@@ -17,7 +17,7 @@ export function useWalletBalance(userId?: string, enabled = true) {
         enabled: Boolean(activeUserId),
         queryFn: async () => {
             const wallet = await getWallet(1, 1);
-            if (wallet.account.userId !== activeUserId) throw new Error("积分账户与当前用户不一致");
+            if (wallet.account.userId !== activeUserId) throw new Error("余额账户与当前用户不一致");
             return wallet.account.availableMicrocredits;
         },
         staleTime: WALLET_REFRESH_INTERVAL_MS,
@@ -35,7 +35,7 @@ export function useWalletBalance(userId?: string, enabled = true) {
     }, [activeUserId, queryClient]);
 
     useEffect(() => {
-        if (query.error) console.warn("积分余额刷新失败", query.error);
+        if (query.error) console.warn("余额刷新失败", query.error);
     }, [query.error]);
 
     return {

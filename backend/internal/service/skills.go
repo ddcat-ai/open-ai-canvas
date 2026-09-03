@@ -155,6 +155,18 @@ func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 追加第一方默认技能（用户无需手动添加即可在Agent中使用）
+	existingIDs := make(map[string]struct{}, len(rows))
+	for _, skill := range rows {
+		existingIDs[skill.ID] = struct{}{}
+	}
+	for defaultID := range defaultFirstPartySkillIDs {
+		if _, exists := existingIDs[defaultID]; !exists {
+			if defaultSkill, err := s.repo.Skill(defaultID); err == nil && defaultSkill != nil {
+				rows = append(rows, *defaultSkill)
+			}
+		}
+	}
 	return s.skillItems(userID, rows, false)
 }
 
@@ -329,7 +341,7 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 			Source: skill.Source, Tag: skill.Tag, SortWeight: skill.SortWeight, IsPrivate: skill.IsPrivate,
 			LikeCount: metric.LikeCount, IsLike: state.Liked, OwnerUID: skill.OwnerID,
 			EffectiveUser: SkillEffectiveUser{Name: ownerName, AvatarURL: ownerAvatarURL, UID: skill.OwnerID}, ShowcaseMedia: showcaseMedia,
-			AddedCount: metric.AddedCount, ExtraInfo: skill.ExtraInfo, IsAdded: state.Added || skill.OwnerID == userID, IsOwner: skill.OwnerID == userID,
+			AddedCount: metric.AddedCount, ExtraInfo: skill.ExtraInfo, IsAdded: state.Added || skill.OwnerID == userID || isDefaultFirstPartySkill(skill.ID), IsOwner: skill.OwnerID == userID,
 		})
 	}
 	return items, nil

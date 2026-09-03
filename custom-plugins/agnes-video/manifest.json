@@ -1,0 +1,351 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "agnes-video",
+  "name": "Agnes视频",
+  "version": "1.0.0",
+  "author": "影策自定义",
+  "description": "Agnes AI官方视频生成协议，支持Agnes Video 2.5和2.5 Flash模型。",
+  "documentation": "# Agnes视频协议插件\n\nAgnes AI官方视频生成协议，适配 Agnes /v1/videos 异步接口。\n\n## 接口说明\n\n- 创建任务：POST /v1/videos\n- 查询任务：GET /agnesapi?video_id={id}&model_name={model}\n- 鉴权：Authorization: Bearer <apiKey>\n\n## 请求字段（2.5系列）\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| model | string | 视频模型ID（agnes-video-2.5, agnes-video-2.5-flash） |\n| prompt | string | 生成提示词 |\n| mode | string | 模式（text/keyframe/reference） |\n| seconds | string | 视频时长（4-12秒） |\n| size | string | 分辨率（720P/960P/2K，Flash仅支持720P） |\n| aspect_ratio | string | 宽高比 |\n| n | integer | 生成数量，固定1 |\n| first_frame | string | 首帧图片URL（keyframe模式） |\n| last_frame | string | 尾帧图片URL（keyframe模式） |\n| images | string[] | 参考图片URL列表（reference模式） |\n| videos | string[] | 参考视频URL列表（reference模式，Flash不支持） |\n| audios | string[] | 参考音频URL列表（reference模式） |\n\n## 响应字段\n\n- 任务ID：video_id / task_id / id\n- 状态：status（pending/processing/succeeded/failed）\n- 视频结果：metadata.url / url\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "agnes-video",
+        "label": "Agnes视频",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://apihub.agnes-ai.com/v1",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "Agnes视频模型ID"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频生成提示词"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "values": [
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12"
+            ],
+            "mapping": "seconds",
+            "description": "视频时长（4-12秒）"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "values": [
+              "720P",
+              "960P",
+              "2K"
+            ],
+            "mapping": "size",
+            "description": "分辨率（Flash仅支持720P）"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "values": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ],
+            "mapping": "aspect_ratio",
+            "description": "宽高比"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "参考图片URL列表"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "mapping": "videos",
+            "description": "参考视频URL列表（Flash不支持）"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "mapping": "audios",
+            "description": "参考音频URL列表"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "mode": {
+              "$if": {
+                "condition": {
+                  "$or": [
+                    {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.videos"
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.audios"
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.images"
+                          }
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                },
+                "then": "reference",
+                "else": {
+                  "$if": {
+                    "condition": {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$ref": "request.images"
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    "then": "keyframe",
+                    "else": "text"
+                  }
+                }
+              }
+            },
+            "seconds": {
+              "$toString": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.duration"
+                  },
+                  5
+                ]
+              }
+            },
+            "size": {
+              "$coalesce": [
+                {
+                  "$ref": "request.resolution"
+                },
+                "720P"
+              ]
+            },
+            "aspect_ratio": {
+              "$coalesce": [
+                {
+                  "$ref": "request.aspectRatio"
+                },
+                "16:9"
+              ]
+            },
+            "n": 1,
+            "first_frame": {
+              "$omitEmpty": {
+                "$arrayElemAt": [
+                  {
+                    "$map": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  },
+                  0
+                ]
+              }
+            },
+            "last_frame": {
+              "$omitEmpty": {
+                "$arrayElemAt": [
+                  {
+                    "$map": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  },
+                  1
+                ]
+              }
+            },
+            "images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.images"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "videos": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.videos"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "audios": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.audios"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/agnesapi?video_id={{taskId}}&model_name={{model}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.video_id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.detail"
+              },
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.error.detail"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$ref": "response.metadata.url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

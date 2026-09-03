@@ -4,7 +4,7 @@ import { Copy, Cpu, Settings2, Trash2, X } from "lucide-react";
 import { Button, Modal, Segmented, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
-import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelDisplayName, modelIcon, modelOptionName, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
@@ -248,6 +248,8 @@ type CanvasAssistantPanelProps = {
     selectedNodeIds: Set<string>;
     snapshot: CanvasAgentSnapshot;
     projectId: string;
+    domainProjectId?: string;
+    unitId?: string;
     sessions: CanvasAssistantSession[];
     activeSessionId: string | null;
     onSelectNodeIds: (ids: Set<string>) => void;
@@ -339,6 +341,8 @@ export function CanvasAssistantPanel({
     selectedNodeIds,
     snapshot,
     projectId,
+    domainProjectId,
+    unitId,
     sessions,
     activeSessionId,
     onSelectNodeIds,
@@ -364,6 +368,7 @@ export function CanvasAssistantPanel({
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const confirmTools = useCanvasAgentStore((state) => state.confirmTools);
+    const autoGenerateMedia = useCanvasAgentStore((state) => state.autoGenerateMedia);
     const setAgentState = useCanvasAgentStore((state) => state.setAgentState);
     const [view, setView] = useState<OnlineAgentTab>("chat");
     const [prompt, setPrompt] = useState("");
@@ -578,6 +583,8 @@ export function CanvasAssistantPanel({
             const detail = await createCinematicAgentSession(
                 {
                     projectId,
+                    domainProjectId,
+                    unitId,
                     prompt: text,
                     canvasSnapshot: compactSnapshot(current) as unknown as Record<string, unknown>,
                     projectStyle: storyboardContext.projectStyle,
@@ -780,7 +787,7 @@ export function CanvasAssistantPanel({
             const skillToolResult = await skillRuntime.executeAgentTool("onlineAgent", name, args, composerSkills);
             if (skillToolResult) return skillToolResult;
             if (name === "canvas_get_state") return { ok: true, message: describeCanvasSnapshot(current), data: compactSnapshot(current) };
-            if (name === "canvas_get_context") return { ok: true, message: "已读取语义化画布上下文。", data: buildCanvasAgentContext(current) };
+            if (name === "canvas_get_context") return { ok: true, message: "已读取语义化画布上下文。", data: buildCanvasAgentContext(current, { autoGenerateMedia: useCanvasAgentStore.getState().autoGenerateMedia }) };
             if (name === "canvas_find_nodes") return { ok: true, message: "已按条件检索真实节点。", data: findCanvasAgentNodes(current, args as Parameters<typeof findCanvasAgentNodes>[1]) };
             if (name === "canvas_get_node") {
                 const data = getCanvasAgentNode(current, { id: requireString(args.id, "id") });
@@ -1189,6 +1196,8 @@ export function CanvasAssistantPanel({
                 undoCount={agentMode === "online" ? undoOpsCount : 0}
                 onModeChange={onAgentModeChange}
                 onConfirmToolsChange={(confirmTools) => setAgentState({ confirmTools })}
+                autoGenerateMedia={autoGenerateMedia}
+                onAutoGenerateMediaChange={(autoGenerateMedia) => setAgentState({ autoGenerateMedia })}
                 onUndo={undoLastOnlineBatch}
                 onCollapse={collapse}
                 historyCount={agentMode === "online" ? historySessions.length : 0}
@@ -1206,13 +1215,16 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
     const options = useMemo(() => Array.from(new Set([value, ...selectableModelsByCapability(config, "text")].filter(Boolean))), [config, value]);
     const current = value || "";
     return (
-        <div className="min-w-0 max-w-[240px]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="min-w-0 max-w-[240px]">
             <Select<string>
                 size="small"
                 variant="borderless"
                 value={current || undefined}
                 className="agent-text-model-select w-full"
                 popupMatchSelectWidth={288}
+                listHeight={320}
+                virtual={false}
+                getPopupContainer={(node) => node.parentElement || document.body}
                 options={options.map((model) => ({ value: model, label: agentModelLabel(config, model) }))}
                 notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">暂无文本模型</span>}
                 optionRender={(option) => {
@@ -1239,6 +1251,8 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
         </div>
     );
 }
+
+
 
 function agentModelSource(config: AiConfig, model: string) {
     const channel = resolveModelChannel(config, model);

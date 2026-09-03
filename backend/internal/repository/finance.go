@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -935,31 +936,23 @@ func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, err
 	if input < 0 {
 		input = 0
 	}
-	inputAmount, ok := safeTokenUsageProduct(input, order.InputTokenPriceMicrocredits)
-	if !ok {
+	inputAmount := safeTokenUsageProduct(input, order.InputTokenPriceMicrocredits)
+	outputAmount := safeTokenUsageProduct(usage.OutputTokens, order.OutputTokenPriceMicrocredits)
+	cachedAmount := safeTokenUsageProduct(usage.CachedTokens, order.CachedTokenPriceMicrocredits)
+	base := inputAmount + outputAmount + cachedAmount
+	if order.MultiplierBasisPoints <= 0 {
 		return 0, errors.New("invalid token usage amount")
 	}
-	outputAmount, ok := safeTokenUsageProduct(usage.OutputTokens, order.OutputTokenPriceMicrocredits)
-	if !ok || inputAmount > 1<<63-1-outputAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	cachedAmount, ok := safeTokenUsageProduct(usage.CachedTokens, order.CachedTokenPriceMicrocredits)
-	base := inputAmount + outputAmount
-	if !ok || base > 1<<63-1-cachedAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	base += cachedAmount
-	if order.MultiplierBasisPoints <= 0 || base > (1<<63-1-9_999_999_999)/order.MultiplierBasisPoints {
-		return 0, errors.New("invalid token usage amount")
-	}
-	return (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000, nil
+	// 价格为 float64（微积分/token），最终金额向上取整为整数微积分
+	amount := base * float64(order.MultiplierBasisPoints) / 10_000_000_000
+	return int64(math.Ceil(amount)), nil
 }
 
-func safeTokenUsageProduct(tokens int64, price int64) (int64, bool) {
-	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
-		return 0, false
+func safeTokenUsageProduct(tokens int64, price float64) float64 {
+	if tokens < 0 || price < 0 {
+		return 0
 	}
-	return tokens * price, true
+	return float64(tokens) * price
 }
 
 func (r *Repository) AdjustCredits(userID string, actorUserID string, amount int64, note string) (*model.CreditAccount, error) {

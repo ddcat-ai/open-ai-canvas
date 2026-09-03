@@ -200,6 +200,25 @@ export function searchSkillFiles(id: string, query: string) {
     return request<{ results: SkillFileSearchResult[] }>(api.get(`/skills/${encodeURIComponent(id)}/search`, { params: { q: query } }));
 }
 
+export interface SkillVersionSummary {
+    id: string;
+    versionLabel: string;
+    contentHash: string;
+    fileCount: number;
+    totalBytes: number;
+    sourceCommit: string;
+    isCurrent: boolean;
+    createdAt: string;
+}
+
+export function listSkillVersions(id: string) {
+    return request<{ versions: SkillVersionSummary[] }>(api.get(`/skills/${encodeURIComponent(id)}/versions`));
+}
+
+export function activateSkillVersion(id: string, versionId: string) {
+    return request<{ version: SkillVersionSummary }>(api.post(`/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/activate`)).finally(invalidateAddedSkillsCache);
+}
+
 export function syncSkill(id: string) {
     return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/sync`)).finally(invalidateAddedSkillsCache);
 }

@@ -48,16 +48,16 @@ type BillingOrder struct {
 	Scene                        string        `json:"scene" gorm:"index;size:80"`
 	BillingMode                  string        `json:"billingMode" gorm:"size:32"`
 	PriceVersion                 int64         `json:"priceVersion"`
-	UnitPriceMicrocredits        int64         `json:"unitPriceMicrocredits"`
+	UnitPriceMicrocredits        float64         `json:"unitPriceMicrocredits"`
 	MultiplierBasisPoints        int64         `json:"multiplierBasisPoints"`
 	Quantity                     int64         `json:"quantity"`
 	AmountMicrocredits           int64         `json:"amountMicrocredits"`
 	ReservedAmountMicrocredits   int64         `json:"reservedAmountMicrocredits"`
 	ActualAmountMicrocredits     int64         `json:"actualAmountMicrocredits"`
 	RefundedAmountMicrocredits   int64         `json:"refundedAmountMicrocredits"`
-	InputTokenPriceMicrocredits  int64         `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64         `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64         `json:"cachedTokenPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64         `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64         `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64         `json:"cachedTokenPriceMicrocredits"`
 	InputTokens                  int64         `json:"inputTokens"`
 	OutputTokens                 int64         `json:"outputTokens"`
 	CachedTokens                 int64         `json:"cachedTokens"`

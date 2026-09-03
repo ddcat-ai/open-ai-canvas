@@ -80,7 +80,7 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	}
 	task, err = s.repo.RetryTaskWithBilling(userID, task, billingOrder, policy.Task.ActiveTaskLimit)
 	if errors.Is(err, repository.ErrInsufficientCredits) {
-		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
+		return nil, BadAuthRequest("余额不足，请先使用兑换码充值")
 	}
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
@@ -185,7 +185,7 @@ func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, 
 			billingErr = s.taskBilling().MarkBillingUncertain(task.BillingOrderID, "用户取消时上游请求 ID 尚未确认，费用待核对")
 		}
 		if billingErr != nil {
-			_ = s.log(task.UserID, task.ID, "error", "取消任务后处理积分失败，已保留人工核对线索", billingErr.Error())
+			_ = s.log(task.UserID, task.ID, "error", "取消任务后处理余额失败，已保留人工核对线索", billingErr.Error())
 		}
 	}
 

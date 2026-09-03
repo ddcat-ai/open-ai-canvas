@@ -1,6 +1,6 @@
 export const CONTENT_MODERATION_ERROR_CODE = "sensitive_words_detected";
 
-export const CONTENT_MODERATION_MESSAGE = "内容审核未通过，本次平台积分未扣除或已退还。请修改提示词后重新生成。";
+export const CONTENT_MODERATION_MESSAGE = "内容审核未通过，本次平台费用未扣除或已退还。请修改提示词后重新生成。";
 
 const DEFAULT_GENERATION_ERROR_MESSAGE = "生成失败，请稍后重试。";
 const NETWORK_ERROR_MESSAGE = "网络异常。";

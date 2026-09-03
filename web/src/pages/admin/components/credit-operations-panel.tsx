@@ -112,7 +112,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 });
             })
             .catch((error) => {
-                if (active) message.error(error instanceof Error ? error.message : "读取积分策略失败");
+                if (active) message.error(error instanceof Error ? error.message : "读取余额策略失败");
             })
             .finally(() => {
                 if (active) setLoadingPolicy(false);
@@ -175,10 +175,10 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 defaultMultiplierBasisPoints: Math.round(values.defaultMultiplier * 10_000),
                 modelMultiplierBasisPoints,
             });
-            message.success("积分策略已保存，将应用于后续创建的计费订单");
+            message.success("余额策略已保存，将应用于后续创建的计费订单");
             onOperationChange(null);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存积分策略失败");
+            message.error(error instanceof Error ? error.message : "保存余额策略失败");
         } finally {
             setSavingPolicy(false);
         }
@@ -187,18 +187,18 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     const previewAdjustment = (values: AdjustmentFormValues) => {
         const amount = Number(values.amount);
         if (!Number.isFinite(amount) || amount === 0) {
-            message.error("积分变化不能为 0");
+            message.error("余额变化不能为 0");
             return;
         }
         try {
             toMicrocredits(amount);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "积分变化超出可处理范围");
+            message.error(error instanceof Error ? error.message : "余额变化超出可处理范围");
             return;
         }
         const user = adjustmentUsers.find((item) => item.id === values.userId);
         if (amount < 0 && hasCreditBalance(user) && user.availableMicrocredits + toMicrocredits(amount) < 0) {
-            message.error("扣减后可用积分不能低于 0");
+            message.error("扣减后可用余额不能低于 0");
             return;
         }
         setPendingAdjustment({ ...values, amount, note: values.note.trim() });
@@ -226,9 +226,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             adjustmentForm.resetFields();
             setPendingAdjustment(null);
             onOperationChange(null);
-            message.success(`用户积分已调整，当前可用积分 ${formatCredits(result.account.availableMicrocredits)}`);
+            message.success(`用户余额已调整，当前可用余额 ${formatCredits(result.account.availableMicrocredits)}`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "调整积分失败");
+            message.error(error instanceof Error ? error.message : "调整余额失败");
         } finally {
             setAdjusting(false);
         }
@@ -247,7 +247,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
         try {
             if (resolutionTarget.kind === "single") {
                 await resolveAdminBillingOrder(resolutionTarget.order.id, { action: resolutionTarget.action, note });
-                message.success(resolutionTarget.action === "settle" ? "计费订单已结算" : "预授权积分已退回");
+                message.success(resolutionTarget.action === "settle" ? "计费订单已结算" : "预授权余额已退回");
             } else {
                 const result = await resolveAdminBillingOrders({
                     ids: resolutionTarget.orders.map((order) => order.id),
@@ -264,7 +264,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     await reload(page, pageSize);
                     return;
                 }
-                message.success(resolutionTarget.action === "settle" ? `已结算 ${result.resolvedCount} 条订单` : `已退回 ${result.resolvedCount} 条订单的预授权积分`);
+                message.success(resolutionTarget.action === "settle" ? `已结算 ${result.resolvedCount} 条订单` : `已退回 ${result.resolvedCount} 条订单的预授权余额`);
             }
             setResolutionTarget(null);
             resolutionForm.resetFields();
@@ -314,7 +314,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             ),
         },
         {
-            title: "预授权积分",
+            title: "预授权余额",
             width: 125,
             align: "center",
             render: (_, order) => <span className="font-medium tabular-nums">{formatCredits(getReservedAmount(order))}</span>,
@@ -326,7 +326,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             render: (_, order) =>
                 order.billingMode === "token" ? (
                     <div className="text-xs leading-5">
-                        <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "等待用量结算"}</div>
+                        <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)}` : "等待用量结算"}</div>
                         <div className="text-foreground/50">
                             输入 {order.inputTokens} · 输出 {order.outputTokens} · 缓存 {order.cachedTokens}
                         </div>
@@ -363,7 +363,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     const hasFilters = Boolean(keyword || orderStatus !== "review");
     const resolutionOrders = resolutionTarget?.kind === "batch" ? resolutionTarget.orders : resolutionTarget ? [resolutionTarget.order] : [];
     const resolutionReservedTotal = resolutionOrders.reduce((sum, order) => sum + getReservedAmount(order), 0);
-    const resolutionTitle = resolutionTarget ? (resolutionTarget.action === "settle" ? (resolutionTarget.kind === "batch" ? "批量确认结算" : "确认结算计费订单") : resolutionTarget.kind === "batch" ? "批量退回预授权积分" : "确认退回预授权积分") : "";
+    const resolutionTitle = resolutionTarget ? (resolutionTarget.action === "settle" ? (resolutionTarget.kind === "batch" ? "批量确认结算" : "确认结算计费订单") : resolutionTarget.kind === "batch" ? "批量退回预授权余额" : "确认退回预授权余额") : "";
 
     return (
         <div className="admin-credit-operations flex min-h-0 flex-1 flex-col">
@@ -463,7 +463,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             </section>
 
             <Drawer
-                title="积分策略"
+                title="余额策略"
                 open={activeOperation === "policy"}
                 size="min(700px, 100vw)"
                 onClose={() => {
@@ -490,21 +490,21 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 </div>
                 {loadingPolicy ? (
                     <div className="admin-credit-drawer-loading" role="status">
-                        正在读取积分策略…
+                        正在读取余额策略…
                     </div>
                 ) : (
                     <Form form={policyForm} layout="vertical" requiredMark={false} initialValues={{ modelMultipliers: [] }} onFinish={(values) => void savePolicy(values)}>
                         <section className="admin-credit-drawer-section">
                             <div className="admin-credit-drawer-section-heading">
                                 <h3>基础规则</h3>
-                                <p>积分支持最多 6 位小数，倍率支持最多 4 位小数。</p>
+                                <p>余额支持最多 6 位小数，倍率支持最多 4 位小数。</p>
                             </div>
                             <div className="admin-credit-policy-grid">
                                 <Form.Item
                                     name="signupBonus"
-                                    label="注册赠送积分"
+                                    label="注册赠送余额"
                                     rules={[
-                                        { required: true, message: "请填写注册积分" },
+                                        { required: true, message: "请填写注册余额" },
                                         { type: "number", min: 0, max: 1_000_000, message: "请输入 0–1,000,000" },
                                     ]}
                                 >
@@ -512,9 +512,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 </Form.Item>
                                 <Form.Item
                                     name="checkinBonus"
-                                    label="每日签到积分"
+                                    label="每日签到余额"
                                     rules={[
-                                        { required: true, message: "请填写签到积分" },
+                                        { required: true, message: "请填写签到余额" },
                                         { type: "number", min: 0, max: 100_000, message: "请输入 0–100,000" },
                                     ]}
                                 >
@@ -607,7 +607,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             >
                 <div className="admin-credit-drawer-intro is-warning">
                     <strong>账务写入操作</strong>
-                    <p>提交后会立即写入积分流水和管理员审计记录，请填写可追溯的处理依据。</p>
+                    <p>提交后会立即写入余额流水和管理员审计记录，请填写可追溯的处理依据。</p>
                 </div>
                 <Form form={adjustmentForm} layout="vertical" requiredMark={false} onFinish={previewAdjustment}>
                     <section className="admin-credit-drawer-section">
@@ -628,12 +628,12 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         {selectedAdjustmentUser ? <CreditAccountSummary user={selectedAdjustmentUser} /> : null}
                         <Form.Item
                             name="amount"
-                            label="积分变化"
-                            extra="正数增加，负数扣减；扣减只能使用可用积分。"
+                            label="余额变化"
+                            extra="正数增加，负数扣减；扣减只能使用可用余额。"
                             rules={[
-                                { required: true, message: "请填写积分变化" },
+                                { required: true, message: "请填写余额变化" },
                                 {
-                                    validator: (_, value) => (typeof value === "number" && Number.isFinite(value) && value !== 0 ? Promise.resolve() : Promise.reject(new Error("积分变化不能为 0"))),
+                                    validator: (_, value) => (typeof value === "number" && Number.isFinite(value) && value !== 0 ? Promise.resolve() : Promise.reject(new Error("余额变化不能为 0"))),
                                 },
                             ]}
                         >
@@ -647,7 +647,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             </Drawer>
 
             <Modal
-                title={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减用户积分" : "确认增加用户积分"}
+                title={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减用户余额" : "确认增加用户余额"}
                 open={Boolean(pendingAdjustment)}
                 okText={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减" : "确认增加"}
                 cancelText="返回修改"
@@ -664,14 +664,14 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             >
                 {pendingAdjustment ? (
                     <div className="admin-operation-confirmation">
-                        <p className="admin-operation-confirmation-copy">请再次核对用户、积分变化和处理依据。确认后将立即写入账务流水。</p>
+                        <p className="admin-operation-confirmation-copy">请再次核对用户、余额变化和处理依据。确认后将立即写入账务流水。</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
                                 <dt>目标用户</dt>
                                 <dd>{formatUserLabel(pendingAdjustmentUser, pendingAdjustment.userId)}</dd>
                             </div>
                             <div>
-                                <dt>积分变化</dt>
+                                <dt>余额变化</dt>
                                 <dd className={pendingAdjustment.amount < 0 ? "is-negative" : "is-positive"}>
                                     {pendingAdjustment.amount > 0 ? "+" : ""}
                                     {formatCredits(toMicrocredits(pendingAdjustment.amount))}
@@ -718,7 +718,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             >
                 {resolutionTarget ? (
                     <div className="admin-operation-confirmation">
-                        <p className="admin-operation-confirmation-copy">{resolutionTarget.action === "settle" ? "结算会依据订单计费方式确认实际费用；Token 订单可能退回差额，也可能补扣可用积分。" : "退回操作只会释放尚未结算订单的预授权积分。"}</p>
+                        <p className="admin-operation-confirmation-copy">{resolutionTarget.action === "settle" ? "结算会依据订单计费方式确认实际费用；Token 订单可能退回差额，也可能补扣可用余额。" : "退回操作只会释放尚未结算订单的预授权余额。"}</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
                                 <dt>订单数量</dt>
@@ -726,7 +726,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                             </div>
                             <div>
                                 <dt>预授权总额</dt>
-                                <dd>{formatCredits(resolutionReservedTotal)} 积分</dd>
+                                <dd>{formatCredits(resolutionReservedTotal)}</dd>
                             </div>
                             {resolutionTarget.kind === "single" ? (
                                 <>
@@ -761,7 +761,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
 
 function CreditAccountSummary({ user }: { user: AdjustmentUser }) {
     if (!hasCreditBalance(user)) {
-        return <div className="admin-credit-account-summary is-unavailable">选择远程搜索结果后可核对当前可用与冻结积分。</div>;
+        return <div className="admin-credit-account-summary is-unavailable">选择远程搜索结果后可核对当前可用与冻结余额。</div>;
     }
     return (
         <dl className="admin-credit-account-summary">
@@ -795,7 +795,7 @@ function formatUserLabel(user: AdjustmentUser | undefined, fallback: string) {
 
 function toMicrocredits(value: number) {
     const result = Math.round(Number(value) * 1_000_000);
-    if (!Number.isSafeInteger(result)) throw new Error("积分变化超出可处理范围");
+    if (!Number.isSafeInteger(result)) throw new Error("余额变化超出可处理范围");
     return result;
 }
 

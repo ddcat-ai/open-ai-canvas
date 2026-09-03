@@ -45,7 +45,7 @@ export const navigationTools = [
     },
     {
         slug: "wallet",
-        label: "积分中心",
+        label: "余额中心",
         icon: CircleDollarSign,
         section: "工作台管理",
     },

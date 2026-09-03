@@ -49,7 +49,7 @@ func (w *sessionCreationCoordinator) create(userID string, req CreateSessionRequ
 	if err := w.persistDraft(userID, prompt, snapshotJSON, session, policy); err != nil {
 		return nil, err
 	}
-	taskReq := CreateTaskRequest{SessionID: session.ID, ProjectID: req.ProjectID, TraceID: req.TraceID, RequestID: req.RequestID, Type: "agent_storyboard", Operation: "storyboard", Prompt: prompt, Provider: "openai-compatible", Model: req.Config.Model, LogicalModelID: req.LogicalModelID, Input: map[string]any{"mode": "text", "references": req.References, "canvasSnapshot": compactedSnapshot, "requirements": req.Requirements, "canvasAssets": req.CanvasAssets, "projectStyle": req.ProjectStyle, "characters": req.Characters, "config": req.Config}}
+	taskReq := CreateTaskRequest{SessionID: session.ID, ProjectID: req.ProjectID, TraceID: req.TraceID, RequestID: req.RequestID, Type: "agent_storyboard", Operation: "storyboard", Prompt: prompt, Provider: "openai-compatible", Model: req.Config.Model, LogicalModelID: req.LogicalModelID, Input: map[string]any{"mode": "text", "references": req.References, "canvasSnapshot": compactedSnapshot, "requirements": req.Requirements, "canvasAssets": req.CanvasAssets, "projectStyle": req.ProjectStyle, "characters": req.Characters, "config": req.Config, "domainProjectId": req.DomainProjectID, "unitId": req.UnitID}}
 	if _, err := s.CreateTask(userID, taskReq); err != nil {
 		if cleanupErr := w.deleteDraft(userID, session.ID); cleanupErr != nil {
 			return nil, fmt.Errorf("创建会话任务失败：%v；清理会话失败：%w", err, cleanupErr)

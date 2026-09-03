@@ -347,11 +347,18 @@ func resolveOutboundHostWithPolicy(ctx context.Context, host string, allowPrivat
 		return nil, BadAuthRequest("外部服务域名没有可用地址")
 	}
 	if !allowPrivateHost {
+		// 过滤掉私有/回环/链路本地地址，保留至少一个公网地址即可放行。
+		// 避免域名同时解析到私有 IPv6 ULA 和公网 IPv4 时被整体拒绝（代理 fake-ip 环境常见）。
+		publicAddresses := make([]net.IP, 0, len(addresses))
 		for _, ip := range addresses {
-			if blockedOutboundIP(ip) {
-				return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
+			if !blockedOutboundIP(ip) {
+				publicAddresses = append(publicAddresses, ip)
 			}
 		}
+		if len(publicAddresses) == 0 {
+			return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
+		}
+		addresses = publicAddresses
 	}
 	return addresses, nil
 }

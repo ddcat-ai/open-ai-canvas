@@ -27,10 +27,10 @@ type LogicalModel struct {
 	SourceChannelModelID    string `json:"sourceChannelModelId,omitempty" gorm:"size:36;index"`
 	PricePolicy             string `json:"pricePolicy" gorm:"size:24;default:unified"`
 	BillingMode             string `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits   int64  `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	UnitPriceMicrocredits   float64  `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits  float64  `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits float64  `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits float64  `json:"cachedPriceMicrocredits"`
 	// LegacyModelIDsJSON 用于创作端把已保存的旧 SKU 选择无缝映射到新的模型家族。
 	// 这只是目录兼容信息，任务、路由尝试和账单仍固定引用其创建时的 ID 快照。
 	LegacyModelIDsJSON string `json:"-" gorm:"type:text"`
@@ -92,10 +92,10 @@ type LogicalModelPriceSKU struct {
 	SelectorKey                  string     `json:"selectorKey" gorm:"size:500;not null;default:{};uniqueIndex:idx_logical_sku_active,priority:2,where:deleted_at IS NULL"`
 	SelectorJSON                 string     `json:"-" gorm:"type:text;not null;default:{}"`
 	BillingMode                  string     `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits        int64      `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64      `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64      `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64      `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64      `json:"cachedTokenPriceMicrocredits"`
 	Priority                     int        `json:"priority" gorm:"index"`
 	Enabled                      bool       `json:"enabled" gorm:"index"`
 	Version                      int        `json:"version"`

@@ -234,9 +234,9 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 		}
 	}
 	if err := c.billing.SettleBilling(task.BillingOrderID, ""); err != nil {
-		uncertainErr := c.billing.MarkBillingUncertain(task.BillingOrderID, "生成成功但积分结算失败："+err.Error())
-		_ = c.logger.log(task.UserID, task.ID, "error", "积分结算失败，已进入待核对", err.Error())
-		completionErr = errors.Join(completionErr, fmt.Errorf("积分结算失败：%w", err))
+		uncertainErr := c.billing.MarkBillingUncertain(task.BillingOrderID, "生成成功但余额结算失败："+err.Error())
+		_ = c.logger.log(task.UserID, task.ID, "error", "余额结算失败，已进入待核对", err.Error())
+		completionErr = errors.Join(completionErr, fmt.Errorf("余额结算失败：%w", err))
 		if uncertainErr != nil {
 			completionErr = errors.Join(completionErr, fmt.Errorf("记录计费待核对状态失败：%w", uncertainErr))
 		}

@@ -17,7 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
     tasks: "任务",
     assets: "素材",
     skills: "技能库",
-    wallet: "积分中心",
+    wallet: "余额中心",
     settings: "设置",
 };
 

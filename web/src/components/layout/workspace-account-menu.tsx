@@ -22,7 +22,7 @@ export function WorkspaceAccountMenu() {
 
     const balance = availableMicrocredits === null
         ? "--"
-        : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+        : "¥" + (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 
     if (!hydrated) {
         return <span className="size-9 animate-pulse rounded-[var(--r-md)] bg-foreground/[.06]" aria-hidden />;
@@ -41,7 +41,7 @@ export function WorkspaceAccountMenu() {
                         <UserAvatar user={user} className="size-8" />
                         <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
-                            {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div> : null}
+                            {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance}</div> : null}
                         </div>
                     </div>
 

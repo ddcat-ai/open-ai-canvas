@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: docker.m.daocloud.io/library/postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-open_ai_canvas}
       POSTGRES_USER: ${POSTGRES_USER:-open_ai_canvas}
@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7.4-alpine
+    image: docker.m.daocloud.io/library/redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
       - ${CANVAS_REDIS_DATA_PATH:-redis-data}:/data
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-backend:${CANVAS_IMAGE_TAG:-latest}
+    image: open-ai-canvas-backend:server
     command: ["migrate-schema", "up"]
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
@@ -38,7 +38,7 @@ services:
         condition: service_healthy
 
   backend:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-backend:${CANVAS_IMAGE_TAG:-latest}
+    image: open-ai-canvas-backend:server
     environment:
       CANVAS_BACKEND_ADDR: ":8080"
       CANVAS_BACKEND_DATA_DIR: /data
@@ -70,7 +70,7 @@ services:
     stop_grace_period: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
 
   web:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-web:${CANVAS_IMAGE_TAG:-latest}
+    image: open-ai-canvas-web:server
     ports:
       - "${CANVAS_HTTP_PORT:-3000}:3000"
     depends_on:

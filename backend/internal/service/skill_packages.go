@@ -338,6 +338,28 @@ func (s *Service) createSkillFromArchive(userID string, archive skillPackageArch
 }
 
 func (s *Service) addSkillArchiveVersion(skill *model.Skill, archive skillPackageArchive, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool) error {
+	// 幂等：同一技能已存在内容哈希相同的版本时直接复用，不重复落盘 zip、不新建重复版本/文件清单。
+	if existing, err := s.repo.SkillVersionByContentHash(skill.ID, archive.ContentHash); err == nil && existing != nil {
+		now := time.Now()
+		skill.CurrentVersionID = existing.ID
+		skill.VersionLabel = existing.VersionLabel
+		skill.ContentHash = existing.ContentHash
+		skill.FileCount = existing.FileCount
+		skill.TotalBytes = existing.TotalBytes
+		skill.SourceType = sourceType
+		skill.SourceURL = sourceURL
+		skill.SourceRef = sourceRef
+		skill.SourceSubdir = sourceSubdir
+		skill.SourceCommit = sourceCommit
+		skill.SyncStatus = "synced"
+		skill.SyncError = ""
+		skill.AutoUpdate = autoUpdate
+		skill.LastCheckedAt = &now
+		skill.LastSyncedAt = &now
+		return s.repo.SaveSkill(skill)
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	versionID := newID()
 	packageKey, version, files, err := s.persistSkillArchive(skill.ID, versionID, archive, sourceCommit)
 	if err != nil {
@@ -370,10 +392,32 @@ func (s *Service) addSkillArchiveVersion(skill *model.Skill, archive skillPackag
 	skill.LastCheckedAt = &now
 	skill.LastSyncedAt = &now
 	if err := s.repo.AddSkillVersion(skill, version, files); err != nil {
+		// 并发兜底：两个请求同时为相同内容建版本时，后到者命中 (skill_id,content_hash) 唯一索引，
+		// 此时复用已落库的版本作为当前版本，而不是把冲突暴露给用户。
+		if isSkillVersionConflict(err) {
+			existing, lookupErr := s.repo.SkillVersionByContentHash(skill.ID, archive.ContentHash)
+			if lookupErr == nil && existing != nil {
+				_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
+				skill.CurrentVersionID = existing.ID
+				skill.VersionLabel = existing.VersionLabel
+				skill.FileCount = existing.FileCount
+				skill.TotalBytes = existing.TotalBytes
+				return s.repo.SaveSkill(skill)
+			}
+		}
 		_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
 		return err
 	}
 	return nil
+}
+
+// isSkillVersionConflict 判断是否为技能版本内容幂等唯一索引冲突（Postgres / SQLite）。
+func isSkillVersionConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "idx_skill_version_skill_hash") || strings.Contains(message, "unique constraint") || strings.Contains(message, "duplicate key")
 }
 
 func (s *Service) persistSkillArchive(skillID string, versionID string, archive skillPackageArchive, sourceCommit string) (string, *model.SkillVersion, []model.SkillFile, error) {
@@ -415,6 +459,73 @@ func (s *Service) persistSkillArchive(skillID string, versionID string, archive 
 		files = append(files, model.SkillFile{ID: newID(), SkillVersionID: versionID, Path: filePath, Kind: skillFileKind(filePath), MimeType: skillFileMime(filePath, content), Size: int64(len(content)), SHA256: hex.EncodeToString(digest[:])})
 	}
 	return packageKey, version, files, nil
+}
+
+// SkillVersionSummary 是技能历史版本的对外摘要，isCurrent 标记当前激活版本。
+type SkillVersionSummary struct {
+	ID           string    `json:"id"`
+	VersionLabel string    `json:"versionLabel"`
+	ContentHash  string    `json:"contentHash"`
+	FileCount    int       `json:"fileCount"`
+	TotalBytes   int64     `json:"totalBytes"`
+	SourceCommit string    `json:"sourceCommit"`
+	IsCurrent    bool      `json:"isCurrent"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// ListSkillVersions 列出技能的全部历史版本（倒序），并标记当前激活版本。
+func (s *Service) ListSkillVersions(userID string, skillID string) ([]SkillVersionSummary, error) {
+	skill, err := s.visibleSkill(userID, skillID)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := s.repo.ListSkillVersions(skillID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]SkillVersionSummary, 0, len(versions))
+	for _, version := range versions {
+		result = append(result, SkillVersionSummary{
+			ID:           version.ID,
+			VersionLabel: version.VersionLabel,
+			ContentHash:  version.ContentHash,
+			FileCount:    version.FileCount,
+			TotalBytes:   version.TotalBytes,
+			SourceCommit: version.SourceCommit,
+			IsCurrent:    version.ID == skill.CurrentVersionID,
+			CreatedAt:    version.CreatedAt,
+		})
+	}
+	return result, nil
+}
+
+// ActivateSkillVersion 把技能切换（回滚）到指定历史版本；版本必须属于该技能且其落盘包仍可读。
+func (s *Service) ActivateSkillVersion(userID string, skillID string, versionID string) (*SkillVersionSummary, error) {
+	skill, err := s.visibleSkill(userID, skillID)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.repo.ActivateSkillVersion(skill.ID, versionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, BadAuthRequest("指定版本不存在或不属于该技能")
+		}
+		return nil, err
+	}
+	// 校验该版本的落盘归档仍可读取，避免把当前指针切到已损坏/缺失的包。
+	if _, err := s.readSkillArchiveEntry(target, target.EntryPath); err != nil {
+		return nil, fmt.Errorf("目标版本内容不可读，无法激活：%w", err)
+	}
+	return &SkillVersionSummary{
+		ID:           target.ID,
+		VersionLabel: target.VersionLabel,
+		ContentHash:  target.ContentHash,
+		FileCount:    target.FileCount,
+		TotalBytes:   target.TotalBytes,
+		SourceCommit: target.SourceCommit,
+		IsCurrent:    true,
+		CreatedAt:    target.CreatedAt,
+	}, nil
 }
 
 func (s *Service) SkillPackageFiles(userID string, skillID string) ([]SkillPackageFileItem, error) {

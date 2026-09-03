@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { applyCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import { deriveAgentStateFromNodes, filterGenerationOps } from "@/lib/canvas/canvas-agent-state";
 import { createGenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
 import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
 import { persistCanvasAgentGenerationContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
+import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import type { CanvasConnection, CanvasNodeData, ContextMenuState, ViewportTransform } from "@/types/canvas";
 
 import type { CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
@@ -63,6 +65,13 @@ type RunCanvasAgentGenerationOpsInput = {
     consumeTask?: typeof consumeGenerationTaskAgent;
     resumeAgent?: (task: GenerationTask) => Promise<void>;
     onContinuation?: (nodeId: string, continuation: CanvasAgentGenerationContinuation) => Promise<void> | void;
+    // 媒体自动生成开关：false 时只保留已创建的媒体节点（idle），不提交生成任务。默认 true 保持既有行为。
+    autoGenerateMedia?: boolean;
+};
+
+export type RunCanvasAgentGenerationResult = {
+    submittedNodeIds: string[];
+    skipped: Array<{ nodeId: string; reason: "pending" | "completed" | "failed-needs-retry" | "no-target" | "auto-media-off" }>;
 };
 
 export async function runCanvasAgentGenerationOps({
@@ -74,6 +83,7 @@ export async function runCanvasAgentGenerationOps({
     consumeTask = consumeGenerationTaskAgent,
     resumeAgent = async () => undefined,
     onContinuation,
+    autoGenerateMedia = true,
 }: RunCanvasAgentGenerationOpsInput) {
     const observations = new Map<string, Promise<void>>();
     const observe = (taskId: string, nodeId: string, continuationIdPromise?: Promise<string>) => {
@@ -131,11 +141,28 @@ export async function runCanvasAgentGenerationOps({
                 return observe(node.metadata?.taskId || continuation.taskId, node.id, Promise.resolve(continuation.id));
             }),
         );
-        return;
+        return { submittedNodeIds: [], skipped: [] } satisfies RunCanvasAgentGenerationResult;
+    }
+
+    // 防重复提交：以真实画布节点派生的任务状态为准，进行中/已完成的非 retry 操作直接跳过。
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const derivedState = deriveAgentStateFromNodes(nodes, "generating");
+    const { toSubmit, skipped } = filterGenerationOps(derivedState, generationOps, nodeById);
+    const skippedResult: RunCanvasAgentGenerationResult["skipped"] = skipped.map(({ op, reason }) => ({ nodeId: op.nodeId, reason }));
+
+    // 关闭媒体自动生成：媒体节点已由结构变更创建，这里不提交生成任务，全部记为 auto-media-off。
+    if (!autoGenerateMedia) {
+        return {
+            submittedNodeIds: [],
+            skipped: [
+                ...skippedResult,
+                ...toSubmit.map((op) => ({ nodeId: op.nodeId, reason: "auto-media-off" as const })),
+            ],
+        };
     }
 
     await Promise.all(
-        generationOps.map(async (op) => {
+        toSubmit.map(async (op) => {
             const target = nodes.find((node) => node.id === op.nodeId);
             const prompt = op.prompt?.trim() ? op.prompt : (target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
             const retryOf = op.retry ? target?.metadata?.taskId : undefined;
@@ -168,6 +195,7 @@ export async function runCanvasAgentGenerationOps({
             if (observation) await observation;
         }),
     );
+    return { submittedNodeIds: toSubmit.map((op) => op.nodeId), skipped: skippedResult } satisfies RunCanvasAgentGenerationResult;
 }
 
 export async function consumeCanvasAgentGenerationContinuation(
@@ -292,6 +320,7 @@ export function useCanvasAgentOperations({
                         generationOps,
                         nodes: nodesRef.current,
                         generate,
+                        autoGenerateMedia: useCanvasAgentStore.getState().autoGenerateMedia,
                         context: generationContext,
                         onContinuation: async (nodeId, continuation) => {
                             if (continuation.status === "completed" && continuation.effectKey) {

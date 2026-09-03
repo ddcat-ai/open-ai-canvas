@@ -121,20 +121,31 @@ export function createCanvasAgentHttpModule(
                 ? body.attachments as AgentAttachment[]
                 : [];
             const skills = parseAgentSkills(body.skills);
+            // agentRunId 是不透明的关联元数据，仅用于前端将 SSE 事件关联到正确的 AgentRun。
+            // 它不影响授权、画布访问或任何业务逻辑。
+            const agentRunId = String(body.agentRunId || "").trim();
             const workspace = ensureCanvasWorkspace(config, String(body.canvasId || ""));
             let threadId = String(body.threadId || workspace.activeThreadId || "");
+            // 包装 emit：在所有 SSE 事件 payload 中注入 agentRunId，使前端能关联到正确的 run
+            const turnEmit = (type: string, payload: unknown) => {
+                if (agentRunId && typeof payload === "object" && payload !== null) {
+                    emit(type, { ...(payload as Record<string, unknown>), agentRunId });
+                } else {
+                    emit(type, payload);
+                }
+            };
             void (async () => {
                 if (!threadId) {
-                    const thread = await startCodexThread(emit, workspace.workspacePath);
+                    const thread = await startCodexThread(turnEmit, workspace.workspacePath);
                     threadId = String((thread as Record<string, unknown>).id || "");
                     updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: threadId });
                 } else if (threadId !== workspace.activeThreadId) {
-                    await verifyCodexThreadWorkspace(emit, threadId, workspace.workspacePath);
+                    await verifyCodexThreadWorkspace(turnEmit, threadId, workspace.workspacePath);
                     updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: threadId });
                 }
                 void runCodexTurn(
                     withAgentPrompt(String(body.prompt || "")),
-                    emit,
+                    turnEmit,
                     attachments,
                     {
                         skills,

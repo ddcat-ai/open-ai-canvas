@@ -191,6 +191,34 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"results": results})
 	})
 
+	r.GET("/skills/:id/versions", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		versions, err := svc.ListSkillVersions(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"versions": versions})
+	})
+
+	r.POST("/skills/:id/versions/:versionId/activate", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		version, err := svc.ActivateSkillVersion(user.ID, c.Param("id"), c.Param("versionId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"version": version})
+	})
+
 	r.POST("/skills/:id/sync", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

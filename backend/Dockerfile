@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS payment-package-build
+FROM --platform=$BUILDPLATFORM docker.m.daocloud.io/library/golang:1.25-alpine AS payment-package-build
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
       ./plugin-packages/build-packages.sh --payments-only; \
     sh ./plugin-packages/verify-payment-packages.sh "$TARGETOS" "$TARGETARCH"
 
-FROM alpine:3.22 AS payment-package-smoke
+FROM docker.m.daocloud.io/library/alpine:3.22 AS payment-package-smoke
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -32,7 +32,7 @@ COPY --from=payment-package-build /src/plugin-packages /app/plugin-packages
 RUN PAYMENT_PLUGIN_SMOKE_TEST=1 \
     sh /app/plugin-packages/verify-payment-packages.sh "$TARGETOS" "$TARGETARCH"
 
-FROM golang:1.25-alpine AS backend-build
+FROM docker.m.daocloud.io/library/golang:1.25-alpine AS backend-build
 
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG BUILD_VERSION
@@ -45,16 +45,16 @@ RUN apk add --no-cache build-base
 WORKDIR /src/backend
 COPY VERSION /src/VERSION
 COPY backend/go.mod backend/go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN go mod download
 COPY backend ./
-RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
+RUN set -eu; \
     version="${BUILD_VERSION:-$(tr -d '\r\n' </src/VERSION)}"; \
     ldflags="-s -w -X infinite-canvas/backend/internal/buildinfo.Version=${version} -X infinite-canvas/backend/internal/buildinfo.Commit=${BUILD_COMMIT} -X infinite-canvas/backend/internal/buildinfo.BuildTime=${BUILD_TIME}"; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/infinite-canvas-backend ./cmd/server; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-schema ./cmd/migrate-schema; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-sqlite-postgres ./cmd/migrate-sqlite-postgres
 
-FROM alpine:3.22
+FROM docker.m.daocloud.io/library/alpine:3.22
 
 RUN apk add --no-cache ca-certificates tzdata wget \
     && addgroup -S app \

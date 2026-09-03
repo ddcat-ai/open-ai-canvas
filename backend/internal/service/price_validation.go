@@ -4,7 +4,7 @@ import "infinite-canvas/backend/internal/model"
 
 // ValidateChannelModelPrice 校验渠道模型价格配置的有效性
 // 根据 billingMode 检查必要的价格字段是否已配置
-func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
+func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice float64) bool {
 	switch billingMode {
 	case "fixed_request":
 		// 固定价格模式：0 表示免费，负数无效。
@@ -36,7 +36,7 @@ func ValidatePriceTierPrice(tier *model.ChannelModelPriceTier, capability string
 
 // ComputePriceConfigured 根据价格内容计算 PriceConfigured 标志
 // 不再允许手动设置 PriceConfigured，必须由价格字段派生
-func ComputePriceConfigured(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
+func ComputePriceConfigured(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice float64) bool {
 	return ValidateChannelModelPrice(billingMode, capability, protocol, unitPrice, inputPrice, outputPrice, cachedPrice)
 }
 
@@ -70,7 +70,7 @@ func HasValidPrice(channelModel *model.ChannelModel) bool {
 }
 
 // ValidateLogicalModelPrice 校验前台模型的价格配置
-func ValidateLogicalModelPrice(pricePolicy string, billingMode string, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
+func ValidateLogicalModelPrice(pricePolicy string, billingMode string, unitPrice, inputPrice, outputPrice, cachedPrice float64) bool {
 	if pricePolicy == "channel" {
 		// 跟随渠道价格，不需要校验前台价格
 		return true

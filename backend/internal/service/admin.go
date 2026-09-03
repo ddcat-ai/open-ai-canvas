@@ -124,10 +124,10 @@ type PublicChannelModelPrice struct {
 	Capability                   string                     `json:"capability"`
 	Protocol                     model.ChannelInterfaceType `json:"protocol"`
 	BillingMode                  string                     `json:"billingMode"`
-	UnitPriceMicrocredits        int64                      `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64                      `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64                      `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64                      `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64                      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64                      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64                      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64                      `json:"cachedTokenPriceMicrocredits"`
 	CapabilityConfig             *ModelCapabilityConfig     `json:"capabilityConfig,omitempty"`
 }
 

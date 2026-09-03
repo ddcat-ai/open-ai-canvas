@@ -1,6 +1,9 @@
 package service
 
-import "infinite-canvas/backend/internal/model"
+import (
+	"math"
+	"infinite-canvas/backend/internal/model"
+)
 
 // LogicalModelQuote 是创作端当前参数命中的实际供应线路报价。
 // Token 视频在上游返回真实 usage 前只能预估，创建任务仍以账务预留逻辑为准。
@@ -55,7 +58,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 	switch routed.LogicalModel.BillingMode {
 	case "fixed_request":
 		quantity = 1
-		amount = routed.LogicalModel.UnitPriceMicrocredits
+		amount = int64(math.Ceil(routed.LogicalModel.UnitPriceMicrocredits))
 	case "per_second":
 		if capability != "video" || quantity <= 0 {
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")

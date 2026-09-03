@@ -12,5 +12,5 @@ export function CreditSymbol({ className, ...props }: ComponentProps<"span">) {
 }
 
 export function formatCredits(value: number, maximumFractionDigits = 6) {
-    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits });
+    return "¥" + (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits });
 }

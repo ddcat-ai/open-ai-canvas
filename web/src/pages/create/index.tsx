@@ -1190,8 +1190,8 @@ function CreationComposer(props: ComposerProps) {
         seconds: props.mode === "video" ? props.seconds : 1,
     });
     const showCost = creditsEnabled && credits !== null;
-    const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : props.busy ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送";
+    const formattedCredits = credits != null ? "¥" + credits.toLocaleString("zh-CN", { maximumFractionDigits: 6 }) : undefined;
+    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : props.busy ? "生成中" : showCost ? `预计消耗 ${formattedCredits}，发送` : "发送";
     const placeholder = props.mode === "text"
         ? "描述你的故事、角色或想继续讨论的创意"
         : props.mode === "image"

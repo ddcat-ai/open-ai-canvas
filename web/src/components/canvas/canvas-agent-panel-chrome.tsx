@@ -1,5 +1,5 @@
 import { Button, Switch, Tooltip } from "antd";
-import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, Globe2, History, LayoutTemplate, Laptop, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
+import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, Globe2, History, Images, LayoutTemplate, Laptop, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
 import { useNavigate } from "react-router";
 
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
@@ -13,10 +13,12 @@ export function AgentPanelChrome({
     context,
     referenceCount,
     confirmTools,
+    autoGenerateMedia,
     canUndo,
     undoCount,
     onModeChange,
     onConfirmToolsChange,
+    onAutoGenerateMediaChange,
     onUndo,
     onCollapse,
     historyCount = 0,
@@ -30,10 +32,12 @@ export function AgentPanelChrome({
     context: CanvasContextSummary;
     referenceCount: number;
     confirmTools: boolean;
+    autoGenerateMedia: boolean;
     canUndo: boolean;
     undoCount: number;
     onModeChange: (mode: CanvasAgentMode) => void;
     onConfirmToolsChange: (confirm: boolean) => void;
+    onAutoGenerateMediaChange: (autoGenerate: boolean) => void;
     onUndo: () => void;
     onCollapse: () => void;
     historyCount?: number;
@@ -92,6 +96,26 @@ export function AgentPanelChrome({
                         <Switch size="small" checked={confirmTools} onChange={onConfirmToolsChange} />
                         <span className="whitespace-nowrap">确认</span>
                     </label>
+                    <Tooltip
+                        title={autoGenerateMedia
+                            ? "媒体自动生成已开启：Agent 创建图片/视频/音频节点后会立即提交生成任务并消耗积分。点击关闭可只搭建节点、暂不生成。"
+                            : "媒体自动生成已关闭：Agent 只会创建媒体节点（不提交生成、不消耗积分）；你检查结构后可在节点上手动生成。"}
+                    >
+                        <label
+                            className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-1 transition-colors"
+                            style={{ color: autoGenerateMedia ? theme.node.muted : theme.accent.primary }}
+                            aria-label={autoGenerateMedia ? "关闭媒体自动生成" : "开启媒体自动生成"}
+                        >
+                            <Images className="size-3 shrink-0" />
+                            <Switch
+                                size="small"
+                                checked={autoGenerateMedia}
+                                onChange={onAutoGenerateMediaChange}
+                                aria-label="媒体自动生成开关"
+                            />
+                            <span className="whitespace-nowrap">{autoGenerateMedia ? "自动生成" : "仅建节点"}</span>
+                        </label>
+                    </Tooltip>
                 </div>
             </div>
         </header>

@@ -139,6 +139,7 @@ func run(ctx context.Context) error {
 	handler.RegisterUserDataRoutes(api, svc)
 	handler.RegisterDiagnosticsRoutes(api, svc)
 	handler.RegisterPluginRoutes(api, svc)
+	handler.RegisterAgentRunRoutes(api, svc)
 	projectAPI := api.Group("")
 	projectAPI.Use(handler.RequireFeature(svc, service.FeatureShortDrama))
 	handler.RegisterProjectRoutes(projectAPI, svc)

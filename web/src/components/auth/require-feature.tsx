@@ -12,7 +12,7 @@ type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" |
 const featureNames: Record<FeatureKey, string> = {
     shortDramaEnabled: "短剧创作",
     taskCenterEnabled: "任务中心",
-    creditsEnabled: "积分中心",
+    creditsEnabled: "余额中心",
     frontendModelsEnabled: "前台模型",
     pluginCenterEnabled: "插件中心",
 };

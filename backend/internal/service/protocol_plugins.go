@@ -309,6 +309,12 @@ func (c *pluginRuntime) reload() error {
 	if err != nil {
 		return err
 	}
+	// 先注册所有内置协议（builtin），确保 grsai-image、hongniao-image 等内置协议在 pluginRuntime 中也可用
+	for _, metadata := range protocol.Builtins().List("", "", true) {
+		if adapter, ok := protocol.Builtins().Get(metadata.ID); ok {
+			_ = registry.Register(adapter)
+		}
+	}
 	for id, record := range plugins {
 		var manifest protocol.Manifest
 		if err := json.Unmarshal(record.Raw, &manifest); err != nil {

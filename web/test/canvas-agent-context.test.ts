@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
+import { buildCanvasAgentContext, getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, selectContextNodes, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { canvasAgentPostconditionMessage, type CanvasAgentSnapshot, verifyCanvasAgentOps } from "@/lib/canvas/canvas-agent-ops";
 import { CanvasNodeType } from "@/types/canvas";
 
@@ -112,5 +112,85 @@ describe("canvas write postconditions", () => {
         const result = verifyCanvasAgentOps(snapshot, snapshot, [{ type: "update_node", id: "prompt-1", patch: { title: "新标题" } }]);
         expect(result.ok).toBe(false);
         expect(result.warnings.join(" ")).toContain("未达到预期");
+    });
+});
+
+describe("context window prioritization", () => {
+    function makeNodes(count: number) {
+        return Array.from({ length: count }, (_, index) => ({
+            id: `n-${index}`,
+            type: CanvasNodeType.Text,
+            title: `节点${index}`,
+            position: { x: index * 10, y: 0 },
+            width: 200,
+            height: 120,
+        }));
+    }
+
+    it("does not truncate when node count is within budget", () => {
+        const nodes = makeNodes(10);
+        const result = selectContextNodes(nodes, [], new Set(), 120);
+        expect(result.truncated).toBe(false);
+        expect(result.included).toBe(10);
+        expect(result.total).toBe(10);
+        expect(result.nodes).toHaveLength(10);
+    });
+
+    it("keeps selected nodes and their one-hop neighbors first when truncated", () => {
+        const nodes = makeNodes(12);
+        const connections = [{ id: "c-1", fromNodeId: "n-11", toNodeId: "n-3" }];
+        // max=5：选中 n-11、其邻居 n-3 优先，其余按原始顺序补位
+        const result = selectContextNodes(nodes, connections, new Set(["n-11"]), 5);
+        expect(result.truncated).toBe(true);
+        expect(result.included).toBe(5);
+        const ids = result.nodes.map((node) => node.id);
+        expect(ids).toContain("n-11"); // 选中
+        expect(ids).toContain("n-3");  // 一跳邻居
+        // 保持画布原始顺序
+        const indices = ids.map((id) => Number(id.slice(2)));
+        const sorted = [...indices].sort((a, b) => a - b);
+        expect(indices).toEqual(sorted);
+    });
+
+    it("keeps loading/error nodes even when they are not selected", () => {
+        const nodes = makeNodes(10).map((node, index) =>
+            index === 9 ? { ...node, metadata: { status: "error" } } : node,
+        );
+        const result = selectContextNodes(nodes, [], new Set(), 4);
+        expect(result.nodes.map((node) => node.id)).toContain("n-9");
+    });
+
+    it("buildCanvasAgentContext limits nodes and dangling connections and reports truncation", () => {
+        const nodes = makeNodes(10);
+        const bigSnapshot: CanvasAgentSnapshot = {
+            projectId: "p",
+            title: "大画布",
+            nodes,
+            // c-a：两端都在窗口内（n-0,n-1 会被保留）；c-out：一端 n-9 会被裁掉
+            connections: [
+                { id: "c-a", fromNodeId: "n-0", toNodeId: "n-1" },
+                { id: "c-out", fromNodeId: "n-0", toNodeId: "n-9" },
+            ],
+            selectedNodeIds: [],
+            viewport: { x: 0, y: 0, k: 1 },
+        };
+        const ctx = buildCanvasAgentContext(bigSnapshot, { maxNodes: 5 });
+        expect(ctx.nodes).toHaveLength(5);
+        expect(ctx.canvas.nodeCount).toBe(10); // 统计仍是真实总数
+        expect(ctx.canvas.contextIncluded).toBe(5);
+        expect(ctx.canvas.contextTruncated).toBe(true);
+        // 悬空连线被过滤
+        const connIds = ctx.connections.map((connection) => connection.id);
+        expect(connIds).toContain("c-a");
+        expect(connIds).not.toContain("c-out");
+        // 截断告警
+        expect(ctx.warnings.join(" ")).toContain("canvas_find_nodes");
+    });
+
+    it("buildCanvasAgentContext keeps full context unchanged below the limit", () => {
+        const ctx = buildCanvasAgentContext(snapshot);
+        expect(ctx.canvas.contextTruncated).toBe(false);
+        expect(ctx.nodes).toHaveLength(2);
+        expect(ctx.connections).toHaveLength(1);
     });
 });

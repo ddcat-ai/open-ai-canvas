@@ -114,9 +114,9 @@ type Skill struct {
 
 type SkillVersion struct {
 	ID           string    `json:"id" gorm:"primaryKey;size:36"`
-	SkillID      string    `json:"skillId" gorm:"size:36;index"`
+	SkillID      string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_skill_version_skill_hash,priority:1"`
 	VersionLabel string    `json:"versionLabel" gorm:"size:64"`
-	ContentHash  string    `json:"contentHash" gorm:"size:64;index"`
+	ContentHash  string    `json:"contentHash" gorm:"size:64;index;uniqueIndex:idx_skill_version_skill_hash,priority:2"`
 	EntryPath    string    `json:"entryPath" gorm:"size:1000"`
 	PackageKey   string    `json:"packageKey" gorm:"size:1000"`
 	FileCount    int       `json:"fileCount"`

@@ -133,7 +133,7 @@ func (s *Service) RequireFeature(feature string) error {
 	case FeatureTaskCenter:
 		return Forbidden("任务中心暂未开放")
 	case FeatureCredits:
-		return Forbidden("积分功能暂未开放")
+		return Forbidden("余额功能暂未开放")
 	case FeatureCustomChannels:
 		return Forbidden("自定义渠道暂未开放")
 	case FeatureFrontendModels:

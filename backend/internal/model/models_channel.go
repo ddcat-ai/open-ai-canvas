@@ -36,10 +36,10 @@ type ChannelModel struct {
 	Capability                   string               `json:"capability" gorm:"size:32;index"`
 	Protocol                     ChannelInterfaceType `json:"protocol" gorm:"size:32;index"`
 	BillingMode                  string               `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits        int64                `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64                `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64                `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64                `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64                `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64                `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64                `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64                `json:"cachedTokenPriceMicrocredits"`
 	PriceConfigured              bool                 `json:"priceConfigured" gorm:"index"`
 	Enabled                      bool                 `json:"enabled" gorm:"index"`
 	PriceVersion                 int64                `json:"priceVersion"`
@@ -69,10 +69,10 @@ type ChannelModelPriceTier struct {
 	VideoSeconds                 int               `json:"videoSeconds" gorm:"not null;default:0"`
 	ProviderModelKey             string            `json:"providerModelKey" gorm:"size:120"`
 	BillingMode                  string            `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64             `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64             `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64             `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64             `json:"cachedTokenPriceMicrocredits"`
 	PriceConfigured              bool              `json:"priceConfigured" gorm:"index"`
 	Enabled                      bool              `json:"enabled" gorm:"index"`
 	PriceVersion                 int64             `json:"priceVersion"`

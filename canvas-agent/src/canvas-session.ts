@@ -5,6 +5,7 @@ import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeout
 import { buildCanvasContext, findCanvasNodes, getCanvasConnection, getCanvasGenerationTasks, getCanvasNode, getCanvasResources, hashState, validateCanvasOps } from "./canvas-context.js";
 import { type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
+import { identifyCreatedStoryboardNodes, reconcileStoryboardShots, type StoryboardShotInput } from "./storyboard-projection.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
 type PendingRequest = { clientId: string; recoverable: boolean; resolve: (value: unknown) => void; reject: (error: Error) => void };
@@ -153,6 +154,30 @@ export class CanvasSession {
         if (tool === "canvas_generate_text" || tool === "canvas_generate_image" || tool === "canvas_generate_video" || tool === "canvas_generate_audio") {
             input = { ops: generationFlowOps({ ...(input as Record<string, unknown>), mode: tool.replace("canvas_generate_", ""), autoRun: true }, this.canvasState) };
             tool = "canvas_apply_ops";
+        }
+        if (tool === "canvas_create_storyboard_shots") {
+            // 幂等分镜投影：按 metadata.shotId reconcile 已有节点。
+            // 使用纯函数 reconcileStoryboardShots 进行reconciliation，便于测试。
+            const data = input as { shots: StoryboardShotInput[]; x?: number; direction?: "column" | "row" };
+            if (!this.canvasState) throw new Error("当前没有已连接画布");
+            const reconciliation = reconcileStoryboardShots(this.canvasState, data.shots, { x: data.x, direction: data.direction });
+            // 校验操作
+            const validation = validateCanvasOps(this.canvasState, reconciliation.ops as unknown[]);
+            if (!validation.ok) throw new Error(`画布操作校验失败：${validation.issues.filter((item) => item.severity === "error").map((item) => item.message).join("；")}`);
+            // 应用操作（作为一个历史条目，全部ops在一次canvas_apply_ops中应用）
+            const applyResult = await this.requestCanvasTool("canvas_apply_ops", { ops: reconciliation.ops });
+            // 从返回快照中识别新创建的节点
+            const resultNodes = (applyResult as { nodes?: Array<{ id: string; metadata?: Record<string, unknown> }> }).nodes || [];
+            const requestedShotIds = new Set(data.shots.map((s) => s.shotId));
+            const createdNodeIds = identifyCreatedStoryboardNodes(resultNodes, requestedShotIds, reconciliation.preExistingNodeIds);
+            return {
+                createdNodeIds,
+                updatedNodeIds: reconciliation.updatedNodeIds,
+                existingNodeIds: [...reconciliation.preExistingNodeIds, ...createdNodeIds],
+                duplicateShotMappings: reconciliation.duplicateShotMappings,
+                totalProjected: reconciliation.preExistingNodeIds.length + createdNodeIds.length,
+                snapshot: applyResult,
+            };
         }
         if (tool === "canvas_update_node") {
             const data = input as { id: string; patch?: Record<string, unknown>; metadata?: Record<string, unknown> };

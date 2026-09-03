@@ -26,6 +26,9 @@ type CanvasAgentStore = {
     loadingThreads: boolean;
     activeTab: AgentPanelTab;
     confirmTools: boolean;
+    // 媒体自动生成：开启时 Agent 的媒体操作会立即提交生成任务；
+    // 关闭时只创建/更新媒体节点（idle），由用户确认后再手动或批量生成。
+    autoGenerateMedia: boolean;
     activity: string;
     connectError: string;
     pendingTool: AgentPendingToolCall | null;
@@ -36,6 +39,7 @@ type CanvasAgentStore = {
 };
 
 const CANVAS_AGENT_ENABLED_STORAGE_KEY = "canvas-agent-enabled";
+const CANVAS_AGENT_AUTO_MEDIA_STORAGE_KEY = "canvas-agent-auto-generate-media";
 
 type CanvasAgentPreferenceStorage = {
     getItem(key: string): string | null;
@@ -55,6 +59,23 @@ export function writeCanvasAgentEnabledPreference(enabled: boolean, storage: Pic
         storage?.setItem(CANVAS_AGENT_ENABLED_STORAGE_KEY, String(enabled));
     } catch {
         // 浏览器隐私模式可能拒绝本地偏好写入；连接本身仍可继续。
+    }
+}
+
+// 媒体自动生成默认开启（保持既有行为）；仅当用户显式关闭时记为 false。
+export function readCanvasAgentAutoMediaPreference(storage: Pick<CanvasAgentPreferenceStorage, "getItem"> | undefined = browserPreferenceStorage()): boolean {
+    try {
+        return storage?.getItem(CANVAS_AGENT_AUTO_MEDIA_STORAGE_KEY) !== "false";
+    } catch {
+        return true;
+    }
+}
+
+export function writeCanvasAgentAutoMediaPreference(enabled: boolean, storage: Pick<CanvasAgentPreferenceStorage, "setItem"> | undefined = browserPreferenceStorage()) {
+    try {
+        storage?.setItem(CANVAS_AGENT_AUTO_MEDIA_STORAGE_KEY, String(enabled));
+    } catch {
+        // 忽略隐私模式写入失败。
     }
 }
 
@@ -91,11 +112,13 @@ export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     loadingThreads: false,
     activeTab: "chat",
     confirmTools: true,
+    autoGenerateMedia: readCanvasAgentAutoMediaPreference(),
     activity: "就绪",
     connectError: "",
     pendingTool: null,
     setAgentState: (patch) => {
         if (typeof patch.enabled === "boolean") writeCanvasAgentEnabledPreference(patch.enabled);
+        if (typeof patch.autoGenerateMedia === "boolean") writeCanvasAgentAutoMediaPreference(patch.autoGenerateMedia);
         set(patch);
     },
     addMessage: (item) => set((state) => ({ messages: [...state.messages.slice(-120), item] })),

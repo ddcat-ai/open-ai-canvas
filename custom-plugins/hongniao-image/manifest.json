@@ -1,0 +1,208 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "hongniao-image",
+  "name": "红鸟图像",
+  "version": "1.0.0",
+  "author": "影策自定义",
+  "description": "红鸟AI中转站图像生成协议，支持ph-gpt-image系列模型。",
+  "documentation": "# 红鸟图像协议插件\n\n红鸟AI中转站图像生成协议，适配红鸟 /v1/images 异步接口。\n\n## 接口说明\n\n- 创建任务：POST /v1/images\n- 查询任务：GET /v1/images/{task_id}\n- 鉴权：Authorization: Bearer <apiKey>\n\n## 请求字段（ph-gpt-image系列）\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| model | string | 图像模型ID（ph-gpt-image-2k, ph-gpt-image-4k） |\n| prompt | string | 生成提示词 |\n| aspect_ratio | string | 宽高比 |\n| images | string[] | 参考图片URL列表（图生图） |\n| parameters.quality | string | 质量（high/medium/low） |\n\n## 响应字段\n\n- 任务ID：id / task_id / taskId\n- 状态：status / state（pending/processing/succeeded/failed）\n- 图片结果：images / data / content / image_url / url\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "hongniao-image",
+        "label": "红鸟图像",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://open.hongniaoai.com",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "红鸟图像模型ID（ph-gpt-image-2k, ph-gpt-image-4k）"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "图像生成提示词"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "mapping": "aspect_ratio",
+            "description": "宽高比"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "参考图片URL列表（图生图）"
+          },
+          {
+            "name": "quality",
+            "type": "string",
+            "values": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "mapping": "parameters.quality",
+            "description": "生成质量"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/images",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "aspect_ratio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.images"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "parameters": {
+              "quality": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.quality"
+                  },
+                  "high"
+                ]
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/images/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "response.task.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              {
+                "$ref": "response.task.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.error"
+              },
+              {
+                "$ref": "response.fail_reason"
+              },
+              {
+                "$ref": "response.data.message"
+              }
+            ]
+          },
+          "images": {
+            "$coalesce": [
+              {
+                "$ref": "response.images"
+              },
+              {
+                "$ref": "response.data"
+              },
+              {
+                "$ref": "response.content"
+              },
+              {
+                "$ref": "response.image_url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

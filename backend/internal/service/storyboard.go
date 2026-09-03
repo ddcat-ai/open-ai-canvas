@@ -14,6 +14,8 @@ const maxStoryboardShots = 12
 type agentStoryboardInput struct {
 	References     []string                  `json:"references"`
 	CanvasSnapshot map[string]any            `json:"canvasSnapshot"`
+	DomainProjectID string                   `json:"domainProjectId"`
+	UnitID         string                    `json:"unitId"`
 	Requirements   string                    `json:"requirements"`
 	CanvasAssets   []storyboardAsset         `json:"canvasAssets"`
 	ProjectStyle   storyboardProjectStyle    `json:"projectStyle"`

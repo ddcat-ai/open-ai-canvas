@@ -84,7 +84,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 		s.CancelComfyBridgeRequest(task.ProviderRequestID)
 		if requestErr == nil && request.Status == "queued" {
 			if err := s.taskBilling().RefundBilling(task.BillingOrderID, "本地 ComfyUI Bridge 请求在领取前取消"); err != nil {
-				return s.markProviderCancellationUncertain(task, "Bridge 请求已取消，但积分退回失败："+err.Error())
+				return s.markProviderCancellationUncertain(task, "Bridge 请求已取消，但余额退回失败："+err.Error())
 			}
 			now := time.Now()
 			if err := s.repo.UpdateTaskProviderCancellation(task.ID, model.ProviderCancelStatusRequested, model.ProviderCancelStatusConfirmed, "", nil, &now); err != nil {
@@ -136,13 +136,13 @@ func (s *Service) reconcileProviderCancellation(ctx context.Context, task *model
 	switch outcome {
 	case providerCancellationConfirmed:
 		if err := billing.RefundBilling(task.BillingOrderID, "上游已确认取消"); err != nil {
-			return s.deferProviderCancellation(task, "上游已取消，但积分退回失败："+err.Error())
+			return s.deferProviderCancellation(task, "上游已取消，但余额退回失败："+err.Error())
 		}
 		now := time.Now()
 		if err := s.repo.UpdateTaskProviderCancellation(task.ID, model.ProviderCancelStatusRequested, model.ProviderCancelStatusConfirmed, "", nil, &now); err != nil {
 			return err
 		}
-		_ = s.log(task.UserID, task.ID, "info", "上游已确认取消，积分已退回", providerStatus)
+		_ = s.log(task.UserID, task.ID, "info", "上游已确认取消，余额已退回", providerStatus)
 	case providerCancellationSucceeded:
 		errorText := "取消请求发出前上游已完成，费用已结算"
 		var billingErr error
@@ -161,9 +161,9 @@ func (s *Service) reconcileProviderCancellation(ctx context.Context, task *model
 			return billingErr
 		}
 	case providerCancellationFailed:
-		errorText := "上游任务已失败，取消状态无法确认，积分已退回"
+		errorText := "上游任务已失败，取消状态无法确认，余额已退回"
 		if err := billing.RefundBilling(task.BillingOrderID, errorText); err != nil {
-			return s.deferProviderCancellation(task, "上游任务已失败，但积分退回失败："+err.Error())
+			return s.deferProviderCancellation(task, "上游任务已失败，但余额退回失败："+err.Error())
 		}
 		if err := s.repo.UpdateTaskProviderCancellation(task.ID, model.ProviderCancelStatusRequested, model.ProviderCancelStatusUncertain, errorText, nil, nil); err != nil {
 			return err

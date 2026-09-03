@@ -276,7 +276,6 @@ export function ModelPicker({
                             <ModelIcon config={config} model={current} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
-                        {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} quote={routeQuote} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
                 </button>
@@ -318,7 +317,21 @@ function ModelLabel({
     const capabilitySummary =
         disabledReason ||
         logicalCost?.description?.trim() ||
-        (logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
+        (logicalSpec ? logicalCapabilitySummary(logicalSpec, logicalCost?.logicalCapabilityProfiles) : videoProfile ? videoCapabilitySummary(videoProfile) : meta.description);
+
+    // 文本模型：在灰色描述位置显示价格
+    const textPrice = (() => {
+        if (capability !== "text" || !logicalCost || logicalCost.billingMode !== "token") return null;
+        const input = logicalCost.inputTokenPriceMicrocredits || 0;
+        const output = logicalCost.outputTokenPriceMicrocredits || 0;
+        if (input <= 0 && output <= 0) return null;
+        const format = (value: number) => "¥" + formatDecimalPrice(value);
+        const parts = [];
+        if (input > 0) parts.push(`入${format(input)}`);
+        if (output > 0) parts.push(`出${format(output)}`);
+        return parts.join(" ");
+    })();
+    const subtitle = textPrice || capabilitySummary;
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
             <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>
@@ -326,11 +339,11 @@ function ModelLabel({
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{pickerModelDisplayName(config, model, showConfiguredModelName)}</span>
-                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={capabilitySummary}>
-                    {capabilitySummary}
+                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: textPrice ? "var(--color-amber-500)" : theme.node.muted }} title={subtitle}>
+                    {subtitle}
                 </span>
             </span>
-            {showPrice ? <ModelPrice price={modelMenuPrice(config, model, capability, true)} /> : null}
+            {showPrice && !textPrice ? <ModelPrice price={modelMenuPrice(config, model, capability, true)} /> : null}
             {!creationVariant && meta.time ? (
                 <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
                     {meta.time}
@@ -340,7 +353,7 @@ function ModelLabel({
     );
 }
 
-function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>) {
+function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>, profiles?: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilityProfiles"]>) {
     const operationLabels: Record<string, string> = {
         text_to_video: "文生视频",
         image_to_video: "图生视频",
@@ -372,20 +385,67 @@ function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channe
         audioSpeed: "语速",
     };
     const values: string[] = [];
-    values.push(...(spec.operations || []).map((operation) => operationLabels[operation] || operation));
+    // 视频模型不显示操作模式（文生/图生/全模态），做视频的都懂；其他能力仍显示
+    if (spec.capability !== "video") {
+        values.push(...(spec.operations || []).map((operation) => operationLabels[operation] || operation));
+    }
     for (const [name, constraint] of Object.entries(spec.inputs || {})) {
-        if (constraint.max <= 0) continue;
         const definition = inputLabels[name];
         if (!definition) continue;
-        values.push(spec.capability === "text" ? `支持${definition.label}` : `${definition.label}最多 ${constraint.max}${definition.unit}`);
+        // 用渠道规格里最宽松的值（避免所有渠道交集导致显示偏小）
+        let maxValue = constraint.max || 0;
+        if (profiles?.length) {
+            for (const profile of profiles) {
+                const profileMax = profile.inputs?.[name]?.max;
+                if (profileMax !== undefined && profileMax > maxValue) {
+                    maxValue = profileMax;
+                }
+            }
+        }
+        if (maxValue <= 0) continue;
+        values.push(spec.capability === "text" ? `支持${definition.label}` : `${definition.label}最多 ${maxValue}${definition.unit}`);
     }
     for (const [name, constraint] of Object.entries(spec.options || {})) {
         const label = optionLabels[name];
         if (!label) continue;
+        // 视频时长不再列出所有秒数，改为显示最长时长
+        if (name === "videoSeconds" || name === "duration") {
+            if (constraint.values?.length) {
+                const maxSeconds = Math.max(...constraint.values.map(Number).filter(Number.isFinite));
+                values.push(`最长 ${maxSeconds} 秒`);
+            } else if (constraint.max !== undefined) {
+                values.push(`最长 ${constraint.max} 秒`);
+            }
+            continue;
+        }
         if (constraint.values?.length) values.push(`${label} ${constraint.values.map(publicScalarLabel).join("/")}`);
         else if (constraint.min !== undefined && constraint.max !== undefined) values.push(`${label} ${constraint.min}-${constraint.max}`);
     }
-    return values.slice(0, 2).join(" · ") || "智能匹配当前输入";
+    // 视频模型显示更多参数（操作模式 + 参考素材 + 时长 + 分辨率），不限制只取前2个
+    const maxItems = spec.capability === "video" ? 6 : 2;
+    return values.slice(0, maxItems).join(" · ") || "智能匹配当前输入";
+}
+
+// 渠道模型（无 logicalSpec）的视频能力说明，用 videoProfile 生成简洁格式
+function videoCapabilitySummary(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>) {
+    const values: string[] = [];
+    // 参考素材
+    const ref = profile.references || {};
+    if (ref.maxImages > 0) values.push(`参考图最多 ${ref.maxImages} 张`);
+    if (ref.maxVideos > 0) values.push(`参考视频最多 ${ref.maxVideos} 个`);
+    if (ref.maxAudios > 0) values.push(`参考音频最多 ${ref.maxAudios} 个`);
+    // 最长时长
+    const dur = profile.duration || {};
+    if (dur.max !== undefined) {
+        values.push(`最长 ${dur.max} 秒`);
+    } else if (dur.values?.length) {
+        values.push(`最长 ${Math.max(...dur.values)} 秒`);
+    }
+    // 分辨率
+    if (profile.resolutions?.length) {
+        values.push(`分辨率 ${profile.resolutions.map((r) => r.toUpperCase()).join("/")}`);
+    }
+    return values.slice(0, 6).join(" · ") || "智能匹配当前输入";
 }
 
 function publicScalarLabel(value: unknown) {
@@ -413,7 +473,19 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
         const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config, requirements);
         return channelTierPriceSummary(matched.length ? matched : tiers, tiers);
     }
-    if (cost.billingMode === "token") return { kind: "estimate" };
+    if (cost.billingMode === "token") {
+        const input = cost.inputTokenPriceMicrocredits || 0;
+        const output = cost.outputTokenPriceMicrocredits || 0;
+        if (input > 0 || output > 0) {
+            const format = (value: number) => "¥" + formatDecimalPrice(value);
+            const parts = [];
+            if (input > 0) parts.push(`入${format(input)}`);
+            if (output > 0) parts.push(`出${format(output)}`);
+            const label = parts.join(" ");
+            return { kind: "tiers", label, compactLabel: label, title: `输入 ${format(input)}/1M tokens，输出 ${format(output)}/1M tokens` };
+        }
+        return { kind: "estimate" };
+    }
     return { kind: "fixed", value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
 }
 
@@ -440,6 +512,28 @@ function channelTierPriceSummary(
     };
 }
 
+function formatTokenPriceRange(tiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>) {
+    // 价格单位：微积分/token，1 微积分 = ¥1/1M tokens，价格支持小数
+    const inputValues = tiers
+        .map((tier) => (tier as any).inputTokenPriceMicrocredits || 0)
+        .filter((value) => value > 0);
+    const outputValues = tiers
+        .map((tier) => (tier as any).outputTokenPriceMicrocredits || 0)
+        .filter((value) => value > 0);
+    const format = (value: number) => "¥" + formatDecimalPrice(value);
+    const inputStr = inputValues.length ? `入${format(inputValues[0])}` : "";
+    const outputStr = outputValues.length ? `出${format(outputValues[0])}` : "";
+    return [inputStr, outputStr].filter(Boolean).join(" ") || "按量预估";
+}
+
+// 格式化小数价格，保留所有有效小数位，去掉末尾多余的零
+function formatDecimalPrice(value: number): string {
+    if (value === 0) return "0";
+    // 先转字符串，处理浮点数精度问题
+    const str = value.toPrecision(10);
+    // 去掉末尾的零和小数点
+    return str.replace(/\.?0+$/, "");
+}
 function tierResolutionLabel(value: string) {
     const normalized = normalizeTierResolution(value);
     return normalized === "*" ? "全部分辨率" : normalized.toUpperCase();
@@ -465,18 +559,26 @@ function tierSpecificationLabel(tier: NonNullable<NonNullable<AiConfig["channels
 }
 
 function tierPriceLabel(tier: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number]) {
-    if (tier.billingMode === "token") return "按量预估";
-    return `${formatPriceRange([tier.unitPriceMicrocredits / 1_000_000], tier.billingMode === "per_second" ? "积分/秒" : "积分")}`;
+    if (tier.billingMode === "token") {
+        const input = (tier as any).inputTokenPriceMicrocredits || 0;
+        const output = (tier as any).outputTokenPriceMicrocredits || 0;
+        const format = (value: number) => "¥" + formatDecimalPrice(value);
+        const parts = [];
+        if (input > 0) parts.push(`输入${format(input)}/1M`);
+        if (output > 0) parts.push(`输出${format(output)}/1M`);
+        return parts.length ? parts.join(" ") : "按量预估";
+    }
+    return `${formatPriceRange([tier.unitPriceMicrocredits / 1_000_000], tier.billingMode === "per_second" ? "/秒" : "")}`;
 }
 
 function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice | null | undefined; quote?: LogicalModelQuote; compact?: boolean }) {
     if (quote) {
-        const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+        const amount = "¥" + (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
         const label = quote.estimated ? `预计 ${amount}` : `${amount}`;
         return (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`}>
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`${quote.estimated ? "预计" : "本次"}消耗 ${amount}`}>
                 <Coins className="size-3" />
-                {compact ? label : `${label} 积分`}
+                {label}
             </span>
         );
     }
@@ -494,9 +596,9 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
         return <span className="shrink-0 text-[var(--fs-tiny)] font-medium text-amber-600 dark:text-amber-300">按量预估</span>;
     }
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ¥${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })}`}>
             <Coins className="size-3" />
-            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
+            ¥{price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>
     );
 }

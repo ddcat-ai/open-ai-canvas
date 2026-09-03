@@ -110,6 +110,15 @@ func LoadInstalledProviders(data []byte, resolve AdapterResolver) ([]Adapter, er
 		if err := normalizeManifest(&manifest); err != nil {
 			return nil, err
 		}
+		// manifest.Metadata 由 JSON 反序列化得到，Create/Poll/Cancel 等运行时字段
+		// 带 json:"-" 标签不会落盘；这里从 host 内置适配器补回，使包装后的
+		// metadataAdapter 仍能正确暴露轮询等能力（例如判断同步/异步协议）。
+		delegateMeta := adapter.Metadata()
+		manifest.Metadata.Create = delegateMeta.Create
+		manifest.Metadata.Poll = delegateMeta.Poll
+		manifest.Metadata.Cancel = delegateMeta.Cancel
+		manifest.Metadata.ContentType = delegateMeta.ContentType
+		manifest.Metadata.RequiresPublicMediaURLs = delegateMeta.RequiresPublicMediaURLs
 		return []Adapter{metadataAdapter{metadata: manifest.Metadata, delegate: adapter}}, nil
 	}
 	if len(manifest.Contributes.Providers) == 0 {

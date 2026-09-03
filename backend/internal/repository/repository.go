@@ -1810,6 +1810,30 @@ func (r *Repository) SaveShotWithRevision(shot *model.Shot, revision *model.Shot
 	})
 }
 
+// CreateProjectShotsWithRevisions 原子创建一批语义镜头及其首个版本。
+// 该方法只写入分镜事实，不创建媒体任务或产物。
+func (r *Repository) CreateProjectShotsWithRevisions(projectID string, unitID string, shots []model.Shot, revisions []model.ShotRevision) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if len(shots) != len(revisions) {
+			return errors.New("shots and revisions must have the same length")
+		}
+		if len(shots) == 0 {
+			return errors.New("shots must not be empty")
+		}
+		if err := tx.Create(&shots).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&revisions).Error; err != nil {
+			return err
+		}
+		now := time.Now()
+		if err := invalidateUnitWorkflowTx(tx, projectID, unitID, "storyboard", now); err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": now}).Error
+	})
+}
+
 func (r *Repository) ReplaceProjectUnitShots(projectID string, unitID string, shots []model.Shot, revisions []model.ShotRevision, references []model.ShotAssetReference, expectedShotIDs []string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if expectedShotIDs != nil {

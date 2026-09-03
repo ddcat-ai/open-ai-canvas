@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ func validateCreditPolicy(policy CreditPolicy) error {
 		return BadAuthRequest("注册和签到奖励不能小于 0")
 	}
 	if policy.SignupBonusMicrocredits > 1_000_000*CreditScale || policy.CheckinBonusMicrocredits > 100_000*CreditScale {
-		return BadAuthRequest("积分奖励超出允许范围")
+		return BadAuthRequest("奖励金额超出允许范围")
 	}
 	if policy.DefaultMultiplierBPS <= 0 || policy.DefaultMultiplierBPS > 1_000_000 {
 		return BadAuthRequest("默认模型倍率必须在 0.0001-100 之间")
@@ -59,7 +60,7 @@ func (s *Service) creditPolicy() (CreditPolicy, error) {
 	}
 	var policy CreditPolicy
 	if json.Unmarshal([]byte(setting.ValueJSON), &policy) != nil {
-		return CreditPolicy{}, errors.New("积分策略配置格式无效")
+		return CreditPolicy{}, errors.New("余额策略配置格式无效")
 	}
 	if policy.ModelMultiplierBPS == nil {
 		policy.ModelMultiplierBPS = map[string]int64{}
@@ -116,7 +117,7 @@ func (s *Service) ensureSignupBonus(userID string) error {
 	if err != nil || policy.SignupBonusMicrocredits == 0 {
 		return err
 	}
-	_, _, err = s.repo.GrantCreditsOnce(userID, model.CreditLedgerSignupBonus, policy.SignupBonusMicrocredits, "signup:"+userID, "新用户默认积分")
+	_, _, err = s.repo.GrantCreditsOnce(userID, model.CreditLedgerSignupBonus, policy.SignupBonusMicrocredits, "signup:"+userID, "新用户默认余额")
 	return err
 }
 
@@ -149,20 +150,15 @@ func (s *Service) publicCreditPolicy(userID string) (PublicCreditPolicy, error) 
 }
 
 // 单价、数量和倍率全程使用整数并向上取整，避免浮点误差造成少扣积分。
-func creditAmount(unitPrice int64, quantity int64, multiplierBPS int64) (int64, error) {
+func creditAmount(unitPrice float64, quantity int64, multiplierBPS int64) (int64, error) {
 	if unitPrice < 0 || quantity <= 0 || multiplierBPS <= 0 {
-		return 0, errors.New("积分计费参数无效")
+		return 0, errors.New("余额计费参数无效")
 	}
-	if unitPrice > (1<<63-1)/quantity {
-		return 0, errors.New("积分计费金额溢出")
-	}
-	base := unitPrice * quantity
-	if base > ((1<<63-1)-9_999)/multiplierBPS {
-		return 0, errors.New("积分计费金额溢出")
-	}
-	amount := (base*multiplierBPS + 9_999) / 10_000
+	base := unitPrice * float64(quantity)
+	// 价格为 float64（微积分/次或秒），最终金额向上取整为整数微积分
+	amount := int64(math.Ceil(base * float64(multiplierBPS) / 10_000))
 	if amount < 0 {
-		return 0, fmt.Errorf("积分计费金额无效：%d", amount)
+		return 0, fmt.Errorf("余额计费金额无效：%d", amount)
 	}
 	return amount, nil
 }

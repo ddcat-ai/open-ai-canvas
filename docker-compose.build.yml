@@ -14,6 +14,11 @@ services:
       dockerfile: backend/Dockerfile
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    # 红鸟站点在 Cloudflare 后面；本机 Clash 的 fake-ip 会让后端 SSRF 校验把域名判成内网地址，
+    # 这里把域名固定到真实公网 IP（Cloudflare anycast）。若日后该 IP 失效，用 DoH 重新解析后更新。
+    extra_hosts:
+      - "open.hongniaoai.com:172.67.214.119"
+      - "api.hongniaoai.com:172.67.214.119"
 
   web:
     image: open-ai-canvas-web:server

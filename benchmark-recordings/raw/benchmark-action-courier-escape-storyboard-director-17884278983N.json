@@ -1,0 +1,154 @@
+{
+  "fixtureId": "action-courier-escape",
+  "mode": "storyboard-director",
+  "effectiveSkillIds": [
+    "storyboard-director"
+  ],
+  "toolTrace": [
+    "canvas_get_context",
+    "project_create_or_update_shots"
+  ],
+  "shots": [
+    {
+      "id": "836264fdaa164515f68942b997e73da7",
+      "position": 1,
+      "title": "车站入口建立空间",
+      "description": "时长4秒｜广角高位横移建立地理：画面左侧是进站大厅入口，中央为分流人群，右后方可见向下扶梯，最右侧远处是检票闸机与站台指示。快递员背着包裹从左向右进入，镜头沿他的行进方向横移，先交代目的地与逃生路线。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "e8d7ff96d2a2058c9f1b172ab06683eb",
+      "position": 2,
+      "title": "包裹与尾随确认",
+      "description": "时长4秒｜中近景跟拍快递员右后方，保持包裹在画面前景；他经过一根立柱时借玻璃反光回望，发现同一名跟踪者在后方约八码处停下。镜头随他的回头短暂推近，再拉回到原跟拍轴线，确认跟踪关系而不跳地理。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "055784fde1b486959a492a9c4e8689e8",
+      "position": 3,
+      "title": "人群切割",
+      "description": "时长5秒｜手持低位侧后方跟拍，快递员突然加速切入左侧下班人潮，用行李箱、广告牌和成排立柱制造遮挡；摄影机被人群短暂挡住后从右侧重新捕捉他，跟踪者被迫绕行。运动由快递员加速和人群遮挡驱动，方向始终朝右后方扶梯。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "554000bb34a18f715e9cf83c6a34f462",
+      "position": 4,
+      "title": "扶梯换层",
+      "description": "时长4秒｜镜头从扶梯底部向上仰拍，快递员冲上向下行人流旁的上行扶梯，摄影机退行跟拍并保持扶梯扶手作为纵深线；跟踪者在下方撞开人群追上。快递员到达上层后向右急转，镜头随转向甩 pan，明确进入检票层。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "c3dccff6072530319716e11354d1bf4d",
+      "position": 5,
+      "title": "检票口封锁",
+      "description": "时长5秒｜上层检票区的广角前跟，快递员从画面左侧冲向右侧闸机，前方一排闸机形成横向屏障；他刷证失败，改为绕向最右侧宽闸机。镜头沿闸机横向平移，跟踪者从后景压近，距离从八码缩到四码，升级阻断感。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "125c791d75a9a26e435648b6ccd2ec6f",
+      "position": 6,
+      "title": "借闸机反制",
+      "description": "时长4秒｜近景固定在最右侧宽闸机出口，快递员跨过出口线后突然停步，把一只空周转箱推入相邻闸机，制造人流堵塞；摄影机快速向右摇，跟着箱子和被迫减速的跟踪者，再回扣快递员奔向站台楼梯的背影。动作方向由左→右保持连续。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "763fdcb315cb46461d9c0981a6a86a02",
+      "position": 7,
+      "title": "站台揭示与倒计时",
+      "description": "时长5秒｜摄影机从楼梯口冲出到站台，先以广角向前推进揭示：列车停在右侧、车门已开启，站台安全线横贯前景；电子屏显示即将关门。快递员从左前景斜切向右侧最近车门，镜头跟随他的视线和冲刺线路，跟踪者在楼梯口露面。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "6f7faabd2fe9c6bd32e420193dfa5212",
+      "position": 8,
+      "title": "车门与追踪者夹击",
+      "description": "时长5秒｜长焦压缩站台纵深，快递员位于右侧车门前，跟踪者从左后方沿安全线逼近；车门提示灯闪烁，周围乘客开始上车。镜头沿安全线向后滑移，把两人和车门保持在同一轴线上，随着跟踪者逼近逐步收紧焦距，突出选择压力。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "3701b457eb6531a14a80ae096db234f9",
+      "position": 9,
+      "title": "最后选择",
+      "description": "时长4秒｜切到快递员主观视角：左侧是可继续逃向站台尽头的服务通道，右侧是正在倒计时的列车车门；跟踪者的影子进入画面底部。镜头先快速左摇扫过服务通道，再被快递员的视线硬拉回右侧车门，完成有动机的选择准备。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    },
+    {
+      "id": "822137fe63fa297b0513aef9b033312a",
+      "position": 10,
+      "title": "冲入关门列车",
+      "description": "时长5秒｜侧面近景跟拍，快递员最终选择右侧列车，抱紧重要包裹冲入车门；他在门缝收窄前用肩顶住门框完成上车，摄影机跟到门内并回望站台，跟踪者被关闭的车门隔在外面。车门合拢与列车启动形成节奏终点，空间关系得到闭合。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 0,
+      "status": "draft"
+    }
+  ],
+  "projectId": "4xG3cxGoHCbhvH2xEGjVaQ",
+  "unitId": "unit-action-003",
+  "agentRunId": "989c76507a6cc84a783577b91dd26a85",
+  "requestedShotCount": 10,
+  "requestedTotalDurationMs": 45000,
+  "generatedAt": "2026-09-03T17:45:00+08:00",
+  "metadata": {
+    "model": "gpt-5.6-sol",
+    "provider": "a6api",
+    "notes": "director模式：storyboard-director技能，10个shots成功创建，duration_ms为0（Codex未填写时长）"
+  }
+}

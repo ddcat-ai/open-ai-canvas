@@ -1037,7 +1037,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		if logErr != nil {
 			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但调用日志写入失败，费用状态待核对")
 		} else if err := svc.SettleBilling(billingOrderID, ""); err != nil {
-			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但积分结算失败："+err.Error())
+			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但余额结算失败："+err.Error())
 		}
 	} else if statusCode == 524 {
 		_ = svc.MarkBillingUncertain(billingOrderID, "上游返回 524，费用状态待核对")

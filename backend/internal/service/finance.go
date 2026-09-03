@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -159,7 +160,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 		return nil, err
 	}
 	if req.AmountMicrocredits <= 0 {
-		return nil, BadAuthRequest("兑换码积分必须大于 0")
+		return nil, BadAuthRequest("兑换码面值必须大于 0")
 	}
 	if req.Count <= 0 || req.Count > 5000 {
 		return nil, BadAuthRequest("单批兑换码数量需为 1-5000")
@@ -271,7 +272,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 		return nil, err
 	}
 	if req.AmountMicrocredits == 0 {
-		return nil, BadAuthRequest("调账积分不能为 0")
+		return nil, BadAuthRequest("调账金额不能为 0")
 	}
 	note := strings.TrimSpace(req.Note)
 	if note == "" {
@@ -282,7 +283,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 	}
 	account, err := s.repo.AdjustCredits(userID, actor.ID, req.AmountMicrocredits, truncateRunes(note, 500))
 	if errors.Is(err, repository.ErrInsufficientCredits) {
-		return nil, BadAuthRequest("用户可用积分不足，不能执行本次扣减")
+		return nil, BadAuthRequest("用户可用余额不足，不能执行本次扣减")
 	}
 	if err != nil {
 		return nil, err
@@ -494,7 +495,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	amount := int64(0)
 	switch logicalModel.BillingMode {
 	case "fixed_request":
-		amount = logicalModel.UnitPriceMicrocredits
+		amount = int64(math.Ceil(logicalModel.UnitPriceMicrocredits))
 	case "per_second":
 		quantity = billingQuantity(capability, config["videoSeconds"])
 		if capability != "video" || quantity <= 0 {
@@ -553,7 +554,7 @@ func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, m
 	}
 	if err := s.repo.ReserveBillingOrder(order); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {
-			return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
+			return nil, BadAuthRequest("余额不足，请先使用兑换码充值")
 		}
 		return nil, err
 	}
@@ -574,7 +575,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	}
 	tier := channelModelPriceTierForBilling(*item, priceTierID, capability, intents...)
 	if tier == nil {
-		return nil, BadAuthRequest("当前模型尚未配置所选规格的用户积分价格")
+		return nil, BadAuthRequest("当前模型尚未配置所选规格的用户价格")
 	}
 	quantity := int64(1)
 	amount := int64(0)
@@ -784,30 +785,22 @@ func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate
 	if item == nil || estimate.InputTokens < 0 || estimate.OutputTokens <= 0 || multiplierBPS <= 0 {
 		return 0, errors.New("Token 计费参数无效")
 	}
-	inputAmount, ok := safeTokenProduct(estimate.InputTokens, item.InputTokenPriceMicrocredits)
-	if !ok {
-		return 0, errors.New("Token 计费金额溢出")
-	}
-	outputAmount, ok := safeTokenProduct(estimate.OutputTokens, item.OutputTokenPriceMicrocredits)
-	if !ok || inputAmount > 1<<63-1-outputAmount {
-		return 0, errors.New("Token 计费金额溢出")
-	}
+	inputAmount := safeTokenProduct(estimate.InputTokens, item.InputTokenPriceMicrocredits)
+	outputAmount := safeTokenProduct(estimate.OutputTokens, item.OutputTokenPriceMicrocredits)
 	base := inputAmount + outputAmount
-	if base > (1<<63-1-9_999_999_999)/multiplierBPS {
-		return 0, errors.New("Token 计费金额溢出")
-	}
-	amount := (base*multiplierBPS + 9_999_999_999) / 10_000_000_000
+	// 价格为 float64（微积分/token），最终金额向上取整为整数微积分
+	amount := int64(math.Ceil(base * float64(multiplierBPS) / 10_000_000_000))
 	if amount <= 0 {
 		return 0, errors.New("Token 计费金额必须大于 0")
 	}
 	return amount, nil
 }
 
-func safeTokenProduct(tokens int64, price int64) (int64, bool) {
-	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
-		return 0, false
+func safeTokenProduct(tokens int64, price float64) float64 {
+	if tokens < 0 || price < 0 {
+		return 0
 	}
-	return tokens * price, true
+	return float64(tokens) * price
 }
 
 func billingQuantity(capability string, value any) int64 {

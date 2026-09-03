@@ -97,5 +97,5 @@ function capabilityLabel(capability: ModelCapability) {
 }
 
 function formatPrice(microcredits: number) {
-    return (microcredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    return "¥" + (microcredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
 }

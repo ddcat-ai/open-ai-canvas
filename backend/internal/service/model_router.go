@@ -1096,7 +1096,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	previousRouteID := task.RouteID
 	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {
-			return nil, BadAuthRequest("模型服务价格发生变化，当前积分余额不足")
+			return nil, BadAuthRequest("模型服务价格发生变化，当前余额不足")
 		}
 		return nil, err
 	}

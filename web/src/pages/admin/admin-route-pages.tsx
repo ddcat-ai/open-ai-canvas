@@ -65,12 +65,12 @@ export function CreditOperationsPage() {
     const [activeOperation, setActiveOperation] = useState<"policy" | "adjustment" | null>(null);
     return (
         <AdminPageFrame
-            title="积分运营"
-            description="异常计费核对、积分策略与人工调账"
+            title="余额运营"
+            description="异常计费核对、余额策略与人工调账"
             actions={
                 <>
                     <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
-                        积分策略
+                        余额策略
                     </Button>
                     <Button type="primary" icon={<UserRoundCog className="size-4" />} onClick={() => setActiveOperation("adjustment")}>
                         人工调账
@@ -78,7 +78,7 @@ export function CreditOperationsPage() {
                 </>
             }
         >
-            <Suspense fallback={<PageFallback label="积分运营数据" />}>
+            <Suspense fallback={<PageFallback label="余额运营数据" />}>
                 <CreditOperationsPanel users={references.users} activeOperation={activeOperation} onOperationChange={setActiveOperation} />
             </Suspense>
         </AdminPageFrame>

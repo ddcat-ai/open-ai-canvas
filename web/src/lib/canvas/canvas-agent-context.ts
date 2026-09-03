@@ -1,5 +1,48 @@
 import { hashCanvasAgentSnapshot, type CanvasAgentOp, type CanvasAgentSnapshot } from "./canvas-agent-ops";
+import { classifyNodeTask } from "./canvas-agent-state";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+
+// 单次画布上下文注入的节点上限。超大画布不把全部节点塞进模型，
+// 而是按“选中 / 进行中或失败 / 选中节点一跳邻居 / 其余”的优先级保留一个窗口，
+// 其余节点需要时由 Agent 主动调用 canvas_find_nodes 精确检索。
+export const MAX_AGENT_CONTEXT_NODES = 120;
+
+type ContextWindow<TNode> = { nodes: TNode[]; truncated: boolean; total: number; included: number };
+
+// 选择注入上下文的节点窗口，保持画布原始顺序。优先节点（选中、loading/error、
+// 选中节点的一跳邻居）尽量全保留，剩余名额按原始顺序填充普通节点。
+export function selectContextNodes<TNode extends { id: string; metadata?: Record<string, unknown> }>(
+    allNodes: TNode[],
+    connections: CanvasAgentSnapshot["connections"],
+    selectedIds: Set<string>,
+    max: number = MAX_AGENT_CONTEXT_NODES,
+): ContextWindow<TNode> {
+    const total = allNodes.length;
+    if (total <= max) return { nodes: allNodes, truncated: false, total, included: total };
+
+    const neighborOfSelected = new Set<string>();
+    for (const connection of connections) {
+        if (selectedIds.has(connection.fromNodeId)) neighborOfSelected.add(connection.toNodeId);
+        if (selectedIds.has(connection.toNodeId)) neighborOfSelected.add(connection.fromNodeId);
+    }
+    const isPriority = (node: TNode) => {
+        const status = String(node.metadata?.status || "idle");
+        return selectedIds.has(node.id) || status === "loading" || status === "error" || neighborOfSelected.has(node.id);
+    };
+
+    const keptIds = new Set<string>();
+    const priority = allNodes.filter(isPriority);
+    priority.slice(0, max).forEach((node) => keptIds.add(node.id));
+    const remainingSlots = Math.max(0, max - keptIds.size);
+    if (remainingSlots > 0) {
+        for (const node of allNodes) {
+            if (keptIds.size >= max) break;
+            if (!isPriority(node)) keptIds.add(node.id);
+        }
+    }
+    const windowNodes = allNodes.filter((node) => keptIds.has(node.id));
+    return { nodes: windowNodes, truncated: true, total, included: windowNodes.length };
+}
 
 export type CanvasAgentResource = {
     nodeId: string;
@@ -18,15 +61,19 @@ export type CanvasAgentResource = {
     ready: boolean;
 };
 
-export function buildCanvasAgentContext(snapshot: CanvasAgentSnapshot, options: { stateHash?: string; hashSource?: "browser-local" | "canvas-agent-server" } = {}) {
-    const nodes = snapshot.nodes || [];
+export function buildCanvasAgentContext(snapshot: CanvasAgentSnapshot, options: { stateHash?: string; hashSource?: "browser-local" | "canvas-agent-server"; maxNodes?: number; autoGenerateMedia?: boolean } = {}) {
+    const allNodes = snapshot.nodes || [];
     const selectedIds = new Set(snapshot.selectedNodeIds || []);
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const nodeById = new Map(allNodes.map((node) => [node.id, node]));
+    // 超大画布只注入优先级窗口，避免上下文膨胀；统计与告警仍基于全部节点。
+    const window = selectContextNodes(allNodes, snapshot.connections, selectedIds, options.maxNodes);
+    const nodes = window.nodes;
+    const windowIds = new Set(nodes.map((node) => node.id));
     const resources = nodes.flatMap((node) => {
         const resource = resourceFromNode(node);
         return resource ? [resource] : [];
     });
-    const nodeTypeCounts = nodes.reduce<Record<string, number>>((counts, node) => {
+    const nodeTypeCounts = allNodes.reduce<Record<string, number>>((counts, node) => {
         counts[node.type] = (counts[node.type] || 0) + 1;
         return counts;
     }, {});
@@ -40,13 +87,19 @@ export function buildCanvasAgentContext(snapshot: CanvasAgentSnapshot, options: 
         // the server hash in a write precondition.
         stateHash: options.stateHash || hashCanvasAgentSnapshot(snapshot),
         hashSource: options.hashSource || "browser-local",
-        canvas: { projectId: snapshot.projectId, domainProjectId: snapshot.domainProjectId, title: snapshot.title, viewport: snapshot.viewport, nodeCount: nodes.length, connectionCount: snapshot.connections.length, selectedNodeCount: selectedIds.size, nodeTypeCounts },
-        selection: nodes.filter((node) => selectedIds.has(node.id)).map(compactNode),
+        canvas: { projectId: snapshot.projectId, domainProjectId: snapshot.domainProjectId, title: snapshot.title, viewport: snapshot.viewport, nodeCount: allNodes.length, connectionCount: snapshot.connections.length, selectedNodeCount: selectedIds.size, nodeTypeCounts, contextIncluded: window.included, contextTruncated: window.truncated, ...(options.autoGenerateMedia === undefined ? {} : { autoGenerateMedia: options.autoGenerateMedia }) },
+        selection: allNodes.filter((node) => selectedIds.has(node.id)).map(compactNode),
         nodes: nodes.map(compactNode),
-        connections: snapshot.connections.map((connection) => ({ id: connection.id, fromNodeId: connection.fromNodeId, fromTitle: nodeById.get(connection.fromNodeId)?.title || "未知节点", toNodeId: connection.toNodeId, toTitle: nodeById.get(connection.toNodeId)?.title || "未知节点", fromHandleId: connection.fromHandleId, toHandleId: connection.toHandleId })),
+        // 连线只保留两端都在上下文窗口内的，避免引用未展示节点。
+        connections: snapshot.connections
+            .filter((connection) => windowIds.has(connection.fromNodeId) && windowIds.has(connection.toNodeId))
+            .map((connection) => ({ id: connection.id, fromNodeId: connection.fromNodeId, fromTitle: nodeById.get(connection.fromNodeId)?.title || "未知节点", toNodeId: connection.toNodeId, toTitle: nodeById.get(connection.toNodeId)?.title || "未知节点", fromHandleId: connection.fromHandleId, toHandleId: connection.toHandleId })),
         resources,
         warnings: [
-            ...(nodes.some((node) => node.metadata?.status === "error") ? ["画布中存在生成失败节点；重试前先检查错误信息。"] : []),
+            ...(options.autoGenerateMedia === false ? ["当前关闭了媒体自动生成：你只能创建/更新图片、视频、音频节点并写好提示词与引用，不要调用生成任务（节点会保持 idle）；待用户开启开关或手动生成时才会真正出片，此阶段不产生生成费用。"] : []),
+            ...(window.truncated ? [`画布共有 ${window.total} 个节点，上下文仅按优先级注入 ${window.included} 个（选中、进行中/失败及其相邻节点优先）；需要其他节点时用 canvas_find_nodes 精确检索，不要假设未展示节点不存在。`] : []),
+            ...(allNodes.some((node) => node.metadata?.status === "error") ? ["画布中存在生成失败节点；重试前先检查错误信息。"] : []),
+            ...(allNodes.some((node) => classifyNodeTask(node)?.lifecycle === "pending") ? ["有节点的生成任务仍在进行中或等待结果落地，不要对同一节点重复提交生成；确需重新生成请带 retry，或先用 canvas_get_generation_tasks 查询进度。"] : []),
             ...(resources.some((resource) => !resource.ready) ? ["存在未就绪或缺少持久化引用的媒体节点，不要把占位节点当作可用参考素材。"] : []),
         ],
     };

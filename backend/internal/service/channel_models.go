@@ -25,10 +25,10 @@ type ChannelModelRequest struct {
 	Capability                   string                         `json:"capability"`
 	Protocol                     string                         `json:"protocol"`
 	BillingMode                  string                         `json:"billingMode"`
-	UnitPriceMicrocredits        int64                          `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64                          `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64                          `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64                          `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64                          `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64                          `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64                          `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64                          `json:"cachedTokenPriceMicrocredits"`
 	PriceConfigured              bool                           `json:"priceConfigured"`
 	Enabled                      *bool                          `json:"enabled"`
 	CapabilityConfig             *ModelCapabilityConfig         `json:"capabilityConfig"`
@@ -45,10 +45,10 @@ type ChannelModelPriceTierRequest struct {
 	VideoSeconds                 int               `json:"videoSeconds"`
 	ProviderModelKey             string            `json:"providerModelKey"`
 	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64             `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64             `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64             `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64             `json:"cachedTokenPriceMicrocredits"`
 	PriceConfigured              bool              `json:"priceConfigured"`
 	Enabled                      *bool             `json:"enabled"`
 }
@@ -473,14 +473,14 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 		return BadAuthRequest("Token 计费仅支持文本模型和火山方舟视频协议")
 	}
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
-		return BadAuthRequest("模型积分价格不能小于 0")
+		return BadAuthRequest("模型价格不能小于 0")
 	}
 	if !input.PriceConfigured {
 		return nil
 	}
-	const maxTokenPriceMicrocredits = int64(1_000_000) * CreditScale
+	const maxTokenPriceMicrocredits = float64(1_000_000) * float64(CreditScale)
 	if input.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
-		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
+		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000")
 	}
 	return nil
 }

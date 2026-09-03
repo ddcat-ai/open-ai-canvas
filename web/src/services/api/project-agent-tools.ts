@@ -55,12 +55,10 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
     }
     if (name === "project_create_or_update_shots") {
         const shots = Array.isArray(rawInput.shots) ? rawInput.shots : [];
-        const result = [];
-        for (const shot of shots) {
-            if (!isShotInput(shot)) continue;
-            result.push((await saveProjectShot(projectId, shot)).shot);
-        }
-        return { shots: result };
+        const validShots = shots.filter(isShotInput);
+        // 并行保存所有shots，避免串行循环导致超时
+        const results = await Promise.all(validShots.map((shot) => saveProjectShot(projectId, shot)));
+        return { shots: results.map((r) => r.shot) };
     }
     if (name === "project_link_shot_asset") {
         return linkShotAsset(projectId, String(rawInput.shotId || ""), { assetVersionId: String(rawInput.assetVersionId || ""), role: String(rawInput.role || "reference") as ShotAssetReference["role"] });

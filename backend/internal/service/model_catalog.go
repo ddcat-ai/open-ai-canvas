@@ -41,7 +41,7 @@ type PublicChannelModel struct {
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
 	PricingMode      string                        `json:"pricingMode"`
-	DisplayPrice     *int64                        `json:"displayPrice,omitempty"`
+	DisplayPrice     *float64                        `json:"displayPrice,omitempty"`
 	PriceLabel       string                        `json:"priceLabel"`
 	Available        bool                          `json:"available"`
 }
@@ -53,10 +53,10 @@ type PublicChannelModelPriceTier struct {
 	Resolution                   string            `json:"resolution"`
 	VideoSeconds                 int               `json:"videoSeconds"`
 	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	UnitPriceMicrocredits        float64             `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  float64             `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits float64             `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits float64             `json:"cachedTokenPriceMicrocredits"`
 }
 
 // ModelCatalog 返回统一的模型目录
@@ -194,7 +194,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) PublicChannelMode
 }
 
 // computeChannelModelPriceDisplay 计算渠道模型的价格展示信息
-func computeChannelModelPriceDisplay(cm *model.ChannelModel, priceTiers []PublicChannelModelPriceTier) (string, *int64, string) {
+func computeChannelModelPriceDisplay(cm *model.ChannelModel, priceTiers []PublicChannelModelPriceTier) (string, *float64, string) {
 	if len(priceTiers) == 0 {
 		return "provider", nil, "未配置"
 	}
@@ -212,7 +212,7 @@ func computeChannelModelPriceDisplay(cm *model.ChannelModel, priceTiers []Public
 }
 
 // getChannelTierDisplayPrice 获取渠道价格档的展示价格
-func getChannelTierDisplayPrice(tier PublicChannelModelPriceTier) int64 {
+func getChannelTierDisplayPrice(tier PublicChannelModelPriceTier) float64 {
 	if tier.BillingMode == "fixed_request" || tier.BillingMode == "per_second" {
 		return tier.UnitPriceMicrocredits
 	}

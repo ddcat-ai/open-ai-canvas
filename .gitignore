@@ -49,4 +49,12 @@ assets/prototypes/.*.drawio.bkp
 camera_language_guide.md
 .superdesign
 .playwright-cli/
+
+# Local deployment files
+hongniao-models.json
+update-yingce.sh
+更新影策.command
+本机部署说明.md
+红鸟模型价格清单.csv
+红鸟模型价格清单.md
 /project-memory/

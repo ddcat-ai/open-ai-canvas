@@ -1,0 +1,147 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "hongniao-video",
+  "name": "红鸟视频",
+  "version": "1.0.0",
+  "author": "影策自定义",
+  "description": "红鸟AI中转站视频生成协议，支持文生视频、图生视频和参考素材生成。",
+  "permissions": ["generation.run", "media.read"],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "hongniao-video",
+        "label": "红鸟视频",
+        "capabilities": ["video"],
+        "scopes": ["admin.system-channel", "user.custom-channel", "canvas", "creation", "agent"],
+        "baseUrl": "https://open.hongniaoai.com",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "红鸟视频模型ID"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频生成提示词"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "seconds",
+            "description": "视频时长（秒）"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "mapping": "aspect_ratio",
+            "description": "宽高比"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "参考图片URL列表"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "mapping": "videos",
+            "description": "参考视频URL列表"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "mapping": "audios",
+            "description": "参考音频URL列表"
+          },
+          {
+            "name": "generateAudio",
+            "type": "boolean",
+            "mapping": "generate_audio",
+            "description": "是否生成音频"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "body": {
+            "model": {"$ref": "request.model"},
+            "prompt": {"$ref": "request.prompt"},
+            "seconds": {"$coalesce": [{"$ref": "request.duration"}, 5]},
+            "aspect_ratio": {"$omitEmpty": {"$ref": "request.aspectRatio"}},
+            "images": {"$omitEmpty": {"$map": {"from": {"$ref": "request.images"}, "as": "media", "in": {"$ref": "media.value"}}}},
+            "videos": {"$omitEmpty": {"$map": {"from": {"$ref": "request.videos"}, "as": "media", "in": {"$ref": "media.value"}}}},
+            "audios": {"$omitEmpty": {"$map": {"from": {"$ref": "request.audios"}, "as": "media", "in": {"$ref": "media.value"}}}},
+            "generate_audio": {"$ref": "request.generateAudio"}
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}",
+          "originPath": true
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {"$ref": "response.id"},
+              {"$ref": "response.task_id"},
+              {"$ref": "response.taskId"},
+              {"$ref": "response.data.id"},
+              {"$ref": "response.task.id"},
+              {"$ref": "taskId"}
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {"$ref": "response.status"},
+              {"$ref": "response.state"},
+              {"$ref": "response.data.status"},
+              {"$ref": "response.task.status"},
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {"$ref": "response.message"},
+              {"$ref": "response.error"},
+              {"$ref": "response.fail_reason"},
+              {"$ref": "response.data.message"}
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {"$ref": "response.videos"},
+              {"$ref": "response.data"},
+              {"$ref": "response.content"},
+              {"$ref": "response.video_url"},
+              {"$ref": "response.url"}
+            ]
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

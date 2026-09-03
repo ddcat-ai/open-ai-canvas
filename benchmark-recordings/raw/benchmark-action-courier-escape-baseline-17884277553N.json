@@ -1,0 +1,18 @@
+{
+  "fixtureId": "action-courier-escape",
+  "mode": "baseline",
+  "effectiveSkillIds": [],
+  "toolTrace": ["canvas_get_context"],
+  "shots": [],
+  "projectId": "4xG3cxGoHCbhvH2xEGjVaQ",
+  "unitId": "unit-action-003",
+  "agentRunId": "989c76507a6cc84a783577b91dd26a85",
+  "requestedShotCount": 10,
+  "requestedTotalDurationMs": 45000,
+  "generatedAt": "2026-09-03T17:35:00+08:00",
+  "metadata": {
+    "model": "gpt-5.6-sol",
+    "provider": "a6api",
+    "notes": "baseline模式：无storyboard-director技能，只调用canvas_get_context，未创建semantic shots"
+  }
+}

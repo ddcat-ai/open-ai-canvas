@@ -114,7 +114,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const bulkDisable = () => {
         modal.confirm({
             title: `停用选中的 ${selectedUserIds.length} 个用户？`,
-            content: "这些用户的全部登录态会被清除，身份、任务和积分流水继续保留。操作会整体成功或整体回滚。",
+            content: "这些用户的全部登录态会被清除，身份、任务和余额流水继续保留。操作会整体成功或整体回滚。",
             okText: "确认批量停用",
             cancelText: "取消",
             okButtonProps: { danger: true },

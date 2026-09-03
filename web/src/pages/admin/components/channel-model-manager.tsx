@@ -538,7 +538,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     ) : null}
 
                     <section className="admin-form-section admin-model-editor-section">
-                        <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
+                        <SectionHeading title="用户价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
                         <div className="admin-model-editor-section-content">
                             <Form.List
                                 name="priceTiers"
@@ -732,7 +732,7 @@ function PriceTierFields({
                                 </div>
                             )
                         ) : (
-                            <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "unitPrice"]} label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
+                            <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "unitPrice"]} label={billingMode === "per_second" ? "每秒消耗金额" : "每次消耗金额"} rules={[{ required: true, message: "请输入价格" }]}>
                                 <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
                             </Form.Item>
                         )}
@@ -790,7 +790,7 @@ function priceTierLabel(tier: ChannelModelPriceTier) {
     ].filter(Boolean);
     const spec = specParts.length ? specParts.join(" / ") : "默认规格";
     if (tier.billingMode === "token") return `${spec} · ${formatCredits(tier.outputTokenPriceMicrocredits)} / 百万 Token`;
-    return `${spec} · ${formatCredits(tier.unitPriceMicrocredits)} 积分 / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
+    return `${spec} · ${formatCredits(tier.unitPriceMicrocredits)} / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
 }
 
 function operationOptions(capability: EditableCapability | undefined) {
@@ -806,5 +806,5 @@ function operationLabel(operation: string) {
 }
 
 function formatCredits(value: number) {
-    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    return "¥" + (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
 }

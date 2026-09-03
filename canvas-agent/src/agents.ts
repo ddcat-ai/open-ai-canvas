@@ -125,7 +125,8 @@ class CodexAppClient {
     private constructor(private child: ChildProcess, private emit: AgentEmit) {}
 
     static async start(emit: AgentEmit) {
-        const child = spawn(process.execPath, [codexBin(), "app-server", "--stdio"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+        const { command, args } = codexCommand();
+        const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
         const client = new CodexAppClient(child, emit);
         child.stdout?.on("data", (chunk) => client.read(chunk.toString()));
         child.stderr?.on("data", (chunk) => emit("agent_log", { text: chunk.toString() }));
@@ -548,8 +549,13 @@ function imageExt(type = "") {
     return "jpg";
 }
 
-function codexBin() {
-    return path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin", "codex.js");
+function codexCommand() {
+    const configured = process.env.CODEX_CLI_PATH?.trim();
+    if (configured) return { command: configured, args: ["app-server", "--stdio"] };
+    return {
+        command: process.execPath,
+        args: [path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin", "codex.js"), "app-server", "--stdio"],
+    };
 }
 
 function pipeJsonLines(child: ReturnType<typeof spawn>, emit: AgentEmit, agent: string) {

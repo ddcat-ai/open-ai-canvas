@@ -1,0 +1,167 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "agnes-image",
+  "name": "Agnes图像",
+  "version": "1.0.0",
+  "author": "影策自定义",
+  "description": "Agnes AI官方图像生成协议，支持Agnes Image 2.5 Flash等模型。",
+  "documentation": "# Agnes图像协议插件\n\nAgnes AI官方图像生成协议，适配 Agnes /v1/images/generations 同步接口。\n\n## 接口说明\n\n- 创建任务：POST /v1/images/generations\n- 鉴权：Authorization: Bearer <apiKey>\n- 同步接口，直接返回图片URL\n\n## 请求字段\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| model | string | 图像模型ID（agnes-image-2.5-flash等） |\n| prompt | string | 生成提示词 |\n| size | string | 输出尺寸（1K/2K/3K/4K），默认1K |\n| ratio | string | 宽高比（1:1, 3:4, 4:3, 16:9, 9:16等） |\n| n | integer | 生成图片数量 |\n| extra_body.response_format | string | 固定值 url |\n| extra_body.image | string[] | 参考图片URL列表（图生图） |\n\n## 响应字段\n\n- 图片结果：data[].url / url\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "agnes-image",
+        "label": "Agnes图像",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://apihub.agnes-ai.com/v1",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "Agnes图像模型ID"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "图像生成提示词"
+          },
+          {
+            "name": "quality",
+            "type": "string",
+            "values": [
+              "1K",
+              "2K",
+              "3K",
+              "4K"
+            ],
+            "mapping": "size",
+            "description": "输出尺寸档位，默认1K"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "values": [
+              "1:1",
+              "3:4",
+              "4:3",
+              "16:9",
+              "9:16",
+              "2:3",
+              "3:2",
+              "21:9"
+            ],
+            "mapping": "ratio",
+            "description": "宽高比"
+          },
+          {
+            "name": "imageCount",
+            "type": "integer",
+            "mapping": "n",
+            "description": "生成图片数量"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "extra_body.image",
+            "description": "参考图片URL列表（图生图）"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/images/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "size": {
+              "$coalesce": [
+                {
+                  "$ref": "request.quality"
+                },
+                "1K"
+              ]
+            },
+            "ratio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "n": {
+              "$omitEmpty": {
+                "$ref": "request.imageCount"
+              }
+            },
+            "extra_body": {
+              "response_format": "url",
+              "image": {
+                "$omitEmpty": {
+                  "$map": {
+                    "from": {
+                      "$ref": "request.images"
+                    },
+                    "as": "media",
+                    "in": {
+                      "$ref": "media.value"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "response": {
+          "taskId": {
+            "$ref": "taskId"
+          },
+          "status": "succeeded",
+          "images": {
+            "$coalesce": [
+              {
+                "$ref": "response.data"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

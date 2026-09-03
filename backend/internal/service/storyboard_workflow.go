@@ -20,7 +20,11 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 	if err != nil {
 		return nil, nil, err
 	}
-	return s.buildAgentStoryboardResult(task, plan, assets, input.ProjectStyle)
+	semanticShots, err := s.persistAgentStoryboardShots(task, input, plan)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.buildAgentStoryboardResult(task, plan, assets, input.ProjectStyle, semanticShots)
 }
 
 func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task) (map[string]interface{}, []map[string]interface{}, error) {
@@ -177,7 +181,89 @@ func storyboardRepairContext(ctx context.Context) (context.Context, context.Canc
 	return repairCtx, cancel, nil
 }
 
-func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboardPlan, assets []storyboardAsset, projectStyle storyboardProjectStyle) (map[string]interface{}, []map[string]interface{}, error) {
+type agentStoryboardSemanticShot struct {
+	ShotID          string
+	DomainProjectID string
+	UnitID          string
+	ImagePrompt     string
+	VideoPrompt     string
+}
+
+func (s *Service) persistAgentStoryboardShots(task model.Task, input agentStoryboardInput, plan agentStoryboardPlan) ([]agentStoryboardSemanticShot, error) {
+	domainProjectID := strings.TrimSpace(input.DomainProjectID)
+	if domainProjectID == "" {
+		return nil, nil
+	}
+	if _, err := s.activeProjectForUser(task.UserID, domainProjectID); err != nil {
+		return nil, err
+	}
+
+	unitID := strings.TrimSpace(input.UnitID)
+	if unitID == "" {
+		links, err := s.repo.ProjectCanvasUnitLinks(domainProjectID)
+		if err != nil {
+			return nil, err
+		}
+		seen := make(map[string]struct{})
+		for _, link := range links {
+			if link.CanvasID == task.ProjectID && strings.TrimSpace(link.UnitID) != "" {
+				seen[link.UnitID] = struct{}{}
+			}
+		}
+		if len(seen) != 1 {
+			return nil, BadAuthRequest("请先将当前画布关联到一个章节后再生成分镜")
+		}
+		for id := range seen {
+			unitID = id
+		}
+	}
+	if _, err := s.repo.ProjectUnit(domainProjectID, unitID); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	shots := make([]model.Shot, 0, len(plan.Shots))
+	revisions := make([]model.ShotRevision, 0, len(plan.Shots))
+	semanticShots := make([]agentStoryboardSemanticShot, 0, len(plan.Shots))
+	for index, shot := range plan.Shots {
+		imagePrompt, err := s.compileStoryboardImagePrompt(task.UserID, input.ProjectStyle.Prompt, plan.StyleGuide, shot)
+		if err != nil {
+			return nil, err
+		}
+		videoPrompt, err := s.compileStoryboardVideoPrompt(task.UserID, input.ProjectStyle.Prompt, plan.StyleGuide, shot)
+		if err != nil {
+			return nil, err
+		}
+		shotID := newID()
+		durationMs := int64(shot.Duration) * 1000
+		actionBeats, err := json.Marshal([]map[string]any{{
+			"timeBeats": shot.TimeBeats, "mustHave": shot.MustHave, "optionalDetails": shot.Optional,
+		}})
+		if err != nil {
+			return nil, fmt.Errorf("序列化镜头动作节拍失败：%w", err)
+		}
+		revision := model.ShotRevision{
+			ID: newID(), ShotID: shotID, Version: 1, PlotDescription: strings.TrimSpace(shot.Description),
+			Action: strings.TrimSpace(shot.Performance), Dialogue: strings.TrimSpace(shot.Dialogue), ShotSize: strings.TrimSpace(shot.ShotSize),
+			CameraAngle: strings.TrimSpace(shot.Camera), CameraMovement: strings.TrimSpace(shot.Motion), DurationMs: durationMs,
+			ImagePrompt: imagePrompt, VideoPrompt: videoPrompt, NegativePrompt: strings.TrimSpace(shot.Negative),
+			ContinuityNotes: strings.TrimSpace(shot.ContinuityOut), ActionBeatsJSON: string(actionBeats), CreatedBy: task.UserID, CreatedAt: now,
+		}
+		shots = append(shots, model.Shot{
+			ID: shotID, ProjectID: domainProjectID, UnitID: unitID, CurrentRevisionID: revision.ID,
+			Title: strings.TrimSpace(shot.Title), Description: revision.PlotDescription, Position: index, DurationMs: durationMs,
+			Status: "draft", CreatedAt: now, UpdatedAt: now,
+		})
+		revisions = append(revisions, revision)
+		semanticShots = append(semanticShots, agentStoryboardSemanticShot{ShotID: shotID, DomainProjectID: domainProjectID, UnitID: unitID, ImagePrompt: imagePrompt, VideoPrompt: videoPrompt})
+	}
+	if err := s.repo.CreateProjectShotsWithRevisions(domainProjectID, unitID, shots, revisions); err != nil {
+		return nil, err
+	}
+	return semanticShots, nil
+}
+
+func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboardPlan, assets []storyboardAsset, projectStyle storyboardProjectStyle, semanticShots []agentStoryboardSemanticShot) (map[string]interface{}, []map[string]interface{}, error) {
 	prefix := "agent-" + task.ID
 	scriptID := prefix + "-script"
 	sceneID := prefix + "-scenes"
@@ -196,37 +282,55 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 	}
 	resultShots := make([]map[string]any, 0, len(plan.Shots))
 	for index, shot := range plan.Shots {
-		videoPrompt, err := s.compileStoryboardVideoPrompt(task.UserID, projectStyle.Prompt, plan.StyleGuide, shot)
-		if err != nil {
-			return nil, nil, err
+		videoPrompt := ""
+		if index < len(semanticShots) {
+			videoPrompt = semanticShots[index].VideoPrompt
+		} else {
+			var err error
+			videoPrompt, err = s.compileStoryboardVideoPrompt(task.UserID, projectStyle.Prompt, plan.StyleGuide, shot)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		shotID := fmt.Sprintf("%s-shot-%d", prefix, index+1)
+		canvasShotID := fmt.Sprintf("%s-shot-%d", prefix, index+1)
 		matchedAssets := resolveStoryboardAssets(assets, shot.AssetRefs)
 		assetIDs := make([]string, 0, len(matchedAssets))
 		for _, asset := range matchedAssets {
 			assetIDs = append(assetIDs, asset.ID)
 		}
+		metadata := map[string]any{
+			"workflowKind":          "shot",
+			"workflowTitle":         shot.Title,
+			"workflowDescription":   shotDescription(shot),
+			"shotIndex":             index + 1,
+			"generationMode":        "video",
+			"prompt":                videoPrompt,
+			"composerContent":       shotComposerContent(videoPrompt, matchedAssets),
+			"videoEditOperation":    "text_to_video",
+			"assetBindings":         shot.AssetRefs,
+			"referenceAssetNodeIds": assetIDs,
+			"status":                "idle",
+		}
+		if index < len(semanticShots) {
+			metadata["domainProjectId"] = semanticShots[index].DomainProjectID
+			metadata["unitId"] = semanticShots[index].UnitID
+			metadata["shotId"] = semanticShots[index].ShotID
+			metadata["projectionKey"] = "shot:" + semanticShots[index].ShotID
+			metadata["projectionVersion"] = 1
+		}
 		ops = append(ops,
-			nodeOpWithMetadata(shotID, "video", fmt.Sprintf("镜头 %d · %s", index+1, shortTitle(shot.Title, 18)), index*360, 560, map[string]any{
-				"workflowKind":          "shot",
-				"workflowTitle":         shot.Title,
-				"workflowDescription":   shotDescription(shot),
-				"shotIndex":             index + 1,
-				"generationMode":        "video",
-				"prompt":                videoPrompt,
-				"composerContent":       shotComposerContent(videoPrompt, matchedAssets),
-				"videoEditOperation":    "text_to_video",
-				"assetBindings":         shot.AssetRefs,
-				"referenceAssetNodeIds": assetIDs,
-				"status":                "idle",
-			}),
-			connectOp(scriptID, shotID),
-			connectOp(shotID, finalID),
+			nodeOpWithMetadata(canvasShotID, "video", fmt.Sprintf("镜头 %d · %s", index+1, shortTitle(shot.Title, 18)), index*360, 560, metadata),
+			connectOp(scriptID, canvasShotID),
+			connectOp(canvasShotID, finalID),
 		)
 		for _, asset := range matchedAssets {
-			ops = append(ops, connectOp(asset.ID, shotID))
+			ops = append(ops, connectOp(asset.ID, canvasShotID))
 		}
-		resultShots = append(resultShots, map[string]any{"title": shot.Title, "description": shot.Description, "assetBindings": shot.AssetRefs, "referenceAssetNodeIds": assetIDs})
+		resultShot := map[string]any{"title": shot.Title, "description": shot.Description, "assetBindings": shot.AssetRefs, "referenceAssetNodeIds": assetIDs}
+		if index < len(semanticShots) {
+			resultShot["shotId"] = semanticShots[index].ShotID
+		}
+		resultShots = append(resultShots, resultShot)
 	}
 	ops = append(ops, map[string]any{"type": "select_nodes", "ids": shotIDs(prefix, len(plan.Shots))})
 	result := map[string]any{
@@ -241,7 +345,18 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 		"locations":  plan.Locations,
 		"shots":      resultShots,
 	}
+	if len(semanticShots) > 0 {
+		result["semanticPersistence"] = map[string]any{"persisted": true, "shotIds": semanticShotIDs(semanticShots)}
+	}
 	return result, ops, nil
+}
+
+func semanticShotIDs(shots []agentStoryboardSemanticShot) []string {
+	ids := make([]string, 0, len(shots))
+	for _, shot := range shots {
+		ids = append(ids, shot.ShotID)
+	}
+	return ids
 }
 
 func (s *Service) compileStoryboardImagePrompt(userID string, projectStyle string, styleGuide string, shot agentStoryboardShot) (string, error) {

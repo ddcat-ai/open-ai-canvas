@@ -73,8 +73,8 @@ func Builtins() *Registry {
 	}
 	registry, err := NewRegistry(
 		openAIChatAdapter(), openAIResponsesAdapter(), claudeAdapter(),
-		openAIImagesAdapter(), grokImagesAdapter(), arkImagesAdapter(), jimengImagesAdapter(), geminiImagesAdapter(),
-		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(),
+		openAIImagesAdapter(), agnesImagesAdapter(), grokImagesAdapter(), arkImagesAdapter(), jimengImagesAdapter(), geminiImagesAdapter(), hongniaoImagesAdapter(), grsaiImagesAdapter(),
+		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(), hongniaoVideosAdapter(),
 		openAIAudioAdapter(), asyncAudioAdapter(), agnesAdapter(),
 	)
 	if err != nil {
@@ -193,6 +193,52 @@ func openAIImagesAdapter() Adapter {
 			copyIf(body, "size", r.AspectRatio)
 			copyIf(body, "quality", r.Quality)
 			mergeExtra(body, r.Extra, "size", "quality", "background", "response_format", "output_format", "style", "n")
+			return jsonSpec(http.MethodPost, "/v1/images/generations", body), nil
+		},
+		parseCreate: parseImageResponse,
+	}
+}
+
+func agnesImagesAdapter() Adapter {
+	info := metadata("agnes-image", "Agnes Images", "Agnes AI", CapabilityImage, "POST /v1/images/generations", "", "application/json")
+	info.Version = "1.0.0"
+	info.Description = "Agnes AI 官方图像协议，支持 Agnes Image 2.0/2.1/2.5 Flash。"
+	info.Parameters = []Parameter{
+		{Name: "model", Type: "string", Required: true, Mapping: "model", Description: "官方模型 ID：agnes-image-2.5-flash 等。"},
+		{Name: "prompt", Type: "string", Required: true, Mapping: "prompt", Description: "图像生成提示词。"},
+		{Name: "images", Type: "media[]", Mapping: "extra_body.image", Description: "参考图片，图生图或多图合成时使用。"},
+		{Name: "aspectRatio", Type: "string", Values: []string{"1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"}, Mapping: "ratio", Description: "宽高比。"},
+		{Name: "quality", Type: "string", Values: []string{"1K", "2K", "3K", "4K"}, Mapping: "size", Description: "输出尺寸档位，默认 1K。"},
+	}
+	return builtinAdapter{info: info,
+		create: func(r GenerationRequest) (RequestSpec, error) {
+			body := map[string]any{
+				"model":  r.Model,
+				"prompt": r.Prompt,
+				"size":   defaultValue(strings.TrimSpace(r.Quality), "1K"),
+			}
+			if ratio := strings.TrimSpace(r.AspectRatio); ratio != "" {
+				body["ratio"] = ratio
+			}
+			if r.ImageCount > 0 {
+				body["n"] = r.ImageCount
+			}
+			extraBody := map[string]any{"response_format": "url"}
+			if len(r.Images) > 0 {
+				imageURLs := make([]string, 0, len(r.Images))
+				for _, img := range r.Images {
+					if img.URL != "" {
+						imageURLs = append(imageURLs, img.URL)
+					} else if img.DataURL != "" {
+						imageURLs = append(imageURLs, img.DataURL)
+					}
+				}
+				if len(imageURLs) > 0 {
+					extraBody["image"] = imageURLs
+				}
+			}
+			body["extra_body"] = extraBody
+			mergeExtra(body, r.Extra, "model", "prompt", "size", "ratio", "n", "extra_body")
 			return jsonSpec(http.MethodPost, "/v1/images/generations", body), nil
 		},
 		parseCreate: parseImageResponse,
@@ -358,6 +404,146 @@ func newAPIChannel1Adapter() Adapter {
 		}
 		return jsonSpec(http.MethodPost, "/v1/videos", map[string]any{"model": r.Model, "input": input, "parameters": parameters}), nil
 	})
+}
+
+func hongniaoVideosAdapter() Adapter {
+	info := metadata("hongniao-video", "红鸟视频", "HongNiao", CapabilityVideo, "POST /v1/videos", "GET /v1/videos/{task_id}", "application/json")
+	info.Parameters = videoParams()
+	return videoAdapter(info, func(r GenerationRequest) (RequestSpec, error) {
+		// 红鸟 /v1/videos 真实字段：seconds(整数秒)、aspect_ratio(蛇形)，参考素材为 images/audios/videos。
+		body := map[string]any{"model": r.Model, "prompt": r.Prompt, "seconds": defaultInt(r.Duration, 5)}
+		if r.AspectRatio != "" {
+			body["aspect_ratio"] = r.AspectRatio
+		}
+		if images := mediaValues(r.Images); len(images) > 0 {
+			body["images"] = images
+		}
+		if audios := mediaValues(r.Audios); len(audios) > 0 {
+			body["audios"] = audios
+		}
+		if videos := mediaValues(r.Videos); len(videos) > 0 {
+			body["videos"] = videos
+		}
+		if r.GenerateAudio {
+			body["generate_audio"] = true
+		}
+		return jsonSpec(http.MethodPost, "/v1/videos", body), nil
+	})
+}
+
+func hongniaoImagesAdapter() Adapter {
+	info := metadata("hongniao-image", "红鸟图像", "HongNiao", CapabilityImage, "POST /v1/images", "GET /v1/images/{task_id}", "application/json")
+	info.Execution = "host:hongniao-image"
+	info.Parameters = mediaParams()
+	return asyncMediaAdapter(info, CapabilityImage, func(r GenerationRequest) (RequestSpec, error) {
+		body := map[string]any{"model": r.Model, "prompt": r.Prompt}
+		if r.AspectRatio != "" {
+			// 红鸟官方字段为下划线 aspect_ratio
+			body["aspect_ratio"] = r.AspectRatio
+		}
+		if images := mediaValues(r.Images); len(images) > 0 {
+			body["images"] = images
+		}
+		model := strings.ToLower(strings.TrimSpace(r.Model))
+		if strings.HasPrefix(model, "banana2") {
+			// banana2-S / banana2-S_copy：顶层 resolution，仅支持小写 1k/2k，默认 1k
+			resolution := strings.ToLower(strings.TrimSpace(r.Quality))
+			if resolution != "2k" {
+				resolution = "1k"
+			}
+			body["resolution"] = resolution
+		} else {
+			// gpt-image / ph-gpt-image 系列：质量参数嵌套在 parameters.quality，取值 high/medium/low
+			quality := "high"
+			switch strings.ToLower(strings.TrimSpace(r.Quality)) {
+			case "medium", "1k", "standard":
+				quality = "medium"
+			case "low", "fast", "draft":
+				quality = "low"
+			}
+			body["parameters"] = map[string]any{"quality": quality}
+		}
+		return jsonSpec(http.MethodPost, "/v1/images", body), nil
+	})
+}
+
+// grsaiImagesAdapter 对接 Grsai 中转站的图像生成接口。
+// 原生端点是 POST /v1/api/generate（创建任务）+ GET /v1/api/result?id={task_id}（轮询结果），
+// 同时支撑 gpt-image-2/gpt-image-2-vip 与 nano-banana 系列。
+// 与通用异步解析器的差异：
+//   - 结果放在响应里的 results[] 数组（通用解析器只认 images/data/url）；
+//   - 违规状态返回 violation，需要当作失败处理，而不是继续轮询；
+//   - nano-banana 系列用 imageSize 表达分辨率（1K/2K/4K），gpt-image-2 系列则把分辨率写进 aspectRatio 像素值。
+func grsaiImagesAdapter() Adapter {
+	info := metadata("grsai-image", "Grsai 图像", "Grsai", CapabilityImage, "POST /v1/api/generate", "GET /v1/api/result?id={task_id}", "application/json")
+	info.Execution = "host:grsai-image"
+	info.Parameters = mediaParams()
+	return builtinAdapter{
+		info: info,
+		create: func(r GenerationRequest) (RequestSpec, error) {
+			body := map[string]any{"model": r.Model, "prompt": r.Prompt, "replyType": "async"}
+			copyIf(body, "aspectRatio", r.AspectRatio)
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Model)), "nano-banana") {
+				copyIf(body, "imageSize", defaultValue(r.Resolution, r.Quality))
+			}
+			if images := mediaValues(r.Images); len(images) > 0 {
+				body["images"] = images
+			}
+			return jsonSpec(http.MethodPost, "/v1/api/generate", body), nil
+		},
+		parseCreate: parseGrsaiCreate,
+		poll: func(c PollContext) (RequestSpec, error) {
+			return RequestSpec{Method: http.MethodGet, Path: "/v1/api/result?id=" + url.QueryEscape(c.TaskID)}, nil
+		},
+		parsePoll: parseGrsaiPoll,
+	}
+}
+
+func parseGrsaiCreate(payload map[string]any) (CreateResult, error) {
+	status := normalizeStatus(firstString(payload, "status", "state"))
+	if strings.EqualFold(firstString(payload, "status", "state"), "violation") {
+		status = StatusFailed
+	}
+	id := firstString(payload, "id", "task_id", "taskId")
+	if id == "" {
+		return CreateResult{}, fmt.Errorf("Grsai 创建响应没有返回任务 id")
+	}
+	if status == "" {
+		status = StatusPending
+	}
+	return CreateResult{TaskID: id, Status: status, Message: firstString(payload, "error", "message")}, nil
+}
+
+func parseGrsaiPoll(c PollContext, payload map[string]any) (PollResult, error) {
+	status := normalizeStatus(firstString(payload, "status", "state"))
+	if strings.EqualFold(firstString(payload, "status", "state"), "violation") {
+		status = StatusFailed
+	}
+	message := firstString(payload, "error", "message", "fail_reason")
+	if status == StatusFailed || status == StatusCancelled {
+		return PollResult{TaskID: c.TaskID, Status: status, Message: message}, nil
+	}
+	if status == StatusSucceeded {
+		images := make([]MediaReference, 0)
+		if results, ok := payload["results"].([]any); ok {
+			for _, item := range results {
+				if media, ok := item.(map[string]any); ok {
+					if value := firstString(media, "url"); value != "" {
+						images = append(images, MediaReference{URL: value, Kind: "image"})
+					}
+				}
+			}
+		}
+		images = append(images, mediaFromArray(payload["data"], CapabilityImage)...)
+		if value := firstString(payload, "url"); value != "" {
+			images = append(images, MediaReference{URL: value, Kind: "image"})
+		}
+		return PollResult{TaskID: c.TaskID, Status: StatusSucceeded, Result: &Result{Images: images}, Message: message}, nil
+	}
+	if status == "" {
+		status = StatusProcessing
+	}
+	return PollResult{TaskID: c.TaskID, Status: status, Message: message}, nil
 }
 
 func xAIVideosAdapter() Adapter {

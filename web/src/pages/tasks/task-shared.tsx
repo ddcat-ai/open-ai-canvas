@@ -26,13 +26,13 @@ export function taskAttentionReason(task: GenerationTask) {
 
 export function providerCancelStatusLabel(task: GenerationTask) {
     if (task.providerCancelStatus === "requested") return "已请求上游取消，正在等待确认";
-    if (task.providerCancelStatus === "confirmed") return "上游已确认取消，积分已退回";
+    if (task.providerCancelStatus === "confirmed") return "上游已确认取消，余额已退回";
     if (task.providerCancelStatus === "uncertain") {
         if (task.billing?.status === "settled") return "上游未能取消，费用已结算";
-        if (task.billing?.status === "refunded") return "上游取消结果未确认，积分已退回";
+        if (task.billing?.status === "refunded") return "上游取消结果未确认，余额已退回";
         return task.providerCancelError || "上游无法确认取消，费用待核对";
     }
-    return task.billing?.status === "refunded" ? "任务在调用上游前取消，积分已退回" : "任务已取消，可按原输入重新提交";
+    return task.billing?.status === "refunded" ? "任务在调用上游前取消，余额已退回" : "任务已取消，可按原输入重新提交";
 }
 
 export function statusDotClassName(status: TaskStatus) {
@@ -67,7 +67,7 @@ export function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }
     const amount = formatCredits(billing.amountMicrocredits);
     const note = billing.status === "settled" ? "已结算" : billing.status === "refunded" ? "已退回" : billing.status === "uncertain" ? "待核对" : "预计";
     return (
-        <div className={`task-record-billing ${billing.status === "uncertain" ? "is-uncertain" : ""}`} title={`积分${note}`}>
+        <div className={`task-record-billing ${billing.status === "uncertain" ? "is-uncertain" : ""}`} title={`余额${note}`}>
             <Coins className="size-4" />
             <span>
                 <strong>{amount}</strong>

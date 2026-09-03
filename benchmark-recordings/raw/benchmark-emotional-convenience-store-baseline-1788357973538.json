@@ -1,0 +1,15 @@
+{
+  "fixtureId": "emotional-convenience-store",
+  "mode": "baseline",
+  "generatedAt": "2026-09-02T14:02:51.748Z",
+  "toolTrace": [
+    "canvas_apply_ops",
+    "canvas_apply_ops"
+  ],
+  "shots": [],
+  "metadata": {
+    "effectiveSkillIds": [],
+    "projectId": "NG96l3QjlyYgQPqjRYKko",
+    "threadId": "01a06250-f0c6-7bd3-abd5-ac2771bda1d7"
+  }
+}

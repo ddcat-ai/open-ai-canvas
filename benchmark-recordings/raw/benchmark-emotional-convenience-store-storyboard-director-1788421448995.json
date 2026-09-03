@@ -1,0 +1,143 @@
+{
+  "fixtureId": "emotional-convenience-store",
+  "mode": "storyboard-director",
+  "generatedAt": 1788421448995,
+  "effectiveSkillIds": [
+    "storyboard-director"
+  ],
+  "toolTrace": [
+    "canvas_get_context",
+    "project_get_context",
+    "project_create_or_update_shots"
+  ],
+  "shots": [
+    {
+      "id": "0f35aa2d070b5dba5b7e298fea8c77e1",
+      "position": 1,
+      "title": "镜头01｜凌晨便利店外景",
+      "description": "时码 00:00–00:04｜景别：大全景/建立镜头｜机位与运动：街对面平视固定机位，末端极轻微推近｜画面：凌晨空旷街道，便利店是街角唯一明亮处；透过整面玻璃窗，只见男人独坐靠窗高脚位，城市空间吞没人物。冷蓝街景与店内惨白荧光形成反差。｜声音：远处车辆低鸣、冰柜压缩机底噪，无音乐或仅极弱低频氛围。｜转场：硬切。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 4000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "8c1d31ef9ede4ac5518284f5a220cd2c",
+      "position": 2,
+      "title": "镜头02｜独自吃面的失业程序员",
+      "description": "时码 00:04–00:09｜景别：室内中远景｜机位与运动：货架缝隙后的侧后方窥视构图，缓慢横移露出人物｜画面：三十多岁的程序员穿皱衬衫，独自俯身吃泡面；手边合着旧笔记本电脑，屏幕边缘可见求职页面与未读拒信提示，旁边是一张揉皱的简历。店里没有其他顾客，画面留出大量负空间。｜声音：吸面声、纸杯摩擦声、荧光灯细微电流声。｜表演：机械进食，肩背下沉，不抬头。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 5000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "f67090ff7e99376f10369b29ed74075b",
+      "position": 3,
+      "title": "镜头03｜疲惫被泡面热气遮住",
+      "description": "时码 00:09–00:13｜景别：近景/细节组合｜机位与运动：桌面低机位，焦点从筷子上的面条缓慢移到男人疲惫的脸｜画面：泡面热气升起，短暂遮住他眼下的青黑；玻璃窗上叠着他模糊的倒影，电脑冷光已暗。｜声音：汤汁滴落、冰柜持续嗡鸣。｜情绪功能：用重复而麻木的动作建立生活停滞感。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 4000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "c0c5d0abe9f376dad9a032ac8cbc0e41",
+      "position": 4,
+      "title": "镜头04｜生日语音抵达",
+      "description": "时码 00:13–00:17｜景别：手机特写/插入镜头｜机位与运动：俯拍桌面，固定；震动发生时轻微声画强调｜画面：手机在泡面杯旁突然震动，屏幕亮起：来自“女儿”的语音消息，附一句“爸爸，生日快乐”。筷子停在半空，一滴汤落回杯中。｜声音：手机震动声切开环境底噪，随后环境声主观性压低。｜转场：动作匹配切到手指。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 4000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "87d34bbbd7c4ef6bc7cdf97306941c31",
+      "position": 5,
+      "title": "镜头05｜点开女儿的声音",
+      "description": "时码 00:17–00:22｜景别：越肩近景｜机位与运动：从男人右肩后拍手机，极慢推近｜画面：他迟疑半拍才点下播放，波形开始移动；手机屏幕冷光映在指尖和脸侧。｜语音：“爸爸，生日快乐。我想你了，早点回家。”声音稚嫩、带一点录音底噪。｜声音设计：女儿声音清晰居中，便利店环境声退到远处；不加煽情音乐。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 5000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "48df5315140afc1fe042e9beb4cfce79",
+      "position": 6,
+      "title": "镜头06｜愣住，眼眶泛红",
+      "description": "时码 00:22–00:27｜景别：正面大特写｜机位与运动：眼平固定长焦，浅景深；不切反应｜画面：男人完全愣住，嘴角想回应却没有发出声音；眼眶逐渐泛红，眨眼把泪意压住。泡面热气从前景慢慢散去，第一次清楚露出他的表情。｜声音：语音尾音落下后保留约两秒沉默，只剩冰柜低鸣与一次克制的吸气。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 5000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "4a50dbaf8440f50e0e097ad6a381db70",
+      "position": 7,
+      "title": "镜头07｜贴耳反复听",
+      "description": "时码 00:27–00:33｜景别：侧面中近景｜机位与运动：侧后方缓慢绕至半侧脸｜画面：他没有回消息，只把手机轻轻贴到耳边；语音结束后，拇指再次按下播放。第二遍听到“生日快乐”时，他闭了一下眼，另一只手仍握着已经坨掉的面。｜声音：女儿语音第二次响起，开头略被贴耳动作遮闷；环境声保持克制。｜表演：动作要小，避免哭戏外放。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    },
+    {
+      "id": "822fc5e20158af96faf5daad169db8a1",
+      "position": 8,
+      "title": "镜头08｜凌晨的城市很远",
+      "description": "时码 00:33–00:40｜景别：由中景缓慢拉至大全景｜机位与运动：从玻璃窗内侧拍人物侧影，持续缓慢后拉；焦点由人物眼睛转向窗外散景灯火｜画面：男人仍把手机贴在耳边，转头望向窗外。玻璃映出他与便利店荧光，窗外城市灯光层层虚化，仿佛离他很远；最终人物被框在玻璃与货架之间，停在未落下的泪光上。｜声音：女儿语音在耳边隐约重播，末尾只剩城市低频与冰柜声。｜结尾：保持最后一秒静止，淡黑。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 7000,
+      "imagePrompt": "",
+      "videoPrompt": "",
+      "continuityNotes": ""
+    }
+  ],
+  "metadata": {
+    "agentRunId": "5a59b21b3b3f76e6ce1027ecc5dd4874",
+    "projectId": "pDsuIiq59wvOq2fJN6lLe",
+    "unitId": "unit-emotional-clean2-001",
+    "requestedShotCount": 8,
+    "requestedTotalDurationMs": 40000,
+    "note": "Codex usage limit hit after project_create_or_update_shots succeeded; canvas_create_storyboard_shots not called. 8 semantic shots persisted successfully."
+  }
+}

@@ -122,7 +122,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         const amountMicrocredits = Math.round(amount * MICRO_CREDITS_PER_CREDIT);
         const totalMicrocredits = amountMicrocredits * count;
         if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isInteger(count) || count < 1 || count > 5000 || !Number.isSafeInteger(totalMicrocredits)) {
-            message.error("积分面额或生成数量超出可安全处理的范围");
+            message.error("面额或生成数量超出可安全处理的范围");
             return;
         }
         let expiresAt: string | undefined;
@@ -212,7 +212,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 </div>
             ),
         },
-        { title: "单码积分", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
+        { title: "单码面值", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
         { title: "过期时间", dataIndex: "expiresAt", width: 180, align: "center", render: (value) => (value ? formatTime(value) : <AdminStatusBadge label="永久有效" tone="info" />) },
@@ -282,7 +282,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索批次备注、积分或数量"
+                            placeholder="搜索批次备注、面额或数量"
                             onChange={(event) => {
                                 setKeyword(event.target.value);
                                 setPage(1);
@@ -442,19 +442,19 @@ function CreateRedeemBatchDrawer({
                     <section className="admin-redemption-drawer-section">
                         <div className="admin-redemption-drawer-section-heading">
                             <h3>批次参数</h3>
-                            <p>积分最多保留 6 位小数；单批最多生成 5,000 个兑换码。</p>
+                            <p>面额最多保留 6 位小数；单批最多生成 5,000 个兑换码。</p>
                         </div>
                         <div className="admin-redemption-form-grid">
                             <Form.Item
                                 name="amount"
-                                label="每个兑换码的积分"
+                                label="每个兑换码的面额"
                                 rules={[
-                                    { required: true, message: "请填写积分面额" },
+                                    { required: true, message: "请填写面额" },
                                     {
                                         validator: (_, value) => {
                                             const numberValue = Number(value);
                                             const microcredits = Math.round(numberValue * MICRO_CREDITS_PER_CREDIT);
-                                            return Number.isFinite(numberValue) && numberValue > 0 && Number.isSafeInteger(microcredits) && microcredits > 0 ? Promise.resolve() : Promise.reject(new Error("请输入可安全处理且大于 0 的积分"));
+                                            return Number.isFinite(numberValue) && numberValue > 0 && Number.isSafeInteger(microcredits) && microcredits > 0 ? Promise.resolve() : Promise.reject(new Error("请输入可安全处理且大于 0 的面额"));
                                         },
                                     },
                                 ]}
@@ -495,7 +495,7 @@ function CreateRedeemBatchDrawer({
                         </Form.Item>
                         <dl className="admin-redemption-live-summary" aria-label="待生成批次摘要">
                             <div>
-                                <dt>单码积分</dt>
+                                <dt>单码面值</dt>
                                 <dd>{Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
                             </div>
                             <div>
@@ -532,7 +532,7 @@ function CreateRedeemBatchDrawer({
                         <p className="admin-operation-confirmation-copy">请核对本批次的总发放额度和有效期。确认后会立即生成，不能撤销整批记录。</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
-                                <dt>单码积分</dt>
+                                <dt>单码面值</dt>
                                 <dd>{formatCredits(pending.amountMicrocredits)}</dd>
                             </div>
                             <div>
@@ -748,7 +748,7 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
                 item.status === "unused" ? (
                     <Popconfirm
                         title={`禁用尾号 ${item.codeSuffix} 的兑换码？`}
-                        description={`该兑换码面值 ${formatCredits(item.amountMicrocredits)} 积分，禁用后无法恢复。`}
+                        description={`该兑换码面值 ${formatCredits(item.amountMicrocredits)}，禁用后无法恢复。`}
                         okText="确认禁用"
                         cancelText="取消"
                         okButtonProps={{ danger: true }}
@@ -789,7 +789,7 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
             {!plaintextAvailable ? <div className="admin-redemption-sensitive-notice is-warning">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
             <div className="admin-redemption-detail-summary">
                 <BatchStatusDistribution batch={batchSummary || batch || emptyBatchSummary} />
-                <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)} 积分</span>
+                <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)}</span>
                 <span>总数 {batchSummary?.count ?? batch?.count ?? 0}</span>
                 <span>{batchSummary?.expiresAt || batch?.expiresAt ? `到期 ${formatTime(batchSummary?.expiresAt || batch?.expiresAt)}` : "永久有效"}</span>
                 <span>创建 {formatTime(batchSummary?.createdAt || batch?.createdAt)}</span>
@@ -867,8 +867,8 @@ function isMutationResultUncertain(error: unknown) {
 function formatBatchDisableImpact(batch: RedeemBatch) {
     const availableCount = batch.availableCount ?? 0;
     const affectedMicrocredits = batch.amountMicrocredits * availableCount;
-    const total = Number.isSafeInteger(affectedMicrocredits) ? `，面值合计 ${formatCredits(affectedMicrocredits)} 积分` : "";
-    return `将禁用当前 ${availableCount} 个可用兑换码（单码 ${formatCredits(batch.amountMicrocredits)} 积分${total}）`;
+    const total = Number.isSafeInteger(affectedMicrocredits) ? `，面值合计 ${formatCredits(affectedMicrocredits)}` : "";
+    return `将禁用当前 ${availableCount} 个可用兑换码（单码 ${formatCredits(batch.amountMicrocredits)}${total}）`;
 }
 
 function formatTime(value?: string | null) {

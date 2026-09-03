@@ -81,7 +81,7 @@ export function useCanvasGenerationExecutor({
             new Promise<boolean>((resolve) => {
                 modal.confirm({
                     title: "再次生成相同内容？",
-                    content: "当前节点已使用相同提示词、模型、参数和参考素材提交过任务。再次生成会新建任务，并可能再次消耗积分。",
+                    content: "当前节点已使用相同提示词、模型、参数和参考素材提交过任务。再次生成会新建任务，并可能再次消耗余额。",
                     okText: "仍然生成",
                     cancelText: "取消",
                     centered: true,

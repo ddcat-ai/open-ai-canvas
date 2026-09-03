@@ -1,0 +1,154 @@
+{
+  "fixtureId": "dialogue-former-partners",
+  "mode": "storyboard-director",
+  "effectiveSkillIds": [
+    "storyboard-director"
+  ],
+  "toolTrace": [
+    "canvas_get_context",
+    "project_create_or_update_shots"
+  ],
+  "shots": [
+    {
+      "id": "78e8682c4b0873dfa4c158e061fa67d8",
+      "position": 1,
+      "title": "1. 咖啡馆外建立镜头",
+      "description": "时长5秒｜远景→缓慢推近。午后咖啡馆临街窗面，雨后反光，透过玻璃看见两位前合伙人分坐同一张靠窗桌的对角线位置；先交代门、窗、桌、两人视线方向，保证后续空间连续。无对白，仅环境声与咖啡机声。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 5000,
+      "status": "draft"
+    },
+    {
+      "id": "c3eb755d324d5964ddd63a036c5ac2c5",
+      "position": 2,
+      "title": "2. 寒暄正打：先到者抬头",
+      "description": "时长5秒｜中近景，过肩正打A。A坐画面左侧、朝右看；B入画坐下后，A露出礼貌但僵硬的笑。A：‘最近还好吗？’保持180度轴线，桌上两杯咖啡作为连续性锚点。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 5000,
+      "status": "draft"
+    },
+    {
+      "id": "9acb731e588db1533103b69f7cae3863",
+      "position": 3,
+      "title": "3. 寒暄反打：回避式回答",
+      "description": "时长6秒｜中近景，过肩反打B。B坐画面右侧、朝左看，先低头整理杯套再抬眼。B：‘挺好的，你呢？’回答快于正常节奏，眼神短暂越过A落向窗外；用相同焦段与视线高度完成正反打纪律。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    },
+    {
+      "id": "9a71eb318c7ad3b4b2291bc0536a12bd",
+      "position": 4,
+      "title": "4. 试探一：旧办公室的名字",
+      "description": "时长6秒｜双人中景，轻微横移。A不接‘你呢’，手指沿杯口缓慢转动，视线落在B的手上。A：‘听说你还留着旧办公室的钥匙？’B的动作停半拍，空间关系不变，暗示A掌握了信息但不揭底。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    },
+    {
+      "id": "d00b8c0bc6b91f930f4d870743d608f0",
+      "position": 5,
+      "title": "5. 防守反打：把问题推回去",
+      "description": "时长6秒｜B中近景反打，略低机位。B把杯子推回桌心，避开A的眼睛。B：‘这种小事，你还记着？’语气带笑，肩颈却绷紧；前景保留A虚焦肩线，强化压迫与反应空间。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    },
+    {
+      "id": "250560c79e38f629e4cb183f3324e4f1",
+      "position": 6,
+      "title": "6. 反应镜头：A听见谎言",
+      "description": "时长6秒｜A特写，静止镜头。A没有立刻回应，只看着B推回来的杯子，拇指在杯壁上停住；背景咖啡机蒸汽声突然突出。A抬眼一瞬又恢复礼貌，明确表现‘知道但不戳穿’。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    },
+    {
+      "id": "7ca7f7111da334b3358635568ea6d1f4",
+      "position": 7,
+      "title": "7. 试探二：把时间说错",
+      "description": "时长7秒｜A过肩中近景正打，轻微推近。A：‘我只是好奇，三月那笔款，你后来是怎么处理的？’停顿后补一句：‘你说过周五会到账。’B的脸在画面右侧进入阴影，A的语气仍平静，情绪开始升级。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 7000,
+      "status": "draft"
+    },
+    {
+      "id": "09fc1576827aeac9166204871b1124c8",
+      "position": 8,
+      "title": "8. 防守反打：否认与抢话",
+      "description": "时长7秒｜B过肩中近景反打，同轴线、同视线高度。B抢在A说完前接话：‘我已经解释过了，银行那边出了问题。’B拿手机假装查看消息，连续两次看向出口；A虚焦肩线不动，形成逼问感。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 7000,
+      "status": "draft"
+    },
+    {
+      "id": "038e3b2fd49713a15088639c134806fb",
+      "position": 9,
+      "title": "9. 反应双人镜头：沉默扩大",
+      "description": "时长6秒｜桌面上方的双人中近景，镜头从咖啡杯慢慢升到两张脸。A轻声：‘银行的问题，为什么只有你看得到记录？’B没有回答，搅拌棒碰杯一声脆响；邻桌起身经过短暂遮挡，遮挡后两人的距离显得更近。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    },
+    {
+      "id": "f5ba21f296003043c19ad5e2299134c1",
+      "position": 10,
+      "title": "10. 关键问题与凝固",
+      "description": "时长6秒｜B面部特写→极慢推近，最后切A一帧反应后停在B。A画外音/正面低声问：‘那份合同，是不是从一开始就没有寄出去？’B抬眼，呼吸停住；环境声被压低，只留下冰块融化声，空气凝固，停在未回答的眼神上。",
+      "action": "",
+      "dialogue": "",
+      "shotSize": "",
+      "cameraAngle": "",
+      "cameraMovement": "",
+      "durationMs": 6000,
+      "status": "draft"
+    }
+  ],
+  "projectId": "zzmD_RY20gsfA6EP59Frv",
+  "unitId": "unit-dialogue-002",
+  "agentRunId": "6cc3aa465df60bfc95f33e6a6317f90a",
+  "requestedShotCount": 10,
+  "requestedTotalDurationMs": 60000,
+  "generatedAt": "2026-09-03T16:59:00+08:00",
+  "metadata": {
+    "model": "gpt-5.6-sol",
+    "provider": "a6api",
+    "notes": "手动创建：project_create_or_update_shots成功创建10个shots，未调用canvas_create_storyboard_shots投影"
+  }
+}

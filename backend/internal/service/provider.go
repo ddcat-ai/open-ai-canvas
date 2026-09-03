@@ -1399,7 +1399,8 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	}
 	channel, err := s.SystemChannel(channelID)
 	if err != nil {
-		return providerConfig{}, errors.New("系统渠道不存在或已停用")
+		fmt.Printf("[DEBUG] SystemChannel(%s) failed: %v\n", channelID, err)
+		return providerConfig{}, fmt.Errorf("系统渠道不存在或已停用: %w", err)
 	}
 	modelKey := strings.TrimPrefix(strings.TrimSpace(config.ChannelModelKey), "models/")
 	requestedModel := strings.TrimPrefix(strings.TrimSpace(config.Model), "models/")
@@ -1522,6 +1523,10 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {
 		return runGeminiImageTask(ctx, input)
+	}
+	// 内置异步协议（如 hongniao-image、grsai-image）走通用适配器执行路径
+	if adapter, ok := hostAsyncAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runProtocolAdapterTask(ctx, input, adapter)
 	}
 	var payload imageResponse
 	if input.Mask != nil {
@@ -2251,6 +2256,10 @@ func shouldFallbackTextToChat(err error) bool {
 func runAudioTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
+	}
+	// 内置异步音频协议走通用适配器执行路径
+	if adapter, ok := hostAsyncAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runProtocolAdapterTask(ctx, input, adapter)
 	}
 	if resolved, ok := input.Metadata["resolvedCharacterVersions"].([]interface{}); ok && len(resolved) > 0 {
 		voiceKey := metadataString(input.Metadata, "resolvedCharacterVoiceKey")
@@ -3345,6 +3354,10 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	}
 	if isSeedanceVideoConfig(input.Config) {
 		return runSeedanceVideosTask(ctx, input)
+	}
+	// 内置异步协议（如 hongniao-video）走通用适配器执行路径
+	if adapter, ok := hostAsyncAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runProtocolAdapterTask(ctx, input, adapter)
 	}
 	if len(input.ReferenceVideos) > 0 || len(input.ReferenceAudios) > 0 {
 		return nil, errors.New("OpenAI 风格视频接口不支持参考视频或参考音频，请切换到 Seedance / Agent Plan 渠道")

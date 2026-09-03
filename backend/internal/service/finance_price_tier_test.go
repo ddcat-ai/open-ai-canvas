@@ -48,7 +48,7 @@ func TestTaskBillingOrderMatchesSystemImagePriceTierFromRequestedSpec(t *testing
 	if err != nil {
 		t.Fatalf("taskBillingOrder() error = %v", err)
 	}
-	if order == nil || order.PriceTierID != tier.ID || order.AmountMicrocredits != tier.UnitPriceMicrocredits {
+	if order == nil || order.PriceTierID != tier.ID || float64(order.AmountMicrocredits) != tier.UnitPriceMicrocredits {
 		t.Fatalf("taskBillingOrder() = %#v, want tier %s", order, tier.ID)
 	}
 }

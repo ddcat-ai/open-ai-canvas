@@ -104,6 +104,7 @@ import { CanvasEmotionWorkspace } from "@/components/canvas/canvas-emotion-works
 import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { useCanvasConnectionController } from "./use-canvas-connection-controller";
 import { useCanvasAgentOperations } from "./use-canvas-agent-operations";
+import { useCanvasAgentState } from "./use-canvas-agent-state";
 import { useCanvasAssistantVisibility } from "./use-canvas-assistant-visibility";
 import { useCanvasActiveTasks } from "./use-canvas-active-tasks";
 import { useCanvasStyleWorkflow } from "./use-canvas-style-workflow";
@@ -522,7 +523,7 @@ function InfiniteCanvasPage() {
             }
             Modal.confirm({
                 title: "取消生成任务？",
-                content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和积分状态。",
+                content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和余额状态。",
                 okText: "取消任务",
                 okButtonProps: { danger: true },
                 cancelText: "继续等待",
@@ -1474,6 +1475,8 @@ function InfiniteCanvasPage() {
         setContextMenu,
         focusSelection: fitCanvasSelection,
     });
+    // Agent 创作状态机：从真实节点派生进行中/已完成任务，跨刷新对账恢复；重复提交由提交层拦截。
+    useCanvasAgentState(projectId, nodes);
 
     const { selectCanvasStyle, styleApplying } = useCanvasStyleWorkflow({
         domainProjectId: currentProject?.projectId,
@@ -2423,6 +2426,7 @@ function InfiniteCanvasPage() {
                                         selectedNodeIds={selectedNodeIds}
                                         snapshot={agentSnapshot}
                                         projectId={projectId}
+                                        domainProjectId={linkedProjectId || undefined}
                                         sessions={chatSessions}
                                         activeSessionId={activeChatId}
                                         onSelectNodeIds={setSelectedNodeIds}

@@ -222,15 +222,15 @@ export function CanvasTopBar({
                     </CanvasTopBarTooltip>
                     {compactAgentStatus ? <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} /> : null}
                     {user && creditsEnabled ? (
-                        <CanvasTopBarTooltip label="查看积分明细">
+                        <CanvasTopBarTooltip label="查看余额明细">
                             <Link
                                 to="/wallet"
                                 className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
                                 style={{ color: theme.node.text }}
-                                aria-label="查看积分明细"
+                                aria-label="查看余额明细"
                             >
                                 {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" /> : <Coins className="size-3.5" />}
-                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
+                                <span>{availableMicrocredits === null ? "--" : "¥" + (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
                             </Link>
                         </CanvasTopBarTooltip>
                     ) : null}

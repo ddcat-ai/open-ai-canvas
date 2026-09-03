@@ -40,6 +40,25 @@ func declarativeProtocolAdapterForContext(ctx context.Context, id string) (proto
 	return adapter, true
 }
 
+// hostAsyncAdapterForContext 返回内置（Go 原生）的异步协议适配器：
+// 它们在插件装载时被标记为 "host:<id>" 而非 "declarative"，但同样实现了
+// BuildCreate/ParseCreate/BuildPoll/ParsePoll，可由 runProtocolAdapterTask 执行。
+// 仅识别声明了 Poll 路径的异步适配器；同步适配器（如 openai-image）继续走各自的专用路径。
+func hostAsyncAdapterForContext(ctx context.Context, id string) (protocol.Adapter, bool) {
+	adapter, ok := protocolAdapterForContext(ctx, id)
+	if !ok {
+		return nil, false
+	}
+	meta := adapter.Metadata()
+	if !strings.HasPrefix(meta.Execution, "host:") {
+		return nil, false
+	}
+	if strings.TrimSpace(meta.Poll) == "" {
+		return nil, false
+	}
+	return adapter, true
+}
+
 func agentProtocolAdapterForContext(ctx context.Context, id string) (protocol.AgentAdapter, bool) {
 	registry, _ := ctx.Value(protocolRegistryContextKey{}).(*protocol.Registry)
 	if registry == nil {

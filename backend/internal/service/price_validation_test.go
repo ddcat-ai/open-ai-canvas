@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidateChannelModelPriceSupportsArkVideoTokensOnly(t *testing.T) {
-	const outputPrice = int64(16_000_000)
+	const outputPrice = float64(16_000_000)
 	if !ValidateChannelModelPrice("token", "video", model.ChannelInterfaceVolcengineArkVideo, 0, 0, outputPrice, 0) {
 		t.Fatal("Volcengine Ark video Token price should be valid")
 	}

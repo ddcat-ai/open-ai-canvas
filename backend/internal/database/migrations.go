@@ -10,14 +10,17 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 6
+const CurrentSchemaVersion int64 = 10
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
-const resourceUploadKeyChecksum = "sha256:resource-upload-key-v4-20260901"
-const paymentTopupChecksum = "sha256:payment-topup-v5-20260902"
-const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
+const decimalPriceColumnsChecksum = "sha256:decimal-price-columns-v4-20260901"
+const agentRunPersistenceChecksum = "sha256:agent-run-persistence-v5-20260902"
+const resourceUploadKeyChecksum = "sha256:resource-upload-key-v7-20260901"
+const paymentTopupChecksum = "sha256:payment-topup-v8-20260902"
+const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v9-20260902"
+const skillVersionContentHashChecksum = "sha256:skill-version-content-hash-v10-20260903"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -47,9 +50,12 @@ var schemaMigrations = []migration{
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
-	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
-	{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
-	{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV6},
+	{version: 4, name: "decimal_price_columns", checksum: decimalPriceColumnsChecksum, apply: migrateSchemaV4},
+	{version: 5, name: "agent_run_persistence", checksum: agentRunPersistenceChecksum, apply: migrateSchemaV5},
+	{version: 7, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV7},
+	{version: 8, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV8},
+	{version: 9, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV9},
+	{version: 10, name: "skill_version_content_hash_identity", checksum: skillVersionContentHashChecksum, apply: migrateSchemaV10},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -96,6 +102,44 @@ func migrateSchemaV3(tx *gorm.DB) error {
 }
 
 func migrateSchemaV4(tx *gorm.DB) error {
+	// 将价格字段从 bigint 改为 numeric(20,6)，支持小数价格
+	// channel_models 和 billing_orders 表使用 _token_price_ 命名
+	tokenPriceColumns := []string{
+		"unit_price_microcredits",
+		"input_token_price_microcredits",
+		"output_token_price_microcredits",
+		"cached_token_price_microcredits",
+	}
+	for _, table := range []string{"channel_models", "billing_orders"} {
+		for _, col := range tokenPriceColumns {
+			if err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE numeric(20,6)", table, col)).Error; err != nil {
+				return fmt.Errorf("修改 %s.%s 字段类型：%w", table, col, err)
+			}
+		}
+	}
+	// logical_models 表使用 _price_ 命名（没有 _token_）
+	logicalPriceColumns := []string{
+		"unit_price_microcredits",
+		"input_price_microcredits",
+		"output_price_microcredits",
+		"cached_price_microcredits",
+	}
+	for _, col := range logicalPriceColumns {
+		if err := tx.Exec(fmt.Sprintf("ALTER TABLE logical_models ALTER COLUMN %s TYPE numeric(20,6)", col)).Error; err != nil {
+			return fmt.Errorf("修改 logical_models.%s 字段类型：%w", col, err)
+		}
+	}
+	return nil
+}
+
+func migrateSchemaV5(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.AgentRun{}, &model.AgentRunStep{}); err != nil {
+		return fmt.Errorf("创建 AgentRun 持久化表：%w", err)
+	}
+	return nil
+}
+
+func migrateSchemaV7(tx *gorm.DB) error {
 	if !tx.Migrator().HasTable(&model.Resource{}) {
 		return fmt.Errorf("资源表不存在")
 	}
@@ -110,7 +154,7 @@ func migrateSchemaV4(tx *gorm.DB) error {
 	return nil
 }
 
-func migrateSchemaV5(tx *gorm.DB) error {
+func migrateSchemaV8(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(
 		&model.CreditLedgerEntry{},
 		&model.TopupProduct{},
@@ -125,9 +169,38 @@ func migrateSchemaV5(tx *gorm.DB) error {
 	return nil
 }
 
-func migrateSchemaV6(tx *gorm.DB) error {
+func migrateSchemaV9(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(&model.Asset{}, &model.AssetFolder{}); err != nil {
 		return fmt.Errorf("创建个人素材分类并扩展素材目录字段：%w", err)
+	}
+	return nil
+}
+
+// migrateSchemaV10 为技能版本建立 (skill_id, content_hash) 内容寻址幂等身份：
+// 同一技能的相同内容只允许存在一个版本，避免并发同步/重装产生重复版本。
+func migrateSchemaV10(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.SkillVersion{}) {
+		if err := tx.AutoMigrate(&model.SkillVersion{}); err != nil {
+			return fmt.Errorf("创建技能版本表：%w", err)
+		}
+		return nil
+	}
+	// 清理历史重复版本：每个 (skill_id, content_hash) 仅保留最早一条，先删其文件清单再删版本。
+	duplicateVersionSelect := `
+		SELECT id FROM (
+			SELECT id, ROW_NUMBER() OVER (
+				PARTITION BY skill_id, content_hash ORDER BY created_at ASC, id ASC
+			) AS rn FROM skill_versions WHERE content_hash <> ''
+		) AS ranked WHERE ranked.rn > 1`
+	if err := tx.Exec(`DELETE FROM skill_files WHERE skill_version_id IN (` + duplicateVersionSelect + `)`).Error; err != nil {
+		return fmt.Errorf("清理重复技能版本文件清单：%w", err)
+	}
+	if err := tx.Exec(`DELETE FROM skill_versions WHERE id IN (` + duplicateVersionSelect + `)`).Error; err != nil {
+		return fmt.Errorf("清理重复技能版本：%w", err)
+	}
+	// 根据结构标签补齐/更新唯一索引。
+	if err := tx.AutoMigrate(&model.SkillVersion{}); err != nil {
+		return fmt.Errorf("建立技能版本内容幂等索引：%w", err)
 	}
 	return nil
 }
