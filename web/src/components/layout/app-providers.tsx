@@ -6,6 +6,7 @@ import zhCN from "antd/locale/zh_CN";
 
 import { AuthSessionHydrator } from "@/components/auth/auth-session-hydrator";
 import { ClientRootInit } from "@/components/layout/client-root-init";
+import { NeonBackdrop } from "@/components/layout/neon-backdrop";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -81,7 +82,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const isolateDevRepro = import.meta.env.DEV && typeof window !== "undefined" && window.location.pathname === "/dev/director-repro";
 
     return (
-        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
+        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.skinId)}>
+            {/* 赛博霓虹皮肤的粒子/辉光/扫描线背景：仅 neon 皮肤时渲染实体，其余皮肤返回 null */}
+            <NeonBackdrop />
             <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (

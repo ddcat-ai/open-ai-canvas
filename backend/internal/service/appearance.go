@@ -38,18 +38,20 @@ const (
 const (
 	defaultAppearanceBrandName = "影策"
 	defaultAppearanceBrandSlug = "open-ai-canvas"
-	// 本地化改造：默认皮肤切为酿笑坊（niangxiao）；管理后台可切回 classic 恢复上游原貌。
-	defaultAppearanceSkinID    = "niangxiao"
+	// 本地化改造：默认皮肤切为赛博霓虹（neon）；管理后台可切 niangxiao / classic。
+	defaultAppearanceSkinID    = "neon"
 	defaultAppearanceLogoURL   = "/logo.svg"
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
 	defaultAppearancePosterURL = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
 	defaultAppearanceHeroTitle = "让一个故事，\n从文字走向银幕。"
 )
 
-// 本地化改造：皮肤白名单。classic 为上游默认；niangxiao 为本地新增的酿笑坊皮肤（navy/gold/teal）。
+// 本地化改造：皮肤白名单。classic 为上游默认；niangxiao 为酿笑坊皮肤（navy/gold/teal）；
+// neon 为赛博霓虹皮肤（深空底 + 霓虹青/品红/紫，参考 neon-fit 案例）。
 var appearanceSkinIDs = map[string]bool{
 	"classic":   true,
 	"niangxiao": true,
+	"neon":      true,
 }
 
 type AppearanceSetting struct {
@@ -357,7 +359,7 @@ func validateAppearanceSetting(value AppearanceSetting) error {
 		return err
 	}
 	if !appearanceSkinIDs[value.SkinID] {
-		return BadAuthRequest("皮肤不存在：当前支持 classic（经典）与 niangxiao（酿笑坊）")
+		return BadAuthRequest("皮肤不存在：当前支持 neon（赛博霓虹）、niangxiao（酿笑坊）与 classic（经典）")
 	}
 	for _, resourceID := range []string{value.LogoResourceID, value.DarkLogoResourceID, value.AuthVideoResourceID, value.AuthVideoPosterResourceID} {
 		if len(resourceID) > 80 {

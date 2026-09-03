@@ -69,7 +69,54 @@ const controlTheme = {
     },
 };
 
-export function getAntThemeConfig(dark: boolean): ThemeConfig {
+export function getAntThemeConfig(dark: boolean, skin?: string): ThemeConfig {
+    const config = getBaseAntThemeConfig(dark);
+    // 本地化改造：赛博霓虹皮肤（neon）把 antd 一并染成深空底 + 霓虹青主色。
+    return skin === "neon" ? neonAntdTheme(config) : config;
+}
+
+function neonAntdTheme(config: ThemeConfig): ThemeConfig {
+    // 注意：base 配置在 components 层为 Button/Switch/Checkbox 等重写了 colorPrimary，
+    // 组件级 token 优先于全局 token，因此霓虹覆写必须同时落到 components 层。
+    const baseComponents = (config.components || {}) as Record<string, Record<string, unknown>>;
+    const neonControl = {
+        colorPrimary: "#00f0ff",
+        colorPrimaryHover: "#63f6ff",
+        colorPrimaryActive: "#00bcd1",
+    };
+    return {
+        ...config,
+        algorithm: antdTheme.darkAlgorithm,
+        cssVar: { key: "infinite-canvas-neon" },
+        token: {
+            ...(config.token || {}),
+            colorPrimary: "#00f0ff",
+            colorPrimaryHover: "#63f6ff",
+            colorPrimaryActive: "#00bcd1",
+            colorInfo: "#00f0ff",
+            colorLink: "#00f0ff",
+            colorLinkHover: "#63f6ff",
+            colorLinkActive: "#00bcd1",
+            colorBgBase: "#05060f",
+            colorBgContainer: "#0f142a",
+            colorBgElevated: "#141a38",
+            colorBorder: "rgba(0, 240, 255, 0.24)",
+            colorBorderSecondary: "rgba(0, 240, 255, 0.13)",
+            borderRadius: 10,
+        },
+        components: {
+            ...baseComponents,
+            Button: { ...baseComponents.Button, ...neonControl },
+            Switch: { ...baseComponents.Switch, ...neonControl },
+            Checkbox: { ...baseComponents.Checkbox, ...neonControl },
+            Radio: { ...baseComponents.Radio, ...neonControl },
+            Pagination: { ...baseComponents.Pagination, itemActiveBg: "rgba(0, 240, 255, 0.14)", itemActiveColor: "#05060f" },
+            Segmented: { ...baseComponents.Segmented, itemActiveBg: "rgba(0, 240, 255, 0.14)", itemSelectedBg: "rgba(0, 240, 255, 0.16)" },
+        } as ThemeConfig["components"],
+    };
+}
+
+function getBaseAntThemeConfig(dark: boolean): ThemeConfig {
     const color = dark ? controlTheme.dark : controlTheme.light;
     // 浮层背景必须不透明（0.96 会透出下层内容）；与侧栏切换器等自定义浮层的实底背景保持一致
     const elevatedBackground = dark ? "rgba(31, 31, 32, 1)" : "rgba(255, 255, 255, 1)";

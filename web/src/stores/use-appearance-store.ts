@@ -16,7 +16,8 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     authVideoUrl: "/auth-bg.mp4",
     authVideoPosterUrl: "/auth-poster.jpg",
     // 本地化改造：默认使用「酿笑坊」皮肤（navy/gold/teal），恢复经典皮肤可在管理后台切换为 classic。
-    skinId: "niangxiao",
+    // 本地化改造：默认皮肤 = 赛博霓虹（neon，参考 neon-fit 案例）；管理后台可切 niangxiao（酿笑坊）/ classic（上游原貌）。
+    skinId: "neon",
     logoConfigured: false,
     darkLogoConfigured: false,
     authVideoConfigured: false,
@@ -58,7 +59,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         logoFrameEnabled: value?.logoFrameEnabled !== false,
         authVideoUrl: safeAppearanceURL(value?.authVideoUrl, DEFAULT_PUBLIC_APPEARANCE.authVideoUrl),
         authVideoPosterUrl: safeAppearanceURL(value?.authVideoPosterUrl, customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl),
-        skinId: value?.skinId === "classic" || value?.skinId === "niangxiao" ? value.skinId : DEFAULT_PUBLIC_APPEARANCE.skinId,
+        skinId: value?.skinId === "classic" || value?.skinId === "niangxiao" || value?.skinId === "neon" ? value.skinId : DEFAULT_PUBLIC_APPEARANCE.skinId,
         logoConfigured: Boolean(value?.logoConfigured),
         darkLogoConfigured: Boolean(value?.darkLogoConfigured),
         authVideoConfigured: customVideo,

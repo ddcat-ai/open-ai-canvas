@@ -100,7 +100,8 @@ export function AuthScene() {
                         transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
                         className="my-auto w-full max-w-[460px]"
                     >
-                        <ConfigProvider theme={getAntThemeConfig(true)}>
+                        {/* 本地化改造：跟随全局皮肤选择（neon/niangxiao/classic），不再写死上游 dark 主题 */}
+                        <ConfigProvider theme={getAntThemeConfig(true, appearance.skinId)}>
                             <div className="auth-card-dark h-auto overflow-hidden rounded-lg bg-[#121318]/94 shadow-[0_28px_80px_rgba(0,0,0,.34)] backdrop-blur-2xl">
                                 <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "min-h-[500px]" : "min-h-[620px] sm:min-h-[640px]"}`}>
                                     <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
