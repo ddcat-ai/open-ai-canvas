@@ -33,6 +33,25 @@ test("announcement editor preserves image and pinned fields through edit and sav
     expect(safetySource).toContain("pinned?: boolean");
 });
 
+test("plugin upload owns native drops and price availability text remains readable", async () => {
+    const [pluginSource, adminCss] = await Promise.all([
+        Bun.file(new URL("../src/pages/plugins/plugin-documentation-modals.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+    ]);
+    const toggleCss = sourceSection(adminCss, ".admin-price-tier-toggle span {", ".admin-model-editor-add-tier.ant-btn {");
+
+    expect(pluginSource).toContain("event.preventDefault()");
+    expect(pluginSource).toContain("onDragOver={(event)");
+    expect(pluginSource).toContain("onDrop={handlePluginDrop}");
+    expect(pluginSource).toContain("点击选择插件文件，也可拖拽到此处");
+    expect(pluginSource).toContain("释放文件以上传插件");
+    expect(pluginSource).toContain("isDraggingPlugin");
+    expect(compactSource(adminCss)).toContain(".admin-price-tier-controls { display: grid !important; grid-template-columns: minmax(0, 1fr);");
+    expect(toggleCss).toContain("overflow-wrap: anywhere;");
+    expect(toggleCss).toContain("white-space: normal;");
+    expect(toggleCss).not.toContain("text-overflow: ellipsis;");
+});
+
 test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {
     const source = compactSource(await Bun.file(new URL("../src/pages/admin/components/analytics-panel.tsx", import.meta.url)).text());
 

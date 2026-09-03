@@ -8,6 +8,10 @@ const contractEnd = "<!-- YINGCE_MANIFEST_CONTRACT_END -->";
 const recursiveDocumentationPlaceholder =
   "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>";
 
+function normalizeNewlines(document) {
+  return document.replace(/\r\n?/g, "\n");
+}
+
 function withoutGeneratedContract(document) {
   const start = document.indexOf(contractStart);
   if (start < 0) return document.trimEnd();
@@ -45,19 +49,21 @@ for (const packageID of packageDirectories) {
   const packageRoot = join(root, packageID);
   let manifestSource;
   try {
-    manifestSource = await readFile(join(packageRoot, "manifest.json"), "utf8");
+    manifestSource = normalizeNewlines(await readFile(join(packageRoot, "manifest.json"), "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") continue;
     throw error;
   }
 
   const manifest = JSON.parse(manifestSource);
-  const readme = (await readFile(join(packageRoot, "README.md"), "utf8")).trim();
+  const readmePath = join(packageRoot, "README.md");
+  const readme = normalizeNewlines(await readFile(readmePath, "utf8")).trim();
   const interfacePath = join(packageRoot, "docs", "interface.md");
-  const interfaceSource = await readFile(interfacePath, "utf8");
+  const interfaceSource = normalizeNewlines(await readFile(interfacePath, "utf8"));
   const interfaceDocument = `${withoutGeneratedContract(interfaceSource)}\n\n${renderContract(manifest)}\n`;
   manifest.documentation = `${readme}\n\n---\n\n${interfaceDocument.trim()}\n`;
 
+  await writeFile(readmePath, `${readme}\n`);
   await writeFile(interfacePath, interfaceDocument);
   await writeFile(join(packageRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   updated += 1;

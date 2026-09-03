@@ -103,6 +103,10 @@ export type PluginCanvasNodeContribution = {
     defaultSize: { width: number; height: number };
     schema: Record<string, unknown>;
     renderer: "declarative" | "sandbox";
+    /** Optional input contract for nodes that consume one media kind. */
+    acceptsInputKind?: "image" | "video" | "audio" | "text";
+    /** Analysis/sink nodes can hide the right-side output connection. */
+    showOutputConnection?: boolean;
 };
 export type PluginTransformContribution = {
     id: string;

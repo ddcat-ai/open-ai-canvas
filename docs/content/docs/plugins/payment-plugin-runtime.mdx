@@ -29,6 +29,27 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 
 请求固定带有 `version: "yingce.payment/v1"`。插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
 
+## 原生包的平台边界
+
+`runtime.backend: "rpc"` 的 `backend/provider` 是原生可执行文件，不是平台无关静态资源。官方 backend 镜像在 Docker 构建中读取 `TARGETOS` 和 `TARGETARCH`，以 `CGO_ENABLED=0` 分别生成目标平台 provider，并在同一阶段重新生成 `.yingce-plugin`；目录文件与包内文件会比较内容，并在目标平台容器中真实执行冒烟请求。因此 Apple Silicon、Intel Mac 或 Windows 上发起的 Docker 构建不会把宿主二进制复制进 Linux 镜像。
+
+仓库中保留的官方支付包用于 Linux amd64 源码运行和回归测试，其规范平台固定为 `linux/amd64`。在其他平台直接运行源码时，应先在具有 Node.js 和 `zip` 的 POSIX shell 中执行：
+
+```bash
+PAYMENT_PLUGIN_GOOS="$(go env GOOS)" \
+PAYMENT_PLUGIN_GOARCH="$(go env GOARCH)" \
+PAYMENT_PLUGIN_CGO_ENABLED=0 \
+  ./plugin-packages/build-packages.sh --payments-only
+```
+
+当前 manifest 尚未声明 native artifact 的 OS/CPU；第三方市场若要分发原生 RPC 插件，应后续在 package index 或 manifest ABI 中增加平台选择信息，不能把单一 native package 视为跨平台包。
+
+## 运行时缓存与诊断
+
+宿主以完整 `.yingce-plugin` 字节的 SHA-256 作为 package 文件名和 `runtime/<digest>` 缓存键。provider 内容变化会产生新 digest 和新运行目录；解包先写临时目录，完成后写入 ready marker 并原子发布，旧目录不会覆盖新包，也不要求升级时手工清空整个数据卷。
+
+执行前，Linux 宿主会拒绝 Mach-O、Windows PE、损坏的 ELF 和与当前 CPU 不匹配的 ELF。管理员可区分可执行文件缺失或加载器不可用、权限不足、格式或架构不兼容、进程异常退出、超时和无效 JSON。服务端启动日志只记录插件 ID、provider ID、宿主平台、可执行路径和操作系统错误；不会记录 RPC 请求、支付配置、密钥或插件 stderr。
+
 ## Manifest 示例
 
 ```json

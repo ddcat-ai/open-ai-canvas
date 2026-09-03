@@ -257,6 +257,7 @@ func migrations() []tableMigration {
 		migrateTable[model.ResourceDeletionJob]("resource_deletion_jobs"),
 		migrateTable[model.AnnouncementImageDraft]("announcement_image_drafts"),
 		migrateTable[model.Asset]("assets"),
+		migrateTable[model.AssetFolder]("asset_folders"),
 		migrateTable[model.ProjectAssetLink]("project_asset_links"),
 		migrateTable[model.ProjectAssetFolder]("project_asset_folders"),
 		migrateTable[model.ProjectAssetCandidate]("project_asset_candidates"),

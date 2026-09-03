@@ -384,12 +384,116 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if _, paged := c.GetQuery("page"); paged || hasUserAssetPageFilters(c) {
+			page, pageErr := strconv.Atoi(c.DefaultQuery("page", "1"))
+			if pageErr != nil || page < 1 {
+				fail(c, http.StatusBadRequest, service.BadAuthRequest("页码必须是正整数"))
+				return
+			}
+			pageSize, pageSizeErr := strconv.Atoi(c.DefaultQuery("page_size", "40"))
+			if pageSizeErr != nil || pageSize < 1 {
+				fail(c, http.StatusBadRequest, service.BadAuthRequest("每页数量必须是正整数"))
+				return
+			}
+			var folderID *string
+			if value, present := c.GetQuery("folder_id"); present {
+				folderID = &value
+			}
+			assets, pageErr := svc.UserAssetsPage(user.ID, page, pageSize, service.UserAssetPageFilter{
+				Kind: c.Query("kind"), Category: c.Query("category"), FolderID: folderID,
+				Uncategorized: c.Query("uncategorized") == "1", Status: c.Query("status"), Query: c.Query("q"),
+			})
+			if pageErr != nil {
+				failService(c, pageErr)
+				return
+			}
+			ok(c, assets)
+			return
+		}
 		assets, err := svc.UserAssetSummaries(user.ID)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"assets": assets})
+	})
+	r.GET("/asset-folders", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		folders, err := svc.AssetFolders(user.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"folders": folders})
+	})
+	r.POST("/asset-folders", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.CreateAssetFolderRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		folder, err := svc.CreateAssetFolder(user.ID, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"folder": folder})
+	})
+	r.PATCH("/asset-folders/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateAssetFolderRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		folder, err := svc.UpdateAssetFolder(user.ID, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"folder": folder})
+	})
+	r.DELETE("/asset-folders/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteAssetFolder(user.ID, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"id": c.Param("id")})
+	})
+	r.PATCH("/assets/folder", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.MoveUserAssetsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.MoveUserAssetsToFolder(user.ID, req); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"assetIds": req.AssetIDs, "folderId": req.FolderID})
 	})
 	r.GET("/user-data/snapshot", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -531,6 +635,15 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"id": c.Param("id")})
 	})
+}
+
+func hasUserAssetPageFilters(c *gin.Context) bool {
+	for _, key := range []string{"page_size", "kind", "category", "folder_id", "uncategorized", "status", "q"} {
+		if _, present := c.GetQuery(key); present {
+			return true
+		}
+	}
+	return false
 }
 
 func resourceResponseETag(resource *model.Resource) string {

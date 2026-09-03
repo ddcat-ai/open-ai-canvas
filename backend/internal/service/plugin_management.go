@@ -12,6 +12,7 @@ const (
 	PluginEagleAssetConnector = "eagle-asset-connector"
 	PluginPromptOptimizer     = "prompt-optimizer"
 	PluginPortraitClearance   = "portrait-clearance"
+	PluginAIArtCritique       = "ai-art-critique"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -72,6 +73,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginPortraitClearance: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
+	PluginAIArtCritique: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},

@@ -37,6 +37,7 @@ type AssetBase<T extends AssetKind> = {
     title: string;
     coverUrl: string;
     tags: string[];
+    folderId?: string;
     category?: AssetCategory;
     status?: AssetStatus;
     primaryVersionId?: string;

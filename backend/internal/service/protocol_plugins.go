@@ -17,7 +17,10 @@ import (
 	"infinite-canvas/backend/internal/protocol"
 )
 
-const protocolPluginMaxBytes = protocol.PluginManifestMaxBytes
+const (
+	protocolPluginMaxBytes  = protocol.PluginManifestMaxBytes
+	paymentRuntimeReadyFile = ".ready"
+)
 
 // PluginView is the backend representation consumed by the single frontend
 // plugin center. Protocol-specific runtime data is nested under Protocol so
@@ -297,7 +300,7 @@ func (c *pluginRuntime) reload() error {
 			return fmt.Errorf("duplicate installed protocol %q", metadata.ID)
 		}
 		packageSHA256 := storedRecord.PackageSHA256
-		if packageSHA256 == "" {
+		if packageSHA256 == "" && strings.TrimSpace(storedRecord.PackagePath) == "" {
 			packageSHA256 = pluginHash(data)
 		}
 		plugins[metadata.ID] = pluginRecord{Raw: data, Metadata: metadata, Source: storedRecord.Source, FileName: storedRecord.FileName, PackagePath: storedRecord.PackagePath, PackageSHA256: packageSHA256, SHA256: packageSHA256, InstalledAt: storedRecord.InstalledAt, UpdatedAt: storedRecord.UpdatedAt, Status: "invalid"}
@@ -403,6 +406,16 @@ func (c *pluginRuntime) reload() error {
 			plugins[id] = record
 			continue
 		}
+		packageSHA256 := pluginHash(packageData)
+		if expected := strings.TrimSpace(record.PackageSHA256); expected != "" && !strings.EqualFold(expected, packageSHA256) {
+			record.Status = "invalid"
+			record.Error = "支付插件包完整性校验失败"
+			plugins[id] = record
+			continue
+		}
+		record.PackageSHA256 = packageSHA256
+		record.SHA256 = packageSHA256
+		plugins[id] = record
 		pkg, parseErr := protocol.ParsePluginPackage(packageData)
 		if parseErr != nil {
 			record.Status = "invalid"
@@ -410,7 +423,7 @@ func (c *pluginRuntime) reload() error {
 			plugins[id] = record
 			continue
 		}
-		runtimeDir, materializeErr := materializePaymentBackend(c.packageDir, record.PackageSHA256, pkg)
+		runtimeDir, materializeErr := materializePaymentBackend(c.packageDir, packageSHA256, pkg)
 		if materializeErr != nil {
 			record.Status = "invalid"
 			record.Error = materializeErr.Error()
@@ -447,15 +460,34 @@ func (c *pluginRuntime) reload() error {
 }
 
 func materializePaymentBackend(packageDir, hash string, pkg protocol.PluginPackage) (string, error) {
-	root := filepath.Join(packageDir, "runtime", strings.TrimSpace(hash))
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	digest := strings.ToLower(strings.TrimSpace(hash))
+	if len(digest) != sha256.Size*2 {
+		return "", errors.New("支付插件包摘要无效")
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return "", errors.New("支付插件包摘要无效")
+	}
+
+	runtimeRoot := filepath.Join(packageDir, "runtime")
+	root := filepath.Join(runtimeRoot, digest)
+	backendEntry := strings.TrimSpace(pkg.Manifest.Runtime.BackendEntry)
+	if paymentRuntimeReady(root, digest, backendEntry) {
+		return root, nil
+	}
+	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
 		return "", fmt.Errorf("创建支付插件运行目录失败：%w", err)
 	}
+	temporaryRoot, err := os.MkdirTemp(runtimeRoot, ".payment-runtime-")
+	if err != nil {
+		return "", fmt.Errorf("创建支付插件临时运行目录失败：%w", err)
+	}
+	defer os.RemoveAll(temporaryRoot)
+
 	for name, content := range pkg.Files {
 		if !strings.HasPrefix(name, "backend/") || strings.HasSuffix(name, "/") {
 			continue
 		}
-		target := filepath.Join(root, filepath.FromSlash(name))
+		target := filepath.Join(temporaryRoot, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return "", err
 		}
@@ -463,7 +495,32 @@ func materializePaymentBackend(packageDir, hash string, pkg protocol.PluginPacka
 			return "", fmt.Errorf("写入支付插件运行文件失败：%w", err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(temporaryRoot, paymentRuntimeReadyFile), []byte(digest+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("写入支付插件运行状态失败：%w", err)
+	}
+	if err := os.Rename(temporaryRoot, root); err != nil {
+		if paymentRuntimeReady(root, digest, backendEntry) {
+			return root, nil
+		}
+		// Digest directories are immutable once ready. An unmarked directory can
+		// only be residue from an interrupted extraction and is safe to replace.
+		if removeErr := os.RemoveAll(root); removeErr != nil {
+			return "", fmt.Errorf("清理未完成的支付插件运行目录失败：%w", removeErr)
+		}
+		if renameErr := os.Rename(temporaryRoot, root); renameErr != nil {
+			return "", fmt.Errorf("发布支付插件运行目录失败：%w", renameErr)
+		}
+	}
 	return root, nil
+}
+
+func paymentRuntimeReady(root, digest, backendEntry string) bool {
+	ready, err := os.ReadFile(filepath.Join(root, paymentRuntimeReadyFile))
+	if err != nil || strings.TrimSpace(string(ready)) != digest {
+		return false
+	}
+	entry, err := os.Stat(filepath.Join(root, filepath.FromSlash(backendEntry)))
+	return err == nil && !entry.IsDir()
 }
 
 func (c *pluginRuntime) list() []PluginView {

@@ -9,12 +9,14 @@ import { createDirectorSceneFromTemplate, type DirectorTemplateId } from "@/lib/
 import { mergeDirectorOutputPreview, upsertDirectorSceneById } from "@/lib/canvas/director/director-session";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
+import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 import type { DirectorScene, DirectorSceneOutput } from "@/types/director";
 
 type UseCanvasDirectorOptions = {
     projectId: string;
+    domainProjectId?: string;
     directorNodeId: string | null;
     directorScenes: DirectorScene[];
     nodesRef: { current: CanvasNodeData[] };
@@ -40,6 +42,7 @@ function currentDirectorScenes(projectId: string, fallback: DirectorScene[]) {
 }
 export function useCanvasDirector({
     projectId,
+    domainProjectId,
     directorNodeId,
     directorScenes,
     nodesRef,
@@ -196,13 +199,23 @@ export function useCanvasDirector({
             videoCameraMovePrompt: output.prompt,
             referenceAssetNodeIds,
         };
-        const finalizedNodes = nextNodes.map((item) => item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, ...directorMetadata } } : item);
+        const mediaNodes = nextNodes.filter((item) => item.id === previewId || Boolean(clayVideoId && item.id === clayVideoId));
+        const assetIds = new Map<string, string>();
+        for (const mediaNode of mediaNodes) {
+            const result = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: mediaNode, source: "canvas-manual" });
+            assetIds.set(mediaNode.id, result.assetId);
+        }
+        const finalizedNodes = nextNodes.map((item) => {
+            const assetId = assetIds.get(item.id);
+            if (assetId) return { ...item, metadata: { ...item.metadata, assetId } };
+            return item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, ...directorMetadata } } : item;
+        });
         nodesRef.current = finalizedNodes;
         connectionsRef.current = nextConnections;
         setNodes(finalizedNodes);
         setConnections(nextConnections);
         saveDirectorScene(mergedScene);
-    }, [connectionsRef, directorNodeId, nodesRef, projectId, saveDirectorScene, setConnections, setNodes]);
+    }, [connectionsRef, directorNodeId, domainProjectId, nodesRef, projectId, saveDirectorScene, setConnections, setNodes]);
 
     return { applyDirectorOutput, createDirectorShot, openDirectorWorkbench, saveDirectorScene };
 }
