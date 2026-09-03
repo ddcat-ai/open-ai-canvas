@@ -58,8 +58,17 @@ describe("parseAiCommandPlan（LLM 输出解析）", () => {
         const plan = parseAiCommandPlan('{"commands":[{"op":"moveClip","payload":{"id":"clip-a","startMs":2000}}]}');
         expect(plan.reasoning).toBeUndefined();
     });
-    test("commands 为空 → 抛 AiCommandPlanError", () => {
-        expect(() => parseAiCommandPlan('{"commands":[]}')).toThrow(AiCommandPlanError);
+    test("commands 空数组合法（只读问答 / 无法执行语义）", () => {
+        const plan = parseAiCommandPlan('{"reasoning":"当前没有可用于增加转场效果的命令。","commands":[]}');
+        expect(plan.commands).toHaveLength(0);
+        expect(plan.reasoning).toContain("转场");
+    });
+    test("commands 超过 8 条上限 → 抛错", () => {
+        const tooMany = Array.from({ length: 9 }, (_, i) => ({
+            op: "moveClip",
+            payload: { id: `clip-a`, startMs: i * 1000 },
+        }));
+        expect(() => parseAiCommandPlan(JSON.stringify({ commands: tooMany }))).toThrow(/8 条上限/);
     });
     test("无 JSON 对象 → 抛错", () => {
         expect(() => parseAiCommandPlan("抱歉，我做不到。")).toThrow(/未找到 JSON 对象/);

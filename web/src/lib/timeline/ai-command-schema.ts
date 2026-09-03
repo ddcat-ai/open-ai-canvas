@@ -64,7 +64,10 @@ function assertPlanShape(raw: unknown): asserts raw is AiCommandPlan {
         throw new AiCommandPlanError("reasoning 必须是字符串");
     }
     if (!Array.isArray(plan.commands)) throw new AiCommandPlanError("缺少 commands 数组");
-    if (plan.commands.length === 0) throw new AiCommandPlanError("commands 不能为空");
+    if (plan.commands.length > AI_EDITING_MAX_COMMANDS) {
+        throw new AiCommandPlanError(`commands 超过 ${AI_EDITING_MAX_COMMANDS} 条上限`);
+    }
+    // commands 为空数组 = 只读问答 / 无可用命令，合法终态
     plan.commands.forEach((cmd, i) => {
         if (typeof cmd !== "object" || cmd === null) throw new AiCommandPlanError(`commands[${i}] 必须是对象`);
         const c = cmd as Record<string, unknown>;
@@ -75,7 +78,10 @@ function assertPlanShape(raw: unknown): asserts raw is AiCommandPlan {
     });
 }
 
-/** 解析 LLM 文本输出为 AiCommandPlan；结构非法时抛 AiCommandPlanError（供 UI 展示并回填模型）。 */
+/**
+ * 解析 LLM 文本输出为 AiCommandPlan；结构非法时抛 AiCommandPlanError（供 UI 展示并回填模型）。
+ * commands 为空数组表示「只读问答 / 无法用现有命令完成」，面板直接展示 reasoning 作为回答。
+ */
 export function parseAiCommandPlan(text: string): AiCommandPlan {
     let raw: unknown;
     try {
@@ -113,6 +119,9 @@ export function validateAiCommandBatch(project: TimelineProject, plan: AiCommand
 
 /** AI 命令 schema 版本（Runbook M6.1）：提示词契约/解析规则变更时递增，供 golden 与缓存失效对齐。 */
 export const AI_COMMAND_SCHEMA_VERSION = 1;
+
+/** 单次 AI 编辑最多允许的命令条数（ADR-0007：防止模型一次输出失控编辑）。 */
+export const AI_EDITING_MAX_COMMANDS = 8;
 
 /** 12 个黄金 op 的 LLM 可读 payload 契约；op 集合与注册表黄金同步（见测试）。 */
 export const AI_EDITING_OP_CATALOG: ReadonlyArray<{
@@ -186,7 +195,8 @@ export const AI_EDITING_OP_CATALOG: ReadonlyArray<{
 export const AI_EDITING_OUTPUT_FORMAT = `输出要求：
 - 只输出一个 JSON 对象，不要任何解释文字或 markdown。
 - 结构：{ "reasoning": "一句话说明意图", "commands": [ { "op": "命令名", "payload": { ... } } ] }
-- commands 至少 1 条、至多 8 条；payload 字段严格按命令契约；时间一律毫秒；文本用简体中文。
+- commands：能执行时 1-8 条；用户只是提问或无法用现有命令完成时为空数组 []，此时 reasoning 直接回答用户。
+- payload 字段严格按命令契约；时间一律毫秒；文本用简体中文。
 - 所有 id（clip/track/nodeId）必须来自上面时间线摘要，禁止编造。`;
 
 /** 示例（示意完整 JSON 输出，加入 system prompt）。 */
