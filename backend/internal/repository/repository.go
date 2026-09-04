@@ -1664,9 +1664,16 @@ func (r *Repository) DeleteProjectAssetFolder(projectID string, folderID string)
 }
 
 // LinkProjectAsset 将首版本、素材领域字段、项目引用和修订号原子提交，避免产生半关联资产。
+// 资产首次入库也在此事务内完成（service 层只做内存构造，不预落库），
+// 事务失败时资产一并回滚，不再留下“有资产无链接”的孤儿资产。
 func (r *Repository) LinkProjectAsset(asset *model.Asset, version *model.AssetVersion, link *model.ProjectAssetLink) (bool, error) {
 	createdLink := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		// 资产可能尚未落库（首次导入）或已存在（并发/重试），冲突幂等跳过。
+		assetCreated := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(asset)
+		if assetCreated.Error != nil {
+			return assetCreated.Error
+		}
 		created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "project_id"}, {Name: "asset_id"}}, DoNothing: true}).Create(link)
 		if created.Error != nil {
 			return created.Error

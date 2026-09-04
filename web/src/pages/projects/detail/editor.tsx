@@ -10,7 +10,9 @@ import {
     PanelRightClose,
     PanelRightOpen,
     Redo2,
+    Sparkles,
     Undo2,
+    X,
 } from "lucide-react";
 
 import type { ProjectAsset, ProjectDetail } from "@/services/api/projects";
@@ -130,10 +132,14 @@ function EditorTopBar({
     onExport,
     isFullscreen,
     onToggleFullscreen,
+    aiOpen,
+    onToggleAi,
 }: {
     onExport: () => void;
     isFullscreen: boolean;
     onToggleFullscreen: () => void;
+    aiOpen: boolean;
+    onToggleAi: () => void;
 }) {
     const { project, history, isDirty, saving, saveError, undo, redo } = useEditorStoreContext();
     const canUndo = (history?.undoStack.length ?? 0) > 0;
@@ -174,6 +180,20 @@ function EditorTopBar({
                         <Check className="size-4 text-[var(--director-success)]" aria-label="已保存" />
                     )}
                 </span>
+                <button
+                    type="button"
+                    aria-label="AI 剪辑助手"
+                    aria-pressed={aiOpen}
+                    title="AI 剪辑助手（编辑意图转时间线指令）"
+                    onClick={onToggleAi}
+                    className={`grid size-8 place-items-center rounded-md transition-colors ${
+                        aiOpen
+                            ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
+                            : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                    }`}
+                >
+                    <Sparkles className="size-4" />
+                </button>
                 <button
                     type="button"
                     aria-label={isFullscreen ? "退出全屏" : "全屏编辑"}
@@ -234,6 +254,16 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
     const [assets, setAssets] = useState<ProjectAsset[]>(detail.assets);
     const workbenchRef = useRef<HTMLDivElement | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    // AI 助手浮层（顶部工具按钮触发，M6.3；Esc / 点击遮罩关闭）。
+    const [aiOpen, setAiOpen] = useState(false);
+    useEffect(() => {
+        if (!aiOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setAiOpen(false);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [aiOpen]);
 
     // 底部时间线高度（px）：分隔条拖拽调整（120–480）。
     const [timelineH, setTimelineH] = useState(240);
@@ -283,13 +313,53 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
         })();
         return () => {
             cancelled = true;
+            // 卸载前冲刷尚未落盘的改动（如切页发生在防抖窗口内），避免最后几次操作丢失。
+            void store.getState().flushSave?.().catch(() => {});
         };
     }, [scope, projectId, store]);
 
     return (
         <EditorStoreProvider store={store} host={{ projectId, assets, refreshAssets }}>
-            <div ref={workbenchRef} className="editor-workbench flex h-full min-h-0 flex-col bg-[var(--director-workspace-bg)]">
-                <EditorTopBar onExport={() => setRightTab("export")} isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen} />
+            <div ref={workbenchRef} className="editor-workbench relative flex h-full min-h-0 flex-col bg-[var(--director-workspace-bg)]">
+                <EditorTopBar
+                    onExport={() => setRightTab("export")}
+                    isFullscreen={isFullscreen}
+                    onToggleFullscreen={toggleFullscreen}
+                    aiOpen={aiOpen}
+                    onToggleAi={() => setAiOpen((v) => !v)}
+                />
+                {/* AI 助手浮层：常驻挂载、随开关显隐，关闭再开保留会话与输入（状态在 SlotStack 内）。 */}
+                <div className={aiOpen ? "contents" : "hidden"}>
+                    <button
+                        type="button"
+                        aria-label="关闭 AI 助手"
+                        tabIndex={-1}
+                        className="fixed inset-0 z-30 cursor-default bg-transparent"
+                        onClick={() => setAiOpen(false)}
+                    />
+                    <div className="absolute right-2 top-14 z-40 flex h-[640px] max-h-[calc(100%-3.75rem)] w-[460px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface)] shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
+                        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] px-3">
+                            <Sparkles className="size-4 text-[var(--director-dock-fg)]/80" />
+                            <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">AI 剪辑助手</span>
+                            <span className="hidden truncate text-[10px] text-[var(--director-dock-fg)]/45 sm:inline">
+                                编辑意图 → 时间线指令（宿主校验）
+                            </span>
+                            <div className="flex-1" />
+                            <button
+                                type="button"
+                                aria-label="关闭"
+                                title="关闭（Esc）"
+                                onClick={() => setAiOpen(false)}
+                                className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </div>
+                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            <SlotStack slots={aiSlots} emptyHint="AI 助手插件未加载。" />
+                        </div>
+                    </div>
+                </div>
 
                 <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
                     {/* 上区：左栏 + 预览 + 右栏 */}
@@ -316,7 +386,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                             <SlotStack slots={previewSlots} emptyHint="预览插件未加载。" />
                         </main>
 
-                        {/* 右栏：检查 / 字幕 / 导出 / AI（Tab 化，可折叠为窄条） */}
+                        {/* 右栏：检查 / 字幕 / 导出（Tab 化，可折叠为窄条；AI 助手已移至顶栏浮层） */}
                         {rightCollapsed ? (
                             <aside className="flex h-full w-9 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
                                 <button
@@ -336,7 +406,6 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                                         { id: "inspector", label: "检查" },
                                         { id: "subtitle", label: "字幕" },
                                         { id: "export", label: "导出" },
-                                        { id: "ai", label: "AI" },
                                     ]}
                                     active={rightTab}
                                     onChange={setRightTab}
@@ -356,10 +425,8 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                                     <SlotStack slots={inspectorSlots} emptyHint="检查器插件未加载。" />
                                 ) : rightTab === "subtitle" ? (
                                     <SlotStack slots={subtitleSlots} emptyHint="字幕工具插件未加载。" />
-                                ) : rightTab === "export" ? (
-                                    <SlotStack slots={exportSlots} emptyHint="导出插件未加载。" />
                                 ) : (
-                                    <SlotStack slots={aiSlots} emptyHint="AI 助手插件未加载。" />
+                                    <SlotStack slots={exportSlots} emptyHint="导出插件未加载。" />
                                 )}
                             </aside>
                         )}

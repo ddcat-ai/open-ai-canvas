@@ -26,7 +26,7 @@
 | **M3 预设插件** | 8 个 editor 插件逐个人轨 + detail.tsx 接线 | 编辑器三段式布局完整：时间线/预览/检查器/素材库/字幕/转写/导出逐区域可见可操作 | M2、M4（API 面） |
 | **M4 后端任务** | 转写 + 渲染异步任务（服务端） | `go test ./...` 通过；前端任务客户端（创建/轮询/SSE）接 editor-transcription/export | M3 前需 API 面 |
 | **M5 权限执行** | plugin-permission-check + fail-closed 接入 | permission-denied 测试通过；未声明 `timeline.command` 的插件写操作被拒；v1 插件权限语义不变 | M1、M3 |
-| **M6 AI 编辑交互** | ai-command-schema + timeline-summary + editor-ai-assistant | AI 命令 schema 黄金文件测试通过；对话式剪辑浏览器冒烟（命令执行→撤销、非法命令整批拒绝、批量 diff 预览） | M2、M3、M5 |
+| **M6 AI 编辑交互** | ai-command-schema + timeline-summary + editor-ai-assistant | 代码侧完成（schema 黄金测试 / 摘要确定性 / 助手面板 M6.3 已实现，tsc + 全量测试 + 构建通过）；待用户浏览器冒烟：命令执行→撤销、非法命令整批拒绝、批量 diff 预览 | M2、M3、M5 |
 
 ## 2. 原子步明细
 
@@ -95,7 +95,7 @@
 |---|---|---|---|---|
 | M6.1 | `web/src/lib/timeline/ai-command-schema.ts` + `web/test/fixtures/ai-commands.golden.json`（新建） | per-op 命令 JSON schema（与 M2.1 handler 同源维护）、`aiCommandSchemaVersion` 版本化；fail-closed 校验函数 | 新增 `web/test/ai-command-schema.test.ts` | 合法/非法 payload 全覆盖；单条非法整批拒绝；错误回填格式稳定 ✅（14 用例全绿；golden op 集与 EDITOR_COMMAND_OPS 黄金同步断言通过） |
 | M6.2 | `web/src/lib/timeline/timeline-summary.ts`（新建） | 时间线结构化精简摘要（轨道/片段/时长/关键属性，不含媒体二进制） | 新增 `web/test/timeline-summary.test.ts` | 摘要确定性强（同输入同输出）；大对象排除 ✅（16 用例全绿；折叠上限/中文字幕统计/空态覆盖） |
-| M6.3 | `web/src/lib/plugins/builtin/editor/editor-ai-assistant.ts` | AI 助手：对话面板（right，复用画布 agent 聊天 UI 交互模式）、命令执行链路（≤3 条直执行 / >3 条 diff 预览待确认）、只读问答（timeline.read） | typecheck + M6.1/M6.2 测试 + 浏览器冒烟 | 自然语言→命令→撤销全链路；非法命令回填错误；与画布会话上下文隔离 |
+| M6.3 | `web/src/lib/plugins/builtin/editor/editor-ai-assistant.tsx` | AI 助手：右上悬浮对话面板（OpenAI Canvas 风格，由顶部工具栏 Sparkles 入口开合；面板内文本模型选择器 + 消息流 + 空态引导 + 输入条）、命令执行链路（≤3 条直执行 / >3 条 diff 预览待确认）、宿主 registry 拒绝 failTurn 回填失败标记 | typecheck + M6.1/M6.2 测试 + `bun run build` ✅ | 自然语言→命令→撤销全链路代码侧就绪（≤3 条直执行按条入撤销栈，撤销按条回退）；非法命令回填错误；与画布会话上下文隔离（历史存 `historyRef`，仅时间线上下文入提示词）✅（浏览器冒烟待用户确认） |
 
 ## 3. 依赖关系
 

@@ -10,7 +10,7 @@
 //   播放速率同步 playbackRate —— 画面与声音由浏览器管线真实推进（不再纯读时间码）。
 // - 静音跟随所在音频/视频轨道（muted），不再硬编码 muted（否则"有声音"永远不成立）。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Film, Gauge, Pause, Play, SkipBack, SkipForward, StepBack, StepForward } from "lucide-react";
 
 import { useEditorStoreContext } from "@/components/editor/editor-context";
@@ -329,6 +329,24 @@ export function EditorPreviewMonitor() {
         }
     };
 
+    // 播放条随监视器面板宽度自适应：窄面板逐级隐藏次要信息（先“/ 总时长”，再时间码与速度文字/箭头），
+    // 极窄时让整条可横向滚动兜底；走带按钮始终固定尺寸，不缩小、不重叠。阈值即对应内容的最小显示宽度。
+    const transportRef = useRef<HTMLDivElement | null>(null);
+    const [transportWidth, setTransportWidth] = useState(Number.POSITIVE_INFINITY);
+    useLayoutEffect(() => {
+        const el = transportRef.current;
+        if (!el) return;
+        const update = () => setTransportWidth(Math.round(el.getBoundingClientRect().width));
+        update();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(update);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+    const compact = transportWidth < 340;
+    const hideTotal = !compact && transportWidth < 440;
+    const allowScroll = transportWidth < 240;
+
     const showEmpty = !activeClip || (!videoSrc && !imageSrc);
 
     return (
@@ -392,11 +410,19 @@ export function EditorPreviewMonitor() {
             </div>
 
             {/* 播放控制条：画面下方的独立一行（Concat 布局），不悬浮叠加、无进度条；
-                播放/暂停用反白块 + 图标形态（Play/Pause）表达状态，图标保持中性（无 accent 蓝）。 */}
-            <div className="grid h-11 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+                播放/暂停用反白块 + 图标形态（Play/Pause）表达状态，图标保持中性（无 accent 蓝）。
+                宽度自适应见上方 transportWidth 逻辑。 */}
+            <div
+                ref={transportRef}
+                className={`grid h-11 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3 ${
+                    allowScroll ? "overflow-x-auto [scrollbar-width:thin]" : ""
+                }`}
+            >
                 <span className="truncate text-xs tabular-nums text-[var(--director-dock-fg)]">
-                    {formatTimelineTime(playbackMs)}
-                    <span className="opacity-60"> / {formatTimelineTime(durationMs)}</span>
+                    {!compact && formatTimelineTime(playbackMs)}
+                    {!compact && !hideTotal && (
+                        <span className="opacity-60"> / {formatTimelineTime(durationMs)}</span>
+                    )}
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5">
                     <button
@@ -462,8 +488,10 @@ export function EditorPreviewMonitor() {
                         className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
                     >
                         <Gauge className="size-3.5" />
-                        <span className="tabular-nums">{speed}x</span>
-                        <ChevronDown className={`size-3 transition-transform ${speedMenuOpen ? "rotate-180" : ""}`} />
+                        {!compact && <span className="tabular-nums">{speed}x</span>}
+                        {!compact && (
+                            <ChevronDown className={`size-3 transition-transform ${speedMenuOpen ? "rotate-180" : ""}`} />
+                        )}
                     </button>
                     {speedMenuOpen && (
                         <>

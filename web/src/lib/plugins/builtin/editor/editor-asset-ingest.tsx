@@ -5,33 +5,31 @@
 // linkProjectAsset（后端按资源元数据合成资产记录）→ refreshAssets。
 
 import { useEffect, useRef, useState } from "react";
-import {
-    Boxes,
-    ChevronDown,
-    ChevronRight,
-    Clapperboard,
-    Film,
-    FolderOpen,
-    HardDrive,
-    Image as ImageIcon,
-    Loader2,
-    Music2,
-    Plus,
-} from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, Clapperboard, Film, FolderOpen, HardDrive, Image as ImageIcon, Loader2, Music2, Plus } from "lucide-react";
 
 import { useEditorHostContext, useEditorStoreContext } from "@/components/editor/editor-context";
 import { defaultAssetCategoryForKind } from "@/lib/asset-category";
+import { probeMediaDurationMs } from "@/lib/media-metadata";
 import { makeClipFromAsset } from "@/lib/timeline/asset-ingest";
 import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_SUBTITLE_TRACK_ID, DEFAULT_VIDEO_TRACK_ID } from "@/lib/timeline/timeline-tracks";
 import { linkProjectAsset } from "@/services/api/projects";
 import { uploadResourceFile, type ResourceUploadMeta } from "@/services/api/resources";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { probeMediaDurationMs } from "@/lib/media-metadata";
 import type { ProjectAsset } from "@/services/api/projects";
 import type { TimelineProject } from "@/types/timeline";
 
 
 const MEDIA_ACCEPT = "video/*,audio/*,image/*";
+/** 库内重复判定用的归一键（文件名+媒体类型）。 */
+function assetDedupeKey(title: string | undefined, mediaType: string): string {
+    return `${(title || "").trim().toLowerCase()}|${mediaType}`;
+}
+/** 毫秒 → m:ss 时长文案。 */
+function formatDurationMs(ms: number | undefined): string {
+    if (!ms || ms <= 0) return "";
+    const total = Math.round(ms / 1000);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
 const IMAGE_RE = /\.(png|jpe?g|webp|gif|avif)$/i;
 const AUDIO_RE = /\.(mp3|wav|m4a|ogg|flac|aac)$/i;
 const MEDIA_RE = /\.(mp4|mov|webm|mkv|m4v|avi)$/i;
@@ -78,29 +76,125 @@ function AssetIcon({ mediaType }: { mediaType: string }) {
     return <Clapperboard className={cls} />;
 }
 
-/** 列表行小缩略图：有 storageKey 时加载真实媒体，否则类型图标占位。 */
+/** 列表行小缩略图：图片媒体显示真实画面；视频/音频无法在 <img> 解码，
+ *  统一渲染类型色块+图标占位（不再出现破图），视频缩略图由展开卡片提供。 */
 function AssetThumb({ asset }: { asset: ProjectAsset }) {
+    const isImage = asset.mediaType === "image";
     const [url, setUrl] = useState<string | null>(null);
     useEffect(() => {
+        if (!isImage || !asset.storageKey) return;
         let alive = true;
-        if (asset.storageKey) {
-            resolveMediaUrl(asset.storageKey)
-                .then((resolved) => alive && setUrl(resolved ?? null))
-                .catch(() => alive && setUrl(null));
+        resolveMediaUrl(asset.storageKey)
+            .then((resolved) => alive && setUrl(resolved ?? null))
+            .catch(() => alive && setUrl(null));
+        return () => {
+            alive = false;
+        };
+    }, [asset.storageKey, isImage]);
+    if (url) {
+        return (
+            <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-[var(--director-control-hover)]">
+                <img src={url} alt="" className="size-full object-cover" />
+            </div>
+        );
+    }
+    const kind =
+        asset.mediaType === "video"
+            ? { icon: <Film className="size-4" />, tone: "text-[var(--director-accent)]", tile: "bg-[var(--director-accent)]/15" }
+            : asset.mediaType === "audio"
+              ? { icon: <Music2 className="size-4" />, tone: "text-[var(--director-dock-fg)]/70", tile: "bg-[var(--director-control-hover)]" }
+              : { icon: <ImageIcon className="size-4" />, tone: "text-[var(--director-dock-fg)]/60", tile: "bg-[var(--director-control-hover)]" };
+    return (
+        <div className={`grid size-9 shrink-0 place-items-center overflow-hidden rounded-md ${kind.tile}`}>
+            <span className={kind.tone}>{kind.icon}</span>
+        </div>
+    );
+}
+
+/** 尝试用 <video> 抓取视频首帧作为封面 dataURL；失败返回 null（保持图标占位）。 */
+function useVideoPoster(url: string | null): string | null {
+    const [poster, setPoster] = useState<string | null>(null);
+    useEffect(() => {
+        if (!url) {
+            setPoster(null);
+            return;
         }
+        let alive = true;
+        const video = document.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        video.src = url;
+        const seekToHead = () => {
+            if (!alive || video.readyState < 1) return;
+            try {
+                video.currentTime = Math.min(0.05, Number.isFinite(video.duration) ? video.duration : 0.05);
+            } catch {
+                /* 忽略跨域/编解码异常 */
+            }
+        };
+        const grabFrame = () => {
+            if (!alive || video.readyState < 2 || video.videoWidth === 0) return;
+            try {
+                const canvas = document.createElement("canvas");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+                if (dataUrl.length > 100) setPoster(dataUrl);
+            } catch {
+                /* canvas 跨域污染等：放弃自动封面 */
+            }
+        };
+        video.addEventListener("loadeddata", seekToHead);
+        video.addEventListener("seeked", grabFrame);
+        return () => {
+            alive = false;
+            video.removeAttribute("src");
+            video.load();
+        };
+    }, [url]);
+    return poster;
+}
+
+/** 展开卡片预览：图片直接展示；视频给出自动首帧封面 + 原生播放器；音频为说明。 */
+function MediaPreview({ asset }: { asset: ProjectAsset }) {
+    const [url, setUrl] = useState<string | null>(null);
+    useEffect(() => {
+        if (!asset.storageKey) return;
+        let alive = true;
+        resolveMediaUrl(asset.storageKey)
+            .then((resolved) => alive && setUrl(resolved ?? null))
+            .catch(() => alive && setUrl(null));
         return () => {
             alive = false;
         };
     }, [asset.storageKey]);
+    const poster = useVideoPoster(asset.mediaType === "video" ? url : null);
+    if (asset.mediaType === "image") {
+        return url ? <img src={url} alt="" className="h-28 w-full rounded-md object-cover" /> : <div className="h-28 animate-pulse rounded-md bg-[var(--director-control-hover)]" />;
+    }
+    if (asset.mediaType === "video") {
+        return (
+            <div className="relative overflow-hidden rounded-md bg-black">
+                <video
+                    src={url ?? undefined}
+                    poster={poster ?? undefined}
+                    preload="metadata"
+                    controls
+                    playsInline
+                    className="aspect-video w-full"
+                />
+                {!url ? <div className="aspect-video w-full animate-pulse bg-[var(--director-control-hover)]" /> : null}
+            </div>
+        );
+    }
     return (
-        <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-[var(--director-control-hover)]">
-            {url ? (
-                <img src={url} alt="" className="size-full object-cover" />
-            ) : (
-                <div className="text-[var(--director-dock-fg)]/50">
-                    <AssetIcon mediaType={asset.mediaType} />
-                </div>
-            )}
+        <div className="flex h-16 items-center justify-center gap-2 rounded-md bg-[var(--director-control-hover)] text-[var(--director-dock-fg)]/60">
+            <Music2 className="size-4" />
+            <span className="text-[10px]">音频素材 · 点击下方按钮加入时间线</span>
         </div>
     );
 }
@@ -126,11 +220,20 @@ export function EditorAssetIngest() {
     const [added, setAdded] = useState<string | null>(null);
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
+    const [importNote, setImportNote] = useState<string | null>(null);
+    useEffect(() => {
+        if (!importNote) return;
+        const timer = window.setTimeout(() => setImportNote(null), 3200);
+        return () => window.clearTimeout(timer);
+    }, [importNote]);
     const [dragOver, setDragOver] = useState(false);
+
     const [filter, setFilter] = useState<AssetFilter>("all");
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [openGroups, setOpenGroups] = useState<{ uploaded: boolean; project: boolean }>({ uploaded: true, project: true });
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const lastAddKey = useRef<string | null>(null);
+    const lastAddAt = useRef(0);
 
     if (!project) return null;
 
@@ -144,33 +247,79 @@ export function EditorAssetIngest() {
         }
         setImporting(true);
         setImportError(null);
-        let failed = 0;
+        setImportNote(null);
+        let okCount = 0;
+        let firstErrorMsg: string | null = null;
+        const failedNames: string[] = [];
         try {
+            // 去重：同名同类型视为同一素材。库内已有或本批内重复的跳过，避免
+            // 再次上传同一大文件生成重复 asset（历史上重复导入会把素材堆积成多条）。
+            const seen = new Set<string>();
+            const toImport = media.filter(({ file, kind }) => {
+                const key = assetDedupeKey(file.name, kind);
+                const known = assets.some((a) => assetDedupeKey(a.title, a.mediaType) === key);
+                const duplicated = seen.has(key);
+                seen.add(key);
+                return !known && !duplicated;
+            });
+            const skipped = media.length - toImport.length;
             // 逐文件导入：单文件失败不中断整批，汇总失败数提示。
-            for (const { file, kind } of media) {
+            for (const { file, kind } of toImport) {
                 try {
                     // 上传前探测真实时长（视频/音频），随 meta 入库供时间线片段使用。
                     const durationMs = await probeMediaDurationMs(file);
                     const resource = await uploadResourceFile(file, kind, durationMs !== undefined ? { durationMs } : undefined);
                     if (resource.status === "failed") {
-                        failed += 1;
-                        setImportError(resource.error || `「${file.name}」上传失败`);
+                        failedNames.push(file.name);
+                        if (!firstErrorMsg) firstErrorMsg = resource.error ? `「${file.name}」${resource.error}` : null;
                         continue;
                     }
-                    await linkProjectAsset(projectId, { assetId: resource.id, category: defaultAssetCategoryForKind(kind), title: file.name });
+                    let linked = false;
+                    try {
+                        await linkProjectAsset(projectId, { assetId: resource.id, category: defaultAssetCategoryForKind(kind), title: file.name });
+                        linked = true;
+                    } catch {
+                        // 链接偶发失败（网络抖动/后端竞态）时重试一次，避免资源已入库却未挂到项目下。
+                        linked = await linkProjectAsset(projectId, { assetId: resource.id, category: defaultAssetCategoryForKind(kind), title: file.name })
+                            .then(() => true)
+                            .catch(() => false);
+                    }
+                    if (!linked) {
+                        // 两次挂载都失败（asset 可能已创建但未挂上项目）：不删除，提示重试——重试走幂等路径可补挂。
+                        failedNames.push(file.name);
+                        if (!firstErrorMsg) firstErrorMsg = `「${file.name}」已上传但挂载到项目失败，请重试`;
+                        continue;
+                    }
+                    okCount += 1;
                 } catch (err) {
-                    failed += 1;
+                    failedNames.push(file.name);
                     const detail = extractApiMessage(err);
-                    setImportError(detail ? `「${file.name}」${detail}` : `「${file.name}」导入失败`);
+                    if (!firstErrorMsg) firstErrorMsg = detail ? `「${file.name}」${detail}` : `「${file.name}」导入失败`;
                 }
             }
-            if (failed === 0) await refreshAssets();
+            if (okCount > 0) {
+                await refreshAssets();
+                setImportNote(skipped > 0 ? `已导入 ${okCount} 个，跳过 ${skipped} 个重复文件` : `已导入 ${okCount} 个媒体`);
+            } else if (skipped > 0 && failedNames.length === 0) {
+                setImportNote(`媒体库中已有同名素材，跳过 ${skipped} 个重复文件`);
+            }
+            if (firstErrorMsg) {
+                setImportError(firstErrorMsg);
+            } else if (failedNames.length > 0) {
+                const failedText = failedNames.length === 1 ? `「${failedNames[0]}」` : `${failedNames.length} 个文件`;
+                setImportError(`${failedText}导入失败，请重试`);
+            }
         } finally {
             setImporting(false);
         }
     };
 
+    // 双击“添加到时间线”会连续 dispatch 两次，产生两个同一素材的相邻片段；用时间戳守卫拦截 1.5s 内的重复添加。
     const addToTimeline = (asset: ProjectAsset) => {
+        const now = Date.now();
+        if (lastAddKey.current === asset.id && now - lastAddAt.current < 1500) return;
+        lastAddKey.current = asset.id;
+        lastAddAt.current = now;
         const kind = asset.mediaType === "video" ? "video" : asset.mediaType === "audio" ? "audio" : asset.mediaType === "image" ? "image" : null;
         if (!kind) return;
         const trackId = trackIdForKind(kind, project);
@@ -256,11 +405,19 @@ export function EditorAssetIngest() {
             </div>
 
             {importError ? <p className="px-2 pb-1 text-[10px] text-[var(--director-danger)]">{importError}</p> : null}
+            {importNote ? <p className="px-2 pb-1 text-[10px] text-[var(--director-success)]">{importNote}</p> : null}
 
             <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-1.5">
                 {assets.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
                         <p className="text-xs text-[var(--director-dock-fg)]/60">项目暂无资产</p>
+                        <p className="max-w-[180px] text-[11px] leading-relaxed text-[var(--director-dock-fg)]/45">点击上方导入媒体，或将文件拖入此区域</p>
+                    </div>
+                ) : visibleGroups.every((g) => g.items.length === 0) ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                        <p className="text-xs text-[var(--director-dock-fg)]/60">
+                            {filter === "uploaded" ? "暂无本地上传的媒体" : filter === "project" ? "暂无项目素材" : "项目暂无资产"}
+                        </p>
                         <p className="max-w-[180px] text-[11px] leading-relaxed text-[var(--director-dock-fg)]/45">点击上方导入媒体，或将文件拖入此区域</p>
                     </div>
                 ) : (
@@ -274,11 +431,17 @@ export function EditorAssetIngest() {
                                         type="button"
                                         aria-expanded={open}
                                         onClick={() => setOpenGroups((s) => ({ ...s, [group.id]: !open }))}
-                                        className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-left transition-colors hover:bg-[var(--director-control-hover)]"
+                                        className="group flex h-7 w-full items-center gap-1.5 rounded-md px-1 text-left transition-colors hover:bg-[var(--director-control-hover)]"
                                     >
-                                        <ChevronRight className={`size-3.5 shrink-0 text-[var(--director-dock-fg)]/50 transition-transform ${open ? "rotate-90" : ""}`} />
-                                        <group.icon className="size-3.5 text-[var(--director-dock-fg)]/70" />
-                                        <span className="text-[11px] font-medium text-[var(--director-dock-fg-strong)]">{group.label}</span>
+                                        <span
+                                            className={`grid size-4 shrink-0 place-items-center rounded-[5px] transition-colors ${
+                                                open ? "bg-[var(--director-accent)]/15 text-[var(--director-accent)]" : "bg-[var(--director-control-hover)] text-[var(--director-dock-fg)]/55 group-hover:text-[var(--director-dock-fg-strong)]"
+                                            }`}
+                                        >
+                                            <ChevronRight className={`size-3 transition-transform duration-150 ease-out ${open ? "rotate-90" : ""}`} />
+                                        </span>
+                                        <group.icon className={`size-3.5 shrink-0 transition-colors ${open ? "text-[var(--director-accent)]" : "text-[var(--director-dock-fg)]/60"}`} />
+                                        <span className="truncate text-[11px] font-medium text-[var(--director-dock-fg-strong)]">{group.label}</span>
                                         <span className="ml-auto rounded-full bg-[var(--director-control-hover)] px-1.5 text-[9px] tabular-nums text-[var(--director-dock-fg)]/70">{group.items.length}</span>
                                     </button>
                                     {open ? (
@@ -293,29 +456,44 @@ export function EditorAssetIngest() {
                                                             aria-expanded={expanded}
                                                             onClick={() => setExpandedId(expanded ? null : asset.id)}
                                                             title={asset.title || asset.storageKey}
-                                                            className={`flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors ${
+                                                            className={`group flex w-full items-center gap-2 rounded-md px-1 py-[3px] text-left transition-colors ${
                                                                 added === asset.id ? "bg-[var(--director-accent)]/15" : "hover:bg-[var(--director-control-hover)]"
                                                             }`}
                                                         >
                                                             <AssetThumb asset={asset} />
                                                             <span className="min-w-0 flex-1">
                                                                 <span className="block truncate text-[11px] text-[var(--director-dock-fg-strong)]">{asset.title || asset.storageKey}</span>
-                                                                <span className="mt-0.5 flex items-center gap-1">
-                                                                    <span className="text-[9px] uppercase text-[var(--director-dock-fg)]/60">{asset.mediaType}</span>
+                                                                <span className="mt-0.5 flex items-center gap-1 text-[9px] text-[var(--director-dock-fg)]/60">
+                                                                    <span className="uppercase">{asset.mediaType}</span>
+                                                                    {asset.durationMs ? <span className="tabular-nums opacity-80">{formatDurationMs(asset.durationMs)}</span> : null}
                                                                     <SourceBadge source={source} />
                                                                 </span>
                                                             </span>
-                                                            <ChevronDown className={`size-3.5 shrink-0 text-[var(--director-dock-fg)]/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                                                            <span
+                                                                className={`grid size-5 shrink-0 place-items-center rounded-[5px] transition-colors ${
+                                                                    expanded ? "bg-[var(--director-accent)]/15 text-[var(--director-accent)]" : "text-[var(--director-dock-fg)]/40 group-hover:text-[var(--director-dock-fg)]/80"
+                                                                }`}
+                                                            >
+                                                                <ChevronDown className={`size-3.5 transition-transform duration-150 ease-out ${expanded ? "rotate-180" : ""}`} />
+                                                            </span>
                                                         </button>
                                                         {expanded ? (
-                                                            <div className="mx-1 mb-1 ml-10 rounded-md bg-[var(--director-control-hover)] p-2">
-                                                                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                                                                <div className="mx-1 mb-1 ml-10 rounded-md bg-[var(--director-control-hover)] p-2">
+
+                                                                <MediaPreview asset={asset} />
+                                                                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
                                                                     <dt className="text-[var(--director-dock-fg)]/60">媒体类型</dt>
                                                                     <dd className="truncate text-right capitalize text-[var(--director-dock-fg-strong)]">{asset.mediaType}</dd>
                                                                     <dt className="text-[var(--director-dock-fg)]/60">分类</dt>
                                                                     <dd className="truncate text-right text-[var(--director-dock-fg-strong)]">{asset.category}</dd>
                                                                     <dt className="text-[var(--director-dock-fg)]/60">来源</dt>
                                                                     <dd className="text-right text-[var(--director-dock-fg-strong)]">{source === SOURCE_UPLOADED ? "本地上传" : "项目素材"}</dd>
+                                                                    {asset.durationMs ? (
+                                                                        <>
+                                                                            <dt className="text-[var(--director-dock-fg)]/60">时长</dt>
+                                                                            <dd className="text-right tabular-nums text-[var(--director-dock-fg-strong)]">{formatDurationMs(asset.durationMs)}</dd>
+                                                                        </>
+                                                                    ) : null}
                                                                 </dl>
                                                                 {asset.previewText ? <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[var(--director-dock-fg)]/60">{asset.previewText}</p> : null}
                                                                 <button

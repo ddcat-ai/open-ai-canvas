@@ -34,7 +34,8 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 - [x] M6.1：`ai-command-schema.ts` 新建——AI 命令 JSON 解析（容忍 markdown fence/前后杂讯/字符串内括号）、批级 dry-run 预检（走 M2 命令注册表，任一非法整批拒绝并报下标与 op）、12-op LLM 提示词契约（`AI_EDITING_OP_CATALOG` + `buildAiEditingSystemPrompt`）、`AI_COMMAND_SCHEMA_VERSION` 版本化；`ai-commands.golden.json` 固化 op 集与 registry 黄金同步（漂移即测试失败）；20 用例全绿。
 - [x] M6.2：`timeline-summary.ts` 新建——确定性中文摘要（轨道按 order 排序逐行、片段逐行含 id/kind/时间区间、字幕字数统计、空态提示）；片段行数超限折叠（SUMMARY_MAX_CLIP_LINES）；同输入同输出；10 用例全绿。
-- [ ] M6.3 AI 助手面板真实现（待用户确认模型源后单列）：editor-ai-assistant.tsx 从占位替换为对话 + 时间线摘要喂上下文 → LLM 输出经 parseAiCommandPlan → dry-run 校验 → ≤3 条直执行 / >3 条预览确认 → 命令代发走 `assertEditorPermission`（M5 通道）。
+- [x] M6.3：`editor-ai-assistant.tsx` 从占位替换为真实 AI 助手——右上悬浮对话面板（OpenAI Canvas 风格）：面板内文本模型选择器（`effective.textModels` 即文本能力模型目录，选择即 `updateConfig("textModel", …)` 持久化并在请求时同时覆写 `config.model/textModel`，绕过默认/误配图像模型的根因）、消息流（user/assistant/error/preview 四类气泡 + 思考中占位）、空态引导（示例意图文案，点击建议指令 chips 即发送，跨轮记忆）、底部输入条；顶部工具栏常驻 Sparkles 入口（aria-pressed 切换）。宿主链路：`buildAiEditingSystemPrompt(summarizeTimeline(project))` 喂上下文 → 流式增量渲染 → `parseAiCommandPlan` → `validateAiCommandBatch` dry-run（任一非法整批拒绝，同步 registry 校验、不落盘）→ ≤3 条 `dispatch` 直执行 / >3 条渲染 diff 预览卡片「确认执行（N）/ 放弃」→ 解析/校验拒绝时错误气泡可「修正后重试」（`failTurn` 回填 `FAILED_MARK`，历史含用户文本不重发；registry 直执行本身 fail-closed——拒绝写入 `saveError` 顶部提示，同步 dispatch 不抛错故不回填 FAILED_MARK）。修复了上一版文件的重复/截断函数（appendToEntry 双定义、settleAnswer 三声明等）；typecheck 零错误、编辑器/插件相关测试通过、生产构建通过。
+- [ ] 浏览器冒烟（待用户确认，需真实文本渠道）：顶部工具栏 AI 图标开关面板 → 切换面板内模型下拉（无可用模型时展示禁用态）→ 输入自然语言；确认 ≤3 条指令直接执行且可撤销（撤销按条回退，N 条需 N 次撤销）、>3 条出现预览确认卡片（放弃不动时间线、确认后预览卡转为执行汇报、重复点击不再二次提交）、模型输出非法 JSON 时错误气泡出现「修正后重试」并回填失败标记、ESC/关闭按钮收起面板后再次打开会话仍在。
 
 ## M4（后端转写/渲染任务）
 

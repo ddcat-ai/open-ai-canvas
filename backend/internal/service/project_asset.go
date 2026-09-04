@@ -171,8 +171,8 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	return s.projectAssetSummary(userID, projectID, asset)
 }
 
-// assetFromUploadedResource 把媒体导入上传的 Resource 合成/补齐为资产记录并落库。
-// 幂等：资产已存在（例如并发重试）时按资源元数据补齐字段。
+// assetFromUploadedResource 把媒体导入上传的 Resource 合成为资产记录（内存构造，不落库）。
+// 资产创建与项目链接由 LinkProjectAsset 事务原子提交，避免失败留下孤立资产。
 func (s *Service) assetFromUploadedResource(userID string, resourceID string, title string) (*model.Asset, error) {
 	resource, err := s.repo.ResourceForUser(userID, resourceID)
 	if err != nil {
@@ -213,10 +213,9 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 		CreatedAt:   resource.CreatedAt,
 		UpdatedAt:   resource.UpdatedAt,
 	}
-	if err := s.repo.UpsertAsset(asset); err != nil {
-		return nil, err
-	}
-	return s.repo.AssetForUser(userID, resource.ID)
+	// 不在此预落库：资产创建交给 LinkProjectAsset 的事务统一提交，
+	// 事务失败时与链接一起回滚，避免留下“有资产无链接”的孤儿记录。
+	return asset, nil
 }
 
 // mediaTitleFallback 资源无文件名时的展示标题：未命名 + 媒体类型 + 分辨率。
