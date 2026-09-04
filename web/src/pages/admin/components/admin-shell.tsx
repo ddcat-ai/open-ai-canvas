@@ -84,7 +84,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
-            { path: "/admin/settings/appearance", label: "外观管理", description: "品牌、Logo 与登录影片", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO、备案与皮肤", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
@@ -127,7 +127,7 @@ export function AdminShell() {
     };
 
     return (
-        <ConfigProvider theme={getAdminAntThemeConfig(dark)}>
+        <ConfigProvider theme={getAdminAntThemeConfig(dark, appearance.activeSkin)}>
             <main className="admin-shell app-user-workspace flex h-full min-h-0 overflow-hidden text-foreground">
                 <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                     <div className="admin-sidebar-identity shrink-0">

@@ -57,6 +57,7 @@
 | <img src="assets/user-dominic1556.jpg" alt="Dominic1556" width="80"> | Dominic1556 | [184026530@qq.com](mailto:184026530@qq.com) | Done is better than perfect |
 | <img src="assets/user-yuxi.jpg" alt="宇熙" width="80"> | 宇熙 | [53121904@qq.com](mailto:53121904@qq.com) | 年轻的时候不狂，老了拿什么回忆 |
 | <img src="assets/user-yingzi.png" alt="影子" width="80"> | 影子 | [305818148@qq.com](mailto:305818148@qq.com) | 年纪大佬才明白人要顺势而为。 |
+| <img src="assets/user-ray.jpg" alt="Ray" width="80"> | Ray | [cnraylee@qq.com](mailto:cnraylee@qq.com) | AI时代的全栈落地工，欢迎找我聊需求 |
 
 ## 交流与反馈
 

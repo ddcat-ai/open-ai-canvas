@@ -1,6 +1,8 @@
 import type { ThemeConfig } from "antd";
 import { theme as antdTheme } from "antd";
 
+import { getSkinAntOverrides, normalizeSkinID } from "@/lib/skin-themes";
+
 // 主操作、普通选择和开关是不同交互语义，必须各自维护成对的背景/前景色。
 const controlTheme = {
     light: {
@@ -12,8 +14,8 @@ const controlTheme = {
         checkHoverBg: "#303030",
         checkActiveBg: "#404040",
         checkFg: "#ffffff",
-        switchCheckedBg: "#171717",
-        switchCheckedHoverBg: "#303030",
+        switchCheckedBg: "#16a34a",
+        switchCheckedHoverBg: "#15803d",
         switchCheckedHandle: "#ffffff",
         selectedBg: "rgba(17, 17, 17, 0.09)",
         selectedHoverBg: "rgba(17, 17, 17, 0.13)",
@@ -24,9 +26,16 @@ const controlTheme = {
         controlDisabledBg: "rgba(17, 17, 17, 0.05)",
         controlDisabledFg: "rgba(17, 17, 17, 0.36)",
         controlFocus: "rgba(17, 17, 17, 0.24)",
-        switchOffBg: "rgba(17, 17, 17, 0.22)",
-        switchOffHoverBg: "rgba(17, 17, 17, 0.3)",
+        switchOffBg: "#b8b8b8",
+        switchOffHoverBg: "#9f9f9f",
         switchOffHandle: "#ffffff",
+        success: "#16a34a",
+        warning: "#d97706",
+        danger: "#dc2626",
+        dangerHover: "#b91c1c",
+        dangerActive: "#991b1b",
+        dangerForeground: "#ffffff",
+        info: "#2563eb",
         menuBg: "#f5f5f5",
         menuText: "#171717",
         selectActiveBg: "rgba(17, 17, 17, 0.035)",
@@ -44,9 +53,9 @@ const controlTheme = {
         checkHoverBg: "#ffffff",
         checkActiveBg: "#e5e5e5",
         checkFg: "#131313",
-        switchCheckedBg: "#f5f5f5",
-        switchCheckedHoverBg: "#ffffff",
-        switchCheckedHandle: "#131313",
+        switchCheckedBg: "#22c55e",
+        switchCheckedHoverBg: "#4ade80",
+        switchCheckedHandle: "#071a0f",
         selectedBg: "rgba(255, 255, 255, 0.12)",
         selectedHoverBg: "rgba(255, 255, 255, 0.16)",
         selectedActiveBg: "rgba(255, 255, 255, 0.2)",
@@ -56,9 +65,16 @@ const controlTheme = {
         controlDisabledBg: "rgba(255, 255, 255, 0.06)",
         controlDisabledFg: "rgba(255, 255, 255, 0.38)",
         controlFocus: "rgba(255, 255, 255, 0.24)",
-        switchOffBg: "rgba(255, 255, 255, 0.22)",
-        switchOffHoverBg: "rgba(255, 255, 255, 0.3)",
+        switchOffBg: "#525252",
+        switchOffHoverBg: "#686868",
         switchOffHandle: "#f5f5f5",
+        success: "#4ade80",
+        warning: "#fbbf24",
+        danger: "#f87171",
+        dangerHover: "#fca5a5",
+        dangerActive: "#ef4444",
+        dangerForeground: "#2b0808",
+        info: "#60a5fa",
         menuBg: "#262626",
         menuText: "#fafafa",
         selectActiveBg: "rgba(255, 255, 255, 0.055)",
@@ -69,32 +85,73 @@ const controlTheme = {
     },
 };
 
-export function getAntThemeConfig(dark: boolean): ThemeConfig {
-    const color = dark ? controlTheme.dark : controlTheme.light;
+export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): ThemeConfig {
+    const baseColor = dark ? controlTheme.dark : controlTheme.light;
+    const skin = getSkinAntOverrides(skinID, dark ? "dark" : "light");
+    const color = {
+        ...baseColor,
+        solidBg: skin.primary || baseColor.solidBg,
+        solidHoverBg: skin.primaryHover || baseColor.solidHoverBg,
+        solidActiveBg: skin.primaryActive || baseColor.solidActiveBg,
+        solidFg: skin.primaryForeground || baseColor.solidFg,
+        checkBg: skin.primary || baseColor.checkBg,
+        checkHoverBg: skin.primaryHover || baseColor.checkHoverBg,
+        checkActiveBg: skin.primaryActive || baseColor.checkActiveBg,
+        checkFg: skin.primaryForeground || baseColor.checkFg,
+        switchCheckedBg: skin.switchChecked || baseColor.switchCheckedBg,
+        switchCheckedHoverBg: skin.switchCheckedHover || baseColor.switchCheckedHoverBg,
+        switchCheckedHandle: skin.switchCheckedHandle || baseColor.switchCheckedHandle,
+        selectedBg: skin.selected || baseColor.selectedBg,
+        selectedHoverBg: skin.selectedHover || baseColor.selectedHoverBg,
+        selectedActiveBg: skin.selectedActive || baseColor.selectedActiveBg,
+        selectedFg: skin.selectedForeground || baseColor.selectedFg,
+        controlBorder: skin.controlBorder || baseColor.controlBorder,
+        controlFocus: skin.controlFocus || baseColor.controlFocus,
+        menuBg: skin.menuBackground || baseColor.menuBg,
+        menuText: skin.menuForeground || baseColor.menuText,
+        selectActiveBg: skin.selected || baseColor.selectActiveBg,
+        selectSelectedBg: skin.selectedHover || baseColor.selectSelectedBg,
+        selectText: skin.selectedForeground || baseColor.selectText,
+        tableSelectedBg: skin.selected || baseColor.tableSelectedBg,
+        tableSelectedHoverBg: skin.selectedHover || baseColor.tableSelectedHoverBg,
+        controlSurface: skin.controlSurface || baseColor.controlSurface,
+        controlDisabledBg: skin.controlDisabledBackground || baseColor.controlDisabledBg,
+        controlDisabledFg: skin.controlDisabledForeground || baseColor.controlDisabledFg,
+        switchOffBg: skin.switchUnchecked || baseColor.switchOffBg,
+        switchOffHoverBg: skin.switchUncheckedHover || baseColor.switchOffHoverBg,
+        switchOffHandle: skin.switchUncheckedHandle || baseColor.switchOffHandle,
+        success: skin.success || baseColor.success,
+        warning: skin.warning || baseColor.warning,
+        danger: skin.danger || baseColor.danger,
+        dangerHover: skin.dangerHover || baseColor.dangerHover,
+        dangerActive: skin.dangerActive || baseColor.dangerActive,
+        dangerForeground: skin.dangerForeground || baseColor.dangerForeground,
+        info: skin.info || baseColor.info,
+    };
     // 浮层背景必须不透明（0.96 会透出下层内容）；与侧栏切换器等自定义浮层的实底背景保持一致
-    const elevatedBackground = dark ? "rgba(31, 31, 32, 1)" : "rgba(255, 255, 255, 1)";
-    const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
-    const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
+    const elevatedBackground = skin.elevatedBackground || (dark ? "rgba(31, 31, 32, 1)" : "rgba(255, 255, 255, 1)");
+    const subtleBackground = skin.subtleBackground || (dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)");
+    const interactiveBorder = skin.controlBorder || (dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)");
     // 信息提示使用独立的浅色/深色表面，不能复用主操作的纯黑/纯白色；
     // 否则 Ant Design 会根据 colorInfo 生成近似纯黑的浅色主题背景，造成文字对比度失效。
     const infoBackground = dark ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 17, 17, 0.045)";
     const infoBackgroundHover = dark ? "rgba(255, 255, 255, 0.11)" : "rgba(17, 17, 17, 0.07)";
     const infoBorder = dark ? "rgba(255, 255, 255, 0.2)" : "rgba(17, 17, 17, 0.14)";
-    const infoAccent = dark ? "#e4e4e7" : "#3f3f46";
+    const infoAccent = color.info;
     // 黑白主题使用边框表达焦点，避免输入控件周围出现蓝紫色光圈。
     const focusShadow = "none";
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        cssVar: { key: dark ? "infinite-canvas-dark" : "infinite-canvas-light" },
+        cssVar: { key: `infinite-canvas-${normalizeSkinID(skinID)}-${dark ? "dark" : "light"}` },
         token: {
             colorPrimary: color.solidBg,
             colorPrimaryHover: color.solidHoverBg,
             colorPrimaryActive: color.solidActiveBg,
             colorPrimaryBg: color.selectedBg,
             colorPrimaryBgHover: color.selectedHoverBg,
-            colorInfoBg: infoBackground,
-            colorInfoBgHover: infoBackgroundHover,
+            colorInfoBg: skin.selected || infoBackground,
+            colorInfoBgHover: skin.selectedHover || infoBackgroundHover,
             colorInfoBorder: infoBorder,
             colorInfoBorderHover: infoBorder,
             colorInfo: infoAccent,
@@ -107,25 +164,43 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorLinkHover: color.solidHoverBg,
             colorLinkActive: color.solidActiveBg,
             colorTextLightSolid: color.solidFg,
+            colorText: skin.text || undefined,
+            colorTextSecondary: skin.textMuted || undefined,
+            colorIcon: skin.icon || undefined,
+            colorIconHover: skin.iconHover || undefined,
+            colorSuccess: color.success,
+            colorWarning: color.warning,
+            colorError: color.danger,
+            colorErrorHover: color.dangerHover,
+            colorErrorActive: color.dangerActive,
+            colorErrorText: color.danger,
+            colorErrorTextHover: color.dangerHover,
+            colorErrorTextActive: color.dangerActive,
             colorBgElevated: elevatedBackground,
+            colorBgContainer: skin.controlSurface || undefined,
             colorBorderSecondary: dark ? "rgba(255, 255, 255, 0.1)" : "rgba(17, 17, 17, 0.09)",
-            boxShadowSecondary: dark ? "0 24px 72px rgba(0, 0, 0, 0.48)" : "0 22px 64px rgba(15, 23, 42, 0.14)",
-            borderRadius: 6,
-            borderRadiusLG: 8,
-            borderRadiusSM: 5,
-            controlHeight: 36,
-            controlHeightLG: 42,
-            controlHeightSM: 30,
+            boxShadowSecondary:
+                skin.shadowStyle === "none" ? "none" : skin.shadowStyle === "strong" ? (dark ? "0 28px 84px rgba(0, 0, 0, 0.68)" : "0 26px 72px rgba(15, 23, 42, 0.22)") : dark ? "0 24px 72px rgba(0, 0, 0, 0.48)" : "0 22px 64px rgba(15, 23, 42, 0.14)",
+            borderRadius: skin.borderRadius || 6,
+            borderRadiusLG: skin.borderRadiusLG || 8,
+            borderRadiusSM: skin.borderRadiusSM || 5,
+            lineWidth: skin.borderWidth || 1,
+            controlHeight: skin.controlHeight || 36,
+            controlHeightLG: skin.controlHeightLarge || 42,
+            controlHeightSM: skin.controlHeightSmall || 30,
             fontSize: 13,
             fontSizeSM: 12,
-            motionDurationFast: "0.12s",
-            motionDurationMid: "0.18s",
-            motionDurationSlow: "0.24s",
+            motionDurationFast: `${skin.motionFast ?? 120}ms`,
+            motionDurationMid: `${skin.motionNormal ?? 180}ms`,
+            motionDurationSlow: `${Math.max(skin.motionNormal ?? 180, 240)}ms`,
         },
         components: {
             Button: {
                 primaryShadow: "none",
-                fontWeight: 500,
+                dangerShadow: "none",
+                dangerColor: color.dangerForeground,
+                fontWeight: skin.buttonFontWeight || 500,
+                borderRadius: skin.buttonRadius || skin.borderRadius || 6,
                 paddingInline: 14,
                 paddingInlineLG: 16,
                 paddingInlineSM: 10,
@@ -133,27 +208,29 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 colorPrimaryHover: color.solidHoverBg,
                 colorPrimaryActive: color.solidActiveBg,
                 primaryColor: color.solidFg,
-                defaultBg: "transparent",
+                defaultBg: skin.controlSurface || "transparent",
                 defaultColor: color.selectedFg,
                 defaultBorderColor: color.controlBorder,
-                defaultHoverBg: color.selectedBg,
+                defaultHoverBg: skin.controlHover || color.selectedBg,
                 defaultHoverColor: color.selectedFg,
                 defaultHoverBorderColor: color.controlBorder,
-                defaultActiveBg: color.selectedHoverBg,
+                defaultActiveBg: skin.controlActive || color.selectedHoverBg,
                 defaultActiveColor: color.selectedFg,
                 defaultActiveBorderColor: color.controlBorder,
             },
             Input: {
+                borderRadius: skin.inputRadius || skin.borderRadiusSM || 5,
                 paddingInline: 11,
-                activeBg: elevatedBackground,
-                hoverBg: elevatedBackground,
+                activeBg: skin.controlSurface || elevatedBackground,
+                hoverBg: skin.controlHover || elevatedBackground,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
                 activeShadow: focusShadow,
             },
             InputNumber: {
-                activeBg: elevatedBackground,
-                hoverBg: elevatedBackground,
+                borderRadius: skin.inputRadius || skin.borderRadiusSM || 5,
+                activeBg: skin.controlSurface || elevatedBackground,
+                hoverBg: skin.controlHover || elevatedBackground,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
                 activeShadow: focusShadow,
@@ -169,6 +246,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 controlOutline: color.controlFocus,
             },
             Checkbox: {
+                borderRadiusSM: skin.checkboxRadius || 4,
                 colorBgContainer: color.controlSurface,
                 colorBgContainerDisabled: color.controlDisabledBg,
                 colorBorder: color.controlBorder,
@@ -197,6 +275,8 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 controlOutline: color.controlFocus,
             },
             Menu: {
+                itemBorderRadius: skin.menuRadius || skin.borderRadius || 6,
+                subMenuItemBorderRadius: skin.menuRadius || skin.borderRadius || 6,
                 itemHeight: 40,
                 itemMarginBlock: 2,
                 itemActiveBg: color.menuBg,
@@ -208,6 +288,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 darkItemSelectedColor: controlTheme.dark.menuText,
             },
             Select: {
+                borderRadius: skin.inputRadius || skin.borderRadiusSM || 5,
                 selectorBg: elevatedBackground,
                 optionHeight: 40,
                 optionPadding: "8px 12px",
@@ -221,10 +302,10 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             },
             Table: {
                 headerBg: subtleBackground,
-                headerColor: dark ? "rgba(250, 250, 250, 0.62)" : "rgba(23, 23, 23, 0.58)",
+                headerColor: skin.textMuted || (dark ? "rgba(250, 250, 250, 0.62)" : "rgba(23, 23, 23, 0.58)"),
                 headerBorderRadius: 0,
-                rowHoverBg: dark ? "rgba(255, 255, 255, 0.035)" : "rgba(17, 17, 17, 0.025)",
-                borderColor: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 17, 17, 0.075)",
+                rowHoverBg: skin.controlHover || (dark ? "rgba(255, 255, 255, 0.035)" : "rgba(17, 17, 17, 0.025)"),
+                borderColor: skin.controlBorder || (dark ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 17, 17, 0.075)"),
                 cellPaddingBlockMD: 13,
                 cellPaddingInlineMD: 14,
                 rowSelectedBg: color.tableSelectedBg,
@@ -238,6 +319,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 itemActiveColorHover: color.solidFg,
             },
             Segmented: {
+                borderRadius: skin.inputRadius || skin.borderRadiusSM || 5,
                 trackBg: subtleBackground,
                 trackPadding: 3,
                 itemColor: color.controlDisabledFg,
@@ -248,6 +330,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 itemSelectedColor: color.selectedFg,
             },
             Modal: {
+                borderRadiusLG: skin.overlayRadius || skin.borderRadiusLG || 8,
                 headerBg: "transparent",
                 contentBg: elevatedBackground,
                 footerBg: "transparent",
@@ -266,6 +349,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 gradientToColor: dark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.1)",
             },
             Card: {
+                borderRadiusLG: skin.borderRadiusLG || 8,
                 headerBg: "transparent",
                 headerFontSize: 15,
                 bodyPadding: 18,
@@ -277,16 +361,17 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
 /**
  * 管理后台使用更高密度的控件节奏；只在 AdminShell 内挂载，避免改变创作端的视觉契约。
  */
-export function getAdminAntThemeConfig(dark: boolean): ThemeConfig {
-    const base = getAntThemeConfig(dark);
+export function getAdminAntThemeConfig(dark: boolean, skinID: unknown = "classic"): ThemeConfig {
+    const base = getAntThemeConfig(dark, skinID);
+    const skin = getSkinAntOverrides(skinID, dark ? "dark" : "light");
     const mutedForeground = dark ? "rgba(250, 250, 250, 0.58)" : "rgba(23, 23, 23, 0.58)";
 
     return {
         ...base,
         token: {
             ...base.token,
-            borderRadius: 6,
-            borderRadiusLG: 8,
+            borderRadius: skin.borderRadius || 6,
+            borderRadiusLG: skin.borderRadiusLG || 8,
             colorBgContainer: "var(--color-surface)",
             colorBorder: "var(--color-border)",
             fontFamily: "var(--font-sans)",

@@ -14,23 +14,25 @@ import (
 const featureAvailabilitySettingKey = "feature_availability"
 
 const (
-	FeatureShortDrama     = "shortDrama"
-	FeatureTaskCenter     = "taskCenter"
-	FeatureCredits        = "credits"
-	FeatureCustomChannels = "customChannels"
-	FeatureFrontendModels = "frontendModels"
-	FeaturePluginCenter   = "pluginCenter"
-	FeatureSystemPlugins  = "systemPluginsVisibleToUsers"
+	FeatureShortDrama            = "shortDrama"
+	FeatureTaskCenter            = "taskCenter"
+	FeatureCredits               = "credits"
+	FeatureCustomChannels        = "customChannels"
+	FeatureFrontendModels        = "frontendModels"
+	FeaturePluginCenter          = "pluginCenter"
+	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
+	FeatureTimelineTranscription = "timelineTranscription"
 )
 
 type FeatureAvailability struct {
-	ShortDramaEnabled           bool `json:"shortDramaEnabled"`
-	TaskCenterEnabled           bool `json:"taskCenterEnabled"`
-	CreditsEnabled              bool `json:"creditsEnabled"`
-	CustomChannelsEnabled       bool `json:"customChannelsEnabled"`
-	FrontendModelsEnabled       bool `json:"frontendModelsEnabled"`
-	PluginCenterEnabled         bool `json:"pluginCenterEnabled"`
-	SystemPluginsVisibleToUsers bool `json:"systemPluginsVisibleToUsers"`
+	ShortDramaEnabled            bool `json:"shortDramaEnabled"`
+	TaskCenterEnabled            bool `json:"taskCenterEnabled"`
+	CreditsEnabled               bool `json:"creditsEnabled"`
+	CustomChannelsEnabled        bool `json:"customChannelsEnabled"`
+	FrontendModelsEnabled        bool `json:"frontendModelsEnabled"`
+	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
+	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
+	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -44,13 +46,14 @@ type PublicFeatureAvailability struct {
 func defaultFeatureAvailability() FeatureAvailability {
 	// 缺少配置代表尚未由运维接管；前台模型需要明确配置后才开放。
 	return FeatureAvailability{
-		ShortDramaEnabled:           true,
-		TaskCenterEnabled:           true,
-		CreditsEnabled:              true,
-		CustomChannelsEnabled:       true,
-		FrontendModelsEnabled:       false,
-		PluginCenterEnabled:         true,
-		SystemPluginsVisibleToUsers: true,
+		ShortDramaEnabled:            true,
+		TaskCenterEnabled:            true,
+		CreditsEnabled:               true,
+		CustomChannelsEnabled:        true,
+		FrontendModelsEnabled:        false,
+		PluginCenterEnabled:          true,
+		SystemPluginsVisibleToUsers:  true,
+		TimelineTranscriptionEnabled: true,
 	}
 }
 
@@ -114,6 +117,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.PluginCenterEnabled, nil
 	case FeatureSystemPlugins:
 		return value.SystemPluginsVisibleToUsers, nil
+	case FeatureTimelineTranscription:
+		return value.TimelineTranscriptionEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -142,6 +147,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return Forbidden("插件中心暂未开放")
 	case FeatureSystemPlugins:
 		return Forbidden("系统插件暂未向普通用户展示")
+	case FeatureTimelineTranscription:
+		return Forbidden("字幕转写暂未开放")
 	default:
 		return Forbidden("该功能暂未开放")
 	}

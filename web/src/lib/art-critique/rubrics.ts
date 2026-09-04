@@ -106,7 +106,7 @@ export function buildArtCritiqueRubricPrompt(options: ArtCritiqueRubricPromptOpt
 
     return [
         `审美 Rubric 版本：${ART_CRITIQUE_RUBRIC_VERSION}`,
-        "以下是影策当前采用的内部审美检查标准。参考项目提供的是任务定义和方法论，不是需要引用的答案，也不是必须部署的模型。",
+        "以下是当前创作工作台采用的内部审美检查标准。参考项目提供的是任务定义和方法论，不是需要引用的答案，也不是必须部署的模型。",
         selectedCategories ? `本次 Reviewer 只负责以下维度：${[...selectedCategories].join("、")}。不要评价其他维度，也不要重复其他 Reviewer 的职责。` : "先判断图片类型、主体、视觉意图和当前构图策略，再应用检查项。",
         "审美偏好不等于结构性错误；只有有画面证据、会影响表达、且能给出动作时才生成问题。允许没有问题，不要为了覆盖检查项、满足数量或显得有帮助而凑数。",
         ...(includeReferenceMapping ? [`参考方法映射：\n${ART_CRITIQUE_REFERENCE_METHODS.map((method) => `- ${method}`).join("\n")}`] : []),

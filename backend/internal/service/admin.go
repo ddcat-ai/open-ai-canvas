@@ -761,8 +761,16 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 	if requestedAllowLocal && !s.DesktopLocalChannelsEnabled() {
 		return channel, BadAuthRequest("当前后端未启用本机渠道")
 	}
-	if _, err := s.validateChannelOutboundURL(baseURL, requestedAllowLocal, false); err != nil {
-		return channel, err
+	// 启用/停用或只修改价格、模型等本地配置时，不应要求上游域名当前可解析。
+	// 只有 Base URL 或本机渠道开关实际变化时才做出站地址校验。
+	connectionChanged := strings.TrimRight(baseURL, "/") != strings.TrimRight(channel.BaseURL, "/")
+	if req.AllowLocalChannel != nil {
+		connectionChanged = connectionChanged || *req.AllowLocalChannel != channel.AllowLocalChannel
+	}
+	if connectionChanged {
+		if _, err := s.validateChannelOutboundURL(baseURL, requestedAllowLocal, false); err != nil {
+			return channel, err
+		}
 	}
 	models := uniqueNonEmpty(req.Models)
 	modelsJSON, _ := json.Marshal(models)

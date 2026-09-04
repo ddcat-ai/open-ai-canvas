@@ -125,7 +125,7 @@ func (s *Service) UpdateAnnouncement(actor *model.User, id string, req UpdateAnn
 			}
 			return nil, err
 		}
-		if err := s.ensureResourceHasNoBusinessReferences(oldResource); err != nil {
+		if err := s.ensureResourceHasNoBusinessReferences(oldResource, repository.ResourceDirectReference{Kind: "公告", ID: announcement.ID}); err != nil {
 			return nil, err
 		}
 		sharedCount, countErr := s.repo.ResourceStorageReferenceCount(oldResource, []string{oldResource.ID})
@@ -316,7 +316,7 @@ func (s *Service) discardAnnouncementImageDraft(userID string, resourceID string
 		}
 		return err
 	}
-	if err := s.ensureResourceHasNoBusinessReferences(resource); err != nil {
+	if err := s.ensureResourceHasNoBusinessReferences(resource, repository.ResourceDirectReference{Kind: "公告草稿", ID: resource.ID}); err != nil {
 		return err
 	}
 	sharedCount, err := s.repo.ResourceStorageReferenceCount(resource, []string{resource.ID})
@@ -340,7 +340,7 @@ func (s *Service) discardAnnouncementImageDraft(userID string, resourceID string
 	return nil
 }
 
-func (s *Service) ensureResourceHasNoBusinessReferences(resource *model.Resource) error {
+func (s *Service) ensureResourceHasNoBusinessReferences(resource *model.Resource, ignoredDirect ...repository.ResourceDirectReference) error {
 	if resource == nil {
 		return NotFound("资源不存在")
 	}
@@ -348,7 +348,18 @@ func (s *Service) ensureResourceHasNoBusinessReferences(resource *model.Resource
 	if err != nil {
 		return err
 	}
-	if len(snapshot.Direct) > 0 {
+	hasBlocking := false
+DirectLoop:
+	for _, direct := range snapshot.Direct {
+		for _, ignored := range ignoredDirect {
+			if direct.Kind == ignored.Kind && direct.ID == ignored.ID {
+				continue DirectLoop
+			}
+		}
+		hasBlocking = true
+		break
+	}
+	if hasBlocking {
 		return BadAuthRequest("公告配图仍被其他业务数据引用，已停止删除")
 	}
 	resourceIDs := map[string]struct{}{resource.ID: {}}

@@ -42,7 +42,7 @@ curl "{channel_base_url}/v1beta/models/YOUR_VEO_MODEL:predictLongRunning" \
 
 ## Operation 轮询与结果
 
-创建响应返回 operation `name`。影策会移除开头斜杠，并在缺少 `operations/` 前缀时自动补齐，然后请求 `/v1beta/operations/...`。
+创建响应返回 operation `name`。宿主会移除开头斜杠，并在缺少 `operations/` 前缀时自动补齐，然后请求 `/v1beta/operations/...`。
 
 ```json
 {"name":"operations/op_xxx","done":false}

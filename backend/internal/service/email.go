@@ -40,17 +40,18 @@ type EmailSettingRequest struct {
 }
 
 type PublicEmailSetting struct {
-	Enabled     bool      `json:"enabled"`
-	Host        string    `json:"host"`
-	Port        int       `json:"port"`
-	Username    string    `json:"username"`
-	Encryption  string    `json:"encryption"`
-	FromEmail   string    `json:"fromEmail"`
-	FromName    string    `json:"fromName"`
-	HasPassword bool      `json:"hasPassword"`
-	UpdatedBy   string    `json:"updatedBy"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Enabled           bool      `json:"enabled"`
+	Host              string    `json:"host"`
+	Port              int       `json:"port"`
+	Username          string    `json:"username"`
+	Encryption        string    `json:"encryption"`
+	FromEmail         string    `json:"fromEmail"`
+	FromName          string    `json:"fromName"`
+	FromNameInherited bool      `json:"fromNameInherited"`
+	HasPassword       bool      `json:"hasPassword"`
+	UpdatedBy         string    `json:"updatedBy"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 type emailSettingValue struct {
@@ -72,7 +73,7 @@ func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, err
 	if err != nil {
 		return nil, err
 	}
-	return publicEmailSetting(setting, value), nil
+	return s.publicEmailSetting(setting, value), nil
 }
 
 func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest) (*PublicEmailSetting, error) {
@@ -106,7 +107,7 @@ func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest)
 	if err := s.repo.SaveSystemSetting(&setting); err != nil {
 		return nil, err
 	}
-	return publicEmailSetting(&setting, next), nil
+	return s.publicEmailSetting(&setting, next), nil
 }
 
 func (s *Service) EmailEnabled() (bool, error) {
@@ -168,7 +169,9 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	if err := s.deliverEmail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
+	brandName := s.appearanceBrandName()
+	setting = resolveEmailSender(setting, brandName)
+	if err := s.deliverEmail(setting, email, brandName+"注册验证码", registrationEmailBody(brandName, code)); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
 			return errors.Join(
@@ -278,20 +281,26 @@ func normalizeEmailSetting(value emailSettingValue) emailSettingValue {
 	default:
 		value.Encryption = "starttls"
 	}
-	if value.FromName == "" {
-		value.FromName = "影策"
-	}
 	return value
 }
 
-func publicEmailSetting(setting *model.SystemSetting, value emailSettingValue) *PublicEmailSetting {
-	result := &PublicEmailSetting{Enabled: value.Enabled, Host: value.Host, Port: value.Port, Username: value.Username, Encryption: value.Encryption, FromEmail: value.FromEmail, FromName: value.FromName, HasPassword: value.Password != ""}
+func (s *Service) publicEmailSetting(setting *model.SystemSetting, value emailSettingValue) *PublicEmailSetting {
+	inherited := value.FromName == "" || value.FromName == defaultAppearanceBrandName
+	value = resolveEmailSender(value, s.appearanceBrandName())
+	result := &PublicEmailSetting{Enabled: value.Enabled, Host: value.Host, Port: value.Port, Username: value.Username, Encryption: value.Encryption, FromEmail: value.FromEmail, FromName: value.FromName, FromNameInherited: inherited, HasPassword: value.Password != ""}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
 		result.CreatedAt = setting.CreatedAt
 		result.UpdatedAt = setting.UpdatedAt
 	}
 	return result
+}
+
+func resolveEmailSender(value emailSettingValue, brandName string) emailSettingValue {
+	if value.FromName == "" || value.FromName == defaultAppearanceBrandName {
+		value.FromName = brandName
+	}
+	return value
 }
 
 func sendSMTPMail(setting emailSettingValue, recipient string, subject string, body string) error {
@@ -363,6 +372,6 @@ func randomNumericCode(length int) (string, error) {
 	return fmt.Sprintf("%0*d", length, value.Int64()), nil
 }
 
-func registrationEmailBody(code string) string {
-	return "你正在注册影策。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
+func registrationEmailBody(brandName string, code string) string {
+	return "你正在注册" + brandName + "。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
 }

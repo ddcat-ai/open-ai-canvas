@@ -1061,6 +1061,40 @@ func (r *Repository) Resources(userID string, limit int) ([]model.Resource, erro
 	return resources, err
 }
 
+// PlaybackPendingVideos 返回本地存储、就绪但尚无播放副本判定结果的视频
+// （H.264 需标记 none、H.265 需触发转码）。
+func (r *Repository) PlaybackPendingVideos(limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	err := r.db.Where("kind = ? AND status = ? AND provider = ? AND (playback_status = ? OR playback_status IS NULL)",
+		"video", model.ResourceStatusReady, "local", "").Order("created_at asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
+// ClaimPlaybackTranscode 原子地把待判定（空/none）视频置为 processing，返回是否抢占成功。
+// 多实例或多 goroutine 并发转同一资源时仅一个能成功置位，其余返回 false 直接放弃，
+// 避免重复转码同一份文件。
+func (r *Repository) ClaimPlaybackTranscode(id string) (bool, error) {
+	res := r.db.Model(&model.Resource{}).
+		Where("id = ? AND (playback_status = ? OR playback_status IS NULL OR playback_status = ?)",
+			id, "", model.PlaybackStatusNone).
+		Updates(map[string]any{"playback_status": model.PlaybackStatusProcessing, "playback_error": ""})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// ResetStuckPlaybackTranscodes 服务重启时把卡在 processing 的转码记录重置回待判定
+// （进程崩溃后转码 goroutine 随进程消亡，状态永远停在 processing）。
+func (r *Repository) ResetStuckPlaybackTranscodes() error {
+	return r.db.Model(&model.Resource{}).
+		Where("playback_status = ?", model.PlaybackStatusProcessing).
+		Updates(map[string]any{"playback_status": "", "playback_error": ""}).Error
+}
+
 func (r *Repository) ResourceCleanupCandidates(incompleteBefore time.Time, readyBefore time.Time, limit int) ([]model.Resource, error) {
 	var resources []model.Resource
 	if limit <= 0 || limit > 500 {
@@ -1073,7 +1107,6 @@ func (r *Repository) ResourceCleanupCandidates(incompleteBefore time.Time, ready
 	).Order("created_at asc, id asc").Limit(limit).Find(&resources).Error
 	return resources, err
 }
-
 func (r *Repository) Assets(userID string) ([]model.Asset, error) {
 	var assets []model.Asset
 	err := r.db.Order("updated_at desc").Find(&assets, "user_id = ?", userID).Error
@@ -1631,9 +1664,16 @@ func (r *Repository) DeleteProjectAssetFolder(projectID string, folderID string)
 }
 
 // LinkProjectAsset 将首版本、素材领域字段、项目引用和修订号原子提交，避免产生半关联资产。
+// 资产首次入库也在此事务内完成（service 层只做内存构造，不预落库），
+// 事务失败时资产一并回滚，不再留下“有资产无链接”的孤儿资产。
 func (r *Repository) LinkProjectAsset(asset *model.Asset, version *model.AssetVersion, link *model.ProjectAssetLink) (bool, error) {
 	createdLink := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		// 资产可能尚未落库（首次导入）或已存在（并发/重试），冲突幂等跳过。
+		assetCreated := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(asset)
+		if assetCreated.Error != nil {
+			return assetCreated.Error
+		}
 		created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "project_id"}, {Name: "asset_id"}}, DoNothing: true}).Create(link)
 		if created.Error != nil {
 			return created.Error

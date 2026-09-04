@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Switch, type FormInstance } from "antd";
+import { App, Button, Checkbox, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space, Switch, type FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { FlaskConical, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
@@ -11,7 +11,7 @@ import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } 
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
+import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { defaultPriceTier, legacyPriceTierToForm, priceTierResolutionFromForm, priceTierToForm, priceTierVideoSecondsFromForm, skuSelectorFromForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 import { AdminPageFrame } from "./admin-shell";
@@ -37,6 +37,10 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [editing, setEditing] = useState<ChannelModel | null>(null);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
+    const [fetchPreviewOpen, setFetchPreviewOpen] = useState(false);
+    const [fetchPreviewModels, setFetchPreviewModels] = useState<string[]>([]);
+    const [selectedFetchModels, setSelectedFetchModels] = useState<string[]>([]);
+    const [importing, setImporting] = useState(false);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -75,6 +79,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             .catch(() => setAvailableProtocols([]));
         setEditing(null);
         setEditorOpen(false);
+        resetFetchPreview();
         setKeyword("");
         setCapability("all");
         setStatus("all");
@@ -84,17 +89,51 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const fetchModels = async () => {
         setFetching(true);
         try {
-            // 拉取只导入缺失项；新模型仍需管理员定价并手动启用。
             const result = await fetchAdminChannelModels(channel.id);
-            await reload();
-            await onChanged();
-            if (result.models.length === 0) message.warning("上游没有返回可用模型");
-            else if (result.added > 0) message.success(`已拉取 ${result.models.length} 个模型，新增 ${result.added} 个待配置模型`);
-            else message.info(`已拉取 ${result.models.length} 个模型，没有需要新增的模型`);
+            if (result.models.length === 0) {
+                message.warning("上游没有返回可用模型");
+                return;
+            }
+            setFetchPreviewModels(result.models);
+            setSelectedFetchModels(result.models);
+            setFetchPreviewOpen(true);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "拉取模型失败");
         } finally {
             setFetching(false);
+        }
+    };
+
+    const closeFetchPreview = () => {
+        if (importing) return;
+        resetFetchPreview();
+    };
+
+    const resetFetchPreview = () => {
+        setFetchPreviewOpen(false);
+        setFetchPreviewModels([]);
+        setSelectedFetchModels([]);
+    };
+
+    const importSelectedModels = async () => {
+        if (!selectedFetchModels.length) return;
+        if (!selectedNewFetchModels.length) {
+            message.info("当前勾选的模型均已存在，没有需要新增的模型");
+            resetFetchPreview();
+            return;
+        }
+        setImporting(true);
+        try {
+            const result = await importAdminChannelModels(channel.id, selectedFetchModels);
+            await reload();
+            await onChanged();
+            resetFetchPreview();
+            if (result.added > 0) message.success(`已导入 ${result.added} 个模型，新增模型仍需配置价格后启用`);
+            else message.info("所选模型均已存在，没有新增模型");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导入模型失败");
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -293,6 +332,23 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         return true;
     });
     const pagedItems = filteredItems.slice((page - 1) * pageSize, page * pageSize);
+    const existingFetchModelKeys = new Set(items.map((item) => normalizeFetchModelKey(item.modelKey)));
+    const selectedNewFetchModels = selectedFetchModels.filter((name) => !existingFetchModelKeys.has(normalizeFetchModelKey(name)));
+    const selectedExistingFetchCount = selectedFetchModels.length - selectedNewFetchModels.length;
+    const fetchModelOptions = fetchPreviewModels.map((name) => {
+        const alreadyExists = existingFetchModelKeys.has(normalizeFetchModelKey(name));
+        return {
+            label: alreadyExists ? (
+                <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 break-all">{name}</span>
+                    <span className="shrink-0 text-xs text-foreground/45">已存在</span>
+                </span>
+            ) : (
+                <span className="break-all">{name}</span>
+            ),
+            value: name,
+        };
+    });
 
     return (
         <AdminPageFrame
@@ -416,6 +472,40 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     />
                 }
             />
+            <Modal
+                title="选择要导入的模型"
+                open={fetchPreviewOpen}
+                centered
+                width={720}
+                rootClassName="admin-modal-root admin-model-import-modal"
+                onCancel={closeFetchPreview}
+                maskClosable={!importing}
+                closable={!importing}
+                footer={[
+                    <Button key="cancel" disabled={importing} onClick={closeFetchPreview}>
+                        取消
+                    </Button>,
+                    <Button key="confirm" type="primary" loading={importing} disabled={!selectedFetchModels.length} onClick={() => void importSelectedModels()}>
+                        确认导入
+                    </Button>,
+                ]}
+            >
+                <div className="space-y-3">
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，请取消本次不需要拉入的模型；已存在的模型不会重复导入。</p>
+                    <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-md border border-border/70 p-3">
+                        <Checkbox.Group
+                            className="channel-model-import-picker grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+                            value={selectedFetchModels}
+                            options={fetchModelOptions}
+                            onChange={(values) => setSelectedFetchModels(values as string[])}
+                        />
+                    </div>
+                    <div className="text-xs text-foreground/50">
+                        {selectedNewFetchModels.length > 0 ? `将导入 ${selectedNewFetchModels.length} 个新模型` : "当前勾选的模型均已存在"}
+                        {selectedExistingFetchCount > 0 ? `，另有 ${selectedExistingFetchCount} 个已存在模型已勾选` : ""}
+                    </div>
+                </div>
+            </Modal>
             <Drawer
                 title={editing ? `编辑模型 / ${editing.displayName || editing.modelKey}` : "新增模型"}
                 open={editorOpen}
@@ -807,4 +897,8 @@ function operationLabel(operation: string) {
 
 function formatCredits(value: number) {
     return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+}
+
+function normalizeFetchModelKey(value: string) {
+    return value.trim().replace(/^models\//, "").toLowerCase();
 }

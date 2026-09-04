@@ -4,6 +4,10 @@
 .playwright-mcp
 .spec-workflow
 .vscode
+._*
+**/._*
+.DS_Store
+**/.DS_Store
 docs
 docs2
 data

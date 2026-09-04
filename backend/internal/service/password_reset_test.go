@@ -187,6 +187,65 @@ func TestPasswordResetDeliveryFailureRemovesUnusableCode(t *testing.T) {
 	}
 }
 
+func TestCustomAppearanceBrandsRegistrationAndPasswordResetEmails(t *testing.T) {
+	svc, db := newPasswordResetTestService(t)
+	appearanceJSON, err := json.Marshal(AppearanceSetting{
+		SchemaVersion:    appearanceSchemaVersion,
+		BrandName:        "HIMA Studio",
+		BrandSlug:        "hima-studio",
+		AuthHeroTitle:    defaultAppearanceHeroTitle,
+		LogoFrameEnabled: true,
+		SkinID:           defaultAppearanceSkinID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(appearanceJSON)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: registrationSettingKey, ValueJSON: `{"enabled":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	passwordHash, err := hashPassword("strong-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing := model.User{ID: "brand-admin", Username: "brand-admin", Email: "admin@example.com", Role: model.UserRoleAdmin, Status: model.UserStatusActive, PasswordHash: passwordHash}
+	resetUser := model.User{ID: "brand-user", Username: "brand-user", Email: "member@example.com", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: passwordHash}
+	if err := db.Create(&[]model.User{existing, resetUser}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	type delivery struct {
+		fromName  string
+		recipient string
+		subject   string
+		body      string
+	}
+	deliveries := make([]delivery, 0, 2)
+	svc.mailSender = func(setting emailSettingValue, recipient string, subject string, body string) error {
+		deliveries = append(deliveries, delivery{fromName: setting.FromName, recipient: recipient, subject: subject, body: body})
+		return nil
+	}
+	if err := svc.SendRegistrationEmailCode("new-member@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPasswordResetEmailCode(resetUser.Email); err != nil {
+		t.Fatal(err)
+	}
+	if len(deliveries) != 2 {
+		t.Fatalf("deliveries = %d, want 2", len(deliveries))
+	}
+	for _, delivered := range deliveries {
+		if delivered.fromName != "HIMA Studio" || !strings.Contains(delivered.subject, "HIMA Studio") || !strings.Contains(delivered.body, "HIMA Studio") || strings.Contains(delivered.subject, defaultAppearanceBrandName) || strings.Contains(delivered.body, defaultAppearanceBrandName) {
+			t.Fatalf("email did not inherit custom appearance: %#v", delivered)
+		}
+	}
+	if deliveries[0].subject != "HIMA Studio注册验证码" || deliveries[1].subject != "HIMA Studio密码重置验证码" {
+		t.Fatalf("unexpected branded subjects: %#v", deliveries)
+	}
+}
+
 func newPasswordResetTestService(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})

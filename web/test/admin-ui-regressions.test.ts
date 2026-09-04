@@ -52,6 +52,28 @@ test("plugin upload owns native drops and price availability text remains readab
     expect(toggleCss).not.toContain("text-overflow: ellipsis;");
 });
 
+test("channel model fetch requires explicit selection before import", async () => {
+    const [componentSource, apiSource, adminCssSource] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/components/channel-model-manager.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/services/api/wallet.ts", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+    ]);
+    const component = compactSource(componentSource);
+
+    expect(apiSource).toContain('api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)');
+    expect(apiSource).toContain('api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })');
+    expect(component).toContain('title="选择要导入的模型"');
+    expect(component).toContain("默认已全选");
+    expect(component).toContain("setFetchPreviewOpen(true)");
+    expect(component).toContain("setSelectedFetchModels(result.models)");
+    expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
+    expect(component).toContain("disabled={!selectedFetchModels.length}");
+    expect(component).not.toContain("disabled: alreadyExists");
+    expect(component).not.toContain("const result = await fetchAdminChannelModels(channel.id); await reload();");
+    expect(adminCssSource).toContain(".admin-model-import-modal .channel-model-import-picker .ant-checkbox-checked");
+    expect(adminCssSource).toContain("border-color: var(--control-check-fg) !important");
+});
+
 test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {
     const source = compactSource(await Bun.file(new URL("../src/pages/admin/components/analytics-panel.tsx", import.meta.url)).text());
 

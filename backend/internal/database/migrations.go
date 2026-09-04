@@ -10,13 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 6
+const CurrentSchemaVersion int64 = 7
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
 const resourceUploadKeyChecksum = "sha256:resource-upload-key-v4-20260901"
 const paymentTopupChecksum = "sha256:payment-topup-v5-20260902"
+const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
@@ -49,7 +50,8 @@ var schemaMigrations = []migration{
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
 	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
 	{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
-	{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV6},
+	{version: 6, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaV6},
+	{version: 7, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -109,7 +111,6 @@ func migrateSchemaV4(tx *gorm.DB) error {
 	}
 	return nil
 }
-
 func migrateSchemaV5(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(
 		&model.CreditLedgerEntry{},
@@ -126,6 +127,28 @@ func migrateSchemaV5(tx *gorm.DB) error {
 }
 
 func migrateSchemaV6(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.Resource{}) {
+		return fmt.Errorf("资源表不存在")
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_status") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackStatus"); err != nil {
+			return fmt.Errorf("增加播放副本状态列：%w", err)
+		}
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_object_key") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackObjectKey"); err != nil {
+			return fmt.Errorf("增加播放副本对象键列：%w", err)
+		}
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_error") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackError"); err != nil {
+			return fmt.Errorf("增加播放副本错误列：%w", err)
+		}
+	}
+	return nil
+}
+
+func migrateSchemaV7(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(&model.Asset{}, &model.AssetFolder{}); err != nil {
 		return fmt.Errorf("创建个人素材分类并扩展素材目录字段：%w", err)
 	}

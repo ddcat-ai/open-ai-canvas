@@ -16,6 +16,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -308,7 +309,43 @@ func (s *Service) UploadResource(userID string, header *multipart.FileHeader, ki
 	return resource, err
 }
 
-func detectUploadedMimeType(file multipart.File, fileName string, declared string) string {
+// UploadResourceFile 接收已完整落盘的本地文件（分片上传合并后调用），语义与 UploadResource 一致；
+// 唯一差异是豁免“单文件大小上限”——分片会话已在 handler 按片校验，此处只受日上传与账号存储总量约束。
+func (s *Service) UploadResourceFile(userID string, fileName string, size int64, kind string, width int, height int, durationMs int64, file io.ReadSeeker, uploadIdentity ...string) (*model.Resource, error) {
+	if file == nil || size <= 0 {
+		return nil, BadAuthRequest("请选择要上传的文件")
+	}
+	uploadKey := normalizedResourceUploadKey(uploadIdentity)
+	existing, err := s.resourceForUploadKey(userID, uploadKey)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == model.ResourceStatusReady {
+		return existing, nil
+	}
+	if existing != nil && existing.Status == model.ResourceStatusPending {
+		return nil, resourceUploadInProgress()
+	}
+	mimeType := detectUploadedMimeType(file, fileName, "")
+	if existing != nil {
+		return s.retryStoredResource(userID, existing, kind, mimeType, size, file)
+	}
+	day, err := s.reserveChunkedUploadQuota(userID, size)
+	if err != nil {
+		return nil, err
+	}
+	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, file, uploadKey)
+	if err != nil {
+		s.releaseUserUploadQuota(userID, day, size)
+	} else if stored {
+		s.commitUserUploadQuota(userID, size)
+	} else {
+		s.releaseUserUploadQuota(userID, day, size)
+	}
+	return resource, err
+}
+
+func detectUploadedMimeType(file io.ReadSeeker, fileName string, declared string) string {
 	declared = strings.TrimSpace(strings.Split(declared, ";")[0])
 	if declared != "" && declared != "application/octet-stream" {
 		return declared
@@ -492,12 +529,7 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, false, err
 	}
 	var etag string
-	if provider == "local" {
-		filePath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(objectKey))
-		err = writeLocalResourceObject(filePath, body)
-	} else {
-		etag, err = putOSSObject(setting, objectKey, mimeType, size, body)
-	}
+	etag, err = s.storeResourceObject(&resource, fileName, body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		resource.Status = model.ResourceStatusFailed
@@ -527,6 +559,7 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, true, errors.Join(err, fmt.Errorf("清理已上传资源对象失败：%w", cleanupErr))
 	}
 	s.recordActivity(userID, "resource", 1)
+	s.maybeStartPlaybackTranscode(&resource)
 	return &resource, true, nil
 }
 
@@ -544,6 +577,48 @@ func writeLocalResourceObject(filePath string, body io.Reader) error {
 		return copyErr
 	}
 	return closeErr
+}
+
+// storeResourceObject 写入资源物理对象。对象存储不可用（配置错误、密钥失效、网络
+// 故障、设置被删）时自动降级为本地存储并同步改写资源记录，保证上传写路径不因外部
+// 存储故障整体失败。对象存储失败后 body 会被重新读取，须支持 Seek。
+func (s *Service) storeResourceObject(resource *model.Resource, fileName string, body io.Reader) (string, error) {
+	if resource == nil {
+		return "", errors.New("资源不存在")
+	}
+	if resource.Provider == "local" {
+		return "", writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)), body)
+	}
+	setting, settingErr := s.ossSettingForResource(resource.UserID, resource)
+	var etag string
+	var putErr error
+	if settingErr == nil {
+		etag, putErr = putOSSObject(setting, resource.ObjectKey, resource.MimeType, resource.Size, body)
+	}
+	if putErr == nil && settingErr == nil {
+		return etag, nil
+	}
+	fallbackErr := putErr
+	if fallbackErr == nil {
+		fallbackErr = settingErr
+	}
+	if seeker, ok := body.(io.Seeker); ok {
+		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
+			return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储时重置读取位置失败：%w", seekErr))
+		}
+	}
+	localKey := localObjectKey(resource.UserID, resource.Kind, fileName, resource.MimeType, time.Now())
+	resource.Provider = "local"
+	resource.ObjectKey = localKey
+	resource.Endpoint = ""
+	resource.Bucket = ""
+	resource.StorageSettingID = ""
+	resource.ETag = ""
+	if localErr := writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(localKey)), body); localErr != nil {
+		return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储失败：%w", localErr))
+	}
+	log.Printf("object storage upload degraded to local storage: resource=%s error=%v", resource.ID, fallbackErr)
+	return "", nil
 }
 
 func (s *Service) retryStoredResource(userID string, resource *model.Resource, kind string, mimeType string, size int64, body io.Reader) (*model.Resource, error) {
@@ -585,15 +660,7 @@ func (s *Service) retryStoredResource(userID string, resource *model.Resource, k
 		return nil, err
 	}
 	var etag string
-	if resource.Provider == "local" {
-		err = writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)), body)
-	} else {
-		var setting ossSettingValue
-		setting, err = s.ossSettingForResource(userID, resource)
-		if err == nil {
-			etag, err = putOSSObject(setting, resource.ObjectKey, resource.MimeType, resource.Size, body)
-		}
-	}
+	etag, err = s.storeResourceObject(resource, "", body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		s.releaseRetryUploadQuota(userID, day, size)
@@ -1489,7 +1556,17 @@ func newOSSRequest(method string, setting ossSettingValue, objectKey string, con
 		return nil, err
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
-	req, err := http.NewRequest(method, baseURL.String(), body)
+	// 请求体必须用 no-op close 包装：服务端提前返回（如 OSS 签名 403）时
+	// http.Transport 会关闭未发完的 Request.Body，若直接传入 *os.File 等
+	// 调用方持有的文件，后续“降级本地存储”的 Seek 重读将因 file already
+	// closed 失败。NopCloser 让 Transport 的关闭成为空操作，底层文件保持可用。
+	// GET/HEAD/DELETE 等无请求体的调用传入 nil body；NopCloser(nil) 会产生非 nil 的
+	// Body 包装 nil reader，Go 1.26 发送前 body 探测会直接 nil 解引用崩溃。
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = io.NopCloser(body)
+	}
+	req, err := http.NewRequest(method, baseURL.String(), reqBody)
 	if err != nil {
 		return nil, err
 	}

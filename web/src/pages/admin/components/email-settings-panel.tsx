@@ -5,12 +5,14 @@ import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
 type EmailFormValues = Pick<EmailSetting, "enabled" | "host" | "port" | "username" | "password" | "encryption" | "fromEmail" | "fromName">;
 
 export default function EmailSettingsPanel() {
     const { message, modal } = App.useApp();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const [setting, setSetting] = useState<EmailSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -394,9 +396,9 @@ export default function EmailSettingsPanel() {
                                                 validator: (_, value: string | undefined) => (!draftEnabled || !value || !/[\r\n]/.test(value) ? Promise.resolve() : Promise.reject(new Error("发件人名称不能包含换行"))),
                                             },
                                         ]}
-                                        extra="留空时服务端使用“影策”。"
+                                        extra={`留空时自动使用当前站点名称“${brandName}”；之后修改站点名称会同步更新。`}
                                     >
-                                        <Input placeholder="影策" />
+                                        <Input placeholder={brandName} />
                                     </Form.Item>
                                 </div>
                             </div>
@@ -429,7 +431,7 @@ function toEmailFormValues(setting: EmailSetting): EmailFormValues {
         password: "",
         encryption: setting.encryption,
         fromEmail: setting.fromEmail,
-        fromName: setting.fromName,
+        fromName: setting.fromNameInherited ? "" : setting.fromName,
     };
 }
 
@@ -442,7 +444,7 @@ function normalizeEmailFormValues(values: Partial<EmailFormValues>): EmailFormVa
         password: values.password?.trim() || "",
         encryption: values.encryption === "tls" || values.encryption === "none" ? values.encryption : "starttls",
         fromEmail: values.fromEmail?.trim().toLowerCase() || "",
-        fromName: values.fromName?.trim() || "影策",
+        fromName: values.fromName?.trim() || "",
     };
 }
 
@@ -482,6 +484,7 @@ function isEmailSetting(value: unknown): value is EmailSetting {
         ["starttls", "tls", "none"].includes(setting.encryption || "") &&
         typeof setting.fromEmail === "string" &&
         typeof setting.fromName === "string" &&
+        typeof setting.fromNameInherited === "boolean" &&
         typeof setting.hasPassword === "boolean"
     );
 }

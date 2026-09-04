@@ -245,7 +245,7 @@ func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*Lib
 	userID = strings.TrimSpace(userID)
 	canvasProjectID = strings.TrimSpace(canvasProjectID)
 	if userID == "" || canvasProjectID == "" {
-		return nil, Unauthorized("请先打开已同步的影策画布")
+		return nil, Unauthorized("请先打开已同步的" + s.appearanceBrandName() + "画布")
 	}
 	if _, err := s.repo.CanvasProjectForUser(userID, canvasProjectID); err != nil {
 		return nil, err

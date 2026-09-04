@@ -1,9 +1,85 @@
 ---
 title: 待测试
-description: 影策已实现功能的手工验证清单与未确认边界
+description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
+
+## 编辑器（M2 命令状态机）
+
+- [x] 命令协议黄金文件：`editor-commands` 8 个黄金 op（addClip/moveClip/trimClip/splitClip/removeClip/setClipProperty/addSubtitle/removeSubtitle）全量快照比对通过；未知 op、非法 payload 一律抛错（fail-closed）且输入不可变。
+- [x] 快照撤销：`editor-history` 有界 200 层，undo 后新命令清空 redo；边界测试（0 层/200 层/undo 后 redo 清空）通过。
+- [x] 命令状态机 store：`editor-store` 命令入队→reducer→新状态，手势预览（previewGesture 连续预览/commitGesture 一次性入历史/cancelGesture 丢弃），1.5s 防抖保存（保存层依赖注入），保存串行链防旧快照覆盖，失败置 saveError 且保持 dirty；11 项测试通过。
+- [ ] 浏览器冒烟（待用户确认）：项目详情 → 剪辑成片 → 编辑器，拖拽片段移动、拖拽边缘裁剪（trim-start/trim-end）、撤销/重做按钮与缩放按钮；松手提交后可一次撤销；刷新后本地时间线（localforage scope 隔离）保留；状态栏显示 未保存/保存中/已保存/保存失败。
+- [ ] M2.4 手势与画布拖拽不冲突（时间线容器 `data-canvas-no-zoom`），快捷键（Cmd/Ctrl+Z）与全局冲突项待 M3 统一处理。
+
+## 编辑器（M3 预设插件八连）
+
+- [x] 命令层新增 `rebuildSubtitleClips`（9 个黄金 op）：从节点权威 subtitleEntries 重建字幕快照，确定性 id（nodeId:subtitle:index）重复导入原地替换；非法 entries（index/startMs/endMs/text/重复 index）与非法轨道（非字幕轨/无字幕轨）fail-closed；黄金文件追加用例通过（26 项）。
+- [x] M3.1~M3.4：timeline-panel（选中联动 + 撤销/重做/缩放 UI）、preview-monitor（buildTimelineRenderPlan 预览）、inspector（setClipProperty 可撤销）、asset-ingest（addClip 入轨）插件与 editor.tsx 三段式接线已提交。
+- [x] M3.5 subtitle-tools：SRT 粘贴导入（parseSrt → rebuildSubtitleClips 重建快照）、当前时间线字幕导出 .srt（serializeSrtEntries 往返一致）；AI 高亮占位（M6 接入）。
+- [x] M3.6 transcription：确定性 mock 转写（mockTranscriptionEntries 同输入同输出，3 项测试），结果按 ADR-0004 协议重建到字幕轨道；M4 替换真实任务客户端。
+- [x] M3.7 export：渲染计划（buildTimelineRenderPlan 与画布同源）+ ffmpeg.wasm 降级导出（exportTimelineToMp4 带进度）；悬空 nodeId 源按计划跳过。
+- [x] M3.8：editor.tsx 全 8 槽三段式渲染（左素材/转写，中预览/时间线，右检查器/字幕/导出/AI）+ ai-assistant 占位（M6）；typecheck 零错误、专项 53/53、全量 build 通过。
+- [ ] 浏览器三段式冒烟（待用户确认）：编辑器六个区域（时间线/预览/检查器/素材库/字幕/转写/导出）逐区域可见可操作；拖拽/裁剪/撤销重做回归；SRT 导入导出往返；mock 转写落轨；导出面板显示渲染计划。
+
+## M5（编辑器插件权限执行，fail-closed）
+
+
+- [x] M5.1：`plugin-permission-check.ts` 新建——8 插槽→最小权限表（timeline.read/timeline.command/export.run 三类域）+ `pluginMayRenderEditorSlot`/`assertEditorPermission` fail-closed 判定；测试 10 用例（表完整性/空权限拒绝/未注册拒绝/缺权限拒绝含 missing 域/editor-shell 真实回归 8 插槽可渲染）全绿。
+- [x] M5.2 执行路径接入：editor.tsx SlotStack 渲染前过滤——缺权限插槽不渲染、改显一行诊断条（含缺失域）；editor-shell manifest 权限补全为 timeline.read/timeline.command/export.run；tsc 全绿、全量 bun test 失败集与改动前一致（零新增回归）。边界：宿主全局命令（editor-commands，v1 语义）与宿主 UI 手势不经过此校验，仅 v2 插件插槽贡献与后续 M6 AI 命令代发通道受约束——ADR-0007「v1 权限语义一字不动」。
+- [ ] M5 浏览器验证（待用户确认）：停用/注册一个缺 timeline.command 权限的第三方插件时对应面板被拒渲染并显示诊断；editor-shell 全部 8 面板正常。
+
+## M6（AI 编辑助手：schema + 摘要 + 面板）
+
+- [x] M6.1：`ai-command-schema.ts` 新建——AI 命令 JSON 解析（容忍 markdown fence/前后杂讯/字符串内括号）、批级 dry-run 预检（走 M2 命令注册表，任一非法整批拒绝并报下标与 op）、12-op LLM 提示词契约（`AI_EDITING_OP_CATALOG` + `buildAiEditingSystemPrompt`）、`AI_COMMAND_SCHEMA_VERSION` 版本化；`ai-commands.golden.json` 固化 op 集与 registry 黄金同步（漂移即测试失败）；20 用例全绿。
+- [x] M6.2：`timeline-summary.ts` 新建——确定性中文摘要（轨道按 order 排序逐行、片段逐行含 id/kind/时间区间、字幕字数统计、空态提示）；片段行数超限折叠（SUMMARY_MAX_CLIP_LINES）；同输入同输出；10 用例全绿。
+- [x] M6.3：`editor-ai-assistant.tsx` 从占位替换为真实 AI 助手——右上悬浮对话面板（OpenAI Canvas 风格）：面板内文本模型选择器（`effective.textModels` 即文本能力模型目录，选择即 `updateConfig("textModel", …)` 持久化并在请求时同时覆写 `config.model/textModel`，绕过默认/误配图像模型的根因）、消息流（user/assistant/error/preview 四类气泡 + 思考中占位）、空态引导（示例意图文案，点击建议指令 chips 即发送，跨轮记忆）、底部输入条；顶部工具栏常驻 Sparkles 入口（aria-pressed 切换）。宿主链路：`buildAiEditingSystemPrompt(summarizeTimeline(project))` 喂上下文 → 流式增量渲染 → `parseAiCommandPlan` → `validateAiCommandBatch` dry-run（任一非法整批拒绝，同步 registry 校验、不落盘）→ ≤3 条 `dispatch` 直执行 / >3 条渲染 diff 预览卡片「确认执行（N）/ 放弃」→ 解析/校验拒绝时错误气泡可「修正后重试」（`failTurn` 回填 `FAILED_MARK`，历史含用户文本不重发；registry 直执行本身 fail-closed——拒绝写入 `saveError` 顶部提示，同步 dispatch 不抛错故不回填 FAILED_MARK）。修复了上一版文件的重复/截断函数（appendToEntry 双定义、settleAnswer 三声明等）；typecheck 零错误、编辑器/插件相关测试通过、生产构建通过。
+- [ ] 浏览器冒烟（待用户确认，需真实文本渠道）：顶部工具栏 AI 图标开关面板 → 切换面板内模型下拉（无可用模型时展示禁用态）→ 输入自然语言；确认 ≤3 条指令直接执行且可撤销（撤销按条回退，N 条需 N 次撤销）、>3 条出现预览确认卡片（放弃不动时间线、确认后预览卡转为执行汇报、重复点击不再二次提交）、模型输出非法 JSON 时错误气泡出现「修正后重试」并回填失败标记、ESC/关闭按钮收起面板后再次打开会话仍在。
+
+## M4（后端转写/渲染任务）
+
+- [x] M4.1 执行侧（e9d1b8ad）：本地 whisper.cpp HTTP（`CANVAS_WHISPER_BASE_URL`）转写；语音数据不出本机；未配置时任务明确失败并提示设置；`processClaimedTask` 顶部按类型分叉、旁路计费/模型路由，20 分钟超时；ffmpeg 预处理 16k 单声道 wav；`verbose_json` 解码/`formatSRTTimestamp`/`buildTimelineSRT` 单测 PASS。
+- [x] M4.1 创建 API（bf26ebb1）：`POST /api/timeline/transcriptions`（注册于 `RegisterTaskRoutes`）→ `CreateTimelineTranscriptionTask`：draining 503 → feature 门控 → 资源归属/可转写类型校验 → 配额入队（local/whisper.cpp，无 billing order）；活跃任务上限 → 可读 400；测试 3 项 PASS。
+- [x] M4.2 渲染任务（3f16d13b）：`POST /api/timeline/renders` → `CreateTimelineRenderTask`：`buildRenderPlan` 校验 ≥1 可渲染媒体 → 配额入队（local/ffmpeg）；worker 分叉 `processTimelineRender`（60 分钟超时）：ffmpeg 合成 → 产物写资源存储 → `ResultJSON{resourceId,...}`；计划/失败快路径测试 PASS。
+- [x] M4.3 前端字幕回写（fd5e8139）：`timeline-tasks.ts` 客户端 + `editor-transcription.tsx` 真实任务替换 mock；资源范围放宽到音视频；`resourceId` 由 `storageKey` 推导；`waitForGenerationTask` 显式 25 分钟超时轮询；结果 segments → SrtEntry → `rebuildSubtitleClips` 落字幕轨；typecheck 通过。
+- [ ] 浏览器端到端（待用户确认，需本机 whisper.cpp server）：媒体面板选音视频素材 → 转写 → 进度可见 → 完成后字幕分段入轨可编辑；错误路径（未配置/删除素材/非音视频/活跃任务上限/功能未开放）提示可读。
+- [x] M4.2 渲染前端接线：`timeline-tasks.ts` 增 `createTimelineRenderTask`（timeline 整传 TimelineProject v2，与后端 renderProject 契约同构）；`editor-export.tsx` 主路径改提交 `POST /api/timeline/renders` → `waitForGenerationTask` 轮询（62min）→ ResultJSON.resourceId 内嵌预览/下载；ffmpeg.wasm 降级保留；tsc 全绿、无新增测试失败。
+- [ ] M4.2 渲染浏览器验证（待用户确认，需 ffmpeg 可用）：导出面板「渲染成片（服务端）」→ 轮询进度 → 完成后内嵌预览/下载渲染产物；无后端时「本地导出」ffmpeg.wasm 仍可用。
+- [ ] 文档回写（已提交）：`docs/plans/m4-transcription-render-design.md` §2 决策 3/4/5 按“单一池 + 类型分叉”与旁路终态修正；端点统一为复数 `/api/timeline/transcriptions` 与 `/api/timeline/renders`（注册于 `RegisterTaskRoutes`）；`auth.go` 前缀白名单补 `timeline`。
+
+## 编辑器 UI 打磨（主题/布局/导入媒体）
+
+- [x] 主题联动修复：globals.css `.dark` 块未闭合导致 `.editor-workbench` 规则被 CSS 嵌套吞并、浅暗主题三栏配色反转；补齐花括号后编译产物恢复顶层两规则，director token 明暗两主题齐备。
+- [x] 播放条修复：预览卡与时间线卡容器补 `flex flex-col`，恢复 absolute 播放条的高度链。
+- [x] 时间线右端截断修复：内容宽度改为 `trackWidth + 标签列(160px)`，标尺左列占位与轨道标签列改为 sticky（`left-0` + 不透明底），滚动到最右端时末端片段完整可见；容器宽度监听改用 ResizeObserver。
+- [x] 顶部栏图标化：删除「剪辑工作台」标题 + Film 图标 + 分隔线等死图标；导出按钮改为纯图标（aria-label/title 保留）。
+- [x] 媒体导入失败修复：`linkProjectAsset` 原来只认 assets 表记录，而上传只落 resources 表，导入必然 404。后端 `LinkProjectAsset` 在资产不存在时按资源元数据（storageKey/mimeType/kind/宽高/时长/状态）合成资产记录并幂等补齐（`UpsertAsset`），`Title` 透传原始文件名；资源与资产都不存在时仍 fail-closed。前端导入调用补传 `title: file.name`。
+- [x] 后端新增 `TestLinkProjectAssetCreatesAssetFromUploadedResource` 与 `TestLinkProjectAssetMissingResourceKeepsFailingClosed` 专项测试；前端 typecheck、生产构建、后端全量测试通过。
+- [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
+- [x] 对象存储上传降级：OSS 上传失败（密钥失效、配置错误、网络故障、设置被删）自动回退本地存储并同步改写资源记录，本地媒体导入不再因外部存储故障整体失败；覆盖新上传与重试两条路径。专项测试 2 个（OSS 不可用降级成功 + 本地路径不受他人 OSS 设置影响），后端全量测试通过。
+- [ ] 用户浏览器 re-test（对象存储降级）：重新启动后端后再次导入视频，应显示成功且素材出现在媒体面板；资源走本地存储（`provider=local`）。
+- [x] 编辑器 UI 打磨（第 36 条 5 项）：① 时间线/监视器分隔条拖拽方向反转（上拖=时间线变大）；② 导出按钮图标去蓝（灰白描边风格），媒体面板来源徽章去蓝，轨道类型徽章保留语义色；③ 时间线 pxPerMs 独立化（不再随时长漂移），末片段向右拖轨道随内容等比扩展不再被钉住（新增守护测试 3 例）；④ 监视器控制条重做为 Concat 风格：回到开头/退 1s/播放/进 1s/到结尾五键传输组 + 播放速度展开菜单（0.5x/1x/1.5x/2x）+ 进度条，全部灰白描边；⑤ 检查器重做为 Concat 风格：分组小标题（片段/基本/转场）+ 紧凑控件 + sunken 滑块（新增 .editor-slider），全部使用 director token 随主题联动。
+- [ ] 用户浏览器 re-test（第 36 条）：上拖分隔条时间线变大；导出按钮与监视器控制条图标均为灰白描边风格；时间线末片段可正常向右拖拽且轨道随内容扩展；监视器速度菜单展开选择生效；检查器分组与滑块在明暗两主题下配色一致（无主题不同步）。
+- [x] 媒体面板改版：资产按来源分组（「本地上传」/「项目素材」），顶部提供 全部/项目素材/本地上传 筛选 Tab；分组头可折叠、资产行可展开查看详情（类型/分类/来源/预览文本）并一键添加到时间线；每项带来源徽章与计数徽章。后端 `projectAssetSummary` 透出 `source`（上传链路写入 `uploaded`），前端 `ProjectAsset` 类型补 `source?: string`，仅展示层使用，后端读取不再查询本地存储。
+- [x] 时间线横跨编辑面板全宽：时间线卡从内容区独立出来，与左栏+预览+右栏同处编辑面板，横跨从左到右全宽（含拖拽高度分隔条）；左栏收窄到 256px、右栏 320px，为全宽时间线腾出空间。
+- [x] 主题明暗一致性：媒体面板分组/筛选/徽章/展开详情全部使用 director token（surface/control-hover/dock-fg/sequencer-border），无新增硬编码色值；后端 `source` 字段不参与任何配色。前端 typecheck、生产构建、后端全量测试通过。
+- [x] 时间线面板补齐 Concat 风格工具栏与编辑交互（对齐第 2 条 runbook 与 `Concat/desktop/.../TimelinePanel.tsx`）：新增 选择/剃刀 工具切换（剃刀点击分割、非字幕片段、边缘留 100ms）、播放头时码只读显示与标尺拖动 scrub、分割播放头处、删除选中片段、磁吸开关（默认开）、加轨道下拉（视频/音频/字幕，`addTrack` 黄金命令确定性生成 id/order/label，undo/redo 可重放）、适应宽度（`getFitTimelineZoom`）；工具栏布局重排为 Concat 顶部条结构。`editor-commands.ts` golden ops 由 9 增到 10（`addTrack`）。
+- [x] 磁吸失效修复：片段拖拽移动分支原本只保留「左边缘目标与右边缘目标同时命中」的结果，单边命中（如最后一个片段右边缘无目标）或双目标取整后偏移为 0（原始位置已在目标上）时整组吸附被丢弃，表现为「第一个和第二个片段能吸附、后续片段与剃刀分割出的片段都吸不住」。改为以 `computeSnap` 返回的 `targets.length` 判定命中、左右候选独立比较取更近者，单边命中与零偏移命中均可正常吸附。
+- [ ] 用户浏览器 re-test（时间线工具栏与磁吸）：拖拽任意片段（含剃刀分割出的片段）靠近其他片段边缘或播放头时磁吸生效且可吸附回自身原位置；剃刀点击在指针处分割；分割按钮在播放头落在片段中段时可用；删除选中片段后再次拖拽正常；加轨道后新轨道带确定性标签与序号；适应宽度后内容恰好铺满可视宽度；磁吸关闭后拖拽自由、无取整跳动。
+- [x] 工具按钮选中态样式修正：时间线工具栏 选择/剃刀/磁吸 的按下态原来是蓝色背景块，改为「仅图标变 accent 色、无背景块」；颜色职责收敛为 `TOOL_FG_IDLE` / `TOOL_FG_ACTIVE` 两常量（唯一来源），工具栏与加轨道下拉不再散落重复的颜色字面量。
+- [x] 监视器播放条重构（Concat 布局）：删除叠加在画面底部的渐变进度条与 `<input type=range>` scrub；改为画面下方独立一行 `grid h-11 grid-cols-[1fr_auto_1fr]`：左 播放头/总时长时码、中 回开头/退 1s/播放暂停/进 1s/到结尾（播放态仅图标变 accent）、右 速度菜单（0.5x/1x/1.5x/2x，带 Gauge 图标与展开箭头）。
+- [ ] 用户浏览器 re-test（选中态与播放条）：点击 选择/剃刀/磁吸 时只看到图标变色（无蓝底块），深色/浅色主题一致；监视器底部控制条不悬浮于画面、无进度条，播放态播放图标变主题强调色，速度菜单展开/选择生效，拖拽分隔条改变监视器高度时画面区域与控制条高度正常。
+- [x] 轨道操作按钮（Concat 对齐）：时间线轨道行头新增「移除轨道」X 按钮（hover/键盘 focus 显现，danger 强调，仅该 kind 非最后一条时可用）；新增 `removeTrack` 黄金命令——每类轨道至少保留一条（删除该 kind 最后一条会被守卫拒绝），删除时级联移除轨道上全部片段、无悬挂引用，undo/redo 可重放；`editor-commands.ts` golden ops 10→11（`removeTrack`），新增 3 条单测（级联删除并保留其余 / 最后一条拒绝 / 未知 trackId 拒绝）。
+- [x] 资源上传 400 修复：`POST /api/resources` 在文件超过 MaxBytesReader 上限（单文件限制 50MB +1MB 缓冲）时 `FormFile` 返回英文 `http: request body too large` → 现翻译为与 service 配额校验一致的中文「单个上传文件必须小于 50MB」（`backend/internal/handler/user_data.go`），前端可正常展示失败原因而非裸 400。
+- [x] antd Modal `maskClosable` deprecation 清理：5 处改用 `mask={{ closable: … }}`（canvas-upload-modal / asset-library-picker-modal / projects index「AI 生成章节」/ skill-editor-drawer / skill-install-modal）。
+- [ ] 用户浏览器 re-test（轨道移除与上传）：hover 轨道行头出现 X，点击移除非最后一条轨道后其与片段消失且可 undo；该 kind 仅剩一条时行头不出现 X；移除轨道后选中片段同步取消；导入超过 50MB 的本地视频不再报 400、可正常入库（见下方分片导入复测）。
+- [x] 本地媒体导入对齐 Concat 分片化：前端 `uploadResourceFile` 超过 50MB 自动切分片上传（8MB/片、失败整传重试、回调进度）；后端新增分片会话三接口 `POST /api/resources/uploads`（开始）、`PUT /api/resources/uploads/:id/chunks/:index`（逐片原始二进制）、`POST /api/resources/uploads/:id/complete`（合并落库，复用 UploadResourceFile 幂等/落盘/探测，保留上传中唯一键 → 提示“上传中请稍候”）；单片上限 8MB 使文件整体不再受 multipart 单请求限制，普通本地视频可导入。
+- [x] 上传默认配额放宽：运行时默认策略 `DailyUploadMB` 200→2048、`StoredFileGB` 2→20（管理员后台仍可调回）；`UploadResourceFile` 经 `reserveChunkedUploadQuota` 豁免单文件大小上限、仅受日/总量约束；`upload_quota_test.go` 对总量文案、daily 上限文案与逻辑按新默认同步，`resource_upload_session.go` 分片会话（内存 TTL 90min、并发/单片限长防护、超总量提前拒绝），新增路由注册测试。
+- [ ] 用户浏览器 re-test（分片导入）：本地选择 >50MB 的视频导入成功并入库（进度可见、失败自动整传重试）；断网重连后重试完成；<50MB 小文件仍走原 multipart 路径无回归；重复导入同一文件命中幂等返回原资源不重复占额度；超日限/总量时提示中文配额文案。
+- [ ] 用户浏览器 re-test（第 35 条）：媒体面板中导入的素材与项目资产分组显示、筛选 Tab 切换、分组折叠与资产行展开；浅色/深色主题切换后媒体面板配色与编辑面板一致；时间线横跨整个编辑面板宽度，拖动分隔条调整高度正常。
+- [x] 轨道可见/静音开关（Concat 行头对齐）：轨道行头补齐 eye（显示/隐藏轨道）与 volume（静音/取消静音）按钮，与移除 X 三按钮同组（行头加宽 w-40→w-48）；关闭态图标变 accent 色（无背景块），轨道名与片段区随隐藏降透明度；新增 `setTrackFlag` 黄金命令（flag 白名单 visible/muted，golden ops 11→12），隐藏轨道（visible=false）上的片段不再参与监视器预览合成（getClipAtTime 过滤）；新增 3 条单测（目标轨设置且其余不受影响、muted 独立于 visible、未知轨道/flag/非布尔拒绝），输入不可变校验。
+- [ ] 用户浏览器 re-test（轨道可见/静音）：行头 hover 出现三按钮组；点 eye 隐藏轨道后监视器该轨画面消失、轨道行与轨道名变淡、再点恢复；点 volume 静音后图标变 accent（音频在 M4 播放/导出阶段生效）；仅剩一条轨道时无移除 X；以上操作均可一步 undo。
 
 ## 支付插件跨平台构建
 
@@ -12,13 +88,21 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [ ] 在 Linux CI 完成无文件、无权限、错误格式、异常退出与无效 JSON 的 RPC 进程测试，并使用 Docker Buildx/QEMU 执行 `payment-package-smoke` 的 amd64/arm64 双平台构建，确认目标容器内两个 provider 均能真实执行无效 JSON 冒烟请求。
 - [ ] 保留含旧 Mach-O runtime 的生产 `/data` 卷升级到修复镜像，确认启动后自动选择新 package digest，管理后台保存微信和支付宝配置进入真实凭证校验。
 
-## 平台外观管理
+## 站点及外观与皮肤主题
 
-管理后台已新增“系统配置 → 外观管理”，并让公开品牌配置在应用渲染前完成解析；以下真实浏览器与媒体场景需要持续确认：
+管理后台“系统配置 → 站点及外观”统一品牌、登录页、SEO、首页收尾/备案和皮肤主题，并让公开配置在应用渲染前完成解析；以下真实浏览器与媒体场景需要持续确认：
 
 - [x] 后端专项与全量测试通过，覆盖内置默认值、管理员权限、资源类型/归属、公开 URL 不泄漏资源 ID、媒体字节嗅探、删除保护与路由注册。
 - [x] 前端专项测试、后台回归测试、TypeScript 检查和生产构建通过，覆盖初始 HTML 品牌中立、自定义视频不回退内置封面、不安全 URL 回退、单 Logo 深浅主题复用、双 Logo 主题选择、外框关闭与登录场景固定使用深色 Logo。
+- [x] 站点名已覆盖注册邮件、密码重置邮件、继承型发件人名称、诊断说明、批量导出、插件与协议文档中的运行时品牌文案；技术兼容键继续保留稳定值。
+- [x] SEO、版权、ICP备案和主题库通过前后端归一化、持久化、公开投影、metadata/页脚和亮暗语义令牌专项测试；经典皮肤不写覆盖变量且由服务端锁定，三套初始扩展主题可编辑或删除。
+- [x] 主题库支持从经典或当前主题完整复制、改名、新建、编辑、删除、启用和统一保存；每套包含浅/深各 50 项颜色与 17 项控件参数，公开接口只投影当前主题。
+- [x] 危险删除、系统警告、错误/成功/信息状态与全站 Ant Switch 已统一消费主题语义色；开关有可编辑的开/关轨道、悬停和滑块色，并以边界与外环增强开启态辨识。主题卡按频次显示全部去重色，取色器只由色块直接触发。
+- [x] 生产站 `/register` 与 `/forgot-password` 在 1440×900、1280×800、430×932、390×844 下无横向溢出，页面标题、SEO 描述、Open Graph 和版权均使用当前自定义站点名，正文无内置品牌残留。
 - [ ] 使用管理员账号依次保存品牌名、英文品牌标识、登录页标题/说明、浅色 PNG/WebP Logo、可选深色 Logo、外框开关、MP4/WebM 视频与封面，确认工作台和登录页立即更新，刷新后保持一致。
+- [ ] 在已登录管理后台从经典主题复制一套自定义主题，修改名称、浅色/深色、按钮 hover/active/focus、输入框、开关开/关轨道与滑块、选中卡、警告/危险色、图标、圆角、阴影和动效；保存刷新后确认保持，再删除测试主题并恢复运营方实际选择。
+- [ ] 在浅色/深色下检查后台、创作页、插件页和设置页的开关开启/关闭状态，确认颜色、滑块、边界与外环均清晰；检查删除主题、普通危险按钮、确认弹窗、warning/error message 和状态徽标均随主题色变化且文字对比可读。
+- [ ] 保存 SEO 标题/描述/关键词、版权与ICP备案开关，确认 metadata 和公共页脚刷新后同步；备案链接只指向 `https://beian.miit.gov.cn/`。
 - [ ] 分别只上传浅色 Logo、只上传深色 Logo、同时上传两套 Logo，并切换浅色/深色主题，确认单图自动复用、双图按主题选择；开启“禁用 Logo 后面的圆角矩形外框”后确认工作台和管理后台导航只显示等比放大到原外框可用区域的 Logo，布局不跳动。
 - [ ] 在“对象存储”中点击“使用品牌标识”，确认只更新当前路径前缀草稿；未点击或未保存时保留服务端已有前缀，历史资源读取不受影响。
 - [ ] 保存一套自定义品牌后点击“恢复影策默认”，确认品牌名称、英文标识、Logo、登录页文案和媒体立即恢复内置值，自定义素材文件仍保留在存储资源中。
@@ -752,3 +836,37 @@ description: 影策已实现功能的手工验证清单与未确认边界
 - [ ] 确认最近项目表格的搜索、状态筛选、排序与分页行为，行点击进入项目概览；无项目时显示创建入口。
 - [ ] 确认快捷创建与工作流面板入口可用，工作流提示显示最近项目阶段与章节完成度。
 - [ ] 验证浅色/深色主题与窄窗口（表格横向滚动、统计卡换行）下可读可操作。
+
+## 编辑器 Concat 风格打磨第 36 条（5 项 UI）
+
+已实施完成，需要浏览器最终确认：
+
+- [x] 前端 TypeScript 检查通过；`web/test/timeline-view.test.ts` 3 个守护测试通过；git 工作区干净。
+- [ ] 时间线面板与监视器的分隔条拖拽方向：向上拖拽时间线面板应变大（已反转，拖拽中无反向）。
+- [ ] 顶部工具栏图标（含导出）与时间线轨道徽标、片段未选中态不再使用蓝色填充，风格与 img-10 参考统一；片段选中态仍以 accent 蓝标识。
+- [ ] 时间线最后一个片段可向左、向右双向拖拽，右侧不再固定不动；拖动过程中时间刻度不漂移（pxPerMs 仅由缩放决定）。
+- [ ] 监视器底部控制条为 Concat img-14 风格：SkipBack/StepBack/Play/StepForward/SkipForward 五键 + 变速菜单（0.5x–2x）+ 进度条行与时间码；图标在恒黑监视器上为白色，无蓝色。
+- [ ] 右侧检查器为 Concat img-15 风格：属性行水平排列（标签左、控件右）、Section 分组标题、输入框 h-7 rounded-[7px]、凹嵌式滑块；浅色/深色主题下均无主题不同步。
+
+## 媒体导入失败根治（分片上传 + OSS 降级修复）
+
+已实施，代码/单测/编译验证通过，需要浏览器最终确认：
+
+- [ ] 后端 `go build`/`go vet` 通过；`resource_test.go` 新增 OSS body close 回归测试通过；handler/service 包测试通过。
+- [ ] 重新导入 >50MB 视频（如 92MB 样例），确认前端分片上传（POST /uploads → PUT chunks → POST complete）全程无 400，且进度条显示百分比。
+- [ ] OSS 配置密钥仍不匹配（历史 403 SignatureDoesNotMatch）时，确认上传自动降级写入本地存储（provider=local）并导入成功，不再报"导入失败"。
+- [ ] 在用户设置里修正阿里云 OSS AccessKeySecret（当前配置的密钥从未验证通过，8/16 起所有 OSS 上传均 403）后，确认资源改回写入 OSS。
+- [ ] 确认配额默认值已放宽（日 2048MB、总量 20GB，仅当无 runtime_policy 记录时生效）；超过日配额时前端提示为中文而非裸 400。
+
+## 上传媒体监视器播放（H.265 播放副本 + 真实播放驱动 + 时长链路）
+
+阶段 C 根治：本地 H.265 原件服务端转 H.264 播放副本（provider=local 专属，无 ffmpeg 则保持原样），
+监视器 <video> 真实播放驱动（不再纯时间码），时间线 transport 与监视器共享，上传携带真实时长。
+代码/单测/编译验证通过（后端 go build/vet/test、前端 tsc 全绿），需浏览器最终确认：
+
+- [ ] 拖入上传的 H.265 视频（92MB 样例，资源 rowid 54/55）到时间线，点播放：画面真实播放、有声音（不再黑屏/静音）；首次 onError 后出现"正在生成兼容版本"提示并轮询，转码完成后自动切 H.264 副本继续播放。
+- [ ] 监视器播放时时间线播放头同步推进；拖动时间线播放头（scrub）监视器画面即时跳转；暂停/继续/变速（0.5x–2x）后时间线与监视器仍一致。
+- [ ] 轨道静音开关生效：视频所在轨道 muted 时监视器无声，取消静音恢复声音；轨道隐藏（可见性关闭）的片段不再参与预览。
+- [ ] 拖入时长 >5s 的视频片段，其时间线长度等于视频真实时长（不再固定 5s 截断）；时长探测上传的新素材在资源卡片/片段均显示真实时长。
+- [ ] 播放副本就绪前（processing）视频黑屏时出现"正在生成兼容版本（H.264）…"浮层 + "下载原片用本地播放器观看"链接；生成失败显示失败文案而非一直转圈。
+- [ ] 时间线 scrub/播放/变速往返 10 次以上无卡死、无播放头回跳、无 setState-after-unmount 报错（Console 无告警）。
