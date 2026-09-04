@@ -2,6 +2,10 @@ import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { apiClient, request } from "@/services/api/request";
+
+// 与 task-center.ts 保持同样的别名惯例
+const api = apiClient;
 import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
 import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
@@ -631,4 +635,132 @@ export function parseBackendGenerationResult(task: GenerationTask): BackendGener
     const result = JSON.parse(task.resultJson) as BackendGenerationResult;
     if (!result || typeof result !== "object") throw new Error("后端任务结果格式错误");
     return result;
+}
+
+/* ------------------------------------------------------------------ *
+ * W1-01 生成任务链（Shot → GenerationTask → ComfyJob → Artifact）
+ * ------------------------------------------------------------------ */
+
+/** 产物状态四态（D-034）。与后端 model.ShotArtifactStatus* 常量一一对应，改动需同步。 */
+export type ShotArtifactStatus = "ready" | "pending_resource" | "resource_failed" | "stale";
+
+/** 镜头产物（后端 shot_artifacts）。产物统一落这里，不另建 output_assets（D-026）。 */
+export type ShotArtifactSummary = {
+    id: string;
+    projectId: string;
+    unitId: string;
+    shotId: string;
+    revisionId?: string;
+    taskId?: string;
+    type: string;
+    version: number;
+    resourceId?: string;
+    status: ShotArtifactStatus;
+    selected: boolean;
+    metadataJson?: string;
+    /** 生成侧溯源（W1-01）：requestId 指向 comfy_bridge_requests，即 ComfyJob（D-020）。 */
+    requestId?: string;
+    assetIndex: number;
+    checksum?: string;
+    fileSize: number;
+    provider?: string;
+    durationMs: number;
+    width: number;
+    height: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+/** 一次执行尝试（后端 comfy_bridge_requests，即逻辑实体 ComfyJob，D-020 不另建表）。 */
+export type ComfyJobSummary = {
+    id: string;
+    taskId: string;
+    bridgeId: string;
+    kind: string;
+    status: string;
+    error?: string;
+    claimedAt?: string;
+    completedAt?: string;
+    expiresAt: string;
+    /** 任务链字段（W1-01） */
+    generationTaskId?: string;
+    shotId?: string;
+    canvasNodeId?: string;
+    /** 第几次尝试——属于 Job 不属于 Task（D-020：Retry = 同 Task 新 Job）。 */
+    attemptNo: number;
+    comfyPromptId?: string;
+    /** 取值：NETWORK/AUTH/QUEUE/GPU/WORKFLOW/MODEL/TIMEOUT/OUTPUT/UNKNOWN */
+    errorCode?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+/** 任务链详情：一个 Task 可有多个 Job（重试）与多个产物。 */
+export type TaskChainDetail = {
+    task: GenerationTask;
+    jobs: ComfyJobSummary[];
+    artifacts: ShotArtifactSummary[];
+};
+
+/**
+ * Timeline 投影 DTO（D-026：不落数据库，由后端读出时组装）。
+ *
+ * D-033 时长语义：
+ * - plannedDurationMs = 导演的计划时长（Shot.DurationMs）
+ * - actualDurationMs  = 当前版本/选中产物的实测媒体时长，未生成时为 0
+ * - effectiveDurationMs = Timeline 实际应使用的长度（实际值优先，否则回退计划值）
+ */
+export type ShotTimelineEntry = {
+    shotId: string;
+    projectId: string;
+    unitId: string;
+    title: string;
+    position: number;
+    canvasNodeId?: string;
+    semanticType?: string;
+    status: string;
+    plannedDurationMs: number;
+    actualDurationMs: number;
+    effectiveDurationMs: number;
+    revisionId?: string;
+    revisionVersion: number;
+    latestTaskId?: string;
+    latestJobId?: string;
+    latestArtifactId?: string;
+    hasArtifact: boolean;
+};
+
+/** 读取任务链：Task → ComfyJob → Artifact（D-009 可追踪链）。 */
+export async function getTaskChain(taskId: string, signal?: AbortSignal): Promise<TaskChainDetail> {
+    return request<TaskChainDetail>(api.get(`/tasks/${encodeURIComponent(taskId)}/chain`, { signal }));
+}
+
+/** 读取项目的分镜 Timeline 投影（D-026 / D-033）。 */
+export async function listShotTimeline(projectId: string, signal?: AbortSignal): Promise<ShotTimelineEntry[]> {
+    const payload = await request<{ shots: ShotTimelineEntry[] }>(
+        api.get(`/projects/${encodeURIComponent(projectId)}/shots`, { signal }),
+    );
+    return payload?.shots ?? [];
+}
+
+/**
+ * 重试分镜任务（D-030）：Retry = 同一 GenerationTask 新增一个 ComfyJob，不是新建 Task。
+ * 后端会复用既有 retryTask 逻辑，已正确处理计费、并发上限与内容审核拦截。
+ */
+export async function retryShotTask(projectId: string, shotId: string, taskId: string): Promise<GenerationTask> {
+    const payload = await request<{ task: GenerationTask }>(
+        api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/tasks/${encodeURIComponent(taskId)}/retry`),
+    );
+    return payload.task;
+}
+
+/**
+ * 重新生成分镜（D-030）：Regenerate = 新建一个 GenerationTask，与 Retry 语义不同。
+ * 会产生新版本产物，从而触发 Timeline reflow（D-033）。
+ */
+export async function regenerateShot(projectId: string, shotId: string): Promise<GenerationTask> {
+    const payload = await request<{ task: GenerationTask }>(
+        api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/regenerate`),
+    );
+    return payload.task;
 }
