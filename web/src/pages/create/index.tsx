@@ -36,9 +36,10 @@ import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
 import { beginGenerationConsumer, runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
-import { loadCreationConversations, pendingCreationTaskIds, pendingCreationTaskKey, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { loadCreationConversations, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { recoverCreationTextTask } from "@/services/creation-text-task-recovery";
 import { modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -138,6 +139,11 @@ export default function CreatePage() {
     const { message: toast, modal } = App.useApp();
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const config = useEffectiveConfig();
+    const composerPreferencesHydrated = useCreationPreferencesStore((state) => state.hydrated);
+    const rememberMode = useCreationPreferencesStore((state) => state.rememberMode);
+    const rememberImageSettings = useCreationPreferencesStore((state) => state.rememberImageSettings);
+    const rememberVideoSettings = useCreationPreferencesStore((state) => state.rememberVideoSettings);
+    const initialComposerPreferences = useCreationPreferencesStore.getState().preferences;
     const promptOptimizerInstallation = usePluginStore((state) => state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID));
     const promptOptimizerEnabled = usePluginStore((state) => state.pluginStates[PROMPT_OPTIMIZER_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID)?.enabled));
     const promptOptimizerProvider = useMemo<PromptOptimizerProvider | null>(() => {
@@ -152,7 +158,7 @@ export default function CreatePage() {
     const [activeId, setActiveId] = useState("");
     const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
-    const [mode, setMode] = useState<CreationMode>("video");
+    const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || "video");
     const [prompt, setPrompt] = useState("");
     const [attachments, setAttachments] = useState<CreationAttachment[]>([]);
     const promptRef = useRef(prompt);
@@ -177,9 +183,11 @@ export default function CreatePage() {
     const threadScrollRef = useRef<HTMLElement>(null);
     const followLatestMessageRef = useRef(true);
     const taskSyncWarningRef = useRef(false);
+    const activeGenerationTaskIdsRef = useRef(new Set<string>());
     const retryPreparingRef = useRef(new Set<string>());
     const pendingRetryRef = useRef<{ context: CreationRetryContext; lockKey: string } | null>(null);
     const [retrySequence, setRetrySequence] = useState(0);
+    const [composerPreferencesInitialized, setComposerPreferencesInitialized] = useState(false);
     promptRef.current = prompt;
     attachmentsRef.current = attachments;
 
@@ -220,38 +228,58 @@ export default function CreatePage() {
     }, [attachments]);
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
-    const pendingTaskKey = useMemo(() => pendingCreationTaskKey(conversations), [conversations]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
+    const recoveryTaskKey = useMemo(() => pendingTaskIds.filter((id) => !activeGenerationTaskIdsRef.current.has(id)).join("|"), [pendingTaskIds]);
     const shots = useMemo(() => shotsFromMessages(activeConversation?.messages || []), [activeConversation]);
     const visibleShotIndex = shots.length ? selectedShotIndex >= 0 && selectedShotIndex < shots.length ? selectedShotIndex : shots.length - 1 : -1;
 
     useEffect(() => {
-        if (mode !== "image") return;
-        // 前台逻辑模型的默认参数优先于旧的全局创作参数；否则旧的合法值会一直覆盖后台刚配置的默认值。
+        if (!composerPreferencesHydrated || composerPreferencesInitialized) return;
+        const saved = useCreationPreferencesStore.getState().preferences;
+        const nextMode = saved.mode || "video";
+        setMode(nextMode);
+        if (nextMode === "image" && saved.image) {
+            if (saved.image.ratio) setRatio(saved.image.ratio);
+            if (saved.image.quality) setQuality(saved.image.quality);
+            if (saved.image.count) setCount(saved.image.count);
+        }
+        if (nextMode === "video" && saved.video) {
+            if (saved.video.ratio) setRatio(saved.video.ratio);
+            if (saved.video.seconds) setSeconds(saved.video.seconds);
+            if (saved.video.videoQuality) setVideoQuality(saved.video.videoQuality);
+        }
+        setComposerPreferencesInitialized(true);
+    }, [composerPreferencesHydrated, composerPreferencesInitialized]);
+
+    useEffect(() => {
+        if (!composerPreferencesHydrated || !composerPreferencesInitialized || mode !== "image") return;
+        const saved = useCreationPreferencesStore.getState().preferences.image;
+        // 优先恢复用户上次选择；只有当前模型不支持该值时，normalizeImageValue 才回退到模型默认值。
         const normalized = normalizeImageValue(imageProfile, {
-            size: imageProfile.size.default,
-            quality: imageProfile.quality.default,
-            count,
+            size: saved?.ratio || imageProfile.size.default,
+            quality: saved?.quality || imageProfile.quality.default,
+            count: saved?.count || count,
         });
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setCount(normalized.count);
-    }, [mode, selectedModel, imageProfile]);
+    }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, imageProfile]);
 
     useEffect(() => {
-        if (mode !== "video") return;
-        // 前台逻辑模型的默认参数必须直接落到创作端状态，提交任务时才不会被旧状态覆盖。
+        if (!composerPreferencesHydrated || !composerPreferencesInitialized || mode !== "video") return;
+        const saved = useCreationPreferencesStore.getState().preferences.video;
+        // 优先恢复用户上次选择；只有当前模型不支持该值时，normalizeVideoValue 才回退到模型默认值。
         const normalized = normalizeVideoValue(videoProfile, {
-            seconds: String(videoProfile.duration.default),
-            ratio: videoProfile.defaultRatio,
-            resolution: videoProfile.defaultResolution,
+            seconds: saved?.seconds || String(videoProfile.duration.default),
+            ratio: saved?.ratio || videoProfile.defaultRatio,
+            resolution: saved?.videoQuality || videoProfile.defaultResolution,
         });
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
         const maxReferences = videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0;
         if (attachments.length > maxReferences) setAttachments((current) => current.slice(0, maxReferences));
-    }, [mode, selectedModel, videoProfile]);
+    }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, videoProfile]);
 
     useEffect(() => {
         const reconciled = reconcileCreationAttachmentLimit(attachments, mentionReferences, maxReferences);
@@ -288,7 +316,10 @@ export default function CreatePage() {
     }, [conversations, hydrated]);
 
     useEffect(() => {
-        if (!hydrated || !pendingTaskKey || !pendingTaskIds.length) return;
+        if (!hydrated || !recoveryTaskKey || !pendingTaskIds.length) return;
+        // 当前页面主动提交的任务由 submit 自己等待并收尾；恢复监听只接管刷新前遗留的任务，避免同一任务被双重轮询。
+        const recoverableTaskIds = pendingTaskIds.filter((id) => !activeGenerationTaskIdsRef.current.has(id));
+        if (!recoverableTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
         const applyTasks = async (tasks: GenerationTask[]) => {
@@ -298,14 +329,19 @@ export default function CreatePage() {
             taskSyncWarningRef.current = false;
             const attachable = persistedTasks.filter((task) => task.status === "succeeded" && Boolean(task.clientContext?.messageId) && Boolean(task.creationResultUrls?.length));
             for (const task of attachable) {
-                await consumeGenerationTaskMessage(task, task.clientContext!.messageId!, async ({ effectKey, resultUrls }) => {
-                    if (cancelled) return;
-                    await updateConversationMessage(task.clientContext!.conversationId!, task.clientContext!.messageId!, (item) =>
-                        applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) })).value,
-                    );
-                }, { signal: observationController.signal, materialize: async () => task, materializedUrls: generationTaskMaterializedUrls });
+                try {
+                    await consumeGenerationTaskMessage(task, task.clientContext!.messageId!, async ({ effectKey, resultUrls }) => {
+                        if (cancelled) return;
+                        await updateConversationMessage(task.clientContext!.conversationId!, task.clientContext!.messageId!, (item) =>
+                            applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) })).value,
+                        );
+                    }, { signal: observationController.signal, materialize: async () => task, materializedUrls: generationTaskMaterializedUrls });
+                } catch (error) {
+                    if (cancelled || observationController.signal.aborted) return;
+                    console.warn("创作任务结果挂载失败，将使用已物化结果收敛消息状态", error);
+                }
             }
-            if (!attachable.length && !cancelled) setConversations((current) => reconcileCreationTaskMessages(current, persistedTasks));
+            if (!cancelled) setConversations((current) => reconcileCreationTaskMessages(current, persistedTasks));
         };
         const warnSync = (error: unknown) => {
             if (cancelled || observationController.signal.aborted) return;
@@ -316,7 +352,7 @@ export default function CreatePage() {
             }
         };
         let applyChain = Promise.resolve();
-        const unsubscribe = subscribeGenerationTasks(pendingTaskIds, (task) => {
+        const unsubscribe = subscribeGenerationTasks(recoverableTaskIds, (task) => {
             applyChain = applyChain.then(() => applyTasks([task])).catch(warnSync);
         });
         return () => {
@@ -324,7 +360,7 @@ export default function CreatePage() {
             observationController.abort();
             unsubscribe();
         };
-    }, [hydrated, pendingTaskKey, toast]);
+    }, [hydrated, recoveryTaskKey, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -366,11 +402,34 @@ export default function CreatePage() {
 
     const selectMode = (next: CreationMode) => {
         setMode(next);
+        rememberMode(next);
         const nextModels = selectableModelsByCapability(config, next);
         const current = next === "text" ? config.textModel : next === "image" ? config.imageModel : config.videoModel;
         if (!nextModels.includes(current) && nextModels[0]) {
             updateConfig(next === "text" ? "textModel" : next === "image" ? "imageModel" : "videoModel", nextModels[0]);
         }
+    };
+
+    const setComposerRatio = (value: string) => {
+        setRatio(value);
+        if (mode === "image") rememberImageSettings({ ratio: value });
+        if (mode === "video") rememberVideoSettings({ ratio: value });
+    };
+    const setComposerSeconds = (value: string) => {
+        setSeconds(value);
+        if (mode === "video") rememberVideoSettings({ seconds: value });
+    };
+    const setComposerQuality = (value: string) => {
+        setQuality(value);
+        if (mode === "image") rememberImageSettings({ quality: value });
+    };
+    const setComposerVideoQuality = (value: string) => {
+        setVideoQuality(value);
+        if (mode === "video") rememberVideoSettings({ videoQuality: value });
+    };
+    const setComposerCount = (value: string) => {
+        setCount(value);
+        if (mode === "image") rememberImageSettings({ count: value });
     };
 
     const externalLibraryItems = useMemo<AssetLibraryPickerItem[]>(
@@ -570,6 +629,7 @@ export default function CreatePage() {
         const bindTask = (task: GenerationTask) => {
             if (typeof task.clientContext?.batchIndex === "number") boundTaskIdsByBatchIndex.set(task.clientContext.batchIndex, task.id);
             boundTaskIds.add(task.id);
+            activeGenerationTaskIdsRef.current.add(task.id);
             boundTasks.set(task.id, task);
             updateOriginAssistant((item) => ({ ...item, generationStage: task.stage, generationOperation: task.operation, generationErrorCode: task.errorCode, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])), clientOperationId: task.clientOperationId, retryOf: task.retryOf, attemptGroupId: task.attemptGroupId }));
             if (abortRef.current === controller) {
@@ -699,6 +759,7 @@ export default function CreatePage() {
             const message = generationErrorMessage(error);
             updateOriginAssistant((item) => ({ ...item, status: "error", error: message, generationErrorCode: item.generationErrorCode || generationErrorCode(error), generationOperation: item.generationOperation || (mode === "video" ? videoOperation : mode), createdAt: assistantMessage.createdAt, content: "生成失败" }));
         } finally {
+            for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();
             releaseRetryLock();
             if (abortRef.current === controller) {
@@ -781,7 +842,7 @@ export default function CreatePage() {
     const restoreMessageDraft = (item: CreationMessage) => {
         const nextMode = item.mode || "text";
         const nextSettings = item.settings;
-        setMode(nextMode);
+        selectMode(nextMode);
         setPrompt(item.content);
         setAttachments(item.attachments ? [...item.attachments] : []);
         setDraftReferences(item.references ? [...item.references] : []);
@@ -792,6 +853,8 @@ export default function CreatePage() {
         setQuality(nextSettings.quality);
         setVideoQuality(nextSettings.videoQuality);
         setCount(nextSettings.count);
+        if (nextMode === "image") rememberImageSettings({ ratio: nextSettings.ratio, quality: nextSettings.quality, count: nextSettings.count });
+        if (nextMode === "video") rememberVideoSettings({ ratio: nextSettings.ratio, seconds: nextSettings.seconds, videoQuality: nextSettings.videoQuality });
     };
 
     const retryFailedMessage = async (item: CreationMessage, index: number) => {
@@ -876,15 +939,15 @@ export default function CreatePage() {
         config,
         onModelChange: (value: string) => updateConfig(mode === "text" ? "textModel" : mode === "image" ? "imageModel" : "videoModel", value),
         ratio,
-        setRatio,
+        setRatio: setComposerRatio,
         seconds,
-        setSeconds,
+        setSeconds: setComposerSeconds,
         quality,
-        setQuality,
+        setQuality: setComposerQuality,
         videoQuality,
-        setVideoQuality,
+        setVideoQuality: setComposerVideoQuality,
         count,
-        setCount,
+        setCount: setComposerCount,
         promptOptimizerProvider,
         composerFocusRef,
         placeholderOverride: viewMode === "storyboard" && composingNextShot ? `${formatShotOrdinal(nextShotNumber - 1)} · 写下这一镜的镜头、画面或故事` : undefined,
@@ -1101,8 +1164,82 @@ function CreationMessageReferences({ references }: { references: CreationReferen
     })}</div>;
 }
 
+type CreationImagePreviewView = { scale: number; offsetX: number; offsetY: number };
+
+const initialCreationImagePreviewView: CreationImagePreviewView = { scale: 1, offsetX: 0, offsetY: 0 };
+
+function CreationImagePreview({ url }: { url: string }) {
+    const viewportRef = useRef<HTMLDivElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
+    const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
+    const [view, setView] = useState<CreationImagePreviewView>(initialCreationImagePreviewView);
+    const [dragging, setDragging] = useState(false);
+
+    useEffect(() => {
+        setView(initialCreationImagePreviewView);
+        dragRef.current = null;
+        setDragging(false);
+    }, [url]);
+
+    const clampOffset = (offsetX: number, offsetY: number, scale: number) => {
+        const viewport = viewportRef.current;
+        const image = imageRef.current;
+        if (!viewport || !image) return { offsetX, offsetY };
+        const maxOffsetX = Math.max(0, (image.offsetWidth * scale - viewport.clientWidth) / 2);
+        const maxOffsetY = Math.max(0, (image.offsetHeight * scale - viewport.clientHeight) / 2);
+        return {
+            offsetX: Math.max(-maxOffsetX, Math.min(maxOffsetX, offsetX)),
+            offsetY: Math.max(-maxOffsetY, Math.min(maxOffsetY, offsetY)),
+        };
+    };
+
+    const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const viewport = event.currentTarget;
+        const rect = viewport.getBoundingClientRect();
+        const pointerX = event.clientX - (rect.left + rect.width / 2);
+        const pointerY = event.clientY - (rect.top + rect.height / 2);
+        setView((current) => {
+            const nextScale = Math.max(1, Math.min(5, current.scale * Math.exp(-event.deltaY * 0.0015)));
+            if (nextScale === current.scale) return current;
+            if (nextScale === 1) return initialCreationImagePreviewView;
+            const scaleRatio = nextScale / current.scale;
+            const nextOffset = clampOffset(pointerX + (current.offsetX - pointerX) * scaleRatio, pointerY + (current.offsetY - pointerY) * scaleRatio, nextScale);
+            return { scale: nextScale, ...nextOffset };
+        });
+    };
+
+    const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+        if (view.scale <= 1 || event.button !== 0) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startOffsetX: view.offsetX, startOffsetY: view.offsetY };
+        setDragging(true);
+    };
+
+    const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        const nextOffset = clampOffset(drag.startOffsetX + event.clientX - drag.startX, drag.startOffsetY + event.clientY - drag.startY, view.scale);
+        setView((current) => ({ ...current, ...nextOffset }));
+    };
+
+    const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+        dragRef.current = null;
+        setDragging(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    };
+
+    return <div ref={viewportRef} className={`creation-media-preview-viewport${view.scale > 1 ? " is-zoomed" : ""}${dragging ? " is-dragging" : ""}`} onWheel={handleWheel} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
+        <img ref={imageRef} className="creation-media-preview-image" src={url} alt="媒体预览" draggable={false} style={{ transform: `translate3d(${view.offsetX}px, ${view.offsetY}px, 0) scale(${view.scale})` }} />
+        <span className="creation-media-preview-hint" aria-hidden="true">滚轮缩放 · 放大后拖动</span>
+    </div>;
+}
+
 function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
-    return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <img className="creation-media-preview-image" src={url} alt="媒体预览" /> : null}</Modal>;
+    return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <CreationImagePreview url={url} /> : null}</Modal>;
 }
 
 function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {

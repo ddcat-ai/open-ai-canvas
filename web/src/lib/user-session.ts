@@ -7,6 +7,7 @@ import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
@@ -38,17 +39,19 @@ export async function applyUserSession(payload: AuthSessionPayload) {
             localForageStorage.getItem(PLUGIN_STORE_KEY),
         ]);
         const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
+        const persistedCreationPreferences = scopedLocalStorage.getItem(CREATION_PREFERENCES_STORE_KEY);
         usePluginStore.setState({ hydrated: false, runtimeStatuses: {}, pluginStates: {} });
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
-        await Promise.all([useCanvasStore.persist.rehydrate(), useCanvasHistoryStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate(), usePluginStore.persist.rehydrate()]);
+        await Promise.all([useCanvasStore.persist.rehydrate(), useCanvasHistoryStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate(), usePluginStore.persist.rehydrate(), useCreationPreferencesStore.persist.rehydrate()]);
         // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
         if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
         if (!persistedCanvasHistory) useCanvasHistoryStore.setState({ deletedProjects: [] });
         if (!persistedAssets) useAssetStore.setState({ assets: [] });
         if (!persistedPlugins) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
+        if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
         if (!persistedConfig) {
             // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
             // 使用统一模型目录接口
