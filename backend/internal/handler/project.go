@@ -844,6 +844,48 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"unlinked": true})
 	})
+	// W1-01 #52：Timeline 投影（D-026 用 DTO 不落库、D-033 计划时长 vs 实际时长）
+	r.GET("/projects/:id/shots", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		entries, err := svc.ShotTimelineEntries(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"shots": entries})
+	})
+	// D-030：Retry = 同一 GenerationTask 新增一个 ComfyJob（不是新建 Task）
+	r.POST("/projects/:id/shots/:shotId/tasks/:taskId/retry", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		task, err := svc.RetryShotTask(user.ID, c.Param("id"), c.Param("shotId"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
+	// D-030：Regenerate = 新建一个 GenerationTask（与 Retry 语义不同，会产生新版本产物）
+	r.POST("/projects/:id/shots/:shotId/regenerate", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		task, err := svc.RegenerateShot(user.ID, c.Param("id"), c.Param("shotId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
 	r.POST("/projects/:id/asset-candidates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

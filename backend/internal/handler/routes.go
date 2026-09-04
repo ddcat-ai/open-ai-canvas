@@ -63,12 +63,31 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			Limit:      limit,
 			ProjectID:  c.Query("projectId"),
 			ActiveOnly: c.Query("activeOnly") == "true",
+			// W1-01 #52：影策 2.0 按分镜 / 画布节点 / 工作流步骤 / 状态过滤（D-023：复用 /tasks，不建平行体系）
+			ShotID:       c.Query("shotId"),
+			CanvasNodeID: c.Query("canvasNodeId"),
+			WorkflowStep: c.Query("workflowStepId"),
+			Status:       c.Query("status"),
 		})
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, tasks)
+	})
+	// 任务链：Task → ComfyJob → Artifact（D-009）。归属校验在 service 层逐层进行。
+	r.GET("/tasks/:id/chain", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		chain, err := svc.TaskChain(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, chain)
 	})
 	r.GET("/tasks/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

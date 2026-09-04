@@ -44,6 +44,25 @@ type Task struct {
 	CompletedAt               *time.Time           `json:"completedAt"`
 	CreatedAt                 time.Time            `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3;index:idx_tasks_user_project_created,priority:3"`
 	UpdatedAt                 time.Time            `json:"updatedAt"`
+
+	// W1-01（影策 2.0 任务链，D-022：Task 即 GenerationTask）
+	// ShotID / CanvasNodeID / WorkflowStepID 把生成任务挂到画布分镜节点与工作流步骤上。
+	// 这三者是查询加速用的冗余——权威关系仍在 ProductionTaskLink（D-026 并轨后确认），
+	// 但 ProductionTaskLink 只在工作流上下文才建，非工作流任务没有 link，故此处保留。
+	// D-039（D-025 升级）：所有新增业务代码**禁止**通过 Task.InputJSON.metadata.workflowStepId
+	// 获取 workflow step，只能读本列。旧数据 fallback 只允许出现在 migration / compatibility helper，
+	// 且应逐步消灭——否则会退化成「一半读 column、一半读 metadata」，canonical 化白做。
+	ShotID         string `json:"shotId,omitempty" gorm:"index:idx_task_shot;size:64"`
+	CanvasNodeID   string `json:"canvasNodeId,omitempty" gorm:"index:idx_task_node;size:64"`
+	WorkflowStepID string `json:"workflowStepId,omitempty" gorm:"index:idx_task_step;size:36"`
+
+	// Agent 溯源（D-031：不建 AgentRun/Action 表，只加两列）
+	// AgentSessionID = WorkBuddy（codebuddy CLI）会话标识，canvas-agent 用 --resume 维护多轮。
+	// AgentTurnID = 一次用户/Agent turn 的关联标识。
+	// D-038：agent_turn_id **不加 UNIQUE**——不同 Runtime 的 turn ID 格式与唯一性不保证；
+	// 将来若要唯一，须用复合键 (agent_runtime, agent_session_id, agent_turn_id)。
+	AgentSessionID string `json:"agentSessionId,omitempty" gorm:"index:idx_task_agent_session;size:64"`
+	AgentTurnID    string `json:"agentTurnId,omitempty" gorm:"index:idx_task_agent_turn;size:64"`
 }
 
 // TaskTextDelta 只保存可回放窗口内的文本增量；最终正文和失败草稿分别归并到 Task.ResultJSON 与 Task.TextDraft。

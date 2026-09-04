@@ -641,17 +641,45 @@ func (r *Repository) ClaimNextTaskProviderCancellation(owner string, leaseDurati
 	return &task, nil
 }
 
-func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnly bool) ([]model.Task, error) {
+// TaskQuery 是任务列表的查询条件（W1-01 #52）。
+// 早期版本只有 project_id / activeOnly；影策 2.0 需要按分镜、画布节点、工作流步骤过滤，
+// 继续往函数签名里加参数会越来越难维护，故收敛为结构体。
+type TaskQuery struct {
+	Limit        int
+	ProjectID    string
+	ShotID       string
+	CanvasNodeID string
+	WorkflowStep string
+	Status       string
+	ActiveOnly   bool
+}
+
+func (r *Repository) Tasks(userID string, options TaskQuery) ([]model.Task, error) {
 	var tasks []model.Task
+	limit := options.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	// W1-01：把任务链 canonical 列纳入查询，否则上层拿到的 Task 里这些字段永远是零值。
+	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at",
+		"shot_id", "canvas_node_id", "workflow_step_id", "agent_session_id", "agent_turn_id").
 		Where("user_id = ?", userID)
-	if strings.TrimSpace(projectID) != "" {
-		query = query.Where("project_id = ?", strings.TrimSpace(projectID))
+	if projectID := strings.TrimSpace(options.ProjectID); projectID != "" {
+		query = query.Where("project_id = ?", projectID)
 	}
-	if activeOnly {
+	if shotID := strings.TrimSpace(options.ShotID); shotID != "" {
+		query = query.Where("shot_id = ?", shotID)
+	}
+	if nodeID := strings.TrimSpace(options.CanvasNodeID); nodeID != "" {
+		query = query.Where("canvas_node_id = ?", nodeID)
+	}
+	if stepID := strings.TrimSpace(options.WorkflowStep); stepID != "" {
+		query = query.Where("workflow_step_id = ?", stepID)
+	}
+	if status := strings.TrimSpace(options.Status); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if options.ActiveOnly {
 		query = query.Where("status IN ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning})
 	}
 	err := query.Order("created_at desc").Limit(limit).Find(&tasks).Error
