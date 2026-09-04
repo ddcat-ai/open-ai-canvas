@@ -21,6 +21,8 @@ type PluginProviderCatalogItem = {
         capability: ProtocolCapability;
         parameters: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>;
         defaults?: Record<string, string | number | boolean>;
+        operations?: string[];
+        references?: { minImages?: number; maxImages?: number; maxVideos?: number; maxAudios?: number };
     }>;
 };
 

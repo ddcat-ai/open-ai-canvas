@@ -88,6 +88,8 @@ export type PluginWorkflowContribution = {
     capability: ProtocolCapability;
     parameters: PluginParameter[];
     defaults?: Record<string, string | number | boolean>;
+    operations?: string[];
+    references?: { minImages?: number; maxImages?: number; maxVideos?: number; maxAudios?: number };
 };
 export type PluginPaymentProviderContribution = {
     id: string;

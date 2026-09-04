@@ -1,4 +1,4 @@
-import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import type { ModelProtocol, ModelProtocolDefinition, ModelProtocolWorkflow } from "@/lib/model-protocols";
 
 export type ModelCapabilityConfig = {
     version: number;
@@ -73,6 +73,13 @@ export type VideoCapabilityConfig = {
     watermark: { supported: boolean; default: boolean };
     operations: string[];
     defaultOperation: string;
+};
+
+export type ResolvedModelProtocolPreset = {
+    capabilityConfig?: ModelCapabilityConfig;
+    defaultOptions: Record<string, unknown>;
+    workflowMatched: boolean;
+    incompatibleReason?: string;
 };
 
 // 旧版本的“允许自定义”可能只保存了 `*`，前台需要用这组标准值恢复可选项。
@@ -349,7 +356,42 @@ export function pluginWorkflowCapabilityConfig(protocol: ModelProtocol, workflow
     if (workflow.capability === "image") {
         return { ...fallback, image: workflowImageCapabilityConfig(fields, fallback.image!) };
     }
-    return { ...fallback, video: workflowVideoCapabilityConfig(fields, fallback.video!) };
+    const video = workflowVideoCapabilityConfig(fields, fallback.video!);
+    if (workflow.references) {
+        video.references = {
+            ...video.references,
+            ...Object.fromEntries(Object.entries(workflow.references).filter(([, value]) => typeof value === "number" && Number.isFinite(value))),
+        };
+    }
+    if (workflow.operations?.length) {
+        video.operations = [...workflow.operations];
+        video.defaultOperation = workflow.operations[0] || video.defaultOperation;
+    }
+    return { ...fallback, video };
+}
+
+export function resolveModelProtocolPreset(protocol: ModelProtocol, model: string, definitions: ModelProtocolDefinition[]): ResolvedModelProtocolPreset {
+    const definition = definitions.find((item) => item.value === protocol);
+    const workflow = definition?.workflows?.find((item) => item.id === model);
+    if (workflow) {
+        return {
+            capabilityConfig: pluginWorkflowCapabilityConfig(protocol, workflow),
+            defaultOptions: { ...(workflow.defaults || {}) },
+            workflowMatched: true,
+        };
+    }
+    if (definition?.workflows?.length) {
+        return {
+            defaultOptions: {},
+            workflowMatched: false,
+            incompatibleReason: `请求协议 ${definition.label} 未声明模型 ${model} 的工作流预设`,
+        };
+    }
+    return {
+        capabilityConfig: defaultModelCapabilityConfig(protocol, model),
+        defaultOptions: {},
+        workflowMatched: false,
+    };
 }
 
 export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {

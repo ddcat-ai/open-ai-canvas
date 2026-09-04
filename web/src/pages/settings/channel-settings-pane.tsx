@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
+import { mergeFetchedChannelModelCosts, syncPluginWorkflowModelCosts } from "@/lib/channel-model-catalog";
 import { desktopLocalChannelFormState, desktopLocalChannelPayloadValue, DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL } from "@/lib/desktop-local-channel";
 import { fetchChannelModels } from "@/services/api/image";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
@@ -43,8 +43,20 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
     const comfyBridgeReady = Boolean(config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim());
 
     useEffect(() => {
-        void fetchPluginProviderCatalog("user.custom-channel").then(setProviderCatalog).catch(() => setProviderCatalog([]));
-    }, []);
+        let active = true;
+        void fetchPluginProviderCatalog("user.custom-channel").then((catalog) => {
+            if (!active) return;
+            setProviderCatalog(catalog);
+            const current = useConfigStore.getState().config;
+            const synced = syncPluginWorkflowModelCosts(current.channels, catalog);
+            if (synced.changed) replaceConfig(withChannels(current, synced.channels));
+        }).catch(() => {
+            if (active) setProviderCatalog([]);
+        });
+        return () => {
+            active = false;
+        };
+    }, [replaceConfig]);
 
     const updateChannels = (channels: ModelChannel[], baseConfig = config) => {
         replaceConfig(withChannels(baseConfig, channels));

@@ -37,7 +37,9 @@ my-plugin.yingce-plugin
     "workflows": [{
       "id": "minimax-h3", "label": "MiniMax H3 文生视频", "providerId": "acme-comfyui", "capability": "video",
       "parameters": [{ "name": "duration", "type": "number", "required": true }, { "name": "resolution", "type": "string", "values": ["720p", "1080p"] }],
-      "defaults": { "duration": 5, "resolution": "720p" }
+      "defaults": { "duration": 5, "resolution": "720p" },
+      "operations": ["reference_to_video"],
+      "references": { "maxImages": 9, "maxVideos": 0, "maxAudios": 0 }
     }]
   }
 }
@@ -57,6 +59,8 @@ my-plugin.yingce-plugin
 
 - `providers` 声明上游能力和字段映射。鉴权、Base URL、超时、私网校验、轮询、下载和计费由宿主负责。
 - `workflows` 声明一个 provider 下的具体工作流或模型入口。AutoDL/ComfyUI 等工作流型 API 必须在这里扩展，不能为每个工作流新增宿主代码。
+- 工作流的 `operations` 声明实际支持的生成操作，例如 `text_to_video`、`image_to_video`、`reference_to_video` 或 `audio_to_video`；宿主据此判断输入组合，不再仅凭图片数量推断能力。
+- 工作流的 `references` 声明 `maxImages`、`maxVideos` 和 `maxAudios` 等参考素材上限。未声明的字段保持渠道配置值；声明为 `0` 表示该类输入不支持。
 - `canvasNodes` 声明节点 ID、默认尺寸和 schema。`renderer` 为 `declarative` 时使用宿主 schema renderer；`sandbox` 由隔离运行时承载。
 - `transforms` 声明媒体或生成请求转换，必须匹配清单权限和受控 runtime。
 - `assetSources`、`usageObservers`、`agents`、`commands` 和 `importExport` 是同一清单的其他贡献面。

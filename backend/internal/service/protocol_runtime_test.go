@@ -296,6 +296,16 @@ func TestAutoDLPluginPackageLoadsAsOfficialRuntime(t *testing.T) {
 	if autoDL == nil || len(autoDL.Workflows) == 0 {
 		t.Fatalf("AutoDL administrator catalog = %#v", catalog)
 	}
+	var multiImage *protocol.ManifestWorkflow
+	for index := range autoDL.Workflows {
+		if autoDL.Workflows[index].ID == "minimax_h3_lightx2v_v5" {
+			multiImage = &autoDL.Workflows[index]
+			break
+		}
+	}
+	if multiImage == nil || len(multiImage.Operations) != 1 || multiImage.Operations[0] != "reference_to_video" || multiImage.References == nil || multiImage.References.MaxImages == nil || *multiImage.References.MaxImages != 9 {
+		t.Fatalf("AutoDL multi-image workflow capability = %#v", multiImage)
+	}
 }
 
 func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {

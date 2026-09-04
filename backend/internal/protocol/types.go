@@ -360,12 +360,21 @@ type ManifestValidation struct {
 }
 
 type ManifestWorkflow struct {
-	ID         string         `json:"id"`
-	Label      string         `json:"label"`
-	ProviderID string         `json:"providerId"`
-	Capability Capability     `json:"capability"`
-	Parameters []Parameter    `json:"parameters"`
-	Defaults   map[string]any `json:"defaults,omitempty"`
+	ID         string                      `json:"id"`
+	Label      string                      `json:"label"`
+	ProviderID string                      `json:"providerId"`
+	Capability Capability                  `json:"capability"`
+	Parameters []Parameter                 `json:"parameters"`
+	Defaults   map[string]any              `json:"defaults,omitempty"`
+	Operations []string                    `json:"operations,omitempty"`
+	References *ManifestWorkflowReferences `json:"references,omitempty"`
+}
+
+type ManifestWorkflowReferences struct {
+	MinImages *int `json:"minImages,omitempty"`
+	MaxImages *int `json:"maxImages,omitempty"`
+	MaxVideos *int `json:"maxVideos,omitempty"`
+	MaxAudios *int `json:"maxAudios,omitempty"`
 }
 
 type ManifestCanvasNode struct {
