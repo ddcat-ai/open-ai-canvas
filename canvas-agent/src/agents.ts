@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -105,6 +106,121 @@ export function runClaudeTurn(prompt: string, emit: AgentEmit) {
     const child = spawnAgent("claude", ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--allowedTools", "mcp__yingce__*", prompt], ["ignore", "pipe", "pipe"], emit);
     if (!child) return;
     pipeJsonLines(child, emit, "claude");
+}
+
+// PATCH(agent-workbuddy-backend): WorkBuddy（codebuddy CLI）作为带 agent 能力的后端。
+// 为什么：codebuddy 是完整 agent（MCP 工具 + 自主多轮），纯 LLM API 适配器没有工具调用能力。
+// 2026-09-04 实测的三个坑（复现成本极高，勿删）：
+// 1. CLI 默认监听 127.0.0.1:6181，而 WorkBuddy 桌面版占着它 → spawn 后 unhandledRejection
+//    且 -p 模式无限挂起、零输出。唯一官方开关是 SERVER__PORT 环境变量（改监听端口）。
+// 2. 默认模型可能被上游网关 400（fast-model / deepseek-v4-pro 抖动），glm-5.3 实测稳定。
+// 3. `--resume <sessionId>` 可续接会话（已用暗号问答验证），session_id 从事件流取。
+// 事件流是 Claude-Code 风格 stream-json，这里翻译成 web 面板已支持的 codex 契约
+// （item.updated / item.completed + turn.completed）。
+const WORKBUDDY_CLI_PATH = process.env.CANVAS_AGENT_WORKBUDDY_CLI || "D:/软件/workbuddy/resources/app.asar.unpacked/cli/dist/codebuddy.js";
+const WORKBUDDY_SERVER_PORT = process.env.CANVAS_AGENT_WORKBUDDY_PORT || "16881";
+const WORKBUDDY_MODEL = process.env.CANVAS_AGENT_WORKBUDDY_MODEL || "glm-5.3";
+
+export function workbuddyEnabled() {
+    if (process.env.CANVAS_AGENT_WORKBUDDY === "0") return false;
+    try {
+        return existsSync(WORKBUDDY_CLI_PATH);
+    } catch {
+        return false;
+    }
+}
+
+export function runWorkBuddyTurn(
+    prompt: string,
+    emit: AgentEmit,
+    options: { resumeSessionId?: string; onSessionId?: (sessionId: string) => void } = {},
+) {
+    if (!prompt.trim()) return;
+    const args = [
+        WORKBUDDY_CLI_PATH,
+        "-p",
+        "-y",
+        "--model", WORKBUDDY_MODEL,
+        "--permission-mode", "bypassPermissions",
+        "--output-format", "stream-json",
+        // 注意：不要加 --allowedTools！2026-09-04 实测加了它 codebuddy 会吞掉
+        // assistant 事件（只剩 init+result），前端看不到任何回复文本。
+        ...(options.resumeSessionId ? ["--resume", options.resumeSessionId] : []),
+        prompt,
+    ];
+    let child: ChildProcess | null = null;
+    try {
+        child = spawn(process.execPath, args, {
+            stdio: ["ignore", "pipe", "pipe"],
+            windowsHide: true,
+            env: { ...process.env, SERVER__PORT: WORKBUDDY_SERVER_PORT },
+        });
+    } catch (error) {
+        emit("agent_error", { message: errorMessage(error) });
+        return;
+    }
+    if (!child) return;
+    emit("agent_log", { text: `[workbuddy] spawn codebuddy model=${WORKBUDDY_MODEL} resume=${options.resumeSessionId ? "yes" : "no"}` });
+    pipeWorkBuddyEvents(child, emit, options.onSessionId);
+}
+
+function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId?: (sessionId: string) => void) {
+    let out = "";
+    let sessionReported = false;
+    child.stdout?.on("data", (chunk) => {
+        out += chunk.toString();
+        const lines = out.split(/\r?\n/);
+        out = lines.pop() || "";
+        lines.filter(Boolean).forEach((line) => {
+            let event: Record<string, unknown>;
+            try {
+                event = JSON.parse(line) as Record<string, unknown>;
+            } catch {
+                emit("agent_log", { text: `[workbuddy] non-json line: ${line.slice(0, 200)}` });
+                return;
+            }
+            const type = String(event.type || "");
+            const sessionId = String(event.session_id || "");
+            if (sessionId && onSessionId && !sessionReported) {
+                sessionReported = true;
+                onSessionId(sessionId);
+            }
+            if (type === "system" && event.subtype === "init") {
+                emit("agent_event", { agent: "workbuddy", type: "thread.started", thread_id: sessionId });
+                return;
+            }
+            if (type === "assistant") {
+                const message = event.message as Record<string, unknown> | undefined;
+                const content = Array.isArray(message?.content) ? (message!.content as Record<string, unknown>[]) : [];
+                const text = content.filter((part) => part.type === "text").map((part) => String(part.text || "")).join("");
+                if (!text) return;
+                const id = String(message?.id || sessionId || "workbuddy");
+                emit("agent_event", { agent: "workbuddy", type: "item.updated", item: { id, type: "agent_message", text } });
+                return;
+            }
+            if (type === "result") {
+                const failed = event.is_error === true || event.subtype !== "success";
+                const finalText = String(event.result || "");
+                if (!failed && finalText) {
+                    const id = String(event.uuid || sessionId || "workbuddy");
+                    emit("agent_event", { agent: "workbuddy", type: "item.completed", item: { id, type: "agent_message", text: finalText } });
+                }
+                const usage = (event.usage && typeof event.usage === "object" ? event.usage : {}) as Record<string, unknown>;
+                const input = Number(usage.input_tokens) || 0;
+                const output = Number(usage.output_tokens) || 0;
+                if (failed) {
+                    emit("agent_event", { agent: "workbuddy", type: "turn.failed", error: { message: finalText || `codebuddy 执行失败（${String(event.subtype || "unknown")}）` } });
+                } else {
+                    emit("agent_event", { agent: "workbuddy", type: "turn.completed", usage: { total_tokens: input + output, input_tokens: input, output_tokens: output } });
+                }
+                return;
+            }
+            // 其余事件（file-history-snapshot / stream 碎片）面板用不上，静默丢弃
+        });
+    });
+    child.stderr?.on("data", (chunk) => emit("agent_log", { text: chunk.toString() }));
+    child.on("error", (error) => emit("agent_error", { message: errorMessage(error) }));
+    child.on("close", (code) => emit("agent_done", { agent: "workbuddy", code }));
 }
 
 async function ensureCodexThread(app: CodexAppClient, options: CodexRunOptions) {

@@ -7,10 +7,12 @@ import {
     resumeCodexThread,
     runClaudeTurn,
     runCodexTurn,
+    runWorkBuddyTurn,
     startCodexThread,
     summarizeCodexThread,
     verifyCodexThreadWorkspace,
     withAgentPrompt,
+    workbuddyEnabled,
 } from "../agents.js";
 import { runYingceTurn, yingceLlmEnabled } from "../yingce-llm.js";
 import { CanvasSession } from "../canvas-session.js";
@@ -35,6 +37,8 @@ export function createCanvasAgentHttpModule(
     const emit = (type: string, payload: unknown) => session.emitAll(type, payload);
     /** 影策渠道的服务端会话历史（前端不传 history，按 canvasId 在此累积，最近 40 条） */
     const yingceHistory = new Map<string, { role: "user" | "assistant"; content: string }[]>();
+    /** WorkBuddy 后端的会话 id（按 canvasId 记忆，供 codebuddy --resume 续接） */
+    const workbuddySessions = new Map<string, string>();
     const routes: LocalRuntimeProtectedRoute[] = [
         canvasRoute("GET", "/events", (req, res) => {
             session.openEvents(
@@ -78,6 +82,7 @@ export function createCanvasAgentHttpModule(
         canvasRoute("POST", "/agent/codex/threads/new", async (req, res) => {
             const body = jsonRecord(req);
             const workspace = ensureCanvasWorkspace(config, String(body.canvasId || ""));
+            workbuddySessions.delete(workspace.canvasId);
             const thread = await startCodexThread(emit, workspace.workspacePath);
             const activeThreadId = String((thread as Record<string, unknown>).id || "");
             updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId });
@@ -122,7 +127,21 @@ export function createCanvasAgentHttpModule(
         canvasRoute("POST", "/agent/codex/turn", (req, res) => {
             const body = jsonRecord(req);
             const prompt = withAgentPrompt(String(body.prompt || ""));
-            // 影策自有渠道优先：配了 YINGCE_AGENT_API_KEY 就走直连，不需要 Codex/Claude 登录态
+            // WorkBuddy 后端优先：codebuddy CLI 是完整 agent（MCP 工具 + 自主多轮），用户钦点
+            if (workbuddyEnabled()) {
+                const canvasKey = String(body.canvasId || "default");
+                const rawPrompt = String(body.prompt || "");
+                const resumeSessionId = workbuddySessions.get(canvasKey) || "";
+                void runWorkBuddyTurn(prompt, emit, {
+                    resumeSessionId,
+                    onSessionId: (sessionId) => {
+                        if (sessionId) workbuddySessions.set(canvasKey, sessionId);
+                    },
+                });
+                res.json({ ok: true, agent: "workbuddy" });
+                return;
+            }
+            // 影策自有渠道其次：配了 YINGCE_AGENT_API_KEY 就走直连，不需要 Codex/Claude 登录态
             if (yingceLlmEnabled()) {
                 const canvasKey = String(body.canvasId || "default");
                 const rawPrompt = String(body.prompt || "");
