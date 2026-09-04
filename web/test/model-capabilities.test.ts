@@ -75,9 +75,7 @@ test("modelCapabilityConfigFor reconciles a stale saved generic resolutions list
                     id: "relay",
                     models: ["minimax_h3"],
                     interfaceType: "newapi-channel-2",
-                    modelCosts: [
-                        { model: "minimax_h3", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } },
-                    ],
+                    modelCosts: [{ model: "minimax_h3", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } }],
                 },
             ],
         },
@@ -137,4 +135,85 @@ test("modelCapabilityConfigFor leaves non-H3 relay models on their saved generic
 
     assert.deepEqual(profile.resolutions, ["480p", "720p", "1080p", "1440p", "2160p"]);
     assert.equal(profile.defaultResolution, "720p");
+});
+
+test("minimax_h3 with no protocol at all still offers 768p/1080p", () => {
+    // Regression: a custom channel that never picked a Provider (no interfaceType)
+    // and never tagged a per-model protocol/cost must not fall through to the generic
+    // 480p..2160p list. The H3 model name itself implies 768p/1080p only.
+    const profile = defaultModelCapabilityConfig(undefined, "minimax_h3").video!;
+
+    assert.deepEqual(profile.resolutions, ["768p", "1080p"]);
+    assert.equal(profile.defaultResolution, "768p");
+});
+
+test("modelCapabilityConfigFor surfaces 768p/1080p for an untagged minimax_h3 channel", () => {
+    // The exact user scenario: channel has models but no interfaceType and no modelCosts.
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "mm",
+                    models: ["minimax_h3"],
+                    // no interfaceType, no modelCosts
+                },
+            ],
+        },
+        "mm::minimax_h3",
+    ).video!;
+
+    assert.deepEqual(profile.resolutions, ["768p", "1080p"]);
+    assert.equal(profile.defaultResolution, "768p");
+});
+
+test("MiniMax H3 raises the prompt limit to the official 2000 chars", () => {
+    // Hailuo H3's official prompt cap is 2000 characters; the generic video default
+    // (1000) is too low and wrongly rejects long auto-generated storyboard prompts.
+    // A storyboard workflow prompt of ~1006 chars must no longer be blocked.
+    const profile = defaultModelCapabilityConfig("newapi-channel-2", "minimax_h3").video!;
+    assert.equal(profile.references.promptMaxChars, 2000);
+});
+
+test("modelCapabilityConfigFor raises a stale saved 1000-char prompt limit to 2000 for H3", () => {
+    // A channel previously persisted the generic video promptMaxChars=1000 into its
+    // capabilityConfig. The merge must still raise it to the official 2000 so the
+    // 1006-char storyboard prompt is not rejected on regeneration.
+    const genericVideo = defaultModelCapabilityConfig("newapi-channel-2").video!;
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["minimax_h3"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [{ model: "minimax_h3", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } }],
+                },
+            ],
+        },
+        "relay::minimax_h3",
+    ).video!;
+
+    assert.equal(profile.references.promptMaxChars, 2000);
+});
+
+test("non-H3 relay models keep the generic 1000-char prompt limit", () => {
+    // The 2000-char bump is H3-specific and must not leak onto other video models.
+    const genericVideo = defaultModelCapabilityConfig("newapi-channel-2").video!;
+    assert.equal(genericVideo.references.promptMaxChars, 1000);
+
+    const profile = modelCapabilityConfigFor(
+        {
+            channels: [
+                {
+                    id: "relay",
+                    models: ["some-video-model"],
+                    interfaceType: "newapi-channel-2",
+                    modelCosts: [{ model: "some-video-model", capability: "video", protocol: "newapi-channel-2", capabilityConfig: { version: 1, video: { ...genericVideo } } }],
+                },
+            ],
+        },
+        "relay::some-video-model",
+    ).video!;
+
+    assert.equal(profile.references.promptMaxChars, 1000);
 });

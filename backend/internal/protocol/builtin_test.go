@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -155,6 +156,69 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 				if poll.Path != tc.poll {
 					t.Fatalf("poll path = %q, want %q", poll.Path, tc.poll)
 				}
+			}
+		})
+	}
+}
+
+func TestNewAPIChannel2AdapterSendsHailuoH3DurationNotSeconds(t *testing.T) {
+	adapter, ok := Builtins().Get("newapi-channel-2")
+	if !ok {
+		t.Fatal("adapter missing")
+	}
+	cases := []struct {
+		name               string
+		model              string
+		duration           int
+		resolution         string
+		wantDuration       int
+		expectLegacyFields bool
+	}{
+		{name: "h3 768p 12s stays", model: "minimax_h3", duration: 12, resolution: "768p", wantDuration: 12},
+		{name: "h3 768p 18s clamped to 15s", model: "minimax_h3", duration: 18, resolution: "768p", wantDuration: 15},
+		{name: "h3 768p 3s clamped up to 4s", model: "minimax_h3", duration: 3, resolution: "768p", wantDuration: 4},
+		{name: "h3 1080p 12s clamped to 8s", model: "MiniMax-H3", duration: 12, resolution: "1080p", wantDuration: 8},
+		{name: "h3 alias hailuo-3 works", model: "hailuo-3", duration: 6, resolution: "768p", wantDuration: 6},
+		{name: "non-h3 keeps seconds and generate_audio", model: "some-video-model", duration: 10, resolution: "768p", expectLegacyFields: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model:         tc.model,
+				Prompt:        "a clip",
+				Duration:      tc.duration,
+				Resolution:    tc.resolution,
+				AspectRatio:   "16:9",
+				GenerateAudio: true,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, ok := spec.Body.(map[string]any)
+			if !ok {
+				t.Fatalf("body type = %T, want map[string]any", spec.Body)
+			}
+			if tc.expectLegacyFields {
+				if body["seconds"] != strconv.Itoa(tc.duration) {
+					t.Fatalf("seconds = %#v, want %q", body["seconds"], strconv.Itoa(tc.duration))
+				}
+				if value, exists := body["duration"]; exists {
+					t.Fatalf("non-H3 should not send duration, got %#v", value)
+				}
+				if body["generate_audio"] != true {
+					t.Fatalf("generate_audio = %#v, want true", body["generate_audio"])
+				}
+				return
+			}
+			// H3：整型 duration，不得出现 seconds / generate_audio
+			if body["duration"] != tc.wantDuration {
+				t.Fatalf("duration = %#v, want %d", body["duration"], tc.wantDuration)
+			}
+			if value, exists := body["seconds"]; exists {
+				t.Fatalf("H3 must not send seconds, got %#v", value)
+			}
+			if value, exists := body["generate_audio"]; exists {
+				t.Fatalf("H3 must not send generate_audio, got %#v", value)
 			}
 		})
 	}

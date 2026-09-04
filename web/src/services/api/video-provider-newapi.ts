@@ -1,4 +1,4 @@
-import { modelCapabilityConfigFor, videoResolutionRequest } from "@/lib/model-capabilities";
+import { isHailuoH3ViaRelay, modelCapabilityConfigFor, videoResolutionRequest } from "@/lib/model-capabilities";
 import { boolConfig } from "@/lib/seedance-video";
 import { getResourceOSSUrl } from "@/services/api/resources";
 import { modelOptionName } from "@/stores/use-config-store";
@@ -18,14 +18,22 @@ export async function createVideoGenerationsTask(deps: VideoProviderDeps, config
         Promise.all(audioReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
     ]);
     const profile = modelCapabilityConfigFor(config, model).video!;
-    const resolution = newAPIVideoResolutionRequest(profile, config.vquality, modelOptionName(model));
+    const resolvedModel = modelOptionName(model);
+    const resolution = newAPIVideoResolutionRequest(profile, config.vquality, resolvedModel);
+    // 本 payload 经 /api/ai/custom 中继时后端原样转发，不会改写字段，所以必须在
+    // 这里就发对：MiniMax Hailuo H3 经 NewAPI 中转只认整型 duration（官方 4~15s），
+    // 不认识 seconds 字符串，也没有 generate_audio 参数；继续发这两个字段会被上游
+    // 以 unsupported_duration / task_not_exist 拒收。
+    const hailuoH3 = isHailuoH3ViaRelay(config.interfaceType, resolvedModel);
     const payload = {
-        model: modelOptionName(model),
+        model: resolvedModel,
         prompt: prompt.trim(),
-        seconds: normalizeVideoSeconds(config.videoSeconds),
+        ...(hailuoH3
+            ? { duration: clampHailuoH3Duration(Number(normalizeVideoSeconds(config.videoSeconds)), resolution) }
+            : { seconds: normalizeVideoSeconds(config.videoSeconds) }),
         aspect_ratio: normalizeVideoSize(config.size) || "16:9",
         ...(resolution ? { resolution } : {}),
-        ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
+        ...(!hailuoH3 && profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
         ...(imageUrls.length ? { image_urls: imageUrls } : {}),
         ...(videoUrls.length ? { video_urls: videoUrls } : {}),
         ...(audioUrls.length ? { audio_urls: audioUrls } : {}),
@@ -60,6 +68,14 @@ export async function pollVideoGenerationsTask(deps: VideoProviderDeps, task: Vi
 function newAPIVideoResolutionRequest(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, value: string, model: string) {
     if (model.trim().toLowerCase() === "grok-video-1.5-1080p") return "1080p";
     return videoResolutionRequest(profile, value);
+}
+
+// Hailuo H3 官方时长下限是 4s，分镜镜头可能只有 3s，直接发会被上游拒收；
+// 上限按档位区分：768p 档 15s，1080p/2K 档 8s。
+function clampHailuoH3Duration(seconds: number, resolution: string | undefined) {
+    const value = Math.floor(Number(seconds) || 6);
+    const limit = ["1080p", "2k", "1440p"].includes((resolution ?? "").trim().toLowerCase()) ? 8 : 15;
+    return Math.min(Math.max(value, 4), limit);
 }
 
 async function resolveVideoGenerationsUrl(value: string | undefined, storageKey?: string) {

@@ -158,6 +158,36 @@ func TestNormalizeAgnesVideo25CapabilityRepairsLegacyStoredLimits(t *testing.T) 
 	}
 }
 
+func TestHailuoH3CapabilityUses2000CharPromptLimit(t *testing.T) {
+	// 默认能力配置：H3 经中转应得到 2000 字符的 prompt 上限（官方上限），而非通用默认 1000。
+	def := DefaultModelCapabilityConfigForModel("newapi-channel-2", "minimax_h3")
+	if def == nil || def.Video == nil {
+		t.Fatal("H3 default video profile = nil")
+	}
+	if def.Video.References.PromptMaxChars != 2000 {
+		t.Fatalf("default H3 PromptMaxChars = %d, want 2000", def.Video.References.PromptMaxChars)
+	}
+
+	// 归一化：即使渠道固化了通用默认 1000，也应被抬到 2000。
+	legacy := DefaultModelCapabilityConfigForModel("newapi", "legacy-video") // PromptMaxChars=1000
+	normalized, err := NormalizeModelCapabilityConfigForModel("video", "newapi-channel-2", "minimax_h3", legacy)
+	if err != nil {
+		t.Fatalf("NormalizeModelCapabilityConfigForModel(H3) error = %v", err)
+	}
+	if normalized.Video.References.PromptMaxChars != 2000 {
+		t.Fatalf("normalized H3 PromptMaxChars = %d, want 2000", normalized.Video.References.PromptMaxChars)
+	}
+
+	// 非 H3 模型保持通用 1000，不被误抬。
+	other, err := NormalizeModelCapabilityConfigForModel("video", "newapi-channel-2", "some-other-model", legacy)
+	if err != nil {
+		t.Fatalf("NormalizeModelCapabilityConfigForModel(other) error = %v", err)
+	}
+	if other.Video.References.PromptMaxChars != 1000 {
+		t.Fatalf("non-H3 PromptMaxChars = %d, want 1000", other.Video.References.PromptMaxChars)
+	}
+}
+
 func TestDefaultVolcengineArkVideoCapabilitySupportsFullModalReference(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-260128")
 	if profile == nil || profile.Video == nil {

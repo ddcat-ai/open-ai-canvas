@@ -262,13 +262,28 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 // 不会继续把 768p 挡在生成下拉之外。
 const RELAY_PROTOCOLS = ["newapi", "newapi-channel-1", "newapi-channel-2"] as const;
 const HAILUO_H3_RESOLUTIONS = ["768p", "1080p"] as const;
+const HAILUO_H3_NAME_PATTERN = /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/;
+// 海螺 H3 官方 prompt 上限为 2000 字符（Leonardo.AI / APIDot 等渠道文档明确）；
+// 本地历史通用视频默认 1000 偏低，会误拦分镜工作流自动生成的长提示词（常超 1000）。
+const HAILUO_H3_PROMPT_MAX_CHARS = 2000;
+
+// 仅按模型名识别海螺 H3（不关心协议），供请求路由与档位推断在渠道/模型未标注
+// 协议时兜底复用。
+export function isHailuoH3Model(model: string): boolean {
+    return HAILUO_H3_NAME_PATTERN.test(model.trim().toLowerCase());
+}
 
 export function isHailuoH3ViaRelay(protocol: ModelProtocol | undefined, model: string): boolean {
-    const normalizedModel = model.trim().toLowerCase();
-    return (
-        (RELAY_PROTOCOLS as readonly string[]).includes(protocol ?? "") &&
-        /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/.test(normalizedModel)
-    );
+    return (RELAY_PROTOCOLS as readonly string[]).includes(protocol ?? "") && isHailuoH3Model(model);
+}
+
+// H3 档位判定：经 NewAPI 中转（协议明确为中转）或未标注协议时都按 768p/1080p 处理。
+// 未标注协议（渠道未选 Provider、模型未单独标协议）时，模型名 minimax_h3 已强烈暗示
+// 是海螺 H3，且默认按 NewAPI 中转处理（该模型最常见的接法），避免落到通用
+// 480p..2160p 档位、漏掉 768p。原生 MiniMax 协议（minimax-video）走自己的 768P/2K 档位，
+// 不受此影响。
+function shouldUseHailuoH3Resolutions(protocol: ModelProtocol | undefined, model: string): boolean {
+    return isHailuoH3ViaRelay(protocol, model) || (!protocol && isHailuoH3Model(model));
 }
 
 // 仅当协议/模型真实只支持某组档位时（H3 经中转 = 768p/1080p），把已固化配置里
@@ -276,7 +291,7 @@ export function isHailuoH3ViaRelay(protocol: ModelProtocol | undefined, model: s
 // 规则：保存列表里只要混入任一非权威档位（如通用基线里的 720p/480p），说明它是过期
 // 快照，直接回落权威档位；若已是权威档位的子集（用户刻意收窄），则保留其选择。
 function reconcileSavedResolutions(protocol: ModelProtocol | undefined, model: string, video: VideoCapabilityConfig): VideoCapabilityConfig {
-    if (!isHailuoH3ViaRelay(protocol, model)) return video;
+    if (!shouldUseHailuoH3Resolutions(protocol, model)) return video;
     const authoritative = HAILUO_H3_RESOLUTIONS;
     const saved = (video.resolutions || []).map(normalizeCapabilityString).filter(Boolean);
     const hasInvalidTier = saved.some((value) => !(authoritative as readonly string[]).includes(value));
@@ -378,11 +393,12 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     // wrongly ships 720p, which upstream rejects with "unsupported H3
     // resolution". Pin the relay config to 768p/1080p and default to 768p so
     // longer shots (up to 15s) stay valid; 1080p/2K caps at ~8s.
-    if (isHailuoH3ViaRelay(protocol, model)) {
+    if (shouldUseHailuoH3Resolutions(protocol, model)) {
         video.references.maxImages = 9;
         video.references.maxVideos = 3;
         video.references.maxVideoDurationSeconds = 15;
         video.references.maxVideoBytes = 200 * 1024 * 1024;
+        video.references.promptMaxChars = HAILUO_H3_PROMPT_MAX_CHARS;
         video.duration = { selection: "enum", values: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], default: 6 };
         video.ratios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
         video.resolutions = ["768p", "1080p"];
@@ -429,6 +445,11 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     // 避免 UI 提供模型根本不支持、会被上游拒收的分辨率。
     const mergedVideo = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video!;
     const video = reconcileSavedResolutions(protocol, modelName, mergedVideo);
+    // 已固化的 capabilityConfig 里同样残留着通用视频默认的 promptMaxChars=1000，
+    // 而海螺 H3 官方上限是 2000。对 H3 强制抬到 2000，避免误拦自动生成的长分镜提示词。
+    if (shouldUseHailuoH3Resolutions(protocol, modelName)) {
+        video.references = { ...video.references, promptMaxChars: HAILUO_H3_PROMPT_MAX_CHARS };
+    }
     const configuredImage = capabilityConfig.image;
     const image = configuredImage
         ? (() => {

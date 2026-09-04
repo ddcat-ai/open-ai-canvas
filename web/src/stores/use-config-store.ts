@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
-import { workflowFieldRole, workflowFieldSafeToOverride, workflowVideoFieldsFromJson, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { isHailuoH3Model, workflowFieldRole, workflowFieldSafeToOverride, workflowVideoFieldsFromJson, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CapabilitySpec, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
 
@@ -498,6 +498,8 @@ function isVideoModelName(model: string) {
         value.includes("ltx-video") ||
         value.includes("ltxvideo") ||
         value.includes("minimax-video") ||
+        value.includes("minimax-h3") ||
+        value.includes("minimax_h3") ||
         value.includes("abab-video")
     );
 }
@@ -853,7 +855,11 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
     const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
-    const interfaceType = modelProtocol || channel.interfaceType;
+    // 海螺 H3（minimax_h3 / MiniMax-H3 等）经 OpenAI 兼容端点只能走 NewAPI 中转；
+    // 当渠道未选 Provider、模型也未单独标协议时，默认按 newapi-channel-2 处理，
+    // 让请求体走 duration 整型分支，而不是通用 multipart seconds 分支（会被上游拒收）。
+    const inferredProtocol = !modelProtocol && !channel.interfaceType && isHailuoH3Model(model) ? "newapi-channel-2" : undefined;
+    const interfaceType = modelProtocol || channel.interfaceType || inferredProtocol;
     return {
         ...config,
         model,
