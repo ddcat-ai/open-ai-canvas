@@ -180,7 +180,10 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 	}
 	src := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
 	switch probeVideoCodec(src) {
-	case videoCodecH265:
+	case videoCodecH265, videoCodecMPEG4:
+		// H.265 与 MPEG-4 Part 2（mp4v）Chromium/Firefox/Edge 均不能解码：
+		// H.265 需转 H.264；MPEG-4 Part 2 浏览器不支持，老式/损坏文件只能转码兜底
+		// （转码失败会落 failed，前端据此显示终止性错误，不再出现死循环）。
 		// 原子抢占（空/none → processing）：并发上传 + 回填、多实例同抢时
 		// 仅一个能成功置位，其余直接返回，避免重复转码。
 		claimed, err := s.repo.ClaimPlaybackTranscode(resource.ID)
@@ -189,9 +192,10 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 		}
 		resource.PlaybackStatus = model.PlaybackStatusProcessing
 		go s.runPlaybackTranscode(resource.UserID, resource.ID, src)
-	case videoCodecH264, videoCodecAV1, videoCodecVP9, videoCodecMPEG4, "":
-		// H.264 浏览器可直接解码；AV1/VP9/MPEG4 暂不转码；探针读不出编码（非 mp4 /
-		// moov 在尾部 / 加密容器）也无法处理 —— 均标 none，避免重复探测与前端无限轮询。
+	case videoCodecH264, videoCodecAV1, videoCodecVP9, "":
+		// H.264 浏览器可直接解码；AV1/VP9 现代浏览器可直接解码，均不需转码；
+		// 探针读不出编码（非 mp4 / moov 在尾部 / 加密容器）也无法处理 —— 均标 none，
+		// 避免重复探测与前端无限轮询。
 		markPlaybackNone(s, resource)
 	}
 }

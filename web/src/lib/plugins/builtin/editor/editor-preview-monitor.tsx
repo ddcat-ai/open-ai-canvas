@@ -138,11 +138,15 @@ export function EditorPreviewMonitor() {
     const [mediaTier, setMediaTier] = useState<"primary" | "variant">("primary");
     const [variantReadyTick, setVariantReadyTick] = useState(0);
     const [mediaErrorHint, setMediaErrorHint] = useState<string | null>(null);
+    // 终态护栏：none/failed/超时/不可达后禁止再回退 primary 重试或覆盖终态文案。
+    // 否则原件不可解码且后端无副本可生成时会 primary→variant→primary 无限循环。
+    const mediaTerminalRef = useRef(false);
 
     useEffect(() => {
         setMediaTier("primary");
         setVariantReadyTick(0);
         setMediaErrorHint(null);
+        mediaTerminalRef.current = false;
     }, [activeClip?.id, storageKey, activeMediaUrl]);
 
     useEffect(() => {
@@ -159,16 +163,19 @@ export function EditorPreviewMonitor() {
                     setVariantReadyTick((n) => n + 1);
                     window.clearInterval(timer);
                 } else if (res.playbackStatus === "failed") {
+                    mediaTerminalRef.current = true;
                     setMediaErrorHint("兼容副本生成失败，可下载原片后用本地播放器观看。");
                     window.clearInterval(timer);
                 } else if (res.playbackStatus === "none") {
-                    // 后端判定无需转码（远端存储/无 ffmpeg/编码不可处理）：无副本可等，
-                    // 停轮询回到原件原生播放，避免"正在生成"永挂。
-                    setMediaTier("primary");
-                    setMediaErrorHint(null);
+                    // 后端判定无播放副本可生成（远端存储/无 ffmpeg/编码不可处理）。
+                    // 原件此刻必然已 onError 失败才进入 variant 轮询，回退 primary 只会
+                    // 再次失败并切回 variant，形成无限循环 —— 直接进入终态提示并停轮询。
+                    mediaTerminalRef.current = true;
+                    setMediaErrorHint("视频编码此浏览器暂不支持，且无可生成的兼容副本；可下载原片转换格式后重新导入。");
                     window.clearInterval(timer);
                 } else if ((polls += 1) >= 120) {
                     // processing 上限保护（约 5 分钟）：转码异常卡死时不再无限轮询。
+                    mediaTerminalRef.current = true;
                     setMediaErrorHint("兼容版本生成超时，可下载原片后用本地播放器观看。");
                     window.clearInterval(timer);
                 } else {
@@ -179,6 +186,7 @@ export function EditorPreviewMonitor() {
                 if (cancelled) return;
                 failures += 1;
                 if (failures >= 4) {
+                    mediaTerminalRef.current = true;
                     window.clearInterval(timer);
                     setMediaErrorHint("兼容版本生成服务暂不可达，请稍后重新打开预览重试。");
                 }
@@ -191,9 +199,12 @@ export function EditorPreviewMonitor() {
     }, [mediaTier, mediaResourceId]);
 
     const handleMediaError = () => {
+        // 已进入终态（副本生成失败/无副本可生成/超时/服务不可达）：保持终态文案，
+        // 不再改写为"正在生成"或回退重试 —— 副本 URL 在 failed/none 时会回退原件，
+        // 反复 onError 会把失败提示覆盖成误导性的"正在生成兼容版本"。
+        if (mediaTerminalRef.current) return;
         // 图片/无资源：无播放副本可切，仅提示。
         if (activeClip?.kind !== "video" || !mediaResourceId) {
-            setMediaErrorHint("该媒体无法解码，可下载原片后用本地播放器观看。");
             return;
         }
         if (mediaTier === "primary") {
