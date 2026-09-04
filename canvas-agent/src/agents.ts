@@ -161,10 +161,10 @@ export function runWorkBuddyTurn(
     }
     if (!child) return;
     emit("agent_log", { text: `[workbuddy] spawn codebuddy model=${WORKBUDDY_MODEL} resume=${options.resumeSessionId ? "yes" : "no"}` });
-    pipeWorkBuddyEvents(child, emit, options.onSessionId);
+    pipeWorkBuddyEvents(child, emit, options.onSessionId, Boolean(options.resumeSessionId));
 }
 
-function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId?: (sessionId: string) => void) {
+function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId: ((sessionId: string) => void) | undefined, workbuddyResumeFlag: boolean) {
     let out = "";
     let sessionReported = false;
     child.stdout?.on("data", (chunk) => {
@@ -201,13 +201,21 @@ function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId?:
             if (type === "result") {
                 const failed = event.is_error === true || event.subtype !== "success";
                 const finalText = String(event.result || "");
-                if (!failed && finalText) {
-                    const id = String(event.uuid || sessionId || "workbuddy");
-                    emit("agent_event", { agent: "workbuddy", type: "item.completed", item: { id, type: "agent_message", text: finalText } });
-                }
                 const usage = (event.usage && typeof event.usage === "object" ? event.usage : {}) as Record<string, unknown>;
                 const input = Number(usage.input_tokens) || 0;
                 const output = Number(usage.output_tokens) || 0;
+                if (!failed && finalText) {
+                    const id = String(event.uuid || sessionId || "workbuddy");
+                    // usage 挂在 item.completed 上，前端 usageText(event) 会把它渲染成消息 meta（"输入/输出 tok"）
+                    emit("agent_event", { agent: "workbuddy", type: "item.completed", item: { id, type: "agent_message", text: finalText }, usage: { total_tokens: input + output, input_tokens: input, output_tokens: output } });
+                }
+                // PATCH(agent-workbuddy-usage-ledger): 每轮消耗落本地 JSONL 台账，主人可随时查总量
+                if (input > 0 || output > 0) {
+                    void fs.appendFile(
+                        path.join(CONFIG_DIR, "workbuddy-usage.jsonl"),
+                        JSON.stringify({ time: new Date().toISOString(), agent: "workbuddy", model: WORKBUDDY_MODEL, resumed: Boolean(workbuddyResumeFlag), session_id: sessionId || undefined, input_tokens: input, output_tokens: output }),
+                    ).catch(() => undefined);
+                }
                 if (failed) {
                     emit("agent_event", { agent: "workbuddy", type: "turn.failed", error: { message: finalText || `codebuddy 执行失败（${String(event.subtype || "unknown")}）` } });
                 } else {
