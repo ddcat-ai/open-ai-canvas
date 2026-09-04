@@ -264,6 +264,7 @@ export function EditorAssetIngest() {
             });
             const skipped = media.length - toImport.length;
             // 逐文件导入：单文件失败不中断整批，汇总失败数提示。
+            const linkedIds: string[] = [];
             for (const { file, kind } of toImport) {
                 try {
                     // 上传前探测真实时长（视频/音频），随 meta 入库供时间线片段使用。
@@ -291,6 +292,7 @@ export function EditorAssetIngest() {
                         continue;
                     }
                     okCount += 1;
+                    linkedIds.push(resource.id);
                 } catch (err) {
                     failedNames.push(file.name);
                     const detail = extractApiMessage(err);
@@ -298,7 +300,12 @@ export function EditorAssetIngest() {
                 }
             }
             if (okCount > 0) {
-                await refreshAssets();
+                // 刷新后校验本次挂载的素材是否都出现在列表里；若单次刷新因网络抖动
+                // 或后端提交延迟而拿不到最新结果，立即再刷新一次，避免列表停留在旧快照。
+                const firstList = await refreshAssets();
+                if (firstList && linkedIds.some((id) => !firstList.some((asset) => asset.id === id))) {
+                    await refreshAssets();
+                }
                 setImportNote(skipped > 0 ? `已导入 ${okCount} 个，跳过 ${skipped} 个重复文件` : `已导入 ${okCount} 个媒体`);
             } else if (skipped > 0 && failedNames.length === 0) {
                 setImportNote(`媒体库中已有同名素材，跳过 ${skipped} 个重复文件`);

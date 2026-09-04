@@ -11,7 +11,25 @@
 // - 静音跟随所在音频/视频轨道（muted），不再硬编码 muted（否则"有声音"永远不成立）。
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, Film, Gauge, Pause, Play, SkipBack, SkipForward, StepBack, StepForward } from "lucide-react";
+import {
+    AlertTriangle,
+    Captions,
+    ChevronDown,
+    Download,
+    Film,
+    Gauge,
+    Image as ImageIcon,
+    LoaderCircle,
+    Pause,
+    Play,
+    SkipBack,
+    SkipForward,
+    StepBack,
+    StepForward,
+    Type,
+    Video,
+    Volume2,
+} from "lucide-react";
 
 import { useEditorStoreContext } from "@/components/editor/editor-context";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
@@ -65,6 +83,31 @@ function useClipMediaUrl(clip: TimelineClip | null): string | null {
 /** clip 内部当前应播放的源时间（毫秒）：transport 相对 clip 起点 + 源起点偏移。 */
 function clipSourceTimeMs(clip: TimelineClip, transportMs: number): number {
     return Math.max(0, transportMs - clip.startMs + (clip.sourceStartMs ?? 0));
+}
+
+function clipKindLabel(kind: TimelineClip["kind"]): string {
+    switch (kind) {
+        case "video":
+            return "视频";
+        case "image":
+            return "图片";
+        case "audio":
+            return "音频";
+        case "subtitle":
+            return "字幕";
+        case "text":
+            return "文字";
+    }
+}
+
+function clipDisplayTitle(clip: TimelineClip): string {
+    return clip.directMedia?.title || clip.title || clip.text || clip.nodeId || clip.id;
+}
+
+function ClipKindIcon({ kind, className }: { kind: TimelineClip["kind"]; className?: string }) {
+    const Icon =
+        kind === "video" ? Video : kind === "image" ? ImageIcon : kind === "audio" ? Volume2 : kind === "subtitle" ? Captions : Type;
+    return <Icon className={className} />;
 }
 
 export function EditorPreviewMonitor() {
@@ -351,6 +394,52 @@ export function EditorPreviewMonitor() {
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--director-sequencer-surface)]">
+            {/* 顶部信息条：媒体标题/元数据常驻在画面外的标题栏，不再悬浮遮挡画面内容 */}
+            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {activeClip ? (
+                        <>
+                            <ClipKindIcon kind={activeClip.kind} className="size-3.5 shrink-0 text-[var(--director-dock-fg)]/55" />
+                            <span className="truncate text-xs font-medium text-[var(--director-dock-fg-strong)]" title={clipDisplayTitle(activeClip)}>
+                                {clipDisplayTitle(activeClip)}
+                            </span>
+                            <span className="hidden shrink-0 rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--director-dock-fg)]/85 sm:inline-flex">
+                                {clipKindLabel(activeClip.kind)}
+                            </span>
+                            {activeTrack && (
+                                <span className="hidden shrink-0 rounded-full border border-[var(--director-sequencer-border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--director-dock-fg)]/55 md:inline-flex">
+                                    {activeTrack.label}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="truncate text-xs text-[var(--director-dock-fg)]/40">预览监视器</span>
+                    )}
+                </div>
+                {mediaErrorHint && (
+                    <span
+                        title={mediaErrorHint}
+                        className="flex min-w-0 max-w-[42%] items-center gap-1.5 rounded-md bg-[var(--director-danger)]/10 px-2 py-1 text-[11px] text-[var(--director-danger)]"
+                    >
+                        {mediaErrorHint.includes("正在生成") ? (
+                            <LoaderCircle className="size-3 shrink-0 animate-spin" />
+                        ) : (
+                            <AlertTriangle className="size-3 shrink-0" />
+                        )}
+                        <span className="truncate">{mediaErrorHint}</span>
+                        {mediaResourceId && (
+                            <a
+                                href={resourceFileUrl(mediaResourceId)}
+                                download
+                                title="下载原片，用本地播放器观看"
+                                className="grid size-4 shrink-0 place-items-center rounded hover:bg-[var(--director-danger)]/15"
+                            >
+                                <Download className="size-3" />
+                            </a>
+                        )}
+                    </span>
+                )}
+            </div>
             {/* 预览画面：恒黑舞台，占满控制条以上剩余空间（Concat 监视器风格） */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
                 {showEmpty ? (
@@ -388,25 +477,6 @@ export function EditorPreviewMonitor() {
                         onError={handleMediaError}
                     />
                 ) : null}
-                {mediaErrorHint && (
-                    <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-black/70 px-4 py-3 backdrop-blur">
-                        <p className="text-xs leading-relaxed text-white/90">{mediaErrorHint}</p>
-                        {mediaResourceId && (
-                            <a
-                                href={resourceFileUrl(mediaResourceId)}
-                                download
-                                className="text-[11px] underline decoration-white/40 underline-offset-2 text-white/70 hover:text-white"
-                            >
-                                下载原片用本地播放器观看
-                            </a>
-                        )}
-                    </div>
-                )}
-                {activeClip && (
-                    <div className="absolute left-4 top-4 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white/90 backdrop-blur">
-                        {activeClip.nodeId || activeClip.id} · {activeClip.kind}
-                    </div>
-                )}
             </div>
 
             {/* 播放控制条：画面下方的独立一行（Concat 布局），不悬浮叠加、无进度条；

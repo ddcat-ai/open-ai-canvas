@@ -532,6 +532,7 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
     const intervalMs = options?.intervalMs || 2000;
     let lastTask = options?.initialTask;
     let lastQueryError: unknown;
+    let consecutiveFailures = 0;
     try {
         while (Date.now() - startedAt < (options?.timeoutMs || taskWaitTimeoutMs(lastTask))) {
             if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -540,9 +541,16 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
                 task = await queryGenerationTask(id, { signal: options?.signal });
                 lastTask = task;
                 lastQueryError = undefined;
+                consecutiveFailures = 0;
                 options?.onTaskUpdate?.(task);
             } catch (error) {
                 lastQueryError = error;
+                consecutiveFailures += 1;
+                // 连续失败说明查询通道已不可用，继续轮询只会空转到整体超时；
+                // 保留少量容忍度（约 10 秒）以跳过瞬时抖动后直接报错，便于用户尽早处理。
+                if (consecutiveFailures >= 5) {
+                    throw error instanceof Error ? error : new Error(String(error));
+                }
                 await delay(intervalMs, options?.signal);
                 continue;
             }

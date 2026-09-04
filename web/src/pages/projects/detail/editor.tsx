@@ -269,11 +269,14 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
     const [timelineH, setTimelineH] = useState(240);
     const splitterRef = useRef<{ startY: number; startH: number } | null>(null);
 
-    const refreshAssets = async () => {
+    const refreshAssets = async (): Promise<ProjectAsset[] | null> => {
         try {
-            setAssets((await listProjectAssets(projectId)).assets);
+            const list = (await listProjectAssets(projectId)).assets;
+            setAssets(list);
+            return list;
         } catch {
-            // 刷新失败保留现有列表；导入面板内联提示错误
+            // 刷新失败保留现有列表；调用方可据此决定是否重试
+            return null;
         }
     };
 
@@ -293,6 +296,19 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
 
     const scope = getActiveUserScope();
     const projectId = detail.project.id;
+
+    // 挂载/切换项目时以服务端为准同步一次资产：detail.assets 只是详情页快照，
+    // 上个会话导入但详情未携带（或导入后未刷新）的素材会在进入编辑器后补现。
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            const list = await refreshAssets();
+            if (!cancelled && list) setAssets(list);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId]);
 
     const store = useState(() =>
         createEditorStore({

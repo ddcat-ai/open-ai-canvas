@@ -278,6 +278,7 @@ export type ProjectOverviewMetrics = {
     readyStoryboardCount: number;
     readyPrevizCount: number;
     readyVideoCount: number;
+    renderSucceededCount: number;
     staleArtifactCount: number;
 };
 

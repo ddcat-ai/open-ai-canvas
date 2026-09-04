@@ -159,3 +159,39 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/components/canvas/canvas-zoom-controls.tsx`：底部视图控制 Dock 与“自动整理节点”入口。
 - `web/src/pages/canvas/use-canvas-node-operations.ts`：候选节点筛选、流程/网格布局选择和位置提交。
 - `web/src/lib/canvas/canvas-layout.ts`：媒体泳道、拓扑流程、网格、行列排列和对齐算法。
+
+## 剪辑成片（时间线编辑器）
+
+“剪辑成片”是项目详情里的时间线编辑器入口（`/projects/:id/editor`），用于把已就绪的分镜视频编排成一段可播放、可导出的成片。它运行在浏览器本地时间线模型之上，通过后端任务队列完成语音转写与成片导出，编辑器本身不直接触碰原始媒体大文件。
+
+### 使用入口
+
+- 项目详情“制作流程 → 剪辑成片”步骤卡，或地址栏直接访问 `/projects/:id/editor`。
+- 编辑器按项目隔离时间线状态；离开后再次进入会恢复该项目的编辑器快照。
+
+### 当前能力
+
+- **轨道与命令**：时间线支持添加、删除、拆分、移动、修剪片段等操作，全部通过统一命令状态机执行并进入 200 层历史记录，可撤销与重做；非法操作整批拒绝，不产生半应用状态。
+- **预设面板**：左侧“添加”分类提供 8 个内置片段/字幕插件，按分类分组接入同一插槽注册链，第三方插件可与内置面板共存。
+- **权限与执行边界**：命令执行遵循失败关闭（fail-closed）策略，`timeline.command` 权限与全局 `plugins.run` 权限分开控制；未授权插件或命令不会被执行或回显。
+- **语音转写（字幕）**：对时间线音视频发起转写任务，转写进度沿任务 SSE 回流，完成后生成字幕轨。
+- **成片导出（渲染）**：发起渲染任务，由服务端 ffmpeg 按渲染计划输出成片；渲染成功后在项目概览的“剪辑成片”步骤卡呈现“已输出 N 个成片”，并作为该步骤完成度的判定依据。
+- **AI 编辑助手**：可以用自然语言描述剪辑意图，系统将其解析为受支持的命令序列；不超过 3 条命令时直接执行，多于 3 条先给出差异预览，确认后才批量执行。
+
+### 运行环境要求
+
+- 语音转写依赖本地 whisper.cpp 服务（`CANVAS_WHISPER_BASE_URL`），未配置时转写任务明确失败。
+- 成片导出依赖服务端 ffmpeg（`CANVAS_FFMPEG_PATH`，留空时在 PATH 中查找）。
+- AI 编辑助手需要可用的文本模型渠道。
+
+### 相关实现
+
+- `web/src/pages/projects/detail/editor.tsx`、`web/src/pages/projects/detail.tsx`：编辑器页面与路由入口。
+- `web/src/pages/projects/detail/overview.tsx`：制作流程步骤卡与成片完成度展示。
+- `web/src/lib/timeline/`：时间线命令状态机、历史记录、命令 schema 与摘要（`editor-commands.ts`、`editor-history.ts`、`ai-command-schema.ts`、`timeline-summary.ts`）。
+- `web/src/stores/editor/editor-store.ts`：编辑器状态与快照持久化。
+- `web/src/lib/plugins/editor-slot-registry.ts`、`web/src/lib/plugins/builtin/editor/`：插槽注册链与内置预设插件。
+- `web/src/lib/plugins/plugin-permission-check.ts`：命令执行权限与失败关闭策略。
+- `web/src/services/api/timeline-tasks.ts`：转写与渲染任务客户端。
+- `backend/internal/service/task_timeline.go`、`task_render.go`、`timeline_render_plan.go`、`transcription_whisper.go`：后端转写、渲染与渲染计划任务。
+- `backend/internal/repository/project_workbench_read.go`：项目概览指标聚合（含成片完成度计数）。

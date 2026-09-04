@@ -121,6 +121,33 @@ func TestProjectOverviewUsesAggregatesWithoutLoadingProjectCollections(t *testin
 	}
 }
 
+func TestProjectOverviewCountsSucceededTimelineRenders(t *testing.T) {
+	service, db := newProjectWorkbenchReadTestService(t)
+	project := seedWorkbenchProject(t, db)
+	for index := 0; index < 2; index++ {
+		task := model.Task{ID: fmt.Sprintf("render-%02d", index), UserID: "user-1", ProjectID: project.ID, Type: model.TaskTypeTimelineRender, Status: model.TaskStatusSucceeded}
+		if err := db.Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	distractors := []model.Task{
+		{ID: "render-failed", UserID: "user-1", ProjectID: project.ID, Type: model.TaskTypeTimelineRender, Status: model.TaskStatusFailed},
+		{ID: "transcribe-ok", UserID: "user-1", ProjectID: project.ID, Type: model.TaskTypeTimelineTranscription, Status: model.TaskStatusSucceeded},
+	}
+	for _, task := range distractors {
+		if err := db.Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	overview, err := service.ProjectOverview("user-1", project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.Metrics.RenderSucceededCount != 2 {
+		t.Fatalf("render succeeded count = %d, want 2", overview.Metrics.RenderSucceededCount)
+	}
+}
+
 func TestProjectUnitWorkspaceIsolatesShotsAndBoundAssetsByUnit(t *testing.T) {
 	service, db := newProjectWorkbenchReadTestService(t)
 	project := seedWorkbenchProject(t, db)
