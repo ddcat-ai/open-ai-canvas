@@ -1097,8 +1097,13 @@ function AssetCard({
     );
 }
 
+function isKnownAssetKind(kind: unknown): kind is AssetKind {
+    return kind === "image" || kind === "video" || kind === "audio" || kind === "model" || kind === "text";
+}
+
 function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuItems }: { asset: LibraryAsset; selected: boolean; isTrash?: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; menuItems: MenuProps["items"] }) {
-    const KindIcon = assetKindIcons[asset.kind];
+    const kind = isKnownAssetKind(asset.kind) ? asset.kind : undefined;
+    const KindIcon = kind ? assetKindIcons[kind] : FileText;
     const clock = asset.kind === "video" || asset.kind === "audio" ? formatAssetClock(asset.data.durationMs) : null;
     const showPlay = asset.kind === "video";
     const isLight = asset.kind === "audio" || asset.kind === "text" || asset.kind === "model";
@@ -1133,7 +1138,7 @@ function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuIt
             <span className="assets-cover-badges">
                 <span className="assets-cover-badge is-kind">
                     <KindIcon />
-                    {assetKindLabel(asset.kind)}
+                    {kind ? assetKindLabel(kind) : "素材"}
                 </span>
                 {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
             </span>
@@ -1320,7 +1325,8 @@ function AssetFilterGroup({
 
 function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAsset | null; onClose: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void }) {
     const facts = asset ? assetArchiveFacts(asset) : [];
-    const KindIcon = asset ? assetKindIcons[asset.kind] : Clapperboard;
+    const kind = asset && isKnownAssetKind(asset.kind) ? asset.kind : undefined;
+    const KindIcon = asset ? (kind ? assetKindIcons[kind] : FileText) : Clapperboard;
     return (
         <Drawer className="library-drawer" title="素材档案" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
