@@ -356,7 +356,18 @@ export function pluginWorkflowCapabilityConfig(protocol: ModelProtocol, workflow
     if (workflow.capability === "image") {
         return { ...fallback, image: workflowImageCapabilityConfig(fields, fallback.image!) };
     }
-    return { ...fallback, video: workflowVideoCapabilityConfig(fields, fallback.video!) };
+    const video = workflowVideoCapabilityConfig(fields, fallback.video!);
+    if (workflow.references) {
+        video.references = {
+            ...video.references,
+            ...Object.fromEntries(Object.entries(workflow.references).filter(([, value]) => typeof value === "number" && Number.isFinite(value))),
+        };
+    }
+    if (workflow.operations?.length) {
+        video.operations = [...workflow.operations];
+        video.defaultOperation = workflow.operations[0] || video.defaultOperation;
+    }
+    return { ...fallback, video };
 }
 
 export function resolveModelProtocolPreset(protocol: ModelProtocol, model: string, definitions: ModelProtocolDefinition[]): ResolvedModelProtocolPreset {

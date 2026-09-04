@@ -1,5 +1,5 @@
-import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
-import { modelProtocolCapability, protocolForModelCatalog, type ModelProtocol } from "@/lib/model-protocols";
+import { defaultModelCapabilityConfig, pluginWorkflowCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { modelProtocolCapability, protocolForModelCatalog, type ModelProtocol, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ModelChannel } from "@/stores/use-config-store";
 
 export type ChannelModelCatalogOption = { value: string; label?: string };
@@ -25,6 +25,54 @@ export type ChannelModelCatalogItem = {
 };
 
 type ChannelModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
+
+export function mergePluginWorkflowModelCosts(channel: ModelChannel, provider: ModelProtocolDefinition): ChannelModelCost[] {
+    const workflows = provider.workflows || [];
+    if (!workflows.length) return channel.modelCosts || [];
+    const workflowById = new Map(workflows.map((workflow) => [workflow.id, workflow]));
+    const existingByModel = new Map((channel.modelCosts || []).map((cost) => [cost.model, cost]));
+    const next = (channel.modelCosts || []).map((cost) => {
+        const workflow = workflowById.get(cost.model);
+        if (!workflow) return cost;
+        return {
+            ...cost,
+            displayName: workflow.label || cost.displayName,
+            capability: workflow.capability,
+            protocol: provider.value,
+            capabilityConfig: pluginWorkflowCapabilityConfig(provider.value, workflow),
+            defaultOptions: workflow.defaults || cost.defaultOptions,
+        };
+    });
+    for (const model of channel.models) {
+        const workflow = workflowById.get(model);
+        if (!workflow || existingByModel.has(model)) continue;
+        next.push({
+            model,
+            displayName: workflow.label,
+            capability: workflow.capability,
+            protocol: provider.value,
+            billingMode: "fixed_request",
+            unitPriceMicrocredits: 0,
+            capabilityConfig: pluginWorkflowCapabilityConfig(provider.value, workflow),
+            defaultOptions: workflow.defaults,
+        });
+    }
+    return next;
+}
+
+export function syncPluginWorkflowModelCosts(channels: ModelChannel[], providers: ModelProtocolDefinition[]) {
+    const providerById = new Map(providers.map((provider) => [provider.value, provider]));
+    let changed = false;
+    const next = channels.map((channel) => {
+        const provider = providerById.get(channel.interfaceType || "");
+        if (!provider?.workflows?.length) return channel;
+        const modelCosts = mergePluginWorkflowModelCosts(channel, provider);
+        if (JSON.stringify(modelCosts) === JSON.stringify(channel.modelCosts || [])) return channel;
+        changed = true;
+        return { ...channel, modelCosts };
+    });
+    return { channels: next, changed };
+}
 
 export function sanitizeChannelModelCatalogItem(value: unknown): ChannelModelCatalogItem | null {
     if (!value || typeof value !== "object") return null;

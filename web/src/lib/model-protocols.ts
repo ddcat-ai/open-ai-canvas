@@ -1,6 +1,15 @@
 export type ModelProtocol = string;
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
-export type ModelProtocolWorkflow = { id: string; label: string; providerId: string; capability: ProtocolCapability; parameters: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>; defaults?: Record<string, string | number | boolean> };
+export type ModelProtocolWorkflow = {
+    id: string;
+    label: string;
+    providerId: string;
+    capability: ProtocolCapability;
+    parameters: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>;
+    defaults?: Record<string, string | number | boolean>;
+    operations?: string[];
+    references?: { minImages?: number; maxImages?: number; maxVideos?: number; maxAudios?: number };
+};
 export type ModelProtocolDefinition = { value: ModelProtocol; label: string; vendor?: string; capability: ProtocolCapability; create: string; contentType: string; poll?: string; media: string; enabled?: boolean; baseUrl?: string; workflows?: ModelProtocolWorkflow[] };
 
 export function protocolGroups(protocols: ModelProtocolDefinition[]) {

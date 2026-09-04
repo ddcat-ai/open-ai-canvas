@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 )
 
 // ModelCapabilityConfig 是模型能力声明，不包含供应商字段名；协议适配器负责把统一参数映射到上游请求。
@@ -304,6 +305,68 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		return nil, err
 	}
 	return value, nil
+}
+
+// applyPluginWorkflowCapabilityDeclaration projects the optional workflow
+// contract onto the stored capability profile without changing provider
+// routing or request execution. Explicit channel settings remain authoritative
+// for fields that the workflow does not declare.
+func (s *Service) applyPluginWorkflowCapabilityDeclaration(profile *ModelCapabilityConfig, providerID, workflowID string) *ModelCapabilityConfig {
+	if s == nil || profile == nil || profile.Video == nil || strings.TrimSpace(providerID) == "" || strings.TrimSpace(workflowID) == "" {
+		return profile
+	}
+	var declaration *protocol.ManifestWorkflow
+	for _, plugin := range s.Plugins() {
+		if plugin.Status != "enabled" {
+			continue
+		}
+		for index := range plugin.Manifest.Contributes.Workflows {
+			workflow := &plugin.Manifest.Contributes.Workflows[index]
+			if workflow.ProviderID == providerID && workflow.ID == workflowID && workflow.Capability == protocol.CapabilityVideo {
+				declaration = workflow
+				break
+			}
+		}
+		if declaration != nil {
+			break
+		}
+	}
+	if declaration == nil {
+		return profile
+	}
+	value := *profile
+	value.Video = cloneVideoCapabilityConfig(profile.Video)
+	if len(declaration.Operations) > 0 {
+		value.Video.Operations = append([]string(nil), declaration.Operations...)
+		value.Video.DefaultOperation = declaration.Operations[0]
+	}
+	if refs := declaration.References; refs != nil {
+		if refs.MinImages != nil {
+			value.Video.References.MinImages = *refs.MinImages
+		}
+		if refs.MaxImages != nil {
+			value.Video.References.MaxImages = *refs.MaxImages
+		}
+		if refs.MaxVideos != nil {
+			value.Video.References.MaxVideos = *refs.MaxVideos
+		}
+		if refs.MaxAudios != nil {
+			value.Video.References.MaxAudios = *refs.MaxAudios
+		}
+	}
+	return &value
+}
+
+func cloneVideoCapabilityConfig(profile *VideoCapabilityConfig) *VideoCapabilityConfig {
+	if profile == nil {
+		return nil
+	}
+	value := *profile
+	value.Operations = append([]string(nil), profile.Operations...)
+	value.Ratios = append([]string(nil), profile.Ratios...)
+	value.Resolutions = append([]string(nil), profile.Resolutions...)
+	value.Duration.Values = append([]int(nil), profile.Duration.Values...)
+	return &value
 }
 
 func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
@@ -622,6 +685,7 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 			}
 			profile = DefaultModelCapabilityConfigForModel(taskInput.Config.InterfaceType, taskInput.Config.Model)
 		}
+		profile = s.applyPluginWorkflowCapabilityDeclaration(profile, taskInput.Config.InterfaceType, taskInput.Config.Model)
 		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile)
 		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 			return BadAuthRequest("当前视频模型能力参数无效")
@@ -646,6 +710,7 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if err != nil || profile == nil || profile.Video == nil {
 		return BadAuthRequest("当前视频模型尚未配置能力参数")
 	}
+	profile = s.applyPluginWorkflowCapabilityDeclaration(profile, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey))
 	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile)
 	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 		return BadAuthRequest("当前视频模型能力参数无效")

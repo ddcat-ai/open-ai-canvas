@@ -112,6 +112,8 @@ describe("public channel model catalog", () => {
                 { name: "resolution", type: "string", mapping: "resolution", values: ["480p竖", "480p横"] },
             ],
             defaults: { duration: 5, resolution: "480p竖" },
+            operations: ["text_to_video"],
+            references: { maxImages: 0, maxVideos: 0, maxAudios: 0 },
         })!.video!;
 
         expect(profile.ratios).toEqual([]);
@@ -133,6 +135,24 @@ describe("public channel model catalog", () => {
             resolutions: ["480p竖", "768p竖", "480p横", "768p横"],
             defaultResolution: "768p竖",
         });
+    });
+
+    test("projects workflow reference limits and operations into video capability", () => {
+        const profile = pluginWorkflowCapabilityConfig("autodl-comfyui", {
+            id: "minimax_h3_lightx2v_v5",
+            label: "MiniMax H3 多图参考",
+            providerId: "autodl-comfyui",
+            capability: "video",
+            parameters: [{ name: "prompt", type: "string", mapping: "prompt" }],
+            operations: ["reference_to_video"],
+            references: { maxImages: 9, maxVideos: 0, maxAudios: 0 },
+        })!.video!;
+
+        expect(profile.operations).toEqual(["reference_to_video"]);
+        expect(profile.defaultOperation).toBe("reference_to_video");
+        expect(profile.references.maxImages).toBe(9);
+        expect(profile.references.maxVideos).toBe(0);
+        expect(profile.references.maxAudios).toBe(0);
     });
 
     test("restores AutoDL workflow parameters after switching through xAi Video", () => {

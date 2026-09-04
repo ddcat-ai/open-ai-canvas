@@ -3,11 +3,13 @@ import { useEffect, useRef } from "react";
 import { App } from "antd";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
+import { syncPluginWorkflowModelCosts } from "@/lib/channel-model-catalog";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-model-store";
 import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
 import { initializeClientDiagnostics, setDiagnosticUserScope } from "@/services/diagnostics/client-diagnostics";
 import { useUserStore } from "@/stores/use-user-store";
+import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
@@ -18,6 +20,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const replaceConfig = useConfigStore((state) => state.replaceConfig);
 
     useEffect(() => {
         initializeClientDiagnostics();
@@ -26,6 +29,20 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     useEffect(() => {
         setDiagnosticUserScope(userId);
     }, [userId]);
+
+    useEffect(() => {
+        if (!userId) return;
+        let active = true;
+        void fetchPluginProviderCatalog("user.custom-channel").then((catalog) => {
+            if (!active) return;
+            const current = useConfigStore.getState().config;
+            const synced = syncPluginWorkflowModelCosts(current.channels, catalog);
+            if (synced.changed) replaceConfig({ ...current, channels: synced.channels });
+        }).catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, [replaceConfig, userId]);
 
     useEffect(() => {
         const interactiveSelector = 'button, [role="button"], a, [class*="card"], [class*="Card"]';
