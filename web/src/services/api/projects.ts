@@ -480,7 +480,7 @@ export function unlinkCanvasProject(projectId: string, canvasId: string) {
     return request<{ canvasId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvases/${encodeURIComponent(canvasId)}`));
 }
 
-export function linkProjectAsset(projectId: string, input: { assetId: string; category: AssetCategory; folderId?: string; title?: string }, signal?: AbortSignal) {
+export function linkProjectAsset(projectId: string, input: { assetId: string; category: AssetCategory; folderId?: string; title?: string; source?: "uploaded" | "canvas" }, signal?: AbortSignal) {
     return request<{ asset: ProjectAsset }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets`, input, { signal }));
 }
 

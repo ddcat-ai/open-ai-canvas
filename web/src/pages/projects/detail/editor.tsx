@@ -15,8 +15,8 @@ import {
     X,
 } from "lucide-react";
 
-import type { ProjectAsset, ProjectDetail } from "@/services/api/projects";
-import { listProjectAssets } from "@/services/api/projects";
+import type { ProjectAsset, ProjectDetail, ShotArtifact } from "@/services/api/projects";
+import { linkProjectAsset, listProjectAssets } from "@/services/api/projects";
 import { useEditorSlots, type EditorSlotRegistration } from "@/lib/plugins/editor-slot-registry";
 import { pluginMayRenderEditorSlot } from "@/lib/plugins/plugin-permission-check";
 import { EditorStoreProvider } from "@/components/editor/editor-context";
@@ -333,6 +333,58 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
             void store.getState().flushSave?.().catch(() => {});
         };
     }, [scope, projectId, store]);
+
+    // 画布产物自动同步：detail.shotArtifacts 中当前采用(storyboard/action_board/
+    // 分镜/导出成片，且 ready + 有资源)尚未作为素材进本项目时，自动
+    // linkProjectAsset(source=canvas) 并入素材库 —— 剪辑器“素材选项”直接可用画布产物。
+    // 后端幂等(已链接直接返回)，失败静默，下次进入编辑器自动补同步；
+    // 已完成集合记录在 ref，避免同一会话重复请求。
+    const syncedCanvasResourcesRef = useRef<Set<string>>(new Set());
+    const canvasSyncKeys = detail.shotArtifacts
+        .filter(
+            (a): a is ShotArtifact & { resourceId: string } =>
+                a.selected &&
+                a.status === "ready" &&
+                !!a.resourceId &&
+                ["storyboard", "action_board", "start_frame", "end_frame", "video", "delivery"].includes(a.type),
+        )
+        .map((a) => `resource:${a.resourceId}`)
+        .join(",");
+    useEffect(() => {
+        if (!canvasSyncKeys) return;
+        const keys = canvasSyncKeys.split(",");
+        // 已同步过的(本会话 ref)或已存在于项目素材的(storageKey 命中)均跳过 ——
+        // storageKey 与 assetFromUploadedResource 合成格式一致(resource:<id>)。
+        const existing = new Set(assets.map((a) => a.storageKey));
+        const pending = keys.filter((key) => !syncedCanvasResourcesRef.current.has(key) && !existing.has(key));
+        if (!pending.length) return;
+        let cancelled = false;
+        void (async () => {
+            for (const key of pending) {
+                if (cancelled) break;
+                const resourceId = key.slice("resource:".length);
+                try {
+                    await linkProjectAsset(projectId, { assetId: resourceId, category: "material", source: "canvas" });
+                    syncedCanvasResourcesRef.current.add(key);
+                } catch {
+                    // 单个同步失败不阻塞其余；留待下次进入编辑器重试
+                }
+            }
+            if (!cancelled) {
+                // 直接拉取最新列表(setAssets 稳定)而非经 refreshAssets，
+                // 避免闭包依赖变化导致 effect 反复触发
+                try {
+                    const list = (await listProjectAssets(projectId)).assets;
+                    if (!cancelled) setAssets(list);
+                } catch {
+                    // 刷新失败保留现有列表，下次进入编辑器再同步
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [canvasSyncKeys, projectId, assets]);
 
     return (
         <EditorStoreProvider store={store} host={{ projectId, assets, refreshAssets }}>
