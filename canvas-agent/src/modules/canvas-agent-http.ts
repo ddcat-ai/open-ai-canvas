@@ -12,8 +12,10 @@ import {
     verifyCodexThreadWorkspace,
     withAgentPrompt,
 } from "../agents.js";
+import { runYingceTurn, yingceLlmEnabled } from "../yingce-llm.js";
 import { CanvasSession } from "../canvas-session.js";
 import {
+    AGENT_PROMPT,
     ensureCanvasWorkspace,
     updateCanvasWorkspace,
     type LocalRuntimeConfig,
@@ -31,6 +33,8 @@ export function createCanvasAgentHttpModule(
     session: CanvasAgentSession = new CanvasSession(),
 ): LocalRuntimeModule {
     const emit = (type: string, payload: unknown) => session.emitAll(type, payload);
+    /** 影策渠道的服务端会话历史（前端不传 history，按 canvasId 在此累积，最近 40 条） */
+    const yingceHistory = new Map<string, { role: "user" | "assistant"; content: string }[]>();
     const routes: LocalRuntimeProtectedRoute[] = [
         canvasRoute("GET", "/events", (req, res) => {
             session.openEvents(
@@ -117,6 +121,24 @@ export function createCanvasAgentHttpModule(
         }),
         canvasRoute("POST", "/agent/codex/turn", (req, res) => {
             const body = jsonRecord(req);
+            const prompt = withAgentPrompt(String(body.prompt || ""));
+            // 影策自有渠道优先：配了 YINGCE_AGENT_API_KEY 就走直连，不需要 Codex/Claude 登录态
+            if (yingceLlmEnabled()) {
+                const canvasKey = String(body.canvasId || "default");
+                const rawPrompt = String(body.prompt || "");
+                const history = [...(yingceHistory.get(canvasKey) || [])];
+                void runYingceTurn(rawPrompt, emit, {
+                    systemPrompt: AGENT_PROMPT,
+                    history,
+                }).then((result) => {
+                    const list = yingceHistory.get(canvasKey) || [];
+                    if (rawPrompt.trim()) list.push({ role: "user", content: rawPrompt.trim().slice(0, 24_000) });
+                    if (result.text.trim()) list.push({ role: "assistant", content: result.text.trim().slice(0, 24_000) });
+                    yingceHistory.set(canvasKey, list.slice(-40));
+                }).catch(() => undefined);
+                res.json({ ok: true, agent: "yingce" });
+                return;
+            }
             const attachments = Array.isArray(body.attachments)
                 ? body.attachments as AgentAttachment[]
                 : [];
@@ -133,7 +155,7 @@ export function createCanvasAgentHttpModule(
                     updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: threadId });
                 }
                 void runCodexTurn(
-                    withAgentPrompt(String(body.prompt || "")),
+                    prompt,
                     emit,
                     attachments,
                     {
