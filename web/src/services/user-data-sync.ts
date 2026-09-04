@@ -369,7 +369,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
                     message: "正在保存画布结构",
                 });
             }
-            await upsertRemoteCanvasProject(remotePayload);
+            await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
             acknowledgedProjects.set(source.id, source);
             if (total > 0) useSyncProgressStore.getState().setProjectProgress(source.id, null);
         } catch (error) {
@@ -512,4 +512,43 @@ function isLocalStorageKey(value: string) {
 function numberValue(value: unknown) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
+function sanitizeCanvasProjectForRemoteSync<T>(project: T): T {
+    if (!project || typeof project !== "object") return project;
+    const clone = { ...(project as Record<string, unknown>) };
+    if (Array.isArray(clone.chatSessions)) {
+        clone.chatSessions = clone.chatSessions.map((session) => {
+            if (!session || typeof session !== "object") return session;
+            const s = { ...(session as Record<string, unknown>) };
+            if (Array.isArray(s.messages)) {
+                s.messages = s.messages.map((message) => {
+                    if (!message || typeof message !== "object" || !message.detail) return message;
+                    const m = { ...(message as Record<string, unknown>) };
+                    if (m.detail && typeof m.detail === "object") {
+                        const d = { ...(m.detail as Record<string, unknown>) };
+                        if (Array.isArray(d.results)) {
+                            d.results = d.results.map((r) => {
+                                if (!r || typeof r !== "object") return r;
+                                const res = { ...(r as Record<string, unknown>) };
+                                if (res.result && typeof res.result === "object") {
+                                    const inner = { ...(res.result as Record<string, unknown>) };
+                                    if (inner.data && typeof inner.data === "object") {
+                                        const { snapshot: _s, before: _b, after: _a, ...restData } = inner.data as Record<string, unknown>;
+                                        inner.data = restData;
+                                    }
+                                    res.result = inner;
+                                }
+                                return res;
+                            });
+                        }
+                        m.detail = d;
+                    }
+                    return m;
+                });
+            }
+            return s;
+        });
+    }
+    return clone as T;
 }
