@@ -2,6 +2,7 @@ import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import type { ShotArtifact } from "@/services/api/projects";
 import { apiClient, request } from "@/services/api/request";
 
 // 与 task-center.ts 保持同样的别名惯例
@@ -763,4 +764,16 @@ export async function regenerateShot(projectId: string, shotId: string): Promise
         api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/regenerate`),
     );
     return payload.task;
+}
+
+/**
+ * 切换分镜「当前采用的版本」(W1-B-02)。
+ * selected 是版本指针而非状态：只改变下载/成片/时间线时长取哪一版，
+ * 不新增版本、不改产物状态、不重新生成。
+ */
+export async function selectShotArtifact(projectId: string, shotId: string, artifactId: string): Promise<ShotArtifact> {
+    const payload = await request<{ artifact: ShotArtifact }>(
+        api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/artifacts/${encodeURIComponent(artifactId)}/select`),
+    );
+    return payload.artifact;
 }

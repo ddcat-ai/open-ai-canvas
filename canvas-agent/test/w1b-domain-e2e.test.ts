@@ -162,6 +162,12 @@ const executors: Record<string, (input: Record<string, unknown>) => Promise<unkn
         const projectId = String(input.projectId || "");
         return api(`POST`, `/projects/${projectId}/shots/${String(input.shotId || "")}/regenerate`);
     },
+    project_select_artifact: async (input) => {
+        const projectId = String(input.projectId || "");
+        const shotId = String(input.shotId || "");
+        const artifactId = String(input.artifactId || "");
+        return api(`POST`, `/projects/${projectId}/shots/${shotId}/artifacts/${artifactId}/select`);
+    },
 };
 
 async function dispatch(frame: SseFrame) {
@@ -202,6 +208,13 @@ function fixtureLatestTask(shotId: string, taskId: string) {
         `conn.execute("INSERT INTO tasks (id, user_id, type, status, project_id, shot_id, prompt, operation, provider, model, input_json, attempts, error, completed_at, created_at, updated_at) VALUES (?, ?, 'canvas_video', 'succeeded', ?, ?, 'E2E fixture prompt', 'video', 'comfy', 'w1-e2e', ?, 1, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",`,
         `    (${JSON.stringify(taskId)}, ${JSON.stringify(userId)}, ${JSON.stringify(projectId)}, ${JSON.stringify(shotId)}, input_json))`,
         `conn.execute("UPDATE shots SET latest_task_id = ? WHERE id = ?", (${JSON.stringify(taskId)}, ${JSON.stringify(shotId)}))`,
+        // E5 前置：两个产物版本（v1 未选 / v2 选中），模拟「重新生成过一次」的镜头
+        `revision = conn.execute("SELECT current_revision_id FROM shots WHERE id = ?", (${JSON.stringify(shotId)},)).fetchone()[0]`,
+        `unit = conn.execute("SELECT unit_id FROM shots WHERE id = ?", (${JSON.stringify(shotId)},)).fetchone()[0]`,
+        `conn.execute("DELETE FROM shot_artifacts WHERE shot_id = ? AND id IN ('art-e2e-v1', 'art-e2e-v2')", (${JSON.stringify(shotId)},))`,
+        `conn.execute("INSERT INTO shot_artifacts (id, project_id, unit_id, shot_id, revision_id, task_id, type, version, resource_id, status, selected, provider, duration_ms, created_at, updated_at) VALUES ('art-e2e-v1', ?, ?, ?, ?, ?, 'video', 1, '', 'ready', 0, 'comfy', 5000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (${JSON.stringify(projectId)}, unit, ${JSON.stringify(shotId)}, revision, ${JSON.stringify(taskId)}))`,
+        `conn.execute("INSERT INTO shot_artifacts (id, project_id, unit_id, shot_id, revision_id, task_id, type, version, resource_id, status, selected, provider, duration_ms, created_at, updated_at) VALUES ('art-e2e-v2', ?, ?, ?, ?, ?, 'video', 2, '', 'ready', 1, 'comfy', 4600, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (${JSON.stringify(projectId)}, unit, ${JSON.stringify(shotId)}, revision, ${JSON.stringify(taskId)}))`,
+        `conn.execute("UPDATE shots SET latest_artifact_id = 'art-e2e-v2' WHERE id = ?", (${JSON.stringify(shotId)},))`,
         "conn.commit()",
         "conn.close()",
     ].join("\n");
@@ -332,6 +345,53 @@ test("E4 复读 getShot：latestTask 前移为新 Task，完成序指针语义�
     const timeline = await api<{ shots: Array<{ shotId: string; latestTaskId?: string }> }>(`GET`, `/projects/${projectId}/shots`);
     const entry = timeline.shots.find((item) => item.shotId === shotIds[1]);
     assert.equal(entry?.latestTaskId, "task-e2e-fixture", "完成序指针应保持旧已完成 Task（queued ≠ completed，F-25 语义）");
+});
+
+test("E5 selectArtifact：版本指针切换（同类型内唯一 true + 加速指针回写）", async () => {
+    // 前置：shotIds[1] 在 fixture 里有 v1(未选) / v2(已选) 两个版本
+    const before = (await session.callTool("project_get_shot", { shotId: shotIds[1] })) as {
+        artifacts: Array<{ id: string; version: number; selected?: boolean }>;
+    };
+    const v1 = before.artifacts.find((item) => item.version === 1);
+    const v2 = before.artifacts.find((item) => item.version === 2);
+    assert.ok(v1 && v2, "fixture 应提供两个版本");
+    assert.equal(v2!.selected, true, "前置：新版本应为当前采用版本");
+    assert.equal(v1!.selected, false, "前置：旧版本不应被选中");
+
+    // 切回 v1
+    const result = (await session.callTool("project_select_artifact", { shotId: shotIds[1], artifactId: v1!.id })) as {
+        artifact: { id: string; selected: boolean; version: number };
+    };
+    assert.equal(result.artifact.id, v1!.id);
+    assert.equal(result.artifact.selected, true, "selectArtifact 应把目标版本置为采用中");
+
+    // 复读校验：同类型内唯一 true（不能出现双 true）
+    const after = (await session.callTool("project_get_shot", { shotId: shotIds[1] })) as {
+        artifacts: Array<{ id: string; version: number; selected?: boolean }>;
+    };
+    const selectedList = after.artifacts.filter((item) => item.selected === true);
+    assert.equal(selectedList.length, 1, "同类型内必须恰好一个选中版本（版本指针语义）");
+    assert.equal(selectedList[0]?.id, v1!.id, "选中的应是被切换到的 v1");
+    assert.equal(after.artifacts.find((item) => item.version === 2)?.selected, false, "v2 应被清空选中态");
+
+    // 后端权威投影：shots.latest_artifact_id 必须同步回写
+    const timeline = await api<{ shots: Array<{ shotId: string; latestArtifactId?: string }> }>(`GET`, `/projects/${projectId}/shots`);
+    const entry = timeline.shots.find((item) => item.shotId === shotIds[1]);
+    assert.equal(entry?.latestArtifactId, v1!.id, "加速指针 latest_artifact_id 应与选中版本一致");
+});
+
+test("E6 selectArtifact 负例：产物不存在/不属于该分镜必须拒绝", async () => {
+    // 越权与串镜防护（D-024 归属校验的仓储层兜底）：不存在的产物必须报错，不得静默成功
+    await assert.rejects(
+        session.callTool("project_select_artifact", { shotId: shotIds[1], artifactId: "art-does-not-exist" }),
+    );
+    // 切换失败后，原选中态必须保持（事务回滚，不能留下零 true 的中间态）
+    const summary = (await session.callTool("project_get_shot", { shotId: shotIds[1] })) as {
+        artifacts: Array<{ id: string; version: number; selected?: boolean }>;
+    };
+    const selectedList = summary.artifacts.filter((item) => item.selected === true);
+    assert.equal(selectedList.length, 1, "失败的切换不得破坏原有选中态");
+    assert.equal(selectedList[0]?.version, 1, "应保持上一次成功切换后的 v1");
 });
 
 test("安全验收：写工具不得进入 read 名单（必须过 confirmation gate）", async () => {

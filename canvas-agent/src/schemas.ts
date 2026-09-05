@@ -55,6 +55,7 @@ export const toolNames = [
     "project_get_shot",
     "project_retry_shot",
     "project_regenerate_shot",
+    "project_select_artifact",
 ] as const;
 export type ToolName = (typeof toolNames)[number];
 
@@ -169,6 +170,7 @@ export const toolInputSchemas = {
     project_get_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
     project_retry_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), taskId: z.string().min(1).optional() }),
     project_regenerate_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
+    project_select_artifact: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), artifactId: z.string().min(1) }),
 } satisfies Record<ToolName, z.AnyZodObject>;
 
 export const toolDescriptions: Record<ToolName, string> = {
@@ -215,4 +217,5 @@ export const toolDescriptions: Record<ToolName, string> = {
     project_get_shot: "读取单个镜头的完整生产上下文：镜头本体、当前版本（Revision）、产物版本列表和最新生成任务摘要。先取镜头 id 再用本工具看细节。",
     project_retry_shot: "对镜头的既有生成任务做重试：同一 GenerationTask 新增一次执行尝试（attempt），不新建任务。不传 taskId 时自动定位该镜头最新的生成任务；任务不存在时报错。",
     project_regenerate_shot: "对镜头做重新生成：创建新的 GenerationTask（旧任务保持原样），成功后产生新版本产物并更新 Timeline 时长。与 retryShot 的语义区别：regenerate 是新任务，retry 是同任务新尝试。",
+    project_select_artifact: "把镜头的某个产物版本设为「当前采用的版本」（版本指针切换）。只改变下载、成片与时间线时长取哪一版，不新增版本、不改状态、不重新生成。多用于同一镜头多个版本里挑一条更好的。",
 };

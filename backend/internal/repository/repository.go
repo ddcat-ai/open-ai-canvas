@@ -2103,6 +2103,38 @@ func (r *Repository) MarkShotArtifactsStale(shotID string, updatedAt time.Time) 
 	return r.db.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error
 }
 
+// SelectShotArtifact 把指定产物设为该分镜「当前采用的版本」（W1-B-02）。
+//
+// selected 是**版本指针**而非状态（W1-01 定死，与 status 正交）：
+// 同 (shot_id, type) 内只允许一个 true；切换是「清旧 + 置新 + 回写加速指针」的
+// 单事务操作，中途失败不得留下双 true 或零 true 的中间态。
+// 产物必须属于该分镜（D-024 归属校验的仓储层兜底，服务层另有用户→项目→分镜校验）。
+func (r *Repository) SelectShotArtifact(shotID string, artifactID string, updatedAt time.Time) (*model.ShotArtifact, error) {
+	var artifact model.ShotArtifact
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND shot_id = ?", artifactID, shotID).First(&artifact).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ShotArtifact{}).
+			Where("shot_id = ? AND type = ? AND id <> ?", artifact.ShotID, artifact.Type, artifactID).
+			Updates(map[string]any{"selected": false, "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ShotArtifact{}).Where("id = ?", artifactID).
+			Updates(map[string]any{"selected": true, "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Shot{}).Where("id = ?", shotID).
+			Updates(map[string]any{"latest_artifact_id": artifactID, "updated_at": updatedAt}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	artifact.Selected = true
+	artifact.UpdatedAt = updatedAt
+	return &artifact, nil
+}
+
 func (r *Repository) UpsertProductionTaskLink(link *model.ProductionTaskLink) error {
 	return r.db.Where("task_id = ? AND shot_id = ? AND artifact_type = ?", link.TaskID, link.ShotID, link.ArtifactType).Assign(map[string]any{
 		"project_id": link.ProjectID, "canvas_id": link.CanvasID, "unit_id": link.UnitID, "shot_id": link.ShotID,

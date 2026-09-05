@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -200,6 +201,23 @@ func (s *Service) RegenerateShot(userID string, projectID string, shotID string)
 	created.AgentSessionID = latest.AgentSessionID
 	created.AgentTurnID = latest.AgentTurnID
 	return created, nil
+}
+
+// SelectShotArtifact 切换分镜「当前采用的版本」（W1-B-02：Domain Tool 的后端能力）。
+//
+// 语义边界（与 W1-01 定死的模型注释一致）：selected 是**版本指针**，不是状态——
+// 切换版本不动 status、不动 revision、不产生新版本、不触发 Timeline reflow 的时长变化
+// 之外的副作用；它只决定「下载/成片/时间线 effective 时长取哪一版」。
+// 归属校验逐层走「用户 → 项目 → 分镜」，产物属于该分镜由仓储层兜底。
+func (s *Service) SelectShotArtifact(userID string, projectID string, shotID string, artifactID string) (*model.ShotArtifact, error) {
+	if _, err := s.requireShotInProject(userID, projectID, shotID); err != nil {
+		return nil, err
+	}
+	artifactID = strings.TrimSpace(artifactID)
+	if artifactID == "" {
+		return nil, BadAuthRequest("请选择要采用的产物版本")
+	}
+	return s.repo.SelectShotArtifact(shotID, artifactID, time.Now())
 }
 
 // requireShotInProject 逐层校验「用户 → 项目 → 分镜」归属（D-024）。

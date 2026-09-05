@@ -53,8 +53,7 @@ exit /b 1
 :READY
 echo       panel is up.
 echo.
-echo [3/3] Opening browser ...
-start "" http://127.0.0.1:17580/
+echo [3/3] Panel will open the browser itself (fixed: used to open twice).
 echo.
 echo ============================================
 echo   Done!

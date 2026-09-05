@@ -12,7 +12,7 @@ import {
     type ShotAssetReference,
 } from "./projects";
 import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
-import { regenerateShot, retryShotTask } from "./generation-task";
+import { regenerateShot, retryShotTask, selectShotArtifact } from "./generation-task";
 import { distillShotContext, latestShotTask } from "./shot-context";
 
 export { distillShotContext, latestShotTask } from "./shot-context";
@@ -32,6 +32,7 @@ export const projectAgentToolNames = [
     "project_get_shot",
     "project_retry_shot",
     "project_regenerate_shot",
+    "project_select_artifact",
 ] as const;
 
 export type ProjectAgentToolName = (typeof projectAgentToolNames)[number];
@@ -111,6 +112,11 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
     if (name === "project_regenerate_shot") {
         const shotId = String(rawInput.shotId || "").trim();
         return { task: await regenerateShot(projectId, shotId) };
+    }
+    if (name === "project_select_artifact") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const artifactId = String(rawInput.artifactId || "").trim();
+        return { artifact: await selectShotArtifact(projectId, shotId, artifactId) };
     }
     throw new Error(`未知项目工具：${name}`);
 }

@@ -886,6 +886,20 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"task": task})
 	})
+	// W1-B-02：切换分镜「当前采用的版本」——selected 是版本指针，不是状态
+	r.POST("/projects/:id/shots/:shotId/artifacts/:artifactId/select", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		artifact, err := svc.SelectShotArtifact(user.ID, c.Param("id"), c.Param("shotId"), c.Param("artifactId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"artifact": artifact})
+	})
 	r.POST("/projects/:id/asset-candidates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
