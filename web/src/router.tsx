@@ -55,9 +55,10 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 
 function deferred(element: ReactNode) {
-    // Use the same full-screen surface during session hydration and route
-    // suspension so the first loader never gives way to a second mask.
-    return <Suspense fallback={<FullScreenLoader label="正在打开页面" detail="准备当前页面" />}>{element}</Suspense>;
+    // AuthSessionHydrator owns the only full-screen loading surface for the
+    // workspace. Keep the current shell visible while a route chunk resolves
+    // so hydration cannot hand off to a second flashing mask.
+    return <Suspense fallback={null}>{element}</Suspense>;
 }
 
 function fullScreenDeferred(element: ReactNode) {
