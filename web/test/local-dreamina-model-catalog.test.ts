@@ -213,6 +213,41 @@ test("effective config projects an asynchronously arriving Dreamina catalog with
     expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
 });
 
+test("Dreamina model selection preserves the canonical local model ID", async () => {
+    const {
+        configuredModelMatchesCapability,
+        defaultConfig,
+        effectiveConfigWithDreamina,
+        modelDisplayName,
+        modelIcon,
+        normalizeModelOptionValue,
+        selectableModelsByCapability,
+    } = await import("../src/stores/use-config-store");
+    const { configuredModelDisplayName } = await import("../src/lib/model-selection");
+    const model = "local:dreamina-cli:5.0";
+    const config = effectiveConfigWithDreamina(defaultConfig, "ready", [
+        {
+            provider: "dreamina-cli",
+            id: "5.0",
+            displayName: "5.0",
+            modality: "image",
+            operations: ["text-to-image", "image-to-image"],
+            adapterSupported: true,
+            accountEntitlement: "unknown",
+            currentlyObservedAvailable: "unknown",
+            settings: { aliases: [], aspects: ["1:1"], maxReferenceImages: 1, tiers: ["auto"] },
+            source: "runtime-execution-contract",
+        },
+    ]);
+
+    expect(selectableModelsByCapability(config, "image")).toContain(model);
+    expect(normalizeModelOptionValue(model, config.channels)).toBe(model);
+    expect(configuredModelMatchesCapability(config, model, "image")).toBe(true);
+    expect(modelDisplayName(config, model)).toBe("即梦 5.0");
+    expect(configuredModelDisplayName(config, model)).toBe("即梦 5.0");
+    expect(modelIcon(config, model)).toBe("Jimeng");
+});
+
 test("Dreamina catalog readiness is loading immediately and shares one in-flight bootstrap", async () => {
     const module = await import("../src/stores/use-local-dreamina-model-store").catch(() => ({}));
     const createStore = (
