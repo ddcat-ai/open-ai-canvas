@@ -2042,6 +2042,13 @@ func createOrGetShotArtifactTx(tx *gorm.DB, artifact *model.ShotArtifact, key Ar
 	if artifact == nil {
 		return nil, false, nil
 	}
+	// 幂等键声明按 (request_id, asset_index) 去重，产物上这两个字段就必须与声明一致，
+	// 否则会变成「按 A 查重、却写入 B」——每次都查不到自己刚写的行，幂等键形同虚设。
+	// 以 key 为准回填，调用方漏填也不会静默退化成「每次都新建」。
+	if key.Kind == ArtifactIdemByRequest {
+		artifact.RequestID = key.RequestID
+		artifact.AssetIndex = key.AssetIndex
+	}
 	if query := key.artifactIdemQuery(tx, artifact); query != nil {
 		var existing model.ShotArtifact
 		if err := query.Limit(1).Find(&existing).Error; err != nil {
