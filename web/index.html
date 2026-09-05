@@ -14,6 +14,40 @@
             #root:empty {
                 min-height: 100vh;
             }
+            #root:empty::before {
+                content: "";
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                width: 72px;
+                height: 72px;
+                margin: -36px 0 0 -36px;
+                background: #171717 url('/logo.svg') center / 38px 38px no-repeat;
+                border: 1px solid rgba(245, 245, 245, 0.14);
+                border-radius: 18px;
+                animation: appearance-bootstrap-logo 2.8s ease-in-out infinite;
+            }
+            #root:empty::after {
+                content: "";
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                width: 170px;
+                height: 170px;
+                margin: -85px 0 0 -85px;
+                border: 1px solid rgba(245, 245, 245, 0.22);
+                border-right-color: transparent;
+                border-radius: 999px;
+                animation: appearance-bootstrap-orbit 5.5s linear infinite;
+            }
+            @keyframes appearance-bootstrap-logo { 0%, 100% { opacity: .86; transform: scale(.97); } 50% { opacity: 1; transform: scale(1.03); } }
+            @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
+            @media (prefers-reduced-motion: reduce) {
+                #root:empty::before,
+                #root:empty::after {
+                    animation: none;
+                }
+            }
         </style>
         <script>
             try {
