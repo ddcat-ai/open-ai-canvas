@@ -123,16 +123,34 @@ func (r *Repository) NextShotArtifactVersion(db *gorm.DB, shotID string, artifac
 	return current + 1, nil
 }
 
+// latestTaskForwardCondition 是 LatestTaskID 的单调性防护条件（F-25A / T8）。
+//
+// 语义：latest_task_id 是「最近一次成功生成任务」，属于**时间序语义**，
+// 不能靠"谁最后写数据库"决定——旧任务的迟到 succeeded 回调（Bridge 长轮询、
+// 幂等补写都可能乱序）不得把指针回退。因此只有满足以下任一情况才允许覆盖：
+//   - 当前指针为空或已指向同一任务；
+//   - 当前指针指向的任务行已不存在（任务被清理，指针失去参照）；
+//   - 候选任务的「成功时间」不早于指针任务的成功时间。
+// 成功时间 = COALESCE(completed_at, updated_at)（handleSuccess 调用前
+// markTerminalState 已把 completed_at 落库；Bridge 路径同理）。
+// 候选任务行不存在时成功时间无法判定，按保守策略拒绝覆盖。
+const latestTaskForwardCondition = "(latest_task_id IS NULL OR latest_task_id = '' OR latest_task_id = ? " +
+	"OR NOT EXISTS (SELECT 1 FROM tasks cur WHERE cur.id = shots.latest_task_id) " +
+	"OR COALESCE((SELECT cur.completed_at FROM tasks cur WHERE cur.id = shots.latest_task_id), (SELECT cur.updated_at FROM tasks cur WHERE cur.id = shots.latest_task_id)) " +
+	"<= COALESCE((SELECT nt.completed_at FROM tasks nt WHERE nt.id = ?), (SELECT nt.updated_at FROM tasks nt WHERE nt.id = ?)))"
+
 // TouchShotLatestTask 回写分镜的「最近一次成功生成任务」指针（F-25 / W1-02）。
 //
 // 唯一调用方是 task_terminal.handleSuccess（全 Provider 统一成功收口）——
 // 语义为 provider 无关的「最近一次**成功**任务」，与 Bridge completion 的
 // Job 级指针（updateShotLatestPointers，最近一次尝试）是两个层次。
 // 失败任务不得走到这里：重试失败任务走既有 Retry（同 Task 新 Job）链路。
+// F-25A：带单调性防护，迟到的旧任务成功回调不会把指针往回拨（T8）。
 func (r *Repository) TouchShotLatestTask(shotID string, taskID string, now time.Time) error {
 	if shotID == "" || taskID == "" {
 		return nil
 	}
 	return r.db.Model(&model.Shot{}).Where("id = ?", shotID).
+		Where(latestTaskForwardCondition, taskID, taskID, taskID).
 		Updates(map[string]any{"latest_task_id": taskID, "updated_at": now}).Error
 }

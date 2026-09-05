@@ -3,7 +3,7 @@ import type { CanvasContext } from "./canvas-context.js";
 import type { CanvasSnapshot } from "./types.js";
 
 /* ------------------------------------------------------------------ *
- * W1-02 #2 Agent Context v1（D-042）：影策项目域蒸馏摘要。
+ * W1-02 #2 Agent Context v1（D-042 / D-044）：影策项目域蒸馏摘要。
  *
  * 架构决策（本轮定稿）：
  * - 复用既有 requestCanvasTool WS 回传通道 + project_get_context 工具
@@ -11,6 +11,9 @@ import type { CanvasSnapshot } from "./types.js";
  *   不直连 8080、不扩 CanvasSnapshot 推送结构（避开 Canvas 数据模型改动）。
  * - 蒸馏原则：不全量塞 JSON——只投影 Agent 决策所需字段（章节/镜头序列/
  *   角色场景清单/最新任务与产物状态），prompt 正文一律不下发。
+ * - D-044（ChatGPT 第十轮裁决）：characters / locations 契约 = 仅
+ *   id + name；人物设定、场景设定等详细信息由 Agent 按需（on-demand）
+ *   通过 Domain Tool 按 ID 查询。本段不建第二套 Context DB。
  * - 降级原则：项目段拉取失败只追加 warning，不阻塞纯画布上下文。
  * ------------------------------------------------------------------ */
 

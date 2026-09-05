@@ -292,14 +292,20 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 // Bridge 请求本身成功时才允许覆盖 latest_task_id——失败的尝试不得把成功
 // 指针拉黑，否则 Regenerate 会克隆失败任务的参数。latest_job_id /
 // latest_artifact_id 保持「最近一次尝试」语义，无论成败照旧回写。
+// F-25A（T8）：latest_task_id 覆写走 latestTaskForwardCondition 单调性防护——
+// 旧任务的迟到 succeeded 回调不得把指针回退；Job 级指针不受防护约束。
 func updateShotLatestPointers(tx *gorm.DB, shotID string, taskID string, jobID string, artifactID string, now time.Time, recordLatestTask bool) error {
 	if shotID == "" {
 		return nil
 	}
-	updates := map[string]any{"updated_at": now}
 	if taskID != "" && recordLatestTask {
-		updates["latest_task_id"] = taskID
+		if err := tx.Model(&model.Shot{}).Where("id = ?", shotID).
+			Where(latestTaskForwardCondition, taskID, taskID, taskID).
+			Updates(map[string]any{"latest_task_id": taskID, "updated_at": now}).Error; err != nil {
+			return err
+		}
 	}
+	updates := map[string]any{"updated_at": now}
 	if jobID != "" {
 		updates["latest_job_id"] = jobID
 	}

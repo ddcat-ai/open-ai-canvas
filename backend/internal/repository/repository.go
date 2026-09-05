@@ -2060,6 +2060,9 @@ func createOrGetShotArtifactTx(tx *gorm.DB, artifact *model.ShotArtifact, key Ar
 	}
 	// 并发下两个事务可能同时算出同一个 MAX+1，唯一约束 (shot_id,type,version) 是最后一道防线：
 	// 撞上就重算版本号再试，而不是把冲突直接抛给调用方。
+	// Q-29（ChatGPT 已批准）：5 次 bounded retry 只是防异常无限循环——真正的
+	// correctness barrier 是唯一约束本身；重试耗尽必须显式返回错误（下方
+	// return nil, false, lastErr），禁止静默吞掉。
 	var lastErr error
 	for attempt := 0; attempt < artifactVersionRetryLimit; attempt++ {
 		version, err := nextShotArtifactVersion(tx, artifact.ShotID, artifact.Type)

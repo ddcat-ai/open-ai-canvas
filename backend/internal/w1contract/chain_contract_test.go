@@ -539,13 +539,106 @@ func TestT7LatestTaskPointerIgnoresFailedBridgeAttempt(t *testing.T) {
 	}
 
 	// ③ 非 Bridge Provider 的成功任务（统一收口 handleSuccess → TouchShotLatestTask）：
-	//    换一个新 Task 成功后，指针应前移。
+	//    换一个新 Task 成功后，指针应前移。F-25A 后候选任务必须真实存在
+	//    （成功时间可判定），先补一行 task-w2，成功时间晚于 task-w1。
+	w2Completed := f.now.Add(3 * time.Second)
+	taskW2 := model.Task{
+		ID: "task-w2", UserID: f.userID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+		ProjectID: f.projectID, ShotID: f.shotID,
+		Prompt: "契约测试镜头二", Operation: "video", Provider: "kling", Model: "w1-test",
+		InputJSON: "{}", CompletedAt: &w2Completed,
+		CreatedAt: f.now, UpdatedAt: w2Completed,
+	}
+	if err := f.db.Create(&taskW2).Error; err != nil {
+		t.Fatalf("创建 task-w2 失败：%v", err)
+	}
 	if err := f.repo.TouchShotLatestTask(f.shotID, "task-w2", f.now.Add(3*time.Second)); err != nil {
 		t.Fatalf("TouchShotLatestTask 失败：%v", err)
 	}
 	shot = f.shotRow(t)
 	if shot.LatestTaskID != "task-w2" {
 		t.Fatalf("非 Bridge 成功任务应前移指针：latest_task_id=%q（期望 task-w2）", shot.LatestTaskID)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// T8 · LatestTaskID 单调性（F-25A / W1-02 收口补丁）
+//
+// 契约：latest_task_id 是「最近一次成功生成任务」的时间序语义——
+// 成功任务 B（更晚）已把指针前移后，旧任务 A 的迟到 succeeded 回调
+// （乱序的 Bridge completion / handleSuccess 幂等补写）不得把指针回退为 A。
+// Job 级指针（latest_job_id）不受防护，仍保持「最近一次尝试」语义。
+// ─────────────────────────────────────────────────────────────────────────
+
+func TestT8LatestTaskDoesNotRegressOnLateBridgeCompletion(t *testing.T) {
+	f := seedChain(t)
+	f.newBridge(t)
+
+	// 任务时间线：task-w1 成功于 now+1s；task-w3 成功于 now+3s（更新）。
+	w1Completed := f.now.Add(time.Second)
+	if err := f.db.Model(&model.Task{}).Where("id = ?", f.taskID).
+		Updates(map[string]any{"status": model.TaskStatusSucceeded, "completed_at": w1Completed, "updated_at": w1Completed}).Error; err != nil {
+		t.Fatalf("补写 task-w1 成功时间失败：%v", err)
+	}
+	w3Completed := f.now.Add(3 * time.Second)
+	taskW3 := model.Task{
+		ID: "task-w3", UserID: f.userID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+		ProjectID: f.projectID, ShotID: f.shotID,
+		Prompt: "契约测试镜头三", Operation: "video", Provider: "kling", Model: "w1-test",
+		InputJSON: "{}", CompletedAt: &w3Completed,
+		CreatedAt: f.now, UpdatedAt: w3Completed,
+	}
+	if err := f.db.Create(&taskW3).Error; err != nil {
+		t.Fatalf("创建 task-w3 失败：%v", err)
+	}
+
+	// ① task-w1 的 Bridge 生成成功：指针指向 task-w1。
+	f.newClaimedRequest(t, "req-t8-a", 1)
+	if !f.completeOnce(t, "req-t8-a", time.Second, sampleOutputs("file:///t8-a.mp4")) {
+		t.Fatalf("第一次成功回调应生效")
+	}
+	if shot := f.shotRow(t); shot.LatestTaskID != f.taskID {
+		t.Fatalf("成功生成后 latest_task_id 应为 %q，实际 %q", f.taskID, shot.LatestTaskID)
+	}
+
+	// ② 更新的成功任务 task-w3 到达（如另一 Provider 先收口）：指针前移。
+	if err := f.repo.TouchShotLatestTask(f.shotID, "task-w3", f.now.Add(4*time.Second)); err != nil {
+		t.Fatalf("TouchShotLatestTask(task-w3) 失败：%v", err)
+	}
+	if shot := f.shotRow(t); shot.LatestTaskID != "task-w3" {
+		t.Fatalf("更新的成功任务应前移指针：latest_task_id=%q（期望 task-w3）", shot.LatestTaskID)
+	}
+
+	// ③ 迟到回调 A：task-w1 的 handleSuccess 幂等补写再次到达——指针不得回退。
+	if err := f.repo.TouchShotLatestTask(f.shotID, f.taskID, f.now.Add(5*time.Second)); err != nil {
+		t.Fatalf("迟到 TouchShotLatestTask 不应报错：%v", err)
+	}
+	if shot := f.shotRow(t); shot.LatestTaskID != "task-w3" {
+		t.Fatalf("旧任务迟到的成功回写不得回退指针：latest_task_id=%q（期望 task-w3）——F-25A 回归", shot.LatestTaskID)
+	}
+
+	// ④ 迟到回调 B：task-w1 的另一个 Bridge succeeded completion 到达
+	//    （同 request 重复完成会被幂等挡，故造一个同 Task 的新 request）。
+	lateRequest := model.ComfyBridgeRequest{
+		ID: "req-t8-late", TaskID: f.taskID, UserID: f.userID, BridgeID: f.bridgeID,
+		Kind: "video", Status: "claimed", PayloadJSON: "{}",
+		ExpiresAt: f.now.Add(time.Hour), GenerationTaskID: f.taskID, ShotID: f.shotID,
+		AttemptNo: 2, CreatedAt: f.now, UpdatedAt: f.now,
+	}
+	if err := f.db.Create(&lateRequest).Error; err != nil {
+		t.Fatalf("创建迟到 Bridge 请求失败：%v", err)
+	}
+	if _, applied, err := f.repo.CompleteComfyBridgeRequestWithAssets(
+		f.bridgeID, "req-t8-late", "succeeded", "{}", "", f.now.Add(6*time.Second), nil,
+	); err != nil || !applied {
+		t.Fatalf("迟到 succeeded 回调应正常落库：applied=%v err=%v", applied, err)
+	}
+	shot := f.shotRow(t)
+	if shot.LatestTaskID != "task-w3" {
+		t.Fatalf("迟到的 Bridge succeeded 回调不得回退指针：latest_task_id=%q（期望 task-w3）——F-25A 回归", shot.LatestTaskID)
+	}
+	if shot.LatestJobID != "req-t8-late" {
+		t.Fatalf("Job 指针不受单调防护，应保持最近尝试语义：latest_job_id=%q（期望 req-t8-late）", shot.LatestJobID)
 	}
 }
 
