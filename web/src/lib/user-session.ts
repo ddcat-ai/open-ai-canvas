@@ -17,6 +17,13 @@ import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { clearFileStorageObjectUrls } from "@/services/file-storage";
 import { clearImageStorageObjectUrls } from "@/services/image-storage";
 
+export type SessionLoadingStage = {
+    label: string;
+    detail: string;
+};
+
+type SessionLoadingStageListener = (stage: SessionLoadingStage) => void;
+
 export async function switchUserStorageScope(userId?: string | null) {
     await withGenerationConsumersPaused(async () => {
         await withRemoteUserDataSyncExclusive(async () => {
@@ -34,7 +41,8 @@ export async function switchUserStorageScope(userId?: string | null) {
     });
 }
 
-export async function applyUserSession(payload: AuthSessionPayload) {
+export async function applyUserSession(payload: AuthSessionPayload, onStage?: SessionLoadingStageListener) {
+    onStage?.({ label: "正在准备创作环境", detail: "连接本地能力与模型配置" });
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
@@ -42,6 +50,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
         if (previousUserId !== nextUserId) appQueryClient.clear();
         await switchUserStorageScope(payload.user?.id);
+        onStage?.({ label: "正在恢复工作区", detail: "读取画布、素材和插件缓存" });
         const [persistedCanvas, persistedCanvasHistory, persistedAssets, persistedPlugins] = await Promise.all([
             localForageStorage.getItem(CANVAS_STORE_KEY),
             localForageStorage.getItem(CANVAS_HISTORY_STORE_KEY),
@@ -63,6 +72,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // 匿名会话只恢复本地 guest scope。模型目录是受保护的登录后接口，
         // 不应在会话失效的降级路径中再次请求它并制造未处理的 401 Promise。
         if (payload.user?.id) {
+            onStage?.({ label: "正在准备创作环境", detail: "同步模型目录和能力配置" });
             if (!persistedConfig) {
                 // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
                 const catalog = await getModelCatalog();
@@ -93,9 +103,11 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         }
         installRemoteUserDataAutoSync();
         if (payload.user?.id) {
+            onStage?.({ label: "正在连接远端数据", detail: "建立项目同步基线" });
             // 登录阶段只建立远端会话和本地缓存基线；画布与素材在实际打开或使用时按需校验，避免下载整份快照。
             await initializeRemoteUserDataSession(payload.user.id);
         } else resetRemoteUserDataSync();
+        onStage?.({ label: "正在打开创作空间", detail: "完成工作区初始化" });
     } finally {
         useUserStore.getState().setHydrated(true);
     }
