@@ -8,7 +8,8 @@ import { applyCanvasGenerationTaskNodeEffect, persistCanvasAgentGenerationContin
 import { canvasCinematicContinuationEntryAdapters } from "../src/components/canvas/canvas-assistant-panel";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "../src/services/generation-consumer-dedupe";
 import { createProviderNeutralGenerationTaskEffectStore } from "../src/services/provider-neutral-generation-effects";
-import { consumeGenerationTaskAgent, consumeGenerationTaskMessage, consumeGenerationTaskNode, materializeGenerationTaskAssets } from "../src/services/project-asset-sync";
+import { consumeGenerationTaskAgent, consumeGenerationTaskMessage, consumeGenerationTaskNode, materializeGenerationTaskAssets, retryCanvasAssetSyncAfterRateLimit } from "../src/services/project-asset-sync";
+import { ApiError } from "../src/services/api/request";
 import { flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { flushAssetStorePersistence, useAssetStore, type NewAsset } from "../src/stores/use-asset-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasNodeData } from "../src/types/canvas";
@@ -41,6 +42,56 @@ function createEffectStore(): GenerationTaskEffectStore {
         },
     };
 }
+
+test("automatic canvas asset sync honors Retry-After before retrying a rate limit", async () => {
+    const delays: number[] = [];
+    let attempts = 0;
+
+    const result = await retryCanvasAssetSyncAfterRateLimit(
+        async () => {
+            attempts += 1;
+            if (attempts === 1) throw new ApiError("请求过于频繁，请稍后再试", { status: 429, retryAfterMs: 60_000 });
+            return "synced";
+        },
+        {
+            wait: async (delayMs) => {
+                delays.push(delayMs);
+            },
+        },
+    );
+
+    expect(result).toBe("synced");
+    expect(attempts).toBe(2);
+    expect(delays).toEqual([60_000]);
+});
+
+test("automatic canvas asset sync does not retry non-rate-limit failures", async () => {
+    let attempts = 0;
+
+    await expect(
+        retryCanvasAssetSyncAfterRateLimit(async () => {
+            attempts += 1;
+            throw new ApiError("素材校验失败", { status: 400 });
+        }),
+    ).rejects.toThrow("素材校验失败");
+
+    expect(attempts).toBe(1);
+});
+
+test("automatic canvas asset sync aborts promptly while waiting for the rate-limit window", async () => {
+    const controller = new AbortController();
+    const syncing = retryCanvasAssetSyncAfterRateLimit(
+        async () => {
+            throw new ApiError("请求过于频繁，请稍后再试", { status: 429, retryAfterMs: 60_000 });
+        },
+        { signal: controller.signal },
+    );
+
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(syncing).rejects.toMatchObject({ name: "AbortError" });
+});
 
 type MetaImageHarnessImage = {
     naturalWidth: number;
@@ -3075,7 +3126,8 @@ describe("generation task materializer", () => {
     test("generic task materialization never treats a local Canvas id as a backend project id", async () => {
         const source = await Bun.file(new URL("../src/services/project-asset-sync.ts", import.meta.url)).text();
         expect(source).not.toContain("if (input.task.projectId) await syncAssetToProject(assetId, input.task.projectId");
-        expect(source).toContain("if (!options.domainProjectId) return");
+        expect(source).toContain("if (!options.domainProjectId) {");
+        expect(source).toContain("linkedToProject: false");
         expect(source).toContain("await syncAssetToProject(asset.id, options.domainProjectId");
     });
 

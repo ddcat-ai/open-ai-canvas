@@ -142,7 +142,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
     );
 }
 
-export function ProjectPreview({ project, preferLatestImage = false }: { project: CanvasProject; preferLatestImage?: boolean }) {
+export function ProjectPreview({ project, preferLatestImage = false }: { project: Pick<CanvasProject, "id" | "nodes">; preferLatestImage?: boolean }) {
     const syncProgress = useSyncProgressStore((state) => state.syncingProjects[project.id]);
     const isSyncing = Boolean(syncProgress && (syncProgress.phase === "uploading" || syncProgress.phase === "saving"));
     const media = projectPreviewMedia(project.nodes, preferLatestImage);

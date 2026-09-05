@@ -89,6 +89,12 @@ func TestArchiveLogicalModelPreservesPublishedHistory(t *testing.T) {
 			t.Fatalf("%s history was not preserved: %v", label, err)
 		}
 	}
+
+	replacement := &model.LogicalModel{ID: "LMODEL_REPLACEMENT", Code: item.Code, Name: "Replacement", Capability: "text", Enabled: true, PricePolicy: "unified", BillingMode: "fixed_request", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	replacementRevision := &model.LogicalModelRevision{ID: "REVISION_REPLACEMENT", LogicalModelID: replacement.ID, CapabilitySpecJSON: `{"version":1,"capability":"text"}`, DefaultOptionsJSON: `{}`, CreatedAt: time.Now()}
+	if err := repo.SaveLogicalModelBundle(replacement, replacementRevision, nil, true); err != nil {
+		t.Fatalf("reusing archived logical model code: %v", err)
+	}
 }
 
 func TestArchiveLogicalModelRejectsActiveTask(t *testing.T) {

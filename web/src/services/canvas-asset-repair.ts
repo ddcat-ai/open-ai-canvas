@@ -9,7 +9,7 @@ export type CanvasAssetRepairResult = {
     updatedProjects: number;
 };
 
-export function repairMissingCanvasAssets(): CanvasAssetRepairResult {
+export function repairMissingCanvasAssets(projectIds?: Set<string>, partialAssets = false): CanvasAssetRepairResult {
     const assetStore = useAssetStore.getState();
     const canvasStore = useCanvasStore.getState();
     const assetIdByStorageKey = new Map<string, string>();
@@ -27,6 +27,21 @@ export function repairMissingCanvasAssets(): CanvasAssetRepairResult {
     let createdAssets = 0;
     let updatedProjects = 0;
     for (const project of canvasStore.projects) {
+        if (projectIds && !projectIds.has(project.id)) continue;
+        if (partialAssets) {
+            for (const node of project.nodes) {
+                if (node.metadata?.assetId) {
+                    knownAssetIds.add(node.metadata.assetId);
+                    if (node.metadata.storageKey) storageKeyByAssetId.set(node.metadata.assetId, node.metadata.storageKey);
+                }
+            }
+            for (const clip of project.timeline?.clips || []) {
+                if (clip.directMedia?.assetId) {
+                    knownAssetIds.add(clip.directMedia.assetId);
+                    if (clip.directMedia.storageKey) storageKeyByAssetId.set(clip.directMedia.assetId, clip.directMedia.storageKey);
+                }
+            }
+        }
         const repaired = repairProject(project, knownAssetIds, assetIdByStorageKey, storageKeyByAssetId, (node) => {
             const input = canvasNodeToAsset(node, { canvasId: project.id, source: "canvas-upload" });
             if (!input) return undefined;

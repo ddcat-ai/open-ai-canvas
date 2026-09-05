@@ -3337,6 +3337,12 @@
     padding-bottom: 24px;
 }
 
+.admin-email-form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .admin-email-settings .admin-settings-section {
     border: 1px solid var(--admin-card-border);
 }

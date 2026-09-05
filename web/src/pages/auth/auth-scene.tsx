@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { ConfigProvider, Tabs } from "antd";
 import { ArrowLeft, Play } from "lucide-react";
+import { useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
@@ -50,6 +51,8 @@ export function AuthScene() {
     const location = useLocation();
     const navigate = useNavigate();
     const reducedMotion = useReducedMotion();
+    const [videoActive, setVideoActive] = useState(false);
+    const [failedPosterURL, setFailedPosterURL] = useState("");
     const recovery = location.pathname === "/forgot-password";
     const activeTab = location.pathname === "/register" ? "register" : "login";
     const copy = recovery ? authCopy.recovery : activeTab === "register" ? authCopy.register : authCopy.login;
@@ -58,7 +61,7 @@ export function AuthScene() {
         <main className="auth-scene h-dvh min-h-0 overflow-y-auto text-white lg:overflow-hidden">
             <div className="grid min-h-full lg:h-full lg:grid-cols-[minmax(0,1.32fr)_minmax(520px,1fr)]">
                 <section className="relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label={`${appearance.brandName}品牌影片`}>
-                    <video className="absolute inset-0 size-full object-cover" src={appearance.authVideoUrl} poster={appearance.authVideoPosterUrl || undefined} autoPlay={!reducedMotion} muted loop playsInline preload="metadata" />
+                    {videoActive && appearance.authVideoUrl ? <video className="absolute inset-0 size-full object-cover" src={appearance.authVideoUrl} poster={appearance.authVideoPosterUrl || undefined} autoPlay={!reducedMotion} muted loop playsInline preload="metadata" /> : appearance.authVideoPosterUrl && failedPosterURL !== appearance.authVideoPosterUrl ? <img className="absolute inset-0 size-full object-cover" src={appearance.authVideoPosterUrl} alt="" decoding="async" onError={() => setFailedPosterURL(appearance.authVideoPosterUrl)} /> : null}
                     <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,5,8,.58),transparent_42%,rgba(4,5,8,.74))]" />
                     <div aria-hidden className="auth-scene-video-blend absolute inset-y-0 right-0 hidden w-[clamp(120px,14vw,240px)] lg:block" />
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
@@ -66,10 +69,10 @@ export function AuthScene() {
                             <BrandLogo theme="dark" className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />} />
                             {appearance.brandName}
                         </Link>
-                        <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl">
+                        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl transition hover:bg-black/35 disabled:cursor-default" onClick={() => setVideoActive(true)} disabled={videoActive || !appearance.authVideoUrl} aria-pressed={videoActive}>
                             <Play className="size-3 fill-current" />
-                            创作正在发生
-                        </span>
+                            {videoActive ? "创作正在发生" : "播放品牌影片"}
+                        </button>
                     </div>
                     <motion.div
                         initial={reducedMotion ? false : { opacity: 0, y: 18 }}

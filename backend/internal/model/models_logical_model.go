@@ -12,7 +12,7 @@ type IDSequence struct {
 
 type LogicalModel struct {
 	ID          string `json:"id" gorm:"primaryKey;size:36"`
-	Code        string `json:"code" gorm:"size:80;uniqueIndex"`
+	Code        string `json:"code" gorm:"size:80;uniqueIndex:idx_logical_models_code,where:archived_at IS NULL"`
 	Name        string `json:"name" gorm:"size:120"`
 	Icon        string `json:"icon" gorm:"size:80"`
 	Description string `json:"description" gorm:"size:500"`

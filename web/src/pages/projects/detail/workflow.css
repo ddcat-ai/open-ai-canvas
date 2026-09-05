@@ -631,6 +631,18 @@
 
 .workflow-preview-media-button:hover .workflow-preview-media { transform: scale(1.005); }
 
+.workflow-video-placeholder {
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--workspace-border);
+    color: color-mix(in srgb, var(--foreground) 30%, transparent);
+}
+
+.workflow-video-placeholder svg {
+    width: 34px;
+    height: 34px;
+}
+
 .workflow-preview-expand,
 .workflow-video-play {
     position: absolute;

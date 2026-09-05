@@ -129,6 +129,9 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		if email == "" {
 			return nil, BadAuthRequest("请输入邮箱")
 		}
+		if err := s.validateRegistrationEmailDomain(email); err != nil {
+			return nil, err
+		}
 		verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
 		if err != nil {
 			return nil, err

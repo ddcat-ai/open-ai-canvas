@@ -42,6 +42,8 @@ type BackendGenerationTaskOptions = {
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
     onTextDelta?: (text: string) => void;
+    streamText?: boolean;
+    enableThinking?: boolean;
     localIdempotencyKey?: string;
     localResumeOnly?: boolean;
     clientOperationId?: string;
@@ -90,6 +92,9 @@ export async function runBackendGenerationTask(
         signal,
         metadata,
         onTaskUpdate,
+        onTextDelta,
+        streamText,
+        enableThinking,
         localIdempotencyKey,
         localResumeOnly,
         clientOperationId,
@@ -104,14 +109,14 @@ export async function runBackendGenerationTask(
         await dependencies.ensureLocalDreaminaReady?.(signal);
         throwIfAborted(signal);
         return await runLocalDreaminaGeneration(
-            { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId },
+            { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, mask, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId },
             dependencies,
         );
     }
     assertBackendRuntimeConfigured(config, mode);
     const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
-    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate }, prepared, dependencies);
+    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking }, prepared, dependencies);
 }
 
 // 分镜等后台生产流程只需要可靠提交任务；任务状态与产物由项目工作区轮询和
@@ -439,6 +444,7 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
             config: backendProviderConfig(config, mode),
             capabilityOptions: logicalModelId ? logicalCapabilityOptions(config, mode) : undefined,
             textHistory: options.textHistory,
+            ...(mode === "text" ? { textOptions: { stream: options.streamText !== false, thinking: options.enableThinking === true } } : {}),
             referenceImages: prepared.referenceImages,
             referenceVideos: prepared.referenceVideos,
             referenceAudios: prepared.referenceAudios,

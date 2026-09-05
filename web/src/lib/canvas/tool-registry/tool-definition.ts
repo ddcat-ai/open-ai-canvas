@@ -7,6 +7,7 @@ import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasToolMo
 
 /** 工具栏标识——每个工具栏有独立的注册表与偏好 */
 export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
+export type NodeToolbarGroup = "primary" | "portrait" | "viewpoint" | "process" | "workspace" | "utility" | "more";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
 export type ToolCategory =
@@ -166,6 +167,13 @@ export type ToolDefinition = {
     defaultVisible: boolean;
     /** 默认排序权重，升序 */
     defaultOrder: number;
+    /** 节点工具条的展示层级；由注册表统一决定，避免组件按工具 ID 二次编排。 */
+    nodeToolbar?: {
+        group: NodeToolbarGroup | ((ctx: ToolContext) => NodeToolbarGroup);
+        order?: number | ((ctx: ToolContext) => number);
+        section?: string;
+        description?: string;
+    };
     active?: (ctx: ToolContext) => boolean;
     disabled?: (ctx: ToolContext) => boolean;
     /** 危险操作——渲染时隔离到独立分组 */

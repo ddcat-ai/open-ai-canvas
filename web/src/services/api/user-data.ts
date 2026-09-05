@@ -37,6 +37,18 @@ export type RemoteUserDataSnapshot = {
     projects: CanvasProject[];
 };
 
+export type CanvasLibrarySummary = Pick<CanvasProject, "id" | "projectId" | "title" | "createdAt" | "updatedAt"> & {
+    nodeCount: number;
+    previewNodes: CanvasProject["nodes"];
+};
+
+export function listRemoteCanvasProjectsPage(options: { page: number; pageSize: number; projectId?: string; query?: string; sort?: string; signal?: AbortSignal }) {
+    return request<{ projects: CanvasLibrarySummary[]; page: number; pageSize: number; total: number; hasMore: boolean }>(api.get("/canvas-projects", {
+        signal: options.signal,
+        params: compactApiParams({ page: options.page, page_size: options.pageSize, project_id: options.projectId, q: options.query, sort: options.sort }),
+    }));
+}
+
 export function getRemoteUserDataSnapshot() {
     return request<RemoteUserDataSnapshot>(api.get("/user-data/snapshot"));
 }
@@ -83,6 +95,10 @@ export function moveRemoteAssetsToFolder(assetIds: string[], folderId = "") {
 
 export function getRemoteAsset(id: string) {
     return request<{ asset: Asset }>(api.get(`/assets/${encodeURIComponent(id)}`));
+}
+
+export function getRemoteAssetsByIds(ids: string[]) {
+    return request<{ assets: Asset[] }>(api.post("/assets/batch", { ids }));
 }
 
 export function upsertRemoteAsset(asset: Asset) {

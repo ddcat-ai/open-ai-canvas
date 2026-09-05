@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AssetLibraryPickerFolder, AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
-import "@/lib/plugins/builtin";
 import { createHostedAssetSources, type HostedAssetSource } from "@/services/external-asset-sources";
 import type { ExternalAssetFolder, ExternalAssetItem, ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { usePluginStore } from "@/stores/use-plugin-store";

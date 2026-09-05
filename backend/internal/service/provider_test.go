@@ -489,6 +489,25 @@ data: [DONE]
 	}
 }
 
+func TestTextThinkingOptionsAndReasoningParsing(t *testing.T) {
+	input := canvasGenerationInput{TextOptions: canvasTextOptions{Thinking: true}}
+	responsesBody := map[string]interface{}{}
+	applyTextThinking(responsesBody, input, "responses")
+	reasoning, _ := responsesBody["reasoning"].(map[string]interface{})
+	if reasoning["effort"] != "medium" || reasoning["summary"] != "auto" {
+		t.Fatalf("responses reasoning options = %#v", reasoning)
+	}
+	chatBody := map[string]interface{}{}
+	applyTextThinking(chatBody, input, "chat-completion")
+	if chatBody["reasoning_effort"] != "medium" {
+		t.Fatalf("chat reasoning options = %#v", chatBody)
+	}
+	result, err := parseAgentToolPayload(map[string]interface{}{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "正文", "reasoning_content": "推理摘要"}}}}, "chat-completion")
+	if err != nil || result["text"] != "正文" || result["reasoning"] != "推理摘要" {
+		t.Fatalf("parsed reasoning result = %#v, err = %v", result, err)
+	}
+}
+
 func TestStreamingAgentParserReassemblesChatToolCallsAcrossChunks(t *testing.T) {
 	var deltas strings.Builder
 	parser := newStreamingAgentParser("chat-completion", func(delta string) {

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 
-import { applyCanvasNodeDragPreview, applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
+import { applyCanvasNodeDragPreview, applyCanvasNodeSelectionPreview, applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateNodeAlignment, createNodeAlignmentContext, sameStringSet, type NodeAlignmentContext } from "@/lib/canvas/canvas-project-domain";
 import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
-import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
+import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy } from "@/lib/canvas/canvas-selection";
+import { canvasNodeBounds } from "@/lib/canvas/canvas-spatial-index";
 import type { CanvasNodeData, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
 
 type UseCanvasSelectionControllerOptions = {
@@ -25,7 +26,6 @@ type UseCanvasSelectionControllerOptions = {
     onBatchConnectionTarget?: (event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => boolean;
     onLinkedFolderDrop?: (folder: CanvasNodeData, nodes: CanvasNodeData[]) => void;
     onDeselect: () => void;
-    onSelectionBoxEnd?: () => void;
 };
 
 type DragState = {
@@ -39,6 +39,10 @@ type DragState = {
     draggedRenderNodeIdSet: Set<string>;
     initialSelectedNodes: Array<{ id: string; x: number; y: number }>;
 };
+
+type SelectionGestureState =
+    | { phase: "idle" }
+    | { phase: "pending" | "selecting"; initialSelection: Set<string>; selection: SelectionBox };
 
 const EMPTY_DRAG_STATE: DragState = {
     isDraggingNode: false,
@@ -71,7 +75,6 @@ export function useCanvasSelectionController({
     onBatchConnectionTarget,
     onLinkedFolderDrop,
     onDeselect,
-    onSelectionBoxEnd,
 }: UseCanvasSelectionControllerOptions) {
     const dragFrameRef = useRef<number | null>(null);
     const pendingNodeDragRef = useRef<Position>({ x: 0, y: 0 });
@@ -80,10 +83,9 @@ export function useCanvasSelectionController({
     const lastFrameDropCheckRef = useRef(0);
     const selectionFrameRef = useRef<number | null>(null);
     const selectionBoundsElementRef = useRef<HTMLDivElement>(null);
-    const selectionSpatialIndexRef = useRef<CanvasSpatialIndex<CanvasNodeData>>(buildCanvasSpatialIndex([]));
+    const selectionSpatialIndexCacheRef = useRef(createCanvasSelectionSpatialIndexCache());
     const pendingSelectionPointRef = useRef<Position | null>(null);
-    const selectionActivatedRef = useRef(false);
-    const selectionBoxRef = useRef<SelectionBox | null>(null);
+    const selectionGestureRef = useRef<SelectionGestureState>({ phase: "idle" });
     const nodeDraggingRef = useRef(false);
     const dragRef = useRef<DragState>({ ...EMPTY_DRAG_STATE });
     const frameDropIndexRef = useRef(buildCanvasFrameDropIndex([]));
@@ -94,14 +96,25 @@ export function useCanvasSelectionController({
     const [dragPreview, setDragPreview] = useState<{ x: number; y: number; nodeIds: Set<string> } | null>(null);
     const [alignmentGuides, setAlignmentGuides] = useState<{ vertical?: number; horizontal?: number }>({});
 
-    const cancelSelectionBox = useCallback(() => {
-        selectionBoxRef.current = null;
+    const resetSelectionBox = useCallback(() => {
+        selectionGestureRef.current = { phase: "idle" };
         pendingSelectionPointRef.current = null;
-        selectionActivatedRef.current = false;
         if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
         selectionFrameRef.current = null;
+        applyCanvasNodeSelectionPreview(containerRef.current, null);
         setSelectionBox(null);
-    }, []);
+    }, [containerRef]);
+
+    const cancelSelectionBox = useCallback(() => {
+        const gesture = selectionGestureRef.current;
+        const initialSelection = gesture.phase === "selecting" ? gesture.initialSelection : null;
+        resetSelectionBox();
+        if (!initialSelection) return;
+        const restoredSelection = new Set(initialSelection);
+        if (sameStringSet(restoredSelection, selectedNodeIdsRef.current)) return;
+        selectedNodeIdsRef.current = restoredSelection;
+        setSelectedNodeIds(restoredSelection);
+    }, [resetSelectionBox, selectedNodeIdsRef, setSelectedNodeIds]);
 
     const deselectCanvas = useCallback(() => {
         cancelPendingConnectionCreate();
@@ -118,29 +131,19 @@ export function useCanvasSelectionController({
         onCanvasSelectionStart();
         if (event.button !== 0) return;
         const world = screenToCanvas(event.clientX, event.clientY);
-        const subtractive = event.altKey;
-        const additive = !subtractive && (event.shiftKey || event.ctrlKey || event.metaKey);
+        const strategy = resolveCanvasSelectionStrategy(event);
+        const initialSelection = new Set(selectedNodeIdsRef.current);
         const nextSelectionBox: SelectionBox = {
             startWorldX: world.x,
             startWorldY: world.y,
             currentWorldX: world.x,
             currentWorldY: world.y,
-            additive,
-            subtractive,
-            initialSelectedNodeIds: additive || subtractive ? Array.from(selectedNodeIdsRef.current) : [],
+            strategy,
+            hitMode: "contain",
+            initialSelectedNodeIds: Array.from(initialSelection),
         };
-        selectionBoxRef.current = nextSelectionBox;
-        selectionActivatedRef.current = false;
-        const currentNodes = nodesRef.current;
-        const nodeById = new Map(currentNodes.map((node) => [node.id, node]));
-        const hiddenBatchChildIds = new Set(currentNodes.flatMap((node) => {
-            const rootId = node.metadata?.batchRootId;
-            const root = rootId ? nodeById.get(rootId) : undefined;
-            return root && !root.metadata?.imageBatchExpanded ? [node.id] : [];
-        }));
-        selectionSpatialIndexRef.current = buildCanvasSpatialIndex(currentNodes
-            .filter((node) => !hiddenBatchChildIds.has(node.id) && !(node.parentId && nodeById.get(node.parentId)?.metadata?.frame?.collapsed))
-            .map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node })));
+        selectionGestureRef.current = { phase: "pending", initialSelection, selection: nextSelectionBox };
+        selectionSpatialIndexCacheRef.current.get(nodesRef.current);
         setSelectedConnectionId(null);
     }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId]);
 
@@ -282,70 +285,79 @@ export function useCanvasSelectionController({
         });
     }, [containerRef, viewportRef]);
 
+    const updateSelectionPreview = useCallback((world: Position, commit: boolean) => {
+        let gesture = selectionGestureRef.current;
+        if (gesture.phase === "idle") return false;
+        let selection = gesture.selection;
+        if (gesture.phase === "pending") {
+            const threshold = 4 / viewportRef.current.k;
+            if (Math.hypot(world.x - selection.startWorldX, world.y - selection.startWorldY) < threshold) return false;
+            selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y, hitMode: resolveCanvasSelectionHitMode(selection.startWorldX, world.x) };
+            gesture = { phase: "selecting", initialSelection: gesture.initialSelection, selection };
+            selectionGestureRef.current = gesture;
+            // React only learns that a gesture exists. All subsequent geometry
+            // and node feedback stays outside React until pointer-up.
+            setSelectionBox(selection);
+        }
+        const bounds = createCanvasSelectionBounds(selection.startWorldX, selection.startWorldY, world.x, world.y);
+        selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y, hitMode: resolveCanvasSelectionHitMode(selection.startWorldX, world.x) };
+        selectionGestureRef.current = { phase: "selecting", initialSelection: gesture.initialSelection, selection };
+        applyCanvasSelectionPreview(containerRef.current, selection);
+        const queryBounds = { ...bounds, right: Math.max(bounds.right, bounds.left + 0.01), bottom: Math.max(bounds.bottom, bounds.top + 0.01) };
+        const hitNodeIds = new Set(selectionSpatialIndexCacheRef.current
+            .get(nodesRef.current)
+            .query(queryBounds)
+            .filter((node) => canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode))
+            .map((node) => node.id));
+        applyCanvasNodeSelectionPreview(containerRef.current, resolveCanvasSelectionPreviewDelta(gesture.initialSelection, hitNodeIds, selection.strategy));
+        if (!commit) return true;
+        const nextSelected = applyCanvasSelectionStrategy(gesture.initialSelection, hitNodeIds, selection.strategy);
+        if (!sameStringSet(nextSelected, selectedNodeIdsRef.current)) {
+            selectedNodeIdsRef.current = nextSelected;
+            setSelectedNodeIds(nextSelected);
+        }
+        return true;
+    }, [containerRef, nodesRef, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+
     const handlePointerMove = useCallback((event: PointerEvent) => {
         if (dragRef.current.isDraggingNode) {
             handleNodeDragMove(event);
             return;
         }
-        const currentSelection = selectionBoxRef.current;
-        if (!currentSelection) return;
-        if (event.buttons === 0) {
-            cancelSelectionBox();
-            return;
-        }
+        const currentGesture = selectionGestureRef.current;
+        if (currentGesture.phase === "idle") return;
         pendingSelectionPointRef.current = screenToCanvas(event.clientX, event.clientY);
         if (selectionFrameRef.current) return;
         selectionFrameRef.current = requestAnimationFrame(() => {
             selectionFrameRef.current = null;
-            let selection = selectionBoxRef.current;
             const world = pendingSelectionPointRef.current;
-            if (!selection || !world) return;
-            if (!selectionActivatedRef.current) {
-                const threshold = 4 / viewportRef.current.k;
-                if (Math.hypot(world.x - selection.startWorldX, world.y - selection.startWorldY) < threshold) return;
-                selectionActivatedRef.current = true;
-                selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
-                selectionBoxRef.current = selection;
-                setSelectionBox(selection);
-                if (!selection.additive) {
-                    const emptySelection = new Set<string>();
-                    selectedNodeIdsRef.current = emptySelection;
-                    setSelectedNodeIds(emptySelection);
-                }
-            }
-            const rectX = Math.min(selection.startWorldX, world.x);
-            const rectY = Math.min(selection.startWorldY, world.y);
-            const rectW = Math.abs(world.x - selection.startWorldX);
-            const rectH = Math.abs(world.y - selection.startWorldY);
-            selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
-            selectionBoxRef.current = selection;
-            applyCanvasSelectionPreview(containerRef.current, selection);
-            const nextSelected = new Set<string>(selection.additive || selection.subtractive ? selection.initialSelectedNodeIds : []);
-            selectionSpatialIndexRef.current.query({ left: rectX, top: rectY, right: rectX + Math.max(rectW, 0.01), bottom: rectY + Math.max(rectH, 0.01) }).forEach((node) => {
-                if (selection.subtractive) nextSelected.delete(node.id);
-                else nextSelected.add(node.id);
-            });
-            if (sameStringSet(nextSelected, selectedNodeIdsRef.current)) return;
-            selectedNodeIdsRef.current = nextSelected;
-            setSelectedNodeIds(nextSelected);
+            if (world) updateSelectionPreview(world, false);
         });
-    }, [cancelSelectionBox, containerRef, handleNodeDragMove, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+    }, [handleNodeDragMove, screenToCanvas, updateSelectionPreview]);
 
-    const finishSelection = useCallback(() => {
-        const hadPendingSelection = Boolean(selectionBoxRef.current);
-        const wasSelection = selectionActivatedRef.current;
-        cancelSelectionBox();
-        if (hadPendingSelection && !wasSelection) deselectCanvas();
-        if (hadPendingSelection) onSelectionBoxEnd?.();
-    }, [cancelSelectionBox, deselectCanvas, onSelectionBoxEnd]);
+    const finishSelection = useCallback((clientX: number, clientY: number) => {
+        const gesture = selectionGestureRef.current;
+        const hadPendingSelection = gesture.phase !== "idle";
+        const strategy = gesture.phase === "idle" ? null : gesture.selection.strategy;
+        if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
+        selectionFrameRef.current = null;
+        const wasSelection = hadPendingSelection && updateSelectionPreview(screenToCanvas(clientX, clientY), true);
+        resetSelectionBox();
+        if (hadPendingSelection && !wasSelection && strategy === "replace") deselectCanvas();
+    }, [deselectCanvas, resetSelectionBox, screenToCanvas, updateSelectionPreview]);
 
     useEffect(() => {
         const handleMouseUp = (event: MouseEvent) => {
             finishNodeDrag(event.clientX, event.clientY);
-            finishSelection();
         };
-        const handlePointerUp = (event: PointerEvent) => finishNodeDrag(event.clientX, event.clientY);
-        const cancel = () => finishNodeDrag();
+        const handlePointerUp = (event: PointerEvent) => {
+            finishNodeDrag(event.clientX, event.clientY);
+            finishSelection(event.clientX, event.clientY);
+        };
+        const cancel = () => {
+            finishNodeDrag();
+            cancelSelectionBox();
+        };
         window.addEventListener("mousemove", handleNodeDragMove);
         window.addEventListener("mouseup", handleMouseUp);
         window.addEventListener("pointermove", handlePointerMove);
@@ -363,7 +375,7 @@ export function useCanvasSelectionController({
             window.removeEventListener("pointercancel", cancel);
             window.removeEventListener("blur", cancel);
         };
-    }, [finishNodeDrag, finishSelection, handleNodeDragMove, handlePointerMove]);
+    }, [cancelSelectionBox, finishNodeDrag, finishSelection, handleNodeDragMove, handlePointerMove]);
 
     return {
         alignmentGuides,

@@ -23,7 +23,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { flushAssetStorePersistence, useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
-import { deleteAssetWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { deleteAssetWithRemoteSync, loadAssetLibraryPage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
 import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAssetsPage, moveRemoteAssetsToFolder, updateAssetFolder, type AssetFolder } from "@/services/api/user-data";
 import { AssetBatchUploadModal } from "./asset-batch-upload-modal";
@@ -143,7 +143,7 @@ export default function AssetsPage() {
 
     const assetPageQuery = useQuery({
         queryKey: [...ASSET_LIBRARY_QUERY_KEY, page, pageSize, viewMode, kindFilter, categoryFilter, folderFilter, debouncedKeyword],
-        queryFn: ({ signal }) => listRemoteAssetsPage({
+        queryFn: ({ signal }) => loadAssetLibraryPage({
             page,
             pageSize,
             status: viewMode === "trash" ? "archived" : "active",

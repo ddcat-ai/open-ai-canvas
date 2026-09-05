@@ -277,6 +277,52 @@ test("a selected Dreamina local model never creates a Backend task", async () =>
     expect(backendCalls).toBe(0);
 });
 
+test("backend text generation forwards streaming callbacks and thinking options", async () => {
+    let createdInput: Parameters<NonNullable<Parameters<typeof runBackendGenerationTask>[1]>["createTask"]>[0] | undefined;
+    let streamedText = "";
+    const running: GenerationTask = {
+        id: "text-stream-task-0001",
+        type: "canvas_text",
+        status: "running",
+        prompt: "写一个开场",
+        attempts: 1,
+        createdAt: "2026-09-04T00:00:00.000Z",
+        updatedAt: "2026-09-04T00:00:00.000Z",
+    };
+
+    const result = await runBackendGenerationTask(
+        {
+            mode: "text",
+            prompt: running.prompt,
+            config: backendModelConfig("reasoning-text-model"),
+            streamText: true,
+            enableThinking: true,
+            onTextDelta: (value) => {
+                streamedText = value;
+            },
+        },
+        {
+            createTask: async (input) => {
+                createdInput = input;
+                return running;
+            },
+            waitTask: async (_id, options) => {
+                options?.onTextDelta?.("实时正文");
+                return { ...running, status: "succeeded", resultJson: JSON.stringify({ mode: "text", text: "完整正文", reasoning: "思考摘要" }) };
+            },
+            runLocal: async () => {
+                throw new Error("must not use local Runtime");
+            },
+            createId: () => "unused-text-id",
+            now: () => "2026-09-04T00:00:00.000Z",
+        },
+    );
+
+    expect(createdInput?.input?.textOptions).toEqual({ stream: true, thinking: true });
+    expect(streamedText).toBe("实时正文");
+    expect(result).toEqual({ mode: "text", text: "完整正文", reasoning: "思考摘要" });
+});
+
 test("the shared local generation entry projects pre-receipt work as submitting without fake progress", async () => {
     const updates: GenerationTask[] = [];
     let release!: () => void;

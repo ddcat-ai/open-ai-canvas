@@ -21,7 +21,8 @@ func TestPasswordResetChangesPasswordConsumesCodeAndRevokesSessions(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := model.User{ID: "user-1", Username: "creator", Email: "creator@example.com", DisplayName: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: oldHash}
+	// Existing users can reset passwords even outside the registration whitelist.
+	user := model.User{ID: "user-1", Username: "creator", Email: "creator@external.example", DisplayName: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: oldHash}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +256,7 @@ func newPasswordResetTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.EmailVerificationCode{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
-	settingJSON, err := json.Marshal(emailSettingValue{Enabled: true, Host: "smtp.example.com", Port: 587, Encryption: "starttls", FromEmail: "noreply@example.com", FromName: "影策"})
+	settingJSON, err := json.Marshal(emailSettingValue{Enabled: true, Host: "smtp.example.com", Port: 587, Encryption: "starttls", FromEmail: "noreply@example.com", FromName: "影策", RegistrationAllowedDomains: []string{"example.com"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,7 +8,13 @@ import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
-type EmailFormValues = Pick<EmailSetting, "enabled" | "host" | "port" | "username" | "password" | "encryption" | "fromEmail" | "fromName">;
+type EmailFormValues = Pick<EmailSetting, "enabled" | "host" | "port" | "username" | "password" | "encryption" | "fromEmail" | "fromName"> & {
+    registrationAllowedDomains: string;
+};
+
+type NormalizedEmailFormValues = Omit<EmailFormValues, "registrationAllowedDomains"> & {
+    registrationAllowedDomains: string[];
+};
 
 export default function EmailSettingsPanel() {
     const { message, modal } = App.useApp();
@@ -289,8 +295,25 @@ export default function EmailSettingsPanel() {
                 </SettingsSectionCard>
             </div>
 
-            {draftEnabled ? (
-                <div id="admin-email-smtp" className="admin-settings-anchor">
+            <Form
+                form={form}
+                className="admin-email-form-stack"
+                layout="vertical"
+                requiredMark={false}
+                disabled={loading || refreshing || saving}
+                onValuesChange={() => {
+                    const values = form.getFieldsValue(true);
+                    setDraftEnabled(Boolean(values.enabled));
+                    setDirty(hasEmailChanges(values, setting));
+                    setSaveError("");
+                }}
+            >
+                <Form.Item name="enabled" valuePropName="checked" hidden>
+                    <Switch />
+                </Form.Item>
+
+                {draftEnabled ? (
+                    <div id="admin-email-smtp" className="admin-settings-anchor">
                     <SettingsSectionCard
                         className="admin-email-section admin-email-configuration-section"
                         icon={<Server className="size-4" aria-hidden="true" />}
@@ -310,28 +333,12 @@ export default function EmailSettingsPanel() {
                                         </Button>
                                     ) : null}
                                     <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
-                                        保存并启用
+                                        {draftEnabled ? "保存并启用" : "保存设置"}
                                     </Button>
                                 </div>
                             </>
                         }
                     >
-                        <Form
-                            form={form}
-                            layout="vertical"
-                            requiredMark={false}
-                            disabled={loading || refreshing || saving}
-                            onValuesChange={() => {
-                                const values = form.getFieldsValue(true);
-                                setDraftEnabled(Boolean(values.enabled));
-                                setDirty(hasEmailChanges(values, setting));
-                                setSaveError("");
-                            }}
-                        >
-                            <Form.Item name="enabled" valuePropName="checked" hidden>
-                                <Switch />
-                            </Form.Item>
-
                             <div className="admin-email-form-section">
                                 <FormSectionTitle icon={<Server className="size-4" />} title="服务器连接" description="填写 SMTP 主机、端口和传输加密；STARTTLS 通常使用 587，直接 TLS 通常使用 465。" />
                                 <div className="admin-email-form-grid is-connection">
@@ -402,10 +409,53 @@ export default function EmailSettingsPanel() {
                                     </Form.Item>
                                 </div>
                             </div>
-                        </Form>
+                    </SettingsSectionCard>
+                    </div>
+                ) : null}
+
+                <div id="admin-email-registration-domains" className="admin-settings-anchor">
+                    <SettingsSectionCard
+                        className="admin-email-section"
+                        icon={<MailCheck className="size-4" aria-hidden="true" />}
+                        title="3. 电子邮件域名白名单"
+                        description="每行填写一个允许注册的邮箱域名；不在白名单内的邮箱无法注册。"
+                        status={<AdminStatusBadge label={currentValues.registrationAllowedDomains.length > 0 ? "已限制范围" : "不限制服务商"} tone={currentValues.registrationAllowedDomains.length > 0 ? "info" : "neutral"} />}
+                        footer={
+                            <>
+                                <div className="admin-email-footer-note">
+                                    <BadgeCheck className="size-4" aria-hidden="true" />
+                                    <span>规则只影响新用户注册，不限制发件邮箱和已有账号找回密码</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {dirty ? (
+                                        <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
+                                            撤销
+                                        </Button>
+                                    ) : null}
+                                    <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
+                                        保存设置
+                                    </Button>
+                                </div>
+                            </>
+                        }
+                    >
+                            <div className="admin-email-form-section">
+                                <Form.Item
+                                    name="registrationAllowedDomains"
+                                    label="电子邮件域名白名单"
+                                    extra="每行一个域名。留空保存表示不限制邮箱域名。"
+                                    rules={[{ validator: (_, value: string | undefined) => validateDomainList(value) }]}
+                                >
+                                    <Input.TextArea
+                                        autoSize={{ minRows: 9, maxRows: 16 }}
+                                        placeholder="gmail.com&#10;163.com&#10;126.com&#10;qq.com"
+                                        spellCheck={false}
+                                    />
+                                </Form.Item>
+                            </div>
                     </SettingsSectionCard>
                 </div>
-            ) : null}
+            </Form>
         </div>
     );
 }
@@ -432,10 +482,11 @@ function toEmailFormValues(setting: EmailSetting): EmailFormValues {
         encryption: setting.encryption,
         fromEmail: setting.fromEmail,
         fromName: setting.fromNameInherited ? "" : setting.fromName,
+        registrationAllowedDomains: setting.registrationAllowedDomains.join("\n"),
     };
 }
 
-function normalizeEmailFormValues(values: Partial<EmailFormValues>): EmailFormValues {
+function normalizeEmailFormValues(values: Partial<EmailFormValues>): NormalizedEmailFormValues {
     return {
         enabled: Boolean(values.enabled),
         host: values.host?.trim() || "",
@@ -445,6 +496,7 @@ function normalizeEmailFormValues(values: Partial<EmailFormValues>): EmailFormVa
         encryption: values.encryption === "tls" || values.encryption === "none" ? values.encryption : "starttls",
         fromEmail: values.fromEmail?.trim().toLowerCase() || "",
         fromName: values.fromName?.trim() || "",
+        registrationAllowedDomains: normalizeDomains(values.registrationAllowedDomains),
     };
 }
 
@@ -453,7 +505,8 @@ function hasEmailChanges(values: Partial<EmailFormValues>, setting: EmailSetting
     const draft = normalizeEmailFormValues(values);
     const saved = normalizeEmailFormValues(toEmailFormValues(setting));
     if (draft.password) return true;
-    return (Object.keys(saved) as Array<keyof EmailFormValues>).some((key) => key !== "password" && draft[key] !== saved[key]);
+    const scalarFields: Array<keyof EmailFormValues> = ["enabled", "host", "port", "username", "encryption", "fromEmail", "fromName"];
+    return scalarFields.some((key) => draft[key] !== saved[key]) || !arraysEqual(draft.registrationAllowedDomains, saved.registrationAllowedDomains);
 }
 
 function validateEmailDraft(values: EmailFormValues, setting: EmailSetting | null) {
@@ -466,11 +519,11 @@ function validateEmailDraft(values: EmailFormValues, setting: EmailSetting | nul
     return "";
 }
 
-function emailResponseMatches(setting: EmailSetting, expected: EmailFormValues) {
+function emailResponseMatches(setting: EmailSetting, expected: NormalizedEmailFormValues) {
     const actual = normalizeEmailFormValues(toEmailFormValues(setting));
     const fields: Array<keyof EmailFormValues> = ["enabled", "host", "port", "username", "encryption", "fromEmail", "fromName"];
     if (expected.password && !setting.hasPassword) return false;
-    return fields.every((key) => actual[key] === expected[key]);
+    return fields.every((key) => actual[key] === expected[key]) && arraysEqual(actual.registrationAllowedDomains, expected.registrationAllowedDomains);
 }
 
 function isEmailSetting(value: unknown): value is EmailSetting {
@@ -485,8 +538,34 @@ function isEmailSetting(value: unknown): value is EmailSetting {
         typeof setting.fromEmail === "string" &&
         typeof setting.fromName === "string" &&
         typeof setting.fromNameInherited === "boolean" &&
-        typeof setting.hasPassword === "boolean"
+        typeof setting.hasPassword === "boolean" &&
+        Array.isArray(setting.registrationAllowedDomains) &&
+        setting.registrationAllowedDomains.every((value) => typeof value === "string")
     );
+}
+
+function normalizeDomains(value?: string) {
+    return Array.from(
+        new Set(
+            (value || "")
+                .split(/[\s,，;；]+/)
+                .map((domain) => domain.trim().toLowerCase().replace(/^@/, "").replace(/\.$/, ""))
+                .filter(Boolean),
+        ),
+    );
+}
+
+function arraysEqual(left: string[], right: string[]) {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function validateDomainList(value?: string) {
+    const invalid = invalidDomain(value);
+    return invalid ? Promise.reject(new Error(`邮箱域名格式不正确：“${invalid}”`)) : Promise.resolve();
+}
+
+function invalidDomain(value?: string) {
+    return normalizeDomains(value).find((domain) => !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domain));
 }
 
 function isValidEmail(value: string) {

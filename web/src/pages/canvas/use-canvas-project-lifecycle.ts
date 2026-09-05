@@ -8,9 +8,10 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { CanvasHistorySnapshot } from "./use-canvas-history";
 
@@ -74,18 +75,24 @@ export function useCanvasProjectLifecycle({
     const { message } = App.useApp();
     const navigate = useNavigate();
     const hydrated = useCanvasStore((state) => state.hydrated);
+    const sessionHydrated = useUserStore((state) => state.hydrated);
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
     const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
+    const [loadError, setLoadError] = useState("");
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        if (!hydrated) return;
+        if (!hydrated || !sessionHydrated) return;
         let cancelled = false;
         setProjectLoaded(false);
-        const project = openProject(projectId);
+        setLoadError("");
+        const load = async () => {
+        const project = await loadCanvasProjectForEditing(projectId);
+        if (cancelled) return;
         if (!project) {
             navigate("/canvas", { replace: true });
             return;
@@ -140,11 +147,15 @@ export function useCanvasProjectLifecycle({
                     if (!cancelled) message.warning("部分助手会话素材恢复失败，已使用项目记录继续打开");
                 });
         };
-        void restore();
+        await restore();
+        };
+        void load().catch((error) => {
+            if (!cancelled) setLoadError(error instanceof Error ? error.message : "读取画布失败，请重试");
+        });
         return () => {
             cancelled = true;
         };
-    }, [hydrated, message, navigate, openProject, projectId, resetHistory, setActiveChatId, setBackgroundMode, setCanvasAppearance, setChatSessions, setConnections, setNodes, setShowImageInfo, setViewport]);
+    }, [hydrated, sessionHydrated, loadAttempt, message, navigate, openProject, projectId, resetHistory, setActiveChatId, setBackgroundMode, setCanvasAppearance, setChatSessions, setConnections, setNodes, setShowImageInfo, setViewport]);
 
     useEffect(() => {
         if (!projectLoaded) return;
@@ -244,6 +255,8 @@ export function useCanvasProjectLifecycle({
     }, [cleanupCanvasFiles, projectId]);
 
     return {
+        loadError,
+        retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
         addedSkills,
         clearCanvasFiles,
         createAndOpenProject,

@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           prerelease_args=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* ]]; then
             prerelease_args+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" \

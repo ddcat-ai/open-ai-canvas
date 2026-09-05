@@ -1,5 +1,3 @@
-import "@/lib/plugins/builtin";
-
 import { getRegisteredPlugin } from "@/lib/plugins/plugin-registry";
 import { pluginStorageFor } from "@/lib/plugins/plugin-storage";
 import type { Asset } from "@/stores/use-asset-store";

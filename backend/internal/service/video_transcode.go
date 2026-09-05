@@ -301,7 +301,8 @@ func (s *Service) OpenResourcePlaybackRange(userID string, resourceID string) (*
 }
 
 // BackfillPlaybackTranscodes 在服务启动后扫描存量本地视频：未判定 codec 的补判定，
-// H.265 触发转码、H.264 标记 none。幂等：maybeStartPlaybackTranscode 先置
+// H.265/MPEG-4 Part 2 触发转码、H.264 标记 none；再对旧规则遗留的 none 行做一次
+// 有界重判（见 PlaybackNoneVideos）。幂等：maybeStartPlaybackTranscode 先置
 // processing/none 再入库，重复扫描不会重复转码。
 func (s *Service) BackfillPlaybackTranscodes() {
 	// 上次进程可能崩溃在转码中途（状态卡 processing），先重置为待判定。
@@ -309,10 +310,20 @@ func (s *Service) BackfillPlaybackTranscodes() {
 	for {
 		resources, err := s.repo.PlaybackPendingVideos(20)
 		if err != nil || len(resources) == 0 {
-			return
+			break
 		}
 		for i := range resources {
 			s.maybeStartPlaybackTranscode(&resources[i])
+		}
+	}
+	// 旧版本曾把 H.265/MPEG-4 Part 2 误判为浏览器可播并落 none；对存量 none 行
+	// 做一次有界重判（H.264 保持 none，H.265/MPEG-4 Part 2 触发转码），使 codec
+	// 判定规则的变更覆盖规则变更前已导入的文件。每次启动最多重判 20 条最旧行，
+	// 天然收敛且不会重复转码（claim 原子地把 none → processing）。
+	legacy, err := s.repo.PlaybackNoneVideos(20)
+	if err == nil {
+		for i := range legacy {
+			s.maybeStartPlaybackTranscode(&legacy[i])
 		}
 	}
 }

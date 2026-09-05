@@ -60,6 +60,7 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
 
     return (
         <AssetLibraryPickerModal
+            remoteLibrary
             open={open}
             items={items}
             categoryLabels={{ ...categoryLabels, ...externalAssetSources.categoryLabels }}

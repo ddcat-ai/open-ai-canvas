@@ -2,10 +2,8 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
-import { RequireFeature } from "@/components/auth/require-feature";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
-import UserLayout from "@/layouts/user-layout";
+import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 
@@ -48,9 +46,11 @@ const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
 const WalletPage = lazy(loadWalletPage);
 const ProjectsPage = lazy(loadProjectsPage);
-const ProjectDetailPage = lazy(() => import("@/pages/projects/detail"));
+const ProjectDetailPage = lazy(loadProjectDetailPage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
+const UserLayout = lazy(() => import("@/layouts/user-layout"));
+const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
 
 function deferred(element: ReactNode) {
     return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
@@ -58,6 +58,10 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+function AuthenticatedWorkspaceLayout() {
+    return <RequireAuth>{fullScreenDeferred(<UserLayout><Outlet /></UserLayout>)}</RequireAuth>;
 }
 
 /**
@@ -90,11 +94,7 @@ export const router = createBrowserRouter([
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     ...(import.meta.env.DEV ? devRoutes() : []),
     {
-        element: (
-            <UserLayout>
-                <Outlet />
-            </UserLayout>
-        ),
+        element: <AuthenticatedWorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
             { path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },

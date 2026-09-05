@@ -18,6 +18,7 @@ const metaStore = localforage.createInstance({ name: "infinite-canvas", storeNam
 const objectUrls = new Map<string, string>();
 const sessionBlobs = new Map<string, Blob>();
 const inFlight = new Map<string, Promise<string>>();
+const scheduled = new Set<string>();
 const downloadQueue: Array<() => void> = [];
 let activeDownloads = 0;
 let persistQueue: Promise<void> = Promise.resolve();
@@ -45,6 +46,25 @@ export async function cacheResourceObjectUrl(storageKey: string) {
     const task = withDownloadSlot(() => downloadAndCacheResource(storageKey, target)).finally(() => inFlight.delete(target.key));
     inFlight.set(target.key, task);
     return task;
+}
+
+/**
+ * 播放器先使用支持 Range 的资源 URL 起播；确认用户实际播放后，再延迟下载完整 Blob。
+ * 这样不会让 IndexedDB 缓存阻塞首帧，同时后续打开可直接复用本地 Object URL。
+ */
+export function scheduleResourceBlobCache(storageKey: string, delayMs = 4_000) {
+    if (!resourceIdFromStorageKey(storageKey) || scheduled.has(storageKey)) return;
+    scheduled.add(storageKey);
+    const run = () => {
+        void cacheResourceObjectUrl(storageKey)
+            .catch(() => "")
+            .finally(() => scheduled.delete(storageKey));
+    };
+    if (typeof window === "undefined") {
+        run();
+        return;
+    }
+    window.setTimeout(run, Math.max(0, delayMs));
 }
 
 function withDownloadSlot<T>(task: () => Promise<T>) {

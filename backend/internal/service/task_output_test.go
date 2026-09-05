@@ -41,6 +41,16 @@ func TestTaskMediaPreviewUsesSafeMediaURLs(t *testing.T) {
 	}
 }
 
+func TestTaskMediaPreviewSeparatesVideoPoster(t *testing.T) {
+	previewURL, previewKind, posterURL := taskMediaPreviewWithPoster(`{"video":{"url":"https://cdn.example.com/output.mp4","posterUrl":"https://cdn.example.com/poster.webp"}}`, "canvas_video")
+	if previewURL != "https://cdn.example.com/output.mp4" || previewKind != "video" || posterURL != "https://cdn.example.com/poster.webp" {
+		t.Fatalf("unexpected video preview: url=%q kind=%q poster=%q", previewURL, previewKind, posterURL)
+	}
+	if _, _, posterURL := taskMediaPreviewWithPoster(`{"video":{"url":"https://cdn.example.com/output.mp4","posterUrl":"file:///tmp/poster.png"}}`, "canvas_video"); posterURL != "" {
+		t.Fatalf("unsafe local poster was exposed: %q", posterURL)
+	}
+}
+
 func TestTaskClientContextRequiresCreatePageMetadata(t *testing.T) {
 	valid := taskClientContext(`{"metadata":{"source":"create-page","conversationId":"conversation-1","messageId":"message-1","batchIndex":2,"batchCount":4}}`)
 	if valid == nil || valid.ConversationID != "conversation-1" || valid.BatchIndex != 2 {

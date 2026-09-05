@@ -324,7 +324,7 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
     scene.selectionBounds.visible = Boolean(bounds && !selection);
     if (bounds && !selection) {
         syncSelectionBounds(scene.selectionBounds, bounds, viewportScale);
-        scene.selectionBounds.stroke = props.theme.accent.primary;
+        scene.selectionBounds.stroke = props.theme.node.label;
     }
 
     const connecting = props.connectingParams;
@@ -373,8 +373,9 @@ function syncSelection(rect: Rect, selection: SelectionBox, theme: CanvasTheme) 
         y: Math.min(selection.startWorldY, selection.currentWorldY),
         width: Math.abs(selection.currentWorldX - selection.startWorldX),
         height: Math.abs(selection.currentWorldY - selection.startWorldY),
-        fill: theme.canvas.selectionFill,
-        stroke: theme.accent.primary,
+        fill: "transparent",
+        stroke: theme.node.label,
+        opacity: selection.hitMode === "intersect" ? 0.82 : 0.68,
     });
 }
 
@@ -382,10 +383,18 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
     const scale = Math.max(viewport.k, 0.05);
     for (const scene of [underlay, overlay]) scene.world.set({ x: viewport.x, y: viewport.y, scaleX: scale, scaleY: scale });
 
-    overlay.selection.strokeWidth = 1 / scale;
-    overlay.selection.cornerRadius = 2 / scale;
+    overlay.selection.set({
+        strokeWidth: 1 / scale,
+        cornerRadius: 2 / scale,
+        dashPattern: [4 / scale, 4 / scale],
+    });
     if (props.selectedNodeBounds) syncSelectionBounds(overlay.selectionBounds, props.selectedNodeBounds, scale);
-    overlay.selectionBounds.set({ strokeWidth: 1 / scale, cornerRadius: 12 / scale });
+    overlay.selectionBounds.set({
+        strokeWidth: 1 / scale,
+        cornerRadius: 2 / scale,
+        dashPattern: [4 / scale, 4 / scale],
+        opacity: 0.68,
+    });
     overlay.draft.set({ strokeWidth: 1.4 / scale, dashPattern: [8 / scale, 8 / scale] });
     overlay.guides.set({
         visible: typeof props.alignmentGuides.vertical === "number" || typeof props.alignmentGuides.horizontal === "number",

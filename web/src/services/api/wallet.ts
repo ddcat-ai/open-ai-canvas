@@ -147,6 +147,7 @@ export type EmailSetting = {
     fromName: string;
     fromNameInherited: boolean;
     hasPassword: boolean;
+    registrationAllowedDomains: string[];
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;

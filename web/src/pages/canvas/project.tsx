@@ -1,7 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
+import { loadAssetsForUse } from "@/services/user-data-sync";
+import { canvasAssetHandoffIds } from "@/lib/canvas/canvas-asset-handoff";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
 import { readLocalRuntimeBootstrapState } from "@/services/local-runtime-bootstrap";
@@ -23,7 +25,7 @@ import { flushCanvasStorePersistence } from "@/stores/canvas/use-canvas-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { App, Modal } from "antd";
+import { App, Button, Modal } from "antd";
 import { getNodeSpec } from "@/constant/canvas";
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
 import { CanvasConfigNodePanel } from "@/components/canvas/canvas-config-node-panel";
@@ -261,7 +263,7 @@ function InfiniteCanvasPage() {
     const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(DEFAULT_CANVAS_BACKGROUND_MODE);
     const [showImageInfo, setShowImageInfo] = useState(false);
-    const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("move");
+    const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("box-select");
     const [mediaPerformanceMode, setMediaPerformanceMode] = useState<CanvasMediaPerformanceMode>(readCanvasMediaPerformanceMode);
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [workspaceMode, setWorkspaceMode] = useState<CanvasWorkspaceMode>(readCanvasWorkspaceMode);
@@ -408,7 +410,7 @@ function InfiniteCanvasPage() {
         [cleanupAssetImages, getHistoryCleanupContext],
     );
 
-    const { addedSkills, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
+    const { loadError, retryLoad, addedSkills, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
         projectId,
         projectLoaded,
         nodes,
@@ -709,6 +711,11 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
     });
     const replaceCanvasNodeMedia = useCallback((node: CanvasNodeData) => handleUploadRequest(node.id), [handleUploadRequest]);
+
+    useEffect(() => {
+        if (!projectLoaded || searchParams.get("mode") !== "handoff") return;
+        void loadAssetsForUse(canvasAssetHandoffIds(searchParams)).catch((error) => message.error(error instanceof Error ? error.message : "转入素材读取失败"));
+    }, [projectLoaded, searchParams, message]);
 
     useEffect(() => {
         if (!projectLoaded || !assetsHydrated || searchParams.get("mode") !== "handoff") return;
@@ -1099,7 +1106,6 @@ function InfiniteCanvasPage() {
         onBatchConnectionTarget: handleBatchConnectionTargetClick,
         onLinkedFolderDrop: archiveNodesToLinkedFolder,
         onDeselect: handleCanvasDeselect,
-        onSelectionBoxEnd: () => setCanvasTool((tool) => (tool === "box-select" ? "move" : tool)),
     });
 
     const keepNodeToolbar = useCallback(
@@ -2142,6 +2148,7 @@ function InfiniteCanvasPage() {
             onAddScript={() => createNode(CanvasNodeType.Script)}
         />
     ) : null;
+    if (!projectLoaded && loadError) return <main className="flex h-full flex-col items-center justify-center gap-4"><p role="alert">{loadError}</p><Button onClick={retryLoad}>重新加载</Button><Link to="/canvas">返回画布库</Link></main>;
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (

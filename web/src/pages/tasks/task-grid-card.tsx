@@ -11,13 +11,16 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
     const isVideo = task.previewKind === "video";
+    const thumbnailUrl = isVideo ? task.previewPosterUrl : task.previewUrl;
     const fallbackVideo = task.type.includes("video");
     const Icon = fallbackVideo ? Video : task.type.includes("image") ? ImageIcon : FileText;
     return (
         <article className={`task-grid-card${isFailed ? " is-attention" : ""}`}>
             <div className="task-grid-thumb">
-                {task.previewUrl ? (
-                    <MediaPreview src={task.previewUrl} kind={isVideo ? "video" : "image"} loading="lazy" className="h-full w-full object-cover" />
+                {thumbnailUrl ? (
+                    <MediaPreview src={thumbnailUrl} kind="image" loading="lazy" className="h-full w-full object-cover" />
+                ) : isVideo && task.previewUrl ? (
+                    <span className="task-video-poster-placeholder"><Video /><small>视频预览</small></span>
                 ) : (
                     <Icon />
                 )}

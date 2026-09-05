@@ -1,11 +1,10 @@
-import { memo, useMemo, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
-import { resolveActiveCanvasMediaNodeId } from "@/lib/canvas/canvas-performance-mode";
 import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
@@ -83,7 +82,10 @@ const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 
 export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
     const { viewportScale } = props;
-    const activeMediaNodeId = resolveActiveCanvasMediaNodeId(props.selectedNodeIds, props.nodeById);
+    const [activeMediaNodeId, setActiveMediaNodeId] = useState<string | null>(null);
+    useEffect(() => {
+        if (activeMediaNodeId && !props.nodeById.has(activeMediaNodeId)) setActiveMediaNodeId(null);
+    }, [activeMediaNodeId, props.nodeById]);
     const orderedVisibleNodes = useMemo(() => [
         ...props.visibleNodes.filter(isFrameNode),
         ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
@@ -146,6 +148,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         scale={viewportScale}
                         isSelected={props.selectedNodeIds.has(node.id)}
                         mediaActive={activeMediaNodeId === node.id}
+                        onMediaPlayRequest={setActiveMediaNodeId}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}

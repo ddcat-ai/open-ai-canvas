@@ -4,7 +4,7 @@ import { App } from "antd";
 
 import { applyGenerationTaskResultToNodes, generationTaskCanReloadResource, generationTaskNodeId } from "@/lib/canvas/canvas-generation-task-sync";
 import { applyCanvasGenerationTaskNodeEffect, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
-import { consumeGenerationTaskNode, ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -273,7 +273,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
 
     const saveGeneratedAsset = useCallback(
         async (node: CanvasNodeData, taskId: string, signal?: AbortSignal) => {
-            const result = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node, source: "canvas-generation", taskId, signal });
+            const result = await retryCanvasAssetSyncAfterRateLimit(() => ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node, source: "canvas-generation", taskId, signal }), { signal });
             setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item)));
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
         },

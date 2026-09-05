@@ -17,6 +17,27 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/assets/batch", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			IDs []string `json:"ids"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		assets, err := svc.UserAssetsByIDs(user.ID, req.IDs)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"assets": assets})
+	})
 	r.GET("/settings/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -569,6 +590,17 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
+			return
+		}
+		if c.Query("page") != "" {
+			page, _ := strconv.Atoi(c.Query("page"))
+			pageSize, _ := strconv.Atoi(c.Query("page_size"))
+			result, pageErr := svc.UserCanvasProjectsPage(user.ID, page, pageSize, c.Query("project_id"), c.Query("q"), c.Query("sort"))
+			if pageErr != nil {
+				failService(c, pageErr)
+				return
+			}
+			ok(c, result)
 			return
 		}
 		projects, err := svc.UserCanvasProjectSummaries(user.ID)

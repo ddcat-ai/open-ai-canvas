@@ -16,7 +16,18 @@ type NodeDragPreviewDomState = {
     previousIds: Set<string>;
 };
 
+type NodeSelectionPreviewDomState = {
+    elementsById: Map<string, HTMLElement>;
+    previousStates: Map<string, "include" | "remove">;
+};
+
+export type CanvasNodeSelectionPreview = {
+    includeNodeIds: ReadonlySet<string>;
+    removeNodeIds: ReadonlySet<string>;
+};
+
 const nodeDragPreviewDomStates = new WeakMap<HTMLDivElement, NodeDragPreviewDomState>();
+const nodeSelectionPreviewDomStates = new WeakMap<HTMLDivElement, NodeSelectionPreviewDomState>();
 const liveViewportElements = new WeakMap<HTMLDivElement, { worldLayer: HTMLElement | null; gridLayer: HTMLElement | null }>();
 
 // 空间网格点模式的点半径（像素单位）。远距时使用更小半径，避免点阵糊成一团。
@@ -129,6 +140,47 @@ export function subscribeCanvasNodeDragPreview(container: HTMLDivElement, listen
     const handlePreview = (event: Event) => listener((event as CustomEvent<CanvasNodeDragPreview | null>).detail);
     container.addEventListener(CANVAS_NODE_DRAG_PREVIEW_EVENT, handlePreview);
     return () => container.removeEventListener(CANVAS_NODE_DRAG_PREVIEW_EVENT, handlePreview);
+}
+
+/**
+ * Shows the selection delta on mounted nodes without changing React state.
+ * The controller commits the final Set once on pointer-up.
+ */
+export function applyCanvasNodeSelectionPreview(container: HTMLDivElement | null, preview: CanvasNodeSelectionPreview | null) {
+    if (!container) return;
+
+    let state = nodeSelectionPreviewDomStates.get(container);
+    if (!state) {
+        state = { elementsById: new Map(), previousStates: new Map() };
+        nodeSelectionPreviewDomStates.set(container, state);
+    }
+
+    const nextStates = new Map<string, "include" | "remove">();
+    if (preview) {
+        for (const nodeId of preview.includeNodeIds) nextStates.set(nodeId, "include");
+        for (const nodeId of preview.removeNodeIds) nextStates.set(nodeId, "remove");
+    }
+
+    if (state.elementsById.size === 0 && nextStates.size > 0) {
+        container.querySelectorAll<HTMLElement>("[data-node-id]").forEach((element) => {
+            const nodeId = element.dataset.nodeId;
+            if (nodeId) state?.elementsById.set(nodeId, element);
+        });
+    }
+
+    for (const [nodeId, previousState] of state.previousStates) {
+        if (nextStates.get(nodeId) === previousState) continue;
+        state.elementsById.get(nodeId)?.removeAttribute("data-canvas-selection-preview");
+    }
+    for (const [nodeId, nextState] of nextStates) {
+        if (state.previousStates.get(nodeId) === nextState) continue;
+        const element = state.elementsById.get(nodeId);
+        if (!element || !element.isConnected) continue;
+        element.dataset.canvasSelectionPreview = nextState;
+    }
+
+    state.previousStates = nextStates;
+    if (!preview) state.elementsById.clear();
 }
 
 export function applyCanvasSelectionPreview(container: HTMLDivElement | null, selection: SelectionBox) {

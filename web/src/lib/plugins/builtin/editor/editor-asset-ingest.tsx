@@ -5,7 +5,7 @@
 // linkProjectAsset（后端按资源元数据合成资产记录）→ refreshAssets。
 
 import { useEffect, useRef, useState } from "react";
-import { Boxes, ChevronDown, ChevronRight, Clapperboard, Film, FolderOpen, HardDrive, Image as ImageIcon, Loader2, Music2, Plus } from "lucide-react";
+import { Boxes, Check, ChevronDown, ChevronRight, Clapperboard, Film, FolderOpen, HardDrive, Image as ImageIcon, Loader2, Music2, Plus, X } from "lucide-react";
 
 import { useEditorHostContext, useEditorStoreContext } from "@/components/editor/editor-context";
 import { defaultAssetCategoryForKind } from "@/lib/asset-category";
@@ -34,17 +34,15 @@ const IMAGE_RE = /\.(png|jpe?g|webp|gif|avif)$/i;
 const AUDIO_RE = /\.(mp3|wav|m4a|ogg|flac|aac)$/i;
 const MEDIA_RE = /\.(mp4|mov|webm|mkv|m4v|avi)$/i;
 
-/** 本地上传标记与画布产物标记（assetFromUploadedResource 写入 payload.data.source）。 */
+/** 本地上传标记（assetFromUploadedResource 写入 payload.data.source）。画布产物同步时写入 canvas，仅作数据追溯，面板不再单列分组。 */
 const SOURCE_UPLOADED = "uploaded";
-const SOURCE_CANVAS = "canvas";
 
-type AssetFilter = "all" | "project" | "uploaded" | "canvas";
+type AssetFilter = "all" | "project" | "uploaded";
 
 const FILTER_TABS: { id: AssetFilter; label: string }[] = [
     { id: "all", label: "全部" },
     { id: "project", label: "项目素材" },
     { id: "uploaded", label: "本地上传" },
-    { id: "canvas", label: "画布素材" },
 ];
 
 /** 按 MIME 与扩展名推断媒体 kind；非媒体文件返回 null。 */
@@ -200,20 +198,96 @@ function MediaPreview({ asset }: { asset: ProjectAsset }) {
         </div>
     );
 }
-
-function SourceBadge({ source }: { source: string }) {
-    const uploaded = source === SOURCE_UPLOADED;
-    const canvas = source === SOURCE_CANVAS;
+/** 展开详情浮层：覆盖在素材列表上方（列表保持原位不被挤压、滚动位置不变），
+ *  自带头部（标题+关闭）、可滚动内容区与固定底部操作；Esc 或关闭按钮退出。 */
+function AssetDetailSheet({
+    asset,
+    added,
+    onAdd,
+    onClose,
+}: {
+    asset: ProjectAsset;
+    added: boolean;
+    onAdd: () => void;
+    onClose: () => void;
+}) {
+    const closeRef = useRef<HTMLButtonElement | null>(null);
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            setShown(true);
+            return;
+        }
+        const raf = window.requestAnimationFrame(() => setShown(true));
+        return () => window.cancelAnimationFrame(raf);
+    }, []);
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        closeRef.current?.focus();
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [onClose]);
     return (
-        <span
-            className={`rounded px-1 py-px text-[9px] leading-none ${
-                uploaded || canvas
-                    ? "bg-[var(--director-control-hover)] text-[var(--director-dock-fg-strong)]"
-                    : "bg-[var(--director-control-hover)] text-[var(--director-dock-fg)]/70"
+        <div
+            role="dialog"
+            aria-label={`${asset.title || "素材"} 详情`}
+            className={`absolute inset-1.5 z-10 flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] shadow-[0_12px_32px_rgba(0,0,0,0.35)] transition-[opacity,transform] duration-150 ease-out ${
+                shown ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
             }`}
         >
-            {uploaded ? "本地上传" : canvas ? "画布素材" : "项目素材"}
-        </span>
+            <div className="flex items-center gap-2 border-b border-[var(--director-sequencer-border)] px-2.5 py-2">
+                <span className="grid size-5 shrink-0 place-items-center rounded-[5px] bg-[var(--director-accent)]/15">
+                    <AssetIcon mediaType={asset.mediaType} />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--director-dock-fg-strong)]">
+                    {asset.title || asset.storageKey}
+                </span>
+                <button
+                    ref={closeRef}
+                    type="button"
+                    onClick={onClose}
+                    aria-label="关闭详情"
+                    className="grid size-5 shrink-0 place-items-center rounded-md text-[var(--director-dock-fg)]/55 transition-colors hover:bg-[var(--director-control-hover)] hover:text-[var(--director-dock-fg-strong)]"
+                >
+                    <X className="size-3.5" />
+                </button>
+            </div>
+            <div className="director-scroll min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+                <MediaPreview asset={asset} />
+                <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                    <dt className="text-[var(--director-dock-fg)]/60">媒体类型</dt>
+                    <dd className="truncate text-right capitalize text-[var(--director-dock-fg-strong)]">{asset.mediaType}</dd>
+                    <dt className="text-[var(--director-dock-fg)]/60">分类</dt>
+                    <dd className="truncate text-right text-[var(--director-dock-fg-strong)]">{asset.category}</dd>
+                    {asset.durationMs ? (
+                        <>
+                            <dt className="text-[var(--director-dock-fg)]/60">时长</dt>
+                            <dd className="text-right tabular-nums text-[var(--director-dock-fg-strong)]">{formatDurationMs(asset.durationMs)}</dd>
+                        </>
+                    ) : null}
+                </dl>
+                {asset.previewText ? (
+                    <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-[var(--director-dock-fg)]/60">{asset.previewText}</p>
+                ) : null}
+            </div>
+            <div className="border-t border-[var(--director-sequencer-border)] p-2">
+                <button
+                    type="button"
+                    disabled={added}
+                    onClick={onAdd}
+                    className={`flex h-7 w-full items-center justify-center gap-1 rounded-md text-[11px] font-medium transition-colors ${
+                        added
+                            ? "bg-[var(--director-success-soft)] text-[var(--director-success)]"
+                            : "bg-[var(--director-accent)] text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)]"
+                    }`}
+                >
+                    {added ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+                    {added ? "已添加到时间线" : "添加到时间线"}
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -233,10 +307,16 @@ export function EditorAssetIngest() {
 
     const [filter, setFilter] = useState<AssetFilter>("all");
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [openGroups, setOpenGroups] = useState<{ uploaded: boolean; project: boolean; canvas: boolean }>({ uploaded: true, project: true, canvas: true });
+    const [openGroups, setOpenGroups] = useState<{ uploaded: boolean; project: boolean }>({ uploaded: true, project: true });
     const inputRef = useRef<HTMLInputElement | null>(null);
     const lastAddKey = useRef<string | null>(null);
     const lastAddAt = useRef(0);
+    // 展开浮层指向的素材被移除/刷新消失时自动关闭，避免浮层残留指向已不存在的数据。
+    useEffect(() => {
+        if (expandedId && !assets.some((a) => a.id === expandedId)) {
+            setExpandedId(null);
+        }
+    }, [assets, expandedId]);
 
     if (!project) return null;
 
@@ -346,15 +426,15 @@ export function EditorAssetIngest() {
     };
 
     const uploadedAssets = assets.filter((a) => a.source === SOURCE_UPLOADED);
-    const canvasAssets = assets.filter((a) => a.source === SOURCE_CANVAS);
-    const projectAssets = assets.filter((a) => a.source !== SOURCE_UPLOADED && a.source !== SOURCE_CANVAS);
-    const groups: { id: "uploaded" | "project" | "canvas"; label: string; icon: typeof HardDrive; items: ProjectAsset[] }[] = [
+    // 画布产物已自动同步为普通项目素材：并入「项目素材」，不再按来源单列分组。
+    const projectAssets = assets.filter((a) => a.source !== SOURCE_UPLOADED);
+    const groups: { id: "uploaded" | "project"; label: string; icon: typeof HardDrive; items: ProjectAsset[] }[] = [
         { id: "uploaded", label: "本地上传", icon: HardDrive, items: uploadedAssets },
-        { id: "canvas", label: "画布素材", icon: Boxes, items: canvasAssets },
         { id: "project", label: "项目素材", icon: Boxes, items: projectAssets },
     ];
     const visibleGroups = groups.filter((g) => filter === "all" || g.id === filter);
     const totalCount = assets.length;
+    const expandedAsset = assets.find((a) => a.id === expandedId) ?? null;
 
     return (
         <div
@@ -419,7 +499,8 @@ export function EditorAssetIngest() {
             {importError ? <p className="px-2 pb-1 text-[10px] text-[var(--director-danger)]">{importError}</p> : null}
             {importNote ? <p className="px-2 pb-1 text-[10px] text-[var(--director-success)]">{importNote}</p> : null}
 
-            <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-1.5">
+            <div className="relative min-h-0 flex-1">
+                <div className="director-scroll h-full overflow-y-auto p-1.5">
                 {assets.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
                         <p className="text-xs text-[var(--director-dock-fg)]/60">项目暂无资产</p>
@@ -428,7 +509,7 @@ export function EditorAssetIngest() {
                 ) : visibleGroups.every((g) => g.items.length === 0) ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
                         <p className="text-xs text-[var(--director-dock-fg)]/60">
-                            {filter === "uploaded" ? "暂无本地上传的媒体" : filter === "canvas" ? "暂无画布素材，请先在画布工作台生成分镜/预演" : filter === "project" ? "暂无项目素材" : "项目暂无资产"}
+                            {filter === "uploaded" ? "暂无本地上传的媒体" : filter === "project" ? "暂无项目素材" : "项目暂无资产"}
                         </p>
                         <p className="max-w-[180px] text-[11px] leading-relaxed text-[var(--director-dock-fg)]/45">点击上方导入媒体，或将文件拖入此区域</p>
                     </div>
@@ -460,7 +541,6 @@ export function EditorAssetIngest() {
                                         <ul className="flex flex-col">
                                             {group.items.map((asset) => {
                                                 const expanded = expandedId === asset.id;
-                                                const source = asset.source || "";
                                                 return (
                                                     <li key={asset.id}>
                                                         <button
@@ -478,7 +558,6 @@ export function EditorAssetIngest() {
                                                                 <span className="mt-0.5 flex items-center gap-1 text-[9px] text-[var(--director-dock-fg)]/60">
                                                                     <span className="uppercase">{asset.mediaType}</span>
                                                                     {asset.durationMs ? <span className="tabular-nums opacity-80">{formatDurationMs(asset.durationMs)}</span> : null}
-                                                                    <SourceBadge source={source} />
                                                                 </span>
                                                             </span>
                                                             <span
@@ -489,35 +568,6 @@ export function EditorAssetIngest() {
                                                                 <ChevronDown className={`size-3.5 transition-transform duration-150 ease-out ${expanded ? "rotate-180" : ""}`} />
                                                             </span>
                                                         </button>
-                                                        {expanded ? (
-                                                                <div className="mx-1 mb-1 ml-10 rounded-md bg-[var(--director-control-hover)] p-2">
-
-                                                                <MediaPreview asset={asset} />
-                                                                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-                                                                    <dt className="text-[var(--director-dock-fg)]/60">媒体类型</dt>
-                                                                    <dd className="truncate text-right capitalize text-[var(--director-dock-fg-strong)]">{asset.mediaType}</dd>
-                                                                    <dt className="text-[var(--director-dock-fg)]/60">分类</dt>
-                                                                    <dd className="truncate text-right text-[var(--director-dock-fg-strong)]">{asset.category}</dd>
-                                                                    <dt className="text-[var(--director-dock-fg)]/60">来源</dt>
-                                                                     <dd className="text-right text-[var(--director-dock-fg-strong)]">{source === SOURCE_UPLOADED ? "本地上传" : source === SOURCE_CANVAS ? "画布素材" : "项目素材"}</dd>
-                                                                    {asset.durationMs ? (
-                                                                        <>
-                                                                            <dt className="text-[var(--director-dock-fg)]/60">时长</dt>
-                                                                            <dd className="text-right tabular-nums text-[var(--director-dock-fg-strong)]">{formatDurationMs(asset.durationMs)}</dd>
-                                                                        </>
-                                                                    ) : null}
-                                                                </dl>
-                                                                {asset.previewText ? <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[var(--director-dock-fg)]/60">{asset.previewText}</p> : null}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => addToTimeline(asset)}
-                                                                    className="mt-2 flex h-7 w-full items-center justify-center gap-1 rounded-md bg-[var(--director-accent)] text-[11px] font-medium text-[var(--director-on-accent)] transition-colors hover:bg-[var(--director-accent-hover)]"
-                                                                >
-                                                                    <Plus className="size-3.5" />
-                                                                    添加到时间线
-                                                                </button>
-                                                            </div>
-                                                        ) : null}
                                                     </li>
                                                 );
                                             })}
@@ -528,6 +578,15 @@ export function EditorAssetIngest() {
                         })}
                     </div>
                 )}
+                </div>
+                {expandedAsset ? (
+                    <AssetDetailSheet
+                        asset={expandedAsset}
+                        added={added === expandedAsset.id}
+                        onClose={() => setExpandedId(null)}
+                        onAdd={() => addToTimeline(expandedAsset)}
+                    />
+                ) : null}
             </div>
         </div>
     );

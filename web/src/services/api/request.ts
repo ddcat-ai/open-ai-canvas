@@ -12,14 +12,16 @@ export class ApiError extends Error {
     readonly status?: number;
     readonly code?: number;
     readonly retryable: boolean;
+    readonly retryAfterMs?: number;
     readonly cause?: unknown;
 
-    constructor(message: string, options: { status?: number; code?: number; retryable?: boolean; cause?: unknown } = {}) {
+    constructor(message: string, options: { status?: number; code?: number; retryable?: boolean; retryAfterMs?: number; cause?: unknown } = {}) {
         super(message);
         this.name = "ApiError";
         this.status = options.status;
         this.code = options.code;
         this.retryable = options.retryable ?? isRetryableStatus(options.status ?? options.code);
+        this.retryAfterMs = options.retryAfterMs;
         this.cause = options.cause;
     }
 }
@@ -28,7 +30,7 @@ export class ApiError extends Error {
 export const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true });
 
-export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number }>) {
+export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number; headers?: unknown }>) {
     try {
         const response = await promise;
         if (response.data.code !== 0) {
@@ -36,6 +38,7 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
                 status: response.status,
                 code: response.data.code,
                 retryable: isRetryableStatus(response.status) || isRetryableStatus(response.data.code),
+                retryAfterMs: retryAfterMilliseconds(response.headers),
             });
         }
         return response.data.data;
@@ -50,6 +53,7 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
                 status,
                 code,
                 retryable: isRetryableStatus(status) || isRetryableStatus(code),
+                retryAfterMs: retryAfterMilliseconds(error.response?.headers),
                 cause: error,
             });
         }
@@ -59,6 +63,21 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
 
 function isRetryableStatus(status?: number) {
     return status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500 && status <= 599);
+}
+
+function retryAfterMilliseconds(headers: unknown) {
+    if (!headers || typeof headers !== "object") return undefined;
+    const headerBag = headers as { get?: (name: string) => unknown; [key: string]: unknown };
+    const rawValue = headerBag.get?.("retry-after") ?? headerBag["retry-after"] ?? headerBag["Retry-After"];
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    if (value === undefined || value === null) return undefined;
+    const text = String(value).trim();
+    if (!text) return undefined;
+    const seconds = Number(text);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+    const retryAt = Date.parse(text);
+    if (!Number.isFinite(retryAt)) return undefined;
+    return Math.max(0, retryAt - Date.now());
 }
 
 export function compactApiParams(params: ApiParams) {

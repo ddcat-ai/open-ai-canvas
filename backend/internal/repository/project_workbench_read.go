@@ -168,6 +168,34 @@ func (r *Repository) ProjectCanvasSummariesPage(userID string, projectID string,
 	return canvases, total, err
 }
 
+func (r *Repository) UserCanvasProjectsPage(userID string, page int, pageSize int, projectID string, search string, sort string) ([]model.CanvasProject, int64, error) {
+	var projects []model.CanvasProject
+	var total int64
+	query := r.db.Model(&model.CanvasProject{}).Where("user_id = ?", userID)
+	if projectID == "independent" {
+		query = query.Where("project_id = '' OR project_id IS NULL")
+	} else if projectID != "" && projectID != "all" {
+		query = query.Where("project_id = ?", projectID)
+	}
+	if search = strings.TrimSpace(search); search != "" {
+		query = query.Where("LOWER(title) LIKE ?", "%"+strings.ToLower(search)+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	order := "updated_at desc, id asc"
+	if sort == "name" {
+		order = "title asc, id asc"
+	} else if sort == "nodes" {
+		order = "COALESCE(json_array_length(payload_json, '$.nodes'), 0) desc, id asc"
+		if r.db.Dialector.Name() == "postgres" {
+			order = "COALESCE(jsonb_array_length(payload_json::jsonb->'nodes'), 0) desc, id asc"
+		}
+	}
+	err := query.Order(order).Offset((page - 1) * pageSize).Limit(pageSize).Find(&projects).Error
+	return projects, total, err
+}
+
 func (r *Repository) ProjectCanvasUnitLinksForCanvases(projectID string, canvasIDs []string) ([]model.CanvasUnitLink, error) {
 	if len(canvasIDs) == 0 {
 		return []model.CanvasUnitLink{}, nil

@@ -1,15 +1,17 @@
-import { Dropdown, Input } from "antd";
+import { App, Dropdown, Input } from "antd";
 import { Download, LoaderCircle, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
-import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import type { CanvasLibrarySummary } from "@/services/api/user-data";
+import { loadCanvasProjectForEditing, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { cn } from "@/lib/utils";
 
 type CanvasFolderCardProps = {
-    project: CanvasProject;
+    project: CanvasLibrarySummary;
     projectName?: string;
     onClick: () => void;
     onPrefetch?: () => void;
@@ -18,6 +20,7 @@ type CanvasFolderCardProps = {
 
 /** 画布库中的文件夹封面：单一卡片表面承载预览和信息，避免相邻卡片互相侵入。 */
 export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, opening = false }: CanvasFolderCardProps) {
+    const { message } = App.useApp();
     const renameProject = useCanvasStore((state) => state.renameProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const editingId = useCanvasUiStore((state) => state.editingProjectId);
@@ -30,9 +33,21 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
 
-    const saveTitle = () => {
-        renameProject(project.id, editingTitle);
+    const saveTitle = async () => {
+        if (!editing) return;
         stopEditing();
+        try {
+            await loadCanvasProjectForEditing(project.id);
+            renameProject(project.id, editingTitle);
+            await saveRemoteUserDataNow();
+        } catch (error) { message.error(error instanceof Error ? error.message : "重命名失败"); }
+    };
+    const exportProject = async () => {
+        try {
+            const fullProject = await loadCanvasProjectForEditing(project.id);
+            if (!fullProject) throw new Error("画布不存在");
+            await exportCanvasProjects([fullProject], project.title || "画布");
+        } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
     };
 
     const handleOpenKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -47,7 +62,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
         <article className={cn("canvas-folder-card", selected && "is-selected", editing && "is-editing", opening && "is-opening")} onPointerEnter={onPrefetch} onPointerDown={onPrefetch} onFocusCapture={onPrefetch}>
             <div className="canvas-folder-open" role="button" tabIndex={0} aria-label={`打开画布 ${project.title}`} aria-busy={opening} onClick={() => !editing && !opening && onClick()} onKeyDown={handleOpenKeyDown}>
                 <div className="canvas-folder-preview" aria-hidden="true">
-                    <ProjectPreview project={project} preferLatestImage />
+                    <ProjectPreview project={{ id: project.id, nodes: project.previewNodes }} preferLatestImage />
                     {opening ? <div className="canvas-folder-opening"><LoaderCircle className="size-5 animate-spin" /><span>正在打开</span></div> : null}
                 </div>
                 <div className="canvas-folder-body">
@@ -72,7 +87,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     <div className="canvas-folder-meta">
                         <span className="canvas-folder-meta-item">{projectName ? `所属项目：${projectName}` : "自由画布"}</span>
                         <span className="canvas-folder-meta-separator" aria-hidden="true">·</span>
-                        <span className="canvas-folder-meta-item">{project.nodes.length} 节点</span>
+                        <span className="canvas-folder-meta-item">{project.nodeCount} 节点</span>
                     </div>
                     <div className="canvas-folder-dates">
                         <span><small>创建时间</small><time dateTime={project.createdAt}>{formatCanvasDate(project.createdAt)}</time></span>
@@ -112,7 +127,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     menu={{
                         onClick: ({ domEvent }) => domEvent.stopPropagation(),
                         items: [
-                            { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportCanvasProjects([project], project.title || "画布") },
+                            { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportProject() },
                             { type: "divider" },
                             { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => setDeleteIds([project.id]) },
                         ],

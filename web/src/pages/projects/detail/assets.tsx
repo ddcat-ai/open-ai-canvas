@@ -441,6 +441,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
 
             <AssetLibraryPickerModal
                 open={addOpen}
+                remoteLibrary
                 items={availablePickerItems}
                 categoryLabels={{ ...pickerCategoryLabels, ...externalAssetSources.categoryLabels }}
                 folders={externalAssetSources.folders}
@@ -462,6 +463,8 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             </Modal>
             <AssetLibraryPickerModal
                 open={Boolean(imageAsset)}
+                remoteLibrary
+                remoteKind="image"
                 items={imagePickerItems}
                 categoryLabels={{ ...pickerCategoryLabels, ...externalAssetSources.categoryLabels }}
                 folders={externalAssetSources.folders}
@@ -480,6 +483,8 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             />
             <AssetLibraryPickerModal
                 open={voicePickerOpen}
+                remoteLibrary
+                remoteKind="audio"
                 items={audioPickerItems}
                 categoryLabels={{ all: "全部音频", audio: "声音素材" }}
                 initialCategory="audio"
