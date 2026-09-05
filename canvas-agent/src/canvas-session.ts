@@ -4,6 +4,7 @@ import type { ServerResponse } from "node:http";
 import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
 import { buildCanvasContext, findCanvasNodes, getCanvasConnection, getCanvasGenerationTasks, getCanvasNode, getCanvasResources, hashState, validateCanvasOps } from "./canvas-context.js";
 import { type ToolName } from "./schemas.js";
+import { withProjectContext } from "./project-context.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
@@ -105,7 +106,7 @@ export class CanvasSession {
         const readTool = ["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_node", "canvas_get_connection", "canvas_get_generation_tasks", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
         if (tool === "canvas_get_state" || tool === "canvas_export_snapshot") return compactCanvasState(this.canvasState);
-        if (tool === "canvas_get_context") return buildCanvasContext(this.canvasState);
+        if (tool === "canvas_get_context") return await withProjectContext(buildCanvasContext(this.canvasState), this.canvasState, (name, input) => this.requestCanvasTool(name, input));
         if (tool === "canvas_find_nodes") return findCanvasNodes(this.canvasState, input as Parameters<typeof findCanvasNodes>[1]);
         if (tool === "canvas_get_node") return getCanvasNode(this.canvasState, input as Parameters<typeof getCanvasNode>[1]);
         if (tool === "canvas_get_connection") return getCanvasConnection(this.canvasState, input as Parameters<typeof getCanvasConnection>[1]);
