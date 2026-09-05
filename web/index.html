@@ -9,44 +9,10 @@
             html,
             body {
                 margin: 0;
-                background: #0b0c10;
+                background: #101010;
             }
             #root:empty {
                 min-height: 100vh;
-            }
-            #root:empty::before {
-                content: "";
-                position: fixed;
-                left: 50%;
-                top: 50%;
-                width: 42px;
-                height: 42px;
-                margin: -21px 0 0 -21px;
-                background: rgba(255, 255, 255, 0.84);
-                mask: url('/logo.svg') center / contain no-repeat;
-                -webkit-mask: url('/logo.svg') center / contain no-repeat;
-                animation: appearance-bootstrap-logo 1.8s ease-in-out infinite;
-            }
-            #root:empty::after {
-                content: "";
-                position: fixed;
-                left: 50%;
-                top: 50%;
-                width: 82px;
-                height: 82px;
-                margin: -42px 0 0 -42px;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                border-right-color: transparent;
-                border-radius: 999px;
-                animation: appearance-bootstrap-orbit 2.8s linear infinite;
-            }
-            @keyframes appearance-bootstrap-logo { 0%, 100% { opacity: .62; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.04); } }
-            @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
-            @media (prefers-reduced-motion: reduce) {
-                #root:empty::before,
-                #root:empty::after {
-                    animation: none;
-                }
             }
         </style>
         <script>
