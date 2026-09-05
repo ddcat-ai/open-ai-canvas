@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router";
 
-import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -9,7 +8,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
     const user = useUserStore((state) => state.user);
 
-    if (!hydrated) return <FullScreenLoader />;
+    // AuthSessionHydrator is the single owner of the session loading surface.
+    // Keep this guard renderless until hydration completes to avoid remounting
+    // a second full-screen loader during refresh.
+    if (!hydrated) return null;
     if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
     return children;
 }
