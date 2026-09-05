@@ -1966,20 +1966,127 @@ func (r *Repository) ProjectShotArtifacts(projectID string) ([]model.ShotArtifac
 	return artifacts, err
 }
 
-func (r *Repository) CreateShotArtifact(artifact *model.ShotArtifact) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		var currentVersion int
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Select("COALESCE(MAX(version), 0)").Scan(&currentVersion).Error; err != nil {
-			return err
+// ArtifactIdemKind 声明「按哪些列判定同一个产物」。
+//
+// 注意这是**去重维度**的声明，不是业务链的声明——
+// Repository 不需要知道 Bridge / Workflow / Veo / Kling 的存在，
+// 未来接新的生成端只是多一个去重维度，不会往这里堆业务判断。
+type ArtifactIdemKind string
+
+const (
+	// ArtifactIdemByRequest 按 (request_id, asset_index) 去重。
+	ArtifactIdemByRequest ArtifactIdemKind = "request_index"
+	// ArtifactIdemByTask 按 (task_id, shot_id, type) 去重。
+	ArtifactIdemByTask ArtifactIdemKind = "task_shot_type"
+	// ArtifactIdemNone 不去重，每次调用都新建。
+	ArtifactIdemNone ArtifactIdemKind = "none"
+)
+
+// ArtifactIdempotencyKey 由调用方（Service 层）显式声明幂等判定方式。
+// Repository 只把它翻译成查询条件，不解释它的业务含义。
+type ArtifactIdempotencyKey struct {
+	Kind       ArtifactIdemKind
+	RequestID  string // Kind=ArtifactIdemByRequest 时必填
+	AssetIndex int
+	TaskID     string // Kind=ArtifactIdemByTask 时必填；ShotID/Type 取自 artifact 本身
+}
+
+// artifactIdemQuery 把幂等键翻译成查询条件；返回 nil 表示不去重。
+func (k ArtifactIdempotencyKey) artifactIdemQuery(tx *gorm.DB, artifact *model.ShotArtifact) *gorm.DB {
+	base := tx.Model(&model.ShotArtifact{})
+	switch k.Kind {
+	case ArtifactIdemByRequest:
+		return base.Where("request_id = ? AND asset_index = ?", k.RequestID, k.AssetIndex)
+	case ArtifactIdemByTask:
+		return base.Where("task_id = ? AND shot_id = ? AND type = ?", k.TaskID, artifact.ShotID, artifact.Type)
+	default:
+		return nil
+	}
+}
+
+// artifactVersionRetryLimit 是 version 撞上唯一约束后的重算次数上限。
+const artifactVersionRetryLimit = 5
+
+// CreateOrGetShotArtifact 是全仓唯一的 ShotArtifact 创建入口。
+//
+// 返回**最终产物**——无论新建还是幂等命中，调用方都直接拿到可用的那一行，
+// 不必依赖入参被副作用修改（幂等命中时返回的是库里的既有行）。
+//
+// 它只做四件机械的事，不含业务判断：
+//  1. 按 key 判重 —— 命中则直接返回，created=false
+//  2. 分配 version = 同 (shot_id, type) 的 MAX(version) + 1
+//  3. 若 artifact.Selected 为真，先把同 (shot_id, type) 其余行 selected 置 false
+//  4. 落库；撞上 version 唯一约束则重算版本号重试
+//
+// 「用哪个 Status」「该不该带 ResourceID」「谁是当前版本」属于业务判断，
+// 由 Service 层决定后填进 artifact——Repository 不替 Service 做决定。
+func (r *Repository) CreateOrGetShotArtifact(artifact *model.ShotArtifact, key ArtifactIdempotencyKey) (*model.ShotArtifact, bool, error) {
+	if artifact == nil {
+		return nil, false, nil
+	}
+	var result *model.ShotArtifact
+	var created bool
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		out, ok, err := createOrGetShotArtifactTx(tx, artifact, key)
+		result, created = out, ok
+		return err
+	})
+	return result, created, err
+}
+
+// createOrGetShotArtifactTx 是事务内版本。调用方已持有事务时
+// （CompleteComfyBridgeRequestWithAssets、RegisterWorkflowTaskOutput）必须用这个，
+// 不能嵌套开新事务——否则外层回滚时内层已提交，产生分层提交问题。
+// 与 completeRequestTx / updateShotLatestPointers 的既有风格一致。
+func createOrGetShotArtifactTx(tx *gorm.DB, artifact *model.ShotArtifact, key ArtifactIdempotencyKey) (*model.ShotArtifact, bool, error) {
+	if artifact == nil {
+		return nil, false, nil
+	}
+	if query := key.artifactIdemQuery(tx, artifact); query != nil {
+		var existing model.ShotArtifact
+		if err := query.Limit(1).Find(&existing).Error; err != nil {
+			return nil, false, err
 		}
-		artifact.Version = currentVersion + 1
+		if existing.ID != "" {
+			return &existing, false, nil
+		}
+	}
+	// 并发下两个事务可能同时算出同一个 MAX+1，唯一约束 (shot_id,type,version) 是最后一道防线：
+	// 撞上就重算版本号再试，而不是把冲突直接抛给调用方。
+	var lastErr error
+	for attempt := 0; attempt < artifactVersionRetryLimit; attempt++ {
+		version, err := nextShotArtifactVersion(tx, artifact.ShotID, artifact.Type)
+		if err != nil {
+			return nil, false, err
+		}
+		artifact.Version = version
 		if artifact.Selected {
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
-				return err
+			if err := tx.Model(&model.ShotArtifact{}).
+				Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).
+				Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
+				return nil, false, err
 			}
 		}
-		return tx.Create(artifact).Error
-	})
+		lastErr = tx.Create(artifact).Error
+		if lastErr == nil {
+			return artifact, true, nil
+		}
+		if !isUniqueConstraintError(lastErr) {
+			return nil, false, lastErr
+		}
+	}
+	return nil, false, lastErr
+}
+
+// isUniqueConstraintError 判断是否为唯一约束冲突。
+// 项目同时支持 SQLite 与 PostgreSQL，两种库的文案不同，这里都覆盖。
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unique constraint failed") ||
+		strings.Contains(message, "duplicate key value")
 }
 
 func (r *Repository) MarkShotArtifactsStale(shotID string, updatedAt time.Time) error {
@@ -2295,26 +2402,13 @@ func (r *Repository) RegisterWorkflowTaskOutput(step *model.WorkflowStepInstance
 				return err
 			}
 		}
+		// 幂等键按 (task_id, shot_id, type) 去重——沿用既有去重语义，行为不变。
+		// version 分配、selected 清零、冲突重试交给统一入口，此处不再手写。
 		if artifact != nil {
-			var existing model.ShotArtifact
-			if err := tx.Where("task_id = ? AND shot_id = ? AND type = ?", artifact.TaskID, artifact.ShotID, artifact.Type).First(&existing).Error; err == nil {
-				artifact = nil
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-		}
-		if artifact != nil {
-			var currentVersion int
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Select("COALESCE(MAX(version), 0)").Scan(&currentVersion).Error; err != nil {
-				return err
-			}
-			artifact.Version = currentVersion + 1
-			if artifact.Selected {
-				if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
-					return err
-				}
-			}
-			if err := tx.Create(artifact).Error; err != nil {
+			if _, _, err := createOrGetShotArtifactTx(tx, artifact, ArtifactIdempotencyKey{
+				Kind:   ArtifactIdemByTask,
+				TaskID: artifact.TaskID,
+			}); err != nil {
 				return err
 			}
 		}

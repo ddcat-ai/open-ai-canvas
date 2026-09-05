@@ -318,7 +318,7 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 	productionLink := &model.ProductionTaskLink{ID: newID(), TaskID: task.ID, ProjectID: projectID, CanvasID: canvasID, UnitID: unitID, ShotID: shotID, WorkflowStepID: step.ID, ArtifactType: artifactType, CreatedAt: now, UpdatedAt: now}
 	var artifact *model.ShotArtifact
 	if shot != nil && strings.TrimSpace(req.ResourceID) != "" && artifactType != "" {
-		artifact = &model.ShotArtifact{ID: newID(), ProjectID: projectID, UnitID: shot.UnitID, ShotID: shot.ID, RevisionID: shotRevisionID, TaskID: task.ID, Type: artifactType, ResourceID: strings.TrimSpace(req.ResourceID), Status: "ready", Selected: true, MetadataJSON: metadata, CreatedAt: now, UpdatedAt: now}
+		artifact = &model.ShotArtifact{ID: newID(), ProjectID: projectID, UnitID: shot.UnitID, ShotID: shot.ID, RevisionID: shotRevisionID, TaskID: task.ID, Type: artifactType, ResourceID: strings.TrimSpace(req.ResourceID), Status: model.ShotArtifactStatusReady, Selected: true, MetadataJSON: metadata, CreatedAt: now, UpdatedAt: now}
 	}
 	// 单镜产物成功只代表该镜头完成，不能提前放行整个章节阶段。
 	if shot != nil {

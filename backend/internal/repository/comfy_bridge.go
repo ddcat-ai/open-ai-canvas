@@ -229,22 +229,9 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 		}
 		latestArtifactID := ""
 		for index, output := range outputs {
-			var existing model.ShotArtifact
-			err := tx.Select("id").Where("request_id = ? AND asset_index = ?", id, index).First(&existing).Error
-			if err == nil {
-				latestArtifactID = existing.ID
-				continue
-			}
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
 			artifactType := strings.TrimSpace(output.AssetType)
 			if artifactType == "" {
 				artifactType = "video"
-			}
-			version, err := nextShotArtifactVersion(tx, shot.ID, artifactType)
-			if err != nil {
-				return err
 			}
 			metadata, _ := json.Marshal(map[string]any{
 				"storageUri": output.StorageURI,
@@ -265,7 +252,6 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 				RevisionID:   shot.CurrentRevisionID,
 				TaskID:       request.GenerationTaskID,
 				Type:         artifactType,
-				Version:      version,
 				Status:       model.ShotArtifactStatusPendingResource,
 				Selected:     true,
 				MetadataJSON: string(metadata),
@@ -280,10 +266,19 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 				CreatedAt:    now,
 				UpdatedAt:    now,
 			}
-			if err := tx.Create(&artifact).Error; err != nil {
+			// 幂等键按 (request_id, asset_index) 去重（D-035）：Bridge 重复回调不会重复落产物。
+			// version 分配、selected 清零、唯一约束冲突重试全部由统一入口负责。
+			saved, _, err := createOrGetShotArtifactTx(tx, &artifact, ArtifactIdempotencyKey{
+				Kind:       ArtifactIdemByRequest,
+				RequestID:  id,
+				AssetIndex: index,
+			})
+			if err != nil {
 				return err
 			}
-			latestArtifactID = artifact.ID
+			if saved != nil {
+				latestArtifactID = saved.ID
+			}
 		}
 		return updateShotLatestPointers(tx, shot.ID, request.GenerationTaskID, id, latestArtifactID, now)
 	})
