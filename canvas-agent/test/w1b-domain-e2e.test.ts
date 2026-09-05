@@ -20,9 +20,8 @@ import { CanvasSession } from "../src/canvas-session.js";
  *   E1 getProjectContext（canvas_get_context.project 蒸馏段，无 prompt 正文）
  *   E2 getShot 结构
  *   E3-a regenerate 负例（latestTask 为空必须报「还没有生成记录」——F-25 契约）
- *   E3-b/E4 regenerate 正例闭环 —— NOT_RUN：前置需 ComfyUI Bridge 通道
- *        （plugin 启用 + bridge 注册 + 渠道定价 + 伪 Bridge completion），
- *        待前置链搭建后补跑；不因它把整条测试拖挂。
+ *   E3-b regenerate 正例（DB fixture 模拟已完成旧任务 + workflow provider 路径）
+ *   E4 复读：getShot latestTask 前移（读模型）+ Timeline 完成序指针不移动（F-25 语义）
  *   安全验收：isProjectAgentReadTool 名单审计（写工具必须过 confirmation gate）
  * ───────────────────────────────────────────────────────────────────────── */
 
@@ -33,7 +32,9 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 let backendProc: ChildProcess | null = null;
 let dataDir = "";
+let dbFile = "";
 let cookie = "";
+let userId = "";
 let projectId = "";
 let unitId = "";
 const shotIds: string[] = [];
@@ -58,6 +59,7 @@ async function ensureBackend() {
     }
     if (!haveGo()) throw new Error("本机无 go 工具链，且未设置 W1B_E2E_BASE_URL——E2E 无法自起测试实例");
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "w1b-e2e-data-"));
+    dbFile = path.join(dataDir, "open_ai_canvas.db");
     const exe = path.join(dataDir, "yingce-e2e.exe");
     execSync(`go build -o "${exe}" ./cmd/server`, { cwd: BACKEND_DIR, stdio: "pipe", env: process.env });
     backendProc = spawn(exe, [], {
@@ -179,15 +181,47 @@ async function dispatch(frame: SseFrame) {
 
 const session = new CanvasSession();
 
+let regeneratedTaskId = "";
+
+/** DB fixture：模拟 handleSuccess 已回写的成功任务状态（产生语义由 T3/T7/T8 覆盖） */
+function fixtureLatestTask(shotId: string, taskId: string) {
+    if (!dbFile) throw new Error("fixture 依赖自起实例的数据目录");
+    const script = [
+        "import sqlite3, json",
+        `conn = sqlite3.connect(${JSON.stringify(dbFile)})`,
+        `conn.execute("DELETE FROM tasks WHERE id = ?", (${JSON.stringify(taskId)},))`,
+        "metadata = json.dumps({",
+        `    "shotId": ${JSON.stringify(shotId)},`,
+        `    "workflowStepId": "wf-e2e-fixture",`,
+        `    "domainProjectId": ${JSON.stringify(projectId)},`,
+        `    "artifactType": "video",`,
+        "})",
+        // config.interfaceType：走 workflow provider 路径（跳过模型路由/渠道校验，插件已在 before 激活）；
+        // channelId 必须显式为空串——key 缺失时 fmt.Sprint(nil) = "<nil>"，billing 会拿 "<nil>" 查渠道而 400。
+        "input_json = json.dumps({\"prompt\": \"E2E fixture prompt\", \"config\": {\"interfaceType\": \"comfyui-bridge-video\", \"channelId\": \"\"}, \"metadata\": json.loads(metadata)})",
+        `conn.execute("INSERT INTO tasks (id, user_id, type, status, project_id, shot_id, prompt, operation, provider, model, input_json, attempts, error, completed_at, created_at, updated_at) VALUES (?, ?, 'canvas_video', 'succeeded', ?, ?, 'E2E fixture prompt', 'video', 'comfy', 'w1-e2e', ?, 1, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",`,
+        `    (${JSON.stringify(taskId)}, ${JSON.stringify(userId)}, ${JSON.stringify(projectId)}, ${JSON.stringify(shotId)}, input_json))`,
+        `conn.execute("UPDATE shots SET latest_task_id = ? WHERE id = ?", (${JSON.stringify(taskId)}, ${JSON.stringify(shotId)}))`,
+        "conn.commit()",
+        "conn.close()",
+    ].join("\n");
+    const pyPath = path.join(path.dirname(dbFile), "w1b-fixture.py");
+    fs.writeFileSync(pyPath, script, "utf8");
+    execSync(`python "${pyPath}"`, { stdio: "pipe" });
+    fs.rmSync(pyPath, { force: true });
+}
+
 /* ---------- 测试主体 ---------- */
 
 before(async () => {
     await ensureBackend();
     // 注册首个用户（空库免邮箱验证码，role=admin）；已存在则登录
     try {
-        await api(`POST`, `/auth/register`, { username: "w1be2e", displayName: "E2E 测试员", password: "W1bE2e!2026" });
+        const registered = await api<{ user: { id: string } }>(`POST`, `/auth/register`, { username: "w1be2e", displayName: "E2E 测试员", password: "W1bE2e!2026" });
+        userId = registered.user.id;
     } catch {
-        await api(`POST`, `/auth/login`, { username: "w1be2e", password: "W1bE2e!2026" });
+        const loggedIn = await api<{ user: { id: string } }>(`POST`, `/auth/login`, { username: "w1be2e", password: "W1bE2e!2026" });
+        userId = loggedIn.user.id;
     }
     // 幂等数据准备：项目 + 章节 + 3 镜头（每次全新项目，互不依赖）
     const project = await api<{ project: { id: string } }>(`POST`, `/projects`, { name: `W1B-E2E-${Date.now()}`, type: "drama" });
@@ -201,6 +235,10 @@ before(async () => {
         });
         shotIds.push(shot.shot.id);
     }
+    // 激活 ComfyUI Bridge 工作流插件（E3-b/E4 fixture 走 workflow provider 路径必需）：
+    // 平台级 enable（首注册用户即 admin）+ 用户级 activation，两步缺一不可
+    await api(`POST`, `/plugins/comfyui-workflow-provider/enable`);
+    await api(`PUT`, `/plugins/comfyui-workflow-provider/activation`, { enabled: true });
     // 连接伪前端画布：快照带 domainProjectId（projectTool 的 projectId 来源）
     const snapshot = { projectId: "canvas-local", domainProjectId: projectId, title: "E2E 画布", revision: 1, nodes: [], connections: [], selectedNodeIds: [] };
     session.updateState(snapshot, "e2e-client");
@@ -262,10 +300,38 @@ test("E3-a regenerate 负例：latestTask 为空必须报「还没有生成记�
     );
 });
 
-test("E3-b/E4 regenerate 正例闭环 —— NOT_RUN（需 Bridge 前置链）", async (t) => {
-    const reason = "前置 = ComfyUI Bridge 通道（plugin 启用 + bridge 注册 + 渠道定价 + 伪 Bridge completion），待 W1-B-01-E2E 下一阶段补跑";
-    console.log(`  ⏭ NOT_RUN：${reason}`);
-    t.skip(reason);
+test("E3-b regenerate 正例：新建 Task 且旧 Task 保留（fixture 前置）", async () => {
+    // 前置说明：生产执行链中 Shot.LatestTaskID 由 task_terminal.handleSuccess 回写
+    // （F-25），而 ComfyUI Bridge 入队（EnqueueComfyBridgeRequest）尚无生产调用点
+    // （W3 范围），REST 无法自然产生"成功任务"。此处用 DB fixture 模拟
+    // handleSuccess 回写后的状态——该状态的产生语义已被 w1contract T3/T7/T8 锁死。
+    // E2E 本身被测的是 Tool 链路：regenerateShot tool → service → 新 Task → getShot 反映。
+    const fixtureTaskId = "task-e2e-fixture";
+    fixtureLatestTask(shotIds[1], fixtureTaskId);
+    const result = (await session.callTool("project_regenerate_shot", { shotId: shotIds[1] })) as { task: { id: string; shotId?: string } };
+    assert.ok(result.task, "regenerate 应返回新 Task");
+    assert.notEqual(result.task.id, fixtureTaskId, "regenerate 必须新建 Task（D-030）");
+    regeneratedTaskId = result.task.id;
+});
+
+test("E4 复读 getShot：latestTask 前移为新 Task，完成序指针语义正确", async () => {
+    // 两个投影、两种语义（F-25 设计定稿）：
+    //   ① getShot 的 latestTask（Agent 读模型）= clientContext.shotId 过滤后按 updatedAt 取最新
+    //      → regenerate 一创建 queued 新任务就前移。
+    //   ② Timeline 的 latestTaskId（D-026 权威投影）= shots.latest_task_id 完成序指针，
+    //      由 handleSuccess → TouchShotLatestTask 回写（F-25A 单调防护）
+    //      → queued 任务不移动指针；移动语义已由 w1contract T1~T8 契约测试锁死。
+    const summary = (await session.callTool("project_get_shot", { shotId: shotIds[1] })) as {
+        shot: Record<string, unknown>;
+        latestTask?: { id: string };
+        artifacts: unknown[];
+    };
+    assert.equal(summary.latestTask?.id, regeneratedTaskId, "getShot 的 latestTask 应反映 regenerate 产生的新 Task");
+    assert.ok(summary.artifacts.length >= 0);
+    // 后端权威投影（D-026 Timeline）：queued 新任务不得移动完成序指针
+    const timeline = await api<{ shots: Array<{ shotId: string; latestTaskId?: string }> }>(`GET`, `/projects/${projectId}/shots`);
+    const entry = timeline.shots.find((item) => item.shotId === shotIds[1]);
+    assert.equal(entry?.latestTaskId, "task-e2e-fixture", "完成序指针应保持旧已完成 Task（queued ≠ completed，F-25 语义）");
 });
 
 test("安全验收：写工具不得进入 read 名单（必须过 confirmation gate）", async () => {
