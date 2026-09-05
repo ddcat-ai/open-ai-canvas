@@ -1881,8 +1881,10 @@
         position: fixed;
         inset: 0;
         z-index: var(--loader-z);
+        min-height: 100vh;
         min-height: 100dvh;
         overflow: hidden;
+        background: #101010;
         background: var(--workspace-page);
         color: #f5f5f5;
         animation: loader-surface-enter var(--motion-panel) var(--motion-ease-out) both;
@@ -2027,6 +2029,7 @@
         place-items: center;
         font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
         color: #f5f5f5;
+        background-color: #101010;
         background-color: var(--workspace-page);
         opacity: 1;
         animation: none;

@@ -62,11 +62,11 @@ function deferred(element: ReactNode) {
 }
 
 function fullScreenDeferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+    return <Suspense fallback={<FullScreenLoader kind="route" label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
 }
 
 function publicCliDeferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader label="正在打开 KraftReel CLI" detail="准备安装与 MCP 指南" />}>{element}</Suspense>;
+    return <Suspense fallback={<FullScreenLoader kind="public" label="正在打开 KraftReel CLI" detail="准备安装与 MCP 指南" />}>{element}</Suspense>;
 }
 
 /**

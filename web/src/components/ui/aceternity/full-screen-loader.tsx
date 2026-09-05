@@ -5,12 +5,14 @@ type FullScreenLoaderProps = {
     label?: string;
     detail?: string;
     className?: string;
+    kind?: "session" | "route" | "public";
 };
 
-export function FullScreenLoader({ label = "正在恢复工作区", detail = "同步账号、模型和项目数据", className }: FullScreenLoaderProps) {
+export function FullScreenLoader({ label = "正在恢复工作区", detail = "同步账号、模型和项目数据", className, kind = "session" }: FullScreenLoaderProps) {
     return (
         <div
             data-full-screen-loader
+            data-app-loading={kind}
             role="status"
             aria-live="polite"
             aria-label={`${label}，${detail}`}
