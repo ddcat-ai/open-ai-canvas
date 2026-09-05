@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -119,4 +121,18 @@ func (r *Repository) NextShotArtifactVersion(db *gorm.DB, shotID string, artifac
 		return 0, err
 	}
 	return current + 1, nil
+}
+
+// TouchShotLatestTask 回写分镜的「最近一次成功生成任务」指针（F-25 / W1-02）。
+//
+// 唯一调用方是 task_terminal.handleSuccess（全 Provider 统一成功收口）——
+// 语义为 provider 无关的「最近一次**成功**任务」，与 Bridge completion 的
+// Job 级指针（updateShotLatestPointers，最近一次尝试）是两个层次。
+// 失败任务不得走到这里：重试失败任务走既有 Retry（同 Task 新 Job）链路。
+func (r *Repository) TouchShotLatestTask(shotID string, taskID string, now time.Time) error {
+	if shotID == "" || taskID == "" {
+		return nil
+	}
+	return r.db.Model(&model.Shot{}).Where("id = ?", shotID).
+		Updates(map[string]any{"latest_task_id": taskID, "updated_at": now}).Error
 }

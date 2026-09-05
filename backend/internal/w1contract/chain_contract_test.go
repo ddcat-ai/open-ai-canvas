@@ -490,3 +490,71 @@ func TestT6VersionUniquenessIsProtected(t *testing.T) {
 		t.Fatalf("期望唯一约束错误，实际：%v", err)
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// T7 · LatestTaskID 语义（F-25 / W1-02）
+//
+// 契约：shots.latest_task_id = 「最近一次**成功**的生成任务」。
+//   · Bridge 失败 attempt 不得把成功指针拉黑（否则 Regenerate 克隆失败参数）；
+//   · Job 级指针（latest_job_id）保持「最近一次尝试」语义，无论成败照旧回写；
+//   · 非 Bridge Provider 的成功任务由 task_terminal.handleSuccess →
+//     TouchShotLatestTask 统一回写（这里直接验证 repo 层契约）。
+// ─────────────────────────────────────────────────────────────────────────
+
+func TestT7LatestTaskPointerIgnoresFailedBridgeAttempt(t *testing.T) {
+	f := seedChain(t)
+	f.newBridge(t)
+
+	// ① 第一次生成成功：latest_task_id 应指向 task-w1。
+	f.newClaimedRequest(t, "req-t7-ok", 1)
+	f.completeOnce(t, "req-t7-ok", time.Second, sampleOutputs("file:///t7-v1.mp4"))
+
+	shot := f.shotRow(t)
+	if shot.LatestTaskID != f.taskID {
+		t.Fatalf("成功生成后 latest_task_id 应为 %q，实际 %q", f.taskID, shot.LatestTaskID)
+	}
+
+	// ② 同 Task 的第二次 attempt 失败：latest_task_id 必须保持 task-w1。
+	request := model.ComfyBridgeRequest{
+		ID: "req-t7-fail", TaskID: f.taskID, UserID: f.userID, BridgeID: f.bridgeID,
+		Kind: "video", Status: "claimed", PayloadJSON: "{}",
+		ExpiresAt: f.now.Add(time.Hour), GenerationTaskID: f.taskID, ShotID: f.shotID,
+		AttemptNo: 2, CreatedAt: f.now, UpdatedAt: f.now,
+	}
+	if err := f.db.Create(&request).Error; err != nil {
+		t.Fatalf("创建失败 attempt 请求失败：%v", err)
+	}
+	if _, applied, err := f.repo.CompleteComfyBridgeRequestWithAssets(
+		f.bridgeID, "req-t7-fail", "failed", "{}", "GPU OOM", f.now.Add(2*time.Second), nil,
+	); err != nil || !applied {
+		t.Fatalf("失败回调应正常落库：applied=%v err=%v", applied, err)
+	}
+
+	shot = f.shotRow(t)
+	if shot.LatestTaskID != f.taskID {
+		t.Fatalf("失败 attempt 不得覆盖成功指针：latest_task_id=%q（期望 %q）——F-25 回归", shot.LatestTaskID, f.taskID)
+	}
+	if shot.LatestJobID != "req-t7-fail" {
+		t.Fatalf("Job 指针应保持最近一次尝试语义：latest_job_id=%q（期望 req-t7-fail）", shot.LatestJobID)
+	}
+
+	// ③ 非 Bridge Provider 的成功任务（统一收口 handleSuccess → TouchShotLatestTask）：
+	//    换一个新 Task 成功后，指针应前移。
+	if err := f.repo.TouchShotLatestTask(f.shotID, "task-w2", f.now.Add(3*time.Second)); err != nil {
+		t.Fatalf("TouchShotLatestTask 失败：%v", err)
+	}
+	shot = f.shotRow(t)
+	if shot.LatestTaskID != "task-w2" {
+		t.Fatalf("非 Bridge 成功任务应前移指针：latest_task_id=%q（期望 task-w2）", shot.LatestTaskID)
+	}
+}
+
+// shotRow 回库读取分镜行（验证指针只能查库，DTO 不带这些加速字段）。
+func (f *chainFixture) shotRow(t *testing.T) model.Shot {
+	t.Helper()
+	var row model.Shot
+	if err := f.db.Where("id = ?", f.shotID).First(&row).Error; err != nil {
+		t.Fatalf("读取分镜失败：%v", err)
+	}
+	return row
+}

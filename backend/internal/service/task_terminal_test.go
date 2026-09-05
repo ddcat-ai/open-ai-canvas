@@ -10,10 +10,21 @@ import (
 )
 
 type taskTerminalRepositoryStub struct {
-	task          *model.Task
-	taskError     error
-	terminalCalls int
-	terminalError error
+	task           *model.Task
+	taskError      error
+	terminalCalls  int
+	terminalError  error
+	touchShotID    string
+	touchTaskID    string
+	touchShotCalls int
+	touchShotError error
+}
+
+func (r *taskTerminalRepositoryStub) TouchShotLatestTask(shotID string, taskID string, _ time.Time) error {
+	r.touchShotCalls++
+	r.touchShotID = shotID
+	r.touchTaskID = taskID
+	return r.touchShotError
 }
 
 func (r *taskTerminalRepositoryStub) Task(string) (*model.Task, error) {
@@ -292,5 +303,56 @@ func TestTaskTerminalCoordinatorReturnsTaskReadErrorAfterSuccess(t *testing.T) {
 	}
 	if billing.settleCalls != 1 {
 		t.Fatalf("billing settlement calls = %d, want 1", billing.settleCalls)
+	}
+}
+
+func TestHandleSuccessTouchesShotLatestTask(t *testing.T) {
+	task := &model.Task{ID: "task-1", UserID: "user-1", ShotID: "shot-1", BillingOrderID: "order-1"}
+	repo := &taskTerminalRepositoryStub{task: task}
+	coordinator := newTaskTerminalCoordinatorForTest(
+		repo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := coordinator.handleSuccess(task); err != nil {
+		t.Fatalf("handleSuccess() error = %v", err)
+	}
+	if repo.touchShotCalls != 1 || repo.touchShotID != "shot-1" || repo.touchTaskID != "task-1" {
+		t.Fatalf("应回写分镜最新任务指针：calls=%d shot=%q task=%q", repo.touchShotCalls, repo.touchShotID, repo.touchTaskID)
+	}
+
+	// 无 Shot 关联的任务（画布自由生成）不应触发回写。
+	free := &model.Task{ID: "task-2", UserID: "user-1", BillingOrderID: "order-2"}
+	freeRepo := &taskTerminalRepositoryStub{task: free}
+	freeCoordinator := newTaskTerminalCoordinatorForTest(
+		freeRepo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := freeCoordinator.handleSuccess(free); err != nil {
+		t.Fatalf("handleSuccess(free) error = %v", err)
+	}
+	if freeRepo.touchShotCalls != 0 {
+		t.Fatalf("无 Shot 关联不应回写指针：calls=%d", freeRepo.touchShotCalls)
+	}
+
+	// 回写失败只记账，不得让成功流程报错（与产物登记失败同一策略）。
+	brokenRepo := &taskTerminalRepositoryStub{task: task, touchShotError: errors.New("shot table busy")}
+	brokenCoordinator := newTaskTerminalCoordinatorForTest(
+		brokenRepo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := brokenCoordinator.handleSuccess(task); err != nil {
+		t.Fatalf("回写失败不应阻断成功流程，实际 error = %v", err)
 	}
 }

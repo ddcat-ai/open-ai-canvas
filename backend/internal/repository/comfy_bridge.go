@@ -218,12 +218,12 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 			return err
 		}
 		if request.ShotID == "" || len(outputs) == 0 {
-			return updateShotLatestPointers(tx, request.ShotID, request.GenerationTaskID, id, "", now)
+			return updateShotLatestPointers(tx, request.ShotID, request.GenerationTaskID, id, "", now, request.Status == "succeeded")
 		}
 		var shot model.Shot
 		if err := tx.First(&shot, "id = ?", request.ShotID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return updateShotLatestPointers(tx, request.ShotID, request.GenerationTaskID, id, "", now)
+				return updateShotLatestPointers(tx, request.ShotID, request.GenerationTaskID, id, "", now, request.Status == "succeeded")
 			}
 			return err
 		}
@@ -280,18 +280,24 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 				latestArtifactID = saved.ID
 			}
 		}
-		return updateShotLatestPointers(tx, shot.ID, request.GenerationTaskID, id, latestArtifactID, now)
+		return updateShotLatestPointers(tx, shot.ID, request.GenerationTaskID, id, latestArtifactID, now, request.Status == "succeeded")
 	})
 	return &request, applied, err
 }
 
 // updateShotLatestPointers 回写分镜的最新任务/Job/产物指针（纯加速字段，见 Shot 模型注释）。
-func updateShotLatestPointers(tx *gorm.DB, shotID string, taskID string, jobID string, artifactID string, now time.Time) error {
+//
+// F-25（W1-02）：latest_task_id 语义 = 「最近一次**成功**的生成任务」，
+// 统一回写点在 task_terminal.handleSuccess（全 Provider 收口）；本函数只在
+// Bridge 请求本身成功时才允许覆盖 latest_task_id——失败的尝试不得把成功
+// 指针拉黑，否则 Regenerate 会克隆失败任务的参数。latest_job_id /
+// latest_artifact_id 保持「最近一次尝试」语义，无论成败照旧回写。
+func updateShotLatestPointers(tx *gorm.DB, shotID string, taskID string, jobID string, artifactID string, now time.Time, recordLatestTask bool) error {
 	if shotID == "" {
 		return nil
 	}
 	updates := map[string]any{"updated_at": now}
-	if taskID != "" {
+	if taskID != "" && recordLatestTask {
 		updates["latest_task_id"] = taskID
 	}
 	if jobID != "" {
