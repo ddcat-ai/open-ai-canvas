@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Empty, Tag } from "antd";
 import { AlertTriangle, Link2, RefreshCcw, RotateCcw } from "lucide-react";
@@ -10,6 +11,9 @@ import {
     type ShotArtifactSummary,
 } from "@/services/api/generation-task";
 import { resourceFileUrl } from "@/services/api/resources";
+import { type GenerationTask } from "@/services/api/task-center";
+import { type ProjectDetail, type ProjectShot } from "@/services/api/projects";
+import { customShotTitle } from "@/lib/shot-label";
 import { formatDuration } from "./workflow-shared";
 
 /* ------------------------------------------------------------------ *
@@ -181,5 +185,43 @@ function ChainArtifactRow({ artifact }: { artifact: ShotArtifactSummary }) {
             </div>
             <span className="shrink-0 font-mono text-[11px] text-foreground/30">{new Date(artifact.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
         </div>
+    );
+}
+
+/* ------------------------------------------------------------------ *
+ * W1-02 #3 Activity 时间线（D-031 / D-022）：
+ * 事实型事件的纯前端投影——数据源只有既有 detail.tasks（Action = Task），
+ * 不建 Event Store / AgentRun / AgentAction 表，不新增任何 API。
+ * ------------------------------------------------------------------ */
+
+const ACTIVITY_PAGE_SIZE = 12;
+
+export function ActivityTimeline({ detail, shots }: { detail: ProjectDetail; shots: ProjectShot[] }) {
+    const events = useMemo(() => {
+        const shotTitleById = new Map(shots.map((shot, index) => [shot.id, customShotTitle(shot.title, index) || shot.title || "未命名镜头"]));
+        return (detail.tasks || [])
+            .slice()
+            .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+            .slice(0, ACTIVITY_PAGE_SIZE)
+            .map((task) => {
+                const shotId = task.clientContext?.shotId;
+                const meta = statusMeta(TASK_STATUS_META, task.status);
+                const subject = shotId ? `镜头「${shotTitleById.get(shotId) || shotId}」` : "画布";
+                const action = task.clientContext?.artifactType === "video" ? "视频生成" : task.clientContext?.artifactType === "action_board" ? "动作预演" : task.clientContext?.artifactType === "storyboard" ? "分镜图" : "生成";
+                return { key: task.id, subject, action, statusLabel: meta.label, statusColor: meta.color, time: task.updatedAt || task.createdAt };
+            });
+    }, [detail.tasks, shots]);
+    if (!events.length) return <div className="text-xs text-foreground/40">还没有生成任务记录</div>;
+    return (
+        <ol className="flex flex-col gap-1.5">
+            {events.map((event) => (
+                <li key={event.key} className="flex items-center gap-2 text-xs">
+                    <span className="min-w-0 flex-1 truncate">{event.subject}{event.action}</span>
+                    <Tag color={event.statusColor} className="mr-0">{event.statusLabel}</Tag>
+                    <span className="shrink-0 text-foreground/35">{new Date(event.time).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                </li>
+            ))}
+            {(detail.tasks?.length || 0) > ACTIVITY_PAGE_SIZE ? <li className="text-[11px] text-foreground/30">仅显示最近 {ACTIVITY_PAGE_SIZE} 条（共 {detail.tasks?.length} 条任务）</li> : null}
+        </ol>
     );
 }

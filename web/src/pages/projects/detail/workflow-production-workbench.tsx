@@ -48,7 +48,7 @@ import {
     type ShortDramaWorkflowStage,
 } from "./workflow-shared";
 import { buildShotAssetReferenceContext, ensureShotAssetMentionPrompt, resolveShotAssetMentionPrompt } from "./workflow-shot-references";
-import TaskChainPanel from "./workflow-task-chain";
+import TaskChainPanel, { ActivityTimeline } from "./workflow-task-chain";
 
 type ShotEditorValues = Omit<ShotRevisionInput, "durationMs"> & {
     title: string;
@@ -599,6 +599,10 @@ export default function WorkflowProductionWorkbench(props: Props) {
             </Modal>
 
             <ShotTimeline activeStage={activeStage} detail={detail} shots={shots} timeline={timelineByShotId} selectedShotId={selectedShot.id} submittingShotIds={submittingShotIds} onSelectShot={requestShotSelection} onAddShot={requestAddShot} addingShot={addingShot} />
+
+            <WorkflowDisclosure icon={<List className="size-4" />} title="活动时间线" description="生成任务事实投影（D-031，无独立事件存储）" summary={`共 ${detail.tasks?.length || 0} 条任务`}>
+                <ActivityTimeline detail={detail} shots={shots} />
+            </WorkflowDisclosure>
         </div>
     );
 }
