@@ -338,6 +338,10 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	input.Config = config
+	input.Config.InterfaceType = normalizeGenerationInterface(input.Mode, input.Config.InterfaceType)
+	if input.Config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {
+		input.Config.APIFormat = "gemini"
+	}
 	ctx = withProviderOutboundPolicy(ctx, input.Config)
 	var textPublisher *taskTextStreamPublisher
 	if input.Mode == "text" && strings.HasPrefix(taskType, "canvas_text") {
@@ -4362,6 +4366,14 @@ func firstNonEmptyString(values ...string) string {
 
 func validateGenerationInterface(mode string, interfaceType string) error {
 	return validateGenerationInterfaceWithRegistry(protocol.Builtins(), mode, interfaceType)
+}
+
+func normalizeGenerationInterface(mode string, interfaceType string) string {
+	interfaceType = strings.TrimSpace(interfaceType)
+	if mode == "image" && interfaceType == "gemini-generate-content" {
+		return string(model.ChannelInterfaceGeminiImage)
+	}
+	return interfaceType
 }
 
 func (s *Service) validateGenerationInterface(mode string, interfaceType string) error {
