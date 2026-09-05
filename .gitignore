@@ -30,6 +30,10 @@ dist/
 *.sqlite3
 *.bak
 *.tmp
+# 临时工作区（含《文件管理规范》的批量删除中转目录 _work_tmp/_trash-<日期>）。
+# 此前只有 *.tmp 文件规则，目录本身未被忽略——任何人执行 git add -A 都会把整个临时目录提交进去。
+# 已确认 _work_tmp 下 0 个已跟踪文件，此改动不会取消跟踪任何内容。
+/_work_tmp/
 /*.drawio.bkp
 /prompt-preferences-*-before.png
 /prompt*-before.png
