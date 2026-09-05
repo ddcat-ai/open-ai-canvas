@@ -220,6 +220,81 @@ func (s *Service) SelectShotArtifact(userID string, projectID string, shotID str
 	return s.repo.SelectShotArtifact(shotID, artifactID, time.Now())
 }
 
+// 镜头审核动作与对应状态（W1-B-02 part2 / Q-30 A 案）。
+//
+// 语义直接沿用本仓唯一的活 review 先例 —— WorkflowStep 状态机
+// （service/project_workflow.go:654-655）：「通过后进终态，打回退回可重做态」。
+// 落到 Shot 上就是：approve → completed，reject → draft。
+// ⚠️ 这两个状态值必须落在 validShotStatus() 的合法集内（service/project_shot.go:248）。
+const (
+	shotReviewActionApprove = "approve"
+	shotReviewActionReject  = "reject"
+
+	shotStatusAfterApprove = "completed"
+	shotStatusAfterReject  = "draft"
+)
+
+// ReviewShotRequest 是审核动作的输入。
+type ReviewShotRequest struct {
+	// Action 审核结论：approve（通过）/ reject（打回）。
+	Action string `json:"action"`
+	// Reason 审核理由。**不落库**（Q-31 A 案），仅由服务层回显给调用方。
+	Reason string `json:"reason,omitempty"`
+}
+
+// ShotReviewResult 是审核动作的返回结果。
+type ShotReviewResult struct {
+	ShotID         string    `json:"shotId"`
+	Title          string    `json:"title,omitempty"`
+	Action         string    `json:"action"`
+	Status         string    `json:"status"`
+	PreviousStatus string    `json:"previousStatus"`
+	Reason         string    `json:"reason,omitempty"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// ReviewShot 对镜头给出审核结论（W1-B-02 part2：Domain Tool 的后端能力）。
+//
+// 三条边界（Q-30/31/32 全 A 案）：
+//  1. 只改 Shot.Status 一个字段——通过进 completed，打回退 draft，**不动产物、不动 revision**；
+//     选哪一版产物是 selectArtifact 的职责，与本动作正交，不在此处代劳。
+//  2. reason **不落库**——Shot 表无批注字段，且不为此新增列；只原样回显。
+//  3. **不触发任何生成**——打回后是否重做由人或后续 Tool（regenerateShot）显式发起，
+//     绝不隐式起任务（生成要花钱，且可能陷入「生成→打回→生成」死循环）。
+// 归属校验逐层走「用户 → 项目 → 分镜」（D-024）。
+func (s *Service) ReviewShot(userID string, projectID string, shotID string, req ReviewShotRequest) (ShotReviewResult, error) {
+	shot, err := s.requireShotInProject(userID, projectID, shotID)
+	if err != nil {
+		return ShotReviewResult{}, err
+	}
+	action := strings.TrimSpace(req.Action)
+	var next string
+	switch action {
+	case shotReviewActionApprove:
+		next = shotStatusAfterApprove
+	case shotReviewActionReject:
+		next = shotStatusAfterReject
+	case "":
+		return ShotReviewResult{}, BadAuthRequest("请给出审核结论：approve（通过）或 reject（打回）")
+	default:
+		return ShotReviewResult{}, BadAuthRequest("不支持的审核动作，只支持 approve（通过）或 reject（打回）")
+	}
+	now := time.Now()
+	updated, err := s.repo.ReviewShot(shot.ID, next, now)
+	if err != nil {
+		return ShotReviewResult{}, err
+	}
+	return ShotReviewResult{
+		ShotID:         updated.ID,
+		Title:          updated.Title,
+		Action:         action,
+		Status:         next,
+		PreviousStatus: shot.Status,
+		Reason:         strings.TrimSpace(req.Reason),
+		UpdatedAt:      updated.UpdatedAt,
+	}, nil
+}
+
 // requireShotInProject 逐层校验「用户 → 项目 → 分镜」归属（D-024）。
 func (s *Service) requireShotInProject(userID string, projectID string, shotID string) (*model.Shot, error) {
 	if _, err := s.activeProjectForUser(userID, projectID); err != nil {

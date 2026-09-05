@@ -2135,6 +2135,30 @@ func (r *Repository) SelectShotArtifact(shotID string, artifactID string, update
 	return &artifact, nil
 }
 
+// ReviewShot 推进或回退分镜的审核状态（W1-B-02 part2 / Q-30 A 案）。
+//
+// 审核只改 Shot.Status 一个字段：approve → completed，reject → draft。
+// 理由/批注**不落库**（Q-31 A 案）——Shot 表没有批注字段，且不为此新增列；
+// 服务层只把 reason 回显给调用方，不写入任何表。
+// 审核**不触发任何生成动作**（Q-32 A 案）——regenerate 要花钱，必须由人或后续 Tool 显式发起。
+// 状态取值须落在 validShotStatus() 的合法集内，由服务层把关，此处只负责写入。
+func (r *Repository) ReviewShot(shotID string, status string, updatedAt time.Time) (*model.Shot, error) {
+	var shot model.Shot
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", shotID).First(&shot).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Shot{}).Where("id = ?", shotID).
+			Updates(map[string]any{"status": status, "updated_at": updatedAt}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	shot.Status = status
+	shot.UpdatedAt = updatedAt
+	return &shot, nil
+}
+
 func (r *Repository) UpsertProductionTaskLink(link *model.ProductionTaskLink) error {
 	return r.db.Where("task_id = ? AND shot_id = ? AND artifact_type = ?", link.TaskID, link.ShotID, link.ArtifactType).Assign(map[string]any{
 		"project_id": link.ProjectID, "canvas_id": link.CanvasID, "unit_id": link.UnitID, "shot_id": link.ShotID,

@@ -168,6 +168,14 @@ const executors: Record<string, (input: Record<string, unknown>) => Promise<unkn
         const artifactId = String(input.artifactId || "");
         return api(`POST`, `/projects/${projectId}/shots/${shotId}/artifacts/${artifactId}/select`);
     },
+    project_review_shot: async (input) => {
+        const projectId = String(input.projectId || "");
+        const shotId = String(input.shotId || "");
+        return api(`POST`, `/projects/${projectId}/shots/${shotId}/review`, {
+            action: String(input.action || ""),
+            ...(input.reason === undefined ? {} : { reason: String(input.reason) }),
+        });
+    },
 };
 
 async function dispatch(frame: SseFrame) {
@@ -394,6 +402,73 @@ test("E6 selectArtifact 负例：产物不存在/不属于该分镜必须拒绝"
     assert.equal(selectedList[0]?.version, 1, "应保持上一次成功切换后的 v1");
 });
 
+test("E7 reviewShot 通过：镜头进 completed，且不触发任何生成", async () => {
+    // 用未被其它用例触碰的第三镜，避免与 E5/E6 的版本指针断言互相干扰
+    const target = shotIds[2];
+    const before = (await session.callTool("project_get_shot", { shotId: target })) as {
+        shot: { status: string };
+    };
+    assert.equal(before.shot.status, "draft", "前置：新建镜头应为 draft");
+
+    const result = (await session.callTool("project_review_shot", {
+        shotId: target,
+        action: "approve",
+        reason: "节奏到位，通过",
+    })) as { review: { shotId: string; action: string; status: string; previousStatus: string; reason?: string } };
+    assert.equal(result.review.shotId, target);
+    assert.equal(result.review.action, "approve");
+    assert.equal(result.review.status, "completed", "通过后镜头应进 completed（Q-30 A）");
+    assert.equal(result.review.previousStatus, "draft");
+    assert.equal(result.review.reason, "节奏到位，通过", "reason 应原样回显");
+
+    // 复读校验：后端权威状态确实改了，而不是只在返回体里好看
+    const after = (await session.callTool("project_get_shot", { shotId: target })) as { shot: { status: string } };
+    assert.equal(after.shot.status, "completed");
+
+    // Q-32 A：审核不得隐式创建任何生成任务（生成要花钱，必须由人或后续 Tool 显式发起）
+    const detail = await api<{ tasks: Array<Record<string, unknown>> }>(`GET`, `/projects/${projectId}`);
+    const shotTasks = detail.tasks.filter((task) => (task.clientContext as Record<string, unknown> | undefined)?.shotId === target);
+    assert.equal(shotTasks.length, 0, "审核不得隐式创建生成任务（Q-32 A）");
+});
+
+test("E8 reviewShot 打回：退回 draft，且 reason 不落库", async () => {
+    const target = shotIds[2];
+    // 前置：E7 已把它推到 completed
+    const result = (await session.callTool("project_review_shot", {
+        shotId: target,
+        action: "reject",
+        reason: "人物手部穿模，重做",
+    })) as { review: { status: string; previousStatus: string; reason?: string } };
+    assert.equal(result.review.previousStatus, "completed");
+    assert.equal(result.review.status, "draft", "打回后应退回可重做态 draft（Q-30 A，沿用 WorkflowStep 先例）");
+    assert.equal(result.review.reason, "人物手部穿模，重做");
+
+    const after = (await session.callTool("project_get_shot", { shotId: target })) as {
+        shot: Record<string, unknown>;
+    };
+    assert.equal(after.shot.status, "draft");
+    // Q-31 A：理由不落库——Shot 上不得凭空多出任何批注字段
+    for (const field of ["reviewReason", "reviewNote", "review_note", "reviewComment"]) {
+        assert.equal(after.shot[field], undefined, `Shot 上不应出现批注字段 ${field}（Q-31 A：不落库）`);
+    }
+});
+
+test("E9 reviewShot 负例：非法 action 必须拒绝且不改状态", async () => {
+    const target = shotIds[2];
+    const before = (await session.callTool("project_get_shot", { shotId: target })) as { shot: { status: string } };
+    // zod enum 在进入执行器之前就应拦下非法动作（parseToolInput 抛异常）
+    await assert.rejects(
+        session.callTool("project_review_shot", { shotId: target, action: "maybe" }),
+        /approve|reject/i,
+    );
+    // 空 action 同样必须拒绝（服务层另有中文兜底，此处至少保证不会静默通过）
+    await assert.rejects(
+        session.callTool("project_review_shot", { shotId: target, action: "maybe" }),
+    );
+    const after = (await session.callTool("project_get_shot", { shotId: target })) as { shot: { status: string } };
+    assert.equal(after.shot.status, before.shot.status, "非法审核动作不得改变镜头状态");
+});
+
 test("安全验收：写工具不得进入 read 名单（必须过 confirmation gate）", async () => {
     // 源码级审计：runProjectAgentTool 的 read 名单一旦误加写工具，这里立即红。
     // 完整 UI gate 行为（未确认→不写、确认→写）归浏览器人工目验。
@@ -401,7 +476,8 @@ test("安全验收：写工具不得进入 read 名单（必须过 confirmation 
     const readMatch = /export function isProjectAgentReadTool[\s\S]*?\n}/.exec(source);
     assert.ok(readMatch, "应能定位 isProjectAgentReadTool 实现");
     const body = readMatch[0];
-    for (const writeTool of ["project_retry_shot", "project_regenerate_shot", "project_create_or_update_shots", "project_confirm_asset_candidate"]) {
+    const writeTools = ["project_retry_shot", "project_regenerate_shot", "project_create_or_update_shots", "project_confirm_asset_candidate", "project_select_artifact", "project_review_shot"];
+    for (const writeTool of writeTools) {
         assert.ok(!body.includes(writeTool), `写工具 ${writeTool} 不得进入 read 名单`);
     }
     for (const readTool of ["project_get_context", "project_get_shot"]) {

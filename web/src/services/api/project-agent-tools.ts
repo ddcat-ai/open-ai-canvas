@@ -12,7 +12,7 @@ import {
     type ShotAssetReference,
 } from "./projects";
 import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
-import { regenerateShot, retryShotTask, selectShotArtifact } from "./generation-task";
+import { regenerateShot, reviewShot, retryShotTask, selectShotArtifact } from "./generation-task";
 import { distillShotContext, latestShotTask } from "./shot-context";
 
 export { distillShotContext, latestShotTask } from "./shot-context";
@@ -33,6 +33,7 @@ export const projectAgentToolNames = [
     "project_retry_shot",
     "project_regenerate_shot",
     "project_select_artifact",
+    "project_review_shot",
 ] as const;
 
 export type ProjectAgentToolName = (typeof projectAgentToolNames)[number];
@@ -117,6 +118,15 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
         const shotId = String(rawInput.shotId || "").trim();
         const artifactId = String(rawInput.artifactId || "").trim();
         return { artifact: await selectShotArtifact(projectId, shotId, artifactId) };
+    }
+    if (name === "project_review_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const action = String(rawInput.action || "").trim();
+        if (action !== "approve" && action !== "reject") {
+            throw new Error("审核结论必须是 approve（通过）或 reject（打回）");
+        }
+        const reason = String(rawInput.reason || "").trim() || undefined;
+        return { review: await reviewShot(projectId, shotId, action, reason) };
     }
     throw new Error(`未知项目工具：${name}`);
 }

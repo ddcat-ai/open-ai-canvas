@@ -777,3 +777,28 @@ export async function selectShotArtifact(projectId: string, shotId: string, arti
     );
     return payload.artifact;
 }
+
+// 镜头审核结论（W1-B-02 part2）。后端只改 Shot.Status；reason 不落库，只回显。
+export type ShotReviewAction = "approve" | "reject";
+
+export interface ShotReviewResult {
+    shotId: string;
+    title?: string;
+    action: ShotReviewAction;
+    status: string;
+    previousStatus: string;
+    reason?: string;
+    updatedAt: string;
+}
+
+export async function reviewShot(
+    projectId: string,
+    shotId: string,
+    action: ShotReviewAction,
+    reason?: string,
+): Promise<ShotReviewResult> {
+    const payload = await request<{ review: ShotReviewResult }>(
+        api.post(`/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/review`, { action, reason }),
+    );
+    return payload.review;
+}

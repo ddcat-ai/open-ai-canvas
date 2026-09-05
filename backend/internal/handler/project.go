@@ -900,6 +900,27 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"artifact": artifact})
 	})
+	// W1-B-02 part2：镜头审核结论（通过/打回）。
+	// 只改 Shot.Status；reason 不落库；不触发任何生成动作。
+	r.POST("/projects/:id/shots/:shotId/review", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.ReviewShotRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.ReviewShot(user.ID, c.Param("id"), c.Param("shotId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"review": result})
+	})
 	r.POST("/projects/:id/asset-candidates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
