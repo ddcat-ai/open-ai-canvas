@@ -1073,6 +1073,20 @@ func (r *Repository) PlaybackPendingVideos(limit int) ([]model.Resource, error) 
 	return resources, err
 }
 
+// PlaybackNoneVideos 返回存量本地视频中旧逻辑遗留、停在 none 的行
+// （规则变更前 H.265/MPEG-4 Part 2 曾被误判为浏览器可播并落 none）。
+// 服务启动回填时对它们重新按 codec 判定，让判定规则变更覆盖规则变更前已导入的文件。
+func (r *Repository) PlaybackNoneVideos(limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	err := r.db.Where("kind = ? AND status = ? AND provider = ? AND playback_status = ?",
+		"video", model.ResourceStatusReady, "local", model.PlaybackStatusNone).
+		Order("created_at asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
 // ClaimPlaybackTranscode 原子地把待判定（空/none）视频置为 processing，返回是否抢占成功。
 // 多实例或多 goroutine 并发转同一资源时仅一个能成功置位，其余返回 false 直接放弃，
 // 避免重复转码同一份文件。
