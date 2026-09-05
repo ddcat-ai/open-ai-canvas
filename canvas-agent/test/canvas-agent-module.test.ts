@@ -5,6 +5,7 @@ import { test } from "node:test";
 
 import { buildCanvasContext } from "../src/canvas-context.js";
 import { CanvasSession } from "../src/canvas-session.js";
+import { buildRunPlan, type ReadOnlyExecution } from "../src/agent-orchestration.js";
 import { createLocalRuntimeApp } from "../src/local-runtime.js";
 import { LocalRuntimeSessionManager } from "../src/local-runtime-session.js";
 import { createCanvasAgentHttpModule } from "../src/modules/canvas-agent-http.js";
@@ -150,6 +151,71 @@ test("CanvasSession exposes precise node and connection reads", async () => {
     assert.equal((await session.callTool("canvas_get_connection", { id: "connection-1" }) as { found: boolean }).found, true);
     assert.equal((await session.callTool("canvas_get_node", { id: "missing" }) as { found: boolean }).found, false);
     session.dispose();
+});
+
+test("CanvasSession only completes a planned write step after browser confirmation", async () => {
+    const session = new CanvasSession();
+    const events = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=run-step"), events.response as never);
+    session.updateState({ nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 } }, "run-step");
+    const plan = buildRunPlan({ prompt: "请整理小说", runId: "run-session" });
+    const director = plan.steps.find((step) => step.agentId === "director");
+    assert.ok(director);
+    const readOnlyExecution: ReadOnlyExecution = {
+        runId: plan.runId,
+        observations: [{ stepId: director.id, agentId: director.agentId, status: "completed", tools: [] }],
+        blockedStepIds: [],
+    };
+
+    session.beginAgentRun(plan, readOnlyExecution);
+    try {
+        const pending = session.callTool("canvas_create_text_node", { text: "hello", title: "正文" });
+        await new Promise((resolve) => setImmediate(resolve));
+        const call = latestToolCall(events.writes()) as { requestId: string; name: string; semanticTool?: string; runId?: string; stepId?: string; attempt?: number };
+        assert.equal(call.name, "canvas_apply_ops");
+        assert.equal(call.semanticTool, "canvas_create_text_node");
+        assert.equal(call.runId, plan.runId);
+        assert.equal(call.stepId, `${plan.runId}:script`);
+        assert.equal(call.attempt, 1);
+        assert.equal(events.writes().some((value) => value.includes('"type":"step.completed"')), false);
+
+        session.resolveResult({ requestId: call.requestId, result: { ok: true } });
+        assert.deepEqual(await pending, { ok: true });
+        const execution = await session.finishAgentRun();
+        assert.deepEqual(execution?.completedStepIds, [`${plan.runId}:script`]);
+        assert.equal(events.writes().some((value) => value.includes('"type":"step.completed"')), true);
+    } finally {
+        session.dispose();
+    }
+});
+
+test("CanvasSession reports a rejected browser write as step.failed", async () => {
+    const session = new CanvasSession();
+    const events = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=run-step-failed"), events.response as never);
+    session.updateState({ nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 } }, "run-step-failed");
+    const plan = buildRunPlan({ prompt: "请整理小说", runId: "run-session-failed" });
+    const director = plan.steps.find((step) => step.agentId === "director");
+    assert.ok(director);
+    session.beginAgentRun(plan, {
+        runId: plan.runId,
+        observations: [{ stepId: director.id, agentId: director.agentId, status: "completed", tools: [] }],
+        blockedStepIds: [],
+    });
+
+    try {
+        const pending = session.callTool("canvas_create_text_node", { text: "hello" });
+        await new Promise((resolve) => setImmediate(resolve));
+        const call = latestToolCall(events.writes());
+        session.resolveResult({ requestId: call.requestId, error: "browser rejected" });
+        await assert.rejects(pending, /browser rejected/);
+        const execution = await session.finishAgentRun();
+        assert.deepEqual(execution?.failedStepIds, [`${plan.runId}:script`]);
+        assert.equal(events.writes().some((value) => value.includes('"type":"step.failed"')), true);
+        assert.equal(events.writes().some((value) => value.includes('"type":"step.completed"')), false);
+    } finally {
+        session.dispose();
+    }
 });
 
 test("CanvasSession closes only streams owned by a revoked Runtime session", async () => {

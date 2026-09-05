@@ -159,7 +159,7 @@ export class DreaminaTaskReconciler {
         const linked = linkedAbortController(signal, this.shutdown.signal);
         const { controller } = linked;
         this.activeControllers.add(controller);
-        const stopHeartbeat = this.startHeartbeat(claimed.record.idempotencyKey, claimed.lease);
+        const stopHeartbeat = this.startHeartbeat(claimed.record.idempotencyKey, claimed.lease, controller.signal);
         try {
             const observation = await this.observe(claimed.record, controller.signal);
             validateObservation(observation);
@@ -226,10 +226,12 @@ export class DreaminaTaskReconciler {
         }, signal);
     }
 
-    private startHeartbeat(idempotencyKey: string, lease: RuntimePollLease) {
+    private startHeartbeat(idempotencyKey: string, lease: RuntimePollLease, parentSignal?: AbortSignal) {
         if (this.pollLeaseHeartbeatMs === 0) return async () => undefined;
         let stopped = false;
         const shutdown = new AbortController();
+        const abort = () => shutdown.abort();
+        parentSignal?.addEventListener("abort", abort, { once: true });
         let refresh = Promise.resolve();
         const timer = setInterval(() => {
             refresh = refresh.then(async () => {
@@ -237,12 +239,12 @@ export class DreaminaTaskReconciler {
                 await this.renewLease(idempotencyKey, lease, shutdown.signal);
             }).catch(() => { stopped = true; clearInterval(timer); });
         }, this.pollLeaseHeartbeatMs);
-        timer.unref();
         return async () => {
             if (stopped) return;
             stopped = true;
             shutdown.abort();
             clearInterval(timer);
+            parentSignal?.removeEventListener("abort", abort);
             await refresh;
         };
     }

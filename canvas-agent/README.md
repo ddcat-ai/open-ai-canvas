@@ -194,6 +194,14 @@ default_tools_approval_mode = "approve"
 
 侧边栏会展示 Codex 返回的 `thread.started`、`turn.started`、`item.*`、`turn.completed` 等结构化事件；收到 app-server 的 `item/agentMessage/delta` 时，Canvas Agent 会转成 `item.updated`，网页会用同一条消息做真实流式更新，并把工具细节收进运行日志。
 
+### 多智能体编排协议
+
+Canvas Agent 借鉴 Novella 的“声明式 Agent + 主控调度”思路，但不引入独立黑板或固定串行管线。每次 Codex turn 会根据用户请求生成一个轻量 `RunPlan`：包含 `runId`、匹配的 Agent manifest、读写事实键、允许工具和 DAG 依赖；它是执行提示和可观测性元数据，不代表步骤已经执行。
+
+运行期间会通过 SSE 广播带 `runId` 的 `run.*` 语义事件：`run.started`、`run.plan.created`、`run.completed` 或 `run.failed`。Codex 原生 `thread.*`、`turn.*`、`item.*` 事件保留原样并关联同一 `runId`。当前版本在 Codex turn 前会按 DAG 执行 manifest 声明的只读预取：无依赖的读取会并行、相同工具读取会去重，结果以受限上下文交给 Codex，并广播 `step.read.*`。Codex turn 开始后，写入和生成进入当前 run 的全局串行 `RunStepExecutor`；它只在现有画布/项目工具真实成功后广播 `step.completed`，失败则广播 `step.failed`，不会把 `turn.completed` 当作步骤完成。
+
+这样可以复用画布已有的 `canvas-context`、`revision/stateHash`、MCP 工具和生成任务事实，避免把共享状态复制成第二套 Blackboard；每一步仍通过现有语义工具完成读写，并以浏览器确认后的真实工具结果驱动 `step.*` 事件。
+
 侧边栏上传或粘贴的图片会先发到本机 Canvas Agent，再由 Canvas Agent 临时写入本机文件并作为 app-server `localImage` 输入传给 Codex；前端会提示附件体积，单次请求体限制为 30MB。
 
 侧边栏 Composer 中显式提及的网页技能不会被拼接进用户 Prompt。网页只为本轮提及的技能获取 bundle，本机 Runtime 将 `SKILL.md`、`references/`、`scripts/`、`assets/` 等目录完整写入当前 turn 的临时技能目录，并通过 Codex app-server 的原生 `skill` 输入项加载；技能不会被复制进文本输入，也不会添加 `$skill-name` 伪标记，turn 完成后删除整个临时目录。未被用户提及的技能不会传给本机 Runtime。
