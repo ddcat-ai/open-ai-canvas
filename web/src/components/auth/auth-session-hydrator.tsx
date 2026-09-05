@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { getAuthSession, type AuthSessionPayload } from "@/services/api/auth";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
@@ -8,6 +8,19 @@ import { useUserStore } from "@/stores/use-user-store";
 
 export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
+    const [showLoader, setShowLoader] = useState(false);
+
+    useEffect(() => {
+        if (hydrated) return;
+        let secondFrame = 0;
+        const firstFrame = window.requestAnimationFrame(() => {
+            secondFrame = window.requestAnimationFrame(() => setShowLoader(true));
+        });
+        return () => {
+            window.cancelAnimationFrame(firstFrame);
+            if (secondFrame) window.cancelAnimationFrame(secondFrame);
+        };
+    }, [hydrated]);
 
     useEffect(() => {
         let cancelled = false;
@@ -32,7 +45,8 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    return hydrated ? children : <FullScreenLoader />;
+    if (hydrated) return children;
+    return showLoader ? <FullScreenLoader /> : null;
 }
 
 function applyAnonymousSession(payload: AuthSessionPayload) {
