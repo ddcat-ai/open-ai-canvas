@@ -54,6 +54,9 @@ import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttac
 type CreationMode = "text" | "image" | "video";
 type CreationViewMode = "chat" | "storyboard";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
+const CREATION_COMPOSER_COMPACT_DELAY_MS = 160;
+const CREATION_COMPOSER_INITIAL_COMPACT_DELAY_MS = 420;
+const CREATION_COMPOSER_PROXIMITY_PX = 28;
 type CreationSettings = { ratio: string; seconds: string; quality: string; videoQuality: string; count: string };
 type CreationRetryContext = GenerationRetryContext & { retryContextsByBatchIndex?: GenerationRetryContext[] };
 type CreationMessage = {
@@ -950,6 +953,7 @@ export default function CreatePage() {
         setCount: setComposerCount,
         promptOptimizerProvider,
         composerFocusRef,
+        browsingContainerRef: threadScrollRef,
         placeholderOverride: viewMode === "storyboard" && composingNextShot ? `${formatShotOrdinal(nextShotNumber - 1)} · 写下这一镜的镜头、画面或故事` : undefined,
         onSubmit: () => void submit(),
     };
@@ -1295,6 +1299,7 @@ type ComposerProps = {
     setCount: (value: string) => void;
     promptOptimizerProvider: PromptOptimizerProvider | null;
     composerFocusRef: RefObject<HTMLTextAreaElement | null>;
+    browsingContainerRef: RefObject<HTMLElement | null>;
     placeholderOverride?: string;
     onSubmit: () => void;
 };
@@ -1302,6 +1307,10 @@ type ComposerProps = {
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 function CreationComposer(props: ComposerProps) {
+    const composerRef = useRef<HTMLElement>(null);
+    const compactTimerRef = useRef<number | null>(null);
+    const pointerWithinComposerRef = useRef(false);
+    const [displayState, setDisplayState] = useState<"expanded" | "compact">("expanded");
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
@@ -1348,6 +1357,69 @@ function CreationComposer(props: ComposerProps) {
         ? props.attachments
         : props.attachments.filter((attachment) => creationAttachmentKind(attachment) === referenceFilter), [props.attachments, referenceFilter]);
     const imageSettingsSupported = props.imageProfile.size.parameter !== "none" || props.imageProfile.quality.supported || props.imageProfile.maxOutputs > 1;
+    const clearCompactTimer = useCallback(() => {
+        if (compactTimerRef.current === null) return;
+        window.clearTimeout(compactTimerRef.current);
+        compactTimerRef.current = null;
+    }, []);
+    const expandComposer = useCallback(() => {
+        clearCompactTimer();
+        setDisplayState("expanded");
+    }, [clearCompactTimer]);
+    const compactComposer = useCallback((allowFocused = false) => {
+        if (props.variant !== "thread") return;
+        const root = composerRef.current;
+        if (!root || pointerWithinComposerRef.current || root.matches(":hover")) return;
+        if (root.querySelector('[aria-expanded="true"], [aria-pressed="true"]')) return;
+        if (!allowFocused && root.contains(document.activeElement)) return;
+        clearCompactTimer();
+        setTrackState((current) => current.isExpanded ? { ...current, isExpanded: false } : current);
+        setDisplayState("compact");
+    }, [clearCompactTimer, props.variant]);
+    const scheduleComposerCompact = useCallback(() => {
+        clearCompactTimer();
+        if (props.variant !== "thread") return;
+        compactTimerRef.current = window.setTimeout(() => compactComposer(), CREATION_COMPOSER_COMPACT_DELAY_MS);
+    }, [clearCompactTimer, compactComposer, props.variant]);
+
+    useEffect(() => {
+        if (props.variant !== "thread") {
+            clearCompactTimer();
+            setDisplayState("expanded");
+            return;
+        }
+        const browsingContainer = props.browsingContainerRef.current;
+        const handleBrowseScroll = () => compactComposer();
+        const handleBrowseWheel = () => compactComposer(true);
+        const handleBrowsePointerDown = () => compactComposer(true);
+        const handleBrowsePointerMove = (event: globalThis.PointerEvent) => {
+            const rect = composerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const nearComposer = event.clientX >= rect.left
+                && event.clientX <= rect.right
+                && event.clientY >= rect.top - CREATION_COMPOSER_PROXIMITY_PX
+                && event.clientY <= rect.bottom;
+            if (nearComposer) expandComposer();
+            else scheduleComposerCompact();
+        };
+        browsingContainer?.addEventListener("scroll", handleBrowseScroll, { passive: true });
+        browsingContainer?.addEventListener("wheel", handleBrowseWheel, { passive: true });
+        browsingContainer?.addEventListener("pointerdown", handleBrowsePointerDown, { passive: true });
+        browsingContainer?.addEventListener("pointermove", handleBrowsePointerMove, { passive: true });
+        compactTimerRef.current = window.setTimeout(() => compactComposer(), CREATION_COMPOSER_INITIAL_COMPACT_DELAY_MS);
+        return () => {
+            browsingContainer?.removeEventListener("scroll", handleBrowseScroll);
+            browsingContainer?.removeEventListener("wheel", handleBrowseWheel);
+            browsingContainer?.removeEventListener("pointerdown", handleBrowsePointerDown);
+            browsingContainer?.removeEventListener("pointermove", handleBrowsePointerMove);
+            clearCompactTimer();
+        };
+    }, [clearCompactTimer, compactComposer, expandComposer, props.browsingContainerRef, props.variant, scheduleComposerCompact]);
+
+    useEffect(() => {
+        if (promptOptimizerOpen) expandComposer();
+    }, [expandComposer, promptOptimizerOpen]);
+
     const updateTrackScrollState = useCallback(() => {
         const track = attachmentTrackRef.current;
         if (!track) return;
@@ -1435,7 +1507,23 @@ function CreationComposer(props: ComposerProps) {
         }
         return undefined;
     };
-    const composer = <section className={`creation-chat-composer is-${props.variant}`}>
+    const composer = <section
+        ref={composerRef}
+        className={`creation-chat-composer is-${props.variant} is-composer-${displayState}`}
+        data-composer-state={displayState}
+        onPointerEnter={() => {
+            pointerWithinComposerRef.current = true;
+            expandComposer();
+        }}
+        onPointerLeave={() => {
+            pointerWithinComposerRef.current = false;
+            scheduleComposerCompact();
+        }}
+        onPointerDownCapture={expandComposer}
+        onFocusCapture={expandComposer}
+        onBlurCapture={scheduleComposerCompact}
+        onKeyDownCapture={expandComposer}
+    >
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />

@@ -10975,15 +10975,75 @@ html:not(.dark) .creation-duration-choices button:hover { background: rgba(28, 3
     min-height: 176px;
     padding: 18px 20px 8px;
 }
+.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface {
+    max-height: 460px;
+    overflow: hidden;
+    transition: min-height 120ms var(--motion-ease-out), max-height 120ms var(--motion-ease-out), padding 120ms var(--motion-ease-out);
+}
 
 /* 上传 input 为 hidden，编辑器是该网格的唯一可见子项；创作页输入区保持整行宽度。 */
 .creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
 .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .creation-home .creation-chat-editor textarea,
 .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
-.creation-home .creation-chat-mention-container { min-height: 124px; }
-.creation-home .creation-chat-mention-editor { min-height: 124px; max-height: 320px; }
+.creation-home .creation-chat-mention-container {
+    min-height: 124px;
+    transition: min-height 120ms var(--motion-ease-out);
+}
+.creation-home .creation-chat-mention-editor {
+    min-height: 124px;
+    max-height: 320px;
+    transition: min-height 120ms var(--motion-ease-out), max-height 120ms var(--motion-ease-out), padding-right 120ms var(--motion-ease-out);
+}
 .creation-home .creation-chat-dock { min-height: 48px; padding: 4px 12px 12px 16px; }
+
+/* 连续对话浏览态：输入器缩为单行，靠近或操作时恢复完整写作空间。 */
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-chat-writing-surface {
+    min-height: 54px;
+    max-height: 54px;
+    padding: 10px 14px 4px;
+}
+
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-chat-editor { position: relative; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-chat-mention-container,
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-chat-editor textarea {
+    min-height: 36px;
+}
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-chat-mention-editor {
+    min-height: 36px;
+    max-height: 36px;
+    padding-right: 44px;
+}
+
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-panel {
+    position: absolute;
+    top: 1px;
+    right: 0;
+    z-index: 1;
+    max-width: 40px;
+    margin: 0;
+}
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-track-wrapper { min-height: 36px; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-stack-shell { gap: 0; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-track { max-width: 36px; padding: 0; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-stack-card,
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-add-button {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+}
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-track:not(.is-expanded) .creation-reference-stack-card { margin-left: -28px; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-track:not(.is-expanded) .creation-reference-stack-card:first-child { margin-left: 0; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-track:not(.is-expanded) .creation-reference-card-content { transform: none; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-add-slot { margin-left: 0; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-add-button span { display: none; }
+.creation-home .creation-chat-composer.is-thread.is-composer-compact .creation-reference-panel-expand { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface,
+    .creation-home .creation-chat-composer.is-thread .creation-chat-mention-container,
+    .creation-home .creation-chat-composer.is-thread .creation-chat-mention-editor { transition: none; }
+}
 
 .creation-home .creation-chat-control,
 .creation-home .creation-chat-composer .creation-model-picker.canvas-composer-model-picker,
