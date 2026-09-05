@@ -1962,8 +1962,7 @@
         gap: var(--space-4);
     }
 
-    .full-screen-loader-status,
-    .workspace-route-loader-content {
+    .full-screen-loader-status {
         display: flex;
         align-items: center;
         gap: var(--space-3);
@@ -1993,21 +1992,6 @@
     .loader-placeholder-title { width: 58%; height: 10px; margin-top: var(--space-3); border-radius: var(--r-full); }
     .loader-placeholder-meta { width: 34%; height: 8px; margin-top: var(--space-2); border-radius: var(--r-full); opacity: 0.72; }
 
-    .workspace-route-loader {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        min-height: 100%;
-        place-items: center;
-        background: var(--workspace-page);
-        color: #f5f5f5;
-        opacity: 0;
-        transition: opacity var(--motion-instant) ease-out;
-    }
-
-    .workspace-route-loader.is-visible { opacity: 1; }
-    .workspace-route-loader-content { justify-content: center; }
-
     @keyframes loader-surface-enter {
         from { opacity: 0; }
         to { opacity: 1; }
@@ -2035,7 +2019,6 @@
     @media (prefers-reduced-motion: reduce) {
         .full-screen-loader { animation: none; }
         .loading-signal { animation: none; }
-        .workspace-route-loader { transition: none; }
     }
 
     /* 启动页以品牌标记和创作流程为视觉中心，不模拟尚未出现的工作区骨架。 */
@@ -2087,7 +2070,6 @@
 
     .full-screen-loader-logo-image { width: 38px; height: 38px; }
     .full-screen-loader-logo-fallback { display: block; width: 36px; height: 36px; background: currentColor; mask: url('/logo.svg') center / contain no-repeat; -webkit-mask: url('/logo.svg') center / contain no-repeat; }
-    .workspace-route-loader-logo .full-screen-loader-logo-fallback { width: 16px; height: 16px; }
 
     .full-screen-loader-orbit {
         position: absolute;
@@ -2164,11 +2146,6 @@
     .loading-signal i { width: 4px; height: 4px; border-radius: 50%; background: color-mix(in srgb, var(--workspace-accent) 76%, var(--foreground)); animation: loader-signal-pulse 1.25s ease-in-out infinite; }
     .loading-signal i:nth-child(2) { animation-delay: 140ms; }
     .loading-signal i:nth-child(3) { animation-delay: 280ms; }
-
-    .workspace-route-loader-content { flex-direction: column; gap: var(--space-2); }
-    .workspace-route-loader-content .loading-signal { margin-top: 0; }
-    .workspace-route-loader-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(245, 245, 245, .12); border-radius: var(--r-md); background: #171717; }
-    .workspace-route-loader-logo { display: grid; place-items: center; color: #f5f5f5; }
 
     @keyframes loader-orbit-spin { to { transform: rotate(360deg); } }
     @keyframes loader-logo-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(.97); } 50% { transform: translate(-50%, -50%) scale(1.035); } }

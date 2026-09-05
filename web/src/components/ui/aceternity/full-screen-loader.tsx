@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { cn } from "@/lib/utils";
 
@@ -30,36 +28,6 @@ export function FullScreenLoader({ label = "正在恢复工作区", detail = "�
             </div>
             <div className="full-screen-loader-copy"><strong>{label}</strong><span>{detail}</span><LoadingSignal /></div>
         </div>
-    );
-}
-
-export function WorkspaceRouteLoader({ label = "正在打开页面" }: { label?: string }) {
-    const [visible, setVisible] = useState(false);
-
-    useEffect(() => {
-        // Let the pending route render once before deciding whether a mask is
-        // needed. If Suspense resolves during these frames, this component is
-        // unmounted without ever painting a route mask. A route that remains
-        // pending gets feedback based on its actual render state instead of a
-        // fixed timeout.
-        let secondFrame = 0;
-        const firstFrame = window.requestAnimationFrame(() => {
-            secondFrame = window.requestAnimationFrame(() => setVisible(true));
-        });
-        return () => {
-            window.cancelAnimationFrame(firstFrame);
-            if (secondFrame) window.cancelAnimationFrame(secondFrame);
-        };
-    }, []);
-
-    return (
-        <section data-workspace-route-loader className={cn("workspace-route-loader", visible && "is-visible")} role="status" aria-live="polite" aria-label={label}>
-            <div className="workspace-route-loader-content">
-                <span className="workspace-route-loader-mark"><BrandLogoFrame className="workspace-route-loader-logo" logoClassName="size-4" alt="" fallback={<span className="full-screen-loader-logo-fallback" />} /></span>
-                <LoadingSignal />
-                <span>{label}</span>
-            </div>
-        </section>
     );
 }
 
