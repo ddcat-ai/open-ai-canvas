@@ -357,7 +357,15 @@ add({
     video_urls: omit(map({ $sortByOrder: ref("request.videos") }, "media", ref("media.value"))),
     audio_urls: omit(map({ $sortByOrder: ref("request.audios") }, "media", ref("media.value")))
   }),
-  poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" }, response: asyncResponse("video")
+  poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" },
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.data.task_id"), ref("response.data.taskId"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("response.id"), ref("taskId")),
+    videos: coalesce(
+      ref("response.data.result_url"), ref("response.data.video_url"), ref("response.data.output_url"), ref("response.data.url"), ref("response.data.metadata.url"),
+      ref("response.data.data.video_url"), ref("response.data.data.output_url"), ref("response.data.data.result_url"), ref("response.data.data.url"), ref("response.data.data.metadata.url"),
+      ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.output_url"), ref("response.url"), ref("response.metadata.url"), ref("response.output.url")
+    )
+  })
 });
 
 add({

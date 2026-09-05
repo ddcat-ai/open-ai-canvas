@@ -150,6 +150,17 @@ type providerHTTPError struct {
 	RetryAfter time.Duration
 }
 
+type providerStatePendingError struct {
+	TaskID string
+	Cause  error
+}
+
+func (e providerStatePendingError) Error() string {
+	return fmt.Sprintf("上游任务状态尚未同步，将继续查询原任务（任务 %s）", e.TaskID)
+}
+
+func (e providerStatePendingError) Unwrap() error { return e.Cause }
+
 type providerAnalyticsKey struct{}
 type providerOutboundPolicyKey struct{}
 
@@ -2297,10 +2308,32 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 	return runProtocolAdapterTask(ctx, input, adapter)
 }
 
+type protocolPollTiming struct {
+	InitialDelay            time.Duration
+	PollInterval            time.Duration
+	TaskNotExistWindow      time.Duration
+	TaskNotExistMaxMisses   int
+	TaskNotExistRetryDelays []time.Duration
+}
+
+var defaultProtocolPollTiming = protocolPollTiming{
+	InitialDelay:            2 * time.Second,
+	PollInterval:            2500 * time.Millisecond,
+	TaskNotExistWindow:      15 * time.Second,
+	TaskNotExistMaxMisses:   5,
+	TaskNotExistRetryDelays: []time.Duration{2 * time.Second, 3 * time.Second, 5 * time.Second, 5 * time.Second},
+}
+
 func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter) (map[string]interface{}, error) {
+	return runProtocolAdapterTaskWithTiming(ctx, input, adapter, defaultProtocolPollTiming)
+}
+
+func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, timing protocolPollTiming) (map[string]interface{}, error) {
 	request := protocolRequestFromInput(input)
 	taskID := resumedProviderRequestID(ctx)
 	var created protocol.CreateResult
+	createdProviderTask := false
+	syncWindowStartedAt := time.Now()
 	if taskID == "" {
 		spec, err := adapter.BuildCreate(ctx, protocol.RequestContext{BaseURL: input.Config.BaseURL, Request: request})
 		if err != nil {
@@ -2324,8 +2357,16 @@ func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, ad
 		if taskID == "" {
 			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
 		}
+		createdProviderTask = true
+		syncWindowStartedAt = time.Now()
+	}
+	if createdProviderTask && input.Config.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2) {
+		if err := sleepContext(ctx, timing.InitialDelay); err != nil {
+			return nil, err
+		}
 	}
 
+	taskNotExistMisses := 0
 	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
 		if err != nil {
@@ -2333,8 +2374,26 @@ func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, ad
 		}
 		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "poll"), input.Config, spec)
 		if err != nil {
+			if isNewAPIChannel2TaskNotReady(input.Config.InterfaceType, taskID, err) {
+				taskNotExistMisses++
+				maxMisses := timing.TaskNotExistMaxMisses
+				if maxMisses <= 0 {
+					maxMisses = len(timing.TaskNotExistRetryDelays) + 1
+				}
+				if time.Since(syncWindowStartedAt) >= timing.TaskNotExistWindow || taskNotExistMisses >= maxMisses {
+					return nil, providerStatePendingError{TaskID: taskID, Cause: err}
+				}
+				delayIndex := min(taskNotExistMisses-1, len(timing.TaskNotExistRetryDelays)-1)
+				if delayIndex >= 0 {
+					if sleepErr := sleepContext(ctx, timing.TaskNotExistRetryDelays[delayIndex]); sleepErr != nil {
+						return nil, sleepErr
+					}
+				}
+				continue
+			}
 			return nil, err
 		}
+		taskNotExistMisses = 0
 		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, body)
 		if err != nil {
 			return nil, err
@@ -2348,11 +2407,27 @@ func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, ad
 		case protocol.StatusFailed, protocol.StatusCancelled:
 			return nil, protocolResultError(state.Message, taskID)
 		}
-		if err := sleepContext(ctx, 2500*time.Millisecond); err != nil {
+		if err := sleepContext(ctx, timing.PollInterval); err != nil {
 			return nil, err
 		}
 	}
 	return nil, fmt.Errorf("声明式协议任务超时（任务 %s）", taskID)
+}
+
+func isNewAPIChannel2TaskNotReady(interfaceType string, taskID string, err error) bool {
+	if strings.TrimSpace(interfaceType) != string(model.ChannelInterfaceNewAPIChannel2) || strings.TrimSpace(taskID) == "" {
+		return false
+	}
+	var httpErr providerHTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	var payload map[string]any
+	if json.Unmarshal([]byte(httpErr.Body), &payload) != nil {
+		return false
+	}
+	code, message := providerFailureDetails(payload)
+	return strings.EqualFold(strings.TrimSpace(code), "task_not_exist") || strings.EqualFold(strings.TrimSpace(message), "task_not_exist")
 }
 
 // queryProtocolAdapterVideoTask performs exactly one read of an existing

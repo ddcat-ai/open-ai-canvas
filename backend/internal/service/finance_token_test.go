@@ -86,6 +86,25 @@ func TestEnrichAPICallLogReadsArkVideoUsage(t *testing.T) {
 	}
 }
 
+func TestEnrichAPICallLogPrefersNewAPIChannel2NestedTaskID(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{name: "snake case", payload: `{"id":"wrapper-id","data":{"task_id":"task-snake"}}`},
+		{name: "camel case", payload: `{"id":"wrapper-id","data":{"taskId":"task-camel"}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &model.ApiCallLog{Capability: "video", Path: "/v1/video/generations"}
+			(&Service{}).EnrichAPICallLog(log, []byte(test.payload))
+			if !strings.HasPrefix(log.ProviderRequestID, "task-") {
+				t.Fatalf("ProviderRequestID = %q, want nested upstream task ID", log.ProviderRequestID)
+			}
+		})
+	}
+}
+
 func TestEnrichAPICallLogKeepsUserFacingAndUpstreamFailureDetails(t *testing.T) {
 	log := &model.ApiCallLog{
 		Status:     model.ApiCallStatusFailed,

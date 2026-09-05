@@ -35,11 +35,21 @@ func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	if !svc.shouldDeferVideoProviderTask(base, string(input), context.DeadlineExceeded) {
 		t.Fatal("resumable NewAPI Channel 2 deadline should remain running")
 	}
+	pendingErr := providerStatePendingError{TaskID: base.ProviderRequestID, Cause: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}}
+	if !svc.shouldDeferVideoProviderTask(base, string(input), pendingErr) {
+		t.Fatal("resumable NewAPI Channel 2 provider sync delay should remain running")
+	}
 	if svc.shouldDeferVideoProviderTask(model.Task{ID: "task-2", Type: "canvas_video"}, string(input), context.DeadlineExceeded) {
 		t.Fatal("missing provider task id must not be deferred")
 	}
+	if svc.shouldDeferVideoProviderTask(model.Task{ID: "task-2", Type: "canvas_video"}, string(input), pendingErr) {
+		t.Fatal("provider sync delay without persisted provider task id must not be deferred")
+	}
 	if svc.shouldDeferVideoProviderTask(base, string(input), context.Canceled) {
 		t.Fatal("explicit cancellation must not be deferred")
+	}
+	if svc.shouldDeferVideoProviderTask(base, string(input), providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}) {
+		t.Fatal("untyped provider error must not be deferred")
 	}
 	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
 	if err != nil {
