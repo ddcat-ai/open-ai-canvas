@@ -177,6 +177,9 @@ export type ShotArtifact = {
     status: "pending" | "running" | "ready" | "failed" | "stale" | string;
     selected: boolean;
     metadataJson: string;
+    // W1-B-01：后端 models_project.go 已有这两列（Provider/DurationMs），前端类型补对齐
+    provider?: string;
+    durationMs?: number;
     createdAt: string;
     updatedAt: string;
 };

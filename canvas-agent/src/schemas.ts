@@ -52,6 +52,9 @@ export const toolNames = [
     "project_link_asset",
     "project_upsert_asset_version",
     "project_register_task_output",
+    "project_get_shot",
+    "project_retry_shot",
+    "project_regenerate_shot",
 ] as const;
 export type ToolName = (typeof toolNames)[number];
 
@@ -163,6 +166,9 @@ export const toolInputSchemas = {
     project_link_asset: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), category: assetCategorySchema }),
     project_upsert_asset_version: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), prompt: z.string().optional(), definitionJson: z.string().optional(), note: z.string().optional() }),
     project_register_task_output: z.object({ projectId: projectIdSchema, stepId: z.string().min(1), taskId: z.string().min(1), assetVersionId: z.string().optional(), resourceId: z.string().optional(), mediaType: z.string().optional(), role: z.enum(["reference", "start_frame", "end_frame", "keyframe", "storyboard", "output"]).optional(), metadataJson: z.string().optional(), outputJson: z.string().optional() }),
+    project_get_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
+    project_retry_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), taskId: z.string().min(1).optional() }),
+    project_regenerate_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
 } satisfies Record<ToolName, z.AnyZodObject>;
 
 export const toolDescriptions: Record<ToolName, string> = {
@@ -206,4 +212,7 @@ export const toolDescriptions: Record<ToolName, string> = {
     project_link_asset: "将个人资产引用到当前短剧项目，不复制媒体文件。",
     project_upsert_asset_version: "为项目资产创建新的设定和提示词版本，保留历史版本。",
     project_register_task_output: "将成功生成任务挂到流程步骤，并登记到具体资产版本和资源表示。",
+    project_get_shot: "读取单个镜头的完整生产上下文：镜头本体、当前版本（Revision）、产物版本列表和最新生成任务摘要。先取镜头 id 再用本工具看细节。",
+    project_retry_shot: "对镜头的既有生成任务做重试：同一 GenerationTask 新增一次执行尝试（attempt），不新建任务。不传 taskId 时自动定位该镜头最新的生成任务；任务不存在时报错。",
+    project_regenerate_shot: "对镜头做重新生成：创建新的 GenerationTask（旧任务保持原样），成功后产生新版本产物并更新 Timeline 时长。与 retryShot 的语义区别：regenerate 是新任务，retry 是同任务新尝试。",
 };
