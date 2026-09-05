@@ -253,6 +253,10 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 				"fps":        output.FPS,
 				"provider":   output.Provider,
 			})
+			// D-034：Bridge 完成只代表「文件生成成功」，Resource 尚未登记
+			// （真实导入与 Resource 注册归 W3-01），因此这里是 pending_resource 而非 ready。
+			// 产物仍可被选中预览——StorageURI 存在 MetadataJSON 里，前端直接用它显示，
+			// 不依赖 Resource 是否存在。
 			artifact := model.ShotArtifact{
 				ID:           repositoryID(),
 				ProjectID:    shot.ProjectID,
@@ -262,7 +266,7 @@ func (r *Repository) CompleteComfyBridgeRequestWithAssets(bridgeID string, id st
 				TaskID:       request.GenerationTaskID,
 				Type:         artifactType,
 				Version:      version,
-				Status:       "ready",
+				Status:       model.ShotArtifactStatusPendingResource,
 				Selected:     true,
 				MetadataJSON: string(metadata),
 				RequestID:    id,

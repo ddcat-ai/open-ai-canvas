@@ -300,6 +300,32 @@ type ShotRevision struct {
 //
 // 语义：Status 描述的不是文件处理 pipeline，而是「这个 Artifact 目前在生产域中是否可用」，
 // 因此不引入 created / processing 这类中间态。
+//
+// ─────────────────────────────────────────────────────────────────────────
+// ★ Status 与 Selected 是两个正交维度（W1-01 纠偏后定死，勿再混用）
+// ─────────────────────────────────────────────────────────────────────────
+//   Status   = 「这个产物能不能用？」——生命周期可用性
+//   Selected = 「这个产物是不是当前被采用的那个版本？」——版本指针（pointer）
+//
+// 二者组合出的合法状态：
+//   1) ready + selected        → 当前采用版本，可用（最常见）
+//   2) ready + !selected       → 历史可用版本，被更新的版本顶替，但仍可回放/切回
+//   3) pending_resource + sel. → 已生成成功、Resource 未登记；W3-01 之前这是常态
+//   4) stale                   → 被新 Revision / 参数变更淘汰，**不再可用**，只作历史留档
+//
+// 关键区分（此前混淆导致 Bug）：
+//   · 「曾经是 selected，现在不是了」≠ stale。那只是版本更替（组合 2），产物依然可用。
+//   · stale 是不可逆淘汰：分镜/资产引用改了，旧产物对新输入不再成立，即便文件还在。
+//   · 因此置 stale 时**必须同时清 selected**（见 repository.go 的 markArtifactStale），
+//     避免出现「已淘汰但仍被当作当前版本」的自相矛盾状态。
+//
+// ⚠️ selected=true 只是「当前候选版本」，**不等于 Timeline 最终使用的产物**。
+//   完整取值链必须走完四层：
+//       Shot → Active Revision → Selected Artifact → 实际媒体
+//   少了 Revision 这一层，就会出现「产物被选中、但分镜版本已经切换」的语义冲突
+//   ——即 selected 指向的 Artifact 并不属于当前 Active Revision。
+//   （W1-02 / W1-03 会在读取侧补齐这一层，此处先立规矩，避免后来者误解。）
+//
 const (
 	// ShotArtifactStatusReady 表示 Resource 已登记，产物可正常使用。
 	ShotArtifactStatusReady = "ready"
@@ -324,9 +350,12 @@ type ShotArtifact struct {
 	Type         string    `json:"type" gorm:"index;size:40;uniqueIndex:idx_shot_artifacts_version,priority:2"`
 	Version      int       `json:"version" gorm:"uniqueIndex:idx_shot_artifacts_version,priority:3"`
 	ResourceID   string    `json:"resourceId,omitempty" gorm:"index;size:36"`
-	Status       string    `json:"status" gorm:"index;size:24"`
-	Selected     bool      `json:"selected" gorm:"index"`
-	MetadataJSON string    `json:"metadataJson" gorm:"type:text"`
+	// Status：生命周期可用性，取值见上方 D-034 常量，禁止裸字符串。
+	Status string `json:"status" gorm:"index;size:24"`
+	// Selected：版本指针，标记「当前采用的版本」。与 Status 正交，不是状态。
+	// 同一 (ShotID, Type) 下最多一行 selected=true；置 stale 时必须同时置 false。
+	Selected     bool   `json:"selected" gorm:"index"`
+	MetadataJSON string `json:"metadataJson" gorm:"type:text"`
 
 	// W1-01（D-026 并轨）：生成侧溯源字段，原拟新建 output_assets 表，改为挂在既有产物表上。
 	// RequestID 指向 comfy_bridge_requests（即 ComfyJob，D-020）；

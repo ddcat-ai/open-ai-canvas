@@ -1422,7 +1422,7 @@ func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkfl
 			return gorm.ErrRecordNotFound
 		}
 		if invalidateWorkflow {
-			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
+			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
 				return err
 			}
 			if err := invalidateUnitWorkflowTx(tx, unit.ProjectID, unit.ID, "story", unit.UpdatedAt); err != nil {
@@ -1827,7 +1827,7 @@ func (r *Repository) SaveShotWithRevision(shot *model.Shot, revision *model.Shot
 			return err
 		}
 		if !create {
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shot.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": shot.UpdatedAt}).Error; err != nil {
+			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shot.ID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": shot.UpdatedAt}).Error; err != nil {
 				return err
 			}
 		}
@@ -1983,7 +1983,7 @@ func (r *Repository) CreateShotArtifact(artifact *model.ShotArtifact) error {
 }
 
 func (r *Repository) MarkShotArtifactsStale(shotID string, updatedAt time.Time) error {
-	return r.db.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error
+	return r.db.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error
 }
 
 func (r *Repository) UpsertProductionTaskLink(link *model.ProductionTaskLink) error {
@@ -2012,7 +2012,7 @@ func (r *Repository) UpsertShotAssetReferenceAndInvalidate(projectID string, ref
 				return err
 			}
 		}
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", reference.ShotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error; err != nil {
+		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", reference.ShotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error; err != nil {
 			return err
 		}
 		var shot model.Shot
@@ -2037,7 +2037,7 @@ func (r *Repository) DeleteShotAssetReferenceAndInvalidate(projectID string, sho
 			return nil
 		}
 		deleted = true
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error; err != nil {
+		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error; err != nil {
 			return err
 		}
 		var shot model.Shot
