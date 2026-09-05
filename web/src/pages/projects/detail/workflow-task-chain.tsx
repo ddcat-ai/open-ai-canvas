@@ -102,7 +102,15 @@ export default function TaskChainPanel({ projectId, shotId, taskId, taskStatus, 
 
     const chain = chainQuery.data;
     const task = chain?.task;
-    const lastJobFailed = chain?.jobs?.some((job) => job.status === "failed") ?? false;
+    // R4：只看**末次尝试**是否失败。
+    // 原写法 `jobs.some((job) => job.status === "failed")` 会把「中途失败过、但末次已成功」
+    // 的任务也判定为失败，导致重试按钮常驻——而此时重试是多余操作（结果已经出来了）。
+    // D-020：Retry = 同一 Task 新 Job，attemptNo 单调递增，故取 attemptNo 最大者即为末次。
+    const lastJob = (chain?.jobs ?? []).reduce<ComfyJobSummary | undefined>(
+        (latest, job) => (!latest || job.attemptNo > latest.attemptNo ? job : latest),
+        undefined,
+    );
+    const lastJobFailed = lastJob?.status === "failed";
 
     return (
         <section className="flex flex-col gap-3 py-2">
