@@ -1,7 +1,7 @@
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
-export type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance";
-export type LocalRuntimeScope = "runtime:status" | "runtime:revoke" | "canvas:connect" | "dreamina:status" | "dreamina:login" | "dreamina:logout" | "dreamina:run" | "dreamina:models" | "dreamina:generate" | "portrait:status" | "portrait:model" | "portrait:run" | "portrait:read";
+export type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance" | "subscription-cli";
+export type LocalRuntimeScope = "runtime:status" | "runtime:revoke" | "canvas:connect" | "dreamina:status" | "dreamina:login" | "dreamina:logout" | "dreamina:run" | "dreamina:models" | "dreamina:generate" | "subscription:status" | "subscription:models" | "subscription:complete" | "subscription:generate" | "portrait:status" | "portrait:model" | "portrait:run" | "portrait:read";
 
 export type LocalRuntimeModuleDescriptor = {
     id: LocalRuntimeModuleId;
@@ -28,6 +28,7 @@ const MODULE_SCOPES: Record<LocalRuntimeModuleId, ReadonlySet<LocalRuntimeScope>
     "canvas-agent": new Set(["canvas:connect"]),
     dreamina: new Set(["dreamina:status", "dreamina:login", "dreamina:logout", "dreamina:run", "dreamina:models", "dreamina:generate"]),
     "portrait-clearance": new Set(["portrait:status", "portrait:model", "portrait:run", "portrait:read"]),
+    "subscription-cli": new Set(["subscription:status", "subscription:models", "subscription:complete", "subscription:generate"]),
 };
 
 export async function readLocalRuntimeStatus(client: LocalRuntimeTransport, signal?: AbortSignal): Promise<LocalRuntimeStatus> {
@@ -136,7 +137,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isModuleId(value: unknown): value is LocalRuntimeModuleId {
-    return value === "canvas-agent" || value === "dreamina" || value === "portrait-clearance";
+    return value === "canvas-agent" || value === "dreamina" || value === "portrait-clearance" || value === "subscription-cli";
 }
 
 function invalidResponse(status: number) {

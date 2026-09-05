@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { isLocalSubscriptionModelValue, resolveLocalSubscriptionModel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { channelRequest } from "@/services/api/custom-channel-relay";
@@ -17,6 +17,8 @@ import { normalizeGrokImageResolution, normalizeQuality, normalizeVolcengineArkI
 import { parseGeminiImagePayload, parseImagePayload, readAxiosError } from "@/services/api/image-response";
 import { toChatCompletionMessages, toChatCompletionToolChoice, toClaudeBody, toGeminiBody, toGeminiToolOptions, toResponseInput, toResponseTool, withSystemMessage } from "@/services/api/image-protocols";
 import { requestGeminiStreamingResponse, requestStreamingChatCompletion, requestStreamingClaude, requestStreamingResponse } from "@/services/api/image-streaming";
+import { confirmSubscriptionCall, runSubscriptionImage, runSubscriptionText } from "@/services/local-subscription-cli";
+import { getLocalRuntimeSessionClient } from "@/stores/use-local-runtime-store";
 export { buildBackendToolRequests } from "@/services/api/image-protocols";
 export type { AiTextContentPart, AiTextMessage, ResponseFunctionTool, ResponseInputMessage, ResponseToolCall, ToolChoice, ToolResponseResult } from "@/services/api/image-contracts";
 
@@ -59,6 +61,30 @@ async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referen
 
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    const subscription = resolveLocalSubscriptionModel(config, selectedModel);
+    if (!subscription && isLocalSubscriptionModelValue(selectedModel)) throw new Error("订阅本机模型尚未就绪；不会切换其他渠道或付费 API");
+    if (subscription) {
+        if (subscription.modality !== "image") throw new Error("订阅文本模型不能用于生图");
+        confirmSubscriptionCall({ provider: subscription.provider, model: subscription.model, capability: "image", count: Number(config.count) || 1 });
+        const count = Math.max(1, Math.min(15, Number(config.count) || 1));
+        const results = await Promise.all(
+            Array.from({ length: count }, () =>
+                runSubscriptionImage(
+                    getLocalRuntimeSessionClient(),
+                    {
+                        provider: subscription.provider,
+                        model: subscription.model,
+                        prompt,
+                        aspectRatio: normalizeSubscriptionRatio(config.size),
+                        quality: normalizeSubscriptionQuality(config.quality),
+                        confirmed: true,
+                    },
+                    options?.signal,
+                ),
+            ),
+        );
+        return results.flat();
+    }
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, []);
@@ -135,6 +161,7 @@ async function grokImageInputURL(image: ReferenceImage) {
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    if (isLocalSubscriptionModelValue(selectedModel)) throw new Error("订阅本机生图第一阶段仅支持文生图，请移除参考素材和蒙版");
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, references, mask);
@@ -234,6 +261,24 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
+    const subscription = resolveLocalSubscriptionModel(config, config.model || config.textModel);
+    if (!subscription && isLocalSubscriptionModelValue(config.model || config.textModel)) throw new Error("订阅本机模型尚未就绪；不会切换其他渠道或付费 API");
+    if (subscription) {
+        if (subscription.modality !== "text") throw new Error("订阅生图模型不能用于文本生成");
+        confirmSubscriptionCall({ provider: subscription.provider, model: subscription.model, capability: "text" });
+        const answer = await runSubscriptionText(
+            getLocalRuntimeSessionClient(),
+            {
+                provider: subscription.provider,
+                model: subscription.model,
+                prompt: subscriptionMessagesPrompt(messages),
+                confirmed: true,
+            },
+            options?.signal,
+        );
+        onDelta(answer);
+        return answer;
+    }
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     try {
         if (requestConfig.apiFormat === "gemini") {
@@ -279,6 +324,33 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
     }
+}
+
+function subscriptionMessagesPrompt(messages: AiTextMessage[]) {
+    return messages
+        .map((message) => {
+            const content =
+                typeof message.content === "string"
+                    ? message.content
+                    : Array.isArray(message.content)
+                      ? message.content
+                            .map((part) => (part && typeof part === "object" && "text" in part && typeof part.text === "string" ? part.text : ""))
+                            .filter(Boolean)
+                            .join("\n")
+                      : "";
+            const role = message.role === "assistant" ? "助手" : message.role === "system" ? "系统" : "用户";
+            return content.trim() ? `${role}：${content.trim()}` : "";
+        })
+        .filter(Boolean)
+        .join("\n\n");
+}
+
+function normalizeSubscriptionRatio(value: string) {
+    return ["1:1", "21:9", "16:9", "3:2", "4:3", "9:16", "2:3", "3:4"].includes(value) ? value : "1:1";
+}
+
+function normalizeSubscriptionQuality(value: string) {
+    return ["auto", "low", "medium", "high"].includes(value) ? value : "auto";
 }
 
 export async function requestToolResponse(config: AiConfig, messages: ResponseInputMessage[], tools: ResponseFunctionTool[], toolChoice: ToolChoice = "auto", onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {

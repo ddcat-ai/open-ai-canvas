@@ -70,6 +70,14 @@ Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接
 - 外部程序直接切换 Dreamina CLI 账号无法被本应用实时观测；只能在下一次 CLI 状态或命令边界重新校验，因此本机任务运行期间请不要在其他程序中换号。
 - 官方 CLI 的 argv 可能被同一 OS 用户通过进程列表看到，其中可能包含 prompt、receipt 或本地路径；这是官方 CLI 的进程边界，本应用不承诺对同机用户隐藏这些参数。
 
+## CLIProxyAPI 订阅渠道
+
+Canvas Agent 内置 `subscription-cli` Local Runtime 模块，只连接固定地址 `http://127.0.0.1:8317`。当前白名单只包含 ChatGPT/Codex 的 `gpt-5.5`、`gpt-image-2`，以及 Google Antigravity 的 `gemini-3.1-flash-lite`、`gemini-3.1-flash-image`；后者在产品界面显示为 Nano Banana 2。模块不接收自定义上游地址，也不会在失败时切换到 API Key、系统渠道或其他付费模型。
+
+CLIProxyAPI 的客户端访问密钥必须保存在独立本机文件中，默认路径为 `~/.infinite-canvas/cliproxyapi-client.key`。也可在启动 Runtime 前通过 `FRAMEFIELD_CLIPROXY_API_KEY_FILE` 指向另一个绝对路径。密钥只由本机 Runtime 读取，不进入浏览器、画布 JSON、请求 URL 或日志；真实文本与图片调用还必须携带网页侧确认结果。
+
+第一阶段只支持普通文本和文生图，不支持参考图、蒙版、视频或后台队列提交。订阅账号的 OAuth 登录和令牌生命周期由 CLIProxyAPI 管理，本模块只根据 `/v1/models` 的实际返回投影可用模型，不把“已安装”或“服务已启动”伪装成账号已经具备生成权限。
+
 ## 肖像可识别性本机引擎
 
 Canvas Agent 内置 `portrait-clearance` Local Runtime 模块。它只接收签名的画布请求，不读取项目 API Key；图片、embedding、候选和报告保存在 Agent 的配置目录，不进入画布 JSON。

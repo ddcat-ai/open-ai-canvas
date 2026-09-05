@@ -11,6 +11,8 @@ import { workflowFieldRole, workflowFieldSafeToOverride, workflowVideoFieldsFrom
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
+import type { SubscriptionCliModel, SubscriptionCliProvider } from "@/services/local-subscription-cli";
+import { useLocalSubscriptionCliStore } from "@/stores/use-local-subscription-cli-store";
 import type { CapabilitySpec, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
 
 export type ApiCallFormat = "openai" | "gemini" | "claude";
@@ -375,7 +377,8 @@ export type ModelChannel = {
         defaultOptions?: Record<string, unknown>;
     }>;
     transport?: "backend-channel" | "local-runtime";
-    localModels?: DreaminaLocalModel[];
+    localProvider?: SubscriptionCliProvider;
+    localModels?: Array<DreaminaLocalModel | SubscriptionCliModel>;
 };
 
 export type AiConfig = {
@@ -736,6 +739,8 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
 }
 
 function normalizeSelectedModel(value: string, channels: ModelChannel[], options: string[]) {
+    const deferredLocal = value.trim();
+    if (isLocalDreaminaModelValue(deferredLocal) || isLocalSubscriptionModelValue(deferredLocal)) return options.includes(deferredLocal) || !channels.some((channel) => channel.id === decodeChannelModel(deferredLocal)?.channelId) ? deferredLocal : options[0] || "";
     const model = normalizeModelOptionValue(value, channels);
     return model && options.includes(model) ? model : options[0] || "";
 }
@@ -745,7 +750,16 @@ export function useEffectiveConfig() {
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
     const catalogState = useLocalDreaminaModelStore((state) => state.state);
     const dreaminaModels = useLocalDreaminaModelStore((state) => state.models);
-    return useMemo(() => effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels), [catalogState, config, customChannelsEnabled, dreaminaModels]);
+    const subscriptionState = useLocalSubscriptionCliStore((state) => state.state);
+    const subscriptionModels = useLocalSubscriptionCliStore((state) => state.models);
+    return useMemo(
+        () => effectiveConfigWithSubscriptionCli(
+            effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels),
+            subscriptionState,
+            subscriptionModels,
+        ),
+        [catalogState, config, customChannelsEnabled, dreaminaModels, subscriptionModels, subscriptionState],
+    );
 }
 
 export function effectiveConfigForCustomChannels(config: AiConfig, customChannelsEnabled: boolean): AiConfig {
@@ -779,6 +793,60 @@ export function effectiveConfigWithDreamina(config: AiConfig, catalogState: "idl
         videoModels: filterModelsByCapability(models, "video", channels),
         textModels: filterModelsByCapability(models, "text", channels),
         audioModels: filterModelsByCapability(models, "audio", channels),
+    };
+}
+
+export function effectiveConfigWithSubscriptionCli(config: AiConfig, state: "idle" | "loading" | "ready" | "error", subscriptionModels: SubscriptionCliModel[]): AiConfig {
+    const withoutSubscription = config.channels.filter((item) => !item.id.startsWith("local:subscription:"));
+    if (state !== "ready" || !subscriptionModels.length) return withoutSubscription.length === config.channels.length ? config : rebuildEffectiveModels({ ...config, channels: withoutSubscription });
+    const channelFor = (provider: SubscriptionCliProvider, name: string): ModelChannel | undefined => {
+        const localModels = subscriptionModels.filter((model) => model.provider === provider);
+        if (!localModels.length) return undefined;
+        return {
+            id: `local:subscription:${provider}`,
+            name,
+            baseUrl: "",
+            apiKey: "",
+            apiFormat: "openai",
+            models: localModels.map((item) => item.id),
+            scope: "user",
+            enabled: true,
+            transport: "local-runtime",
+            localProvider: provider,
+            localModels,
+            modelCosts: localModels.map((item) => ({
+                model: item.id,
+                displayName: item.displayName,
+                description: provider === "chatgpt" ? "通过本机 CLIProxyAPI 使用 ChatGPT/Codex 订阅" : "通过本机 CLIProxyAPI 使用 Google Antigravity 订阅",
+                capability: item.modality,
+                billingMode: "fixed_request",
+                unitPriceMicrocredits: 0,
+            })),
+        };
+    };
+    const channels = [
+        ...withoutSubscription,
+        channelFor("chatgpt", "ChatGPT/Codex 订阅"),
+        channelFor("antigravity", "Google Antigravity 订阅"),
+    ].filter((channel): channel is ModelChannel => Boolean(channel));
+    return rebuildEffectiveModels({ ...config, channels });
+}
+
+function rebuildEffectiveModels(config: AiConfig): AiConfig {
+    const models = modelOptionsFromChannels(config.channels);
+    return {
+        ...config,
+        channelMode: "local",
+        models,
+        imageModels: filterModelsByCapability(models, "image", config.channels),
+        videoModels: filterModelsByCapability(models, "video", config.channels),
+        textModels: filterModelsByCapability(models, "text", config.channels),
+        audioModels: filterModelsByCapability(models, "audio", config.channels),
+        model: normalizeSelectedModel(config.model, config.channels, models),
+        imageModel: normalizeSelectedModel(config.imageModel, config.channels, filterModelsByCapability(models, "image", config.channels)),
+        videoModel: normalizeSelectedModel(config.videoModel, config.channels, filterModelsByCapability(models, "video", config.channels)),
+        textModel: normalizeSelectedModel(config.textModel, config.channels, filterModelsByCapability(models, "text", config.channels)),
+        audioModel: normalizeSelectedModel(config.audioModel, config.channels, filterModelsByCapability(models, "audio", config.channels)),
     };
 }
 
@@ -821,6 +889,18 @@ export function decodeChannelModel(value: string) {
     return { channelId: value.slice(0, index), model: value.slice(index + CHANNEL_MODEL_SEPARATOR.length) };
 }
 
+export function isLocalSubscriptionModelValue(value: string) {
+    return /^local:subscription:(?:chatgpt|antigravity)::[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value.trim());
+}
+
+function isLocalDreaminaModelValue(value: string) {
+    return /^local:dreamina-cli:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value.trim());
+}
+
+function encodeModelForChannel(channel: ModelChannel, model: string) {
+    return channel.id === "local:dreamina-cli" ? `local:dreamina-cli:${model}` : encodeChannelModel(channel.id, model);
+}
+
 export function modelOptionName(value: string) {
     return decodeChannelModel(value)?.model || value;
 }
@@ -855,7 +935,7 @@ export function modelOptionsFromChannels(channels: ModelChannel[]) {
                 .map(normalizeRawModelName)
                 .filter(Boolean)
                 .filter((model) => channel.scope !== "system" || hasSystemModelPrice(channel, model))
-                .map((model) => (channel.transport === "local-runtime" ? `local:dreamina-cli:${model}` : encodeChannelModel(channel.id, model))),
+                .map((model) => encodeModelForChannel(channel, model)),
         ),
     );
 }
@@ -886,11 +966,11 @@ export function normalizeModelOptionValue(value: unknown, channels: ModelChannel
     if (decoded) {
         const channel = channels.find((item) => item.id === decoded.channelId);
         const resolved = channel?.modelAliases?.[decoded.model] || decoded.model;
-        return channel && channel.models.includes(resolved) ? encodeChannelModel(channel.id, resolved) : "";
+        return channel && channel.models.includes(resolved) ? encodeModelForChannel(channel, resolved) : "";
     }
     const channel = channels.find((item) => item.models.includes(model) || Boolean(item.modelAliases?.[model])) || channels[0];
     const resolved = channel?.modelAliases?.[model] || model;
-    return channel && channel.models.includes(resolved) ? encodeChannelModel(channel.id, resolved) : "";
+    return channel && channel.models.includes(resolved) ? encodeModelForChannel(channel, resolved) : "";
 }
 
 export function resolveModelChannel(config: AiConfig, value: string) {
@@ -898,6 +978,16 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     const model = decoded?.model || value;
     const matched = decoded ? config.channels.find((channel) => channel.id === decoded.channelId) : config.channels.find((channel) => channel.models.includes(model));
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
+}
+
+export function resolveLocalSubscriptionModel(config: AiConfig, value = config.model) {
+    const decoded = decodeChannelModel(value);
+    if (!decoded) return undefined;
+    const channel = config.channels.find((item) => item.id === decoded.channelId);
+    if (channel?.transport !== "local-runtime" || !channel.localProvider || !channel.id.startsWith("local:subscription:")) return undefined;
+    const descriptor = channel.localModels?.find((item) => item.id === decoded.model);
+    if (!descriptor || descriptor.provider === "dreamina-cli" || (descriptor.modality !== "text" && descriptor.modality !== "image")) return undefined;
+    return { provider: channel.localProvider, model: decoded.model, modality: descriptor.modality } as const;
 }
 
 export function logicalModelIDForConfig(config: AiConfig) {

@@ -1,9 +1,10 @@
 import { App, Button, Popconfirm, Tag, Typography } from "antd";
-import { CheckCircle2, Copy, ExternalLink, LogIn, LogOut, RefreshCw, Server, SquareTerminal } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, LogIn, LogOut, Network, RefreshCw, Server, SquareTerminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DreaminaAgentError, getDreaminaStatus, loginDreamina, logoutDreamina, type DreaminaCliStatus } from "@/services/local-dreamina-cli";
 import { getLocalRuntimeSessionClient, useLocalRuntimeStore, type LocalRuntimeConnectionState } from "@/stores/use-local-runtime-store";
+import { useLocalSubscriptionCliStore } from "@/stores/use-local-subscription-cli-store";
 
 type PendingAction = "refresh" | "login" | "logout" | "";
 type PresentationAction = "refresh" | "login" | "open_verification" | "logout" | null;
@@ -91,6 +92,10 @@ export function LocalCliSettings() {
     const runtimeError = useLocalRuntimeStore((state) => state.error);
     const connect = useLocalRuntimeStore((state) => state.connect);
     const moduleAvailable = modules.some((module) => module.id === "dreamina");
+    const subscriptionModuleAvailable = modules.some((module) => module.id === "subscription-cli");
+    const subscriptionState = useLocalSubscriptionCliStore((state) => state.state);
+    const subscriptionStatus = useLocalSubscriptionCliStore((state) => state.status);
+    const refreshSubscription = useLocalSubscriptionCliStore((state) => state.sync);
     const [status, setStatus] = useState<DreaminaCliStatus>();
     const [pending, setPending] = useState<PendingAction>("");
     const lifecycle = useRef<{ revision: number; controller: AbortController | null }>({
@@ -181,6 +186,68 @@ export function LocalCliSettings() {
                     <Button icon={<RefreshCw className="size-4" />} loading={connecting} onClick={refreshRuntime}>
                         {presentation.runtime.actionLabel || LOCAL_CLI_SETTINGS_COPY.runtimeRefresh}
                     </Button>
+                </div>
+            </section>
+
+            <section aria-labelledby="subscription-cli-title" className="rounded-md border border-border bg-background p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 pb-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-[var(--r-lg)] bg-foreground/5">
+                            <Network className="size-5" />
+                        </span>
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h2 id="subscription-cli-title" className="text-base font-semibold">
+                                    CLIProxyAPI
+                                </h2>
+                                <Tag color={subscriptionStatus?.state === "ready" ? "success" : subscriptionState === "loading" ? "processing" : subscriptionStatus?.running ? "warning" : "error"} className="m-0">
+                                    {connection !== "connected"
+                                        ? "等待本机连接"
+                                        : !subscriptionModuleAvailable
+                                          ? "模块未加载"
+                                          : subscriptionState === "loading"
+                                            ? "正在检测"
+                                            : subscriptionStatus?.state === "ready"
+                                              ? "已连接"
+                                              : subscriptionStatus?.running
+                                                ? "需要配置"
+                                                : "未运行"}
+                                </Tag>
+                                <Tag className="m-0">127.0.0.1:8317</Tag>
+                            </div>
+                            <p className="mt-1 text-sm text-foreground/60">连接 ChatGPT/Codex 与 Google Antigravity 订阅账号，提供受控文本和生图能力。</p>
+                        </div>
+                    </div>
+                    <Button icon={<RefreshCw className="size-4" />} loading={subscriptionState === "loading"} disabled={connection !== "connected" || !subscriptionModuleAvailable} onClick={() => void refreshSubscription()}>
+                        重新检测
+                    </Button>
+                </div>
+                <div className="space-y-4 pt-4">
+                    <p className="text-sm text-foreground/75">
+                        {connection !== "connected" ? "重新连接本机服务后，将自动检测 CLIProxyAPI。" : !subscriptionModuleAvailable ? "当前 Runtime 未加载 CLIProxyAPI 模块，请更新并重启 Runtime。" : subscriptionStatus?.message || "正在检测 CLIProxyAPI…"}
+                    </p>
+                    <div>
+                        <h3 className="text-sm font-semibold">CLI 安装与环境检测</h3>
+                        <p className="mt-1 text-xs text-foreground/55">CLIProxyAPI 是本功能必需服务；其余官方 CLI 仅展示本机环境，未安装不影响通过 CLIProxyAPI 使用已登录订阅。</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            {(
+                                subscriptionStatus?.tools || [
+                                    { id: "cli-proxy-api", displayName: "CLIProxyAPI", installed: false },
+                                    { id: "codex", displayName: "Codex CLI", installed: false },
+                                    { id: "antigravity", displayName: "Antigravity CLI", installed: false },
+                                    { id: "gemini", displayName: "Gemini CLI", installed: false },
+                                ]
+                            ).map((tool) => (
+                                <div key={tool.id} className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2 text-sm">
+                                    <span>{tool.displayName}</span>
+                                    <Tag color={tool.installed ? "success" : "default"} className="m-0">
+                                        {tool.installed ? "已安装" : tool.id === "cli-proxy-api" ? "未检测到" : "可选，未安装"}
+                                    </Tag>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <p className="text-xs leading-6 text-foreground/55">本页面不读取或上传订阅令牌。CLIProxyAPI 客户端密钥仅由本机 Runtime 从独立文件读取；真实调用会再次确认，并且不会自动回退到 API Key 或其他付费渠道。</p>
                 </div>
             </section>
 

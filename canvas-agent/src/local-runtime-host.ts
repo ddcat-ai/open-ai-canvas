@@ -17,6 +17,7 @@ import { LOCAL_RUNTIME_DEFAULT_SCOPES, LocalRuntimeSessionManager } from "./loca
 import { createCanvasAgentHttpModule } from "./modules/canvas-agent-http.js";
 import { createDreaminaHttpModule } from "./modules/dreamina-http.js";
 import { createPortraitClearanceHttpModule } from "./modules/portrait-clearance-http.js";
+import { createSubscriptionCliHttpModule } from "./modules/subscription-cli-http.js";
 
 export type StartLocalRuntimeOptions = {
     config?: LocalRuntimeConfig;
@@ -46,6 +47,7 @@ export function createDefaultLocalRuntimeModules(config: LocalRuntimeConfig): Lo
             ],
         }),
         createPortraitClearanceHttpModule({ ownerId: ensureRuntimeOwnerId(config), configDir: CONFIG_DIR }),
+        createSubscriptionCliHttpModule({ configDir: CONFIG_DIR }),
     ];
 }
 

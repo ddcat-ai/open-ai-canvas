@@ -8,11 +8,13 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
 import { resolveVideoOperation } from "@/lib/model-selection";
-import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { isLocalSubscriptionModelValue, logicalModelIDForConfig, modelOptionName, resolveLocalSubscriptionModel, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice, type ToolResponseResult } from "@/services/api/image";
+import { confirmSubscriptionCall, runSubscriptionImage, runSubscriptionText } from "@/services/local-subscription-cli";
+import { getLocalRuntimeSessionClient } from "@/stores/use-local-runtime-store";
 
 export { logicalModelIDForConfig };
 
@@ -59,6 +61,9 @@ export type GenerationTaskDependencies = {
     createId: () => string;
     now: () => string;
     ensureLocalDreaminaReady?: (signal?: AbortSignal) => Promise<unknown>;
+    runSubscriptionImage?: typeof runSubscriptionImage;
+    runSubscriptionText?: typeof runSubscriptionText;
+    confirmSubscription?: typeof confirmSubscriptionCall;
 };
 
 const defaultDependencies: GenerationTaskDependencies = {
@@ -68,6 +73,9 @@ const defaultDependencies: GenerationTaskDependencies = {
     createId: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),
     ensureLocalDreaminaReady: (signal) => useLocalDreaminaModelStore.getState().ensureReady(signal),
+    runSubscriptionImage,
+    runSubscriptionText,
+    confirmSubscription: confirmSubscriptionCall,
 };
 
 type PreparedGenerationReferences = {
@@ -105,6 +113,14 @@ export async function runBackendGenerationTask(
 ) {
     throwIfAborted(signal);
     assertClientPromptLimit(mode, prompt, config, metadata);
+    if (isLocalSubscriptionModelValue(config.model)) {
+        const selected = requireLocalSubscriptionModel(config);
+        (dependencies.confirmSubscription ?? confirmSubscriptionCall)({ provider: selected.provider, model: selected.model, capability: selected.modality });
+        return runLocalSubscriptionGeneration(
+            { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, mask, signal, metadata, onTaskUpdate, clientOperationId, retryOf, attemptGroupId },
+            dependencies,
+        );
+    }
     if (usesLocalDreamina(config)) {
         await dependencies.ensureLocalDreaminaReady?.(signal);
         throwIfAborted(signal);
@@ -128,6 +144,7 @@ export async function submitBackendGenerationTask(
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (usesLocalDreamina(options.config)) throw new Error("本机即梦任务暂不支持后台提交");
+    if (isLocalSubscriptionModelValue(options.config.model)) throw new Error("订阅本机任务不能提交到后台队列");
     assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);
     throwIfAborted(options.signal);
@@ -144,6 +161,19 @@ export async function runBackendToolGenerationTask(options: {
     onDelta?: (text: string) => void;
 }): Promise<ToolResponseResult> {
     throwIfAborted(options.signal);
+    const subscription = resolveLocalSubscriptionModel(options.config);
+    if (!subscription && isLocalSubscriptionModelValue(options.config.model)) throw new Error("订阅本机模型尚未就绪；不会切换其他渠道或付费 API");
+    if (subscription) {
+        if (subscription.modality !== "text") throw new Error("订阅生图模型不能用于画布文本助手");
+        (defaultDependencies.confirmSubscription ?? confirmSubscriptionCall)({ provider: subscription.provider, model: subscription.model, capability: "text" });
+        const content = await (defaultDependencies.runSubscriptionText ?? runSubscriptionText)(
+            getLocalRuntimeSessionClient(),
+            { provider: subscription.provider, model: subscription.model, prompt: subscriptionPrompt(options.prompt, options.messages), confirmed: true },
+            options.signal,
+        );
+        options.onDelta?.(content);
+        return { content, toolCalls: [] };
+    }
     const logicalModelId = logicalModelIDForConfig(options.config);
     const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
     if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议");
@@ -175,6 +205,18 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
+    if (isLocalSubscriptionModelValue(options.config.model)) {
+        const selected = requireLocalSubscriptionModel(options.config);
+        (dependencies.confirmSubscription ?? confirmSubscriptionCall)({ provider: selected.provider, model: selected.model, capability: selected.modality, count });
+        return Promise.allSettled(
+            Array.from({ length: count }, (_, batchIndex) => runLocalSubscriptionGeneration({
+                ...options,
+                config: { ...options.config, count: "1" },
+                metadata: { ...options.metadata, batchIndex, batchCount: count },
+                clientOperationId: options.clientOperationId ? `${options.clientOperationId}:${batchIndex + 1}` : undefined,
+            }, dependencies)),
+        );
+    }
     if (usesLocalDreamina(options.config)) {
         await dependencies.ensureLocalDreaminaReady?.(options.signal);
         throwIfAborted(options.signal);
@@ -210,6 +252,82 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
             ),
         ),
     );
+}
+
+async function runLocalSubscriptionGeneration(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies): Promise<BackendGenerationResult> {
+    const selected = resolveLocalSubscriptionModel(options.config);
+    if (!selected) throw new Error("订阅本机模型不可用");
+    if (options.mode !== selected.modality) throw new Error(selected.modality === "image" ? "当前订阅模型仅支持生图" : "当前订阅模型仅支持文本");
+    if (options.referenceImages?.length || options.referenceVideos?.length || options.referenceAudios?.length || options.mask) {
+        throw new Error("订阅本机生图第一阶段仅支持文生图，请移除参考素材和蒙版");
+    }
+    throwIfAborted(options.signal);
+    const now = dependencies.now();
+    const id = `local:subscription-cli:${options.clientOperationId || dependencies.createId()}`;
+    const task: GenerationTask = {
+        id,
+        ...(options.clientOperationId ? { clientOperationId: options.clientOperationId } : {}),
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+        type: `canvas_${options.mode}`,
+        status: "running",
+        stage: "local_subscription_confirmed",
+        prompt: options.prompt,
+        operation: options.mode,
+        provider: "cli-proxy-api",
+        model: options.config.model,
+        attempts: 1,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: now,
+    };
+    options.onTaskUpdate?.(task);
+    try {
+        const result: BackendGenerationResult = options.mode === "image"
+            ? {
+                  mode: "image",
+                  images: await (dependencies.runSubscriptionImage ?? runSubscriptionImage)(
+                      getLocalRuntimeSessionClient(),
+                      { provider: selected.provider, model: selected.model, prompt: options.prompt, aspectRatio: normalizeSubscriptionRatio(options.config.size), quality: normalizeSubscriptionQuality(options.config.quality), confirmed: true },
+                      options.signal,
+                  ),
+              }
+            : {
+                  mode: "text",
+                  text: await (dependencies.runSubscriptionText ?? runSubscriptionText)(
+                      getLocalRuntimeSessionClient(),
+                      { provider: selected.provider, model: selected.model, prompt: subscriptionPrompt(options.prompt, options.textHistory), confirmed: true },
+                      options.signal,
+                  ),
+              };
+        const completedAt = dependencies.now();
+        options.onTaskUpdate?.({ ...task, status: "succeeded", progress: 100, stage: "local_subscription_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt });
+        return result;
+    } catch (error) {
+        const completedAt = dependencies.now();
+        const cancelled = isGenerationTaskCancelled(error, options.signal);
+        options.onTaskUpdate?.({ ...task, status: cancelled ? "cancelled" : "failed", stage: cancelled ? "local_subscription_cancelled" : "local_subscription_failed", completedAt, updatedAt: completedAt, ...(!cancelled ? { error: error instanceof Error ? error.message : "订阅本机调用失败" } : {}) });
+        throw error;
+    }
+}
+
+function subscriptionPrompt(prompt: string, history?: unknown[]) {
+    const prior = (history || []).map((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+        const item = value as { role?: unknown; content?: unknown };
+        if (typeof item.content !== "string" || !item.content.trim()) return "";
+        const role = item.role === "assistant" ? "助手" : item.role === "system" ? "系统" : "用户";
+        return `${role}：${item.content.trim()}`;
+    }).filter(Boolean);
+    prior.push(`用户：${prompt.trim()}`);
+    return prior.join("\n\n");
+}
+
+function normalizeSubscriptionRatio(value: string) {
+    return ["1:1", "21:9", "16:9", "3:2", "4:3", "9:16", "2:3", "3:4"].includes(value) ? value : "1:1";
+}
+
+function normalizeSubscriptionQuality(value: string) {
+    return ["auto", "low", "medium", "high"].includes(value) ? value : "auto";
 }
 
 async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies): Promise<BackendGenerationResult> {
@@ -384,6 +502,13 @@ function isLocalDreaminaModel(model: string) {
 
 function usesLocalDreamina(config: AiConfig) {
     return (config.taskWorkflowProvider || "model") === "model" && isLocalDreaminaModel(config.model);
+}
+
+function requireLocalSubscriptionModel(config: AiConfig) {
+    if ((config.taskWorkflowProvider || "model") !== "model") throw new Error("订阅本机模型不能用于当前工作流渠道");
+    const selected = resolveLocalSubscriptionModel(config);
+    if (!selected) throw new Error("订阅本机模型尚未就绪；不会切换其他渠道或付费 API");
+    return selected;
 }
 
 function assertBackendRuntimeConfigured(config: AiConfig, mode: BackendGenerationMode) {

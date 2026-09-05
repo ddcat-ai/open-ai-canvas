@@ -24,6 +24,10 @@ export const LOCAL_RUNTIME_DEFAULT_SCOPES: readonly LocalRuntimeScope[] = [
     "dreamina:run",
     "dreamina:models",
     "dreamina:generate",
+    "subscription:status",
+    "subscription:models",
+    "subscription:complete",
+    "subscription:generate",
 ];
 
 export type RuntimeBrowserRegistration = {

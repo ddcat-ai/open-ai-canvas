@@ -6,7 +6,7 @@ export const LOCAL_RUNTIME_ENDPOINT = "http://127.0.0.1:17371";
 export const LOCAL_RUNTIME_ID = "framefield-local-runtime";
 export const LOCAL_RUNTIME_API_VERSION = 2;
 
-export type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance";
+export type LocalRuntimeModuleId = "canvas-agent" | "dreamina" | "portrait-clearance" | "subscription-cli";
 export type LocalRuntimeScope =
     | "runtime:status"
     | "runtime:revoke"
@@ -17,6 +17,10 @@ export type LocalRuntimeScope =
     | "dreamina:run"
     | "dreamina:models"
     | "dreamina:generate"
+    | "subscription:status"
+    | "subscription:models"
+    | "subscription:complete"
+    | "subscription:generate"
     | "portrait:status"
     | "portrait:model"
     | "portrait:run"

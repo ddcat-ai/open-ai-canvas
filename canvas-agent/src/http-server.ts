@@ -14,6 +14,7 @@ import {
     type DreaminaHttpModuleOptions,
 } from "./modules/dreamina-http.js";
 import { createPortraitClearanceHttpModule } from "./modules/portrait-clearance-http.js";
+import { createSubscriptionCliHttpModule } from "./modules/subscription-cli-http.js";
 
 export type CanvasAgentHttpDependencies = Pick<DreaminaHttpModuleOptions, "dreamina">;
 
@@ -48,6 +49,7 @@ export function createHttpApp(
             createCanvasAgentHttpModule(config, session),
             createDreaminaHttpModule({ ownerId: config.ownerId!, ...dependencies }),
             createPortraitClearanceHttpModule({ ownerId: config.ownerId!, configDir: CONFIG_DIR }),
+            createSubscriptionCliHttpModule({ configDir: CONFIG_DIR }),
         ],
         legacyMasterToken: config.token,
         legacyOrigins: config.origins ?? [],

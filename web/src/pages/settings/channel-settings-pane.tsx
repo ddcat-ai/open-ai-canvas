@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, Popconfirm, Segmented, Select, Switch, Tooltip } from "antd";
-import { ChevronDown, ChevronUp, MonitorUp, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
+import { ChevronDown, ChevronUp, Image, MessageSquareText, MonitorUp, Plus, RefreshCw, ShieldCheck, Trash2, Workflow } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
@@ -21,6 +21,8 @@ import {
 } from "@/stores/use-config-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
 import { useUserStore } from "@/stores/use-user-store";
+import { useLocalSubscriptionCliStore } from "@/stores/use-local-subscription-cli-store";
+import type { SubscriptionCliProvider } from "@/services/local-subscription-cli";
 
 type UserChannelConnection = "openai" | "gemini";
 type ChannelSettingsPaneProps = {
@@ -41,6 +43,9 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
     const runningHubReady = Boolean(config.runningHub.enabled && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim() && config.runningHub.workflowId.trim());
     const comfyBridgeReady = Boolean(config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim());
+    const subscriptionState = useLocalSubscriptionCliStore((state) => state.state);
+    const subscriptionStatus = useLocalSubscriptionCliStore((state) => state.status);
+    const refreshSubscription = useLocalSubscriptionCliStore((state) => state.sync);
 
     useEffect(() => {
         void fetchPluginProviderCatalog("user.custom-channel").then(setProviderCatalog).catch(() => setProviderCatalog([]));
@@ -226,6 +231,19 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                     <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>新增渠道</Button>
                 </div>
             </div>
+            <section className="settings-section mb-3">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h3 className="text-sm font-semibold">个人订阅渠道</h3>
+                        <p className="mt-1 text-xs text-foreground/55">通过本机 CLIProxyAPI 使用已订购账号；无需在这里填写 API Key，真实调用前会确认且不回退付费 API。</p>
+                    </div>
+                    <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={subscriptionState === "loading"} onClick={() => void refreshSubscription()}>验证订阅渠道</Button>
+                </div>
+                <div className="grid gap-2 lg:grid-cols-2">
+                    <SubscriptionChannelEntry provider="chatgpt" title="ChatGPT/Codex 订阅" textCapability="Codex 订阅文本" imageCapability="GPT Image 2 订阅生图" status={subscriptionStatus} />
+                    <SubscriptionChannelEntry provider="antigravity" title="Google Antigravity 订阅" textCapability="Antigravity 文本" imageCapability="Nano Banana 2 生图" status={subscriptionStatus} />
+                </div>
+            </section>
             {onOpenRunningHub || onOpenComfyUI ? <section className="settings-section mb-3">
                 <div className="mb-3">
                     <h3 className="text-sm font-semibold">个人工作流渠道</h3>
@@ -308,6 +326,30 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                 </div>
             ) : <WorkspaceState icon="settings" compact title="当前没有个人模型渠道" description="管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。" action={<Button icon={<Plus className="size-4" />} onClick={addChannel}>新增个人模型渠道</Button>} />}
         </Form>
+    );
+}
+
+function SubscriptionChannelEntry({ provider, title, textCapability, imageCapability, status }: { provider: SubscriptionCliProvider; title: string; textCapability: string; imageCapability: string; status?: ReturnType<typeof useLocalSubscriptionCliStore.getState>["status"] }) {
+    const models = status?.models.filter((model) => model.provider === provider) || [];
+    const textReady = models.some((model) => model.modality === "text");
+    const imageReady = models.some((model) => model.modality === "image");
+    const ready = textReady || imageReady;
+    return (
+        <div className="settings-channel min-w-0 p-3">
+            <div className="flex items-start gap-2.5">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[var(--workspace-accent)]" />
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold">{title}</h4>
+                        <span className={`settings-channel-status ${ready ? "is-ready" : "is-warning"}`}><i aria-hidden="true" />{ready ? "已验证" : status?.running ? "未发现允许模型" : "等待 CLIProxyAPI"}</span>
+                    </div>
+                    <div className="mt-2 grid gap-1.5 text-xs text-foreground/60">
+                        <span className="flex items-center gap-1.5"><MessageSquareText className="size-3.5" />{textCapability}<b className={textReady ? "text-green-500" : "text-foreground/40"}>{textReady ? "可用" : "未就绪"}</b></span>
+                        <span className="flex items-center gap-1.5"><Image className="size-3.5" />{imageCapability}<b className={imageReady ? "text-green-500" : "text-foreground/40"}>{imageReady ? "可用" : "未就绪"}</b></span>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
 
