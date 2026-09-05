@@ -180,15 +180,22 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task) error {
 			return leaseErr
 		default:
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
-			if decryptErr == nil && s.shouldDeferVideoProviderTask(*task, decryptedInput, err) {
-				if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "后台仍在生成", 15*time.Second); deferErr != nil {
-					return deferErr
-				}
-				_ = s.log(task.UserID, task.ID, "info", "前台等待结束，上游视频仍在生成，将继续回查原任务", task.PollStage)
-				return nil
+		decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
+		if decryptErr == nil && s.shouldDeferVideoProviderTask(*task, decryptedInput, err) {
+			stage := "后台仍在生成"
+			message := "前台等待结束，上游视频仍在生成，将继续回查原任务"
+			var pendingErr providerStatePendingError
+			if errors.As(err, &pendingErr) {
+				stage = "等待上游任务同步"
+				message = "上游任务状态暂未同步，将继续回查原任务"
 			}
+			if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, stage, 15*time.Second); deferErr != nil {
+				return deferErr
+			}
+			_ = s.log(task.UserID, task.ID, "info", message, task.PollStage)
+			return nil
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
 			err = errors.New(taskTimeoutMessage(task.Type))
 		}
 		return terminal.handleExecutionFailure(task, err, providerSucceeded, channelSlotFailedBeforeRequest)
@@ -252,7 +259,16 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 }
 
 func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
-	if !errors.Is(err, context.DeadlineExceeded) || strings.TrimSpace(task.ProviderRequestID) == "" || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+	providerRequestID := strings.TrimSpace(task.ProviderRequestID)
+	if providerRequestID == "" || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+		return false
+	}
+	deferSignal := errors.Is(err, context.DeadlineExceeded)
+	var pendingErr providerStatePendingError
+	if errors.As(err, &pendingErr) {
+		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID
+	}
+	if !deferSignal {
 		return false
 	}
 	var input canvasGenerationInput

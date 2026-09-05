@@ -5,6 +5,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## NewAPI Video Generations Channel 2 轮询恢复
+
+- [x] 官方插件兼容从 `data.task_id` 和 `data.taskId` 读取上游任务 ID；Channel 2 创建成功后首次查询等待 2 秒，仅将结构化 `400 task_not_exist` 识别为上游同步延迟，并按 2 秒、3 秒、5 秒、5 秒退避复查同一任务。
+- [x] 短期重试耗尽后，Worker 保留本地任务 `running`、原 `provider_request_id` 和计费状态，延后 15 秒继续查询；恢复过程不重复发送创建请求、不切换渠道，也不立即失败或退款。其他接口类型、HTTP 状态和错误码仍按原失败语义处理。
+- [x] Channel 2 终态响应兼容 `data.result_url`、`data.video_url`、`data.output_url`、`data.url`、`data.metadata.url` 及对应的 `data.data.*` 嵌套路径；API 调用日志在该接口下优先记录嵌套真实任务 ID。协议与日志富化专项回归测试通过。
+- [ ] 使用真实 Channel 2 分别验证上游任务 ID 短暂不可见和生成耗时 500 至 600 秒的任务：本地不再提示“模型服务拒绝了请求”，创建请求只出现一次，后续始终查询同一 Provider Task ID，最终视频正常回写；真实参数错误仍应及时失败。
+- [ ] 使用返回 `SUCCESS` 且视频地址位于 `data.result_url` 或 `data.data.video_url` 的真实任务，确认不再提示“声明式协议已完成但没有返回结果”，并在当前 OSS 配置下成功下载并持久化为本地资源。
+
 ## 编辑器（M2 命令状态机）
 
 - [x] 命令协议黄金文件：`editor-commands` 8 个黄金 op（addClip/moveClip/trimClip/splitClip/removeClip/setClipProperty/addSubtitle/removeSubtitle）全量快照比对通过；未知 op、非法 payload 一律抛错（fail-closed）且输入不可变。

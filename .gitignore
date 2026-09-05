@@ -14,6 +14,8 @@ docs/content/docs/*
 !docs/content/docs/plugins/
 docs/content/docs/plugins/*
 !docs/content/docs/plugins/ai-art-critique.mdx
+!docs/content/docs/backend/
+!docs/content/docs/backend/newapi-channel-2.mdx
 .env*
 !.env.example
 data/
