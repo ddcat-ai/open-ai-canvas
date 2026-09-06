@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, Clapperboard, Copy, Download, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
-import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
+import { isEmptyMediaNode, shouldShowInlineNodeStatus } from "@/lib/canvas/canvas-node-ui-policy";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, isLocalUploadedAssetNode, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -122,13 +122,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     const mediaDimensionLabel = formatMediaDimensionLabel(data, hasImageContent || hasVideoContent);
     const isComposerNode = data.type === CanvasNodeType.Config;
     const isLocalUploadedAsset = isLocalUploadedAssetNode(data);
-    const hasMediaContent = hasImageContent || hasVideoContent || hasAudioContent;
-    const isEmptyMediaNode = (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video || data.type === CanvasNodeType.Audio) && !hasMediaContent;
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
-    const showResourceLabel = Boolean(resourceLabel && !isEmptyMediaNode);
-    const showStatusTrack = Boolean(showResourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly));
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
+    const inlineStatus = data.metadata?.status === "loading" || data.metadata?.status === "error" ? data.metadata.status : null;
     const nodeState = isFocusRelated ? "focus" : isConnectionTarget ? "target" : isSelected ? "selected" : isRelated && !isBatchChild ? "related" : "idle";
     const showOutputConnection = getNodeDefinition(data.type)?.showOutputConnection !== false;
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
@@ -361,8 +358,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                     }
                 >
                     {/* 节点状态徽章（对应 #97 决策2：左上角 loading/success/error，近距离确认信号）*/}
-                    {data.metadata?.status && data.metadata.status !== "idle" && data.type !== CanvasNodeType.Frame ? (
-                        <NodeStatusBadge status={data.metadata.status} />
+                    {shouldShowInlineNodeStatus(data) && inlineStatus && data.type !== CanvasNodeType.Frame ? (
+                        <NodeStatusBadge status={inlineStatus} />
                     ) : null}
                     <CanvasNodeContent
                         node={data}
@@ -427,14 +424,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                         {data.metadata.versionLabel}
                     </button>
                 ) : null}
-                {showStatusTrack ? (
-                    <div className={`canvas-node-status-track absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
-                        {showResourceLabel && resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
-                        {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
-                        {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
-                        {isBatchChild && !readOnly ? <BatchPrimaryBadge visible={batchPrimary || hovered || isSelected} selected={batchPrimary} theme={theme} onSelect={() => onSetBatchPrimary?.(data)} /> : null}
-                        {data.metadata?.locked ? <NodeLockBadge theme={theme} /> : null}
-                    </div>
+                {resourceLabel && !isEmptyMediaNode(data) ? (
+                    <span className="pointer-events-none absolute bottom-3 left-3 z-[var(--node-z-overlay)] max-w-[45%] truncate rounded-md px-1.5 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background: resourceLabel.active ? theme.accent.primary : "rgba(0,0,0,.35)", color: resourceLabel.active ? theme.accent.onPrimary : "#ffffff", opacity: resourceLabel.active ? 1 : 0.75 }} title={resourceLabel.title || resourceLabel.label}>
+                        {resourceLabel.label}
+                    </span>
                 ) : null}
                 {/* 批次子图操作条：成功子项提供下载/副本/设为主图，失败子项提供重试/删除 */}
                 {isBatchChild && !readOnly && (hasImageContent || data.metadata?.status === "error") && (hovered || isSelected) ? (
@@ -531,46 +524,6 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.onOpenDirector === next.onOpenDirector &&
         previous.onOpenDrawing === next.onOpenDrawing &&
         previous.onContextMenu === next.onContextMenu
-    );
-}
-
-function ResourceLabelBadge({ reference, theme }: { reference: CanvasResourceReference; theme: CanvasTheme }) {
-    return (
-        <span className="pointer-events-none min-w-0 max-w-28 truncate rounded-md px-1.5 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background: reference.active ? theme.accent.primary : "rgba(0,0,0,.35)", color: reference.active ? theme.accent.onPrimary : "#ffffff", opacity: reference.active ? 1 : 0.75 }} title={reference.title || reference.label}>
-            {reference.label}
-        </span>
-    );
-}
-
-function ResourceStorageBadge({ storageKey, active, theme }: { storageKey?: string; active: boolean; theme: CanvasTheme }) {
-    const location = resourceStorageLocation(storageKey);
-    const background = active ? (location === "local" ? "rgba(245,158,11,.9)" : theme.accent.primary) : "rgba(0,0,0,.35)";
-    return (
-        <span className="pointer-events-auto shrink-0 rounded-md px-1.5 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background, color: active && location !== "local" ? theme.accent.onPrimary : "#ffffff", opacity: active ? 1 : 0.75 }} title={resourceStorageTitle(storageKey)}>
-            {resourceStorageLabel(storageKey)}
-        </span>
-    );
-}
-
-function NodeLockBadge({ theme }: { theme: CanvasTheme }) {
-    return <span className="pointer-events-none grid size-7 shrink-0 place-items-center rounded-md border backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.muted }} title="节点已锁定"><Lock className="size-3.5" /></span>;
-}
-
-function BatchToggleBadge({ count, expanded, theme, onToggle }: { count: number; expanded: boolean; theme: CanvasTheme; onToggle: () => void }) {
-    return (
-        <button type="button" className="canvas-node-tool-button inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-semibold backdrop-blur-md" style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }} aria-label={expanded ? "图片组已展开" : "图片组已收起"} onClick={(event) => { event.stopPropagation(); onToggle(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <span className="leading-none" style={{ color: theme.accent.primary }}>{count}</span>
-            <ChevronRight className={`size-3 opacity-55 transition-transform ${expanded ? "rotate-90" : ""}`} />
-        </button>
-    );
-}
-
-function BatchPrimaryBadge({ visible, selected, theme, onSelect }: { visible: boolean; selected: boolean; theme: CanvasTheme; onSelect: () => void }) {
-    return (
-        <button type="button" className={`canvas-node-tool-button inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-medium backdrop-blur-md transition-opacity ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`} style={{ background: theme.toolbar.panel, borderColor: selected ? theme.accent.primary : theme.toolbar.border, color: selected ? theme.accent.primary : theme.node.text }} aria-label={selected ? "当前主图" : "设置为主图"} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onSelect(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <Star className={`size-3 ${selected ? "fill-current" : ""}`} style={{ color: theme.accent.primary }} />
-            {selected ? "当前主图" : "主图"}
-        </button>
     );
 }
 

@@ -1,6 +1,7 @@
 import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
+import { hasMediaResource, isEmptyMediaNode } from "@/lib/canvas/canvas-node-ui-policy";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType } from "@/types/canvas";
 
@@ -10,10 +11,10 @@ function isVideo(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Vi
 function isAudio(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Audio; }
 function isText(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Text; }
 function isConfig(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Config; }
-function hasImage(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
-function hasVideo(ctx: ToolContext) { return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
-function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
-function isEmptyMedia(ctx: ToolContext) { return (isImage(ctx) || isVideo(ctx) || isAudio(ctx)) && !hasImage(ctx) && !hasVideo(ctx) && !hasAudio(ctx); }
+function hasImage(ctx: ToolContext) { return isImage(ctx) && hasMediaResource(ctx.node); }
+function hasVideo(ctx: ToolContext) { return isVideo(ctx) && hasMediaResource(ctx.node); }
+function hasAudio(ctx: ToolContext) { return isAudio(ctx) && hasMediaResource(ctx.node); }
+function isEmptyMedia(ctx: ToolContext) { return isEmptyMediaNode(ctx.node); }
 function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId); }
 function isEditableText(ctx: ToolContext) { return isText(ctx) && !isCharacterReference(ctx); }
 function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || isImage(ctx) || isVideo(ctx); }
@@ -228,7 +229,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultVisible: true,
         defaultOrder: 130,
         nodeToolbar: { group: "primary", order: 10 },
-        applicable: (ctx) => isImage(ctx) && !hasImage(ctx),
+        // 空图片节点已有卡片内的主上传按钮，避免悬浮工具条重复入口。
+        applicable: () => false,
         run: (ctx) => ctx.handlers.onNodeUpload(ctx.node!),
     },
     {
@@ -241,7 +243,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultVisible: true,
         defaultOrder: 140,
         nodeToolbar: { group: (ctx) => hasVideo(ctx) ? "more" : "primary", order: 45, section: "素材" },
-        applicable: isVideo,
+        // 空视频节点的上传入口位于卡片内部；已有资源时替换属于低频操作。
+        applicable: (ctx) => hasVideo(ctx),
         run: (ctx) => ctx.handlers.onNodeUpload(ctx.node!),
     },
     {
@@ -280,7 +283,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultVisible: true,
         defaultOrder: 150,
         nodeToolbar: { group: (ctx) => hasAudio(ctx) ? "more" : "primary", order: 45, section: "素材" },
-        applicable: isAudio,
+        // 空音频节点的上传入口位于卡片内部；已有资源时替换属于低频操作。
+        applicable: (ctx) => hasAudio(ctx),
         run: (ctx) => ctx.handlers.onNodeUpload(ctx.node!),
     },
     // 节点锁定——独立分类，自动插入前置分隔符

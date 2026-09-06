@@ -563,7 +563,7 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
     return content;
 }
 
-function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, onMediaPlayRequest }: CanvasNodeContentProps) {
+function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, onMediaPlayRequest, onReplaceMedia }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMediaNode } = useCanvasNodeActions();
     const hasPassivePreview = Boolean(canvasNodeVideoPreviewUrl(node) || node.metadata?.videoPreview?.storageKey);
@@ -596,7 +596,7 @@ function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false
         };
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
-    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Video className="size-7 opacity-35" />} label="尝试上传或生成视频" uploadLabel="上传视频" color={theme.node.placeholder} onReplaceMedia={onReplaceMedia} />;
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
     const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
     const fitWidth = Math.round(fitHeight * sourceRatio);
@@ -642,8 +642,8 @@ function inferVideoHasAudio(metadata: CanvasNodeData["metadata"]): boolean | und
     return undefined;
 }
 
-function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
-    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent icon={<Music2 className="size-7 opacity-35" />} label="空音频节点" color={theme.node.placeholder} />;
+function AudioNodeContent({ node, theme, onReplaceMedia }: CanvasNodeContentProps) {
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Music2 className="size-7 opacity-35" />} label="尝试上传或生成音频" uploadLabel="上传音频" color={theme.node.placeholder} onReplaceMedia={onReplaceMedia} />;
     return <CanvasAudioPlayer node={node} theme={theme} />;
 }
 
@@ -783,11 +783,26 @@ function MediaLoadingState({ icon, label }: { icon: ReactNode; label: string }) 
     );
 }
 
-function EmptyMediaContent({ icon, label, color }: { icon: ReactNode; label: string; color: string }) {
+function EmptyMediaContent({ node, icon, label, uploadLabel, color, onReplaceMedia }: { node: CanvasNodeData; icon: ReactNode; label: string; uploadLabel: string; color: string; onReplaceMedia?: (node: CanvasNodeData) => void }) {
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color }}>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5" style={{ color }}>
             {icon}
-            <span className="text-sm">{label}</span>
+            <span className="text-xs opacity-70">{label}</span>
+            {onReplaceMedia ? (
+                <button
+                    type="button"
+                    className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-black shadow-sm transition-[transform,background-color,box-shadow] duration-150 hover:bg-white/90 hover:shadow-md active:scale-[.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onReplaceMedia(node);
+                    }}
+                >
+                    <Upload className="size-3.5" strokeWidth={2.2} />
+                    {uploadLabel}
+                </button>
+            ) : null}
         </div>
     );
 }
