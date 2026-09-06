@@ -7561,10 +7561,6 @@
             transform var(--motion-state) var(--ease-aceternity);
     }
 
-    .node-element {
-        animation: canvas-node-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
-    }
-
     .canvas-node-external-header {
         transition: opacity var(--motion-state) var(--motion-ease-out), color var(--motion-state) ease-out;
     }
@@ -9735,7 +9731,6 @@
         transition: none !important;
     }
 
-    [data-canvas-viewport-interacting="true"] .node-element,
     [data-canvas-viewport-interacting="true"] .canvas-node-composer,
     [data-canvas-viewport-interacting="true"] .canvas-node-status-track {
         animation-play-state: paused !important;
@@ -9846,11 +9841,6 @@
             opacity: 1;
             filter: saturate(1);
         }
-    }
-
-    @keyframes canvas-node-enter {
-        from { opacity: 0; }
-        to { opacity: 1; }
     }
 
     @keyframes canvas-node-status-in {
@@ -9977,7 +9967,6 @@
     .workspace-state { animation: none; }
     :where(.ant-btn:not(:disabled)):active { transform: none; }
     .canvas-node-panel-placement-change { animation: none; }
-    .node-element,
     .canvas-node-composer,
     .canvas-node-status-track { animation: none; }
 }
