@@ -5,6 +5,7 @@ import { colorGradeCssFilter, DEFAULT_COLOR_GRADE, isNeutralColorGrade } from ".
 import { NODE_DEFAULT_SIZE, NODE_SPECS } from "../src/constant/canvas";
 import { getNodeGenerationMode, getNodeInputKind, getNodeLabel, getNodeResourceKind } from "../src/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
+import { addNodeMenuCommands } from "../src/lib/canvas/tool-registry/definitions/add-node-menu-tools";
 
 const EXTENSION_TYPES = [
     CanvasNodeType.Markdown,
@@ -21,6 +22,10 @@ function node(type: CanvasNodeType, metadata: CanvasNodeData["metadata"] = {}): 
 }
 
 describe("扩展节点注册完整性", () => {
+    test("全景节点出现在添加节点菜单", () => {
+        expect(addNodeMenuCommands.some((command) => command.id === CanvasNodeType.Panorama && command.label === "全景")).toBe(true);
+    });
+
     test("7 个扩展节点在四张表里都有登记", () => {
         EXTENSION_TYPES.forEach((type) => {
             expect(getNodeLabel(type), `${type} 缺少注册表定义`).toBeTruthy();
