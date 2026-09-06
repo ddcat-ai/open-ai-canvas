@@ -769,19 +769,19 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
                 <svg
                     aria-hidden="true"
                     className="block"
-                    width={10}
-                    height={10}
+                    width={14}
+                    height={14}
                     viewBox="0 0 20 20"
                     fill="none"
                     style={{
                         position: "absolute",
                         left: "50%",
                         top: "50%",
-                        marginLeft: -5,
-                        marginTop: -5,
+                        marginLeft: -7,
+                        marginTop: -7,
                     }}
                 >
-                    <path d="M10 6.5v7M6.5 10h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
                 </svg>
             </span>
         </button>
