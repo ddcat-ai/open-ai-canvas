@@ -295,6 +295,14 @@ func providerPayloadErrorCategory(raw string) (string, bool) {
 		return "模型服务额度不足，请检查渠道余额或配额", true
 	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
 		return "模型不存在或当前渠道未获得模型权限", true
+	// 推理/思考模式模型通常禁止强制指定工具调用：DeepSeek 思考模式返回
+	// "Thinking mode does not support this tool_choice"，其他 OpenAI 兼容
+	// 供应商措辞类似。归为固定可行动原因，画布智能体据此把首步的
+	// tool_choice=required 降级为 auto 重试一次。排在通用参数类目之前，
+	// 避免这类稳定标识落回笼统的"请检查模型和参数"。
+	case (strings.Contains(normalized, "thinking") || strings.Contains(normalized, "reasoning")) && strings.Contains(normalized, "tool_choice"),
+		strings.Contains(normalized, "tool_choice") && (strings.Contains(normalized, "not support") || strings.Contains(normalized, "unsupported")):
+		return "当前模型为思考/推理模式，不支持强制工具调用（tool_choice=required），请改用自动工具选择或更换非思考模式模型", true
 	case strings.Contains(normalized, "invalid"), strings.Contains(normalized, "parameter"), strings.Contains(normalized, "argument"):
 		return "模型服务拒绝了请求，请检查模型和参数", true
 	}

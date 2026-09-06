@@ -1,5 +1,7 @@
+import { App, Button, Segmented } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { App, Button, Segmented, Tooltip } from "antd";
+
 import copyToClipboard from "copy-to-clipboard";
 import { CheckCircle2, Copy, ExternalLink, FolderOpen, History, LoaderCircle, PlugZap, Plus, RefreshCw, Terminal, Trash2 } from "lucide-react";
 import { motion } from "motion/react";

@@ -1,4 +1,7 @@
-import { Button, Input, Modal, Segmented, Skeleton, Tooltip, Tree } from "antd";
+import { Button, Input, Modal, Skeleton, Tree } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
+
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { DataNode } from "antd/es/tree";
 import { Check, ChevronRight, Code2, ExternalLink, File, FileArchive, FileCode2, FileImage, FileText, Folder, FolderOpen, Heart, Pencil, Plus, RefreshCw, Users } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
@@ -140,7 +143,7 @@ export function SkillDetailModal({ skill, loading, mutating, categories, onClose
                         <main className="skill-package-preview">
                             <div className="skill-package-preview-toolbar">
                                 <div className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/58">{activePath || "请选择文件"}</div>
-                                {canPreviewMarkdown ? <Segmented size="small" value={previewMode} onChange={(value) => setPreviewMode(value as PreviewMode)} options={[{ value: "preview", label: <span className="inline-flex items-center gap-1"><FileText className="size-3.5" />预览</span> }, { value: "source", label: <span className="inline-flex items-center gap-1"><Code2 className="size-3.5" />源码</span> }]} /> : null}
+{canPreviewMarkdown ? <SegmentedControl size="sm" value={previewMode} onChange={(value) => setPreviewMode(value as PreviewMode)} options={[{ value: "preview", label: <span className="inline-flex items-center gap-1"><FileText className="size-3.5" />预览</span> }, { value: "source", label: <span className="inline-flex items-center gap-1"><Code2 className="size-3.5" />源码</span> }]} /> : null}
                                 {activePath ? <Tooltip title="打开原始文件"><a className="skill-package-raw-link" href={skillFileRawURL(skill.skill_id, activePath)} target="_blank" rel="noreferrer" aria-label="打开原始文件"><ExternalLink className="size-4" /></a></Tooltip> : null}
                             </div>
                             <div className="skill-package-preview-body thin-scrollbar">

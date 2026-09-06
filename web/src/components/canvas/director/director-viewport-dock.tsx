@@ -1,4 +1,5 @@
-import { Tooltip } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
+
 import { Bone, Box, Camera, Compass, Crosshair, Layers, Lightbulb, Move3D, Palette, Rotate3D, Scaling, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 

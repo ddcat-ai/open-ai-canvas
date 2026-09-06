@@ -1,0 +1,110 @@
+# Celadon UI 组件规范（自研组件层）
+
+> 决策记录见 [ADR-0008](../adr/0008-ui-component-layer-antd-replacement.md)；唯一实施计划见 [ui-kit-rollout-plan](./ui-kit-rollout-plan.mdx)。本文是长期维护的**组件编写规范与 backlog**。
+> **视觉数值唯一权威源**：`/Users/zhugeyue/Desktop/project/bigdate/github-source-code/composio-brand-package/`（规范包；配色/字体/间距/圆角一律以它为准，消费规则见实施计划 §2.4）。
+> 形态来源：契约与 barrel 取 dbx（`apps/desktop/src/components/ui`）；设计深度（语义状态矩阵、复合排版、accent/chart/status 分组、react-aria 原语、动效纪律、application 产品块）取 BoardUI（`components/{base,application,foundations}`）。
+
+## 1. 分层与适用范围
+
+`web/src/components/ui/` 是自研组件层（Celadon UI），按职责分四层：
+
+| 层 | 目录 | 内容 |
+| --- | --- | --- |
+| base | `ui/base/` | 原语 + 基础件：`buttons/`、`badges/`、`kbd/`、`segmented-control/` 等 |
+| product | `ui/product/` | 跨页面模式件：`empty-state/`、`callout/`、`loading-state/`、`section-card/`、`property-row/`、`text-tooltip/` |
+| fx | `ui/fx/` | 特效件（现 `aceternity/*` 归位至此命名空间，引用随用随迁，不重写） |
+| application | `ui/application/` | 产品块（P3 起）：agent-chat、app-shell 等，对齐 BoardUI application（~~notification-center~~ 🚫已禁用，不实施） |
+
+替换完成前 AntD 用法与皮肤仍由 `web/src/lib/app-theme.ts` 统一管理；**同一控件职能不允许两套实现并存超过一个替换周期**。
+
+## 2. 目录与导出规范（组件族目录 + 族级 barrel）
+
+```text
+ui/base/buttons/
+  ├── index.ts          # 族级 barrel：重导出全部组件 + XxxVariants 类型
+  ├── button.tsx
+  ├── icon-button.tsx
+  ├── tool-button.tsx
+  └── button-group.tsx
+```
+
+- 每"族"一目录，族内按文件拆变体；族级 `index.ts` 汇总导出（dbx barrel 形态）；**无全局 barrel**。
+- 导入一律深路径 `@/components/ui/<layer>/<family>`（或 `.../<family>/<file>`）。
+- 组件 `PascalCase`、文件 `kebab-case.tsx`、目录 `kebab-case/`。
+- cva 定义 `xxxVariants` 并从 `index.ts` 导出；`className` 经 `cn` 合并；ref 转发；根元素 `data-slot`。
+- 持久切换状态：`aria-pressed` + `data-active`；`type="primary"` 只表"主要命令"；保留 `:focus-visible`；尊重 `prefers-reduced-motion`。
+
+## 3. Token 义务（含 BoardUI 深度扩展；数值以 composio-brand-package 为权威源）
+
+- **数值权威源**：新 token 的色值/字号/间距/圆角一律取自规范包（`tokens.json` 优先，`DESIGN.md`/`theme.css` 对照），先翻译进 globals.css 三层 token 再被组件消费；禁止组件/页面直写规范包裸值。字体采用 Inter + 开源等宽（不采用规范包 abcDiatype）。
+
+- 只消费三层 token（Primitive→Semantic→Component 的 `var(--*)` 或其 Tailwind 映射）；**禁止裸 `text-[Npx]`、裸圆角、硬编码色**。
+- **语义状态矩阵**：高频角色用 `-default/-hover/-active/-disabled`（及 `-selected`）状态位 token，不在组件里推算色值。
+- **复合排版工具类**：字号走 `text-body-*` / `text-caption-1-*` / `text-title-1-*` 等注册类（由 `--fs-*` 映射），禁止裸字号堆叠；`cn` 的 tailwind-merge 已扩展识别这些类。
+- **分组色系**：`accent`（品牌 ramp，默认电蓝 #0007cd + 状态位）、`chart`（`--palette-chart-1..9`）、`status`（`--palette-status-*` 的成对 halo/dot）、`node`（`--palette-node-*`）。
+- 明暗自适应由 CSS 变量完成；不读皮肤 ID、不分叉业务逻辑。新 token 走 globals.css 三层流程并同步 ADR-0008/本文档/实施计划。
+
+## 4. 原语 / 图标 / 动效契约
+
+- **原语**：简单件用原生语义元素；复杂控件（Select/Modal/Drawer/Popconfirm/日期/Combobox）以 `react-aria-components` 为无障碍地基，包 Celadon 观感。不引入 Radix。
+- **图标**：统一 `lucide-react`，以组件引用传入（`icon={Move}`）；尺寸/颜色由宿主组件用语义档位决定，禁止调用方传 icon className 改尺寸。
+- **动效**：按压/切换/浮层出入抽统一工具类或小组件（`press-motion` 思路），统一尊重 `prefers-reduced-motion`。
+
+## 5. 组件头注释规范（对齐 BoardUI 溯源注释）
+
+每组件文件头：用途、消费的 token 组、接管/对标对象（原 AntD 组件或 dbx/BoardUI 组件）、明暗差异要点。
+
+## 6. 归属决策表
+
+| 场景 | 归属 |
+| --- | --- |
+| 数据表格、复杂表单、日期、树、上传、大对话框、带搜索下拉 | AntD（B3/B5 替换前保持现状；替换后为 RAC 基底的 Celadon 控件） |
+| 纯图标按钮、工具激活态、紧凑分组、尺寸密度 | IconButton / ToolButton / ButtonGroup（base/buttons） |
+| 状态点徽章、节点类型徽章 | StatusBadge / NodeTypeBadge（base/badges，对标 AntD Tag/Badge） |
+| 空态、加载/进度态、轻量提示横幅 | EmptyState / LoadingState / Callout（product，对标 AntD Empty/Alert） |
+| 单行截断悬停全文、快捷键提示 | TextTooltip / Kbd |
+| 属性面板行、分区卡片 | PropertyRow / SectionCard |
+| 右键菜单、下拉、气泡 | AntD Dropdown/Popover（替换前）；B3 后为 RAC 基底控件 |
+| 单/多选分段工具切换 | IconGroup / SegmentedControl（base/segmented-control，对标 AntD Segmented） |
+| 特效件（aceternity 等） | fx 层命名空间，随用随迁，不重写 |
+
+## 7. 进库门槛（D8）
+
+新组件必须满足其一：① ≥2 处真实重复（PR 附 grep 证据）；② 隔离明确协议/交互契约（如工具激活态、截断语义）。纯透传壳不进库；P2/P3 组件先立证据再立项。
+
+## 8. 组件 backlog
+
+### P0（阶段 B，已拍板）
+
+| 组件 | 族目录 | 要点 | 对标 |
+| --- | --- | --- | --- |
+| IconButton | base/buttons | size 档位、colorRole、loading/dot、图标引用契约 | dbx icon-button |
+| ToolButton | base/buttons | `aria-pressed` 工具激活态 | 画布工具注册表 |
+| StatusBadge | base/badges | 语义成对 halo/dot + 文本；variant=outline（默认）/filled | BoardUI status-dot + AntD Tag |
+| EmptyState | product/empty-state | icon/title/description/action/compact | AntD Empty |
+| Callout | product/callout | info/success/warning/error + action + onClose（closable） | dbx ErrorBanner + AntD Alert |
+| Kbd | base/kbd | 全语义 token（`--kbd-bg/fg`） | BoardUI kbd |
+
+### P1（阶段 C）
+
+NodeTypeBadge（`--palette-node-*`）、TextTooltip、LoadingState、SectionCard、PropertyRow、IconGroup。
+
+### P2（B3+ 随替换批次，RAC 基底按需立项）
+
+Button/Input 全量、Dialog/Modal、Drawer、Popconfirm、Tabs、Combobox/Select、Switch、Tooltip、SegmentedControl 等替代件。
+
+### P3（阶段 E，先立证据）
+
+ application 产品块：agent-chat（composer/history/message）、agent-thinking 指示、app-shell、data-table——映射影策 AI 工作台场景（~~notification-center/通知中心~~ 🚫已禁用，不实施）。
+
+### fx
+
+现有 `aceternity/*` 归位 `ui/fx/` 命名空间（不重写）。
+
+## 9. 新组件检查清单
+
+- [ ] 落在正确分层；目录 `kebab-case`、族级 `index.ts` 导出 variants 与类型、`data-slot` 根元素、头注释齐备
+- [ ] 样式仅消费既有 token（含状态位/复合排版/分组色系），无裸值；明暗双态冒烟通过
+- [ ] 图标以组件引用传入且由组件定尺寸；动效走统一工具并尊重 reduced-motion
+- [ ] 键盘可操作、焦点环可见、持久状态 `aria-pressed` 可感知
+- [ ] 满足进库门槛；PR 描述写明对标对象；替换场景已删私有实现

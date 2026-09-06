@@ -1,4 +1,6 @@
-import { Input, InputNumber, Segmented, Select, Switch } from "antd";
+import { Input, InputNumber, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
@@ -122,7 +124,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         </Field>
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="02" title="输出时长" description="定义可用秒数及默认时长">
-                        <Segmented
+                        <SegmentedControl
                             block
                             disabled={disabled}
                             value={profile.duration.selection}
@@ -234,7 +236,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     </div>
                 </CapabilityBlock>
                 <CapabilityBlock title="输出时长">
-                    <Segmented
+                    <SegmentedControl
                         block
                         disabled={disabled}
                         value={profile.duration.selection}
@@ -440,7 +442,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, sec
                         <NumberField label="单次生成张数" value={profile.maxOutputs} min={1} disabled={disabled} onChange={(maxOutputs) => update({ maxOutputs: maxOutputs || 1 })} />
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="02" title="尺寸参数" description="定义尺寸字段、支持值与默认值">
-                        <Segmented
+                        <SegmentedControl
                             block
                             disabled={disabled}
                             value={profile.size.parameter}
@@ -543,7 +545,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, sec
                     <NumberField label="单次生成张数" value={profile.maxOutputs} min={1} disabled={disabled} onChange={(maxOutputs) => update({ maxOutputs: maxOutputs || 1 })} />
                 </CapabilityBlock>
                 <CapabilityBlock title="尺寸参数">
-                    <Segmented
+                    <SegmentedControl
                         block
                         disabled={disabled}
                         value={profile.size.parameter}
@@ -708,11 +710,11 @@ function BooleanField({ label, value, disabled, onChange }: { label: string; val
             <div className="flex shrink-0 items-center gap-3">
                 <label className="grid justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                     <span>支持</span>
-                    <Switch aria-label={`${label}支持`} size="small" disabled={disabled} checked={value.supported} onChange={(supported) => onChange({ ...value, supported })} />
+                    <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={value.supported} onChange={(supported) => onChange({ ...value, supported })} />
                 </label>
                 <label className="grid justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                     <span>默认</span>
-                    <Switch aria-label={`${label}默认值`} size="small" disabled={disabled || !value.supported} checked={value.default} onChange={(defaultValue) => onChange({ ...value, default: defaultValue })} />
+                    <Switch aria-label={`${label}默认值`} size="sm" disabled={disabled || !value.supported} checked={value.default} onChange={(defaultValue) => onChange({ ...value, default: defaultValue })} />
                 </label>
             </div>
         </div>
@@ -728,7 +730,7 @@ function ParameterField({ label, description, supported, disabled, onChange }: {
             </div>
             <label className="grid shrink-0 justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                 <span>支持</span>
-                <Switch aria-label={`${label}支持`} size="small" disabled={disabled} checked={supported} onChange={onChange} />
+                <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={supported} onChange={onChange} />
             </label>
         </div>
     );

@@ -1,4 +1,5 @@
 import { App, Button, Popconfirm, Tag, Typography } from "antd";
+import { StatusBadge } from "@/components/ui/base/badges";
 import { CheckCircle2, Copy, ExternalLink, LogIn, LogOut, RefreshCw, Server, SquareTerminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -172,9 +173,7 @@ export function LocalCliSettings() {
                         <h2 id="local-runtime-title" className="text-base font-semibold">
                             {LOCAL_CLI_SETTINGS_COPY.runtimeTitle}
                         </h2>
-                        <Tag color={presentation.runtime.tone} className="m-0">
-                            {presentation.runtime.label}
-                        </Tag>
+                        <StatusBadge variant="filled" className="m-0" tone={presentation.runtime.tone === "processing" ? "loading" : presentation.runtime.tone === "default" ? "neutral" : presentation.runtime.tone} label={presentation.runtime.label} />
                         <p className="min-w-0 text-sm text-foreground/60">{connection === "connected" ? LOCAL_CLI_SETTINGS_COPY.runtimeConnected : runtimeError || LOCAL_CLI_SETTINGS_COPY.runtimeDetecting}</p>
                         <p className="basis-full text-xs leading-5 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.runtimeSafety}</p>
                     </div>
@@ -195,9 +194,12 @@ export function LocalCliSettings() {
                                 <h2 id="dreamina-cli-title" className="text-base font-semibold">
                                     Dreamina CLI
                                 </h2>
-                                <Tag color={presentation.dreamina.tone} className="m-0">
-                                    {presentation.dreamina.label}
-                                </Tag>
+                                <StatusBadge
+                                    variant="filled"
+                                    className="m-0"
+                                    tone={presentation.dreamina.tone === "processing" ? "loading" : presentation.dreamina.tone === "default" ? "neutral" : presentation.dreamina.tone}
+                                    label={presentation.dreamina.label}
+                                />
                                 {status?.version ? <Tag className="m-0">v{status.version}</Tag> : null}
                                 {presentation.dreamina.creditLabel ? (
                                     <Tag color="blue" className="m-0">

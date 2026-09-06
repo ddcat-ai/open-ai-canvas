@@ -1,4 +1,5 @@
-import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
+import { App, Button, Input, Modal, Select, Typography } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { AudioLines, CalendarDays, CheckCircle2, Clock3, CreditCard, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";

@@ -1,4 +1,7 @@
-import { Button, Switch, Tooltip } from "antd";
+import { Button } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
+
+import { Switch } from "@/components/ui/base/switch";
 import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, Globe2, History, LayoutTemplate, Laptop, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -89,7 +92,7 @@ export function AgentPanelChrome({
                         <Button type="text" shape="circle" className="!h-6 !w-6 !min-w-6" disabled={!canUndo} style={{ color: theme.node.muted }} icon={<RotateCcw className="size-3" />} onClick={onUndo} aria-label="撤销最近一批 Agent 写回" />
                     </Tooltip>
                     <label className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-1" style={{ color: theme.node.muted }}>
-                        <Switch size="small" checked={confirmTools} onChange={onConfirmToolsChange} />
+                        <Switch size="sm" checked={confirmTools} onChange={onConfirmToolsChange} />
                         <span className="whitespace-nowrap">确认</span>
                     </label>
                 </div>

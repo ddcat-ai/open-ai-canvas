@@ -1,5 +1,5 @@
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Power } from "lucide-react";
+import { Eye, Pencil, Power, Trash2 } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -24,12 +24,14 @@ export function createUserColumns({
     onView,
     onEdit,
     onToggleStatus,
+    onPurge,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
     onToggleStatus: (user: AdminUser) => Promise<void>;
+    onPurge: (user: AdminUser) => void;
 }): ColumnsType<AdminUser> {
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
         {
@@ -78,6 +80,19 @@ export function createUserColumns({
                                 okText: user.status === "active" ? "确认停用" : "确认启用",
                             },
                             onClick: () => onToggleStatus(user),
+                        },
+                        {
+                            key: "purge",
+                            label: "删除用户",
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            disabled: user.id === actorId,
+                            confirm: {
+                                title: "彻底删除这个用户？",
+                                description: "该账号及其全部关联数据将被永久移除且不可恢复。停用可保留数据，仅当账号无资金流水和创作内容时才允许删除。",
+                                okText: "彻底删除",
+                            },
+                            onClick: () => onPurge(user),
                         },
                     ]}
                 />

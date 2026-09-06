@@ -128,7 +128,7 @@ export function AssetLibraryPickerModal({
     });
     const remoteItems = useMemo<AssetLibraryPickerItem[]>(() => (remoteQuery.data?.assets || []).filter((asset) => asset.kind !== "entity" && asset.kind !== "model").map((asset) => ({
         id: asset.id, title: asset.title, category: asset.category || "other", archived: asset.status === "archived", asset,
-        kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本", searchText: asset.tags.join(" "),
+        kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本", searchText: (asset.tags ?? []).join(" "),
         ...(items.find((item) => item.id === asset.id) || { disabledReason: "此素材不适用于当前操作" }),
     })), [remoteQuery.data, items]);
     const effectivePagination = remoteEnabled ? { current: remotePage, pageSize: remotePageSize, total: remoteQuery.data?.total || 0, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
@@ -355,6 +355,7 @@ export function AssetLibraryPickerModal({
 
     return (
         <Modal
+            centered
             open={open}
             footer={null}
             title={null}

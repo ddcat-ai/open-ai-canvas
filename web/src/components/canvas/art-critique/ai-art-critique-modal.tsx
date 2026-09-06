@@ -1,4 +1,5 @@
-import { Alert, Button, Empty, Modal, Tag } from "antd";
+import { Button, Modal, Tag } from "antd";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Copy, FileText, Image as ImageIcon, LoaderCircle, RefreshCw, Sparkles, Target, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -27,6 +28,8 @@ import { modelOptionLabel, useEffectiveConfig } from "@/stores/use-config-store"
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
+import { IconButton } from "@/components/ui/base/buttons";
+import { Callout } from "@/components/ui/product/callout";
 
 type AiArtCritiqueModalProps = {
     node: CanvasNodeData | null;
@@ -296,7 +299,7 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
                                       : "尚未分析"}
                         </span>
                     </div>
-                    <Button type="text" size="small" icon={<X className="size-4" />} onClick={close} aria-label="关闭批改报告" />
+                    <IconButton variant="ghost" size="sm" icon={X} onClick={close} aria-label="关闭批改报告" />
                 </header>
 
                 <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(360px,.85fr)]">
@@ -305,7 +308,7 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
                             {previewUrl ? (
                                 <img src={previewUrl} alt={input?.title || "输入图片"} className="max-h-full max-w-full rounded-[var(--r-md)] object-contain shadow-[var(--shadow-md)]" draggable={false} />
                             ) : (
-                                <Empty image={<ImageIcon className="mx-auto size-10 opacity-25" />} description={input ? "正在加载图片" : "还没有图片输入"} />
+                                <EmptyState size="compact" icon={ImageIcon} title={input ? "正在加载图片" : "还没有图片输入"} />
                             )}
                             {overlayIssues.length && previewUrl ? <CritiqueOverlay issues={overlayIssues} issueNumberById={issueNumberById} selectedIssueId={overlayIssues[0]?.id || null} labelPlacements={labelPlacements} onSelect={openIssue} /> : null}
                         </div>
@@ -333,10 +336,26 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
                     <aside className="min-h-0 flex-1 overflow-y-auto" data-canvas-wheel-scroll>
                         <div className="flex min-h-full flex-col gap-4 p-4">
                             {running || visibleState.status === "running" ? <ArtCritiqueProgress stage={progressStage} theme={theme} /> : null}
-                            {draftReportVisible && visibleState.status === "running" && visibleState.report ? <Alert type="info" showIcon message="报告初稿已生成" description="问题和建议已先展示，正在精确定位并复核矩形标注。" /> : null}
-                            {!enabled && !visibleState.report ? <Alert type="warning" showIcon message="插件尚未启用" description="请先到插件管理中开启 AI 审美批改，再运行分析。" /> : null}
-                            {visibleState.status === "stale" ? <Alert type="warning" showIcon message="输入图片已经变化" description="当前报告针对旧图片生成，请重新批改。" /> : null}
-                            {localError || visibleState.errorMessage ? <Alert type="error" showIcon message="批改失败" description={localError || visibleState.errorMessage} /> : null}
+                            {draftReportVisible && visibleState.status === "running" && visibleState.report ? (
+                                <Callout tone="info" title="报告初稿已生成">
+                                    问题和建议已先展示，正在精确定位并复核矩形标注。
+                                </Callout>
+                            ) : null}
+                            {!enabled && !visibleState.report ? (
+                                <Callout tone="warning" title="插件尚未启用">
+                                    请先到插件管理中开启 AI 审美批改，再运行分析。
+                                </Callout>
+                            ) : null}
+                            {visibleState.status === "stale" ? (
+                                <Callout tone="warning" title="输入图片已经变化">
+                                    当前报告针对旧图片生成，请重新批改。
+                                </Callout>
+                            ) : null}
+                            {localError || visibleState.errorMessage ? (
+                                <Callout tone="error" title="批改失败">
+                                    {localError || visibleState.errorMessage}
+                                </Callout>
+                            ) : null}
 
                             {view === "detail" && detailIssue ? (
                                 <IssueDetailView
@@ -355,7 +374,7 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
                                     {visibleState.report ? (
                                         <ReportSummary report={visibleState.report} theme={theme} isDraft={draftReportVisible && visibleState.status === "running"} />
                                     ) : (
-                                        <Empty className="my-auto" description="还没有批改报告" image={<FileText className="mx-auto size-10 opacity-25" />} />
+                                        <EmptyState className="my-auto" size="compact" icon={FileText} title="还没有批改报告" />
                                     )}
 
                                     {visibleState.report && !visibleState.report.issues.length ? (

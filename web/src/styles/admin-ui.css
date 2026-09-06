@@ -162,11 +162,11 @@
     white-space: nowrap;
 }
 
-.admin-appearance-logo-frame-option .ant-switch:not(.ant-switch-checked) {
+.admin-appearance-logo-frame-option [data-slot="switch"][data-state="off"] {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
-.admin-appearance-logo-frame-option .ant-switch.ant-switch-checked {
+.admin-appearance-logo-frame-option [data-slot="switch"][data-state="on"] {
     box-shadow:
         inset 0 0 0 1px color-mix(in srgb, var(--control-switch-checked-bg) 70%, var(--foreground)),
         0 0 0 2px color-mix(in srgb, var(--control-switch-checked-bg) 15%, transparent);
@@ -1291,21 +1291,21 @@
 .admin-secondary-drawer,
 .admin-modal-root,
 .admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #f3f4f6);
+    --admin-layer-0: var(--skin-admin-layer-0, #f5f5f5);
     --admin-layer-1: var(--skin-admin-layer-1, #ffffff);
-    --admin-layer-2: var(--skin-admin-layer-2, #f7f8fa);
-    --admin-layer-3: var(--skin-admin-layer-3, #eceff3);
+    --admin-layer-2: var(--skin-admin-layer-2, #f6f6f6);
+    --admin-layer-3: var(--skin-admin-layer-3, #ececec);
     --admin-sidebar: var(--admin-layer-0);
     --admin-text-primary: var(--foreground);
     --admin-text-secondary: color-mix(in srgb, var(--foreground) 72%, transparent);
     --admin-text-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
     --admin-text-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
     --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
-    --admin-divider: rgba(17, 24, 39, 0.12);
-    --admin-card-border: rgba(17, 24, 39, 0.15);
-    --admin-row-border: rgba(17, 24, 39, 0.09);
-    --admin-row-hover: #f3f5f7;
-    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(17, 24, 39, 0.04));
+    --admin-divider: rgba(17, 17, 17, 0.12);
+    --admin-card-border: rgba(17, 17, 17, 0.15);
+    --admin-row-border: rgba(17, 17, 17, 0.09);
+    --admin-row-hover: #f2f2f2;
+    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(17, 17, 17, 0.04));
     --admin-status-success: var(--palette-status-success);
     --admin-status-warning: var(--palette-status-warning);
     --admin-status-error: var(--palette-status-error);
@@ -1321,10 +1321,10 @@
 .dark .admin-secondary-drawer,
 .dark .admin-modal-root,
 .dark .admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #111315);
-    --admin-layer-1: var(--skin-admin-layer-1, #1a1d20);
-    --admin-layer-2: var(--skin-admin-layer-2, #22262a);
-    --admin-layer-3: var(--skin-admin-layer-3, #2b3035);
+    --admin-layer-0: var(--skin-admin-layer-0, #0f0f0f);
+    --admin-layer-1: var(--skin-admin-layer-1, #181818);
+    --admin-layer-2: var(--skin-admin-layer-2, #222222);
+    --admin-layer-3: var(--skin-admin-layer-3, #2a2a2a);
     --admin-sidebar: var(--admin-layer-0);
     --admin-text-primary: var(--foreground);
     --admin-text-secondary: color-mix(in srgb, var(--foreground) 74%, transparent);
@@ -1334,7 +1334,7 @@
     --admin-divider: rgba(255, 255, 255, 0.12);
     --admin-card-border: rgba(255, 255, 255, 0.16);
     --admin-row-border: rgba(255, 255, 255, 0.085);
-    --admin-row-hover: #252a2f;
+    --admin-row-hover: #242424;
     --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.32));
     --admin-status-success: var(--palette-status-success);
     --admin-status-warning: var(--palette-status-warning);
@@ -1355,10 +1355,10 @@
     margin-bottom: 6px !important;
     padding-inline: 2px !important;
     color: color-mix(in srgb, var(--foreground) 68%, transparent) !important;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    line-height: 17px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 16px;
     transition: color var(--motion-instant) ease-out;
 }
 
@@ -1804,16 +1804,22 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 8px;
-    line-height: 1.35;
+    gap: 6px;
+    font-size: 14px;
+    line-height: 20px;
 }
 
 .admin-page-location-section {
+    display: flex;
+    align-items: center;
+    min-height: 20px;
+    margin: 0;
+    padding: 0;
     flex: none;
     border-radius: 4px;
     color: var(--admin-text-muted);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     text-decoration: none;
     transition:
         color var(--motion-instant) ease-out,
@@ -1830,25 +1836,34 @@
 }
 
 .admin-page-location-separator {
+    display: flex;
+    align-items: center;
+    min-height: 20px;
+    margin: 0;
+    padding: 0;
     flex: none;
     color: color-mix(in srgb, var(--admin-text-muted) 58%, transparent);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 400;
 }
 
 .admin-page-title {
+    display: flex;
+    align-items: center;
+    min-height: 20px;
+    margin: 0;
+    padding: 0;
     min-width: 0;
     color: var(--admin-text-primary);
-    font-size: 18px;
-    font-weight: 650;
-    letter-spacing: -0.008em;
-    line-height: 1.35;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
 }
 
 .admin-page-description {
     margin-top: 5px;
     color: var(--admin-text-muted);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.55;
 }
 
@@ -2710,11 +2725,11 @@
     white-space: nowrap;
 }
 
-.admin-feature-availability .ant-switch:not(.ant-switch-checked) {
+.admin-feature-availability [data-slot="switch"][data-state="off"] {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
-.admin-feature-availability .ant-switch.ant-switch-checked {
+.admin-feature-availability [data-slot="switch"][data-state="on"] {
     box-shadow:
         inset 0 0 0 1px color-mix(in srgb, var(--control-switch-checked-bg) 70%, var(--foreground)),
         0 0 0 2px color-mix(in srgb, var(--control-switch-checked-bg) 15%, transparent);
@@ -8895,7 +8910,9 @@
     background: var(--admin-layer-2);
     padding: 7px 10px;
     color: var(--admin-text-primary);
-    transition: background-color 150ms ease, border-color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease;
 }
 
 .admin-model-import-modal .channel-model-import-picker .ant-checkbox-wrapper:hover {
@@ -8972,7 +8989,6 @@
 .admin-model-protocol-field {
     grid-column: 1 / -1;
 }
-
 
 .admin-model-editor-form {
     width: 100%;
@@ -9329,6 +9345,82 @@
     font-size: 12px;
 }
 
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-header,
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-footer {
+    border-color: rgba(17, 17, 17, 0.15);
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .ant-drawer-body,
+:root:not(.dark) .admin-drawer.admin-model-editor-drawer .ant-drawer-footer {
+    background: #f6f6f6;
+}
+
+:root:not(.dark) .admin-model-editor-section {
+    border: 1px solid rgba(17, 17, 17, 0.15);
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgb(17 17 17 / 0.055);
+}
+
+:root:not(.dark) .admin-model-editor-drawer :is(.admin-capability-group, .admin-capability-boolean-field, .admin-capability-parameter-field),
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card,
+:root:not(.dark) .admin-price-tier-toggle,
+:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented {
+    border-color: rgba(17, 17, 17, 0.18);
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-price-tier-card {
+    border-color: rgba(17, 17, 17, 0.18);
+    background: #f7f7f7;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
+:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card {
+    border-color: rgba(17, 17, 17, 0.18);
+    background: #f7f7f7;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"] {
+    border-color: rgba(17, 17, 17, 0.25);
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"]:hover {
+    border-color: rgba(17, 17, 17, 0.4);
+    background: #f8fafc;
+}
+
+:root:not(.dark) .admin-model-editor-drawer [role="radio"][aria-checked="true"] {
+    border-color: rgba(17, 17, 17, 0.7);
+    background: #ececec;
+    box-shadow: inset 0 0 0 1px rgb(17 17 17 / 0.08);
+}
+
+:root:not(.dark) .admin-model-editor-drawer :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-selector, .ant-segmented) {
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-model-editor-section-heading h2 {
+    color: #1f1f1f;
+}
+
+:root:not(.dark) .admin-model-editor-drawer .ant-form-item-label > label {
+    color: rgba(17, 17, 17, 0.72);
+    font-weight: 550;
+}
+
+:root:not(.dark) .admin-model-editor-footer-actions {
+    border-color: rgba(17, 17, 17, 0.15);
+    background: #ffffff;
+    box-shadow: 0 6px 20px rgb(17 17 17 / 0.08);
+}
+
+:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
+    background: #ececec;
+    box-shadow: inset 0 0 0 1px rgb(17 17 17 / 0.12);
+}
 @media (max-width: 600px) {
     .admin-model-editor-modal .ant-modal-container {
         height: calc(100dvh - 24px);
@@ -9360,7 +9452,6 @@
     .admin-price-tier-card-body {
         grid-template-columns: minmax(0, 1fr);
     }
-
 }
 
 /* 管理后台可读性基线：收敛历史页面中过低的文字透明度，并统一表单层级。 */
@@ -9588,8 +9679,7 @@
     }
 
     .admin-page-title {
-        font-size: 20px;
-        letter-spacing: -0.012em;
+        font-size: 14px;
     }
 
     .admin-page-location-section,
@@ -9791,8 +9881,8 @@
     }
 
     .admin-access-provider-toggle > .ant-form-item,
-    .admin-email-delivery-policy > .ant-switch,
-    .admin-access-registration-policy > .ant-switch {
+    .admin-email-delivery-policy > [data-slot="switch"],
+    .admin-access-registration-policy > [data-slot="switch"] {
         margin-left: auto;
     }
 
@@ -10132,12 +10222,12 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
     }
 
     .admin-page-title {
-        font-size: 18px;
+        font-size: 14px;
     }
 
     .admin-page-location-section,
     .admin-page-location-separator {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .admin-page-actions {

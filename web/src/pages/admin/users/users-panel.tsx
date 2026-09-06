@@ -1,10 +1,11 @@
-import { App, Button, Checkbox, Dropdown, Input, Select } from "antd";
+import { App, Button, Dropdown, Input, Select } from "antd";
+import { Checkbox } from "@/components/ui/base/checkbox";
 import { Ban, Search, Settings2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, purgeAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
@@ -101,13 +102,27 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         }
     }, [message, replaceUser]);
 
+    const purgeUser = useCallback(async (user: AdminUser) => {
+        try {
+            await purgeAdminUser(user.id);
+            setUsers((items) => items.filter((item) => item.id !== user.id));
+            setTotal((value) => Math.max(0, value - 1));
+            setSelectedUserIds((ids) => ids.filter((id) => id !== user.id));
+            if (detailUserId === user.id) setDetailUserId(null);
+            message.success(`用户 ${user.displayName || user.username} 已彻底删除`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "删除用户失败");
+        }
+    }, [detailUserId, message]);
+
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
         onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+        onPurge: purgeUser,
+    }), [actor?.id, purgeUser, toggleStatus, visibleColumns]);
 
     const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
 
@@ -182,6 +197,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                                         {userColumnOptions.map((option) => (
                                             <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
                                                 <Checkbox
+                                                    bare
                                                     checked={visibleColumns.has(option.key)}
                                                     disabled={option.locked}
                                                     onChange={(event) => setVisibleColumns((current) => {

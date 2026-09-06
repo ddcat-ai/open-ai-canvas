@@ -1,4 +1,6 @@
-import { Alert, App, Button, Drawer, Form, Input, Popconfirm, Select, Tabs, Tag } from "antd";
+import { App, Button, Drawer, Form, Input, Popconfirm, Select, Tabs } from "antd";
+import { StatusBadge } from "@/components/ui/base/badges";
+import { Callout } from "@/components/ui/product/callout";
 import type { ColumnsType } from "antd/es/table";
 import { Braces, Copy, FileJson, FileText, Plus, Power, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -212,19 +214,13 @@ export default function StoryboardPromptsPage() {
                     </div>
 
                     {pendingOperation ? (
-                        <Alert
-                            type="warning"
-                            showIcon
-                            title="当前版本有未保存修改"
-                            description={`切换到“${definitionByOperation.get(pendingOperation)?.label || pendingOperation}”会丢弃当前草稿。`}
-                            action={<div className="flex gap-2"><Button size="small" onClick={() => setPendingOperation("")}>继续编辑</Button><Button size="small" danger onClick={() => loadDraftBaseline(pendingOperation)}>放弃并切换</Button></div>}
-                        />
+                        <Callout tone="warning" title="当前版本有未保存修改" action={<div className="flex gap-2"><Button size="small" onClick={() => setPendingOperation("")}>继续编辑</Button><Button size="small" danger onClick={() => loadDraftBaseline(pendingOperation)}>放弃并切换</Button></div>}>{`切换到“${definitionByOperation.get(pendingOperation)?.label || pendingOperation}”会丢弃当前草稿。`}</Callout>
                     ) : null}
 
                     <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-3">
                         <section className="flex min-h-0 flex-col border-b border-border p-4 lg:col-span-2 lg:border-b-0 lg:border-r">
                             <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
-                                <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">模板内容</h3>{dirty ? <Tag variant="filled" color="warning">未保存</Tag> : null}</div>
+                                <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">模板内容</h3>{dirty ? <StatusBadge variant="filled" tone="warning" label="未保存" /> : null}</div>
                                 <div className="flex flex-wrap justify-end gap-2">
                                     {selectedDefinition?.variables.map((variable) => (
                                         <Button key={variable.placeholder} size="small" icon={<Braces className="size-3.5" />} onClick={() => editorRef.current?.insertText(variable.placeholder)}>

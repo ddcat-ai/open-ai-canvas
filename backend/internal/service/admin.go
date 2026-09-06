@@ -389,6 +389,47 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 	return s.appendAdminAudit(actor, "user.disable", "user", user.ID, "停用用户并清除登录态", nil)
 }
 
+// purgeFinanceTables 存在即拒绝彻底删除的账务数据：真实资金流水/订单必须长期保留。
+var purgeFinanceTables = []string{"billing_orders", "payment_orders"}
+
+// PurgeUser 彻底删除（硬删）用户：账号与全部关联数据在单个事务内级联物理移除，不可恢复。
+// 守卫：仅管理员、不能删自己、管理员需保底一个；存在资金流水/账单等需保留的账务数据时拒绝，提示改用停用。
+// 业务内容（任务/项目/素材等）由 repo.PurgeUserData 按 FK 链在事务内级联删除，删除动作以 user.purge 审计落库。
+func (s *Service) PurgeUser(actor *model.User, userID string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	if actor.ID == userID {
+		return BadAuthRequest("不能删除当前登录的管理员账号")
+	}
+	user, err := s.repo.User(userID)
+	if err != nil {
+		return err
+	}
+	if user.Role == model.UserRoleAdmin {
+		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return BadAuthRequest("至少需要保留一个管理员")
+		}
+	}
+	financeCounts, err := s.repo.CountUserRowsByTable(user.ID, purgeFinanceTables)
+	if err != nil {
+		return err
+	}
+	if len(financeCounts) > 0 {
+		return BadAuthRequest("该用户存在资金流水/账单数据，无法彻底删除，请改用停用")
+	}
+	audit, err := newAdminAuditEvent(actor, "user.purge", "user", user.ID, "彻底删除用户账号及全部关联数据", nil)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.PurgeUserData(user, audit)
+	return err
+}
+
 func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersRequest) (*BulkDisableUsersResult, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err

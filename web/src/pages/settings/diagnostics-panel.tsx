@@ -1,4 +1,5 @@
-import { App, Button, Input, Select } from "antd";
+import { App, Button, Input } from "antd";
+import { Select } from "@/components/ui/base/select";
 import { Activity, CheckCircle2, Clock3, Download, FileText, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -12,7 +13,7 @@ type DiagnosticsPanelProps = {
 
 type DiagnosticRange = "15m" | "30m" | "1h" | "24h";
 
-const rangeOptions = [
+const rangeOptions: { value: DiagnosticRange; label: string }[] = [
     { value: "15m", label: "最近 15 分钟" },
     { value: "30m", label: "最近 30 分钟" },
     { value: "1h", label: "最近 1 小时" },
@@ -98,9 +99,18 @@ export default function DiagnosticsPanel({ taskId, projectId }: DiagnosticsPanel
                             <span className="rounded-full bg-foreground/[.045] px-2.5 py-1 text-[var(--fs-tiny)] font-medium text-foreground/48">最长 24 小时</span>
                         </div>
                         <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,230px)_minmax(0,1fr)] md:items-end">
-                            <label className="block" htmlFor="diagnostic-range">
+                            <label className="block">
                                 <span className="mb-2 block text-xs font-semibold text-foreground/65">时间范围</span>
-                                <Select id="diagnostic-range" className="w-full" value={range} options={rangeOptions} onChange={setRange} />
+                                <Select
+                                    ariaLabel="时间范围"
+                                    className="w-full"
+                                    value={range}
+                                    options={rangeOptions}
+                                    onChange={(value) => {
+                                        const next = rangeOptions.find((option) => option.value === value)?.value;
+                                        if (next) setRange(next);
+                                    }}
+                                />
                             </label>
                             <div className="rounded-lg border border-border/55 bg-foreground/[.025] px-3.5 py-3" aria-live="polite">
                                 <div className="flex items-center gap-2 text-sm font-medium text-foreground/78">

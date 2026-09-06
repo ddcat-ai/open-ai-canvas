@@ -1,4 +1,6 @@
-import { Button, Empty, Select } from "antd";
+import { Button, Select } from "antd";
+import { IconButton } from "@/components/ui/base/buttons";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { Maximize, Power, PowerOff, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
@@ -178,10 +180,10 @@ export function WorkflowGraphEditor({ workflowJson, workflowGraph, fields, onCha
 
             <section className="workflow-graph-stage">
                 <div className="workflow-graph-controls">
-                    <Button size="small" type="text" icon={<ZoomOut />} aria-label="缩小工作流" onClick={() => zoom(-1)} />
+                    <IconButton size="sm" variant="ghost" icon={ZoomOut} aria-label="缩小工作流" onClick={() => zoom(-1)} />
                     <span>{Math.round(scale * 100)}%</span>
-                    <Button size="small" type="text" icon={<ZoomIn />} aria-label="放大工作流" onClick={() => zoom(1)} />
-                    <Button size="small" type="text" icon={<Maximize />} aria-label="适应窗口" onClick={fitGraph} />
+                    <IconButton size="sm" variant="ghost" icon={ZoomIn} aria-label="放大工作流" onClick={() => zoom(1)} />
+                    <IconButton size="sm" variant="ghost" icon={Maximize} aria-label="适应窗口" onClick={fitGraph} />
                 </div>
                 <div
                     ref={viewportRef}
@@ -251,7 +253,7 @@ export function WorkflowGraphEditor({ workflowJson, workflowGraph, fields, onCha
                             </g>
                         </svg>
                     ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />
+                        <EmptyState size="compact" title={emptyDescription} />
                     )}
                 </div>
             </section>
