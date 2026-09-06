@@ -20,6 +20,8 @@ import {
     type AgentEventLog,
     type AgentPanelTab,
     type AgentPendingToolCall,
+    type AgentRunPlan,
+    type AgentRunStatus,
     type AgentThreadSummary,
 } from "@/stores/canvas/use-canvas-agent-store";
 import { canvasAgentPostconditionMessage, hashCanvasAgentSnapshot, previewCanvasAgentOps, summarizeCanvasAgentOps, verifyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
@@ -40,6 +42,12 @@ const MAX_AGENT_TURN_PAYLOAD_BYTES = 56 * 1024 * 1024;
 type AgentEventPayload = {
     agent?: string;
     type?: string;
+    runId?: string;
+    eventId?: string;
+    idempotencyKey?: string;
+    timestamp?: string;
+    stepId?: string;
+    payload?: Record<string, unknown>;
     thread_id?: string;
     item?: AgentEventItem;
     error?: { message?: string };
@@ -52,10 +60,12 @@ type AgentLogContext = { connected: boolean; enabled: boolean; activity: string;
 type AgentWorkspace = { canvasId: string; workspacePath: string; activeThreadId?: string };
 type AgentThreadsResponse = { ok?: boolean; workspace?: AgentWorkspace; data?: AgentThreadSummary[] };
 type AgentThreadResponse = { ok?: boolean; workspace?: AgentWorkspace; thread?: AgentThreadSummary; messages?: AgentChatItem[] };
+type AgentTurnResponse = { ok?: boolean; threadId?: string; plan?: unknown };
 type AgentTurnPayload = {
     text: string;
     prompt: string;
     canvasId: string;
+    projectId?: string;
     threadId?: string;
     attachments: Array<Pick<AgentAttachment, "name" | "type" | "dataUrl">>;
     skills: Array<{ skillId: string; name: string; description: string; version: string; files: Array<{ path: string; mimeType: string; contentBase64: string }> }>;
@@ -97,6 +107,8 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         eventLogs,
         threads,
         activeThreadId,
+        runPlan,
+        runStatus,
         workspacePath,
         loadingThreads,
         activeTab,
@@ -210,6 +222,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         runtimeStateHashRef.current = "";
         runtimeCanonicalStateHashRef.current = "";
         activeTurnRef.current = null;
+        setAgentState({ activeRunId: "", runPlan: null, runStatus: "idle" });
         setRetryTurn(null);
         setRetryMessageId(null);
     }, [snapshot.projectId]);
@@ -278,7 +291,9 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                 return;
             }
             if (event.type === "agent_error") {
-                const errorMessage = parseEventJson<{ message?: unknown }>(event.data)?.message;
+                const data = parseEventJson<{ message?: unknown; runId?: string }>(event.data);
+                const errorMessage = data?.message;
+                if (data?.runId) setAgentState({ activeRunId: data.runId, runStatus: "failed" });
                 setAgentState({ activity: "出错", waiting: false, sending: false });
                 const messageId = addMessage({ role: "error", title: "错误", text: normalizeText(errorMessage) || "本地 Agent 执行失败，请重试本轮。" });
                 if (activeTurnRef.current) {
@@ -340,6 +355,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         const state = useCanvasAgentStore.getState();
         if (!state.connected || state.sending || state.waiting) return;
         activeTurnRef.current = payload;
+        setAgentState({ activeRunId: "", runPlan: null, runStatus: "idle" });
         if (appendUserMessage) {
             setRetryTurn(null);
             setRetryMessageId(null);
@@ -358,12 +374,13 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             addEventLog("重试本轮", { threadId: payload.threadId, attachments: payload.attachments.map(({ name, type }) => ({ name, type })) });
         }
         try {
-            const data = await fetchAgentJson<{ threadId?: string }>("/agent/codex/turn", {
+            const data = await fetchAgentJson<AgentTurnResponse>("/agent/codex/turn", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
                     prompt: payload.prompt,
                     canvasId: payload.canvasId,
+                    projectId: payload.projectId,
                     threadId: payload.threadId,
                     attachments: payload.attachments,
                     skills: payload.skills,
@@ -371,7 +388,17 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             });
             const acceptedPayload = data.threadId ? { ...payload, threadId: data.threadId } : payload;
             activeTurnRef.current = acceptedPayload;
-            if (data.threadId) setAgentState({ activeThreadId: data.threadId });
+            if (isRunPlan(data.plan)) {
+                const currentRun = useCanvasAgentStore.getState();
+                setAgentState({
+                    ...(data.threadId ? { activeThreadId: data.threadId } : {}),
+                    activeRunId: data.plan.runId,
+                    runPlan: data.plan,
+                    runStatus: currentRun.activeRunId === data.plan.runId && currentRun.runStatus !== "idle" ? currentRun.runStatus : "planned",
+                });
+            } else if (data.threadId) {
+                setAgentState({ activeThreadId: data.threadId });
+            }
             addEventLog(appendUserMessage ? "本地 Agent 已接收" : "本地 Agent 已接收重试", { accepted: true });
         } catch (error) {
             setRetryTurn(activeTurnRef.current);
@@ -409,6 +436,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             text,
             prompt: requestPrompt,
             canvasId: snapshotRef.current.projectId,
+            projectId: snapshotRef.current.domainProjectId,
             threadId: useCanvasAgentStore.getState().activeThreadId || undefined,
             attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
             skills: skillBundles,
@@ -491,8 +519,11 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                           const before = snapshotRef.current;
                           const next = await onApplyOpsRef.current((input.ops || []) as CanvasAgentOp[], { source: "local", conversationId: activeThreadId || clientIdRef.current, messageId: payload.requestId });
                           const verification = verifyCanvasAgentOps(before, next, (input.ops || []) as CanvasAgentOp[]);
+                          if (!verification.ok) throw new Error(canvasAgentPostconditionMessage(verification));
+                          const synced = await syncState(clientIdRef.current, next);
+                          if (!synced) throw new Error("画布状态同步失败，未确认本次写入");
                           return {
-                              ok: verification.ok,
+                              ok: true,
                               message: canvasAgentPostconditionMessage(verification),
                               data: { verification, snapshot: next },
                               snapshot: next,
@@ -523,7 +554,6 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                               ? await runProjectAgentTool(projectToolName, input, snapshotRef.current.domainProjectId)
                               : snapshotRef.current;
             await postToolResult(clientIdRef.current, { requestId: payload.requestId, result });
-            if (payload.name === "canvas_apply_ops") syncState(clientIdRef.current, (result as { snapshot?: CanvasAgentSnapshot }).snapshot || snapshotRef.current);
             setAgentState({ activity: "工具完成", waiting: true });
             addEventLog(`${toolName(payload.name)}完成`, result, result);
             addMessage({
@@ -720,6 +750,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
 
     const handleAgentEvent = (event: AgentEventPayload) => {
         if (shouldLogAgentEvent(event)) addEventLog(eventTitle(event), event, event);
+        handleRunEvent(event);
         if (event.type === "thread.started" && event.thread_id) setAgentState({ activeThreadId: event.thread_id });
         const nextActivity = activityText(event);
         if (nextActivity) setAgentState({ activity: nextActivity });
@@ -739,6 +770,21 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const messageId = addMessage(item);
             if ((event.type === "turn.failed" || event.type === "error") && activeTurnRef.current && item.role === "error") setRetryMessageId(messageId || null);
         }
+    };
+
+    const handleRunEvent = (event: AgentEventPayload) => {
+        if (!event.runId) return;
+        const patch: { activeRunId: string; runStatus?: AgentRunStatus; runPlan?: AgentRunPlan } = { activeRunId: event.runId };
+        if (event.type === "run.started") patch.runStatus = "planned";
+        if (event.type === "run.plan.created") {
+            const plan = objectField(event.payload, "plan");
+            if (isRunPlan(plan)) patch.runPlan = plan;
+            patch.runStatus = "planned";
+        }
+        if (event.type === "turn.started") patch.runStatus = "running";
+        if (event.type === "run.completed") patch.runStatus = "completed";
+        if (event.type === "run.failed") patch.runStatus = "failed";
+        setAgentState(patch);
     };
 
     const content = (
@@ -786,7 +832,8 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             ) : (
                 <>
                     <div ref={listRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                        {!messages.length && !pendingTool && !waiting ? (
+                        {runPlan ? <AgentRunPlanCard plan={runPlan} status={runStatus} theme={theme} /> : null}
+                        {!messages.length && !pendingTool && !waiting && !runPlan ? (
                             <AgentChatEmptyState
                                 theme={theme}
                                 nodeCount={snapshot.nodes.length}
@@ -1178,6 +1225,67 @@ function agentMessageToChatMessage(item: AgentChatItem) {
 
 function agentAttachmentToChatAttachment(item: AgentAttachment): CanvasAgentChatAttachment {
     return { id: item.id, name: item.name, url: item.dataUrl || item.url };
+}
+
+function isRunPlan(value: unknown): value is AgentRunPlan {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const plan = value as Record<string, unknown>;
+    return plan.schemaVersion === 1
+        && typeof plan.runId === "string"
+        && typeof plan.createdAt === "string"
+        && Array.isArray(plan.steps)
+        && plan.steps.every((step) => {
+            if (!step || typeof step !== "object" || Array.isArray(step)) return false;
+            const item = step as Record<string, unknown>;
+            return typeof item.id === "string"
+                && typeof item.agentId === "string"
+                && typeof item.role === "string"
+                && typeof item.title === "string"
+                && item.status === "planned"
+                && typeof item.attempt === "number"
+                && Array.isArray(item.dependsOn)
+                && item.dependsOn.every((dependency) => typeof dependency === "string");
+        });
+}
+
+function runStatusText(status: AgentRunStatus) {
+    if (status === "planned") return "已规划";
+    if (status === "running") return "执行中";
+    if (status === "completed") return "本轮完成";
+    if (status === "failed") return "执行失败";
+    return "";
+}
+
+function runStatusColor(status: AgentRunStatus, theme: (typeof canvasThemes)[keyof typeof canvasThemes]) {
+    if (status === "failed") return "#dc2626";
+    if (status === "completed") return "#16a34a";
+    if (status === "running") return "#d97706";
+    return theme.node.muted;
+}
+
+function AgentRunPlanCard({
+    plan,
+    status,
+    theme,
+}: {
+    plan: AgentRunPlan;
+    status: AgentRunStatus;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+}) {
+    return (
+        <div className="rounded-md p-3" style={{ background: theme.spatial.surface }}>
+            <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">本轮协作计划</div>
+                <span className="text-[var(--fs-label)]" style={{ color: runStatusColor(status, theme) }}>{runStatusText(status)}</span>
+            </div>
+            <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                {plan.steps.map((step) => step.title).join(" → ") || "DIRECTOR"}
+            </div>
+            <div className="mt-2 text-[var(--fs-tiny)] leading-4" style={{ color: theme.node.muted }}>
+                计划用于指导当前执行，不代表步骤已经完成 · {plan.runId}
+            </div>
+        </div>
+    );
 }
 
 function formatAgentEvent(event: AgentEventPayload): Omit<AgentChatItem, "id"> | null {

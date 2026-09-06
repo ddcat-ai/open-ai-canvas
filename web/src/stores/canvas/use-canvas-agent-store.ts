@@ -6,8 +6,11 @@ export type AgentChatRole = "user" | "assistant" | "system" | "tool" | "error";
 export type AgentAttachment = { id: string; name: string; type: string; size: number; url: string; dataUrl: string };
 export type AgentChatItem = { id: string; role: AgentChatRole; title?: string; text: string; meta?: string; detail?: unknown; attachments?: AgentAttachment[]; streamId?: string };
 export type AgentEventLog = { id: string; time: string; title: string; text: string; raw?: unknown };
-export type AgentPendingToolCall = { requestId: string; name: string; input?: { ops?: CanvasAgentOp[] } };
+export type AgentPendingToolCall = { requestId: string; name: string; input?: { ops?: CanvasAgentOp[]; [key: string]: unknown }; runId?: string; stepId?: string; agentId?: string; attempt?: number; semanticTool?: string };
 export type AgentThreadSummary = { id: string; preview: string; name?: string | null; cwd?: string; status?: string; source?: unknown; createdAt?: number; updatedAt?: number };
+export type AgentRunStep = { id: string; agentId: string; role: string; title: string; dependsOn: string[]; status: "planned"; attempt: number };
+export type AgentRunPlan = { schemaVersion: 1; runId: string; canvasId?: string; projectId?: string; requestFingerprint?: string; createdAt: string; source: string; steps: AgentRunStep[] };
+export type AgentRunStatus = "idle" | "planned" | "running" | "completed" | "failed";
 export type AgentPanelTab = "chat" | "setup" | "history" | "log";
 
 type CanvasAgentStore = {
@@ -22,6 +25,9 @@ type CanvasAgentStore = {
     eventLogs: AgentEventLog[];
     threads: AgentThreadSummary[];
     activeThreadId: string;
+    activeRunId: string;
+    runPlan: AgentRunPlan | null;
+    runStatus: AgentRunStatus;
     workspacePath: string;
     loadingThreads: boolean;
     activeTab: AgentPanelTab;
@@ -87,6 +93,9 @@ export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     eventLogs: [],
     threads: [],
     activeThreadId: "",
+    activeRunId: "",
+    runPlan: null,
+    runStatus: "idle",
     workspacePath: "",
     loadingThreads: false,
     activeTab: "chat",

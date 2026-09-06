@@ -12,6 +12,7 @@ import {
     verifyCodexThreadWorkspace,
     withAgentPrompt,
 } from "../agents.js";
+import { buildRunPlan, executeReadOnlySteps } from "../agent-orchestration.js";
 import { CanvasSession } from "../canvas-session.js";
 import {
     ensureCanvasWorkspace,
@@ -24,7 +25,7 @@ import type { AgentAttachment } from "../types.js";
 export type CanvasAgentSession = Pick<
     CanvasSession,
     "health" | "openEvents" | "updateState" | "resolveResult" | "emitAll" | "callTool" | "closeRuntimeSession" | "dispose"
->;
+> & Partial<Pick<CanvasSession, "beginAgentRun" | "finishAgentRun">>;
 
 export function createCanvasAgentHttpModule(
     config: LocalRuntimeConfig,
@@ -117,11 +118,17 @@ export function createCanvasAgentHttpModule(
         }),
         canvasRoute("POST", "/agent/codex/turn", (req, res) => {
             const body = jsonRecord(req);
+            const prompt = String(body.prompt || "");
             const attachments = Array.isArray(body.attachments)
                 ? body.attachments as AgentAttachment[]
                 : [];
             const skills = parseAgentSkills(body.skills);
             const workspace = ensureCanvasWorkspace(config, String(body.canvasId || ""));
+            const plan = buildRunPlan({
+                prompt,
+                canvasId: workspace.canvasId,
+                ...(typeof body.projectId === "string" ? { projectId: body.projectId } : {}),
+            });
             let threadId = String(body.threadId || workspace.activeThreadId || "");
             void (async () => {
                 if (!threadId) {
@@ -132,14 +139,25 @@ export function createCanvasAgentHttpModule(
                     await verifyCodexThreadWorkspace(emit, threadId, workspace.workspacePath);
                     updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: threadId });
                 }
+                if (!res.headersSent) res.json({ ok: true, threadId, plan });
+                const readOnlyExecution = await executeReadOnlySteps(
+                    plan,
+                    (name, input) => session.callTool(name, input),
+                    emit,
+                );
                 void runCodexTurn(
-                    withAgentPrompt(String(body.prompt || "")),
+                    withAgentPrompt(prompt, plan, readOnlyExecution),
                     emit,
                     attachments,
                     {
                         skills,
+                        plan,
+                        runId: plan.runId,
+                        readOnlyExecution,
                         threadId,
                         cwd: workspace.workspacePath,
+                        onExecutionStart: ({ plan: runPlan, readOnlyExecution: execution }) => session.beginAgentRun?.(runPlan, execution),
+                        onExecutionEnd: () => session.finishAgentRun?.(),
                         onThreadId: (nextThreadId) => updateCanvasWorkspace(
                             config,
                             workspace.canvasId,
@@ -147,7 +165,6 @@ export function createCanvasAgentHttpModule(
                         ),
                     },
                 );
-                if (!res.headersSent) res.json({ ok: true, threadId });
             })().catch((error) => {
                 if (!res.headersSent) res.status(500).json({ ok: false, error: publicCanvasError(error) });
             });
