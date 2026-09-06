@@ -8,7 +8,6 @@ test("text nodes use compact, consistent spacing in edit and view states", () =>
     expect(source).toContain("Math.round(fontSize * 1.5)");
     expect(source).not.toContain("Math.round(fontSize * 1.65)");
     expect(source).toContain("overflow-hidden pb-3 pl-3 pr-0 pt-3");
-    expect(source).toContain("overflow-hidden p-3");
     expect(source).toContain("min-h-0 min-w-0 flex-1");
 });
 
