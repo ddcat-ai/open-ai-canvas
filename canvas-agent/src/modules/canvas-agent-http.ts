@@ -1,4 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { readFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
     archiveCodexThread,
@@ -18,6 +21,7 @@ import { runYingceTurn, yingceLlmEnabled } from "../yingce-llm.js";
 import { CanvasSession } from "../canvas-session.js";
 import {
     AGENT_PROMPT,
+    CONFIG_DIR,
     ensureCanvasWorkspace,
     updateCanvasWorkspace,
     type LocalRuntimeConfig,
@@ -30,6 +34,24 @@ export type CanvasAgentSession = Pick<
     "health" | "openEvents" | "updateState" | "resolveResult" | "emitAll" | "callTool" | "closeRuntimeSession" | "dispose"
 >;
 
+/** WorkBuddy 会话 id 的落盘位置（与 canvas-agent.json 同目录，便于一起备份/排查）。 */
+const WORK_BUDDY_SESSION_FILE = path.join(CONFIG_DIR, "workbuddy-sessions.json");
+
+/** 启动时读回上次记住的会话 id。文件不存在/损坏一律当作“没有历史”，绝不让启动失败。 */
+function loadWorkbuddySessions(): Record<string, string> {
+    try {
+        const parsed = JSON.parse(readFileSync(WORK_BUDDY_SESSION_FILE, "utf8")) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        const out: Record<string, string> = {};
+        for (const [canvasId, sessionId] of Object.entries(parsed as Record<string, unknown>)) {
+            if (typeof sessionId === "string" && sessionId) out[canvasId] = sessionId;
+        }
+        return out;
+    } catch {
+        return {};
+    }
+}
+
 export function createCanvasAgentHttpModule(
     config: LocalRuntimeConfig,
     session: CanvasAgentSession = new CanvasSession(),
@@ -37,8 +59,26 @@ export function createCanvasAgentHttpModule(
     const emit = (type: string, payload: unknown) => session.emitAll(type, payload);
     /** 影策渠道的服务端会话历史（前端不传 history，按 canvasId 在此累积，最近 40 条） */
     const yingceHistory = new Map<string, { role: "user" | "assistant"; content: string }[]>();
-    /** WorkBuddy 后端的会话 id（按 canvasId 记忆，供 codebuddy --resume 续接） */
-    const workbuddySessions = new Map<string, string>();
+    /**
+     * WorkBuddy 后端的会话 id（按 canvasId 记忆，供 codebuddy --resume 续接）。
+     * PATCH(agent-workbuddy-session-persist): 原先只在内存里，canvas-agent 一重启就全丢
+     * ⇒ 每次重启后第一句话都被当成新会话，表现为「多轮对话断片」。
+     * 2026-09-06 实测：codebuddy 的会话本体本来就是落盘的
+     * （~/.workbuddy/projects/<cwd-slug>/<sessionId>.jsonl），跨进程 --resume 有效，
+     * 所以这里只要把 id 也落盘，重启后就能续上。
+     */
+    const workbuddySessions = new Map<string, string>(Object.entries(loadWorkbuddySessions()));
+    if (workbuddySessions.size > 0) {
+        console.log(`[workbuddy] 已恢复 ${workbuddySessions.size} 个画布的续接会话（${WORK_BUDDY_SESSION_FILE}）`);
+    }
+    /** 串行化写盘，避免并发请求交错覆盖；写失败只静默跳过，绝不影响正常对话。 */
+    let sessionPersistQueue: Promise<unknown> = Promise.resolve();
+    const persistWorkbuddySessions = () => {
+        sessionPersistQueue = sessionPersistQueue
+            .then(() => writeFile(WORK_BUDDY_SESSION_FILE, JSON.stringify(Object.fromEntries(workbuddySessions), null, 2), "utf8"))
+            .catch(() => undefined);
+        return sessionPersistQueue;
+    };
     const routes: LocalRuntimeProtectedRoute[] = [
         canvasRoute("GET", "/events", (req, res) => {
             session.openEvents(
@@ -82,7 +122,9 @@ export function createCanvasAgentHttpModule(
         canvasRoute("POST", "/agent/codex/threads/new", async (req, res) => {
             const body = jsonRecord(req);
             const workspace = ensureCanvasWorkspace(config, String(body.canvasId || ""));
+            // 「新建会话」= 主动放弃续接，同步清掉落盘的 id
             workbuddySessions.delete(workspace.canvasId);
+            void persistWorkbuddySessions();
             const thread = await startCodexThread(emit, workspace.workspacePath);
             const activeThreadId = String((thread as Record<string, unknown>).id || "");
             updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId });
@@ -135,7 +177,15 @@ export function createCanvasAgentHttpModule(
                 void runWorkBuddyTurn(prompt, emit, {
                     resumeSessionId,
                     onSessionId: (sessionId) => {
-                        if (sessionId) workbuddySessions.set(canvasKey, sessionId);
+                        if (sessionId) {
+                            workbuddySessions.set(canvasKey, sessionId);
+                            void persistWorkbuddySessions();
+                        }
+                    },
+                    // 续接失败 ⇒ id 已失效，丢弃它，下一轮自动开新会话（否则永久卡死）
+                    onFailure: () => {
+                        workbuddySessions.delete(canvasKey);
+                        void persistWorkbuddySessions();
                     },
                 });
                 res.json({ ok: true, agent: "workbuddy" });

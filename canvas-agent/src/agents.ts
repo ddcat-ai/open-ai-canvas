@@ -130,10 +130,16 @@ export function workbuddyEnabled() {
     }
 }
 
+// 2026-09-06 追加实测：会话数据落盘在
+//   ~/.workbuddy/projects/<cwd-slug>/<sessionId>.jsonl
+// 跨进程 --resume 验证通过（新进程能答出上一轮的 "pong"，cache_read 命中 25600 tok）。
+// 但 --resume 一个**已失效**的 id 会直接报错退出：
+//   {"type":"error","error":"No conversation found with session ID: ..."}
+// 不会自动降级开新会话 ⇒ 上层必须在失败时清掉 id，否则永久卡死（见 onFailure）。
 export function runWorkBuddyTurn(
     prompt: string,
     emit: AgentEmit,
-    options: { resumeSessionId?: string; onSessionId?: (sessionId: string) => void } = {},
+    options: { resumeSessionId?: string; onSessionId?: (sessionId: string) => void; onFailure?: () => void } = {},
 ) {
     if (!prompt.trim()) return;
     const args = [
@@ -161,10 +167,16 @@ export function runWorkBuddyTurn(
     }
     if (!child) return;
     emit("agent_log", { text: `[workbuddy] spawn codebuddy model=${WORKBUDDY_MODEL} resume=${options.resumeSessionId ? "yes" : "no"}` });
-    pipeWorkBuddyEvents(child, emit, options.onSessionId, Boolean(options.resumeSessionId));
+    pipeWorkBuddyEvents(child, emit, options.onSessionId, Boolean(options.resumeSessionId), options.onFailure);
 }
 
-function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId: ((sessionId: string) => void) | undefined, workbuddyResumeFlag: boolean) {
+function pipeWorkBuddyEvents(
+    child: ChildProcess,
+    emit: AgentEmit,
+    onSessionId: ((sessionId: string) => void) | undefined,
+    workbuddyResumeFlag: boolean,
+    onFailure?: () => void,
+) {
     let out = "";
     let sessionReported = false;
     child.stdout?.on("data", (chunk) => {
@@ -217,6 +229,13 @@ function pipeWorkBuddyEvents(child: ChildProcess, emit: AgentEmit, onSessionId: 
                     ).catch(() => undefined);
                 }
                 if (failed) {
+                    // PATCH(agent-workbuddy-session-heal): 带 resume 的一轮失败时通知上层丢弃该 id。
+                    // 不这么做的话，同一个 canvas 之后**每一轮**都带着坏 id 去 resume，
+                    // 而 codebuddy 只会报 "No conversation found"，不会自动降级 ⇒ 永久卡死。
+                    if (workbuddyResumeFlag) {
+                        emit("agent_log", { text: "[workbuddy] 续接失败，已丢弃失效会话 id，下一轮开启新会话" });
+                        onFailure?.();
+                    }
                     emit("agent_event", { agent: "workbuddy", type: "turn.failed", error: { message: finalText || `codebuddy 执行失败（${String(event.subtype || "unknown")}）` } });
                 } else {
                     emit("agent_event", { agent: "workbuddy", type: "turn.completed", usage: { total_tokens: input + output, input_tokens: input, output_tokens: output } });
