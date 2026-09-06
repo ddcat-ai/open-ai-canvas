@@ -9,6 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
 import type { LocalUser } from "@/stores/use-user-store";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
+import { WorkingDots, WorkingGlow } from "@/components/ai/working-indicator";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
@@ -50,37 +51,6 @@ export function extractCanvasAgentQuickActions(text: string): CanvasAgentQuickAc
 
 const WORKING_TEXT = "正在推演...";
 
-// Agent 工作指示器：3×3 点阵对角波光。吸收自 boardui agent-thinking 的
-// wave 形态（不引 UI 资产，仅点阵节奏与降级规范）；reduced-motion 下保持静态帧。
-const WORKING_DOTS = 3;
-const WORKING_DOTS_TICK_MS = 90;
-const WORKING_DOTS_MIN_OPACITY = 0.14;
-const WORKING_DOTS_PHASE_STEP = 1 / 8;
-const WORKING_DOTS_TRAIL = 0.32;
-
-function AgentWorkingDots() {
-    const reducedMotion = useReducedMotion();
-    const [phase, setPhase] = useState(0);
-    useEffect(() => {
-        if (reducedMotion) return;
-        const timer = window.setInterval(() => setPhase((value) => (value + WORKING_DOTS_PHASE_STEP) % 1), WORKING_DOTS_TICK_MS);
-        return () => window.clearInterval(timer);
-    }, [reducedMotion]);
-    return (
-        <span aria-hidden className="grid shrink-0" style={{ gridTemplateColumns: `repeat(${WORKING_DOTS}, 4px)`, gap: 2 }}>
-            {Array.from({ length: WORKING_DOTS * WORKING_DOTS }, (_, index) => {
-                const col = index % WORKING_DOTS;
-                const row = Math.floor(index / WORKING_DOTS);
-                // 对角波相位 0..<1：波前扫过点阵后折返，读作光在格内往返。
-                const scalar = ((col + row) / (2 * (WORKING_DOTS - 1))) * (WORKING_DOTS / (WORKING_DOTS + 1));
-                const behind = (phase - scalar + 1) % 1;
-                const lit = Math.max(0, 1 - behind / WORKING_DOTS_TRAIL) ** 1.5;
-                const opacity = WORKING_DOTS_MIN_OPACITY + (1 - WORKING_DOTS_MIN_OPACITY) * lit;
-                return <span key={index} className="rounded-[1px] bg-current" style={{ width: 4, height: 4, opacity }} />;
-            })}
-        </span>
-    );
-}
 
 function AgentWorkingElapsed() {
     const [elapsed, setElapsed] = useState(0);
@@ -304,7 +274,7 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
 export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; label?: string }) {
     return (
         <div role="status" aria-live="polite" className="flex items-center gap-2.5" style={{ color: theme.node.muted }}>
-            <AgentWorkingDots />
+            <WorkingDots />
             <span className="text-sm leading-5">{label}</span>
             <AgentWorkingElapsed />
         </div>
@@ -417,15 +387,7 @@ export function AgentChatComposer({
                     boxShadow: `0 16px 40px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,0.045)`,
                 }}
             >
-                {sending && !reducedMotion ? (
-                    <motion.div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-[22px]"
-                        style={{ boxShadow: `0 0 0 1px ${theme.accent.primary}` }}
-                        animate={{ opacity: [0.3, 1, 0.3], boxShadow: [`0 0 0 1px ${theme.accent.primary}66`, `0 0 18px 2px ${theme.accent.primary}55, 0 0 0 1px ${theme.accent.primary}`, `0 0 0 1px ${theme.accent.primary}66`] }}
-                        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                ) : null}
+                {sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
                         {attachments.map((item) => (

@@ -608,6 +608,8 @@ func TestProviderPayloadErrorMessageUsesSafeActionableCategories(t *testing.T) {
 		{name: "moderation", raw: "request blocked by content policy: prompt=private", want: "安全审核"},
 		{name: "quota", raw: "insufficient quota for api-key=secret", want: "额度不足"},
 		{name: "model access", raw: "model not found for tenant secret-id", want: "模型不存在"},
+		{name: "thinking mode rejects forced tool choice", raw: `{"error":{"message":"Thinking mode does not support this tool_choice","request_id":"secret-trace"}}`, want: "不支持强制工具调用"},
+		{name: "reasoning mode rejects forced tool choice", raw: `{"error":{"message":"tool_choice=required is not supported in reasoning mode"}}`, want: "不支持强制工具调用"},
 		{name: "unknown", raw: "trace_id=private internal stack", want: "模型服务返回失败"},
 	}
 	for _, tt := range tests {
@@ -681,6 +683,12 @@ func TestProviderUserFacingErrorMessageClassifiesRejectedRequestBodies(t *testin
 			statusCode: http.StatusBadRequest,
 			body:       "",
 			want:       "请检查模型和参数",
+		},
+		{
+			name:       "thinking mode rejects forced tool choice",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"message":"Thinking mode does not support this tool_choice","request_id":"secret"}}`,
+			want:       "不支持强制工具调用",
 		},
 	}
 	for _, tt := range tests {

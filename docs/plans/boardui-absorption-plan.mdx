@@ -28,12 +28,13 @@ BoardUI 是面向 AI/agent 界面的 React 组件库（62+ 源码组件、400+ �
 | `hooks/use-count-up.ts`（数字滚动） | 抄写至 `web/src/hooks/use-count-up.ts`，保留 easeOutCubic/取消动画语义；适配项目规范：尊重 `prefers-reduced-motion`、暴露 `from` 参数 | 后台运营健康卡（活跃用户 / 生成任务 / 服务质量）数值滚动 |
 | agent-thinking（wave 点阵指示器形态） | 形态吸收至 `canvas-agent-chat-ui.tsx`：3×3 对角波光点阵 + `role="status"` + 秒数计时 + reduced-motion 静态降级（不引 UI 资产与 motion 依赖） | Canvas AI 助手工作状态 `AgentWorkingMessage` |
 | composer-loader（发送态点亮语义） | 语义吸收：发送中胶囊加主题色呼吸光环（1.6s 周期，reduced-motion 关闭） | Canvas AI 助手输入胶囊 |
+| agent-log（WorkingRow：工作行与计划分离、真实事件驱动、树线连接） | 语义吸收至创建页分镜 pending：胶囊改纯计划路线（去伪当前步高亮），新增独立活动行 `storyboard-workbench-activity`（真实状态文案 + WorkingDots + `role="status"`，复用共享组件） | 创建页 Storyboard 镜头生成中卡片 |
 
 ### 2.2 待吸收（按 rollout 计划后续执行）
 
 | BoardUI 资产 | 内容 | 本项目落点 |
 |---|---|---|
-| agent-log | Agent 执行过程日志/事件流渲染 | Canvas 任务运行面板（TaskLog 升级） |
+| agent-log 的 reveal/连接线形态（等第二消费点：画布 TaskLog 升级时抽共享组件，参考 WorkingDots 路径） | 形态参考 | Canvas 任务运行面板（TaskLog 升级，进行中） |
 | notification-center | 通知中心（含 agent 完成/失败分组） | 全局通知浮层 / 后台 |
 | styles/typography.css | text-* 排版复合类体系 | 对照 `ui-design-system.mdx` 融入 globals.css（rollout §6.2 缺口） |
 | utils/cx.ts（tailwind-merge） | 类名合并 | 与项目 `lib/utils.ts` 对齐补 cn() |
