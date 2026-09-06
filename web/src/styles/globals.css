@@ -7574,10 +7574,6 @@
         transition: opacity 150ms var(--motion-ease-out), transform 180ms var(--motion-ease-out);
     }
 
-    .canvas-node-status-track {
-        animation: canvas-node-status-in var(--motion-dur-fast-calc) var(--motion-ease-out) both;
-    }
-
     .canvas-folder-shell {
         border: 0;
         background: transparent;
@@ -9738,10 +9734,6 @@
         transition: none !important;
     }
 
-    [data-canvas-viewport-interacting="true"] .canvas-node-status-track {
-        animation-play-state: paused !important;
-    }
-
     /* 平移时优先保证世界层合成，暂时关闭每个媒体卡片的滤镜和阴影绘制。 */
     [data-canvas-viewport-interacting="true"] :where(.canvas-node-shell, .canvas-frame-shell, .canvas-folder-preview, .canvas-folder-front, .aceternity-comet-card) {
         box-shadow: none !important;
@@ -9847,11 +9839,6 @@
             opacity: 1;
             filter: saturate(1);
         }
-    }
-
-    @keyframes canvas-node-status-in {
-        from { opacity: 0; transform: translateY(-3px) scale(.96); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     @keyframes canvas-node-panel-placement-blur {
@@ -9968,7 +9955,6 @@
     .workspace-state { animation: none; }
     :where(.ant-btn:not(:disabled)):active { transform: none; }
     .canvas-node-panel-placement-change { animation: none; }
-    .canvas-node-status-track { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
