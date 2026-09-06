@@ -188,6 +188,13 @@ NodeTypeBadge、TextTooltip、LoadingState、SectionCard、PropertyRow、IconGro
 - UI kit 引用文件 20+；每批 `bun run typecheck` + dev server 编译（HTTP 200）验证通过。git 改动未提交，批次提交按 §ADR 约定进行。
 - **下一闸口**：composio Stage A token 迁移（globals.css 数值翻译 + antd skin 同步），改动会全局位移视觉，需用户目验确认后再动。
 
+**执行状态（2026-09-06）——ui-kit 消费审计 + P0 同角色迁移**：
+
+- 审计：出具 `docs/plans/ui-kit-consumption-audit.md`（660 文件全量扫描 + pages 146 文件逐域矩阵），核验 B1 归零声明与代码一致；剩余同角色残留集中在 Tooltip / Select / Switch / Segmented（画布工作区 vs 设置/后台）。
+- P0 实施：Tooltip 29 处 → ui `base/tooltip`（含 admin-shell、projects/detail 的 `mouseEnterDelay` 秒→`delay` ms、`rootClassName` 死类删除），antd Tooltip 全库归零；Switch 10 处 → ui `base/switch`（`size="small"→"sm"`），antd Switch 全库归零；朴素单选 Select 12 处 → ui `base/select`（`id`→`ariaLabel`、options 类型标注收窄 onChange），其中 `detail/canvases.tsx` 因 `suffixIcon`+`loading` 能力缺口保留 antd；Checkbox.Group 1 处（canvas-script-node 列选择器）→ ui `base/checkbox`，清理 globals.css 三段 antd 死选择器。
+- 保留与缺口：搜索/多选/远程 Select（约 24 处，含后台 19 处中多数）ui 单选壳不覆盖，待 ComboBox/多选能力补足后迁移（计划显式标注为已知缺口而非回退）；画布 11 处 Segmented 维持结构性决策；detail.tsx 归档 Alert banner 维持保留。
+- 验证：`tsc --noEmit` + `vite build` 通过（跳过与本次无关的 build:bridge 预构建）；浏览器目验清单见 `docs/content/docs/progress/pending-test.mdx`（UI 组件同角色迁移节）。git 改动未提交。
+
 ### 阶段 E：application 产品块（P3，按需立项）
 对齐 BoardUI `application/`：agent-chat（composer/history/message）、agent-thinking 指示、notification-center、app-shell、data-table 等，映射影策 AI 工作台场景（画布 AI 助手面板、生成/转写日志、通知中心）。每块立项前先有真实页面需求与 ≥2 处重复证据。
 

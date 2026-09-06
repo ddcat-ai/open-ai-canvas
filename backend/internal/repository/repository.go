@@ -285,6 +285,20 @@ func (r *Repository) DeleteUserAuthSessions(userID string) error {
 	return r.db.Delete(&model.AuthSession{}, "user_id = ?", userID).Error
 }
 
+// CountUserRowsByTable 统计目标用户在给定表（均须含 user_id 列）中的行数，供删除前守卫使用。
+func (r *Repository) CountUserRowsByTable(userID string, tables []string) (map[string]int64, error) {
+	counts := make(map[string]int64, len(tables))
+	for _, table := range tables {
+		var n int64
+		if err := r.db.Table(table).Where("user_id = ?", userID).Count(&n).Error; err != nil {
+			return nil, err
+		}
+		if n > 0 {
+			counts[table] = n
+		}
+	}
+	return counts, nil
+}
 func (r *Repository) LatestEmailVerificationCode(email string, purpose string) (*model.EmailVerificationCode, error) {
 	var code model.EmailVerificationCode
 	if err := r.db.Where("email = ? AND purpose = ? AND used_at IS NULL", email, purpose).Order("created_at desc").First(&code).Error; err != nil {

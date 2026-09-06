@@ -178,13 +178,6 @@ func migrateSchemaV6(tx *gorm.DB) error {
 	return nil
 }
 
-func migrateSchemaV7(tx *gorm.DB) error {
-	if err := tx.AutoMigrate(&model.Asset{}, &model.AssetFolder{}); err != nil {
-		return fmt.Errorf("创建个人素材分类并扩展素材目录字段：%w", err)
-	}
-	return nil
-}
-
 func migrateSchemaV8(tx *gorm.DB) error {
 	if !tx.Migrator().HasTable(&model.LogicalModel{}) {
 		return nil
@@ -198,6 +191,12 @@ func migrateSchemaV8(tx *gorm.DB) error {
 	return nil
 }
 
+func migrateSchemaV7(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.Asset{}, &model.AssetFolder{}); err != nil {
+		return fmt.Errorf("创建个人素材分类并扩展素材目录字段：%w", err)
+	}
+	return nil
+}
 func MigrateSchema(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if tx.Dialector.Name() == "postgres" {
