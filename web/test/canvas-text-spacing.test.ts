@@ -7,9 +7,9 @@ const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/c
 test("text nodes use compact, consistent spacing in edit and view states", () => {
     expect(source).toContain("Math.round(fontSize * 1.5)");
     expect(source).not.toContain("Math.round(fontSize * 1.65)");
-    expect(source).toContain("overflow-hidden pt-8");
-    expect(source).toContain("bg-transparent px-3 pb-3 pt-0 font-mono");
-    expect(source).toContain("bg-transparent px-3 pb-3 font-mono");
+    expect(source).toContain("overflow-hidden p-3");
+    expect(source).toContain("overflow-hidden p-3");
+    expect(source).toContain("min-h-0 min-w-0 flex-1");
 });
 
 test("text node dimensions remain owned by the existing node defaults", () => {
