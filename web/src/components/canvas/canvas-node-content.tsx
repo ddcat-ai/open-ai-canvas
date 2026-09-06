@@ -376,7 +376,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
 
     return (
-        <div className="flex h-full w-full flex-col overflow-hidden p-3">
+        <div className="flex h-full w-full flex-col overflow-hidden pb-3 pl-3 pr-0 pt-3">
             {isEditingContent ? (
                 <CanvasResourceMentionTextarea
                     ref={textareaRef}
