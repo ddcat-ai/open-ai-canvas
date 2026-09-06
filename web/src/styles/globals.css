@@ -7561,6 +7561,22 @@
             transform var(--motion-state) var(--ease-aceternity);
     }
 
+    .node-element {
+        animation: canvas-node-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
+    }
+
+    .canvas-node-external-header {
+        transition: opacity var(--motion-state) var(--motion-ease-out), color var(--motion-state) ease-out;
+    }
+
+    .canvas-connection-rail {
+        transition: opacity 150ms var(--motion-ease-out), transform 180ms var(--motion-ease-out);
+    }
+
+    .canvas-node-status-track {
+        animation: canvas-node-status-in var(--motion-dur-fast-calc) var(--motion-ease-out) both;
+    }
+
     .canvas-folder-shell {
         border: 0;
         background: transparent;
@@ -8031,6 +8047,7 @@
         color: var(--cn-text);
         box-shadow: var(--canvas-composer-shadow);
         padding: var(--space-3);
+        animation: canvas-composer-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
     }
 
     /* 提示词优化保持在输入框附近，使用紧凑的 Popover 作为第二层输入工具。 */
@@ -9718,6 +9735,12 @@
         transition: none !important;
     }
 
+    [data-canvas-viewport-interacting="true"] .node-element,
+    [data-canvas-viewport-interacting="true"] .canvas-node-composer,
+    [data-canvas-viewport-interacting="true"] .canvas-node-status-track {
+        animation-play-state: paused !important;
+    }
+
     /* 平移时优先保证世界层合成，暂时关闭每个媒体卡片的滤镜和阴影绘制。 */
     [data-canvas-viewport-interacting="true"] :where(.canvas-node-shell, .canvas-frame-shell, .canvas-folder-preview, .canvas-folder-front, .aceternity-comet-card) {
         box-shadow: none !important;
@@ -9823,6 +9846,21 @@
             opacity: 1;
             filter: saturate(1);
         }
+    }
+
+    @keyframes canvas-node-enter {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes canvas-node-status-in {
+        from { opacity: 0; transform: translateY(-3px) scale(.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes canvas-composer-enter {
+        from { opacity: 0; transform: translateY(8px) scale(.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     @keyframes canvas-node-panel-placement-blur {
@@ -9939,6 +9977,9 @@
     .workspace-state { animation: none; }
     :where(.ant-btn:not(:disabled)):active { transform: none; }
     .canvas-node-panel-placement-change { animation: none; }
+    .node-element,
+    .canvas-node-composer,
+    .canvas-node-status-track { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
