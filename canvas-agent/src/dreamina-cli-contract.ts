@@ -42,7 +42,7 @@ export const dreaminaVideoModelCapabilityOverrides = {
     "seedance1.0fast": { videoResolutions: ["720p"], minDuration: 5, maxDuration: 10 },
     "seedance1.5pro": { videoResolutions: ["720p"], minDuration: 5, maxDuration: 12 },
     "seedance2.0_vip": { videoResolutions: ["720p", "1080p", "4k"], minDuration: 4, maxDuration: 15 },
-    "seedance2.5": { videoResolutions: ["480p", "720p"], minDuration: 4, maxDuration: 30 },
+    "seedance2.5": { videoResolutions: ["480p", "720p", "1080p"], minDuration: 4, maxDuration: 30 },
 } as const satisfies Partial<Record<DreaminaVideoModel, DreaminaVideoModelCapability>>;
 
 export const dreaminaGenerationCapabilityMetadata = {

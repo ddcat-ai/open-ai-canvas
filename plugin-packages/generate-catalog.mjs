@@ -79,6 +79,25 @@ const asyncResponse = (kind, overrides = {}) => ({
 
 const specs = [];
 
+const markdownImageResults = { $markdownDataImages: ref("response.choices.0.message.content") };
+add({
+  id: "gemini-web2api-image", providerId: "gemini-web2api-image", name: "Gemini Web2API Image", vendor: "Gemini Web2API", capability: "image",
+  baseUrl: "", auth: bearer,
+  params: [
+    ["model", "string", true, "model", "使用代理的 gemini-image 模型，不是 gemini-3.1-pro。"],
+    ["prompt", "string", true, "messages[].content", "生图提示词。比例和风格以提示词描述。"],
+    ["images", "media[]", false, "messages[].content[].image_url", "可选参考图；需要代理支持图片输入。"]
+  ],
+  create: jsonCreate("/v1/chat/completions", { model: ref("request.model"), messages: ref("request.messages"), stream: false }),
+  response: {
+    status: conditional(gt(len(markdownImageResults), 0), "succeeded", "failed"),
+    images: markdownImageResults,
+    message: conditional(gt(len(markdownImageResults), 0), null, "图片代理未返回有效图片，请检查代理登录状态及上游生图权限。"),
+    errorPaths: ["error"], usage: ref("response.usage")
+  },
+  notes: "专用于 https://github.com/zexadev/gemini-web2api-go 的 gemini-image：POST /v1/chat/completions，以 Markdown 内的 Base64 图片返回。不是 OpenAI Images 或 Google 原生 Gemini 协议。Base URL 由管理员配置，Docker 访问宿主机需使用 host.docker.internal 并精确放行该主机。代理必须具备有效 Cookie 登录态；本插件不读取 Cookie。size/n 不生效，不发送尺寸、质量、数量、透明背景和输出格式参数；默认一次请求，不保证上游返回张数。仅接受内嵌 PNG/JPEG/WebP/GIF，纯文本、外链和损坏 Base64 不作为成功图片。"
+});
+
 function add(spec) {
   specs.push(spec);
 }

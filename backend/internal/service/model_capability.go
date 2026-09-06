@@ -126,6 +126,14 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		MaxOutputs:            15,
 	}
 	switch model.ChannelInterfaceType(protocol) {
+	case "gemini-web2api-image":
+		image.References.MaskSupported = false
+		image.Size = ImageSizeConfig{Parameter: "none", Values: []string{}, Default: "auto"}
+		image.Quality = ImageQualityConfig{Values: []string{}, Default: "auto"}
+		image.TransparentBackground = VideoBooleanConfig{}
+		image.ResponseFormat = ParameterSupport{}
+		image.OutputFormat = ParameterSupport{}
+		image.MaxOutputs = 1
 	case model.ChannelInterfaceGrokImage:
 		image.References.MaxImages = 1
 		image.References.MaskSupported = false

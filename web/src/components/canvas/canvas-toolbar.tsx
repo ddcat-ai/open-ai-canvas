@@ -52,6 +52,7 @@ export function CanvasToolbar({
     onShowImageInfoChange,
     onOpenMyAssets,
     onOpenProjectCharacters,
+    onInteractionChange,
 }: {
     selectedCount: number;
     workspaceMode: CanvasWorkspaceMode;
@@ -87,6 +88,7 @@ export function CanvasToolbar({
     onShowImageInfoChange: (show: boolean) => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    onInteractionChange?: (active: boolean) => void;
 }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
@@ -95,8 +97,17 @@ export function CanvasToolbar({
     const [addOpen, setAddOpen] = useState(false);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [pointerInside, setPointerInside] = useState(false);
+    const [focusWithin, setFocusWithin] = useState(false);
     const [panelX, setPanelX] = useState(0);
     const [prefs, setPrefs] = useState<ToolbarPrefs | null>(() => readToolbarPrefs("main"));
+    const interacting = pointerInside || focusWithin || addOpen || appearanceOpen || settingsOpen;
+
+    useEffect(() => {
+        onInteractionChange?.(interacting);
+    }, [interacting, onInteractionChange]);
+
+    useEffect(() => () => onInteractionChange?.(false), [onInteractionChange]);
 
     // 设置面板关闭后重新读取偏好（用户可能调整了排序/显隐）
     useEffect(() => {
@@ -186,7 +197,19 @@ export function CanvasToolbar({
     const createCommands = useCanvasCreateCommands(ctx, runAddAction);
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] z-[var(--z-toolbar)] flex justify-center">
+        <div
+            ref={rootRef}
+            data-canvas-no-zoom
+            data-canvas-immersive-dock
+            className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] z-[var(--z-toolbar)] flex justify-center"
+            onPointerEnter={() => setPointerInside(true)}
+            onPointerLeave={() => setPointerInside(false)}
+            onFocusCapture={() => setFocusWithin(true)}
+            onBlurCapture={(event) => {
+                if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+                setFocusWithin(false);
+            }}
+        >
             <AnimatePresence>
                 {addOpen ? (
                     <AddNodeMenu

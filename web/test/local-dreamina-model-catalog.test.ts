@@ -20,7 +20,7 @@ test("Dreamina model discovery reads only the signed Runtime catalog", async () 
                             id: "seedance2.0mini",
                             displayName: "seedance2.0mini",
                             modality: "video",
-                            operations: ["text-to-video", "image-to-video", "reference-to-video"],
+                            operations: ["text-to-video", "image-to-video", "reference-to-video", "multi-frame-to-video"],
                             adapterSupported: true,
                             accountEntitlement: "unknown",
                             currentlyObservedAvailable: "unknown",
@@ -38,6 +38,7 @@ test("Dreamina model discovery reads only the signed Runtime catalog", async () 
         adapterSupported: true,
         accountEntitlement: "unknown",
         currentlyObservedAvailable: "unknown",
+        operations: ["text-to-video", "image-to-video", "reference-to-video", "multi-frame-to-video"],
     });
     expect(catalog[0]?.settings.minDuration).toBe(4);
     expect(requests).toEqual(["/dreamina/models"]);
@@ -211,6 +212,65 @@ test("effective config projects an asynchronously arriving Dreamina catalog with
     expect(pending.videoModels).not.toContain("local:dreamina-cli:seedance2.0mini");
     expect(ready.videoModels).toContain("local:dreamina-cli:seedance2.0mini");
     expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
+});
+
+test("Dreamina model selection preserves the canonical local model ID", async () => {
+    const {
+        configuredModelMatchesCapability,
+        defaultConfig,
+        effectiveConfigWithDreamina,
+        modelDisplayName,
+        modelIcon,
+        normalizeModelOptionValue,
+        selectableModelsByCapability,
+    } = await import("../src/stores/use-config-store");
+    const { configuredModelDisplayName } = await import("../src/lib/model-selection");
+    const model = "local:dreamina-cli:5.0";
+    const config = effectiveConfigWithDreamina(defaultConfig, "ready", [
+        {
+            provider: "dreamina-cli",
+            id: "5.0",
+            displayName: "5.0",
+            modality: "image",
+            operations: ["text-to-image", "image-to-image"],
+            adapterSupported: true,
+            accountEntitlement: "unknown",
+            currentlyObservedAvailable: "unknown",
+            settings: { aliases: [], aspects: ["1:1"], maxReferenceImages: 1, tiers: ["auto"] },
+            source: "runtime-execution-contract",
+        },
+    ]);
+
+    expect(selectableModelsByCapability(config, "image")).toContain(model);
+    expect(normalizeModelOptionValue(model, config.channels)).toBe(model);
+    expect(configuredModelMatchesCapability(config, model, "image")).toBe(true);
+    expect(modelDisplayName(config, model)).toBe("即梦 5.0");
+    expect(configuredModelDisplayName(config, model)).toBe("即梦 5.0");
+    expect(modelIcon(config, model)).toBe("Jimeng");
+});
+
+test("Dreamina local video capabilities expose the Runtime modes and official limits", async () => {
+    const { defaultConfig, effectiveConfigWithDreamina } = await import("../src/stores/use-config-store");
+    const { modelCapabilityConfigFor } = await import("../src/lib/model-capabilities");
+    const config = effectiveConfigWithDreamina(defaultConfig, "ready", [
+        {
+            provider: "dreamina-cli",
+            id: "seedance2.5",
+            displayName: "seedance2.5",
+            modality: "video",
+            operations: ["text-to-video", "image-to-video", "reference-to-video", "multi-frame-to-video"],
+            adapterSupported: true,
+            accountEntitlement: "unknown",
+            currentlyObservedAvailable: "unknown",
+            settings: { aliases: [], aspects: ["16:9", "9:16"], maxReferenceImages: 30, minDuration: 4, maxDuration: 30, tiers: ["480p", "720p", "1080p"] },
+            source: "runtime-execution-contract",
+        },
+    ]);
+
+    const video = modelCapabilityConfigFor(config, "local:dreamina-cli:seedance2.5").video!;
+    expect(video.operations).toEqual(["text_to_video", "image_to_video", "reference_to_video", "multi_frame_to_video"]);
+    expect(video.references).toMatchObject({ maxImages: 30, maxVideos: 10, maxAudios: 10 });
+    expect(video.resolutions).toEqual(["480p", "720p", "1080p"]);
 });
 
 test("Dreamina catalog readiness is loading immediately and shares one in-flight bootstrap", async () => {

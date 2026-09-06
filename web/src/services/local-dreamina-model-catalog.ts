@@ -11,7 +11,7 @@ export type DreaminaLocalModel = {
     adapterSupported: boolean;
     accountEntitlement: "yes" | "no" | "unknown";
     currentlyObservedAvailable: "yes" | "no" | "unknown";
-    operations: Array<"text-to-image" | "image-to-image" | "text-to-video" | "image-to-video" | "reference-to-video">;
+    operations: Array<"text-to-image" | "image-to-image" | "text-to-video" | "image-to-video" | "reference-to-video" | "multi-frame-to-video">;
     settings: { aliases: string[]; aspects: string[]; maxReferenceImages: number; minDuration?: number; maxDuration?: number; tiers?: string[] };
     source: "runtime-execution-contract";
 };
@@ -150,7 +150,7 @@ function parseModel(value: unknown): DreaminaLocalModel {
         (model.modality === "video" && (minDuration === undefined || maxDuration === undefined))
     )
         throw new Error("Dreamina model catalog is invalid");
-    const allowed = model.modality === "image" ? ["text-to-image", "image-to-image"] : ["text-to-video", "image-to-video", "reference-to-video"];
+    const allowed = model.modality === "image" ? ["text-to-image", "image-to-image"] : ["text-to-video", "image-to-video", "reference-to-video", "multi-frame-to-video"];
     if (!model.operations.length || model.operations.some((operation) => typeof operation !== "string" || !allowed.includes(operation))) throw new Error("Dreamina model catalog is invalid");
     return {
         provider: "dreamina-cli",

@@ -68,6 +68,12 @@ func evaluateManifestValue(template any, env map[string]any) (any, error) {
 
 func evaluateManifestOperator(operator string, operand any, env map[string]any) (any, error) {
 	switch operator {
+	case "$markdownDataImages":
+		value, err := evaluateManifestValue(operand, env)
+		if err != nil {
+			return nil, err
+		}
+		return markdownDataImages(manifestString(value)), nil
 	case "$ref":
 		path, ok := operand.(string)
 		if !ok {

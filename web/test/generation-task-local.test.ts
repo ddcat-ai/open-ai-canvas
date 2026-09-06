@@ -286,6 +286,35 @@ test("a selected Dreamina local model never creates a Backend task", async () =>
     expect(backendCalls).toBe(0);
 });
 
+test("Create forwards its explicit Dreamina smart multi-frame choice to the local boundary", async () => {
+    let localInput: LocalDreaminaGenerationInput | undefined;
+    await runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "Connect two frames",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "3", vquality: "1080" },
+            referenceImages: [
+                { id: "smart-frame-1", name: "frame-1.png", type: "image/png", dataUrl: "data:image/png;base64,AQ==" },
+                { id: "smart-frame-2", name: "frame-2.png", type: "image/png", dataUrl: "data:image/png;base64,Ag==" },
+            ],
+            metadata: { videoEditOperation: "multi_frame_to_video" },
+        },
+        {
+            createTask: async () => { throw new Error("must not post /tasks"); },
+            waitTask: async () => { throw new Error("must not wait Backend task"); },
+            runLocal: async (input) => {
+                localInput = input;
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-smart-multi-frame-0001",
+            now: () => "2026-09-05T00:00:00.000Z",
+        },
+    );
+
+    expect(localInput?.videoOperation).toBe("multi_frame_to_video");
+    expect(localInput?.references.map((reference) => reference.kind ?? "image")).toEqual(["image", "image"]);
+});
+
 test("backend text generation forwards streaming callbacks and thinking options", async () => {
     let createdInput: Parameters<NonNullable<Parameters<typeof runBackendGenerationTask>[1]>["createTask"]>[0] | undefined;
     let streamedText = "";

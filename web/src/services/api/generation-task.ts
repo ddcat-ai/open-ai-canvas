@@ -242,6 +242,7 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
     try {
         const references = await localGenerationReferences([...(options.referenceImages ?? []), ...(options.mask ? [options.mask] : [])], options.referenceVideos ?? [], options.referenceAudios ?? []);
         const resolution = options.mode === "video" ? options.config.vquality : options.config.quality;
+        const videoOperation = localDreaminaVideoOperation(options);
         const result = await dependencies.runLocal(
             {
                 model: options.config.model as `local:dreamina-cli:${string}`,
@@ -253,6 +254,7 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
                     ...(options.mode === "video" ? { duration: Number(options.config.videoSeconds) } : { count: Number(options.config.count) }),
                 },
                 references,
+                ...(videoOperation ? { videoOperation } : {}),
                 resumeOnly: options.localResumeOnly,
                 idempotencyKey: runtimeId,
                 clientOperationId,
@@ -303,6 +305,14 @@ function generationOperation(options: BackendGenerationTaskOptions) {
         audioCount: options.referenceAudios?.length ?? 0,
         characterCount: 0,
     }, options.metadata?.videoEditOperation as string | undefined);
+}
+
+function localDreaminaVideoOperation(options: BackendGenerationTaskOptions): LocalDreaminaGenerationInput["videoOperation"] {
+    if (options.mode !== "video") return undefined;
+    const operation = generationOperation(options);
+    return ["text_to_video", "image_to_video", "reference_to_video", "audio_to_video", "multi_frame_to_video"].includes(operation)
+        ? operation as LocalDreaminaGenerationInput["videoOperation"]
+        : undefined;
 }
 
 export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {

@@ -214,6 +214,42 @@ test("Dreamina local generation posts only to its signed Runtime route and never
     expect(requests.some((request) => request.path.includes("/tasks"))).toBe(false);
 });
 
+test("Dreamina smart multi-frame selection is serialized as an explicit Runtime operation", async () => {
+    const requests: Array<{ path: string; body: string }> = [];
+    await runLocalDreaminaGenerationTask(
+        {
+            model: "local:dreamina-cli:seedance2.0mini",
+            mode: "video",
+            prompt: "Connect the ordered frames",
+            settings: { resolution: "1080", duration: 3 },
+            videoOperation: "multi_frame_to_video",
+            references: [
+                { kind: "image", mimeType: "image/png", bytes: new Uint8Array([1]), metadata: { name: "frame-1.png" } },
+                { kind: "image", mimeType: "image/png", bytes: new Uint8Array([2]), metadata: { name: "frame-2.png" } },
+            ],
+        },
+        {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request(path, init) {
+                    requests.push({ path, body: String(init?.body) });
+                    return jsonResponse(200, path.endsWith("/wait") ? taskEnvelope("smart-multi-frame-web-0001", "succeeded") : taskEnvelope("smart-multi-frame-web-0001", "running"));
+                },
+            },
+            idempotencyKey: () => "smart-multi-frame-web-0001",
+        },
+    );
+
+    expect(JSON.parse(requests[0]!.body)).toMatchObject({
+        operation: "multi-frame-to-video",
+        model: "seedance2.0mini",
+        prompt: "Connect the ordered frames",
+        settings: { resolution: "1080", duration: 3 },
+    });
+});
+
 test("Dreamina signed generation boundary serializes typed multimodal references and scoped task identity", async () => {
     const requests: Array<{ path: string; body: string }> = [];
     await runLocalDreaminaGenerationTask(

@@ -238,7 +238,7 @@ function parseRequest(value: unknown): DreaminaGenerationRequest {
     const settings = record(source.settings);
     const settingKeys = new Set(["aspect", "resolution", "duration", "count"]);
     if (Object.keys(settings).some((key) => !settingKeys.has(key))) throw requestInvalid();
-    const operation = safeString(source.operation, /^(?:text-to-image|image-to-image|text-to-video|image-to-video|reference-to-video)$/) as DreaminaModelOperation;
+    const operation = safeString(source.operation, /^(?:text-to-image|image-to-image|text-to-video|image-to-video|multi-frame-to-video|reference-to-video)$/) as DreaminaModelOperation;
     const duration = settings.duration === undefined ? undefined : boundedInteger(settings.duration, 1, 60);
     const count = settings.count === undefined ? undefined : boundedInteger(settings.count, 1, 4);
     if (operation.endsWith("video") && count !== undefined && count !== 1) throw requestInvalid();
@@ -311,6 +311,13 @@ function validateRequestAgainstCatalog(
     const model = models.find((candidate) => candidate.id === input.model);
     const expectedModality = input.operation === "text-to-image" || input.operation === "image-to-image" ? "image" : "video";
     if (!model || model.modality !== expectedModality || !model.operations.includes(input.operation)) throw modelUnavailable();
+    if (input.operation === "multi-frame-to-video") {
+        if (references.some((reference) => reference.kind !== "image") || imageCount < 2 || imageCount > 20) throw requestInvalid();
+        if (input.settings.resolution !== "720" && input.settings.resolution !== "720p" && input.settings.resolution !== "1080" && input.settings.resolution !== "1080p") throw modelUnavailable();
+        const duration = input.settings.duration ?? 3;
+        if (duration < (imageCount === 2 ? 2 : 1) || duration > 8) throw modelUnavailable();
+        return;
+    }
     if (input.settings.aspect && !model.settings.aspects.includes(input.settings.aspect)) throw modelUnavailable();
     if (imageCount > model.settings.maxReferenceImages) throw modelUnavailable();
     if ((input.operation === "text-to-image" || input.operation === "text-to-video") && referenceCount !== 0) throw requestInvalid();
@@ -327,7 +334,25 @@ type StagedInlineReferences = { images: string[]; videos: string[]; audios: stri
 
 function toDreaminaInput(input: DreaminaGenerationRequest, referencePaths: StagedInlineReferences): DreaminaGenerationInput {
     const common = { idempotencyKey: input.idempotencyKey, prompt: input.prompt, modelVersion: input.model };
-    const candidate: unknown = input.operation === "text-to-image"
+    const candidate: unknown = input.operation === "multi-frame-to-video"
+        ? referencePaths.images.length === 2
+            ? {
+                  operation: "multiframe2video",
+                  idempotencyKey: input.idempotencyKey,
+                  referenceImages: referencePaths.images,
+                  prompt: input.prompt,
+                  duration: input.settings.duration,
+                  videoResolution: videoResolution(input.settings.resolution),
+              }
+            : {
+                  operation: "multiframe2video",
+                  idempotencyKey: input.idempotencyKey,
+                  referenceImages: referencePaths.images,
+                  transitionPrompts: Array.from({ length: referencePaths.images.length - 1 }, () => input.prompt),
+                  ...(input.settings.duration === undefined ? {} : { transitionDurations: Array.from({ length: referencePaths.images.length - 1 }, () => input.settings.duration) }),
+                  videoResolution: videoResolution(input.settings.resolution),
+              }
+        : input.operation === "text-to-image"
         ? { operation: "text2image", ...common, ratio: input.settings.aspect, resolutionType: imageResolution(input.settings.resolution), generateNum: input.settings.count }
         : input.operation === "image-to-image"
             ? { operation: "image2image", ...common, ratio: input.settings.aspect, resolutionType: imageResolution(input.settings.resolution), generateNum: input.settings.count, referenceImages: referencePaths.images }

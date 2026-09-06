@@ -806,7 +806,10 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
 }
 
 export function encodeChannelModel(channelId: string, model: string) {
-    return `${channelId}${CHANNEL_MODEL_SEPARATOR}${model.trim()}`;
+    const normalizedModel = model.trim();
+    return channelId === "local:dreamina-cli"
+        ? `${channelId}:${normalizedModel}`
+        : `${channelId}${CHANNEL_MODEL_SEPARATOR}${normalizedModel}`;
 }
 
 export function isChannelModelValue(value: string) {
@@ -830,12 +833,21 @@ export function modelDisplayName(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const displayName = channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim();
     if (displayName) return displayName;
+    const localDisplayName = configuredLocalModelDisplayName(channel, model);
+    if (localDisplayName) return localDisplayName;
     return channel.scope === "system" ? "系统模型" : model;
 }
 
 export function modelIcon(config: AiConfig, value: string) {
     const model = modelOptionName(value);
-    return resolveModelChannel(config, value).modelCosts?.find((item) => item.model === model)?.icon || "";
+    const channel = resolveModelChannel(config, value);
+    return channel.modelCosts?.find((item) => item.model === model)?.icon || (channel.id === "local:dreamina-cli" ? "Jimeng" : "");
+}
+
+export function configuredLocalModelDisplayName(channel: ModelChannel, model: string) {
+    const displayName = channel.localModels?.find((item) => item.id === model)?.displayName?.trim();
+    if (!displayName) return "";
+    return channel.id === "local:dreamina-cli" ? `即梦 ${displayName}` : displayName;
 }
 
 export function modelOptionLabel(config: AiConfig, value: string) {

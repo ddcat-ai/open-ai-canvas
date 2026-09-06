@@ -34,7 +34,20 @@
 - 外层定位使用 `--canvas-inset-x` / `--canvas-inset-y`，与左下视图控制保持同一水平基线。
 - 简洁模式和专业模式继续使用原有 `workspaceMode` 状态，不改变节点渲染和生成逻辑。
 
-## 4. 实现地图
+## 4. 专注模式自动隐藏
+
+专注模式采用类似专业播放器的控制栏显隐策略，让画布在用户停止操作后回到纯内容状态：
+
+- 进入专注模式时先显示顶部紧凑控制栏，空闲 2.2 秒后自动淡出。
+- 在画布内移动指针、点击或进行键盘操作会立即重新显示控制栏，并重新计算空闲时间。
+- 指针或键盘焦点位于顶部控制栏、底部 Dock 或其展开面板时暂停自动隐藏，避免操作过程中控件消失。
+- 底部完整 Dock 继续由顶部「工具」按钮显式唤出；空闲后与顶部控制栏一同收起。
+- 普通画布模式不启用自动隐藏，工具栏保持原有持续可见行为。
+- 隐藏只改变控件可见性，不修改画布工具、节点选择、视口、生成任务或用户的专注模式偏好。
+
+控制栏保留在键盘焦点顺序中；隐藏状态下通过 Tab 聚焦会触发重新显示。`Escape` 退出专注模式的既有语义保持不变。
+
+## 5. 实现地图
 
 - `web/src/pages/canvas/canvas-project-top-bar.tsx`：顶部左右浮动面板，以及工作模式切换组件和下拉菜单。
 - `web/src/pages/canvas/project.tsx`：将工作模式切换定位到画布右下角，并与底部控制使用同一安全区。
@@ -42,9 +55,13 @@
 - `web/src/components/canvas/canvas-mini-map.tsx`：小地图节点缩略图、标题标注和视口拖动预览。
 - `web/src/components/canvas/canvas-overlay-layer.tsx`：画布浮层的激活层级管理，按点击和焦点提升当前浮层。
 - `web/src/lib/canvas/canvas-aceternity-style.ts`：提供 `canvasDockStyle` 样式合同。
+- `web/src/lib/canvas/immersive-toolbar-auto-hide.ts`：维护显隐、空闲计时和交互暂停状态机。
+- `web/src/hooks/use-immersive-toolbar-auto-hide.ts`：连接画布指针、键盘活动与 React 可见状态。
+- `web/src/components/canvas/canvas-focus-mode-bar.tsx`：渲染顶部控制栏的淡入淡出和焦点保持。
+- `web/src/components/canvas/canvas-toolbar.tsx`：在 Dock 或展开面板操作期间暂停自动隐藏。
 - `web/src/styles/globals.css`：维护顶部面板、控件状态和工作模式菜单的唯一样式规则。
 
-## 5. 小地图信息表达
+## 6. 小地图信息表达
 
 小地图是“定位与导航”视图，不复制完整节点内容，但必须让节点在缩略比例下仍然可识别：
 
@@ -56,7 +73,7 @@
 
 底部“适应画布”命令的语义是把当前画布内容整体纳入视口，和小地图的导航职责分开：小地图用于定位，适应画布用于一次性恢复内容总览。
 
-## 6. 响应式与交互边界
+## 7. 响应式与交互边界
 
 - 桌面端顶部左右面板保持同一顶部安全区；底部左右面板保持同一底部安全区。
 - 窄视口沿用 `--canvas-inset-y + --space-16` 的底部避让规则，避免与移动端底部工具区域重叠。
@@ -64,7 +81,7 @@
 - `prefers-reduced-motion` 下关闭或缩短面板和选项的进入动画。
 - 本次只调整控件位置和视觉层级，不改变菜单命令、模式持久化和画布操作行为。
 
-## 7. 验证与待回归
+## 8. 验证与待回归
 
 已完成：
 

@@ -311,6 +311,8 @@ test("only the final Dreamina adapter selects video CLI operations for every ref
         { name: "video-only", operation: "reference-to-video", references: [video], expected: "multimodal2video", groups: [0, 1, 0] },
         { name: "audio-only", operation: "reference-to-video", references: [audio], expected: "multimodal2video", groups: [0, 0, 1] },
         { name: "mixed", operation: "reference-to-video", references: [image, video, audio], expected: "multimodal2video", groups: [1, 1, 1] },
+        { name: "smart-two-images", operation: "multi-frame-to-video", references: [image, image], expected: "multiframe2video", groups: [2, 0, 0] },
+        { name: "smart-three-images", operation: "multi-frame-to-video", references: [image, image, image], expected: "multiframe2video", groups: [3, 0, 0] },
     ] as const;
 
     try {
@@ -331,6 +333,8 @@ test("only the final Dreamina adapter selects video CLI operations for every ref
                 (input.referenceAudios as unknown[] | undefined)?.length ?? 0,
             ], item.groups, item.name);
         }
+        assert.deepEqual(observed.at(-1)?.transitionPrompts, ["fixture", "fixture"]);
+        assert.deepEqual(observed.at(-1)?.transitionDurations, [4, 4]);
 
         await adapter.run({
             idempotencyKey: "operation-table-max-groups-0001",

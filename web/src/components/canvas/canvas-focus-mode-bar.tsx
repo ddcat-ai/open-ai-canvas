@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Bot, PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip } from "antd";
@@ -7,6 +8,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 
 type CanvasFocusModeBarProps = {
+    visible: boolean;
     dockRevealed: boolean;
     agentOpen: boolean;
     zoomPercent: number;
@@ -16,20 +18,40 @@ type CanvasFocusModeBarProps = {
     onZoomIn: () => void;
     onZoomOut: () => void;
     onFit: () => void;
+    onInteractionChange?: (active: boolean) => void;
 };
 
-export function CanvasFocusModeBar({ dockRevealed, agentOpen, zoomPercent, onToggleDock, onToggleAgent, onExit, onZoomIn, onZoomOut, onFit }: CanvasFocusModeBarProps) {
+export function CanvasFocusModeBar({ visible, dockRevealed, agentOpen, zoomPercent, onToggleDock, onToggleAgent, onExit, onZoomIn, onZoomOut, onFit, onInteractionChange }: CanvasFocusModeBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
+    const [pointerInside, setPointerInside] = useState(false);
+    const [focusWithin, setFocusWithin] = useState(false);
+    const interacting = pointerInside || focusWithin;
+
+    useEffect(() => {
+        onInteractionChange?.(interacting);
+    }, [interacting, onInteractionChange]);
+
+    useEffect(() => () => onInteractionChange?.(false), [onInteractionChange]);
 
     return (
         <motion.div
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
+            animate={visible ? { opacity: 1, y: 0 } : { opacity: 0, y: -14 }}
+            transition={reducedMotion ? { duration: 0 } : visible ? aceternityMotion.spring.panel : { duration: aceternityMotion.duration.state, ease: aceternityMotion.easing.exit }}
             className="pointer-events-auto absolute left-1/2 top-2 z-[var(--z-toolbar)] -translate-x-1/2"
+            style={{ pointerEvents: visible ? "auto" : "none" }}
+            data-canvas-immersive-toolbar
+            data-visible={visible ? "true" : "false"}
             role="toolbar"
             aria-label="专注模式工具栏"
+            onPointerEnter={() => setPointerInside(true)}
+            onPointerLeave={() => setPointerInside(false)}
+            onFocusCapture={() => setFocusWithin(true)}
+            onBlurCapture={(event) => {
+                if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+                setFocusWithin(false);
+            }}
         >
             <div className="flex items-center gap-0.5 rounded-full p-1 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, color: theme.node.text, boxShadow: "var(--workspace-overlay-shadow)" }}>
                 <Tooltip title="退出专注模式（Esc）">

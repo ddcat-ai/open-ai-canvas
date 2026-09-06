@@ -46,6 +46,13 @@ export function projectDreaminaModelCatalog(
             entries.set(key, entry);
         }
     }
+    if (schemas.some((schema) => literalString(schema.shape.operation) === "multiframe2video")) {
+        for (const entry of entries.values()) {
+            if (entry.modality !== "video") continue;
+            entry.operations.add("multi-frame-to-video");
+            entry.maxReferenceImages = Math.max(entry.maxReferenceImages, 20);
+        }
+    }
     return [...entries.values()].map((entry) => ({
         provider: "dreamina-cli",
         id: entry.id,
@@ -75,6 +82,7 @@ function catalogOperationFor(operation: string): DreaminaModelOperation | undefi
         case "image2video": return "image-to-video";
         case "frames2video":
         case "multimodal2video": return "reference-to-video";
+        case "multiframe2video": return "multi-frame-to-video";
         default: return undefined;
     }
 }

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import type { DreaminaVideoMode } from "@/lib/dreamina-video-modes";
 import { scopedLocalStorage } from "@/lib/user-scope";
 
 export type CreationModePreference = "text" | "image" | "video";
@@ -15,6 +16,7 @@ export type CreationVideoPreferences = {
     ratio?: string;
     seconds?: string;
     videoQuality?: string;
+    dreaminaMode?: DreaminaVideoMode;
 };
 
 export type CreationComposerPreferences = {
@@ -51,10 +53,12 @@ function normalizeImagePreferences(value: unknown): CreationImagePreferences | u
 function normalizeVideoPreferences(value: unknown): CreationVideoPreferences | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
     const raw = value as Record<string, unknown>;
-    const preferences = {
+    const dreaminaMode: DreaminaVideoMode | undefined = raw.dreaminaMode === "all_reference" || raw.dreaminaMode === "first_last_frames" || raw.dreaminaMode === "smart_multi_frame" ? raw.dreaminaMode : undefined;
+    const preferences: CreationVideoPreferences = {
         ...(nonEmptyString(raw.ratio) ? { ratio: raw.ratio } : {}),
         ...(nonEmptyString(raw.seconds) ? { seconds: raw.seconds } : {}),
         ...(nonEmptyString(raw.videoQuality) ? { videoQuality: raw.videoQuality } : {}),
+        ...(dreaminaMode ? { dreaminaMode } : {}),
     };
     return Object.keys(preferences).length ? preferences : undefined;
 }

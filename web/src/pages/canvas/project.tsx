@@ -69,6 +69,7 @@ import { CanvasDirectorNodePanel } from "@/components/canvas/director/canvas-dir
 import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-compare-modal";
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
+import { useImmersiveToolbarAutoHide } from "@/hooks/use-immersive-toolbar-auto-hide";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { getContextResourceNodes, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
@@ -323,6 +324,14 @@ function InfiniteCanvasPage() {
     const { tasks: activeTasks } = useCanvasActiveTasks(projectId, projectLoaded);
     const { focusMode, enterFocusMode, exitFocusMode, toggleFocusMode } = useFocusMode();
     const [focusDockRevealed, setFocusDockRevealed] = useState(false);
+    const [focusBarInteracting, setFocusBarInteracting] = useState(false);
+    const [focusDockInteracting, setFocusDockInteracting] = useState(false);
+    const focusControlsVisible = useImmersiveToolbarAutoHide({
+        enabled: focusMode && projectLoaded,
+        suspended: focusBarInteracting || focusDockInteracting,
+        surfaceRef: containerRef,
+        onIdle: () => setFocusDockRevealed(false),
+    });
 
     useEffect(() => {
         persistCanvasWorkspaceMode(workspaceMode);
@@ -2364,6 +2373,7 @@ function InfiniteCanvasPage() {
 
                             {focusMode ? (
                                 <CanvasFocusModeBar
+                                    visible={focusControlsVisible}
                                     dockRevealed={focusDockRevealed}
                                     agentOpen={assistantOpen}
                                     zoomPercent={viewport.k}
@@ -2373,6 +2383,7 @@ function InfiniteCanvasPage() {
                                     onZoomIn={zoomCanvasIn}
                                     onZoomOut={zoomCanvasOut}
                                     onFit={fitCanvasContent}
+                                    onInteractionChange={setFocusBarInteracting}
                                 />
                             ) : null}
 
@@ -2418,6 +2429,7 @@ function InfiniteCanvasPage() {
                                         openCanvasAssetLibrary();
                                     }}
                                     onOpenProjectCharacters={() => openProjectAssets("character")}
+                                    onInteractionChange={setFocusDockInteracting}
                                 />
                             ) : null}
                         </div>
