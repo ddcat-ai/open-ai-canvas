@@ -50,7 +50,69 @@ export function extractCanvasAgentQuickActions(text: string): CanvasAgentQuickAc
 
 const WORKING_TEXT = "正在推演...";
 
-export function AgentChatMessage({ item, theme, user, isStreaming = false, retrying = false, onRejectTool, onApproveTool, onQuickAction, onRetry }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; retrying?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void; onRetry?: () => void }) {
+// Agent 工作指示器：3×3 点阵对角波光。吸收自 boardui agent-thinking 的
+// wave 形态（不引 UI 资产，仅点阵节奏与降级规范）；reduced-motion 下保持静态帧。
+const WORKING_DOTS = 3;
+const WORKING_DOTS_TICK_MS = 90;
+const WORKING_DOTS_MIN_OPACITY = 0.14;
+const WORKING_DOTS_PHASE_STEP = 1 / 8;
+const WORKING_DOTS_TRAIL = 0.32;
+
+function AgentWorkingDots() {
+    const reducedMotion = useReducedMotion();
+    const [phase, setPhase] = useState(0);
+    useEffect(() => {
+        if (reducedMotion) return;
+        const timer = window.setInterval(() => setPhase((value) => (value + WORKING_DOTS_PHASE_STEP) % 1), WORKING_DOTS_TICK_MS);
+        return () => window.clearInterval(timer);
+    }, [reducedMotion]);
+    return (
+        <span aria-hidden className="grid shrink-0" style={{ gridTemplateColumns: `repeat(${WORKING_DOTS}, 4px)`, gap: 2 }}>
+            {Array.from({ length: WORKING_DOTS * WORKING_DOTS }, (_, index) => {
+                const col = index % WORKING_DOTS;
+                const row = Math.floor(index / WORKING_DOTS);
+                // 对角波相位 0..<1：波前扫过点阵后折返，读作光在格内往返。
+                const scalar = ((col + row) / (2 * (WORKING_DOTS - 1))) * (WORKING_DOTS / (WORKING_DOTS + 1));
+                const behind = (phase - scalar + 1) % 1;
+                const lit = Math.max(0, 1 - behind / WORKING_DOTS_TRAIL) ** 1.5;
+                const opacity = WORKING_DOTS_MIN_OPACITY + (1 - WORKING_DOTS_MIN_OPACITY) * lit;
+                return <span key={index} className="rounded-[1px] bg-current" style={{ width: 4, height: 4, opacity }} />;
+            })}
+        </span>
+    );
+}
+
+function AgentWorkingElapsed() {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        const started = performance.now();
+        const timer = window.setInterval(() => setElapsed(Math.floor((performance.now() - started) / 1000)), 500);
+        return () => window.clearInterval(timer);
+    }, []);
+    return <span className="shrink-0 tabular-nums opacity-55">{elapsed}s</span>;
+}
+
+export function AgentChatMessage({
+    item,
+    theme,
+    user,
+    isStreaming = false,
+    retrying = false,
+    onRejectTool,
+    onApproveTool,
+    onQuickAction,
+    onRetry,
+}: {
+    item: CanvasAgentChatMessage;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    user: LocalUser | null;
+    isStreaming?: boolean;
+    retrying?: boolean;
+    onRejectTool?: (id: string) => void;
+    onApproveTool?: (id: string) => void;
+    onQuickAction?: (prompt: string) => void;
+    onRetry?: () => void;
+}) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
@@ -78,7 +140,13 @@ export function AgentChatMessage({ item, theme, user, isStreaming = false, retry
         <div className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
             {!isUser ? <AgentAvatar theme={theme} /> : null}
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
-                {item.role === "assistant" ? <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>{item.text}</AIMessageMarkdown> : <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>}
+                {item.role === "assistant" ? (
+                    <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>
+                        {item.text}
+                    </AIMessageMarkdown>
+                ) : (
+                    <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>
+                )}
                 {item.role === "error" && onRetry ? (
                     <Button size="small" className="mt-2 !h-7" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
                         {retrying ? "重试中" : "重试本轮"}
@@ -121,9 +189,13 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
                             <span>确认工具调用</span>
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>
+                                等待确认
+                            </span>
                         </div>
-                        <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
+                        <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>
+                            {summary}
+                        </div>
                     </div>
                 </div>
                 {impact?.operationCount ? (
@@ -134,11 +206,27 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                             <ImpactMetric label="删除" value={impact.destructiveCount} attention={impact.destructiveCount > 0} theme={theme} />
                             <ImpactMetric label="生成" value={impact.generationCount} attention={impact.generationCount > 0} theme={theme} />
                         </div>
-                        {impact.items.length ? <div className="mt-3 space-y-1.5">{impact.items.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}><span className="mt-2 size-1 shrink-0 rounded-full bg-current" /><span>{item}</span></div>)}</div> : null}
+                        {impact.items.length ? (
+                            <div className="mt-3 space-y-1.5">
+                                {impact.items.map((item, index) => (
+                                    <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}>
+                                        <span className="mt-2 size-1 shrink-0 rounded-full bg-current" />
+                                        <span>{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
                         {impact.warning ? <div className="mt-3 rounded-md bg-amber-500/[.08] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
                     </div>
                 ) : null}
-                {detail ? <details className="mt-3 pt-1"><summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>技术详情</summary><AgentDetailBlock detail={detail} theme={theme} /></details> : null}
+                {detail ? (
+                    <details className="mt-3 pt-1">
+                        <summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>
+                            技术详情
+                        </summary>
+                        <AgentDetailBlock detail={detail} theme={theme} />
+                    </details>
+                ) : null}
                 {onReject || onApprove ? (
                     <div className="mt-4 grid grid-cols-2 gap-2">
                         <Button danger className="!h-9" icon={<XCircle className="size-4" />} onClick={() => onReject?.()}>
@@ -155,7 +243,16 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
 }
 
 function ImpactMetric({ label, value, attention = false, theme }: { label: string; value: number; attention?: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    return <div className="px-1 py-1"><div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
+    return (
+        <div className="px-1 py-1">
+            <div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                {label}
+            </div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>
+                {value}
+            </div>
+        </div>
+    );
 }
 
 function agentImpactFromDetail(detail: unknown) {
@@ -187,7 +284,11 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: state.color, background: state.softBg }}>
                                 {state.label}
                             </span>
-                            {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
+                            {detail ? (
+                                <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>
+                                    详情
+                                </span>
+                            ) : null}
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: state.isError ? state.color : theme.node.muted }}>
                             {text}
@@ -200,20 +301,12 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
     );
 }
 
-export function AgentWorkingMessage({ theme }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    const [length, setLength] = useState(1);
-    useEffect(() => {
-        const timer = window.setInterval(() => setLength((value) => (value >= WORKING_TEXT.length + 4 ? 1 : value + 1)), 120);
-        return () => window.clearInterval(timer);
-    }, [setLength]);
+export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; label?: string }) {
     return (
-        <div className="flex items-start gap-2.5">
-            <AgentAvatar theme={theme} />
-            <div className="min-w-0 max-w-[82%]">
-                <div className="font-mono text-sm" style={{ color: theme.node.muted }} aria-label={WORKING_TEXT}>
-                    <span className="inline-block w-[96px]">{WORKING_TEXT.slice(0, Math.min(length, WORKING_TEXT.length))}</span>
-                </div>
-            </div>
+        <div role="status" aria-live="polite" className="flex items-center gap-2.5" style={{ color: theme.node.muted }}>
+            <AgentWorkingDots />
+            <span className="text-sm leading-5">{label}</span>
+            <AgentWorkingElapsed />
         </div>
     );
 }
@@ -275,11 +368,7 @@ export function AgentChatComposer({
 
     const applySlashSkill = (skill: Skill) => {
         const token = `@[skill:${skill.skill_id}] `;
-        const next = slash
-            ? `${prompt.slice(0, slash.start)}${token}${prompt.slice(slash.start + slash.query.length)}`
-            : prompt
-                ? `${prompt.replace(/\s+$/u, "")} ${token}`
-                : token;
+        const next = slash ? `${prompt.slice(0, slash.start)}${token}${prompt.slice(slash.start + slash.query.length)}` : prompt ? `${prompt.replace(/\s+$/u, "")} ${token}` : token;
         setSlash(null);
         setSlashIndex(0);
         onPromptChange(next);
@@ -321,20 +410,35 @@ export function AgentChatComposer({
     return (
         <div className="px-3 pb-3 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
             <div
-                className="group/composer rounded-[22px] px-3 pb-2.5 pt-3 transition-[background-color,box-shadow,transform] duration-200 focus-within:-translate-y-px"
+                className="group/composer relative rounded-[22px] px-3 pb-2.5 pt-3 transition-[background-color,box-shadow,transform] duration-200 focus-within:-translate-y-px"
                 style={{
                     background: theme.node.fill,
                     color: theme.accent.primary,
                     boxShadow: `0 16px 40px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,0.045)`,
                 }}
             >
+                {sending && !reducedMotion ? (
+                    <motion.div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-[22px]"
+                        style={{ boxShadow: `0 0 0 1px ${theme.accent.primary}` }}
+                        animate={{ opacity: [0.3, 1, 0.3], boxShadow: [`0 0 0 1px ${theme.accent.primary}66`, `0 0 18px 2px ${theme.accent.primary}55, 0 0 0 1px ${theme.accent.primary}`, `0 0 0 1px ${theme.accent.primary}66`] }}
+                        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                ) : null}
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
                         {attachments.map((item) => (
                             <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-md" title={item.name}>
                                 <img src={item.url} alt={item.name} className="size-full object-cover" />
                                 {onRemoveAttachment ? (
-                                    <button type="button" className="absolute right-1 top-1 grid size-5 place-items-center rounded-full opacity-0 shadow-sm transition group-hover:opacity-100" style={{ background: theme.toolbar.panel, color: theme.node.text }} onClick={() => onRemoveAttachment(item.id)} aria-label="移除图片">
+                                    <button
+                                        type="button"
+                                        className="absolute right-1 top-1 grid size-5 place-items-center rounded-full opacity-0 shadow-sm transition group-hover:opacity-100"
+                                        style={{ background: theme.toolbar.panel, color: theme.node.text }}
+                                        onClick={() => onRemoveAttachment(item.id)}
+                                        aria-label="移除图片"
+                                    >
                                         <X className="size-3" />
                                     </button>
                                 ) : null}
@@ -387,12 +491,27 @@ export function AgentChatComposer({
                     <div className="flex min-w-0 items-center gap-1">
                         {onAddFiles ? (
                             <>
-                                <input ref={fileInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
-                                    void onAddFiles(event.target.files);
-                                    event.target.value = "";
-                                }} />
+                                <input
+                                    ref={fileInputRef}
+                                    hidden
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={(event) => {
+                                        void onAddFiles(event.target.files);
+                                        event.target.value = "";
+                                    }}
+                                />
                                 <Tooltip title="上传图片">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
+                                    <Button
+                                        type="text"
+                                        shape="circle"
+                                        className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95"
+                                        disabled={sending}
+                                        style={{ color: theme.node.muted }}
+                                        icon={<ImagePlus className="size-4" />}
+                                        onClick={() => fileInputRef.current?.click()}
+                                    />
                                 </Tooltip>
                             </>
                         ) : null}
@@ -430,13 +549,33 @@ export function AgentChatComposer({
     );
 }
 
-export function AgentPanelTabs<T extends string>({ value, items, theme, right, onChange }: { value: T; items: { value: T; label: string; icon?: ReactNode; count?: number }[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; right?: ReactNode; onChange: (value: T) => void }) {
+export function AgentPanelTabs<T extends string>({
+    value,
+    items,
+    theme,
+    right,
+    onChange,
+}: {
+    value: T;
+    items: { value: T; label: string; icon?: ReactNode; count?: number }[];
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    right?: ReactNode;
+    onChange: (value: T) => void;
+}) {
     return (
         <div className="shrink-0 px-3 pb-1">
             <div className="flex min-h-8 items-center justify-between gap-2 rounded-lg px-0.5 py-0.5" style={{ background: "transparent" }}>
                 <nav className="grid min-w-0 flex-1 grid-flow-col auto-cols-fr items-center gap-0.5 text-[var(--fs-label)]" role="tablist" aria-label="Agent 面板">
                     {items.map((item) => (
-                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`} style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item.value)}>
+                        <button
+                            key={item.value}
+                            type="button"
+                            role="tab"
+                            aria-selected={value === item.value}
+                            className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`}
+                            style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }}
+                            onClick={() => onChange(item.value)}
+                        >
                             <span className="shrink-0">{item.icon}</span>
                             <span className="min-w-0 truncate">{item.label}</span>
                             {item.count ? <span className="shrink-0 tabular-nums opacity-60">{item.count}</span> : null}
@@ -491,7 +630,8 @@ function toolCardState(title: string, text: string, detail?: unknown) {
     if (objectField(detail, "status") === "noop" || /未生效|无需|没有找到|没有.*可|已存在/.test(raw)) return { label: "未生效", color: "#d97706", softBg: "rgba(217,119,6,.04)", icon: <CircleAlert className="size-4" />, isError: false };
     if (/拒绝|取消/.test(raw) || lower.includes("rejected")) return { label: "拒绝执行", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
     if (/失败|错误/.test(raw) || lower.includes("failed") || lower.includes("error")) return { label: "执行失败", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
-    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded")) return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
+    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded"))
+        return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
     return { label: "工具调用", color: "#2563eb", softBg: "rgba(37,99,235,.04)", icon: <Wrench className="size-4" />, isError: false };
 }
 
