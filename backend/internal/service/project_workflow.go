@@ -494,7 +494,11 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 	if strings.TrimSpace(input.MediaType) == "" && strings.TrimSpace(input.ResourceID) != "" {
 		input.MediaType = taskOutputMediaType(task.Type)
 	}
-	if strings.TrimSpace(input.WorkflowStepID) == "" {
+	// D-055 乙案：闸门从「无步骤一律放弃」放宽为「无步骤但有镜头仍落产物」。
+	// 原行为全保留：无步骤且无镜头 → 静默跳过；有步骤 → 走完整步骤登记。
+	hasStep := strings.TrimSpace(input.WorkflowStepID) != ""
+	hasShot := strings.TrimSpace(input.ShotID) != ""
+	if !hasStep && !hasShot {
 		return nil
 	}
 	projectID := strings.TrimSpace(input.DomainProjectID)
@@ -504,7 +508,14 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 		}
 	}
 	if projectID == "" {
-		return errors.New("任务未提供短剧项目 ID，无法登记产物")
+		if hasStep {
+			return errors.New("任务未提供短剧项目 ID，无法登记产物")
+		}
+		// 无步骤语境下解析不出项目：维持旧静默语义，不阻塞任务收口。
+		return nil
+	}
+	if !hasStep {
+		return s.registerShotArtifactWithoutStep(task, projectID, input.ShotID, input.ShotRevisionID, input.ArtifactType, input.ResourceID, input.MediaType, input.MetadataJSON)
 	}
 	if strings.TrimSpace(input.ResourceID) != "" && strings.TrimSpace(input.AssetVersionID) == "" && strings.TrimSpace(input.ShotID) != "" {
 		assetVersionID, assetErr := s.ensureGeneratedProjectAsset(task, projectID, input.ShotID, input.ResourceID, input.MediaType)
@@ -515,6 +526,62 @@ func (s *Service) RegisterTaskOutputFromTask(task model.Task) error {
 	}
 	_, err = s.RegisterTaskOutput(task.UserID, projectID, input.WorkflowStepID, RegisterTaskOutputRequest{TaskID: task.ID, CanvasID: input.CanvasID, UnitID: input.UnitID, ShotID: input.ShotID, ShotRevisionID: input.ShotRevisionID, ArtifactType: input.ArtifactType, AssetVersionID: input.AssetVersionID, ResourceID: input.ResourceID, MediaType: input.MediaType, Role: input.Role, MetadataJSON: input.MetadataJSON, OutputJSON: task.ResultJSON})
 	return err
+}
+
+// registerShotArtifactWithoutStep（D-055 乙案）：
+// 为「无工作流步骤语境但镜头明确」的成功生成任务直接登记镜头产物。
+//
+// 语义边界：
+//   - 只建 shot_artifacts 行（幂等走统一入口 createOrGetShotArtifactTx：
+//     按 (task_id, shot_id, type) 去重、版本分配、旧版本 selected 清零）；
+//   - 不写资产库（asset/representation）、不写 ProductionTaskLink、不动任何
+//     workflow 步骤/实例状态——那些语义都属于步骤语境；
+//   - 静默跳过：无镜头、无输出资源、产物类型推导不出——登记是尽力而为，
+//     绝不阻塞任务收口；但镜头不存在/资源不存在/修订版不属于镜头仍报错
+//     （数据矛盾必须暴露）。
+//   - artifactType 缺省时从任务类型推导（canvas_video → video 等）。
+func (s *Service) registerShotArtifactWithoutStep(task model.Task, projectID string, shotID string, shotRevisionID string, artifactType string, resourceID string, mediaType string, metadataJSON string) error {
+	shotID = strings.TrimSpace(shotID)
+	resourceID = strings.TrimSpace(resourceID)
+	if shotID == "" || resourceID == "" {
+		return nil
+	}
+	if artifactType == "" {
+		switch {
+		case strings.HasSuffix(strings.ToLower(task.Type), "_video"):
+			artifactType = "video"
+		case strings.HasSuffix(strings.ToLower(task.Type), "_image"):
+			artifactType = "image"
+		case strings.HasSuffix(strings.ToLower(task.Type), "_audio"):
+			artifactType = "audio"
+		}
+	}
+	if artifactType == "" {
+		return nil
+	}
+	if _, err := s.activeProjectForUser(task.UserID, projectID); err != nil {
+		return err
+	}
+	shot, err := s.repo.ShotForProject(projectID, shotID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.repo.ResourceForUser(task.UserID, resourceID); err != nil {
+		return err
+	}
+	revisionID := strings.TrimSpace(shotRevisionID)
+	if revisionID == "" {
+		revisionID = shot.CurrentRevisionID
+	} else if _, err := s.repo.ShotRevisionForShot(shot.ID, revisionID); err != nil {
+		return err
+	}
+	metadata := strings.TrimSpace(metadataJSON)
+	if metadata == "" {
+		metadata = "{}"
+	}
+	now := time.Now()
+	artifact := &model.ShotArtifact{ID: newID(), ProjectID: projectID, UnitID: shot.UnitID, ShotID: shot.ID, RevisionID: revisionID, TaskID: task.ID, Type: artifactType, ResourceID: resourceID, Status: model.ShotArtifactStatusReady, Selected: true, MetadataJSON: metadata, CreatedAt: now, UpdatedAt: now}
+	return s.repo.SaveShotArtifactForTask(artifact)
 }
 
 func taskOutputMediaType(taskType string) string {

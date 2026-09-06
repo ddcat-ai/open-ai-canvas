@@ -525,6 +525,80 @@ func TestUpdateChapterSourceInvalidatesAllUnitArtifacts(t *testing.T) {
 	}
 }
 
+// D-055 乙案：无 workflowStepId 但有 shotId 的成功任务仍要落镜头产物（幂等）。
+func TestRegisterTaskOutputFromTaskWithoutStepPersistsShotArtifact(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, unit := seedWorkflowProject(t, db)
+	shot, err := service.CreateProjectShot("user-1", project.ID, CreateProjectShotRequest{UnitID: unit.ID, Title: "SC.01", Description: "无步骤语境", DurationMs: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	resource := model.Resource{ID: "resource-video-nostep", UserID: "user-1", Kind: "video", Status: model.ResourceStatusReady, MimeType: "video/mp4", Size: 1024, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "task-nostep-1", UserID: "user-1", ProjectID: project.ID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+		InputJSON:  `{"metadata":{"domainProjectId":"` + project.ID + `","unitId":"` + unit.ID + `","shotId":"` + shot.ID + `","artifactType":"video"}}`,
+		ResultJSON: `{"mode":"video","video":{"resourceId":"resource-video-nostep","storageKey":"resource:resource-video-nostep","mimeType":"video/mp4"}}`, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RegisterTaskOutputFromTask(task); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RegisterTaskOutputFromTask(task); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := db.Table("shot_artifacts").Where("task_id = ?", task.ID).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("shot_artifacts count = %d, error = %v (want exactly 1, idempotent)", count, err)
+	}
+	var artifact model.ShotArtifact
+	if err := db.First(&artifact, "task_id = ?", task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if artifact.Status != "ready" || !artifact.Selected || artifact.Type != "video" {
+		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	if artifact.RevisionID != shot.CurrentRevisionID {
+		t.Fatalf("artifact revision = %q, want current revision %q", artifact.RevisionID, shot.CurrentRevisionID)
+	}
+	// 无步骤语境不得产生任何 workflow 记账
+	var stepTaskCount int64
+	if err := db.Table("workflow_step_tasks").Where("task_id = ?", task.ID).Count(&stepTaskCount).Error; err != nil || stepTaskCount != 0 {
+		t.Fatalf("workflow_step_tasks count = %d, error = %v (want 0)", stepTaskCount, err)
+	}
+	var productionLinkCount int64
+	if err := db.Table("production_task_links").Where("task_id = ?", task.ID).Count(&productionLinkCount).Error; err != nil || productionLinkCount != 0 {
+		t.Fatalf("production_task_links count = %d, error = %v (want 0)", productionLinkCount, err)
+	}
+}
+
+// D-055 乙案回归护栏：无步骤且无镜头的任务保持旧静默行为，什么都不写。
+func TestRegisterTaskOutputFromTaskWithoutStepAndShotKeepsSilent(t *testing.T) {
+	service, db := newProjectWorkflowV2TestService(t)
+	project, _ := seedWorkflowProject(t, db)
+	now := time.Now()
+	resource := model.Resource{ID: "resource-video-plain", UserID: "user-1", Kind: "video", Status: model.ResourceStatusReady, MimeType: "video/mp4", Size: 1024, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "task-plain-1", UserID: "user-1", ProjectID: project.ID, Type: "canvas_video", Status: model.TaskStatusSucceeded,
+		InputJSON:  `{"metadata":{"domainProjectId":"` + project.ID + `"}}`,
+		ResultJSON: `{"mode":"video","video":{"resourceId":"resource-video-plain","storageKey":"resource:resource-video-plain","mimeType":"video/mp4"}}`, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RegisterTaskOutputFromTask(task); err != nil {
+		t.Fatalf("无步骤无镜头应静默成功，got %v", err)
+	}
+	var artifactCount int64
+	if err := db.Table("shot_artifacts").Where("task_id = ?", task.ID).Count(&artifactCount).Error; err != nil || artifactCount != 0 {
+		t.Fatalf("shot_artifacts count = %d, error = %v (want 0)", artifactCount, err)
+	}
+}
+
 func TestRegisterTaskOutputAcceptsLinkedCanvasAndCreatesShotArtifact(t *testing.T) {
 	service, db := newProjectWorkflowV2TestService(t)
 	project, unit := seedWorkflowProject(t, db)

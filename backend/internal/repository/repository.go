@@ -2595,6 +2595,25 @@ func (r *Repository) RegisterWorkflowTaskOutput(step *model.WorkflowStepInstance
 	})
 }
 
+// SaveShotArtifactForTask（D-055 乙案）：无工作流步骤语境的镜头产物登记。
+// 只做 shot_artifacts 单表幂等写入——复用统一入口 createOrGetShotArtifactTx
+// （按 (task_id, shot_id, type) 去重、版本分配、旧版本 selected 清零），
+// 不触碰 workflow 步骤/实例、ProductionTaskLink、资产库与项目 revision。
+func (r *Repository) SaveShotArtifactForTask(artifact *model.ShotArtifact) error {
+	if artifact == nil {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if _, _, err := createOrGetShotArtifactTx(tx, artifact, ArtifactIdempotencyKey{
+			Kind:   ArtifactIdemByTask,
+			TaskID: artifact.TaskID,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func (r *Repository) CanvasShareForProject(userID string, projectID string) (*model.CanvasShare, error) {
 	var share model.CanvasShare
 	if err := r.db.First(&share, "user_id = ? AND project_id = ?", userID, projectID).Error; err != nil {
