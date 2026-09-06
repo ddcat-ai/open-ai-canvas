@@ -10,9 +10,10 @@ function isVideo(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Vi
 function isAudio(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Audio; }
 function isText(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Text; }
 function isConfig(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Config; }
-function hasImage(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.content); }
-function hasVideo(ctx: ToolContext) { return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content); }
-function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content); }
+function hasImage(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
+function hasVideo(ctx: ToolContext) { return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
+function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
+function isEmptyMedia(ctx: ToolContext) { return (isImage(ctx) || isVideo(ctx) || isAudio(ctx)) && !hasImage(ctx) && !hasVideo(ctx) && !hasAudio(ctx); }
 function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId); }
 function isEditableText(ctx: ToolContext) { return isText(ctx) && !isCharacterReference(ctx); }
 function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || isImage(ctx) || isVideo(ctx); }
@@ -40,6 +41,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
             order: 10,
             section: "节点管理",
         },
+        applicable: (ctx) => !isEmptyMedia(ctx),
         run: (ctx) => ctx.handlers.onNodeInfo(ctx.node!),
     },
     {
@@ -53,6 +55,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultOrder: 20,
         nodeToolbar: { group: "more", order: 1000, section: "危险操作" },
         danger: true,
+        applicable: (ctx) => !isEmptyMedia(ctx),
         run: (ctx) => ctx.handlers.onNodeDelete(ctx.node!),
     },
     // 节点操作工具组——通过 applicable 谓词实现上下文感知
@@ -147,7 +150,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultVisible: true,
         defaultOrder: 70,
         nodeToolbar: { group: (ctx) => isEditableText(ctx) ? "primary" : "more", order: 20, section: "生成信息" },
-        applicable: canOpenDialog,
+        applicable: (ctx) => canOpenDialog(ctx) && !isEmptyMedia(ctx),
         run: (ctx) => ctx.handlers.onNodeToggleDialog(ctx.node!),
     },
     {
@@ -292,6 +295,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultOrder: 160,
         nodeToolbar: { group: "more", order: 900, section: "节点管理" },
         active: (ctx) => Boolean(ctx.nodeMetadata?.locked),
+        applicable: (ctx) => !isEmptyMedia(ctx),
         run: (ctx) => ctx.handlers.onNodeToggleLocked(ctx.node!),
     },
 ];
