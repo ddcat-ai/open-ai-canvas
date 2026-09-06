@@ -476,7 +476,7 @@ test("安全验收：写工具不得进入 read 名单（必须过 confirmation 
     const readMatch = /export function isProjectAgentReadTool[\s\S]*?\n}/.exec(source);
     assert.ok(readMatch, "应能定位 isProjectAgentReadTool 实现");
     const body = readMatch[0];
-    const writeTools = ["project_retry_shot", "project_regenerate_shot", "project_create_or_update_shots", "project_confirm_asset_candidate", "project_select_artifact", "project_review_shot"];
+    const writeTools = ["project_retry_shot", "project_regenerate_shot", "project_create_or_update_shots", "project_confirm_asset_candidate", "project_select_artifact", "project_review_shot", "project_generate_shot"];
     for (const writeTool of writeTools) {
         assert.ok(!body.includes(writeTool), `写工具 ${writeTool} 不得进入 read 名单`);
     }

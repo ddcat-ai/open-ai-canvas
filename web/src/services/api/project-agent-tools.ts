@@ -14,6 +14,7 @@ import {
 import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
 import { regenerateShot, reviewShot, retryShotTask, selectShotArtifact } from "./generation-task";
 import { distillShotContext, latestShotTask } from "./shot-context";
+import { generateShot } from "./shot-generate";
 
 export { distillShotContext, latestShotTask } from "./shot-context";
 export type { ShotContextSummary } from "./shot-context";
@@ -34,6 +35,7 @@ export const projectAgentToolNames = [
     "project_regenerate_shot",
     "project_select_artifact",
     "project_review_shot",
+    "project_generate_shot",
 ] as const;
 
 export type ProjectAgentToolName = (typeof projectAgentToolNames)[number];
@@ -127,6 +129,16 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
         }
         const reason = String(rawInput.reason || "").trim() || undefined;
         return { review: await reviewShot(projectId, shotId, action, reason) };
+    }
+    if (name === "project_generate_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const result = await generateShot(projectId, {
+            shotId,
+            ...(rawInput.videoSeconds !== undefined ? { videoSeconds: Number(rawInput.videoSeconds) } : {}),
+            ...(typeof rawInput.resolution === "string" && rawInput.resolution.trim() ? { resolution: rawInput.resolution.trim() } : {}),
+            ...(Array.isArray(rawInput.referenceImageUrls) ? { referenceImageUrls: rawInput.referenceImageUrls.map((item) => String(item)).filter(Boolean) } : {}),
+        });
+        return { task: result };
     }
     throw new Error(`未知项目工具：${name}`);
 }
