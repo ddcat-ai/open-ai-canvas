@@ -180,11 +180,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                                                             {item.title}
                                                         </button>
                                                     )}
-                                                    {isDeleted ? (
-                                                        <StatusBadge tone="error" size="sm" label="已删除" className="m-0" />
-                                                    ) : (
-                                                        <StatusBadge tone="success" size="sm" label="活跃中" className="m-0" />
-                                                    )}
+                                                    {isDeleted ? <StatusBadge tone="error" size="sm" label="已删除" className="m-0" /> : <StatusBadge tone="success" size="sm" label="活跃中" className="m-0" />}
                                                 </div>
 
                                                 <div className="space-y-1 text-xs text-stone-600 dark:text-stone-300">

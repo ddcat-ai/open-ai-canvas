@@ -30,14 +30,7 @@ export interface CheckboxGroupProps<V extends string = string> {
     className?: string;
 }
 
-export function CheckboxGroup<V extends string = string>({
-    value = [],
-    onChange,
-    options,
-    disabled = false,
-    ariaLabel,
-    className,
-}: CheckboxGroupProps<V>) {
+export function CheckboxGroup<V extends string = string>({ value = [], onChange, options, disabled = false, ariaLabel, className }: CheckboxGroupProps<V>) {
     const toggle = (optionValue: V, checked: boolean) => {
         if (disabled) return;
         const next = checked ? [...value, optionValue] : value.filter((item) => item !== optionValue);
@@ -47,12 +40,7 @@ export function CheckboxGroup<V extends string = string>({
     return (
         <div data-slot="checkbox-group" role="group" aria-label={ariaLabel} className={className}>
             {options.map((option) => (
-                <Checkbox
-                    key={option.value}
-                    checked={value.includes(option.value)}
-                    disabled={disabled || option.disabled}
-                    onChange={(event) => toggle(option.value, event.target.checked)}
-                >
+                <Checkbox key={option.value} checked={value.includes(option.value)} disabled={disabled || option.disabled} onChange={(event) => toggle(option.value, event.target.checked)}>
                     {option.label}
                 </Checkbox>
             ))}

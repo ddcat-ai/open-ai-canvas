@@ -35,16 +35,7 @@ const BOX_SIZE: Record<"sm" | "md", string> = {
     md: "size-4 rounded",
 };
 
-export function Checkbox({
-    size = "md",
-    indeterminate = false,
-    children,
-    bare = false,
-    className,
-    disabled,
-    checked,
-    ...props
-}: CheckboxProps) {
+export function Checkbox({ size = "md", indeterminate = false, children, bare = false, className, disabled, checked, ...props }: CheckboxProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
 
     useLayoutEffect(() => {
@@ -55,14 +46,7 @@ export function Checkbox({
 
     const inner = (
         <>
-            <input
-                ref={inputRef}
-                type="checkbox"
-                disabled={disabled}
-                checked={checked}
-                className="peer sr-only"
-                {...props}
-            />
+            <input ref={inputRef} type="checkbox" disabled={disabled} checked={checked} className="peer sr-only" {...props} />
             <span
                 aria-hidden="true"
                 data-indeterminate={indeterminate || undefined}
@@ -77,17 +61,11 @@ export function Checkbox({
                 )}
             >
                 {/* checked 勾（indeterminate 时隐藏，改显短横线） */}
-                <svg
-                    viewBox="0 0 12 12"
-                    className={cn("size-3 stroke-current stroke-[2.2]", indeterminate ? "hidden" : "block")}
-                >
+                <svg viewBox="0 0 12 12" className={cn("size-3 stroke-current stroke-[2.2]", indeterminate ? "hidden" : "block")}>
                     <path d="M2.5 6.5 L5 9 L9.5 3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {/* indeterminate 短横线 */}
-                <svg
-                    viewBox="0 0 12 12"
-                    className={cn("size-3 stroke-current stroke-[2]", indeterminate ? "block" : "hidden")}
-                >
+                <svg viewBox="0 0 12 12" className={cn("size-3 stroke-current stroke-[2]", indeterminate ? "block" : "hidden")}>
                     <path d="M2.8 6 H9.2" fill="none" strokeLinecap="round" />
                 </svg>
             </span>
@@ -95,32 +73,13 @@ export function Checkbox({
     );
 
     if (bare) {
-        return (
-            <span
-                className={cn(
-                    "group/checkbox inline-flex items-center",
-                    disabled && "cursor-not-allowed",
-                    className,
-                )}
-            >
-                {inner}
-            </span>
-        );
+        return <span className={cn("group/checkbox inline-flex items-center", disabled && "cursor-not-allowed", className)}>{inner}</span>;
     }
 
     return (
-        <label
-            data-slot="checkbox"
-            className={cn(
-                "group/checkbox inline-flex cursor-pointer select-none items-center gap-2 align-middle",
-                disabled && "cursor-not-allowed",
-                className,
-            )}
-        >
+        <label data-slot="checkbox" className={cn("group/checkbox inline-flex cursor-pointer select-none items-center gap-2 align-middle", disabled && "cursor-not-allowed", className)}>
             {inner}
-            {children !== undefined && (
-                <span className={cn("text-sm leading-none text-foreground", disabled && "opacity-60")}>{children}</span>
-            )}
+            {children !== undefined && <span className={cn("text-sm leading-none text-foreground", disabled && "opacity-60")}>{children}</span>}
         </label>
     );
 }

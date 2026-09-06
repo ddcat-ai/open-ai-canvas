@@ -544,7 +544,11 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
         bubbleItems.push({
             key: "error",
             role: "system",
-            content: <Callout className="canvas-prompt-optimizer-alert" tone="error" title="优化失败">{error}</Callout>,
+            content: (
+                <Callout className="canvas-prompt-optimizer-alert" tone="error" title="优化失败">
+                    {error}
+                </Callout>
+            ),
         });
     }
 

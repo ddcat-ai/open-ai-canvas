@@ -42,33 +42,15 @@ export function Callout({ tone = "default", title, icon, action, onClose, closeL
     const resolved = tone === "default" ? "info" : tone;
     const Icon = icon ?? calloutIconByTone[resolved];
     return (
-        <div
-            data-slot="callout"
-            data-tone={resolved}
-            className={cn(
-                "flex items-start gap-2.5 rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5",
-                className,
-            )}
-            {...props}
-        >
+        <div data-slot="callout" data-tone={resolved} className={cn("flex items-start gap-2.5 rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5", className)} {...props}>
             <Icon
                 aria-hidden
                 strokeWidth={1.75}
-                className={cn(
-                    "mt-px size-4 shrink-0",
-                    resolved === "success" && "text-status-success",
-                    resolved === "warning" && "text-status-warning",
-                    resolved === "error" && "text-status-error",
-                    resolved === "info" && "text-muted-foreground",
-                )}
+                className={cn("mt-px size-4 shrink-0", resolved === "success" && "text-status-success", resolved === "warning" && "text-status-warning", resolved === "error" && "text-status-error", resolved === "info" && "text-muted-foreground")}
             />
             <div className="min-w-0 flex-1">
                 {title != null ? <p className="text-caption font-medium text-foreground">{title}</p> : null}
-                {children != null ? (
-                    <div className={cn("text-caption leading-relaxed text-muted-foreground", title != null && "mt-0.5")}>
-                        {children}
-                    </div>
-                ) : null}
+                {children != null ? <div className={cn("text-caption leading-relaxed text-muted-foreground", title != null && "mt-0.5")}>{children}</div> : null}
             </div>
             {action != null || onClose != null ? (
                 <div className="flex shrink-0 items-start gap-1">

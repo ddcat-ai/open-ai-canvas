@@ -4,12 +4,12 @@
 
 ## 分层
 
-| 层 | 目录 | 内容 |
-| --- | --- | --- |
-| base | `ui/base/` | 原语 + 基础件：`buttons/`、`badges/`、`kbd/`、`segmented-control/` 等 |
-| product | `ui/product/` | 跨页面模式件：`empty-state/`、`callout/`、`loading-state/`、`section-card/`、`property-row/` |
-| fx | `ui/fx/` | 特效件（原 `aceternity/*` 归位至此命名空间，引用随用随迁，不重写） |
-| application | `ui/application/` | 产品块（P3 起）：agent-chat、notification-center、app-shell 等 |
+| 层          | 目录              | 内容                                                                                         |
+| ----------- | ----------------- | -------------------------------------------------------------------------------------------- |
+| base        | `ui/base/`        | 原语 + 基础件：`buttons/`、`badges/`、`kbd/`、`segmented-control/` 等                        |
+| product     | `ui/product/`     | 跨页面模式件：`empty-state/`、`callout/`、`loading-state/`、`section-card/`、`property-row/` |
+| fx          | `ui/fx/`          | 特效件（原 `aceternity/*` 归位至此命名空间，引用随用随迁，不重写）                           |
+| application | `ui/application/` | 产品块（P3 起）：agent-chat、notification-center、app-shell 等                               |
 
 > 视觉数值唯一权威源：`composio-brand-package`（仓库根同级兄弟目录），消费规则见实施计划 §2.4。
 

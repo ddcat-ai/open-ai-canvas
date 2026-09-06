@@ -78,17 +78,9 @@ export type StatusBadgeProps = HTMLAttributes<HTMLSpanElement> &
 export function StatusBadge({ tone, variant = "outline", size, label, className, children, ...props }: StatusBadgeProps) {
     const resolvedTone = tone ?? "neutral";
     return (
-        <span
-            data-slot="status-badge"
-            className={cn(statusBadgeVariants({ variant, size }), variant === "filled" && filledTintClass[resolvedTone], className)}
-            {...props}
-        >
-            {variant === "outline" ? (
-                <span aria-hidden className={cn(statusBadgeTone({ tone }), "size-1.5", tone === "loading" && "motion-safe:animate-pulse")} />
-            ) : null}
-            {label != null ? (
-                <span className={cn("text-muted-foreground", variant === "filled" && filledInkClass[resolvedTone])}>{label}</span>
-            ) : null}
+        <span data-slot="status-badge" className={cn(statusBadgeVariants({ variant, size }), variant === "filled" && filledTintClass[resolvedTone], className)} {...props}>
+            {variant === "outline" ? <span aria-hidden className={cn(statusBadgeTone({ tone }), "size-1.5", tone === "loading" && "motion-safe:animate-pulse")} /> : null}
+            {label != null ? <span className={cn("text-muted-foreground", variant === "filled" && filledInkClass[resolvedTone])}>{label}</span> : null}
             {children}
         </span>
     );

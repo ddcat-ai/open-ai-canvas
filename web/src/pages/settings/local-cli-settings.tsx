@@ -194,7 +194,12 @@ export function LocalCliSettings() {
                                 <h2 id="dreamina-cli-title" className="text-base font-semibold">
                                     Dreamina CLI
                                 </h2>
-                                <StatusBadge variant="filled" className="m-0" tone={presentation.dreamina.tone === "processing" ? "loading" : presentation.dreamina.tone === "default" ? "neutral" : presentation.dreamina.tone} label={presentation.dreamina.label} />
+                                <StatusBadge
+                                    variant="filled"
+                                    className="m-0"
+                                    tone={presentation.dreamina.tone === "processing" ? "loading" : presentation.dreamina.tone === "default" ? "neutral" : presentation.dreamina.tone}
+                                    label={presentation.dreamina.label}
+                                />
                                 {status?.version ? <Tag className="m-0">v{status.version}</Tag> : null}
                                 {presentation.dreamina.creditLabel ? (
                                     <Tag color="blue" className="m-0">

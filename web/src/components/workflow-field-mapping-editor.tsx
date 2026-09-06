@@ -82,13 +82,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                     <Button type="text" size="small" danger icon={<PowerOff className="size-3.5" />} disabled={disabled || enabledControllableCount === 0} onClick={() => updateAllFields(false)}>
                         关闭全部
                     </Button>
-                    <ToolButton
-                        size="sm"
-                        icon={<ListFilter />}
-                        active={showOnlyEnabled}
-                        label={showOnlyEnabled ? "显示全部" : "仅显示已开启"}
-                        onClick={() => setShowOnlyEnabled((current) => !current)}
-                    />
+                    <ToolButton size="sm" icon={<ListFilter />} active={showOnlyEnabled} label={showOnlyEnabled ? "显示全部" : "仅显示已开启"} onClick={() => setShowOnlyEnabled((current) => !current)} />
                 </div>
             </div>
             <Collapse

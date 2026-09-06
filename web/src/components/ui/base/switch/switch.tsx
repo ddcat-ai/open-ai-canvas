@@ -36,10 +36,7 @@ export interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 /** 几何档：轨道尺寸与 thumb 行程（thumb 用 left-0.5 起始 + translate-x 档位） */
-const SWITCH_SIZE: Record<
-    "sm" | "md",
-    { root: string; thumbPlain: string; thumbText: string; hasTextRoot: string }
-> = {
+const SWITCH_SIZE: Record<"sm" | "md", { root: string; thumbPlain: string; thumbText: string; hasTextRoot: string }> = {
     sm: {
         root: "h-5 w-8 rounded-full",
         thumbPlain: "size-3.5 data-[state=on]:translate-x-3.5",
@@ -54,19 +51,7 @@ const SWITCH_SIZE: Record<
     },
 };
 
-export function Switch({
-    size = "md",
-    checked: checkedProp,
-    defaultChecked = false,
-    loading = false,
-    checkedChildren,
-    unCheckedChildren,
-    onChange,
-    disabled,
-    className,
-    "aria-label": ariaLabel,
-    ...props
-}: SwitchProps) {
+export function Switch({ size = "md", checked: checkedProp, defaultChecked = false, loading = false, checkedChildren, unCheckedChildren, onChange, disabled, className, "aria-label": ariaLabel, ...props }: SwitchProps) {
     const [innerChecked, setInnerChecked] = useState(defaultChecked);
     const controlled = checkedProp !== undefined;
     const checked = controlled ? checkedProp : innerChecked;
@@ -113,42 +98,24 @@ export function Switch({
             {unCheckedChildren !== undefined ? (
                 <span
                     aria-hidden="true"
-                    className={cn(
-                        "absolute top-1/2 right-1.5 -translate-y-1/2 text-xs leading-none font-medium transition-opacity motion-reduce:transition-none",
-                        checked ? "text-foreground/55 opacity-0" : "text-foreground/55 opacity-100",
-                    )}
+                    className={cn("absolute top-1/2 right-1.5 -translate-y-1/2 text-xs leading-none font-medium transition-opacity motion-reduce:transition-none", checked ? "text-foreground/55 opacity-0" : "text-foreground/55 opacity-100")}
                 >
                     {unCheckedChildren}
                 </span>
             ) : null}
             {/* 开态文案（左侧，反色） */}
             {checkedChildren !== undefined ? (
-                <span
-                    aria-hidden="true"
-                    className={cn(
-                        "absolute top-1/2 left-1.5 -translate-y-1/2 text-xs leading-none font-medium transition-opacity motion-reduce:transition-none",
-                        checked ? "text-background opacity-100" : "text-background opacity-0",
-                    )}
-                >
+                <span aria-hidden="true" className={cn("absolute top-1/2 left-1.5 -translate-y-1/2 text-xs leading-none font-medium transition-opacity motion-reduce:transition-none", checked ? "text-background opacity-100" : "text-background opacity-0")}>
                     {checkedChildren}
                 </span>
             ) : null}
             {/* thumb / loading 转圈 */}
             {loading ? (
-                <span
-                    aria-hidden="true"
-                    className={cn(
-                        "absolute inset-0 m-auto size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent",
-                        checked ? "text-background" : "text-foreground/60",
-                    )}
-                />
+                <span aria-hidden="true" className={cn("absolute inset-0 m-auto size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent", checked ? "text-background" : "text-foreground/60")} />
             ) : (
                 <span
                     aria-hidden="true"
-                    className={cn(
-                        "sc-switch-thumb absolute left-0.5 top-1/2 -translate-y-1/2 rounded-full bg-surface-strong border border-border/80 transition-transform duration-200 ease-out motion-reduce:transition-none",
-                        thumbClass,
-                    )}
+                    className={cn("sc-switch-thumb absolute left-0.5 top-1/2 -translate-y-1/2 rounded-full bg-surface-strong border border-border/80 transition-transform duration-200 ease-out motion-reduce:transition-none", thumbClass)}
                 />
             )}
         </button>

@@ -312,7 +312,11 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                 </CapabilityBlock>
             ) : null}
 
-            {!sourceInputs.length && !sourceOptions.length && !source.operations?.length ? <Callout tone="info" title="该类型暂无额外能力参数">线路仍可按优先级和权重参与路由。</Callout> : null}
+            {!sourceInputs.length && !sourceOptions.length && !source.operations?.length ? (
+                <Callout tone="info" title="该类型暂无额外能力参数">
+                    线路仍可按优先级和权重参与路由。
+                </Callout>
+            ) : null}
         </div>
     );
 }

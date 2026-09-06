@@ -140,16 +140,7 @@ export function AdminExportButton({
 }
 
 export function AdminTableEmpty({ filtered = false, title, description, action }: { filtered?: boolean; title?: string; description?: string; action?: ReactNode }) {
-    return (
-        <EmptyState
-            size="compact"
-            icon={SearchX}
-            title={title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")}
-            description={description}
-            action={action}
-            className="min-h-40 w-full justify-center"
-        />
-    );
+    return <EmptyState size="compact" icon={SearchX} title={title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")} description={description} action={action} className="min-h-40 w-full justify-center" />;
 }
 
 export function AdminFilterChip({ label, onRemove }: { label: ReactNode; onRemove: () => void }) {

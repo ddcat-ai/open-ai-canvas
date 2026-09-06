@@ -261,7 +261,7 @@ export function RunningHubSettingsPane() {
                     />
                 </Form.Item>
                 <Form.Item label="类型" className="mb-0 lg:col-span-3">
-<SegmentedControl
+                    <SegmentedControl
                         block
                         value={kind}
                         options={[
@@ -296,7 +296,7 @@ export function RunningHubSettingsPane() {
                     </div>
                 </Form.Item>
                 <div className="workflow-workspace-tabs lg:col-span-12">
-<SegmentedControl
+                    <SegmentedControl
                         block
                         value={workspaceMode}
                         options={[

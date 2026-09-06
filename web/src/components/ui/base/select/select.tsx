@@ -1,11 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import {
-    Button as AriaButton,
-    ListBox as AriaListBox,
-    ListBoxItem as AriaListBoxItem,
-    Popover as AriaPopover,
-    Select as AriaSelect,
-} from "react-aria-components";
+import { Button as AriaButton, ListBox as AriaListBox, ListBoxItem as AriaListBoxItem, Popover as AriaPopover, Select as AriaSelect } from "react-aria-components";
 import { Check, ChevronDown, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -52,17 +46,7 @@ const TRIGGER_CLASS: Record<SelectSize, string> = {
     md: "h-8 text-sm",
 };
 
-export function Select<V extends string = string>({
-    value,
-    onChange,
-    options = [],
-    placeholder,
-    disabled = false,
-    allowClear = false,
-    size = "md",
-    ariaLabel,
-    className,
-}: SelectProps<V>) {
+export function Select<V extends string = string>({ value, onChange, options = [], placeholder, disabled = false, allowClear = false, size = "md", ariaLabel, className }: SelectProps<V>) {
     const triggerRef = useRef<HTMLButtonElement | null>(null);
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const [open, setOpen] = useState(false);
@@ -122,9 +106,7 @@ export function Select<V extends string = string>({
                     TRIGGER_CLASS[size],
                 )}
             >
-                <span className={cn("min-w-0 flex-1 truncate text-left", displayLabel === undefined && "text-muted-foreground")}>
-                    {displayLabel === undefined ? placeholder : displayLabel}
-                </span>
+                <span className={cn("min-w-0 flex-1 truncate text-left", displayLabel === undefined && "text-muted-foreground")}>{displayLabel === undefined ? placeholder : displayLabel}</span>
                 {allowClear && value !== undefined && !disabled && (
                     <span
                         role="button"
@@ -140,25 +122,9 @@ export function Select<V extends string = string>({
                         <X className="size-3.5" />
                     </span>
                 )}
-                <ChevronDown
-                    aria-hidden="true"
-                    className={cn(
-                        "size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
-                        open && "rotate-180",
-                    )}
-                />
+                <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} />
             </AriaButton>
-            <AriaPopover
-                ref={popoverRef}
-                isNonModal
-                placement="bottom"
-                offset={4}
-                style={popoverWidth ? { width: popoverWidth } : undefined}
-                className={cn(
-                    "z-50 rounded-lg border border-border bg-surface-strong p-1 shadow-lg",
-                    "ra-pop-in",
-                )}
-            >
+            <AriaPopover ref={popoverRef} isNonModal placement="bottom" offset={4} style={popoverWidth ? { width: popoverWidth } : undefined} className={cn("z-50 rounded-lg border border-border bg-surface-strong p-1 shadow-lg", "ra-pop-in")}>
                 <AriaListBox aria-label={ariaLabel ?? placeholder ?? "选项"} className="max-h-60 overflow-auto outline-none">
                     {options.map((option) => (
                         <AriaListBoxItem

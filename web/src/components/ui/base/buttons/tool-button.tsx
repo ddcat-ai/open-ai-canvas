@@ -21,12 +21,7 @@ import { cn } from "@/lib/utils";
  * 明暗：全部颜色走 token；active 用按压底语义 token，明暗自动适配。
  */
 export const toolButtonVariants = cva(
-    [
-        "inline-flex select-none items-center justify-center gap-1.5 rounded-md",
-        "font-medium transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        "disabled:pointer-events-none disabled:opacity-45",
-    ],
+    ["inline-flex select-none items-center justify-center gap-1.5 rounded-md", "font-medium transition-colors", "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", "disabled:pointer-events-none disabled:opacity-45"],
     {
         variants: {
             variant: {
@@ -79,20 +74,7 @@ export type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
         label?: ReactNode;
     };
 
-export function ToolButton({
-    variant,
-    size,
-    tone,
-    icon,
-    active = false,
-    expands = false,
-    loading = false,
-    label,
-    className,
-    type = "button",
-    disabled,
-    ...props
-}: ToolButtonProps) {
+export function ToolButton({ variant, size, tone, icon, active = false, expands = false, loading = false, label, className, type = "button", disabled, ...props }: ToolButtonProps) {
     const pressed = !expands && active;
     const expanded = expands && active;
     return (

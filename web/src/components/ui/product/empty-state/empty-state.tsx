@@ -38,15 +38,7 @@ export type EmptyStateProps = HTMLAttributes<HTMLDivElement> &
         action?: ReactNode;
     };
 
-export function EmptyState({
-    size,
-    icon: Icon = Inbox,
-    title,
-    description,
-    action,
-    className,
-    ...props
-}: EmptyStateProps) {
+export function EmptyState({ size, icon: Icon = Inbox, title, description, action, className, ...props }: EmptyStateProps) {
     return (
         <div data-slot="empty-state" className={cn(emptyStateVariants({ size }), className)} {...props}>
             <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary/60">

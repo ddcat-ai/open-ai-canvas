@@ -19,25 +19,20 @@ import { cn } from "@/lib/utils";
  * 明暗：全部颜色走 token；active 按压底用 bg-surface-active，明暗自动适配。
  */
 export const iconButtonVariants = cva(
-    [
-		"inline-flex shrink-0 items-center justify-center rounded-md",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        "disabled:pointer-events-none disabled:opacity-45",
-        "motion-safe:active:scale-[0.96]",
-    ],
+    ["inline-flex shrink-0 items-center justify-center rounded-md", "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", "disabled:pointer-events-none disabled:opacity-45", "motion-safe:active:scale-[0.96]"],
     {
         variants: {
             variant: {
-				// 纯透明 + hover 浮底（最常用：面板/工具条）
-				ghost: "text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
+                // 纯透明 + hover 浮底（最常用：面板/工具条）
+                ghost: "text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
                 // 常驻浅底
-				default: "bg-surface-secondary text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
+                default: "bg-surface-secondary text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
                 // 描边
-				outline: "border border-border bg-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                outline: "border border-border bg-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                 // 危险（文本色常驻红）
-				danger: "text-status-error hover:bg-surface-hover active:bg-surface-active",
-				// 实心（中性黑底白图标，主操作；active 反转成白底黑字 + 内描边，供选中态使用）
-				solid: "bg-foreground text-background hover:opacity-85 active:opacity-75 data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-border",
+                danger: "text-status-error hover:bg-surface-hover active:bg-surface-active",
+                // 实心（中性黑底白图标，主操作；active 反转成白底黑字 + 内描边，供选中态使用）
+                solid: "bg-foreground text-background hover:opacity-85 active:opacity-75 data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-border",
             },
             size: {
                 xs: "size-6 [&_svg]:size-3.5",
@@ -65,15 +60,7 @@ export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
 
 export function IconButton({ variant, size, icon: Icon, loading = false, active = false, className, type = "button", disabled, ...props }: IconButtonProps) {
     return (
-        <button
-            data-slot="icon-button"
-            type={type}
-            disabled={disabled || loading}
-            aria-busy={loading || undefined}
-            data-active={active || undefined}
-            className={cn(iconButtonVariants({ variant, size }), className)}
-            {...props}
-        >
+        <button data-slot="icon-button" type={type} disabled={disabled || loading} aria-busy={loading || undefined} data-active={active || undefined} className={cn(iconButtonVariants({ variant, size }), className)} {...props}>
             {loading ? <Loader2 aria-hidden className="animate-spin" /> : <Icon aria-hidden />}
         </button>
     );

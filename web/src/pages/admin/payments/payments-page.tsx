@@ -499,7 +499,9 @@ export default function AdminPaymentsPage() {
             }
             scroll
         >
-            <Callout className="my-4" tone="info" title="平台不提供支付退款">管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。</Callout>
+            <Callout className="my-4" tone="info" title="平台不提供支付退款">
+                管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。
+            </Callout>
             <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -612,7 +614,11 @@ export default function AdminPaymentsPage() {
             >
                 {providerDrawer ? (
                     <Form form={providerForm} layout="vertical" requiredMark="optional">
-                        <Callout className="mb-4" tone={providerDrawer.pluginEnabled ? "info" : "warning"} title={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该宿主插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"} />
+                        <Callout
+                            className="mb-4"
+                            tone={providerDrawer.pluginEnabled ? "info" : "warning"}
+                            title={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该宿主插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"}
+                        />
                         <Form.Item name="enabled" label="渠道配置启用" valuePropName="checked">
                             <Switch />
                         </Form.Item>
@@ -700,7 +706,11 @@ export default function AdminPaymentsPage() {
                     setDetailItems([]);
                 }}
             >
-                {detailRun?.error ? <Callout className="mb-4" tone="error" title="对账执行失败">{detailRun.error}</Callout> : null}
+                {detailRun?.error ? (
+                    <Callout className="mb-4" tone="error" title="对账执行失败">
+                        {detailRun.error}
+                    </Callout>
+                ) : null}
                 <AdminDataTable
                     toolbar={
                         <Select

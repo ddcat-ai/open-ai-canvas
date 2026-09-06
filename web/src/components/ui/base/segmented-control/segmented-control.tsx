@@ -53,16 +53,7 @@ const SIZE_CLASS: Record<SegmentedSize, { track: string; thumb: string; item: st
     },
 };
 
-export function SegmentedControl<V extends string = string>({
-    value,
-    onChange,
-    options,
-    size = "md",
-    block = false,
-    disabled = false,
-    ariaLabel,
-    className = "",
-}: SegmentedControlProps<V>) {
+export function SegmentedControl<V extends string = string>({ value, onChange, options, size = "md", block = false, disabled = false, ariaLabel, className = "" }: SegmentedControlProps<V>) {
     const trackRef = useRef<HTMLDivElement | null>(null);
     const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
@@ -70,8 +61,7 @@ export function SegmentedControl<V extends string = string>({
     const selectedIndex = options.findIndex((option) => option.value === value);
 
     /** 无选中项时兜底首个可用项，保证 roving tabindex 下键盘始终可达 */
-    const focusableIndex =
-        selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled);
+    const focusableIndex = selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled);
 
     useLayoutEffect(() => {
         const track = trackRef.current;
@@ -123,29 +113,14 @@ export function SegmentedControl<V extends string = string>({
     };
 
     const itemBase =
-        "relative z-10 inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium outline-none transition-colors motion-reduce:transition-none " +
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ";
+        "relative z-10 inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium outline-none transition-colors motion-reduce:transition-none " + "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ";
 
     return (
-        <div
-            ref={trackRef}
-            role="radiogroup"
-            aria-label={ariaLabel}
-            className={[
-                "relative inline-flex bg-surface-tertiary",
-                SIZE_CLASS[size].track,
-                block ? "flex w-full" : "",
-                disabled ? "opacity-60" : "",
-                className,
-            ].join(" ")}
-        >
+        <div ref={trackRef} role="radiogroup" aria-label={ariaLabel} className={["relative inline-flex bg-surface-tertiary", SIZE_CLASS[size].track, block ? "flex w-full" : "", disabled ? "opacity-60" : "", className].join(" ")}>
             {thumb !== null && !disabled && (
                 <span
                     aria-hidden="true"
-                    className={[
-                        "pointer-events-none absolute inset-y-0.5 z-0 bg-surface-strong transition-[left,width] duration-200 ease-out motion-reduce:transition-none",
-                        SIZE_CLASS[size].thumb,
-                    ].join(" ")}
+                    className={["pointer-events-none absolute inset-y-0.5 z-0 bg-surface-strong transition-[left,width] duration-200 ease-out motion-reduce:transition-none", SIZE_CLASS[size].thumb].join(" ")}
                     style={{ left: thumb.left, width: thumb.width }}
                 />
             )}
@@ -160,7 +135,7 @@ export function SegmentedControl<V extends string = string>({
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        aria-label={option.label ? undefined : option.title ?? option.value}
+                        aria-label={option.label ? undefined : (option.title ?? option.value)}
                         title={option.title}
                         disabled={disabled || option.disabled}
                         tabIndex={index === focusableIndex ? 0 : -1}
@@ -174,11 +149,7 @@ export function SegmentedControl<V extends string = string>({
                             SIZE_CLASS[size].item,
                             SIZE_CLASS[size].thumb,
                             block ? "flex-1" : "",
-                            option.disabled
-                                ? "cursor-not-allowed text-muted-foreground/40"
-                                : selected
-                                  ? "cursor-default text-foreground"
-                                  : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                            option.disabled ? "cursor-not-allowed text-muted-foreground/40" : selected ? "cursor-default text-foreground" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                         ].join(" ")}
                     >
                         {option.icon}

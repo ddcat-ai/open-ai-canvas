@@ -18,12 +18,7 @@ export function Kbd({ className, children, ...props }: KbdProps) {
     return (
         <kbd
             data-slot="kbd"
-            className={cn(
-                "inline-flex h-5 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm",
-                "border border-[color:var(--workspace-border)] bg-background/60 px-1.5",
-                "font-mono text-tiny font-medium text-foreground/60",
-                className,
-            )}
+            className={cn("inline-flex h-5 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm", "border border-[color:var(--workspace-border)] bg-background/60 px-1.5", "font-mono text-tiny font-medium text-foreground/60", className)}
             {...props}
         >
             {children}

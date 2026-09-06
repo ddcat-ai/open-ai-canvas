@@ -336,10 +336,26 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
                     <aside className="min-h-0 flex-1 overflow-y-auto" data-canvas-wheel-scroll>
                         <div className="flex min-h-full flex-col gap-4 p-4">
                             {running || visibleState.status === "running" ? <ArtCritiqueProgress stage={progressStage} theme={theme} /> : null}
-                            {draftReportVisible && visibleState.status === "running" && visibleState.report ? <Callout tone="info" title="报告初稿已生成">问题和建议已先展示，正在精确定位并复核矩形标注。</Callout> : null}
-                            {!enabled && !visibleState.report ? <Callout tone="warning" title="插件尚未启用">请先到插件管理中开启 AI 审美批改，再运行分析。</Callout> : null}
-                            {visibleState.status === "stale" ? <Callout tone="warning" title="输入图片已经变化">当前报告针对旧图片生成，请重新批改。</Callout> : null}
-                            {localError || visibleState.errorMessage ? <Callout tone="error" title="批改失败">{localError || visibleState.errorMessage}</Callout> : null}
+                            {draftReportVisible && visibleState.status === "running" && visibleState.report ? (
+                                <Callout tone="info" title="报告初稿已生成">
+                                    问题和建议已先展示，正在精确定位并复核矩形标注。
+                                </Callout>
+                            ) : null}
+                            {!enabled && !visibleState.report ? (
+                                <Callout tone="warning" title="插件尚未启用">
+                                    请先到插件管理中开启 AI 审美批改，再运行分析。
+                                </Callout>
+                            ) : null}
+                            {visibleState.status === "stale" ? (
+                                <Callout tone="warning" title="输入图片已经变化">
+                                    当前报告针对旧图片生成，请重新批改。
+                                </Callout>
+                            ) : null}
+                            {localError || visibleState.errorMessage ? (
+                                <Callout tone="error" title="批改失败">
+                                    {localError || visibleState.errorMessage}
+                                </Callout>
+                            ) : null}
 
                             {view === "detail" && detailIssue ? (
                                 <IssueDetailView

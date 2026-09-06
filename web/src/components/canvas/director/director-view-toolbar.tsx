@@ -1,6 +1,5 @@
 import { Tooltip } from "@/components/ui/base/tooltip";
 
-
 import { releaseDirectorFocusAfterPointer } from "@/lib/canvas/director/director-shortcuts";
 import { DIRECTOR_VIEW_MODES, type DirectorViewMode } from "@/lib/canvas/director/director-view-modes";
 
