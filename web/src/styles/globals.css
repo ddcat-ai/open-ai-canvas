@@ -7571,13 +7571,35 @@
     }
 
     .canvas-connection-rail {
+        left: auto;
+        right: auto;
+        width: 20px !important;
+        height: 20px !important;
+        padding: 0;
+        border: 1px solid currentColor;
+        overflow: visible;
         opacity: 0;
-        transform: translate3d(var(--canvas-connection-rail-rest-x, 0px), -50%, 0) scale(0.92);
+        transform: translate3d(0, -50%, 0) scale(0.5);
         transform-origin: center;
         transition:
             opacity 150ms var(--motion-ease-out),
-            transform 180ms var(--motion-ease-out),
+            transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
             filter 150ms var(--motion-ease-out);
+    }
+
+    .canvas-connection-rail[data-canvas-connection-rail="left"] {
+        left: -10px;
+    }
+
+    .canvas-connection-rail[data-canvas-connection-rail="right"] {
+        right: -10px;
+    }
+
+    .canvas-connection-rail::before {
+        content: "";
+        position: absolute;
+        inset: -8px;
+        border-radius: inherit;
     }
 
     .canvas-connection-rail[data-visible="true"] {
@@ -7585,11 +7607,26 @@
         transform: translate3d(0, -50%, 0) scale(1);
     }
 
+    .canvas-connection-rail[data-visible="true"][data-canvas-connection-rail="left"] {
+        transform: translate3d(-18px, -50%, 0) scale(1);
+    }
+
+    .canvas-connection-rail[data-visible="true"][data-canvas-connection-rail="right"] {
+        transform: translate3d(18px, -50%, 0) scale(1);
+    }
+
     .canvas-connection-rail:focus-visible {
         opacity: 1;
-        transform: translate3d(0, -50%, 0) scale(1);
         outline: 2px solid color-mix(in srgb, var(--canvas-accent-primary) 72%, transparent);
         outline-offset: 3px;
+    }
+
+    .canvas-connection-rail:focus-visible[data-canvas-connection-rail="left"] {
+        transform: translate3d(-18px, -50%, 0) scale(1);
+    }
+
+    .canvas-connection-rail:focus-visible[data-canvas-connection-rail="right"] {
+        transform: translate3d(18px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail:hover {

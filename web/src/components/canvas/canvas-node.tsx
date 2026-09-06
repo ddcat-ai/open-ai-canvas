@@ -702,33 +702,18 @@ function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }
 
 function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
     const handleRef = useRef<HTMLSpanElement>(null);
-    const [railHovered, setRailHovered] = useState(false);
     const [railFocused, setRailFocused] = useState(false);
     const inverseScale = 1 / Math.max(scale, 0.05);
-    const railSize = 80;
-    // Keep the visible icon tied to the canvas scale. The world-space size is
-    // inverse-scaled so the pin stays legible without jumping when the canvas
-    // zoom changes, while the hit zone remains larger than the visual icon.
-    const handleSize = Math.min(48, Math.max(14, 20 * inverseScale));
-    const desiredOutsideScreen = 8;
-    // The rail is centered 40 world px outside the node. Move the icon back
-    // toward the node by a scale-aware amount so its edge gap stays stable.
-    const edgeOffset = Math.max(4, railSize / 2 - desiredOutsideScreen * inverseScale);
-    const sideOffset = side === "left" ? edgeOffset : -edgeOffset;
-    const isVisible = visible || railHovered || railFocused;
-    const restRailOffset = side === "left" ? "-4px" : "4px";
-    const railStyle = {
-        width: railSize,
-        height: `min(100%, ${railSize}px)`,
-        cursor: "crosshair",
-        "--canvas-connection-rail-rest-x": restRailOffset,
-        ...(side === "left" ? { right: "100%" } : { left: "100%" }),
-    } as React.CSSProperties & Record<string, string | number>;
+    const handleSize = 20;
+    // The visible pin expands from a 10px resting mark to a 20px control and
+    // moves 18px away from the card, matching Updream's node affordance.
+    // The canvas world transform naturally makes both sizes follow zoom.
+    const isVisible = visible || railFocused;
 
     const resetHandle = useCallback(() => {
         if (!handleRef.current) return;
-        handleRef.current.style.transform = `translate(${sideOffset}px, 0) scale(1)`;
-    }, [sideOffset]);
+        handleRef.current.style.transform = "translate(0, 0) scale(1)";
+    }, []);
 
     const updateHandle = (event: React.PointerEvent<HTMLButtonElement>) => {
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -754,14 +739,12 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
             data-canvas-connection-rail={side}
             data-visible={isVisible ? "true" : "false"}
             className="canvas-connection-rail canvas-connection-handle group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex items-center justify-center touch-none cursor-crosshair rounded-full outline-none"
-            style={railStyle}
+            style={{ background: theme.spatial.elevated, borderColor: theme.node.activeStroke, color: theme.node.activeStroke }}
             onPointerEnter={(event) => {
-                setRailHovered(true);
                 updateHandle(event);
             }}
             onPointerMove={updateHandle}
             onPointerLeave={() => {
-                setRailHovered(false);
                 resetHandle();
             }}
             onFocus={() => setRailFocused(true)}
@@ -777,7 +760,7 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
                     height: handleSize,
                     marginLeft: -handleSize / 2,
                     marginTop: -handleSize / 2,
-                    transform: `translate(${sideOffset}px, 0) scale(1)`,
+                    transform: "translate(0, 0) scale(1)",
                     transition: "transform 80ms ease-out",
                     transformOrigin: "center",
                     willChange: "transform",
@@ -786,21 +769,19 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
                 <svg
                     aria-hidden="true"
                     className="block"
-                    width={handleSize}
-                    height={handleSize}
+                    width={10}
+                    height={10}
                     viewBox="0 0 20 20"
                     fill="none"
                     style={{
                         position: "absolute",
                         left: "50%",
                         top: "50%",
-                        marginLeft: -handleSize / 2,
-                        marginTop: -handleSize / 2,
+                        marginLeft: -5,
+                        marginTop: -5,
                     }}
                 >
-                    <circle cx="10" cy="10" r="9.35" fill={theme.spatial.elevated} />
-                    <circle cx="10" cy="10" r="9.35" stroke={theme.node.activeStroke} strokeWidth="1.2" />
-                    <path d="M10 6.5v7M6.5 10h7" stroke={theme.node.activeStroke} strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M10 6.5v7M6.5 10h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
             </span>
         </button>
