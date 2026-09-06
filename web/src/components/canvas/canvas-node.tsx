@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, Clapperboard, Copy, Download, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, Clapperboard, Copy, Download, Image as ImageIcon, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
@@ -9,10 +9,10 @@ import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { isEmptyMediaNode, isLocalReadOnlyAssetNode, shouldShowInlineNodeStatus } from "@/lib/canvas/canvas-node-ui-policy";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
-import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { getNodeDefinition, getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
 import { CanvasNodeContent, CanvasNodeImageInfo } from "./canvas-node-content";
+import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -31,7 +31,6 @@ type CanvasNodeProps = {
     showImageInfo: boolean;
     reduceMediaEffects?: boolean;
     readOnly?: boolean;
-    resourceLabel?: CanvasResourceReference;
     mentionReferences?: CanvasResourceReference[];
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     drawingProjectId?: string;
@@ -78,7 +77,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     showImageInfo,
     reduceMediaEffects = false,
     readOnly = false,
-    resourceLabel,
     mentionReferences = [],
     renderNodeContent,
     drawingProjectId,
@@ -110,7 +108,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     onMediaPlayRequest,
     onContextMenu,
 }: CanvasNodeProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const canvasThemeName = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[canvasThemeName];
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -303,14 +302,17 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             />
             <div
-                className="canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)]"
+                className={`canvas-node-shell relative h-full w-full overflow-visible ${isComposerNode ? "rounded-[var(--node-radius)]" : "canvas-node-card rounded-[var(--canvas-node-card-radius)]"}`}
+                data-node-card={!isComposerNode ? "true" : undefined}
+                data-node-selected={isSelected ? "true" : "false"}
                 data-node-state={nodeState}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
-                    background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
+                    background: isComposerNode ? theme.node.fill : hasImageContent || hasVideoContent ? "transparent" : theme.node.cardFill,
                     // 固定占位但不绘制描边，避免聚焦切换时边框宽度变化造成白边跳动。
                     border: isComposerNode ? "0" : "1px solid transparent",
-                    boxShadow: isComposerNode ? "none" : isSelected || isFocusRelated ? theme.node.hoverShadow : theme.node.shadow,
+                    boxShadow: "none",
+                    ["--canvas-node-selection-stroke" as string]: theme.node.selectionStroke,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -348,7 +350,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot || data.type === CanvasNodeType.Script ? "overflow-visible" : "overflow-hidden"}`}
                     style={
                         {
-                            background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
+                            background: isComposerNode ? theme.node.fill : hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.cardFill,
                             "--batch-from-x": `${batchMotion?.x || 0}px`,
                             "--batch-from-y": `${batchMotion?.y || 0}px`,
                             "--batch-from-rotate": `${6 + (batchMotion?.index || 0) * 4}deg`,
@@ -387,25 +389,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                     />
                 </div>
 
-                {data.type === CanvasNodeType.Text && data.metadata?.workflowKind !== "character" && !readOnly ? (
-                    <div
-                        className={`absolute bottom-[10%] left-1/2 z-[var(--node-z-overlay)] -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                    >
-                        <button
-                            type="button"
-                            className="canvas-node-inline-action inline-flex h-9 items-center gap-2 px-3 text-xs font-medium backdrop-blur-xl transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                            style={{ outlineColor: theme.accent.primary }}
-                            onClick={(event) => { event.stopPropagation(); onOpenTextEditor?.(data); }}
-                            aria-label="放大编辑文本"
-                        >
-                            <Maximize2 className="size-3.5" />
-                            放大编辑
-                        </button>
-                    </div>
-                ) : null}
-
                 {data.metadata?.versionLabel ? (
                     <button
                         type="button"
@@ -423,11 +406,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                     >
                         {data.metadata.versionLabel}
                     </button>
-                ) : null}
-                {resourceLabel && !isEmptyMediaNode(data) ? (
-                    <span className="pointer-events-none absolute bottom-3 left-3 z-[var(--node-z-overlay)] max-w-[45%] truncate rounded-md px-1.5 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background: resourceLabel.active ? theme.accent.primary : "rgba(0,0,0,.35)", color: resourceLabel.active ? theme.accent.onPrimary : "#ffffff", opacity: resourceLabel.active ? 1 : 0.75 }} title={resourceLabel.title || resourceLabel.label}>
-                        {resourceLabel.label}
-                    </span>
                 ) : null}
                 {/* 批次子图操作条：成功子项提供下载/副本/设为主图，失败子项提供重试/删除 */}
                 {isBatchChild && !readOnly && (hasImageContent || data.metadata?.status === "error") && (hovered || isSelected) ? (
@@ -492,7 +470,6 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.showImageInfo === next.showImageInfo &&
         previous.reduceMediaEffects === next.reduceMediaEffects &&
         previous.readOnly === next.readOnly &&
-        previous.resourceLabel === next.resourceLabel &&
         previous.mentionReferences === next.mentionReferences &&
         previous.renderNodeContent === next.renderNodeContent &&
         previous.drawingProjectId === next.drawingProjectId &&
@@ -599,6 +576,7 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
     if (scale < NODE_EXTERNAL_HEADER_MIN_SCALE && !editing) return null;
     const inverseScale = 1 / Math.max(scale, 0.05);
     const Icon = nodeTypeIcon(node.type);
+    const isTextNode = node.type === CanvasNodeType.Text;
     const maxHeaderWidth = Math.min(240, node.width * scale);
 
     return (
@@ -700,51 +678,106 @@ function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }
     );
 }
 
-function ConnectionSideRail({ side, scale: _scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
-    const [railFocused, setRailFocused] = useState(false);
-    const handleSize = 20;
-    // The visible pin expands from a 10px resting mark to a 20px control and
-    // moves 18px away from the card, matching Updream's node affordance.
-    // The canvas world transform naturally makes both sizes follow zoom.
-    const isVisible = visible || railFocused;
+function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
+    const railRef = useRef<HTMLButtonElement>(null);
+    const pinRef = useRef<HTMLSpanElement>(null);
+    const inverseScale = 1 / Math.max(scale, 0.05);
+    const animationFrameRef = useRef<number | null>(null);
+    const pointerInsideRef = useRef(false);
+    const targetOffsetRef = useRef({ x: 0, y: 0 });
+    const currentOffsetRef = useRef({ x: 0, y: 0 });
+    // Keep the hit rail fixed. Moving the hit target itself makes adjacent
+    // rails repeatedly steal pointer events and causes the pin to jump.
+    const handleSize = 24;
+    const restOffset = side === "left" ? "24px" : "-24px";
+    const railStyle = {
+        cursor: "crosshair",
+        "--canvas-connection-plus-rest-x": restOffset,
+        ...(side === "left" ? { right: "100%" } : { left: "100%" }),
+    } as React.CSSProperties & Record<"--canvas-connection-plus-rest-x", string>;
+
+    const animatePin = () => {
+        animationFrameRef.current = null;
+        const pin = pinRef.current;
+        if (!pin || !pointerInsideRef.current) return;
+        const current = currentOffsetRef.current;
+        const target = targetOffsetRef.current;
+        current.x += (target.x - current.x) * 0.22;
+        current.y += (target.y - current.y) * 0.22;
+        pin.style.transform = `translate3d(${current.x}px, ${current.y}px, 0)`;
+        if (Math.abs(target.x - current.x) > 0.1 || Math.abs(target.y - current.y) > 0.1) {
+            animationFrameRef.current = requestAnimationFrame(animatePin);
+        }
+    };
+
+    const updatePinTarget = (event: React.PointerEvent<HTMLButtonElement>) => {
+        const rail = railRef.current;
+        if (!rail) return;
+        const bounds = rail.getBoundingClientRect();
+        const followLimit = 30;
+        const deltaX = event.clientX - (bounds.left + bounds.width / 2);
+        const deltaY = event.clientY - (bounds.top + bounds.height / 2);
+        targetOffsetRef.current = {
+            x: Math.max(-followLimit, Math.min(followLimit, deltaX)) * inverseScale,
+            y: Math.max(-followLimit, Math.min(followLimit, deltaY)) * inverseScale,
+        };
+        if (animationFrameRef.current === null) animationFrameRef.current = requestAnimationFrame(animatePin);
+    };
 
     return (
         <button
+            ref={railRef}
             type="button"
             data-canvas-connection-rail={side}
-            data-visible={isVisible ? "true" : "false"}
+            data-visible={visible ? "true" : "false"}
             className="canvas-connection-rail canvas-connection-handle group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex items-center justify-center touch-none cursor-crosshair rounded-full outline-none"
-            style={{ background: theme.spatial.elevated, borderColor: theme.node.activeStroke, color: theme.node.activeStroke, cursor: "crosshair" }}
-            onFocus={() => setRailFocused(true)}
-            onBlur={() => setRailFocused(false)}
+            style={railStyle}
+            onPointerEnter={(event) => {
+                pointerInsideRef.current = true;
+                updatePinTarget(event);
+            }}
+            onPointerMove={updatePinTarget}
+            onPointerLeave={() => {
+                pointerInsideRef.current = false;
+                targetOffsetRef.current = { x: 0, y: 0 };
+                currentOffsetRef.current = { x: 0, y: 0 };
+                if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+                pinRef.current?.style.removeProperty("transform");
+            }}
             onPointerDown={(event) => onPointerDown(event, 0.5)}
             aria-label={`${side === "left" ? "输入" : "输出"}连接点，单击创建节点或拖动连线`}
         >
             <span
-                className="absolute left-1/2 top-1/2 block transition-transform duration-[80ms] ease-out group-hover:brightness-125 group-focus-visible:brightness-125"
+                ref={pinRef}
+                className="absolute left-1/2 top-1/2 block transition-[filter] duration-150 ease-out group-hover:brightness-125 group-focus-visible:brightness-125"
                 style={{
                     width: handleSize,
                     height: handleSize,
                     marginLeft: -handleSize / 2,
                     marginTop: -handleSize / 2,
+                    willChange: "transform",
                 }}
             >
                 <svg
                     aria-hidden="true"
                     className="block"
-                    width={14}
-                    height={14}
+                    width={handleSize}
+                    height={handleSize}
                     viewBox="0 0 20 20"
                     fill="none"
                     style={{
                         position: "absolute",
                         left: "50%",
                         top: "50%",
-                        marginLeft: -7,
-                        marginTop: -7,
+                        marginLeft: -handleSize / 2,
+                        marginTop: -handleSize / 2,
+                        shapeRendering: "geometricPrecision",
                     }}
                 >
-                    <path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                    <circle cx="10" cy="10" r="9.2" fill={theme.spatial.elevated} />
+                    <circle cx="10" cy="10" r="9.2" stroke={theme.node.activeStroke} strokeWidth="1.25" />
+                    <path d="M10 5.5v9M5.5 10h9" stroke={theme.node.activeStroke} strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
             </span>
         </button>

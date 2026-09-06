@@ -9,6 +9,14 @@ test("text nodes use compact, consistent spacing in edit and view states", () =>
     expect(source).not.toContain("Math.round(fontSize * 1.65)");
     expect(source).toContain("overflow-hidden pb-3 pl-3 pr-0 pt-3");
     expect(source).toContain("min-h-0 min-w-0 flex-1");
+    expect(source).toContain("font-sans outline-none select-text");
+    expect(source).not.toContain("font-mono outline-none select-text");
+});
+
+test("text cards do not render an inline expand editor overlay", () => {
+    const nodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
+    expect(nodeSource).not.toContain("放大编辑文本");
+    expect(nodeSource).not.toContain("<Maximize2");
 });
 
 test("text node dimensions remain owned by the existing node defaults", () => {
