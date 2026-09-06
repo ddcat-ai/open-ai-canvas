@@ -1,21 +1,19 @@
 package repository
 
 import (
-	"errors"
-
 	"infinite-canvas/backend/internal/model"
 
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 func (r *Repository) PluginPlatformState(pluginID string) (*model.PluginPlatformState, error) {
 	var state model.PluginPlatformState
-	if err := r.db.First(&state, "plugin_id = ?", pluginID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
+	result := r.db.Where("plugin_id = ?", pluginID).Limit(1).Find(&state)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
 	}
 	return &state, nil
 }
@@ -39,11 +37,12 @@ func (r *Repository) DeletePluginPlatformState(pluginID string) error {
 
 func (r *Repository) UserPluginState(userID string, pluginID string) (*model.UserPluginState, error) {
 	var state model.UserPluginState
-	if err := r.db.First(&state, "user_id = ? AND plugin_id = ?", userID, pluginID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
+	result := r.db.Where("user_id = ? AND plugin_id = ?", userID, pluginID).Limit(1).Find(&state)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
 	}
 	return &state, nil
 }
