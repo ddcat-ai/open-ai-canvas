@@ -15,8 +15,9 @@ import type { ReferenceImage } from "@/types/image";
  *   logicalModelId 路由会被拒）。
  * - 带 referenceImageUrls ⇒ operation 自动判 image_to_video（与后端
  *   model_capability 强制规则一致），渠道模型画像 operations 已含该模式。
- * - 任务带 metadata.shotId/unitId/artifactType，成功收口后由后端
- *   RegisterTaskOutputFromTask 自动落 ShotArtifact（G2 修复后的链回写兜底）。
+ * - 任务带 metadata.shotId/unitId/artifactType，成功收口后由后端做 G2 链回写；
+ *   若还带 workflowStepId（G1 语境），RegisterTaskOutputFromTask 会自动落
+ *   ShotArtifact——不带则只建任务不落产物行（G1 边界，2026-09-06 实锤）。
  * ------------------------------------------------------------------ */
 
 export type GenerateShotInput = {
@@ -24,6 +25,8 @@ export type GenerateShotInput = {
     videoSeconds?: number;
     resolution?: string;
     referenceImageUrls?: string[];
+    /** 镜头所属工作流的 video 步骤 id。G1 边界：只有带 stepId 的任务成功后才会自动落 shot_artifacts 产物行。 */
+    workflowStepId?: string;
 };
 
 export type GenerateShotResult = {
@@ -135,6 +138,7 @@ export async function generateShot(projectId: string, rawInput: GenerateShotInpu
         metadata: {
             shotId: shot.id,
             ...(shot.unitId ? { unitId: shot.unitId } : {}),
+            ...(rawInput.workflowStepId?.trim() ? { workflowStepId: rawInput.workflowStepId.trim() } : {}),
             artifactType: "video",
             source: "agent-generate-shot",
         },

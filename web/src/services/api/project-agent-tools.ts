@@ -137,6 +137,7 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
             ...(rawInput.videoSeconds !== undefined ? { videoSeconds: Number(rawInput.videoSeconds) } : {}),
             ...(typeof rawInput.resolution === "string" && rawInput.resolution.trim() ? { resolution: rawInput.resolution.trim() } : {}),
             ...(Array.isArray(rawInput.referenceImageUrls) ? { referenceImageUrls: rawInput.referenceImageUrls.map((item) => String(item)).filter(Boolean) } : {}),
+            ...(typeof rawInput.workflowStepId === "string" && rawInput.workflowStepId.trim() ? { workflowStepId: rawInput.workflowStepId.trim() } : {}),
         });
         return { task: result };
     }
