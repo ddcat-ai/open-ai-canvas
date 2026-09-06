@@ -1,4 +1,5 @@
-import { App, Button, Form, Input, InputNumber, Modal, Select, Switch } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Pencil, Plus, Power, Search, Trash2 } from "lucide-react";

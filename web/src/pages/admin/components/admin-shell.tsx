@@ -1,4 +1,5 @@
-import { ConfigProvider, Dropdown, Tooltip } from "antd";
+import { ConfigProvider, Dropdown } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import type { MenuProps } from "antd";
 import {
     ArrowLeft,
@@ -131,7 +132,7 @@ export function AdminShell() {
             <main className="admin-shell app-user-workspace flex h-full min-h-0 overflow-hidden text-foreground">
                 <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                     <div className="admin-sidebar-identity shrink-0">
-                        <Tooltip mouseEnterDelay={0.1} title={collapsed ? "查看更新日志" : undefined} placement="right" rootClassName="app-workspace-sidebar-tooltip">
+                        <Tooltip delay={100} title={collapsed ? "查看更新日志" : undefined} placement="right">
                             <AppChangelogButton
                                 className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
                                 icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
@@ -145,7 +146,7 @@ export function AdminShell() {
                     </div>
                     <AdminNavigation collapsed={collapsed} />
                     <div className="admin-sidebar-footer shrink-0">
-                        <Tooltip mouseEnterDelay={0.1} title={collapsed ? "返回创作台" : undefined} placement="right" rootClassName="app-workspace-sidebar-tooltip">
+                        <Tooltip delay={100} title={collapsed ? "返回创作台" : undefined} placement="right">
                             <NavLink
                                 to="/"
                                 aria-label={collapsed ? "返回创作台" : undefined}
@@ -157,7 +158,7 @@ export function AdminShell() {
                         </Tooltip>
                     </div>
                 </aside>
-                <Tooltip mouseEnterDelay={0.1} title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right" rootClassName="app-workspace-sidebar-tooltip">
+                <Tooltip delay={100} title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right">
                     <button type="button" className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")} onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "收起侧栏"} aria-expanded={!collapsed}>
                         {collapsed ? <ChevronRight className="size-3.5" aria-hidden="true" /> : <ChevronLeft className="size-3.5" aria-hidden="true" />}
                     </button>
@@ -293,7 +294,7 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                 return (
                     <div key={group.label} className="admin-nav-group">
                         {!collapsed ? (
-                            <div className="admin-nav-group-label mb-1 px-2.5 text-[var(--fs-tiny)] font-medium text-foreground/38">
+                            <div className="admin-nav-group-label">
                                 <span>{group.label}</span>
                             </div>
                         ) : (
@@ -301,16 +302,16 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                         )}
                         <div className={cn("admin-nav-group-items space-y-0.5", collapsed && "is-collapsed")}>
                             {visibleItems.map((item) => (
-                                <Tooltip key={item.path} mouseEnterDelay={0.1} title={collapsed ? item.label : undefined} placement="right" rootClassName="app-workspace-sidebar-tooltip">
+                                <Tooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
                                     <NavLink
                                         to={item.path}
                                         end={item.path === "/admin"}
                                         aria-label={collapsed ? item.label : undefined}
                                         className={({ isActive }) =>
                                             cn(
-                                                "app-workspace-nav-link flex h-8 items-center rounded-md text-[var(--fs-body)] transition-colors",
+                                                "app-workspace-nav-link flex h-8 items-center rounded-md transition-colors",
                                                 collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
-                                                isActive ? "is-active font-medium" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
+                                                isActive ? "is-active" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
                                             )
                                         }
                                     >

@@ -1,4 +1,5 @@
-import { Popover, Switch } from "antd";
+import { Popover } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { CircleUserRound, LogIn, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -52,7 +53,7 @@ export function WorkspaceAccountMenu() {
                     <div className="flex h-10 items-center px-2">
                         {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
                         <span className="ml-2 flex-1 text-xs text-foreground/65">深色模式</span>
-                        <Switch size="small" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="深色模式" />
+                        <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="深色模式" />
                     </div>
                 </div>
             )}

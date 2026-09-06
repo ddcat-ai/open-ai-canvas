@@ -1,4 +1,6 @@
-import { Button, Tooltip } from "antd";
+import { Button } from "antd";
+import { IconButton } from "@/components/ui/base/buttons";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video } from "lucide-react";
 import { useState } from "react";
 
@@ -77,7 +79,7 @@ export function TaskListRow({
             {creditsEnabled ? <TaskBilling billing={task.billing} /> : <span className="task-record-billing-empty" aria-hidden="true" />}
             <div className="task-record-actions">
                 <Tooltip title="查看详情">
-                    <Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label="查看详情" onClick={onOpen} />
+                    <IconButton size="sm" variant="ghost" icon={Eye} aria-label="查看详情" onClick={onOpen} />
                 </Tooltip>
                 {isFailed ? (
                     <Tooltip title="重试任务">

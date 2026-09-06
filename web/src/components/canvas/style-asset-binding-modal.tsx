@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Button, Input, InputNumber, Modal, Select, Switch } from "antd";
+import { Button, Input, InputNumber, Modal, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { AlertTriangle, Box, Check, FileImage, Link2, Plus, Save, SlidersHorizontal, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 
@@ -198,7 +199,7 @@ function AssetEditor({ asset, onChange, onDelete }: { asset: StyleAssetBinding; 
                 <Field label="启用状态">
                     <div className="flex h-8 items-center justify-between border-b border-border">
                         <span className="text-xs text-foreground/55">参与生成执行计划</span>
-                        <Switch size="small" checked={asset.enabled !== false} onChange={(enabled) => onChange({ enabled })} />
+                        <Switch size="sm" checked={asset.enabled !== false} onChange={(enabled) => onChange({ enabled })} />
                     </div>
                 </Field>
                 <Field label="资产名称">

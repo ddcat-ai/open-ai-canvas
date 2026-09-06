@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Alert, App, Button, Dropdown, Input, Popover, Tag, Typography } from "antd";
+import { App, Button, Dropdown, Input, Popover, Tag, Typography } from "antd";
+import { Callout } from "@/components/ui/product/callout";
 import { Bubble, Sender, type BubbleItemType } from "@ant-design/x";
 import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, LoaderCircle, Music2, Sparkles, UserRound, Video, X } from "lucide-react";
 
@@ -543,7 +544,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
         bubbleItems.push({
             key: "error",
             role: "system",
-            content: <Alert className="canvas-prompt-optimizer-alert" type="error" showIcon message="优化失败" description={error} />,
+            content: <Callout className="canvas-prompt-optimizer-alert" tone="error" title="优化失败">{error}</Callout>,
         });
     }
 

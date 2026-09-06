@@ -1,5 +1,7 @@
+import { Modal } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Tooltip } from "antd";
+
 import { Image as ImageIcon, Music2, Play, UserRound } from "lucide-react";
 
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";

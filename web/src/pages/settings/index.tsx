@@ -1,4 +1,5 @@
-import { App, Button, Form, Input, InputNumber, Select } from "antd";
+import { App, Button, Form, Input, InputNumber } from "antd";
+import { Select } from "@/components/ui/base/select";
 import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, MonitorUp, RadioTower, SlidersHorizontal, SquareTerminal, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";

@@ -1,5 +1,7 @@
+import { Segmented, Slider } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Segmented, Slider, Tooltip } from "antd";
+
 import { motion, useReducedMotion } from "motion/react";
 import { Camera, RotateCcw, Send, X } from "lucide-react";
 

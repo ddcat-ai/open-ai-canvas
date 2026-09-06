@@ -1,3 +1,5 @@
+import { StatusBadge } from "@/components/ui/base/badges";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { App, Button, Dropdown, Table } from "antd";
 import type { ButtonProps, MenuProps, TableProps } from "antd";
 import { saveAs } from "file-saver";
@@ -12,12 +14,18 @@ export const configuredSecretText = "已配置 · 留空不改";
 
 export type AdminStatusTone = "neutral" | "success" | "warning" | "error" | "info";
 
+/** admin 状态徽章：归并到自研 StatusBadge（outline 圆点胶囊），admin 全部页面零改动统一视觉。
+ * tone 归一：info 在 admin 中本就是前景中性（--admin-status-info: var(--foreground)）→ neutral。 */
+const adminToneToBadgeTone: Record<AdminStatusTone, "neutral" | "success" | "warning" | "error"> = {
+    neutral: "neutral",
+    success: "success",
+    warning: "warning",
+    error: "error",
+    info: "neutral",
+};
+
 export function AdminStatusBadge({ label, tone = "neutral", title }: { label: string; tone?: AdminStatusTone; title?: string }) {
-    return (
-        <span className="admin-status-badge" data-tone={tone} title={title}>
-            {label}
-        </span>
-    );
+    return <StatusBadge tone={adminToneToBadgeTone[tone]} title={title} label={label} />;
 }
 
 export function AdminStatTile({ label, value, detail, trend }: { label: string; value: string | number; detail?: string; trend?: { value: string; tone?: AdminStatusTone } }) {
@@ -133,14 +141,14 @@ export function AdminExportButton({
 
 export function AdminTableEmpty({ filtered = false, title, description, action }: { filtered?: boolean; title?: string; description?: string; action?: ReactNode }) {
     return (
-        <div className="flex min-h-40 flex-col items-center justify-center px-6 py-8 text-center">
-            <span className="grid size-9 place-items-center rounded-md bg-muted/35 text-foreground/45">
-                <SearchX className="size-4" />
-            </span>
-            <div className="mt-3 text-sm font-medium">{title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")}</div>
-            {description ? <p className="mt-1 max-w-sm text-xs leading-5 text-foreground/50">{description}</p> : null}
-            {action ? <div className="mt-4">{action}</div> : null}
-        </div>
+        <EmptyState
+            size="compact"
+            icon={SearchX}
+            title={title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")}
+            description={description}
+            action={action}
+            className="min-h-40 w-full justify-center"
+        />
     );
 }
 

@@ -1,5 +1,7 @@
+import { Button, Spin } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useRef, useState } from "react";
-import { Button, Spin, Tooltip } from "antd";
+
 import { Check, Mic, Square, X } from "lucide-react";
 
 import { AudioWaveform } from "./audio-waveform";

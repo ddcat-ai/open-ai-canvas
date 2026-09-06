@@ -1,4 +1,8 @@
-import { Button, Form, Input, InputNumber, Segmented, Select, Tooltip } from "antd";
+import { Button, Form, Input, InputNumber } from "antd";
+import { Select } from "@/components/ui/base/select";
+import { IconButton } from "@/components/ui/base/buttons";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { Check, Copy, LockKeyhole, Moon, Plus, Sparkles, Sun, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -82,7 +86,7 @@ export function SkinThemeEditor({
                             </button>
                             <div className="admin-skin-card-actions">
                                 <Tooltip title="复制这套主题">
-                                    <Button type="text" size="small" aria-label={`复制 ${theme.name}`} icon={<Copy className="size-3.5" />} disabled={disabled || themes.length >= 16} onClick={() => onDuplicate(theme.id)} />
+                                    <IconButton size="sm" variant="ghost" icon={Copy} aria-label={`复制 ${theme.name}`} disabled={disabled || themes.length >= 16} onClick={() => onDuplicate(theme.id)} />
                                 </Tooltip>
                                 <Tooltip title={theme.locked ? "系统默认主题不可删除" : "删除这套主题"}>
                                     <Button
@@ -134,7 +138,8 @@ export function SkinThemeEditor({
                         <strong>颜色体系</strong>
                         <span>同一用途的控件统一消费下列语义颜色</span>
                     </div>
-                    <Segmented<SkinThemeMode>
+                    <SegmentedControl<SkinThemeMode>
+                        ariaLabel="皮肤预览模式"
                         value={mode}
                         options={[
                             {

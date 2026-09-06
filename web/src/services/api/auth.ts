@@ -475,6 +475,11 @@ export function deleteAdminUser(id: string) {
     return request<{ ok: boolean }>(api.delete(`/admin/users/${encodeURIComponent(id)}`));
 }
 
+// purgeAdminUser 彻底删除（硬删）：账号与全部关联数据从系统移除，不可恢复。仅对无账务数据/无可管理内容的用户放行。
+export function purgeAdminUser(id: string) {
+    return request<{ ok: boolean }>(api.delete(`/admin/users/${encodeURIComponent(id)}/permanent`));
+}
+
 export function bulkDisableAdminUsers(userIds: string[]) {
     return request<{ users: LocalUser[]; disabledCount: number }>(api.post("/admin/users/bulk-disable", { userIds }));
 }

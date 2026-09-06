@@ -1,10 +1,12 @@
-import { App, Button, Form, Input, Select, Switch, Tag } from "antd";
+import { App, Button, Form, Input, Select, Tag } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { Cloud, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type OSSProvider, type S3Preset } from "@/lib/oss-settings";
 import { getUserOSSSetting, testUserOSSConnection, updateUserOSSSetting, type UserOSSSetting } from "@/services/api/resources";
 import { useUserStore } from "@/stores/use-user-store";
+import { StatusBadge } from "@/components/ui/base/badges";
 
 type OSSFormValues = {
     enabled?: boolean;
@@ -121,7 +123,7 @@ export function UserOSSSettingsForm() {
                     <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
-                    <Tag color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>
+                    <StatusBadge tone={setting?.enabled ? "success" : "neutral"} label={setting?.enabled ? "已启用" : "未启用"} />
                     <Tag color={setting?.hasAccessKeySecret ? "processing" : "warning"} icon={<ShieldCheck className="size-3" />}>
                         {setting?.hasAccessKeySecret ? "密钥已加密" : "未保存密钥"}
                     </Tag>
@@ -237,7 +239,7 @@ function connectionInput(values: OSSFormValues) {
 }
 
 function ConnectionTestStatus({ result, stale }: { result: OSSConnectionTestResult | null; stale: boolean }) {
-    if (stale) return <Tag color="warning">需重新测试</Tag>;
+    if (stale) return <StatusBadge tone="warning" label="需重新测试" />;
     if (!result) return null;
-    return <Tag color={result.ok ? "success" : "error"}>{result.ok ? `测试通过${result.testedAt ? ` · ${formatSavedAt(result.testedAt)}` : ""}` : result.message || "测试失败"}</Tag>;
+    return <StatusBadge tone={result.ok ? "success" : "error"} label={result.ok ? `测试通过${result.testedAt ? ` · ${formatSavedAt(result.testedAt)}` : ""}` : result.message || "测试失败"} />;
 }
