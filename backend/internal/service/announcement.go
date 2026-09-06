@@ -459,8 +459,8 @@ func validAnnouncementLevel(level model.AnnouncementLevel) bool {
 func normalizeAnnouncementInput(req CreateAnnouncementRequest) (string, string, model.AnnouncementLevel, error) {
 	title := strings.TrimSpace(req.Title)
 	content := strings.TrimSpace(req.Content)
-	if title == "" || content == "" {
-		return "", "", "", BadAuthRequest("请填写公告标题和正文")
+	if title == "" {
+		return "", "", "", BadAuthRequest("请填写公告标题")
 	}
 	if utf8.RuneCountInString(title) > 120 {
 		return "", "", "", BadAuthRequest("公告标题不能超过 120 个字符")

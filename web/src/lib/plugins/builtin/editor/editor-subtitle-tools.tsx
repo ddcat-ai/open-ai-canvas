@@ -1,7 +1,11 @@
 // 字幕工具（editor-shell 预设插件贡献 subtitle-tool 插槽，M3.5）。
 // SRT 导入导出（复用 srt-parser）+ 「从节点重建字幕片段」命令（§3.1 快照契约：
 // 节点 subtitleEntries 权威 → 重建时间线字幕快照，替换过期快照，单向显式同步）。
-// AI 高亮在 M6（editor-ai-assistant + ai.text 权限）接入，此处留占位。
+// AI 字幕高亮与关键词标注已在 M6 落地，入口在画布「字幕」弹窗
+//（canvas-subtitle-dialog.tsx，走 ai.text 权限门禁）：对权威节点字幕条目生成
+// 高亮/关键词，并随字幕条目渲染。此处（时间线字幕工具）字幕片段只是快照，
+// 编辑器预览尚无字幕文本渲染层，高亮视觉无处挂载，故不在此重复接 AI；
+// 待 M4 数据源接入、预览可渲染字幕文本后，再将高亮打通到时间线片段。
 
 import { useMemo, useState } from "react";
 
@@ -117,10 +121,11 @@ export function EditorSubtitleTools() {
                 <div className="rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">AI 高亮</span>
-                        <span className="rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] text-[var(--director-dock-fg)]/80">M6</span>
+                        <span className="rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] text-[var(--director-dock-fg)]/80">可用</span>
                     </div>
                     <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
-                        AI 字幕高亮与关键词标注将在 M6（ai-assistant 插件 + ai.text 权限）接入。
+                        AI 字幕高亮与关键词标注已实现，入口在画布「字幕」弹窗（点击字幕 → AI 高亮，走 ai.text 权限）。
+                        时间线字幕片段由该字幕快照重建而来；待编辑器预览支持字幕文本渲染后，高亮会随快照同步到这里。
                     </p>
                 </div>
 

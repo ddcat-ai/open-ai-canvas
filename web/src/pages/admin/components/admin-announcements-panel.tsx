@@ -810,13 +810,10 @@ function AnnouncementEditor({
                             </Form.Item>
                             <Form.Item
                                 name="content"
-                                label="公告正文"
-                                rules={[
-                                    { required: true, whitespace: true, message: "请填写公告正文" },
-                                    { max: 4000, message: "正文不能超过 4000 个字符" },
-                                ]}
+                                label="公告正文（可选）"
+                                rules={[{ max: 4000, message: "正文不能超过 4000 个字符" }]}
                             >
-                                <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 14, maxRows: 24 }} placeholder="填写服务状态、影响范围和用户需要采取的操作" />
+                                <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 14, maxRows: 24 }} placeholder="可选填写服务状态、影响范围和用户需要采取的操作" />
                             </Form.Item>
                         </section>
 
@@ -835,7 +832,7 @@ function AnnouncementEditor({
                             </div>
                             <h3>{watchedTitle?.trim() || "公告标题将在这里显示"}</h3>
                             {imagePreviewUrl ? <img src={imagePreviewUrl} alt="公告配图预览" className="mt-4 max-h-56 w-full rounded-lg border border-border/70 bg-muted/20 object-contain p-1" /> : null}
-                            {watchedContent?.trim() ? <AnnouncementContent content={watchedContent.trim()} className="admin-announcement-preview-content" /> : <p className="admin-announcement-preview-placeholder">公告正文将在这里显示。</p>}
+                            {watchedContent?.trim() ? <AnnouncementContent content={watchedContent.trim()} className="admin-announcement-preview-content" /> : <p className="admin-announcement-preview-placeholder">此公告仅展示标题。</p>}
                         </section>
                     </div>
                 </Form>
@@ -889,7 +886,7 @@ function AnnouncementEditor({
                             <div className="is-wide">
                                 <dt>公告正文</dt>
                                 <dd>
-                                    <AnnouncementContent content={pending.content} className="admin-announcement-confirm-content" />
+                                    {pending.content ? <AnnouncementContent content={pending.content} className="admin-announcement-confirm-content" /> : "无正文"}
                                 </dd>
                             </div>
                         </dl>

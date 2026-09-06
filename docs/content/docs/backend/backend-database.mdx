@@ -15,7 +15,11 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 6。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`。
+当前结构版本为 8。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录。
+
+历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
+
+升级前备份数据库，迁移命令必须沿用部署实际配置的数据库连接和数据目录。开发环境启用自动迁移时重新启动新代码即可；关闭自动迁移的部署先使用新构建的 `migrate-schema up`，然后 `migrate-schema verify`，成功后启动 Backend。迁移与记录写入在事务中执行；此修复不提供降级迁移，回退旧二进制可能无法识别历史顺序，应恢复匹配的备份和版本，不手工改迁移表。
 
 版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
 
@@ -34,6 +38,8 @@ description: 影策后端核心持久化表与状态边界
 | `email_verification_codes` | 保存注册和密码重置的一次性邮箱验证码 | 只保存带用途隔离的 HMAC 哈希；验证码 10 分钟过期、只能消费一次，明文不进入数据库 |
 
 密码重置在单个数据库事务中条件消费 `password_reset` 验证码、更新 `users.password_hash` 并删除 `auth_sessions`。任一步失败都会回滚，不能出现密码已修改但旧会话仍有效，或验证码已消耗但密码未更新的部分状态。
+
+邮件系统设置还保存电子邮件域名白名单。新配置默认填入 Gmail、163、126、QQ、Outlook、Hotmail、iCloud、Yahoo 和 Foxmail；管理员可按行编辑完整域名。白名单为空时不限制邮箱域名，非空时只有精确匹配的域名可注册。该规则只作用于新用户注册和注册验证码，不限制 SMTP 发件邮箱，也不影响已有账号找回密码。
 
 ## 技能包与版本
 
@@ -110,7 +116,7 @@ description: 影策后端核心持久化表与状态边界
 | `model_channels` | 保存系统渠道与用户渠道的连接配置 | 系统渠道密钥不进入公开目录；普通用户只能读取脱敏后的可用模型集合 |
 | `channel_models` | 保存系统渠道中的产品模型标识、上游模型 ID、显示名称、模型 Logo、能力、协议和版本状态 | `icon` 只用于模型选择器展示；能力、协议、启用状态和价格仍由 service 强校验 |
 | `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录 |
-| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联 |
+| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一，归档后可用同 code 重建目录项 |
 
 ## 插件管理
 
@@ -140,7 +146,7 @@ description: 影策后端核心持久化表与状态边界
 | `announcement_image_drafts` | 标记尚未发布的公告配图资源 | 发布/更新事务消费草稿；取消编辑显式回收，超过 24 小时的异常遗留草稿由后台清理 |
 | `user_announcement_reads` | 保存用户已读状态 | 同一用户和公告唯一；公告重新发布时清除旧已读记录 |
 
-活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
+活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。公告只要求标题，正文和配图均可为空。用户首次进入工作区时会自动看到未读公告，可以只关闭本次或选择今日不再提醒；主动打开公告中心后才会写入服务端已读状态。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
 
 ## 资源存储
 

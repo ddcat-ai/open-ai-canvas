@@ -11,6 +11,15 @@ import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 import { onlineToolToOps } from "../src/components/canvas/canvas-assistant-panel";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "../src/lib/generation-task-display";
 import { generationErrorMessage } from "../src/lib/generation-error";
+import { generationTaskNodeId } from "../src/lib/canvas/canvas-generation-task-sync";
+
+test("canvas recovery reads node identity from task summaries without full task input", () => {
+    const task: GenerationTask = { id: "task-summary", type: "canvas_image", status: "running", prompt: "", attempts: 1, createdAt: "", updatedAt: "", clientContext: { nodeId: "node-summary" } };
+    expect(generationTaskNodeId(task)).toBe("node-summary");
+    expect(generationTaskNodeId({ ...task, inputJson: "invalid json" })).toBe("node-summary");
+    expect(generationTaskNodeId({ ...task, clientContext: undefined, inputJson: JSON.stringify({ metadata: { nodeId: "node-detail" } }) })).toBe("node-detail");
+    expect(generationTaskNodeId({ ...task, clientContext: undefined })).toBe("");
+});
 
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();
@@ -275,6 +284,52 @@ test("a selected Dreamina local model never creates a Backend task", async () =>
     expect((localInput as unknown as { clientOperationId?: string }).clientOperationId).toBe("dreamina-task-route-0001");
     expect((localInput as unknown as { context?: unknown }).context).toEqual({ scope: "scoped" });
     expect(backendCalls).toBe(0);
+});
+
+test("backend text generation forwards streaming callbacks and thinking options", async () => {
+    let createdInput: Parameters<NonNullable<Parameters<typeof runBackendGenerationTask>[1]>["createTask"]>[0] | undefined;
+    let streamedText = "";
+    const running: GenerationTask = {
+        id: "text-stream-task-0001",
+        type: "canvas_text",
+        status: "running",
+        prompt: "写一个开场",
+        attempts: 1,
+        createdAt: "2026-09-04T00:00:00.000Z",
+        updatedAt: "2026-09-04T00:00:00.000Z",
+    };
+
+    const result = await runBackendGenerationTask(
+        {
+            mode: "text",
+            prompt: running.prompt,
+            config: backendModelConfig("reasoning-text-model"),
+            streamText: true,
+            enableThinking: true,
+            onTextDelta: (value) => {
+                streamedText = value;
+            },
+        },
+        {
+            createTask: async (input) => {
+                createdInput = input;
+                return running;
+            },
+            waitTask: async (_id, options) => {
+                options?.onTextDelta?.("实时正文");
+                return { ...running, status: "succeeded", resultJson: JSON.stringify({ mode: "text", text: "完整正文", reasoning: "思考摘要" }) };
+            },
+            runLocal: async () => {
+                throw new Error("must not use local Runtime");
+            },
+            createId: () => "unused-text-id",
+            now: () => "2026-09-04T00:00:00.000Z",
+        },
+    );
+
+    expect(createdInput?.input?.textOptions).toEqual({ stream: true, thinking: true });
+    expect(streamedText).toBe("实时正文");
+    expect(result).toEqual({ mode: "text", text: "完整正文", reasoning: "思考摘要" });
 });
 
 test("the shared local generation entry projects pre-receipt work as submitting without fake progress", async () => {

@@ -21,12 +21,13 @@ describe("backend API request error semantics", () => {
             response: {
                 status: 429,
                 data: { code: 42901, data: null, msg: "请求过于频繁，请稍后重试" },
+                headers: { "retry-after": "60" },
             },
         };
         const thrown = await request(Promise.reject(axiosError)).catch((error) => error);
 
         expect(thrown).toBeInstanceOf(ApiError);
-        expect(thrown).toMatchObject({ status: 429, code: 42901, message: "请求过于频繁，请稍后重试", retryable: true });
+        expect(thrown).toMatchObject({ status: 429, code: 42901, message: "请求过于频繁，请稍后重试", retryable: true, retryAfterMs: 60_000 });
         expect(thrown.cause).toBe(axiosError);
     });
 

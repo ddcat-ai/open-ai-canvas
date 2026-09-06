@@ -24,6 +24,8 @@ describe("workspace route loading", () => {
         for (const route of ["projects", "canvas", "assets", "wallet", "create"]) {
             expect(modules).toContain(`${route}: () => import`);
         }
+        expect(modules).toContain('projectDetail: () => import("@/pages/projects/detail")');
+        expect(modules).toContain('slug === "projects" && segments.length > 1');
         expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onPointerDown={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(linkTo)}");
@@ -54,6 +56,41 @@ describe("workspace route loading", () => {
         expect(canvasLibrary).toContain("window.requestAnimationFrame(() => navigate(");
         expect(canvasCard).toContain("onPointerEnter={onPrefetch}");
         expect(canvasCard).toContain("正在打开");
+    });
+
+    test("loads only the active project detail view and keeps canvas-only state out of the global layout", () => {
+        const detail = source("../src/pages/projects/detail.tsx");
+        const layout = source("../src/layouts/user-layout.tsx");
+        const canvas = source("../src/pages/canvas/index.tsx");
+
+        for (const view of ["assets", "canvases", "chapters", "overview", "settings", "workflow", "editor"]) {
+            expect(detail).toContain(`lazy(() => import("./detail/${view}"))`);
+        }
+        expect(layout).not.toContain("useCanvasUiStore");
+        expect(layout).not.toContain("CanvasDeleteProjectsDialog");
+        expect(canvas).toContain("deleteDialogOpen ? <Suspense");
+    });
+
+    test("does not poll wallet balance from permanent workspace chrome", () => {
+        const wallet = source("../src/hooks/use-wallet-balance.ts");
+        expect(wallet).not.toContain("refetchInterval:");
+        expect(wallet).toContain("wallet:updated");
+        expect(wallet).toContain("WALLET_STALE_TIME_MS");
+    });
+
+    test("defers modal-only markdown and canvas creation runtimes until interaction", () => {
+        const changelogButton = source("../src/components/layout/app-changelog-modal.tsx");
+        const announcements = source("../src/components/layout/system-announcement-center.tsx");
+        const projectDetail = source("../src/pages/projects/detail.tsx");
+        const workflow = source("../src/pages/projects/detail/workflow-production-workbench.tsx");
+
+        expect(changelogButton).toContain('lazy(() => import("@/components/layout/app-changelog-dialog")');
+        expect(changelogButton).not.toContain('from "react-markdown"');
+        expect(announcements).toContain('lazy(() => import("@/components/ui/aceternity/announcement-timeline-modal")');
+        expect(projectDetail).toContain('import("@/services/user-data-sync")');
+        expect(projectDetail).not.toContain('import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync"');
+        expect(workflow).not.toContain('from "@/lib/video-poster"');
+        expect(workflow).toContain('if (playing) return <video');
     });
 
     test("uses a quiet workspace skeleton for initial hydration", () => {

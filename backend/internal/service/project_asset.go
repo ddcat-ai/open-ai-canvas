@@ -11,12 +11,20 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
+// 资产来源：媒体导入合成/画布产物自动同步。画布产物用 canvas 以便素材面板分组。
+const (
+	AssetSourceUploaded = "uploaded"
+	AssetSourceCanvas   = "canvas"
+)
+
 type LinkProjectAssetRequest struct {
 	AssetID  string  `json:"assetId"`
 	Category string  `json:"category"`
 	FolderID *string `json:"folderId"`
 	// Title 媒体导入场景下由前端携带原始文件名；已有资产时忽略。
 	Title string `json:"title"`
+	// Source 仅媒体导入合成时生效：uploaded（默认）或 canvas（画布产物自动同步）。
+	Source string `json:"source"`
 }
 
 type UpdateProjectAssetRequest struct {
@@ -105,6 +113,10 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 		return ProjectAssetSummary{}, err
 	}
 	assetID := strings.TrimSpace(req.AssetID)
+	source := strings.TrimSpace(req.Source)
+	if source != AssetSourceCanvas {
+		source = AssetSourceUploaded
+	}
 	asset, err := s.repo.AssetForUser(userID, assetID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return ProjectAssetSummary{}, err
@@ -112,7 +124,7 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	if asset == nil {
 		// 媒体导入只落 resources 表；首次链接时按资源元数据合成资产记录，
 		// 避免“资源存在但无资产记录”导致导入永远失败。
-		asset, err = s.assetFromUploadedResource(userID, assetID, req.Title)
+		asset, err = s.assetFromUploadedResource(userID, assetID, req.Title, source)
 		if err != nil {
 			return ProjectAssetSummary{}, err
 		}
@@ -173,7 +185,7 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 
 // assetFromUploadedResource 把媒体导入上传的 Resource 合成为资产记录（内存构造，不落库）。
 // 资产创建与项目链接由 LinkProjectAsset 事务原子提交，避免失败留下孤立资产。
-func (s *Service) assetFromUploadedResource(userID string, resourceID string, title string) (*model.Asset, error) {
+func (s *Service) assetFromUploadedResource(userID string, resourceID string, title string, source string) (*model.Asset, error) {
 	resource, err := s.repo.ResourceForUser(userID, resourceID)
 	if err != nil {
 		return nil, err
@@ -192,7 +204,7 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 			"durationMs": resource.DurationMs,
 			"status":     resource.Status,
 			"mediaType":  resource.Kind,
-			"source":     "uploaded",
+			"source":     source,
 		},
 	})
 	if err != nil {

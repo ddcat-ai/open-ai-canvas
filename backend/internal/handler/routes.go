@@ -174,7 +174,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		initial, err := svc.TaskTextReplay(user.ID, c.Param("id"), after)
+		initial, err := svc.CachedTaskTextReplay(c.Request.Context(), user.ID, c.Param("id"), after)
 		if err != nil {
 			failService(c, err)
 			return
@@ -308,7 +308,7 @@ func streamTaskTextEvents(c *gin.Context, svc *service.Service, userID string, t
 			c.Writer.Flush()
 		case <-pollTicker.C:
 		}
-		next, err := svc.TaskTextReplay(userID, taskID, after)
+		next, err := svc.CachedTaskTextReplay(c.Request.Context(), userID, taskID, after)
 		if err != nil {
 			writeTaskTextSSE(c, "error", 0, map[string]string{"message": "任务文本流不可用"})
 			return

@@ -56,6 +56,55 @@ bun run dev
 
 前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
 
+## 时间线字幕转写（whisper.cpp）
+
+时间线“字幕转写”由**本地 whisper.cpp server** 执行：后端将片段音频预处理为 16k mono wav 后，POST 到 `CANVAS_WHISPER_BASE_URL/inference`（whisper server 原生接口，`response_format=verbose_json`）。未配置该地址时，转写任务会立即明确失败，提示“撰写失败未配置本地转写服务”。
+
+### 安装 whisper-server
+
+```bash
+brew install whisper-cpp
+```
+
+### 下载模型
+
+仓库脚本将模型放在 `.local/whisper-models/`（已被 `.gitignore` 忽略）。多语言模型（含中文）用 `ggml-base.bin`（约 141MB）；网络受限时可用 aifasthub 镜像：
+
+```bash
+mkdir -p .local/whisper-models
+curl -fL -o .local/whisper-models/ggml-base.bin \
+  https://aifasthub.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+```
+
+### 启动服务
+
+```bash
+scripts/start-whisper-local.sh
+```
+
+脚本默认以 `ggml-base.bin` 监听 `127.0.0.1:8082`（`-l auto` 自动识别语言）。需要换模型或端口时：`WHISPER_MODEL=ggml-small.bin WHISPER_PORT=8083 scripts/start-whisper-local.sh`。
+
+### 让后端指向该服务
+
+后端不读取 `.env` 文件，环境变量必须由启动 shell 注入（在手工启动命令基础上追加）：
+
+```bash
+cd backend
+CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug \
+CANVAS_WHISPER_BASE_URL=http://127.0.0.1:8082 \
+go run ./cmd/server
+```
+
+### 验证
+
+```bash
+# 服务就绪：返回 200/404 即可
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/
+# 冒烟：20 秒语音 → verbose_json 字幕段
+curl -s -X POST http://127.0.0.1:8082/inference \
+  -F 'file=@sample.wav' -F 'response_format=verbose_json'
+```
+
 ## Docker 开发
 
 需要容器化热更新时，在仓库根目录执行：

@@ -829,7 +829,8 @@ export function CanvasAssistantPanel({
             }
             const ops = onlineToolToOps(name, args, current, effectiveConfig);
             const result = await executeOps(ops, { source: "online", conversationId: sessionId, messageId: messageId || sessionId });
-            return { ok: result.ok, message: result.changed ? canvasAgentPostconditionMessage(result) : result.noopReason, data: result };
+            const { snapshot: _snapshot, before: _before, after: _after, ...cleanData } = result;
+            return { ok: result.ok, message: result.changed ? canvasAgentPostconditionMessage(result) : result.noopReason, data: cleanData };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
             return { ok: false, message: error instanceof Error ? error.message : "工具执行失败" };

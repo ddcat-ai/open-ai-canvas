@@ -438,6 +438,12 @@ function rebaseCommittedCanvasGenerationOntoLiveProject(scope: string, projectId
 export async function persistCanvasGenerationEffect(input: CanvasGenerationEffectInput) {
     throwIfAborted(input.signal);
     const scope = getActiveUserScope();
+    if (!useCanvasStore.getState().projects.some((project) => project.id === input.projectId)) {
+        const { loadCanvasProjectForEditing } = await import("@/services/user-data-sync");
+        await loadCanvasProjectForEditing(input.projectId);
+        throwIfAborted(input.signal);
+        if (scope !== getActiveUserScope()) throw new Error("账号已切换，无法写入生成结果");
+    }
     const baseRevision = canvasStoreStorageRevision(scope);
     const memoryProjects = useCanvasStore.getState().projects;
     const memoryProject = memoryProjects.find((candidate) => candidate.id === input.projectId);

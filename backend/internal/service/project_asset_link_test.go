@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -58,6 +59,7 @@ func TestLinkProjectAssetCreatesAssetFromUploadedResource(t *testing.T) {
 		AssetID:  "resource-1",
 		Category: "",
 		Title:    "开场.mp4",
+		Source:   AssetSourceCanvas,
 	})
 	if err != nil {
 		t.Fatalf("LinkProjectAsset: %v", err)
@@ -75,6 +77,20 @@ func TestLinkProjectAssetCreatesAssetFromUploadedResource(t *testing.T) {
 	}
 	if asset.Category != model.AssetCategoryMaterial {
 		t.Errorf("asset.Category = %q, want material", asset.Category)
+	}
+	if summary.Source != AssetSourceCanvas {
+		t.Errorf("summary.Source = %q, want canvas", summary.Source)
+	}
+	var payload struct {
+		Data struct {
+			Source string `json:"source"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(asset.PayloadJSON), &payload); err != nil {
+		t.Fatalf("payload unmarshal: %v", err)
+	}
+	if payload.Data.Source != AssetSourceCanvas {
+		t.Errorf("payload.source = %q, want canvas", payload.Data.Source)
 	}
 }
 

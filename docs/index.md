@@ -45,6 +45,6 @@
 - [功能](content/docs/overview/features.mdx)
 - [本地开发](content/docs/backend/local-development.mdx)
 - [后端数据库](content/docs/backend/backend-database.mdx)
-- 代码地图：待补充
-- 待办：待补充
+- [代码地图](content/docs/backend/code-map.mdx)
+- [待办](content/docs/progress/todo.mdx)
 - [待测试](content/docs/progress/pending-test.mdx)

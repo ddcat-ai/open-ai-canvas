@@ -61,12 +61,12 @@
 
 ## 交流与反馈
 
-Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
+Issue 反馈、技术讨论和产品升级建议都可以在 微信 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="280">
-  <img src="assets/wx.jpg" alt="影策 微信交流群" width="280">
+  <img src="assets/wx.jpg" alt="影策 微信交流群" width="100%">
 </p>
+
 
 ## 当前能力
 

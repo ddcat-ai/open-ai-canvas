@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 type taskTerminalRepositoryStub struct {
-	task          *model.Task
-	taskError     error
-	terminalCalls int
-	terminalError error
+	task             *model.Task
+	taskError        error
+	terminalCalls    int
+	terminalError    error
+	terminalConflict bool
 }
 
 func (r *taskTerminalRepositoryStub) Task(string) (*model.Task, error) {
@@ -27,8 +29,11 @@ func (r *taskTerminalRepositoryStub) Task(string) (*model.Task, error) {
 	return &copy, nil
 }
 
-func (r *taskTerminalRepositoryStub) UpdateTaskTerminalState(_ string, _ model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error) {
+func (r *taskTerminalRepositoryStub) UpdateTaskTerminalState(_ string, _ string, _ model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error) {
 	r.terminalCalls++
+	if r.terminalConflict {
+		return false, nil
+	}
 	if r.terminalError != nil {
 		return false, r.terminalError
 	}
@@ -39,6 +44,21 @@ func (r *taskTerminalRepositoryStub) UpdateTaskTerminalState(_ string, _ model.T
 		r.task.CompletedAt = &completedAt
 	}
 	return true, nil
+}
+
+func TestTaskTerminalConflictDoesNotRefundOrFinalize(t *testing.T) {
+	repo := &taskTerminalRepositoryStub{terminalConflict: true}
+	billing, replay := &taskTerminalBillingStub{}, &taskTerminalReplayStub{}
+	sessions, logger := &taskTerminalSessionStub{}, &taskTerminalLoggerStub{}
+	c := newTaskTerminalCoordinatorForTest(repo, billing, replay, sessions, logger, &taskTerminalOutputStub{})
+	task := &model.Task{ID: "task", LeaseOwner: "stale", Status: model.TaskStatusRunning}
+	err := c.handleExecutionFailure(task, errors.New("upstream failed"), false, false)
+	if !errors.Is(err, repository.ErrTaskStateConflict) {
+		t.Fatalf("missing conflict: %v", err)
+	}
+	if len(billing.refund)+len(billing.uncertain)+billing.settleCalls+len(replay.statuses)+len(sessions.messages) != 0 {
+		t.Fatal("stale worker performed terminal side effects")
+	}
 }
 
 type taskTerminalBillingStub struct {

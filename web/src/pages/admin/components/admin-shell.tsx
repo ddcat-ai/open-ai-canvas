@@ -33,7 +33,7 @@ import {
     ToggleLeft,
     UsersRound,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
@@ -164,7 +164,15 @@ export function AdminShell() {
                 </Tooltip>
                 <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
                     <MobileAdminNavigation />
-                    <Outlet />
+                    <Suspense
+                        fallback={
+                            <div className="p-8 text-sm text-foreground/60" role="status">
+                                正在加载管理页面…
+                            </div>
+                        }
+                    >
+                        <Outlet />
+                    </Suspense>
                 </section>
             </main>
         </ConfigProvider>

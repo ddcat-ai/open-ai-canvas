@@ -31,6 +31,7 @@ type TaskSummary struct {
 	ErrorCode                 string                     `json:"errorCode,omitempty"`
 	PreviewURL                string                     `json:"previewUrl,omitempty"`
 	PreviewKind               string                     `json:"previewKind,omitempty"`
+	PreviewPosterURL          string                     `json:"previewPosterUrl,omitempty"`
 	Attempts                  int                        `json:"attempts"`
 	StartedAt                 *time.Time                 `json:"startedAt"`
 	CompletedAt               *time.Time                 `json:"completedAt"`
@@ -41,6 +42,7 @@ type TaskSummary struct {
 }
 
 type TaskClientContext struct {
+	NodeID           string `json:"nodeId,omitempty"`
 	ConversationID   string `json:"conversationId,omitempty"`
 	MessageID        string `json:"messageId,omitempty"`
 	BatchIndex       int    `json:"batchIndex,omitempty"`
@@ -98,7 +100,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	if isContentModerationFailure(task.Error) {
 		errorCode = contentModerationErrorCode
 	}
-	previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
+	previewURL, previewKind, previewPosterURL := taskMediaPreviewWithPoster(task.ResultJSON, task.Type)
 	return TaskSummary{
 		ID:                        task.ID,
 		SessionID:                 task.SessionID,
@@ -120,6 +122,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		ErrorCode:                 errorCode,
 		PreviewURL:                previewURL,
 		PreviewKind:               previewKind,
+		PreviewPosterURL:          previewPosterURL,
 		Attempts:                  task.Attempts,
 		StartedAt:                 task.StartedAt,
 		CompletedAt:               task.CompletedAt,
@@ -134,6 +137,7 @@ func taskClientContext(raw string) *TaskClientContext {
 	var input struct {
 		Metadata struct {
 			Source          string `json:"source"`
+			NodeID          string `json:"nodeId"`
 			ConversationID  string `json:"conversationId"`
 			MessageID       string `json:"messageId"`
 			BatchIndex      int    `json:"batchIndex"`
@@ -150,16 +154,20 @@ func taskClientContext(raw string) *TaskClientContext {
 		return nil
 	}
 	metadata := input.Metadata
+	context := &TaskClientContext{NodeID: metadata.NodeID}
 	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
-		return &TaskClientContext{
-			ConversationID: metadata.ConversationID,
-			MessageID:      metadata.MessageID,
-			BatchIndex:     metadata.BatchIndex,
-			BatchCount:     metadata.BatchCount,
-		}
+		context.ConversationID = metadata.ConversationID
+		context.MessageID = metadata.MessageID
+		context.BatchIndex = metadata.BatchIndex
+		context.BatchCount = metadata.BatchCount
+		return context
 	}
 	if metadata.ShotID != "" && metadata.WorkflowStepID != "" {
-		return &TaskClientContext{DomainProjectID: metadata.DomainProjectID, ShotID: metadata.ShotID, WorkflowStepID: metadata.WorkflowStepID, ArtifactType: metadata.ArtifactType}
+		context.DomainProjectID = metadata.DomainProjectID
+		context.ShotID = metadata.ShotID
+		context.WorkflowStepID = metadata.WorkflowStepID
+		context.ArtifactType = metadata.ArtifactType
+		return context
 	}
 	chapterOperation := ""
 	if metadata.Operation == "chapter_character_breakdown" {
@@ -168,29 +176,68 @@ func taskClientContext(raw string) *TaskClientContext {
 		chapterOperation = "storyboard"
 	}
 	if chapterOperation == "" || metadata.DomainProjectID == "" || metadata.ChapterID == "" {
-		return nil
+		if context.NodeID == "" {
+			return nil
+		}
+		return context
 	}
-	return &TaskClientContext{
-		DomainProjectID:  metadata.DomainProjectID,
-		ChapterID:        metadata.ChapterID,
-		ChapterOperation: chapterOperation,
-	}
+	context.DomainProjectID = metadata.DomainProjectID
+	context.ChapterID = metadata.ChapterID
+	context.ChapterOperation = chapterOperation
+	return context
 }
 
 // 列表只暴露首个可访问媒体地址，避免把完整生成结果和内嵌数据带回前端。
 func taskMediaPreview(raw string, taskType string) (string, string) {
+	previewURL, previewKind, _ := taskMediaPreviewWithPoster(raw, taskType)
+	return previewURL, previewKind
+}
+
+func taskMediaPreviewWithPoster(raw string, taskType string) (string, string, string) {
 	if strings.TrimSpace(raw) == "" {
-		return "", ""
+		return "", "", ""
 	}
 	var payload any
 	if json.Unmarshal([]byte(raw), &payload) != nil {
-		return "", ""
+		return "", "", ""
 	}
 	defaultKind := "image"
 	if strings.Contains(strings.ToLower(taskType), "video") {
 		defaultKind = "video"
 	}
-	return findTaskMediaPreview(payload, defaultKind)
+	previewURL, previewKind := findTaskMediaPreview(payload, defaultKind)
+	posterURL := findTaskMediaPoster(payload)
+	if previewKind == "image" && posterURL == "" {
+		posterURL = previewURL
+	}
+	return previewURL, previewKind, posterURL
+}
+
+func findTaskMediaPoster(value any) string {
+	switch item := value.(type) {
+	case []any:
+		for _, child := range item {
+			if posterURL := findTaskMediaPoster(child); posterURL != "" {
+				return posterURL
+			}
+		}
+	case map[string]any:
+		for _, key := range []string{"posterUrl", "posterURL", "thumbnailUrl", "thumbnailURL", "coverUrl", "coverURL", "poster", "thumbnail", "cover"} {
+			child, exists := item[key]
+			if !exists {
+				continue
+			}
+			if previewURL, previewKind := findTaskMediaPreview(child, "image"); previewURL != "" && previewKind == "image" {
+				return previewURL
+			}
+		}
+		for _, child := range item {
+			if posterURL := findTaskMediaPoster(child); posterURL != "" {
+				return posterURL
+			}
+		}
+	}
+	return ""
 }
 
 func findTaskMediaPreview(value any, hint string) (string, string) {

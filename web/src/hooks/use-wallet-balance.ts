@@ -3,9 +3,9 @@ import { useEffect } from "react";
 
 import { getWallet } from "@/services/api/wallet";
 
-// 余额不是页面心跳数据。工作区内多个位置共享同一个 Query，只有首次进入、显式
-// wallet:updated 事件或低频后台刷新才需要访问服务端，避免每个窗口 focus 都打一次列表接口。
-const WALLET_REFRESH_INTERVAL_MS = 60_000;
+// 余额不是页面心跳数据。工作区内多个位置共享同一个 Query，只在首次进入、显式
+// wallet:updated 事件或用户主动刷新时访问服务端，避免常驻布局产生永久轮询。
+const WALLET_STALE_TIME_MS = 5 * 60_000;
 const walletBalanceQueryKey = (userId: string) => ["wallet-balance", userId] as const;
 
 export function useWalletBalance(userId?: string, enabled = true) {
@@ -20,8 +20,7 @@ export function useWalletBalance(userId?: string, enabled = true) {
             if (wallet.account.userId !== activeUserId) throw new Error("积分账户与当前用户不一致");
             return wallet.account.availableMicrocredits;
         },
-        staleTime: WALLET_REFRESH_INTERVAL_MS,
-        refetchInterval: WALLET_REFRESH_INTERVAL_MS,
+        staleTime: WALLET_STALE_TIME_MS,
         refetchOnWindowFocus: false,
     });
 

@@ -99,19 +99,19 @@ func (w *taskWorkerCoordinator) processTimelineTranscription(task *model.Task, c
 
 func (w *taskWorkerCoordinator) failTimelineTask(task *model.Task, stage string, message string) error {
 	s := w.service
-	done, err := s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, model.TaskStatusFailed, stage, message, time.Now())
+	done, err := s.repo.UpdateTaskTerminalState(task.ID, task.LeaseOwner, model.TaskStatusRunning, model.TaskStatusFailed, stage, message, time.Now())
 	if err != nil {
 		return fmt.Errorf("写入转写失败态失败: %w", err)
 	}
-	s.logInfo(task.UserID, task.ID, fmt.Sprintf("时间线转写失败: %s", message), "")
 	if !done {
-		return fmt.Errorf("时间线转写已失败: %s", message)
+		return fmt.Errorf("时间线任务状态或租约已变化：%w", repository.ErrTaskStateConflict)
 	}
+	s.logInfo(task.UserID, task.ID, fmt.Sprintf("时间线转写失败: %s", message), "")
 	return nil
 }
 
 func (w *taskWorkerCoordinator) progress(task *model.Task, stage string, progress int) error {
-	if err := w.service.repo.UpdateTaskProgress(task.ID, stage, progress); err != nil {
+	if err := w.service.repo.UpdateTaskProgressForLease(task.ID, task.LeaseOwner, stage, progress); err != nil {
 		return fmt.Errorf("更新转写进度失败: %w", err)
 	}
 	return nil

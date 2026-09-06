@@ -7,7 +7,10 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-model-store";
 import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
 import { initializeClientDiagnostics, setDiagnosticUserScope } from "@/services/diagnostics/client-diagnostics";
+import { fetchPluginRuntimeState, setUserPluginEnabled } from "@/services/api/plugins";
+import { usePluginStore } from "@/stores/use-plugin-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { appQueryClient } from "@/lib/query-client";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
@@ -18,6 +21,51 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
+    const setPluginStates = usePluginStore((state) => state.setPluginStates);
+    const pluginStoreHydrated = usePluginStore((state) => state.hydrated);
+
+    useEffect(() => () => {
+        usePluginStore.getState().setRuntimeStatuses({});
+        usePluginStore.getState().setPluginStates({});
+    }, []);
+
+    useEffect(() => {
+        if (!userId || !pluginStoreHydrated) return;
+        let cancelled = false;
+        void appQueryClient.fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
+            .then(async (runtime) => {
+                if (cancelled || useUserStore.getState().user?.id !== userId) return;
+                const statuses = { ...runtime.statuses };
+                const states = { ...runtime.states };
+                const legacyEnabledIds = usePluginStore
+                    .getState()
+                    .installations.filter((installation) => installation.enabled && states[installation.manifest.id]?.canToggle && !states[installation.manifest.id]?.userConfigured)
+                    .map((installation) => installation.manifest.id);
+                if (legacyEnabledIds.length) {
+                    try {
+                        const migrated = await Promise.all(legacyEnabledIds.map((pluginId) => setUserPluginEnabled(pluginId, true)));
+                        for (const state of migrated) states[state.pluginId] = state;
+                        for (const pluginId of legacyEnabledIds) statuses[pluginId] = states[pluginId]?.effectiveEnabled ? "enabled" : "disabled";
+                    } catch (error) {
+                        console.warn("迁移用户插件启用状态失败，已保留服务端状态", error);
+                    }
+                }
+                if (!cancelled && useUserStore.getState().user?.id === userId) {
+                    setRuntimeStatuses(statuses);
+                    setPluginStates(states);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRuntimeStatuses({});
+                    setPluginStates({});
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [pluginStoreHydrated, setPluginStates, setRuntimeStatuses, userId]);
 
     useEffect(() => {
         initializeClientDiagnostics();
