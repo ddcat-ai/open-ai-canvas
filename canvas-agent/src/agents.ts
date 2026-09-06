@@ -221,11 +221,13 @@ function pipeWorkBuddyEvents(
                     // usage 挂在 item.completed 上，前端 usageText(event) 会把它渲染成消息 meta（"输入/输出 tok"）
                     emit("agent_event", { agent: "workbuddy", type: "item.completed", item: { id, type: "agent_message", text: finalText }, usage: { total_tokens: input + output, input_tokens: input, output_tokens: output } });
                 }
-                // PATCH(agent-workbuddy-usage-ledger): 每轮消耗落本地 JSONL 台账，主人可随时查总量
+                // PATCH(agent-workbuddy-usage-ledger): 每轮消耗落本地 JSONL 台账，主人可随时查总量。
+                // PATCH(usage-ledger-newline): JSONL 一行一记录，末尾必须有 \n——否则所有记录
+                // 粘成一坨，按行读的解析器整条失败（2026-09-06 实测 6 轮记录全部粘连）。
                 if (input > 0 || output > 0) {
                     void fs.appendFile(
                         path.join(CONFIG_DIR, "workbuddy-usage.jsonl"),
-                        JSON.stringify({ time: new Date().toISOString(), agent: "workbuddy", model: WORKBUDDY_MODEL, resumed: Boolean(workbuddyResumeFlag), session_id: sessionId || undefined, input_tokens: input, output_tokens: output }),
+                        JSON.stringify({ time: new Date().toISOString(), agent: "workbuddy", model: WORKBUDDY_MODEL, resumed: Boolean(workbuddyResumeFlag), session_id: sessionId || undefined, input_tokens: input, output_tokens: output }) + "\n",
                     ).catch(() => undefined);
                 }
                 if (failed) {
