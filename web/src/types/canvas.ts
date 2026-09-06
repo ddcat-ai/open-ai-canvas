@@ -196,6 +196,8 @@ export type CanvasNodeMetadata = {
               sourceType?: string;
           };
     content?: string;
+    /** Explicit provenance for resource-only nodes; do not infer from assetId/content. */
+    assetOrigin?: "local-upload";
     previewContent?: string;
     videoPreview?: {
         content: string;
@@ -435,6 +437,10 @@ export type CanvasNodeData = {
     parentId?: string;
     metadata?: CanvasNodeMetadata;
 };
+
+export function isLocalUploadedAssetNode(node: CanvasNodeData | undefined | null) {
+    return node?.type === CanvasNodeType.Image && node.metadata?.assetOrigin === "local-upload";
+}
 
 export type CanvasConnection = {
     id: string;

@@ -139,6 +139,7 @@ import {
     type ContextMenuState,
     type Position,
     type ViewportTransform,
+    isLocalUploadedAssetNode,
 } from "@/types/canvas";
 import type { ReferenceImage } from "@/types/image";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
@@ -1006,7 +1007,9 @@ function InfiniteCanvasPage() {
         // Selection is transient, but the LibTV-style paint order survives
         // deselection so a clicked lower node stays above its neighbours.
         if (node.type !== CanvasNodeType.Frame) bringNodeToFront(node.id);
-        if (node.type === CanvasNodeType.Drawing) {
+        if (isLocalUploadedAssetNode(node)) {
+            setDialogNodeId(null);
+        } else if (node.type === CanvasNodeType.Drawing) {
             setDialogNodeId(null);
             setDrawingNodeId(node.id);
         } else if (node.type === CanvasNodeType.Script) {
@@ -1033,7 +1036,7 @@ function InfiniteCanvasPage() {
 
     const handleNodeDragEnd = useCallback((nodeId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
-        if (!node || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === ART_CRITIQUE_NODE_TYPE) {
+        if (!node || isLocalUploadedAssetNode(node) || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === ART_CRITIQUE_NODE_TYPE) {
             setDialogNodeId(null);
             return;
         }
@@ -1799,7 +1802,7 @@ function InfiniteCanvasPage() {
 
     const renderCanvasNodePanel = useCallback(
         (panelNode: CanvasNodeData) => {
-            if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
+            if (isLocalUploadedAssetNode(panelNode) || panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
             return panelNode.type === CanvasNodeType.Config ? (
                 <CanvasConfigComposer
                     value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}

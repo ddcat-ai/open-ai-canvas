@@ -156,10 +156,10 @@ export function useCanvasUpload({
                 position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
                 width: size.width,
                 height: size.height,
-                metadata: imageMetadata(image),
+                metadata: { ...imageMetadata(image), assetOrigin: "local-upload" },
             };
             setNodes((current) => [...current, node]);
-            selectInsertedNode(id, "open");
+            selectInsertedNode(id, "close");
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
             progress.done(persisted ? "图片已添加到画布" : "图片已添加，项目资产待重试");
@@ -192,6 +192,7 @@ export function useCanvasUpload({
                 metadata: {
                     content,
                     storageKey: asset.data.storageKey,
+                    ...(isLocalUploadedAsset(asset) ? { assetOrigin: "local-upload" as const } : {}),
                     status: NODE_STATUS_SUCCESS,
                     naturalWidth: asset.data.width,
                     naturalHeight: asset.data.height,
@@ -809,6 +810,11 @@ export function useCanvasUpload({
         uploadStatus,
         uploadTimelineMedia,
     };
+}
+
+function isLocalUploadedAsset(asset: ImageAsset) {
+    const source = `${asset.source || ""} ${typeof asset.metadata?.source === "string" ? asset.metadata.source : ""}`.toLowerCase();
+    return source.includes("upload") || source.includes("上传") || source.includes("manual") || source.includes("手动");
 }
 
 function hasDraggedFiles(event: DragEvent<HTMLElement>) {

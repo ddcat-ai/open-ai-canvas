@@ -44,6 +44,7 @@ export function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
     return {
         content: image.url,
         storageKey: image.storageKey,
+        assetOrigin: undefined,
         status: "success",
         naturalWidth: image.width,
         naturalHeight: image.height,
