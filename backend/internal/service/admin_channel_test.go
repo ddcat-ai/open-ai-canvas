@@ -52,6 +52,31 @@ func TestMergeChannelRequestSupportsEnabledOnlyPatch(t *testing.T) {
 	}
 }
 
+func TestUpdateSystemChannelEnabledOnlySkipsOutboundResolution(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	svc.dataDir = t.TempDir()
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Dead", BaseURL: "https://dead.invalid/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `[]`}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	disabled := false
+	updated, err := svc.UpdateSystemChannel(admin, channel.ID, ChannelRequest{Enabled: &disabled})
+	if err != nil {
+		t.Fatalf("UpdateSystemChannel() should not resolve the stored URL for an enabled-only patch: %v", err)
+	}
+	if updated.Enabled {
+		t.Fatal("UpdateSystemChannel() did not persist disabled state")
+	}
+	var stored model.ModelChannel
+	if err := db.First(&stored, "id = ?", channel.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Enabled {
+		t.Fatal("stored channel is still enabled after update")
+	}
+}
+
 func TestChannelFromRequestStoresAndClearsHeaders(t *testing.T) {
 	request := ChannelRequest{Name: "Headers", BaseURL: "https://example.com/v1", Headers: []OutboundHeader{{Name: "User-Agent", Value: "Custom Agent"}}}
 	channel, err := channelFromRequest(request, model.ModelChannel{})
@@ -150,6 +175,81 @@ func TestFetchAdminChannelModelsReaddsDeletedModel(t *testing.T) {
 	}
 	if total != 2 {
 		t.Fatalf("model history count = %d, want 2", total)
+	}
+}
+
+func TestImportAdminChannelModelsOnlyImportsSelectedModels(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-a"},{"id":"model-b"}]}`))
+	}))
+	defer upstream.Close()
+
+	svc, db := newChannelModelTestService(t)
+	svc.runtimeCapabilities = RuntimeCapabilities{desktopLocalChannels: true}
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: upstream.URL + "/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `[]`, AllowLocalChannel: true}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	preview, err := svc.PreviewAdminChannelModels(context.Background(), admin, channel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview) != 2 {
+		t.Fatalf("preview models = %#v, want two models", preview)
+	}
+	var before int64
+	if err := db.Model(&model.ChannelModel{}).Where("channel_id = ?", channel.ID).Count(&before).Error; err != nil {
+		t.Fatal(err)
+	}
+	if before != 0 {
+		t.Fatalf("preview created %d channel models", before)
+	}
+
+	result, err := svc.ImportAdminChannelModels(context.Background(), admin, channel.ID, []string{"model-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Added != 1 || len(result.Models) != 1 || result.Models[0] != "model-b" {
+		t.Fatalf("import result = %#v, want only model-b", result)
+	}
+	var imported []model.ChannelModel
+	if err := db.Where("channel_id = ?", channel.ID).Find(&imported).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(imported) != 1 || imported[0].ModelKey != "model-b" {
+		t.Fatalf("imported models = %#v, want only model-b", imported)
+	}
+}
+
+func TestImportAdminChannelModelsRejectsUnknownSelection(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-a"}]}`))
+	}))
+	defer upstream.Close()
+
+	svc, db := newChannelModelTestService(t)
+	svc.runtimeCapabilities = RuntimeCapabilities{desktopLocalChannels: true}
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: upstream.URL + "/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `[]`, AllowLocalChannel: true}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.ImportAdminChannelModels(context.Background(), admin, channel.ID, []string{"not-in-catalog"})
+	var authErr *AuthError
+	if !errors.As(err, &authErr) || authErr.Message != "所选模型不在上游模型目录中：not-in-catalog" {
+		t.Fatalf("ImportAdminChannelModels() error = %#v", err)
+	}
+	var count int64
+	if err := db.Model(&model.ChannelModel{}).Where("channel_id = ?", channel.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("unknown selection created %d channel models", count)
 	}
 }
 

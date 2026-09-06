@@ -56,7 +56,7 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 		sourceType := strings.ToLower(strings.TrimSpace(data.Type))
 		kind := sourceType
 		if sourceType == "material-style" {
-			// 风格素材没有普通生成 URL，但有可复用封面时可以降级为影策图片参考节点。
+			// 风格素材没有普通生成 URL，但有可复用封面时可以降级为宿主图片参考节点。
 			kind = "image"
 		} else if kind != "image" && kind != "video" {
 			result.SkippedNodes = append(result.SkippedNodes, LibTVImportIssue{ID: nodeKey, Name: raw.Name, Reason: "暂不支持的节点类型"})

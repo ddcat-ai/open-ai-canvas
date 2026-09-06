@@ -22,7 +22,7 @@ export function generationTaskInput(task: GenerationTask) {
 }
 
 export function generationTaskNodeId(task: GenerationTask) {
-    return generationTaskInput(task)?.metadata?.nodeId || "";
+    return task.clientContext?.nodeId || generationTaskInput(task)?.metadata?.nodeId || "";
 }
 
 export function generationTaskMode(task: GenerationTask, fallback?: CanvasGenerationMode): CanvasGenerationMode {
@@ -258,8 +258,8 @@ function applySuccessfulVersionSelection(nodes: CanvasNodeData[], updatedNode: C
 
 export async function syncGenerationTaskToCanvasStore(task: GenerationTask) {
     if (task.status !== "succeeded" || !task.projectId) return false;
-    const store = useCanvasStore.getState();
-    const project = store.projects.find((item) => item.id === task.projectId);
+    const { loadCanvasProjectForEditing } = await import("@/services/user-data-sync");
+    const project = await loadCanvasProjectForEditing(task.projectId);
     if (!project) return false;
     const node = findGenerationTaskNode(project.nodes, task);
     if (!node) return false;

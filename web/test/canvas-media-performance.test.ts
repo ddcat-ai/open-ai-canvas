@@ -69,13 +69,16 @@ describe("large canvas media rendering", () => {
         expect(globalStylesSource).not.toMatch(/\[data-canvas-viewport-interacting="true"\]\s+\.canvas-node-shell\s*\{[^}]*content-visibility:\s*hidden/);
     });
 
-    test("lets inactive video nodes hydrate their own first-frame preview", () => {
-        expect(canvasNodeContentSource).toContain("if (previewUrl || !node.metadata?.content || !updateMetadataRef.current)");
+    test("keeps inactive video nodes on a viewport-gated static first frame", () => {
+        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\n}\n\nfunction VideoPreviewPlayButton/)?.[0] || "";
+        expect(canvasNodeContentSource).toContain("if (previewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current)");
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
-        expect(canvasNodeContentSource).toContain("mediaActive || !hasPassivePreview");
-        expect(canvasNodeContentSource).toContain('muted\n                playsInline\n                preload="auto"');
-        expect(canvasNodeContentSource).toContain("onLoadedMetadata={(event) => primePassiveVideoFrame(event.currentTarget)}");
-        expect(canvasNodeContentSource).toContain("video.currentTime = Math.min(0.001, video.duration)");
+        expect(inactivePreviewSource).not.toContain("<video");
+        expect(inactivePreviewSource).toContain("<VideoPreviewPlayButton");
+        expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, mediaActive)");
+        expect(canvasNodeContentSource).toContain("onMediaPlayRequest?.(node.id)");
+        expect(canvasNodeContentSource).toContain('autoPlay preload="metadata"');
+        expect(canvasNodeContentSource).toContain("scheduleResourceBlobCache(node.metadata?.storageKey || \"\")");
     });
 
     test("allows failed or empty first-frame requests to retry", () => {
@@ -174,13 +177,14 @@ describe("video canvas controls", () => {
         expect(videoPlayerSource).toContain("VolumeLow: defaultLayoutIcons.MuteButton.Mute");
         expect(videoPlayerSource).toContain("VolumeHigh: defaultLayoutIcons.MuteButton.Mute");
         expect(videoPlayerSource).toContain("muteButton.disabled = noAudio;");
-        expect(videoPlayerSource).toContain("(volumeSlider as HTMLElement & { disabled?: boolean }).disabled = noAudio;");
+        expect(videoPlayerSource).not.toContain("volumeSlider as HTMLElement & { disabled?: boolean }");
+        expect(videoPlayerSource).toContain('volumeSlider.setAttribute("aria-disabled", String(noAudio))');
         expect(videoPlayerSource).toContain('event.target.closest(".vds-volume,.vds-mute-button,.vds-volume-slider")');
         expect(videoPlayerSource).toContain("onKeyDown={stopCanvasControlInteraction}");
         expect(videoPlayerSource).not.toContain("onPointerDownCapture={stopCanvasControlInteraction}");
         expect(videoPlayerSource).not.toContain("onMouseDownCapture={stopCanvasControlInteraction}");
         expect(videoPlayerSource).not.toContain("onClickCapture={stopCanvasControlClick}");
-        expect(canvasNodeContentSource).toContain("hasAudio={inferVideoHasAudio(node.metadata)} autoPlay={mediaActive}");
+        expect(canvasNodeContentSource).toContain('hasAudio={inferVideoHasAudio(node.metadata)} autoPlay preload="metadata"');
         expect(canvasNodeContentSource).toContain('if (["false", "0", "off", "no", "disabled"].includes(value || "")) return false;');
     });
 
@@ -225,6 +229,8 @@ describe("video canvas controls", () => {
     });
 
     test("keeps the first activation click from being treated as a node drag", () => {
+        expect(canvasNodeContentSource).toContain("onPointerDown={(event) => event.stopPropagation()}");
+        expect(canvasNodeContentSource).toContain("onMouseDown={(event) => event.stopPropagation()}");
         expect(videoPlayerSource).toContain("onClick={stopCanvasControlClick}");
         expect(videoPlayerSource).toContain('event.target.closest(".vds-controls,.vds-menu-items")');
         expect(videoPlayerSource).toContain("event.nativeEvent?.composedPath?.()");

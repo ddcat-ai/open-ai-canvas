@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { cn } from "@/lib/utils";
 
 type FullScreenLoaderProps = {
@@ -17,50 +18,17 @@ export function FullScreenLoader({ label = "正在恢复工作区", detail = "�
             aria-label={`${label}，${detail}`}
             className={cn("full-screen-loader", className)}
         >
-            <div className="full-screen-loader-shell">
-                <header className="full-screen-loader-topbar" aria-hidden="true">
-                    <div className="full-screen-loader-topbar-group">
-                        <span className="loader-placeholder loader-placeholder-control" />
-                        <span className="loader-placeholder loader-placeholder-mark" />
-                        <span className="loader-placeholder loader-placeholder-wordmark" />
-                    </div>
-                    <div className="full-screen-loader-topbar-group">
-                        <span className="loader-placeholder loader-placeholder-control" />
-                        <span className="loader-placeholder loader-placeholder-control" />
-                        <span className="loader-placeholder loader-placeholder-control" />
-                    </div>
-                </header>
-
-                <div className="full-screen-loader-main">
-                    <aside className="full-screen-loader-rail" aria-hidden="true">
-                        <span className="loader-placeholder loader-placeholder-rail-item" />
-                        <span className="loader-placeholder loader-placeholder-rail-item" />
-                        <span className="loader-placeholder loader-placeholder-rail-item" />
-                        <span className="loader-placeholder loader-placeholder-rail-item" />
-                        <span className="loader-placeholder loader-placeholder-rail-item" />
-                    </aside>
-
-                    <main className="full-screen-loader-stage">
-                        <div className="full-screen-loader-stage-header">
-                            <div className="full-screen-loader-status">
-                                <LoadingSignal />
-                                <span>{label}</span>
-                            </div>
-                            <span className="loader-placeholder loader-placeholder-action" aria-hidden="true" />
-                        </div>
-                        <div className="full-screen-loader-stage-grid" aria-hidden="true">
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                            <LoaderSurface />
-                        </div>
-                    </main>
-                </div>
+            <div className="full-screen-loader-scene" aria-hidden="true">
+                <span className="full-screen-loader-guide is-horizontal" />
+                <span className="full-screen-loader-guide is-vertical" />
+                <span className="full-screen-loader-frame is-left"><i /><i /><i /></span>
+                <span className="full-screen-loader-frame is-right"><i /><i /><i /></span>
+                <span className="full-screen-loader-script"><i /><i /><i /><b /></span>
+                <span className="full-screen-loader-timeline"><i /><i /><i /><i /><b /></span>
+                <span className="full-screen-loader-orbit" />
+                <BrandLogoFrame className="full-screen-loader-logo" logoClassName="full-screen-loader-logo-image" alt="" fallback={<span className="full-screen-loader-logo-fallback" />} />
             </div>
+            <div className="full-screen-loader-copy"><strong>{label}</strong><span>{detail}</span><LoadingSignal /></div>
         </div>
     );
 }
@@ -76,6 +44,7 @@ export function WorkspaceRouteLoader({ label = "正在打开页面" }: { label?:
     return (
         <section data-workspace-route-loader className={cn("workspace-route-loader", visible && "is-visible")} role="status" aria-live="polite" aria-label={label}>
             <div className="workspace-route-loader-content">
+                <span className="workspace-route-loader-mark"><BrandLogoFrame className="workspace-route-loader-logo" logoClassName="size-4" alt="" fallback={<span className="full-screen-loader-logo-fallback" />} /></span>
                 <LoadingSignal />
                 <span>{label}</span>
             </div>
@@ -84,15 +53,5 @@ export function WorkspaceRouteLoader({ label = "正在打开页面" }: { label?:
 }
 
 function LoadingSignal() {
-    return <span className="loading-signal" aria-hidden="true" />;
-}
-
-function LoaderSurface() {
-    return (
-        <div className="full-screen-loader-surface">
-            <span className="loader-placeholder loader-placeholder-media" />
-            <span className="loader-placeholder loader-placeholder-title" />
-            <span className="loader-placeholder loader-placeholder-meta" />
-        </div>
-    );
+    return <span className="loading-signal" aria-hidden="true"><i /><i /><i /></span>;
 }

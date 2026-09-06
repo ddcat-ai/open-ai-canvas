@@ -14,7 +14,7 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, type Asset,
 import { withGenerationAssetStorageLock } from "../src/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceLock, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
-import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, installRemoteUserDataAutoSync, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "../src/services/user-data-sync";
+import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, initializeRemoteUserDataSession, loadCanvasProjectForEditing, loadAssetLibraryPage, installRemoteUserDataAutoSync, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
 import { useUserStore } from "../src/stores/use-user-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "../src/stores/canvas/use-canvas-history-store";
@@ -4404,21 +4404,75 @@ test("failed remote baseline cannot upload stale local cache", async () => {
     }
 });
 
-test("user session stays unhydrated until the remote baseline is durable", async () => {
+test("incremental sessions leave cached entities untouched and fetch only the opened canvas", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { setTimeout: () => 1, clearTimeout: () => undefined, localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined } } });
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const previousAssets = useAssetStore.getState().assets;
+    const requests: string[] = [];
+    const cached = storedCanvasProject("cached-unopened", "Cached");
+    const remote = storedCanvasProject("remote-opened", "Remote");
+    apiClient.defaults.adapter = async (config) => {
+        requests.push(`${config.method} ${config.url}`);
+        if (config.url !== "/canvas-projects/remote-opened") throw new Error("unexpected request");
+        return { data: { code: 0, data: { project: remote }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    try {
+        useCanvasStore.setState({ projects: [cached] });
+        useAssetStore.setState({ assets: [] });
+        await initializeRemoteUserDataSession("incremental-owner");
+        await saveRemoteUserDataNow();
+        expect(requests).toEqual([]);
+        expect((await loadCanvasProjectForEditing(remote.id))?.title).toBe("Remote");
+        await loadCanvasProjectForEditing(remote.id);
+        expect(requests).toEqual(["get /canvas-projects/remote-opened"]);
+        expect(useCanvasStore.getState().projects.map((project) => project.id)).toEqual([cached.id, remote.id]);
+        useCanvasStore.setState({ projects: [remote] });
+        await saveRemoteUserDataNow();
+        expect(requests).toEqual(["get /canvas-projects/remote-opened"]);
+    } finally {
+        resetRemoteUserDataSync();
+        apiClient.defaults.adapter = previousAdapter;
+        useCanvasStore.setState({ projects: previousProjects });
+        useAssetStore.setState({ assets: previousAssets });
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("an asset page arriving after account switch cannot populate the new account", async () => {
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousAssets = useAssetStore.getState().assets;
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    apiClient.defaults.adapter = async (config) => {
+        await waiting;
+        return { data: { code: 0, data: { assets: [], page: 1, pageSize: 40, total: 0, hasMore: false }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    try {
+        await initializeRemoteUserDataSession("account-A");
+        const request = loadAssetLibraryPage({ page: 1, pageSize: 40 }).catch((error: unknown) => error);
+        await initializeRemoteUserDataSession("account-B");
+        release();
+        expect(String(await request)).toContain("账号已切换");
+        expect(useAssetStore.getState().assets).toEqual(previousAssets);
+    } finally {
+        release();
+        resetRemoteUserDataSync();
+        apiClient.defaults.adapter = previousAdapter;
+        useAssetStore.setState({ assets: previousAssets });
+    }
+});
+
+test("user session initializes without downloading the full remote snapshot", async () => {
     const originalWindow = (globalThis as { window?: unknown }).window;
     const originalGetItem = localforage.getItem.bind(localforage);
     const originalSetItem = localforage.setItem.bind(localforage);
     const previousAdapter = apiClient.defaults.adapter;
     const previousUserState = useUserStore.getState();
     const localValues = new Map<string, string>();
-    let releaseSnapshot!: () => void;
-    const snapshotReleased = new Promise<void>((resolve) => {
-        releaseSnapshot = resolve;
-    });
-    let snapshotStartedResolve!: () => void;
-    const snapshotStarted = new Promise<void>((resolve) => {
-        snapshotStartedResolve = resolve;
-    });
+    let snapshotRequests = 0;
     const localStorageValues = new Map<string, string>();
     Object.defineProperty(globalThis, "window", {
         configurable: true,
@@ -4443,8 +4497,7 @@ test("user session stays unhydrated until the remote baseline is durable", async
             return { data: { code: 0, data: { source: "frontend", models: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
         }
         if (url.includes("user-data/snapshot")) {
-            snapshotStartedResolve();
-            await snapshotReleased;
+            snapshotRequests += 1;
             return { data: { code: 0, data: { projects: [], assets: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
         }
         throw new Error(`unexpected request: ${String(config.method || "get")} ${url}`);
@@ -4465,13 +4518,11 @@ test("user session stays unhydrated until the remote baseline is durable", async
                 updatedAt: "2026-08-25T00:00:00.000Z",
             },
         });
-        await snapshotStarted;
         expect(useUserStore.getState().hydrated).toBe(false);
-        releaseSnapshot();
         await applying;
         expect(useUserStore.getState().hydrated).toBe(true);
+        expect(snapshotRequests).toBe(0);
     } finally {
-        releaseSnapshot();
         await applying?.catch(() => undefined);
         resetRemoteUserDataSync();
         useUserStore.setState(previousUserState);

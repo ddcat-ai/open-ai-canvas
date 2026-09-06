@@ -57,15 +57,16 @@
 | <img src="assets/user-dominic1556.jpg" alt="Dominic1556" width="80"> | Dominic1556 | [184026530@qq.com](mailto:184026530@qq.com) | Done is better than perfect |
 | <img src="assets/user-yuxi.jpg" alt="宇熙" width="80"> | 宇熙 | [53121904@qq.com](mailto:53121904@qq.com) | 年轻的时候不狂，老了拿什么回忆 |
 | <img src="assets/user-yingzi.png" alt="影子" width="80"> | 影子 | [305818148@qq.com](mailto:305818148@qq.com) | 年纪大佬才明白人要顺势而为。 |
+| <img src="assets/user-ray.jpg" alt="Ray" width="80"> | Ray | [cnraylee@qq.com](mailto:cnraylee@qq.com) | AI时代的全栈落地工，欢迎找我聊需求 |
 
 ## 交流与反馈
 
-Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
+Issue 反馈、技术讨论和产品升级建议都可以在 微信 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="280">
-  <img src="assets/wx.jpg" alt="影策 微信交流群" width="280">
+  <img src="assets/wx.jpg" alt="影策 微信交流群" width="100%">
 </p>
+
 
 ## 当前能力
 

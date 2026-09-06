@@ -197,7 +197,7 @@ export function useCanvasMediaTools({
         const image = await uploadImage(cropped);
         const size = fitNodeSize(image.width, image.height, node.width, node.height);
         const childId = nanoid();
-        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: "Cropped Image", position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
+        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 裁剪`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
         setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
         setSelectedNodeIds(new Set([childId]));
@@ -210,7 +210,7 @@ export function useCanvasMediaTools({
         const image = await uploadImage(dataUrl);
         const size = fitNodeSize(image.width, image.height, node.width, node.height);
         const childId = nanoid();
-        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `标注 · ${node.title || "图片"}`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
+        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 标注`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
         setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
         setSelectedNodeIds(new Set([childId]));
@@ -331,7 +331,7 @@ export function useCanvasMediaTools({
                 { x: node.position.x + node.width + 96 + spec.width / 2, y: node.position.y + node.height / 2 },
                 { ...audioMetadata(uploaded), prompt: `从「${node.title || "视频"}」提取的声音`, status: NODE_STATUS_SUCCESS },
             );
-            audioNode.title = `声音 · ${node.title || "视频"}`;
+            audioNode.title = `${node.title || "视频"} · 音频`;
             const audioNodeId = audioNode.id;
             setNodes((current) => [...current, audioNode]);
             setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: audioNodeId }]);
@@ -397,7 +397,7 @@ export function useCanvasMediaTools({
                     const segmentNode: CanvasNodeData = {
                         id: segmentId,
                         type: CanvasNodeType.Video,
-                        title: `片段 ${index + 1} · ${sourceNode?.title || node.title || "视频"}`,
+                        title: `${sourceNode?.title || node.title || "视频"} · 片段 ${index + 1}`,
                         position: { x: baseX, y: baseY + index * (Math.max(size.height, spec.height) + 24) },
                         width: size.width,
                         height: size.height,
@@ -550,7 +550,7 @@ export function useCanvasMediaTools({
             return {
                 id: nanoid(),
                 type: CanvasNodeType.Image,
-                title: `${node.title || "图片"} ${piece.row + 1}-${piece.column + 1}`,
+                title: `${node.title || "图片"} · 宫格 ${piece.row + 1}-${piece.column + 1}`,
                 position: { x: startX + piece.column * (cellWidth + gap), y: node.position.y + piece.row * (cellHeight + gap) },
                 width: cellWidth,
                 height: cellHeight,
@@ -619,7 +619,7 @@ export function useCanvasMediaTools({
         const image = await uploadImage(upscaled);
         const size = fitNodeSize(image.width, image.height);
         const childId = nanoid();
-        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: "Upscaled Image", position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
+        const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 放大`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
         setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
         setSelectedNodeIds(new Set([childId]));

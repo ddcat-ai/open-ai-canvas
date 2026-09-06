@@ -51,7 +51,7 @@ curl "{channel_base_url}/v1beta/models/YOUR_MODEL:generateContent" \
 
 ## 响应解析与安全
 
-解析器遍历 `candidates[].content.parts[]`，识别 `inlineData` 或 `inline_data`，再生成 `data:<mime>;base64,...`。只有文本、finishReason 或安全反馈而没有内联图片时请求会失败。大图片不能进入 localStorage，应立即转存到影策资源存储。
+解析器遍历 `candidates[].content.parts[]`，识别 `inlineData` 或 `inline_data`，再生成 `data:<mime>;base64,...`。只有文本、finishReason 或安全反馈而没有内联图片时请求会失败。大图片不能进入 localStorage，应立即转存到宿主资源存储。
 
 ## 官方资料
 

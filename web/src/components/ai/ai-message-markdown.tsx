@@ -1,5 +1,4 @@
 import { Streamdown, type Components } from "streamdown";
-import { code as streamdownCode } from "@streamdown/code";
 
 import "streamdown/styles.css";
 
@@ -41,7 +40,6 @@ export function AIMessageMarkdown({ children, isStreaming = false, className = "
             parseIncompleteMarkdown
             skipHtml
             lineNumbers={false}
-            plugins={{ code: streamdownCode }}
             components={components}
         >
             {children}

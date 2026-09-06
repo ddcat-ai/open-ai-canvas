@@ -65,9 +65,11 @@ export type ProjectAsset = {
     folderId?: string;
     position: number;
     storageKey?: string;
+    durationMs?: number;
     previewText?: string;
     updatedAt: string;
     character?: CharacterCardSummary;
+    source?: string;
 };
 
 export type ProjectAssetFolder = {
@@ -276,6 +278,7 @@ export type ProjectOverviewMetrics = {
     readyStoryboardCount: number;
     readyPrevizCount: number;
     readyVideoCount: number;
+    renderSucceededCount: number;
     staleArtifactCount: number;
 };
 
@@ -477,7 +480,7 @@ export function unlinkCanvasProject(projectId: string, canvasId: string) {
     return request<{ canvasId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvases/${encodeURIComponent(canvasId)}`));
 }
 
-export function linkProjectAsset(projectId: string, input: { assetId: string; category: AssetCategory; folderId?: string }, signal?: AbortSignal) {
+export function linkProjectAsset(projectId: string, input: { assetId: string; category: AssetCategory; folderId?: string; title?: string; source?: "uploaded" | "canvas" }, signal?: AbortSignal) {
     return request<{ asset: ProjectAsset }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets`, input, { signal }));
 }
 

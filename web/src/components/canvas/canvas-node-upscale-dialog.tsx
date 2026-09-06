@@ -8,7 +8,7 @@ import { MAX_UPSCALE_LONG_EDGE, resolveUpscaleSize, type ImageUpscaleAlgorithm, 
 export type CanvasImageUpscaleParams = ImageUpscaleParams;
 
 const algorithms: Array<{ value: ImageUpscaleAlgorithm; title: string; description: string }> = [
-    { value: "high", title: "高清插值", description: "适合照片和细节图" },
+    { value: "high", title: "高质量插值", description: "适合照片和细节图" },
     { value: "bilinear", title: "双线性", description: "平滑、速度快" },
     { value: "nearest", title: "最近邻", description: "适合像素风格" },
 ];
@@ -53,7 +53,8 @@ export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: {
         <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={820} centered destroyOnHidden>
             <div className="space-y-5">
                 <div>
-                    <h2 className="text-xl font-semibold">图片放大</h2>
+                    <h2 className="text-xl font-semibold">调整尺寸</h2>
+                    <p className="mt-2 text-sm opacity-60">通过插值放大像素尺寸，另存为新图片，保留原图。这不是 AI 超分，不会生成新的真实细节。</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_360px]">
                     <div className="rounded-xl border p-4">

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { localForageStorageForScope } from "@/lib/localforage-storage";
-import type { PluginInstallation, PluginManifest } from "@/lib/plugins/plugin-types";
+import type { PluginInstallation, PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import type { PluginState } from "@/services/api/plugins";
 
 export const PLUGIN_STORE_KEY = "infinite-canvas:plugin-store";
@@ -12,7 +12,7 @@ type PluginStore = {
     installations: PluginInstallation[];
     runtimeStatuses: Record<string, string>;
     pluginStates: Record<string, PluginState>;
-    ensurePlugin: (manifest: PluginManifest) => void;
+    ensurePlugin: (manifest: PluginManifest | PluginManifestV2) => void;
     setRuntimeStatuses: (statuses: Record<string, string>) => void;
     setPluginStates: (states: Record<string, PluginState>) => void;
     setEnabled: (pluginId: string, enabled: boolean) => void;
