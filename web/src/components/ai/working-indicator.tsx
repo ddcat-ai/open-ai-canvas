@@ -63,17 +63,7 @@ export function WorkingDots({
  * work. Disabled under prefers-reduced-motion. Caller positions it: wrap the
  * control in a `relative` container and pass the matching border radius.
  */
-export function WorkingGlow({
-    active,
-    color,
-    radius = 0,
-    className,
-}: {
-    active: boolean;
-    color: string;
-    radius?: number | string;
-    className?: string;
-}) {
+export function WorkingGlow({ active, color, radius = 0, className }: { active: boolean; color: string; radius?: number | string; className?: string }) {
     const reducedMotion = useReducedMotion();
     if (!active || reducedMotion) return null;
     const soft = `color-mix(in srgb, ${color} 55%, transparent)`;

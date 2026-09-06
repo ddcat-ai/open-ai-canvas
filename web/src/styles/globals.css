@@ -15264,21 +15264,79 @@ html:not(.dark) .creation-history-drawer-root {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.88em;
 }
-.ai-message-markdown-pre {
+.ai-message-codeblock {
     margin: 0.8em 0;
-    padding: 0.8em 0.9em;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+}
+.ai-message-codeblock-header {
+    display: flex;
+    height: 34px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0 var(--space-2) 0 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.ai-message-codeblock-lang {
+    overflow: hidden;
+    color: color-mix(in srgb, currentColor 56%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.ai-message-codeblock-copy {
+    display: inline-flex;
+    height: 24px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    padding: 0 var(--space-2);
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font: inherit;
+    font-size: var(--fs-micro);
+    transition: background-color 150ms ease, color 150ms ease;
+}
+.ai-message-codeblock-copy svg { width: 13px; height: 13px; }
+.ai-message-codeblock-copy:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: inherit; }
+.ai-message-codeblock-copy:focus-visible { outline: 2px solid color-mix(in srgb, var(--primary) 60%, transparent); outline-offset: -1px; }
+.ai-message-codeblock-pre {
+    margin: 0;
+    padding: 10px 12px;
     overflow-x: auto;
-    border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--foreground) 7%, var(--background));
+    background: transparent;
     color: color-mix(in srgb, var(--foreground) 86%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.84em;
     line-height: 1.55;
+    tab-size: 2;
 }
-.ai-message-markdown-pre .ai-message-markdown-code {
+.ai-message-codeblock-pre .ai-message-markdown-code {
     padding: 0;
     background: transparent;
+    color: inherit;
     font-size: inherit;
 }
+@media (prefers-reduced-motion: reduce) {
+    .ai-message-codeblock-copy { transition: none; }
+}
+
+/* --- ai-message 代码块语法高亮（shiki 双主题 CSS 变量：--shiki-light/--shiki-dark）--- */
+.ai-message-codeblock-pre .shiki { margin: 0; padding: 0; background: transparent !important; }
+.ai-message-codeblock-pre .shiki code { font-family: inherit; font-size: inherit; color: inherit; }
+html:not(.dark) .ai-message-codeblock-pre .shiki,
+html:not(.dark) .ai-message-codeblock-pre .shiki span { color: var(--shiki-light) !important; }
+html.dark .ai-message-codeblock-pre .shiki,
+html.dark .ai-message-codeblock-pre .shiki span { color: var(--shiki-dark) !important; }
 .ai-message-markdown-link {
     color: var(--primary);
     text-decoration: underline;
