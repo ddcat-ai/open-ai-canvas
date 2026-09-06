@@ -101,6 +101,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRetry,
     onReloadResource,
     onOpenTaskDetails,
+    onReplaceMedia,
     onOpenVersions,
     onViewImage,
     onOpenTextEditor,
@@ -381,6 +382,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onRetry={onRetry}
                         onReloadResource={onReloadResource}
                         onOpenTaskDetails={onOpenTaskDetails}
+                        onReplaceMedia={onReplaceMedia}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         reduceMediaEffects={reduceMediaEffects}
                         mediaActive={mediaActive}
