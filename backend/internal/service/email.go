@@ -195,9 +195,8 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	brandName := s.appearanceBrandName()
-	setting = resolveEmailSender(setting, brandName)
-	if err := s.deliverEmail(setting, email, brandName+"注册验证码", registrationEmailBody(brandName, code)); err != nil {
+	setting = resolveEmailSender(setting, s.appearanceBrandName())
+	if err := s.deliverEmail(setting, email, setting.FromName+"注册验证码", registrationEmailBody(setting.FromName, code)); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
 			return errors.Join(

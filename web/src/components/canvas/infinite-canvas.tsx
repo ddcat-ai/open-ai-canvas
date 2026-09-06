@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { resolveCanvasAppearance, resolveCanvasGridColor, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { resolveCanvasPointerIntent } from "@/lib/canvas/canvas-selection";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import { applyCanvasLiveViewport, canvasDotGridPx, canvasDotPx, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { applyCanvasLiveViewport, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
@@ -408,13 +408,6 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
                 "--canvas-live-inverse-scale": 1 / Math.max(viewport.k, 0.05),
                 "--canvas-committed-scale": viewport.k,
                 "--canvas-live-scale-ratio": 1,
-                "--canvas-grid-size": `${48 * viewport.k}px`,
-                "--canvas-grid-x": `${viewport.x % (48 * viewport.k)}px`,
-                "--canvas-grid-y": `${viewport.y % (48 * viewport.k)}px`,
-                "--canvas-dot-grid-size": `${canvasDotGridPx(viewport.k)}px`,
-                "--canvas-dot-grid-x": `${viewport.x % canvasDotGridPx(viewport.k)}px`,
-                "--canvas-dot-grid-y": `${viewport.y % canvasDotGridPx(viewport.k)}px`,
-                "--canvas-dot-size": canvasDotPx(viewport.k),
             } as React.CSSProperties}
             onPointerDown={handlePointerDown}
             onDoubleClick={(event) => {
@@ -447,7 +440,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
 function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const gridColor = resolveCanvasGridColor(appearance, colorTheme, mode);
-    const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} var(--canvas-dot-size), transparent calc(var(--canvas-dot-size) + 0.2px))` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;
+    const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 0.8px, transparent 1px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;
     if (mode === "blank") return null;
 
     return (
@@ -455,12 +448,11 @@ function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode:
             data-canvas-grid-layer
             className="pointer-events-none absolute"
             style={{
-                inset: mode === "dots" ? "calc(-1 * var(--canvas-dot-grid-size))" : "calc(-1 * var(--canvas-grid-size))",
+                // 装饰网格固定在屏幕坐标，避免缩放时改变密度或产生亚像素位移闪烁。
+                inset: 0,
                 backgroundImage,
-                backgroundSize: mode === "dots" ? "var(--canvas-dot-grid-size) var(--canvas-dot-grid-size)" : "var(--canvas-grid-size) var(--canvas-grid-size)",
-                transform: mode === "dots" ? "translate3d(var(--canvas-dot-grid-x), var(--canvas-dot-grid-y), 0)" : "translate3d(var(--canvas-grid-x), var(--canvas-grid-y), 0)",
+                backgroundSize: "48px 48px",
                 opacity: mode === "dots" ? 0.34 : 0.46,
-                willChange: "transform",
             }}
         />
     );

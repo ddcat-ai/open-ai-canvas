@@ -56,6 +56,12 @@ type Service struct {
 	workers                    *workerRuntime
 	updateManager              UpdateManager
 	mailSender                 func(emailSettingValue, string, string, string) error
+	readCachesOnce             sync.Once
+	concurrencyReadCache       *boundedReadCache[string, RuntimeTaskPolicy]
+	textReplayReadCache        *boundedReadCache[textReplayCacheKey, *TextReplayResult]
+	routeVersionReadCache      *boundedReadCache[string, int64]
+	routeCatalogRetryAt        time.Time
+	routeCatalogRefreshError   error
 }
 
 const taskWorkerConcurrency = 3

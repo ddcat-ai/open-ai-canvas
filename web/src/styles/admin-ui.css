@@ -1348,17 +1348,6 @@
     position: relative;
 }
 
-@keyframes admin-page-enter {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .admin-shell .admin-nav-group-label {
     display: flex;
     align-items: center;
@@ -8936,31 +8925,75 @@
     border-color: var(--control-check-fg) !important;
 }
 
-.admin-model-editor-drawer .ant-drawer-header {
-    min-height: 52px;
-    padding-inline: 24px;
+/* Model editor: one fixed-height dialog, one scrolling panel, persistent actions. */
+.admin-model-editor-modal .ant-modal-container {
+    display: flex;
+    height: min(880px, calc(100dvh - 48px));
+    flex-direction: column;
 }
 
-.admin-model-editor-drawer .ant-drawer-body {
-    padding: 20px 24px 24px;
+.admin-model-editor-modal .ant-modal-body {
+    display: flex;
+    overflow: hidden;
 }
+
+.admin-model-editor-title p {
+    margin-top: 4px;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+    font-weight: 400;
+    overflow-wrap: anywhere;
+}
+
+.admin-model-editor-form > .ant-tabs {
+    height: 100%;
+    min-height: 0;
+}
+
+.admin-model-editor-form > .ant-tabs > .ant-tabs-nav {
+    flex-shrink: 0;
+    margin: 0;
+    padding-inline: 28px;
+}
+
+.admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.admin-model-editor-tab-content {
+    display: grid;
+    gap: 16px;
+    padding: 16px 24px 20px;
+}
+
+.admin-model-protocol-field {
+    grid-column: 1 / -1;
+}
+
 
 .admin-model-editor-form {
     width: 100%;
-    max-width: 1120px;
-    margin-inline: auto;
+    min-width: 0;
+    min-height: 0;
 }
 
 .admin-model-editor-section {
     display: grid;
-    grid-template-columns: minmax(140px, 176px) minmax(0, 1fr);
-    gap: 24px;
-    padding: 20px 22px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+.admin-model-editor-section + .admin-model-editor-section {
+    border-top: 1px solid var(--admin-divider);
+    padding-top: 16px;
 }
 
 .admin-model-editor-section-stacked {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    gap: 12px;
 }
 
 .admin-model-editor-section-heading,
@@ -8968,7 +9001,15 @@
     min-width: 0;
 }
 
+.admin-model-editor-section-heading {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+
 .admin-model-editor-section-heading h2 {
+    margin: 0;
     color: var(--foreground);
     font-size: 15px;
     font-weight: 650;
@@ -8976,9 +9017,9 @@
 }
 
 .admin-model-editor-section-heading p {
-    margin-top: 6px;
-    color: color-mix(in srgb, var(--foreground) 46%, transparent);
-    font-size: 11px;
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 13px;
     line-height: 1.65;
 }
 
@@ -8991,34 +9032,47 @@
     overflow: hidden;
 }
 
-.admin-model-identity-grid {
+.admin-model-identity-grid,
+.admin-model-protocol-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
 }
 
-.admin-model-editor-drawer .admin-capability-editor {
+.admin-model-editor-modal .ant-form-item {
+    margin-bottom: 0;
+}
+
+.admin-model-editor-modal .ant-form-item .ant-form-item-label {
+    padding-bottom: 4px;
+}
+
+.admin-model-protocol-grid > .ant-alert {
+    grid-column: 1 / -1;
+}
+
+.admin-model-editor-modal .admin-capability-editor {
     border-radius: 0;
     background: transparent;
     padding: 0;
 }
 
-.admin-model-editor-drawer .admin-capability-editor-heading {
+.admin-model-editor-modal .admin-capability-editor-heading {
     padding: 0 2px 2px;
 }
 
-.admin-model-editor-drawer .admin-capability-group {
+.admin-model-editor-modal .admin-capability-group {
     border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
     background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
     padding: 14px;
 }
 
-.admin-model-editor-drawer .admin-capability-group > summary {
+.admin-model-editor-modal .admin-capability-group > summary {
     position: relative;
     padding-right: 20px;
 }
 
-.admin-model-editor-drawer .admin-capability-group > summary::after {
+.admin-model-editor-modal .admin-capability-group > summary::after {
     position: absolute;
     top: 5px;
     right: 2px;
@@ -9031,22 +9085,22 @@
     transition: transform 140ms ease;
 }
 
-.admin-model-editor-drawer .admin-capability-group:not([open]) > summary::after {
+.admin-model-editor-modal .admin-capability-group:not([open]) > summary::after {
     transform: rotate(-45deg);
 }
 
-.admin-model-editor-drawer .admin-capability-group-description {
+.admin-model-editor-modal .admin-capability-group-description {
     color: var(--admin-text-muted) !important;
     line-height: 1.5;
 }
 
-.admin-model-editor-drawer .admin-capability-block + .admin-capability-block {
+.admin-model-editor-modal .admin-capability-block + .admin-capability-block {
     margin-top: 14px;
     padding-top: 14px;
     border-top: 1px solid var(--admin-divider);
 }
 
-.admin-model-editor-drawer .admin-capability-block-title {
+.admin-model-editor-modal .admin-capability-block-title {
     margin-bottom: 9px;
     color: var(--admin-text-secondary);
     font-size: 10px;
@@ -9054,141 +9108,68 @@
     letter-spacing: 0.08em;
 }
 
-.admin-model-editor-drawer .admin-capability-number-field,
-.admin-model-editor-drawer .admin-capability-boolean-field,
-.admin-model-editor-drawer .admin-capability-parameter-field {
+.admin-model-editor-modal .admin-capability-number-field,
+.admin-model-editor-modal .admin-capability-boolean-field,
+.admin-model-editor-modal .admin-capability-parameter-field {
     min-width: 0;
 }
 
-.admin-model-editor-drawer .admin-capability-number-field .ant-input-number {
+.admin-model-editor-modal .admin-capability-number-field .ant-input-number {
     width: 100% !important;
     min-width: 0;
 }
 
-.admin-capability-reference-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+.admin-model-editor-references .admin-capability-reference-grid {
+    align-items: start;
+    gap: 10px;
 }
 
-.admin-capability-reference-grid.is-three {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.admin-model-editor-references .admin-capability-reference-card {
+    padding: 10px 12px;
 }
 
-.admin-capability-reference-grid.is-two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.admin-model-editor-references .admin-capability-reference-card-heading {
+    min-height: 0;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
 }
 
-.admin-capability-reference-card,
-.admin-capability-protocol-card {
-    min-width: 0;
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
-    padding: 14px;
+.admin-model-editor-references .admin-capability-reference-fields {
+    gap: 6px;
 }
 
-.admin-capability-reference-card-heading {
-    min-height: 38px;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--admin-divider);
+.admin-model-editor-references .admin-capability-number-field {
+    min-height: 32px;
+    grid-template-columns: minmax(0, 1fr) 80px;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 0;
+    padding: 0;
 }
 
-.admin-capability-reference-card-heading h3,
-.admin-capability-protocol-card-heading h3 {
-    color: var(--admin-text-primary);
-    font-size: 12px;
-    font-weight: 650;
-    line-height: 1.4;
+.admin-model-editor-references .admin-capability-boolean-field {
+    min-height: 32px;
+    margin-top: 0;
+    gap: 6px;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
 }
 
-.admin-capability-reference-card-heading p,
-.admin-capability-protocol-card-heading p {
-    margin-top: 3px;
-    color: var(--admin-text-muted);
-    font-size: 10px;
-    line-height: 1.5;
+.admin-model-editor-references .admin-capability-boolean-field > div:last-child {
+    gap: 8px;
 }
 
-.admin-capability-reference-fields {
-    display: grid;
+.admin-model-editor-references .admin-capability-boolean-field label {
+    display: flex;
+    align-items: center;
     gap: 4px;
 }
 
-.admin-capability-reference-fields .admin-capability-number-field {
-    display: grid;
-    min-height: 62px;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: end;
-    gap: 5px;
-    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-    padding-block: 4px;
-}
-
-.admin-capability-reference-fields .admin-capability-number-field:last-child {
-    border-bottom: 0;
-}
-
-.admin-capability-reference-fields .admin-capability-field-label {
-    margin-bottom: 0;
-    line-height: 1.4;
-}
-
-.admin-capability-reference-fields .admin-capability-boolean-field {
-    min-height: 48px;
-    margin-top: 4px;
-    padding-block: 6px;
-}
-
-.admin-capability-reference-fields .admin-capability-boolean-field > div:first-child > div:last-child {
-    display: none;
-}
-
-.admin-capability-protocol-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.admin-capability-protocol-card-heading {
-    display: flex;
-    min-height: 46px;
-    align-items: flex-start;
-    gap: 9px;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--admin-divider);
-}
-
-.admin-capability-protocol-card-heading > span {
-    display: grid;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 6px;
-    background: var(--admin-layer-3);
-    color: var(--admin-text-muted);
-    font-size: 9px;
-    font-weight: 700;
-}
-
-.admin-capability-protocol-card-heading p {
-    margin-top: 2px;
-    line-height: 1.45;
-}
-
-.admin-capability-protocol-fields,
-.admin-capability-spec-grid {
-    display: grid;
-    gap: 10px;
-}
-
-.admin-capability-duration-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+@media (min-width: 601px) and (max-width: 1000px) {
+    .admin-model-editor-references .admin-capability-reference-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .admin-price-tier-card {
@@ -9201,24 +9182,22 @@
 .admin-price-tier-card-header {
     display: flex;
     min-width: 0;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     border-bottom: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-    padding: 12px 14px;
+    padding: 8px 12px;
 }
 
 .admin-price-tier-card-body {
     display: grid;
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 12px 16px;
+    padding: 12px;
 }
 
 .admin-price-tier-block {
-    padding: 14px;
-}
-
-.admin-price-tier-block + .admin-price-tier-block {
-    border-left: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    min-width: 0;
 }
 
 .admin-price-tier-block-title {
@@ -9235,26 +9214,24 @@
 }
 
 .admin-price-tier-match-grid {
+    grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
 }
 
 .admin-price-tier-upstream {
-    grid-column: 1 / -1;
+    grid-column: span 2;
 }
 
 .admin-price-tier-billing-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: end;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 12px;
 }
 
-.admin-price-tier-billing-mode,
-.admin-price-tier-unit-price,
-.admin-price-tier-token-grid,
-.admin-price-tier-controls {
+.admin-price-tier-token-grid {
     grid-column: 1 / -1;
 }
 
@@ -9267,18 +9244,18 @@
 .admin-price-tier-billing-mode .ant-segmented {
     border: 1px solid var(--admin-card-border);
     background: var(--admin-layer-2);
-    padding: 3px;
+    padding: 2px;
 }
 
 .admin-price-tier-billing-mode .ant-segmented-item {
-    min-height: 32px;
+    min-height: 28px;
     border-radius: 5px;
 }
 
 .admin-price-tier-billing-mode .ant-segmented-item-label {
-    min-height: 32px;
+    min-height: 28px;
     padding-inline: 12px;
-    line-height: 32px;
+    line-height: 28px;
 }
 
 .admin-price-tier-billing-mode .ant-segmented-item-selected {
@@ -9291,42 +9268,21 @@
 }
 
 .admin-price-tier-controls {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px !important;
+    margin-left: auto;
 }
 
 .admin-price-tier-toggle {
     display: flex;
     min-width: 0;
-    min-height: 58px;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 7px;
-    background: var(--admin-layer-2);
-    padding: 8px 10px;
-}
-
-.admin-price-tier-toggle > div {
-    display: grid;
-    flex: 1 1 auto;
-    min-width: 0;
-    gap: 2px;
-}
-
-.admin-price-tier-toggle strong {
-    color: var(--admin-text-primary);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.35;
 }
 
 .admin-price-tier-toggle span {
     overflow-wrap: anywhere;
     color: var(--admin-text-muted);
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.4;
     white-space: normal;
 }
@@ -9335,170 +9291,76 @@
     min-height: 38px;
 }
 
-.admin-drawer.admin-model-editor-drawer .ant-drawer-footer {
-    border-top: 0;
-    background: var(--admin-layer-0);
-    padding: 8px 24px 12px;
-    backdrop-filter: none;
-}
-
 .admin-model-editor-footer-actions {
-    width: 100%;
-    max-width: 1120px;
-    min-height: 52px;
-    margin-inline: auto;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 10px;
-    background: var(--admin-layer-1);
-    padding: 8px 10px;
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 8%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .admin-model-editor-footer-primary {
+    display: flex;
     min-width: 0;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .admin-model-editor-footer-status {
     display: flex;
-    min-height: 34px;
     align-items: center;
-    gap: 8px;
-    margin-right: 4px;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 6px;
-    background: var(--admin-layer-2);
-    padding: 4px 8px;
-}
-
-.admin-model-editor-footer-status > span {
-    width: 6px;
-    height: 6px;
-    flex: 0 0 auto;
-    border-radius: 50%;
-    background: var(--admin-text-muted);
-}
-
-.admin-model-editor-footer-status > span.is-enabled {
-    background: #10a36a;
+    gap: 10px;
+    text-align: left;
 }
 
 .admin-model-editor-footer-status > div {
     display: grid;
-    min-width: 0;
-    margin-right: 4px;
+    gap: 2px;
 }
 
 .admin-model-editor-footer-status strong {
     color: var(--admin-text-primary);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
-    line-height: 1.25;
 }
 
 .admin-model-editor-footer-status small {
     color: var(--admin-text-muted);
-    font-size: 9px;
-    line-height: 1.2;
+    font-size: 12px;
 }
 
-:root:not(.dark) .admin-model-editor-drawer .ant-drawer-header,
-:root:not(.dark) .admin-model-editor-drawer .ant-drawer-footer {
-    border-color: #d4dae2;
-    background: #ffffff;
-}
-
-:root:not(.dark) .admin-model-editor-drawer .ant-drawer-body,
-:root:not(.dark) .admin-drawer.admin-model-editor-drawer .ant-drawer-footer {
-    background: #edf1f5;
-}
-
-:root:not(.dark) .admin-model-editor-section {
-    border: 1px solid #d4dae2;
-    background: #ffffff;
-    box-shadow: 0 1px 3px rgb(15 23 42 / 0.055);
-}
-
-:root:not(.dark) .admin-model-editor-drawer :is(.admin-capability-group, .admin-capability-boolean-field, .admin-capability-parameter-field),
-:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
-:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card,
-:root:not(.dark) .admin-price-tier-toggle,
-:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented {
-    border-color: #cbd3dd;
-    background: #ffffff;
-}
-
-:root:not(.dark) .admin-price-tier-card {
-    border-color: #cbd3dd;
-    background: #f5f7fa;
-}
-
-:root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
-:root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card {
-    border-color: #cbd3dd;
-    background: #f5f7fa;
-}
-
-:root:not(.dark) .admin-model-editor-drawer [role="radio"] {
-    border-color: #c3ccd7;
-    background: #ffffff;
-}
-
-:root:not(.dark) .admin-model-editor-drawer [role="radio"]:hover {
-    border-color: #929eac;
-    background: #f8fafc;
-}
-
-:root:not(.dark) .admin-model-editor-drawer [role="radio"][aria-checked="true"] {
-    border-color: #657180;
-    background: #eef3f7;
-    box-shadow: inset 0 0 0 1px rgb(31 41 55 / 0.08);
-}
-
-:root:not(.dark) .admin-model-editor-drawer :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-selector, .ant-segmented) {
-    background: #ffffff;
-}
-
-:root:not(.dark) .admin-model-editor-section-heading h2 {
-    color: #20262e;
-}
-
-:root:not(.dark) .admin-model-editor-drawer .ant-form-item-label > label {
-    color: #364152;
-    font-weight: 550;
-}
-
-:root:not(.dark) .admin-model-editor-footer-actions {
-    border-color: #d4dae2;
-    background: #ffffff;
-    box-shadow: 0 6px 20px rgb(15 23 42 / 0.08);
-}
-
-:root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
-    background: #e8edf2;
-    box-shadow: inset 0 0 0 1px rgb(31 41 55 / 0.12);
+@media (max-width: 600px) {
+    .admin-model-editor-modal .ant-modal-container {
+        height: calc(100dvh - 24px);
+    }
+    .admin-model-editor-tab-content {
+        padding: 12px 16px;
+    }
+    .admin-model-editor-footer-primary {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .admin-model-editor-modal .admin-capability-reference-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .admin-price-tier-upstream {
+        grid-column: 1 / -1;
+    }
+    .admin-model-identity-grid,
+    .admin-model-protocol-grid,
+    .admin-price-tier-billing-grid,
+    .admin-price-tier-match-grid,
+    .admin-price-tier-token-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 @media (max-width: 899px) {
     .admin-model-editor-section,
-    .admin-capability-protocol-grid,
-    .admin-price-tier-card-body,
-    .admin-model-identity-grid {
+    .admin-price-tier-card-body {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .admin-model-editor-section {
-        gap: 16px;
-    }
-
-    .admin-model-editor-section-heading {
-        padding-bottom: 12px;
-        border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    }
-
-    .admin-price-tier-block + .admin-price-tier-block {
-        border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-        border-left: 0;
-    }
 }
 
 /* 管理后台可读性基线：收敛历史页面中过低的文字透明度，并统一表单层级。 */
@@ -9654,10 +9516,6 @@
 }
 
 @media (min-width: 1024px) {
-    .admin-shell .admin-page-root > div {
-        animation: admin-page-enter 190ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    }
-
     .admin-shell
         :where(
             .admin-sidebar,

@@ -1,0 +1,103 @@
+.model-editor-modal .ant-modal-container {
+    display: flex;
+    flex-direction: column;
+    height: min(880px, calc(100dvh - 48px));
+}
+.model-editor-modal .ant-modal-header,
+.model-editor-modal .ant-modal-footer {
+    padding: 18px 24px;
+    flex-shrink: 0;
+}
+.model-editor-modal .ant-modal-footer {
+    border-top: 1px solid var(--workspace-border);
+}
+.model-editor-modal .ant-modal-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.model-editor-modal .ant-modal-body > .ant-form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+.model-editor-modal .ant-tabs {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+.model-editor-modal .ant-tabs-nav {
+    flex-shrink: 0;
+    margin: 0;
+    padding-inline: 24px;
+}
+.model-editor-modal .ant-tabs-body-holder {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+.model-editor-modal .ant-modal-body > .model-editor-panel {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+.model-editor-panel {
+    display: grid;
+    gap: 16px;
+    padding: 20px 24px;
+    min-width: 0;
+}
+.model-editor-panel .ant-form-item {
+    margin-bottom: 0;
+}
+.model-editor-connection-fields > .ant-form-item {
+    grid-column: auto;
+    min-width: 0;
+}
+.model-editor-subtitle {
+    margin: 4px 0 0;
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+.model-editor-section {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+.model-editor-section + .model-editor-section {
+    border-top: 1px solid var(--workspace-border);
+    padding-top: 16px;
+}
+.model-editor-section h2 {
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+.model-editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.model-editor-footer-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+@media (max-width: 600px) {
+    .model-editor-modal .ant-modal-container {
+        height: calc(100dvh - 24px);
+    }
+    .model-editor-panel {
+        padding: 16px;
+    }
+    .model-editor-modal .ant-modal-header,
+    .model-editor-modal .ant-modal-footer {
+        padding: 16px;
+    }
+}

@@ -1,6 +1,6 @@
 import { Button } from "antd";
 import { Plus, Settings2, UserRoundCog } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, useState } from "react";
 
 import { useAdminContext } from "./admin-context";
 import { AdminPageFrame } from "./components/admin-shell";
@@ -14,17 +14,11 @@ const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 const StorageResourcesPanel = lazy(() => import("./components/storage-resources-panel"));
 
-function PageFallback({ label }: { label: string }) {
-    return <div className="py-16 text-center text-sm text-foreground/50">正在读取{label}...</div>;
-}
-
 export function AnalyticsPage() {
     const { references } = useAdminContext();
     return (
         <AdminPageFrame title="数据概览" description="用户、任务、质量与成本健康度" scroll>
-            <Suspense fallback={<PageFallback label="统计数据" />}>
-                <AnalyticsPanel users={references.users} channels={references.channels} />
-            </Suspense>
+            <AnalyticsPanel users={references.users} channels={references.channels} />
         </AdminPageFrame>
     );
 }
@@ -53,9 +47,7 @@ export function AnnouncementsPage() {
                 </Button>
             }
         >
-            <Suspense fallback={<PageFallback label="系统公告" />}>
-                <AdminAnnouncementsPanel publishOpen={publishOpen} publishBlocked={publishBlocked} publishReturnFocus={publishReturnFocus} onPublishOpenChange={setPublishOpen} onPublishBlockedChange={setPublishBlocked} />
-            </Suspense>
+            <AdminAnnouncementsPanel publishOpen={publishOpen} publishBlocked={publishBlocked} publishReturnFocus={publishReturnFocus} onPublishOpenChange={setPublishOpen} onPublishBlockedChange={setPublishBlocked} />
         </AdminPageFrame>
     );
 }
@@ -78,9 +70,7 @@ export function CreditOperationsPage() {
                 </>
             }
         >
-            <Suspense fallback={<PageFallback label="积分运营数据" />}>
-                <CreditOperationsPanel users={references.users} activeOperation={activeOperation} onOperationChange={setActiveOperation} />
-            </Suspense>
+            <CreditOperationsPanel users={references.users} activeOperation={activeOperation} onOperationChange={setActiveOperation} />
         </AdminPageFrame>
     );
 }
@@ -88,9 +78,7 @@ export function CreditOperationsPage() {
 export function AccessSettingsPage() {
     return (
         <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口" scroll>
-            <Suspense fallback={<PageFallback label="登录与注册配置" />}>
-                <AccessSettingsPanel />
-            </Suspense>
+            <AccessSettingsPanel />
         </AdminPageFrame>
     );
 }
@@ -98,9 +86,7 @@ export function AccessSettingsPage() {
 export function EmailSettingsPage() {
     return (
         <AdminPageFrame title="邮件服务" description="先决定是否发送注册验证码，再配置 SMTP" scroll>
-            <Suspense fallback={<PageFallback label="邮件配置" />}>
-                <EmailSettingsPanel />
-            </Suspense>
+            <EmailSettingsPanel />
         </AdminPageFrame>
     );
 }
@@ -108,9 +94,7 @@ export function EmailSettingsPage() {
 export function FeatureAvailabilityPage() {
     return (
         <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
-            <Suspense fallback={<PageFallback label="功能开放配置" />}>
-                <FeatureAvailabilityPanel />
-            </Suspense>
+            <FeatureAvailabilityPanel />
         </AdminPageFrame>
     );
 }
@@ -118,9 +102,7 @@ export function FeatureAvailabilityPage() {
 export function StorageResourcesPage() {
     return (
         <AdminPageFrame title="存储资源" description="只读查看资源记录、容量分布与文件预览" scroll>
-            <Suspense fallback={<PageFallback label="存储资源" />}>
-                <StorageResourcesPanel />
-            </Suspense>
+            <StorageResourcesPanel />
         </AdminPageFrame>
     );
 }

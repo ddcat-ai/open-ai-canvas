@@ -72,7 +72,7 @@ func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, inp
 	currentErr := validationErr
 	for attempt := 1; attempt <= maxStoryboardRepairAttempts; attempt++ {
 		_ = s.log(task.UserID, task.ID, "warn", "分镜结构校验失败", fmt.Sprintf("第 %d 次修复前：%s", attempt, currentErr.Error()))
-		if err := s.repo.UpdateTaskProgress(task.ID, "修复分镜结构", 55+attempt*10); err != nil {
+		if err := s.repo.UpdateTaskProgressForLease(task.ID, task.LeaseOwner, "修复分镜结构", 55+attempt*10); err != nil {
 			return agentStoryboardPlan{}, fmt.Errorf("更新分镜修复进度失败，上游修复请求未发出：%w", err)
 		}
 		repairPrompt, promptErr := s.buildStoryboardRepairPrompt(task.UserID, task.Prompt, currentErr, input, currentText)

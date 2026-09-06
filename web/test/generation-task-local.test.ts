@@ -11,6 +11,15 @@ import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 import { onlineToolToOps } from "../src/components/canvas/canvas-assistant-panel";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "../src/lib/generation-task-display";
 import { generationErrorMessage } from "../src/lib/generation-error";
+import { generationTaskNodeId } from "../src/lib/canvas/canvas-generation-task-sync";
+
+test("canvas recovery reads node identity from task summaries without full task input", () => {
+    const task: GenerationTask = { id: "task-summary", type: "canvas_image", status: "running", prompt: "", attempts: 1, createdAt: "", updatedAt: "", clientContext: { nodeId: "node-summary" } };
+    expect(generationTaskNodeId(task)).toBe("node-summary");
+    expect(generationTaskNodeId({ ...task, inputJson: "invalid json" })).toBe("node-summary");
+    expect(generationTaskNodeId({ ...task, clientContext: undefined, inputJson: JSON.stringify({ metadata: { nodeId: "node-detail" } }) })).toBe("node-detail");
+    expect(generationTaskNodeId({ ...task, clientContext: undefined })).toBe("");
+});
 
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();

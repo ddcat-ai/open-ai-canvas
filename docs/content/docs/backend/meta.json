@@ -6,6 +6,7 @@
     "local-development",
     "code-map",
     "backend-database",
+    "task-runtime-stability",
     "system-update",
     "protocol-plugins",
     "canvas-data-structure"

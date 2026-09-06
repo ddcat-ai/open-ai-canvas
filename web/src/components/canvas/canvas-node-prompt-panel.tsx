@@ -107,6 +107,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         }, mode),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
+    const resolvedRequirements: ModelRequirements = {
+        ...requirements,
+        options: modelRequestOptions(config, mode),
+        videoSeconds: mode === "video" ? config.videoSeconds : undefined,
+    };
     const promptOptimizerProvider = useMemo(() => {
         if (!promptOptimizerEnabled || !promptOptimizerInstallation || !promptOptimizerPlugin.createPromptOptimizer) return null;
         return promptOptimizerPlugin.createPromptOptimizer(createPluginHostContext(promptOptimizerPlugin, promptOptimizerInstallation, globalConfig));
@@ -121,9 +126,9 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         seconds: mode === "video" ? config.videoSeconds : 1,
         capability: mode,
         config,
-        requirements,
+        requirements: resolvedRequirements,
     });
-    const quoteRequest = modelQuoteRequest(config, config.model, mode, requirements);
+    const quoteRequest = modelQuoteRequest(config, config.model, mode, resolvedRequirements);
     const quoteRequestKey = JSON.stringify(quoteRequest || null);
     const [quotedCredits, setQuotedCredits] = useState<number | null>(null);
     const credits = quotedCredits ?? configuredCredits;
@@ -341,9 +346,10 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         value={config.model}
                         onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })}
                         capability={mode}
-                        requirements={requirements}
+                        requirements={resolvedRequirements}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         showSelectedPrice={false}
+                        showOptionPrices={creditsEnabled}
                         variant="creation"
                         showConfiguredModelName
                     />
@@ -690,7 +696,7 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text || type === CanvasNodeType.Skill ? "text" : type === CanvasNodeType.Video ? "video" : type === CanvasNodeType.Audio ? "audio" : "image";
 }
 
-function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode, requirements: ModelRequirements): AiConfig {
+export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode, requirements: ModelRequirements): AiConfig {
     const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const preferredModel = resolveCanvasGenerationModel(globalConfig, node.metadata?.model, mode) || resolveCanvasGenerationModel(globalConfig, defaultModel, mode) || fallbackModel;

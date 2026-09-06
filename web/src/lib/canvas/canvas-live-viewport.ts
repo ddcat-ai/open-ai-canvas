@@ -28,28 +28,15 @@ export type CanvasNodeSelectionPreview = {
 
 const nodeDragPreviewDomStates = new WeakMap<HTMLDivElement, NodeDragPreviewDomState>();
 const nodeSelectionPreviewDomStates = new WeakMap<HTMLDivElement, NodeSelectionPreviewDomState>();
-const liveViewportElements = new WeakMap<HTMLDivElement, { worldLayer: HTMLElement | null; gridLayer: HTMLElement | null }>();
-
-// 空间网格点模式的点半径（像素单位）。远距时使用更小半径，避免点阵糊成一团。
-export function canvasDotPx(scale: number): string {
-    return scale < 0.12 ? "0.6px" : "0.8px";
-}
-
-// 点阵在缩小时不再无限压缩到屏幕像素，避免密集视觉噪声。
-export function canvasDotGridPx(scale: number): number {
-    return Math.max(48 * scale, 32);
-}
+const liveViewportElements = new WeakMap<HTMLDivElement, { worldLayer: HTMLElement | null }>();
 
 export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewport: ViewportTransform, notify = true) {
     if (!container) return;
-    const gridSize = 48 * viewport.k;
-    const dotGridSize = canvasDotGridPx(viewport.k);
     const committedScale = Number(container.style.getPropertyValue("--canvas-committed-scale")) || viewport.k;
     let elements = liveViewportElements.get(container);
     if (!elements) {
         elements = {
             worldLayer: container.querySelector<HTMLElement>("[data-canvas-world-layer]"),
-            gridLayer: container.querySelector<HTMLElement>("[data-canvas-grid-layer]"),
         };
         liveViewportElements.set(container, elements);
     }
@@ -63,17 +50,6 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
     container.style.setProperty("--canvas-live-scale", String(viewport.k));
     // 外置节点标题用同一帧逆倍率抵消世界层缩放，避免等待 React 提交后再校正尺寸。
     container.style.setProperty("--canvas-live-inverse-scale", String(1 / Math.max(viewport.k, 0.05)));
-    const gridLayer = elements.gridLayer;
-    if (gridLayer) {
-        // 网格是唯一需要每帧更新背景偏移的元素，不把这些变量放在画布根节点上继承。
-        gridLayer.style.setProperty("--canvas-grid-size", `${gridSize}px`);
-        gridLayer.style.setProperty("--canvas-grid-x", `${viewport.x % gridSize}px`);
-        gridLayer.style.setProperty("--canvas-grid-y", `${viewport.y % gridSize}px`);
-        gridLayer.style.setProperty("--canvas-dot-grid-size", `${dotGridSize}px`);
-        gridLayer.style.setProperty("--canvas-dot-grid-x", `${viewport.x % dotGridSize}px`);
-        gridLayer.style.setProperty("--canvas-dot-grid-y", `${viewport.y % dotGridSize}px`);
-        gridLayer.style.setProperty("--canvas-dot-size", canvasDotPx(viewport.k));
-    }
     // 图形层必须逐帧跟随 DOM 世界层；浮层和滚动通知仍可按原频率节流。
     container.dispatchEvent(new CustomEvent<ViewportTransform>(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, { detail: viewport }));
     if (notify) {

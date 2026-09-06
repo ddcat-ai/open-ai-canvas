@@ -1,0 +1,133 @@
+.choice-browser {
+    container-type: inline-size;
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    color: var(--foreground);
+}
+.choice-browser-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+    overflow: hidden;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+}
+.choice-browser-list {
+    height: 248px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+    scrollbar-gutter: stable;
+}
+.choice-browser-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 120px) 16px;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 7px 10px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+}
+.choice-browser-option:hover {
+    background: var(--surface-hover);
+}
+.choice-browser-option[data-selected="true"] {
+    background: var(--workspace-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--workspace-border-strong);
+}
+.choice-browser-option:has(input:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.choice-browser-option:has(input:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+.choice-browser-option input {
+    accent-color: var(--workspace-accent);
+    width: 14px;
+    height: 14px;
+}
+.choice-browser-main {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+.choice-browser-main strong {
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.choice-browser-main > span,
+.choice-browser-vendor {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+.choice-browser-main > span {
+    font-family: monospace;
+}
+.choice-browser-detail {
+    min-width: 0;
+    max-height: 248px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px;
+    border-left: 1px solid var(--workspace-border);
+}
+.choice-browser-detail > span {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+.choice-browser-detail > strong {
+    font-size: var(--fs-caption);
+    overflow-wrap: anywhere;
+}
+.choice-browser-detail dl {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: var(--fs-caption);
+}
+.choice-browser-detail dl > div {
+    display: grid;
+    grid-template-columns: 4em minmax(0, 1fr);
+    gap: 8px;
+}
+.choice-browser-detail dt,
+.choice-browser-detail p {
+    color: var(--muted-foreground);
+}
+.choice-browser-detail dd,
+.choice-browser-detail p {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.choice-browser-state {
+    display: grid;
+    min-height: 100px;
+    place-items: center;
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+    padding: 16px;
+}
+@container (max-width: 620px) {
+    .choice-browser-panels {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .choice-browser-detail {
+        border-left: 0;
+        border-top: 1px solid var(--workspace-border);
+    }
+    .choice-browser-option {
+        grid-template-columns: minmax(0, 1fr) 16px;
+    }
+    .choice-browser-vendor {
+        display: none;
+    }
+}

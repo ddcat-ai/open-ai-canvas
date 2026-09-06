@@ -22,7 +22,7 @@ export function generationTaskInput(task: GenerationTask) {
 }
 
 export function generationTaskNodeId(task: GenerationTask) {
-    return generationTaskInput(task)?.metadata?.nodeId || "";
+    return task.clientContext?.nodeId || generationTaskInput(task)?.metadata?.nodeId || "";
 }
 
 export function generationTaskMode(task: GenerationTask, fallback?: CanvasGenerationMode): CanvasGenerationMode {

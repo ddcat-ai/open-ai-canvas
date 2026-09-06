@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -52,6 +53,10 @@ type UserStorageUsage struct {
 
 func New(db *gorm.DB) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) WithContext(ctx context.Context) *Repository {
+	return &Repository{db: r.db.WithContext(ctx)}
 }
 
 func (r *Repository) Dialect() string {
@@ -428,7 +433,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 
 func (r *Repository) RenewTaskLease(id string, owner string, leaseDuration time.Duration) error {
 	result := r.db.Model(&model.Task{}).
-		Where("id = ? AND status = ? AND lease_owner = ?", id, model.TaskStatusRunning, owner).
+		Where("id = ? AND status = ? AND lease_owner = ? AND lease_expires_at > ?", id, model.TaskStatusRunning, owner, time.Now()).
 		Updates(map[string]any{"lease_expires_at": time.Now().Add(leaseDuration), "updated_at": time.Now()})
 	if result.Error != nil {
 		return result.Error
@@ -449,8 +454,8 @@ func (r *Repository) UpdateTaskProviderState(id string, providerRequestID string
 
 func (r *Repository) DeferRunningTaskForProviderPoll(id string, owner string, stage string, delay time.Duration) error {
 	now := time.Now()
-	result := r.db.Model(&model.Task{}).
-		Where("id = ? AND status = ? AND lease_owner = ?", id, model.TaskStatusRunning, owner).
+	result := taskLeaseWriter(r.db.Model(&model.Task{}), owner).
+		Where("id = ? AND status = ?", id, model.TaskStatusRunning).
 		Updates(map[string]any{
 			"stage": stage, "error": "", "completed_at": nil, "next_poll_at": now.Add(delay),
 			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
@@ -500,6 +505,27 @@ func (r *Repository) UpdateTaskProgress(id string, stage string, progress int) e
 	}).Error
 }
 
+func (r *Repository) UpdateTaskProgressForLease(id string, owner string, stage string, progress int) error {
+	result := taskLeaseWriter(r.db.Model(&model.Task{}), owner).
+		Where("id = ? AND status = ?", id, model.TaskStatusRunning).
+		Updates(map[string]any{"stage": stage, "progress": progress, "updated_at": time.Now()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrTaskStateConflict
+	}
+	return nil
+}
+
+// 无租约任务仅能写无租约记录；有租约的执行者必须仍持有本次领取的有效 owner。
+func taskLeaseWriter(db *gorm.DB, owner string) *gorm.DB {
+	if owner == "" {
+		return db.Where("(lease_owner = '' OR lease_owner IS NULL)")
+	}
+	return db.Where("lease_owner = ? AND lease_expires_at > ?", owner, time.Now())
+}
+
 // UpdateTaskProviderProgress records upstream-reported progress without allowing
 // a delayed or out-of-order poll response to move the public percentage backwards.
 func (r *Repository) UpdateTaskProviderProgress(id string, progress int) error {
@@ -513,7 +539,7 @@ func (r *Repository) UpdateTaskProviderProgress(id string, progress int) error {
 
 func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskStatus, session *model.Session, message *model.Message, results []model.Result) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		updated := tx.Model(&model.Task{}).
+		updated := taskLeaseWriter(tx.Model(&model.Task{}), task.LeaseOwner).
 			Where("id = ? AND status = ?", task.ID, expected).
 			Select("*").Omit("id", "created_at").Updates(task)
 		if updated.Error != nil {
@@ -541,8 +567,8 @@ func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskSta
 	})
 }
 
-func (r *Repository) UpdateTaskTerminalState(id string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error) {
-	result := r.db.Model(&model.Task{}).
+func (r *Repository) UpdateTaskTerminalState(id string, owner string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error) {
+	result := taskLeaseWriter(r.db.Model(&model.Task{}), owner).
 		Where("id = ? AND status = ?", id, expected).
 		Updates(map[string]any{
 			"status": status, "stage": stage, "error": errorText, "completed_at": &completedAt,
