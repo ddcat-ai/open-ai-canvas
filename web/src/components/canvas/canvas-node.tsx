@@ -700,38 +700,13 @@ function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }
     );
 }
 
-function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
-    const handleRef = useRef<HTMLSpanElement>(null);
+function ConnectionSideRail({ side, scale: _scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
     const [railFocused, setRailFocused] = useState(false);
-    const inverseScale = 1 / Math.max(scale, 0.05);
     const handleSize = 20;
     // The visible pin expands from a 10px resting mark to a 20px control and
     // moves 18px away from the card, matching Updream's node affordance.
     // The canvas world transform naturally makes both sizes follow zoom.
     const isVisible = visible || railFocused;
-
-    const resetHandle = useCallback(() => {
-        if (!handleRef.current) return;
-        handleRef.current.style.transform = "translate(0, 0) scale(1)";
-    }, []);
-
-    const updateHandle = (event: React.PointerEvent<HTMLButtonElement>) => {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const width = Math.max(bounds.width, 1);
-        const height = Math.max(bounds.height, 1);
-        const followLimit = 30;
-        const deltaX = event.clientX - (bounds.left + width / 2);
-        const deltaY = event.clientY - (bounds.top + height / 2);
-        const offsetScreenX = Math.max(-followLimit, Math.min(followLimit, deltaX));
-        const offsetScreenY = Math.max(-followLimit, Math.min(followLimit, deltaY));
-        const focus = 1 + Math.max(0, 1 - Math.hypot(offsetScreenX, offsetScreenY) / followLimit) * 0.1;
-        // While the pointer is inside the rail LibTV uses the rail center as
-        // the origin. The side-specific +/-25px offset is only the resting
-        // position used after leaving the rail.
-        const offsetX = offsetScreenX * inverseScale;
-        const offsetY = offsetScreenY * inverseScale;
-        if (handleRef.current) handleRef.current.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${focus})`;
-    };
 
     return (
         <button
@@ -740,30 +715,18 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
             data-visible={isVisible ? "true" : "false"}
             className="canvas-connection-rail canvas-connection-handle group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex items-center justify-center touch-none cursor-crosshair rounded-full outline-none"
             style={{ background: theme.spatial.elevated, borderColor: theme.node.activeStroke, color: theme.node.activeStroke }}
-            onPointerEnter={(event) => {
-                updateHandle(event);
-            }}
-            onPointerMove={updateHandle}
-            onPointerLeave={() => {
-                resetHandle();
-            }}
             onFocus={() => setRailFocused(true)}
             onBlur={() => setRailFocused(false)}
             onPointerDown={(event) => onPointerDown(event, 0.5)}
             aria-label={`${side === "left" ? "输入" : "输出"}连接点，单击创建节点或拖动连线`}
         >
             <span
-                ref={handleRef}
                 className="absolute left-1/2 top-1/2 block transition-transform duration-[80ms] ease-out group-hover:brightness-125 group-focus-visible:brightness-125"
                 style={{
                     width: handleSize,
                     height: handleSize,
                     marginLeft: -handleSize / 2,
                     marginTop: -handleSize / 2,
-                    transform: "translate(0, 0) scale(1)",
-                    transition: "transform 80ms ease-out",
-                    transformOrigin: "center",
-                    willChange: "transform",
                 }}
             >
                 <svg
