@@ -6925,6 +6925,11 @@
         border-radius: 999px;
     }
 
+    /* 保留节点生成面板的滚动槽位，切换焦点时不会因内容测量完成而闪出滚动条。 */
+    [data-canvas-node-panel] {
+        scrollbar-gutter: stable;
+    }
+
     .storyboard-scrollbar {
         overscroll-behavior: contain;
         scrollbar-color: rgba(148, 163, 184, 0.72) rgba(120, 113, 108, 0.14);
@@ -8043,7 +8048,6 @@
         color: var(--cn-text);
         box-shadow: var(--canvas-composer-shadow);
         padding: var(--space-3);
-        animation: canvas-composer-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
     }
 
     /* 提示词优化保持在输入框附近，使用紧凑的 Popover 作为第二层输入工具。 */
@@ -9731,7 +9735,6 @@
         transition: none !important;
     }
 
-    [data-canvas-viewport-interacting="true"] .canvas-node-composer,
     [data-canvas-viewport-interacting="true"] .canvas-node-status-track {
         animation-play-state: paused !important;
     }
@@ -9845,11 +9848,6 @@
 
     @keyframes canvas-node-status-in {
         from { opacity: 0; transform: translateY(-3px) scale(.96); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    @keyframes canvas-composer-enter {
-        from { opacity: 0; transform: translateY(8px) scale(.985); }
         to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
@@ -9967,7 +9965,6 @@
     .workspace-state { animation: none; }
     :where(.ant-btn:not(:disabled)):active { transform: none; }
     .canvas-node-panel-placement-change { animation: none; }
-    .canvas-node-composer,
     .canvas-node-status-track { animation: none; }
 }
 
