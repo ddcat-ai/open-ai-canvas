@@ -19,6 +19,11 @@ test("text cards do not render an inline expand editor overlay", () => {
     expect(nodeSource).not.toContain("<Maximize2");
 });
 
+test("read-only text content lets the node receive drag and double-click events", () => {
+    const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
+    expect(textContent.match(/onMouseDown=\{\(event\) => event\.stopPropagation\(\)\}/g) || []).toHaveLength(1);
+});
+
 test("text node dimensions remain owned by the existing node defaults", () => {
     const constants = readFileSync(resolve(import.meta.dir, "../src/constant/canvas.ts"), "utf8");
     expect(constants).toContain('width: 250');

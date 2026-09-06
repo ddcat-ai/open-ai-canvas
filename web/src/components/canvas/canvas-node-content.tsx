@@ -398,7 +398,6 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                 <div
                     className="thin-scrollbar block min-h-0 min-w-0 flex-1 select-text overflow-y-auto break-words bg-transparent font-sans [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:pl-2.5 [&_blockquote]:opacity-70 [&_code]:rounded [&_code]:bg-black/6 [&_code]:px-1 dark:[&_code]:bg-white/8 [&_h1]:my-1.5 [&_h1]:text-[1.55em] [&_h1]:font-semibold [&_h2]:my-1.5 [&_h2]:text-[1.3em] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[1.12em] [&_h3]:font-semibold [&_hr]:my-2 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-0.5 [&_pre]:my-1.5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/90 [&_pre]:p-2 [&_pre]:text-white [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&>:first-child]:mt-0 [&>:last-child]:mb-0"
                     style={textStyle}
-                    onMouseDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                     dangerouslySetInnerHTML={{ __html: richTextHTML }}
                 />
@@ -406,7 +405,6 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                 <div
                     className="thin-scrollbar block min-h-0 min-w-0 flex-1 select-text overflow-y-auto whitespace-pre-wrap break-words bg-transparent font-sans"
                     style={textStyle}
-                    onMouseDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                 >
                     {node.metadata?.content || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
