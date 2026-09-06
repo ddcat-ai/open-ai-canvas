@@ -7615,19 +7615,19 @@
     }
 
     .node-element:hover .canvas-connection-rail[data-visible="false"][data-canvas-connection-rail="left"] {
-        transform: translate3d(-18px, -50%, 0) scale(1);
+        transform: translate3d(-24px, -50%, 0) scale(1);
     }
 
     .node-element:hover .canvas-connection-rail[data-visible="false"][data-canvas-connection-rail="right"] {
-        transform: translate3d(18px, -50%, 0) scale(1);
+        transform: translate3d(24px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail[data-visible="true"][data-canvas-connection-rail="left"] {
-        transform: translate3d(-18px, -50%, 0) scale(1);
+        transform: translate3d(-24px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail[data-visible="true"][data-canvas-connection-rail="right"] {
-        transform: translate3d(18px, -50%, 0) scale(1);
+        transform: translate3d(24px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail:focus-visible {
@@ -7637,11 +7637,11 @@
     }
 
     .canvas-connection-rail:focus-visible[data-canvas-connection-rail="left"] {
-        transform: translate3d(-18px, -50%, 0) scale(1);
+        transform: translate3d(-24px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail:focus-visible[data-canvas-connection-rail="right"] {
-        transform: translate3d(18px, -50%, 0) scale(1);
+        transform: translate3d(24px, -50%, 0) scale(1);
     }
 
     .canvas-connection-rail:hover {
