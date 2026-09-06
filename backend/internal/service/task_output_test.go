@@ -41,6 +41,16 @@ func TestTaskMediaPreviewUsesSafeMediaURLs(t *testing.T) {
 	}
 }
 
+func TestTaskMediaPreviewSeparatesVideoPoster(t *testing.T) {
+	previewURL, previewKind, posterURL := taskMediaPreviewWithPoster(`{"video":{"url":"https://cdn.example.com/output.mp4","posterUrl":"https://cdn.example.com/poster.webp"}}`, "canvas_video")
+	if previewURL != "https://cdn.example.com/output.mp4" || previewKind != "video" || posterURL != "https://cdn.example.com/poster.webp" {
+		t.Fatalf("unexpected video preview: url=%q kind=%q poster=%q", previewURL, previewKind, posterURL)
+	}
+	if _, _, posterURL := taskMediaPreviewWithPoster(`{"video":{"url":"https://cdn.example.com/output.mp4","posterUrl":"file:///tmp/poster.png"}}`, "canvas_video"); posterURL != "" {
+		t.Fatalf("unsafe local poster was exposed: %q", posterURL)
+	}
+}
+
 func TestTaskClientContextRequiresCreatePageMetadata(t *testing.T) {
 	valid := taskClientContext(`{"metadata":{"source":"create-page","conversationId":"conversation-1","messageId":"message-1","batchIndex":2,"batchCount":4}}`)
 	if valid == nil || valid.ConversationID != "conversation-1" || valid.BatchIndex != 2 {
@@ -48,6 +58,37 @@ func TestTaskClientContextRequiresCreatePageMetadata(t *testing.T) {
 	}
 	if context := taskClientContext(`{"metadata":{"source":"other","conversationId":"conversation-1","messageId":"message-1"}}`); context != nil {
 		t.Fatalf("unexpected context for non-create-page task: %+v", context)
+	}
+}
+
+func TestTaskClientContextPreservesCanvasNodeID(t *testing.T) {
+	context := taskClientContext(`{"mode":"image","metadata":{"nodeId":"canvas-node-1","source":"canvas"}}`)
+	if context == nil || context.NodeID != "canvas-node-1" {
+		t.Fatalf("canvas node context was not preserved: %+v", context)
+	}
+}
+
+func TestTaskSummaryPreservesCanvasNodeWithoutExposingInput(t *testing.T) {
+	summary := taskSummaryForOutput(model.Task{
+		ID: "task-1", ProjectID: "project-1", Type: "canvas_image",
+		InputJSON: `{"metadata":{"nodeId":"node-1"},"config":{"apiKey":"private-test-value"}}`,
+	})
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output map[string]any
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatal(err)
+	}
+	context, ok := output["clientContext"].(map[string]any)
+	if !ok || context["nodeId"] != "node-1" || len(context) != 1 {
+		t.Fatalf("summary lost safe canvas association: %#v", output)
+	}
+	for _, key := range []string{"inputJson", "config", "apiKey"} {
+		if _, exists := output[key]; exists {
+			t.Fatalf("summary leaked %s", key)
+		}
 	}
 }
 

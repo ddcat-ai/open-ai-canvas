@@ -47,7 +47,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
         {
             items: [
                 { id: "home", title: "首页", icon: Home, to: "/" },
-                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
+                toolItem("projects", "/projects"),
                 ...(features.shortDramaEnabled ? [{ id: "brew", title: "酿造工坊", icon: FlaskConical, to: "/brew" } as WorkspaceNavItem] : []),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),

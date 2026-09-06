@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Input, Popover } from "antd";
-import { Search, WandSparkles } from "lucide-react";
+import { LayoutTemplate, Search, WandSparkles } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -75,6 +75,7 @@ export function CanvasPresetPicker({
     onSelect,
     compact = false,
     dense = false,
+    appearance = "default",
 }: {
     mode: CanvasGenerationMode;
     skillReferences?: CanvasResourceReference[];
@@ -83,6 +84,7 @@ export function CanvasPresetPicker({
     onSelect: (preset: CanvasPromptPreset) => void;
     compact?: boolean;
     dense?: boolean;
+    appearance?: "default" | "quiet";
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [internalOpen, setInternalOpen] = useState(false);
@@ -173,14 +175,14 @@ export function CanvasPresetPicker({
         >
             <button
                 type="button"
-                className={`canvas-preset-picker-trigger inline-flex shrink-0 items-center justify-center gap-1 rounded-lg transition hover:brightness-110 focus-visible:outline-none ${compact ? "size-6" : dense ? "h-6 px-1.5" : "h-7 px-2"}`}
-                style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}
-                title="打开提示词预设"
-                aria-label="打开提示词预设"
+                className={`canvas-preset-picker-trigger ${appearance === "quiet" ? "canvas-node-composer-header-action" : ""} inline-flex shrink-0 items-center justify-center gap-1 rounded-lg transition focus-visible:outline-none ${compact ? "size-6" : dense ? "h-6 px-1.5" : "h-7 px-2"}`}
+                style={appearance === "quiet" ? undefined : { background: theme.accent.primarySoft, color: theme.accent.primary }}
+                title={appearance === "quiet" ? "提示词模板" : "打开提示词预设"}
+                aria-label={appearance === "quiet" ? "提示词模板" : "打开提示词预设"}
                 aria-expanded={actualOpen}
             >
-                <WandSparkles className={dense ? "size-3" : "size-3.5"} />
-                {compact ? null : <span className="text-[var(--fs-tiny)] font-semibold">预设</span>}
+                {appearance === "quiet" ? <LayoutTemplate className="size-3" /> : <WandSparkles className={dense ? "size-3" : "size-3.5"} />}
+                {compact ? null : <span className="text-[var(--fs-tiny)] font-medium">{appearance === "quiet" ? "提示词模板" : "预设"}</span>}
             </button>
         </Popover>
     );

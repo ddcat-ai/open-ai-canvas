@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -74,7 +76,8 @@ var acquireSlotScript = redis.NewScript(`
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
 if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[3]) then return 0 end
 redis.call('ZADD', KEYS[1], ARGV[2], ARGV[4])
-redis.call('PEXPIRE', KEYS[1], ARGV[5])
+local latest = redis.call('ZREVRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+redis.call('PEXPIRE', KEYS[1], math.max(tonumber(ARGV[5]), tonumber(latest[2]) - tonumber(ARGV[1]) + 60000))
 return 1
 `)
 
@@ -91,6 +94,9 @@ func newRuntimeCoordinator(dialect string) (*runtimeCoordinator, error) {
 	if err != nil {
 		return coordinator, fmt.Errorf("REDIS_URL 无效：%w", err)
 	}
+	// 协调写操作不透明重试；限流/并发失败必须及时向调用方返回，不能放大故障流量。
+	options.MaxRetries = -1
+	options.ContextTimeoutEnabled = true
 	coordinator.redis = redis.NewClient(options)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -122,6 +128,21 @@ func (c *runtimeCoordinator) allow(ctx context.Context, key string, limit int, w
 }
 
 func (c *runtimeCoordinator) acquire(ctx context.Context, scope string, limit int, ttl time.Duration) (func(), bool, error) {
+	lease, acquired, err := c.acquireLease(ctx, scope, limit, ttl)
+	if err != nil || !acquired {
+		return nil, acquired, err
+	}
+	return lease.release, true, nil
+}
+
+func (c *runtimeCoordinator) acquireLease(ctx context.Context, scope string, limit int, ttl time.Duration) (*runtimeSlotLease, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if limit <= 0 || ttl <= 0 {
+		return nil, false, errors.New("并发租约参数无效")
+	}
+	lease := &runtimeSlotLease{coordinator: c, scope: scope, token: c.instanceID + ":" + newID(), ttl: ttl}
 	if c.redis == nil {
 		c.localMu.Lock()
 		now := time.Now()
@@ -139,29 +160,90 @@ func (c *runtimeCoordinator) acquire(ctx context.Context, scope string, limit in
 			c.localMu.Unlock()
 			return nil, false, nil
 		}
-		token := c.instanceID + ":" + newID()
-		slots[token] = now.Add(ttl)
+		slots[lease.token] = now.Add(ttl)
 		c.localMu.Unlock()
-		return func() {
-			c.localMu.Lock()
-			delete(c.localSlots[scope], token)
-			c.localMu.Unlock()
-		}, true, nil
+		return lease, true, nil
 	}
 	// 有过期分数的有序集合避免实例崩溃后永久占槽，业务数据库仍保存任务与账本真相。
 	key := "canvas:slots:" + scope
-	token := c.instanceID + ":" + newID()
+	ctx, cancel := context.WithTimeout(ctx, runtimeCoordinationTimeout)
+	defer cancel()
 	now := time.Now()
-	ok, err := acquireSlotScript.Run(ctx, c.redis, []string{key}, now.UnixMilli(), now.Add(ttl).UnixMilli(), limit, token, (ttl + time.Minute).Milliseconds()).Int()
+	ok, err := acquireSlotScript.Run(ctx, c.redis, []string{key}, now.UnixMilli(), now.Add(ttl).UnixMilli(), limit, lease.token, (ttl + time.Minute).Milliseconds()).Int()
 	if err != nil || ok != 1 {
 		return nil, false, err
 	}
-	return func() { _ = c.redis.ZRem(context.Background(), key, token).Err() }, true, nil
+	return lease, true, nil
+}
+
+const runtimeCoordinationTimeout = 2 * time.Second
+
+type runtimeSlotLease struct {
+	coordinator *runtimeCoordinator
+	scope       string
+	token       string
+	ttl         time.Duration
+	once        sync.Once
+}
+
+var renewSlotScript = redis.NewScript(`
+local expires = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if not expires or tonumber(expires) <= tonumber(ARGV[2]) then return 0 end
+redis.call('ZADD', KEYS[1], 'XX', ARGV[3], ARGV[1])
+local latest = redis.call('ZREVRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+redis.call('PEXPIRE', KEYS[1], math.max(tonumber(ARGV[4]), tonumber(latest[2]) - tonumber(ARGV[2]) + 60000))
+return 1
+`)
+
+func (l *runtimeSlotLease) renew(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c := l.coordinator
+	now := time.Now()
+	if c.redis == nil {
+		c.localMu.Lock()
+		defer c.localMu.Unlock()
+		if !c.localSlots[l.scope][l.token].After(now) {
+			return errors.New("并发租约已失效")
+		}
+		c.localSlots[l.scope][l.token] = now.Add(l.ttl)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, runtimeCoordinationTimeout)
+	defer cancel()
+	ok, err := renewSlotScript.Run(ctx, c.redis, []string{"canvas:slots:" + l.scope}, l.token, now.UnixMilli(), now.Add(l.ttl).UnixMilli(), (l.ttl + time.Minute).Milliseconds()).Int()
+	if err != nil {
+		return err
+	}
+	if ok != 1 {
+		return errors.New("并发租约已失效")
+	}
+	return nil
+}
+
+func (l *runtimeSlotLease) release() {
+	l.once.Do(func() {
+		c := l.coordinator
+		if c.redis == nil {
+			c.localMu.Lock()
+			defer c.localMu.Unlock()
+			delete(c.localSlots[l.scope], l.token)
+			if len(c.localSlots[l.scope]) == 0 {
+				delete(c.localSlots, l.scope)
+			}
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeCoordinationTimeout)
+		defer cancel()
+		if err := c.redis.ZRem(ctx, "canvas:slots:"+l.scope, l.token).Err(); err != nil {
+			log.Printf("concurrency lease release failed: scope=%s error=%v", l.scope, err)
+		}
+	})
 }
 
 func (c *runtimeCoordinator) acquireWithWait(ctx context.Context, scope string, limit int, ttl time.Duration) (func(), error) {
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
+	delay := 200 * time.Millisecond
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -173,12 +255,21 @@ func (c *runtimeCoordinator) acquireWithWait(ctx context.Context, scope string, 
 		if acquired {
 			return release, nil
 		}
+		// 满载期间退避并错峰，避免每个等待者固定每秒五次同步争抢 Redis。
+		wait := time.NewTimer(channelSlotRetryDelay(delay))
 		select {
 		case <-ctx.Done():
+			wait.Stop()
 			return nil, ctx.Err()
-		case <-ticker.C:
+		case <-wait.C:
 		}
+		delay = min(delay*2, 2*time.Second)
 	}
+}
+
+func channelSlotRetryDelay(delay time.Duration) time.Duration {
+	// 上限 2s，下半窗口随机等待，保留首轮至少 100ms 的退让。
+	return delay/2 + time.Duration(rand.Int64N(int64(delay/2)+1))
 }
 
 func (c *runtimeCoordinator) circuitOpen(ctx context.Context, channelID string) (bool, error) {

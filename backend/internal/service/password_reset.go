@@ -74,7 +74,8 @@ func (s *Service) SendPasswordResetEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	if err := s.deliverEmail(setting, email, "影策密码重置验证码", passwordResetEmailBody(code)); err != nil {
+	setting = resolveEmailSender(setting, s.appearanceBrandName())
+	if err := s.deliverEmail(setting, email, setting.FromName+"密码重置验证码", passwordResetEmailBody(setting.FromName, code)); err != nil {
 		if cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID); cleanupErr != nil {
 			log.Printf("password reset email cleanup failed: recipient=%s error=%v", maskedEmail(email), cleanupErr)
 		}
@@ -144,8 +145,8 @@ func invalidPasswordResetCode() *AuthError {
 	return BadAuthRequest("验证码无效或已过期")
 }
 
-func passwordResetEmailBody(code string) string {
-	return "你正在重置影策账号密码。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件，并确保邮箱账号安全。"
+func passwordResetEmailBody(brandName string, code string) string {
+	return "你正在重置" + brandName + "账号密码。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件，并确保邮箱账号安全。"
 }
 
 func maskedEmail(email string) string {

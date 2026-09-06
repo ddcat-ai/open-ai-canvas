@@ -1,7 +1,7 @@
 // 时间线视图数学（移植自 lingji-cut 的 timeline-view.ts，按本项目类型精简）。
 // 提供缩放钳制、像素/毫秒换算、标尺刻度与时间格式化。
 
-const BASE_TIMELINE_PX_PER_SECOND = 96;
+export const BASE_TIMELINE_PX_PER_SECOND = 96;
 const MIN_TIMELINE_TRACK_WIDTH = 960;
 const MIN_TIMELINE_ZOOM = 0.02;
 const MAX_TIMELINE_ZOOM = 4;
@@ -19,6 +19,11 @@ export function clampTimelineZoom(zoomLevel: number): number {
 
 export function getBaseTimelineWidth(durationMs: number): number {
     return Math.max(MIN_TIMELINE_TRACK_WIDTH, Math.ceil(Math.max(1_000, durationMs) / 1_000) * BASE_TIMELINE_PX_PER_SECOND);
+}
+
+/** 缩放级别对应的像素/毫秒。时间线面板用它做独立的等比映射，拖动片段时轨道随内容扩展，比例保持恒定。 */
+export function getTimelinePxPerMs(zoomLevel: number): number {
+    return (BASE_TIMELINE_PX_PER_SECOND * clampTimelineZoom(zoomLevel)) / 1_000;
 }
 
 export function getNextTimelineZoom(zoomLevel: number, direction: ZoomDirection): number {

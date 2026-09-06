@@ -10,15 +10,21 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 7
+// CurrentSchemaVersion = 9：影策 fork 与上游迁移编号在此分叉（D-053）。
+// 本地生产库已应用 6=asset_library_folders、7=shot_task_chain（W1-01），
+// 上游 main 在 v1.2.5 后将 6 改派 resource_playback_variant 并把 folders 挪到 7。
+// 为免生产库记录作废，fork 保留自有编号，上游两个新迁移顺延为 8/9。
+const CurrentSchemaVersion int64 = 9
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
 const assetTaxonomyCandidateIdentityChecksum = "sha256:asset-taxonomy-candidate-identity-v3-20260831-r1"
 const resourceUploadKeyChecksum = "sha256:resource-upload-key-v4-20260901"
 const paymentTopupChecksum = "sha256:payment-topup-v5-20260902"
+const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const shotTaskChainChecksum = "sha256:shot-task-chain-v7-20260904"
+const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -50,8 +56,10 @@ var schemaMigrations = []migration{
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
 	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
 	{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
-	{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV6},
-	{version: 7, name: "shot_task_chain", checksum: shotTaskChainChecksum, apply: migrateSchemaV7},
+	{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaAssetLibraryFolders},
+	{version: 7, name: "shot_task_chain", checksum: shotTaskChainChecksum, apply: migrateSchemaShotTaskChain},
+	{version: 8, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaResourcePlaybackVariant},
+	{version: 9, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaLogicalModelActiveCode},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -111,7 +119,6 @@ func migrateSchemaV4(tx *gorm.DB) error {
 	}
 	return nil
 }
-
 func migrateSchemaV5(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(
 		&model.CreditLedgerEntry{},
@@ -127,14 +134,38 @@ func migrateSchemaV5(tx *gorm.DB) error {
 	return nil
 }
 
-func migrateSchemaV6(tx *gorm.DB) error {
+// migrateSchemaResourcePlaybackVariant：上游原编号 v6，fork 顺延为 8。
+func migrateSchemaResourcePlaybackVariant(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.Resource{}) {
+		return fmt.Errorf("资源表不存在")
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_status") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackStatus"); err != nil {
+			return fmt.Errorf("增加播放副本状态列：%w", err)
+		}
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_object_key") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackObjectKey"); err != nil {
+			return fmt.Errorf("增加播放副本对象键列：%w", err)
+		}
+	}
+	if !tx.Migrator().HasColumn(&model.Resource{}, "playback_error") {
+		if err := tx.Migrator().AddColumn(&model.Resource{}, "PlaybackError"); err != nil {
+			return fmt.Errorf("增加播放副本错误列：%w", err)
+		}
+	}
+	return nil
+}
+
+// migrateSchemaAssetLibraryFolders：上游原编号 v6（v1.2.5 发布）/ v7（main 重排），fork 定格在 6。
+func migrateSchemaAssetLibraryFolders(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(&model.Asset{}, &model.AssetFolder{}); err != nil {
 		return fmt.Errorf("创建个人素材分类并扩展素材目录字段：%w", err)
 	}
 	return nil
 }
 
-// migrateSchemaV7 打通影策 2.0 的生成任务链（W1-01，决策 D-008/D-009/D-020~D-026）：
+// migrateSchemaShotTaskChain 打通影策 2.0 的生成任务链（W1-01，决策 D-008/D-009/D-020~D-026）：
 //   - 扩列：tasks（shot_id/canvas_node_id/workflow_step_id）
 //           comfy_bridge_requests（generation_task_id/shot_id/canvas_node_id/attempt_no/comfy_prompt_id/error_code）
 //           shots（canvas_node_id/semantic_type/latest_* 指针）
@@ -146,7 +177,7 @@ func migrateSchemaV6(tx *gorm.DB) error {
 // （Shot / ShotArtifact / WorkflowTemplateVersion / ProductionTaskLink），
 // 初版方案另建 shot_registry / output_assets / bridge_workflows 属于重复造轮子（Q-09），已推翻。
 // D-020：不新建 comfy_jobs 表——ComfyBridgeRequest 即 ComfyJob 的持久化实现。
-func migrateSchemaV7(tx *gorm.DB) error {
+func migrateSchemaShotTaskChain(tx *gorm.DB) error {
 	// 为什么每一步都要先检查表是否存在：
 	// 单元测试（如 TestMigrateSchemaV4AddsResourceUploadKeyToExistingSchema）会构造**精简老 schema**
 	// ——它只建了迁移目标相关的少数几张表，根本没有 tasks / shots 等。
@@ -228,6 +259,20 @@ func migrateSchemaV7(tx *gorm.DB) error {
 		if err := tx.Exec(item.sql).Error; err != nil {
 			return fmt.Errorf("%s：%w", item.describe, err)
 		}
+	}
+	return nil
+}
+
+// migrateSchemaLogicalModelActiveCode：上游 v1.2.6 新增（上游编号 8），fork 顺延为 9。
+func migrateSchemaLogicalModelActiveCode(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.LogicalModel{}) {
+		return nil
+	}
+	if err := tx.Exec("DROP INDEX IF EXISTS idx_logical_models_code").Error; err != nil {
+		return fmt.Errorf("移除前台模型旧 code 唯一索引：%w", err)
+	}
+	if err := tx.Exec("CREATE UNIQUE INDEX idx_logical_models_code ON logical_models(code) WHERE archived_at IS NULL").Error; err != nil {
+		return fmt.Errorf("创建前台模型活动 code 唯一索引：%w", err)
 	}
 	return nil
 }

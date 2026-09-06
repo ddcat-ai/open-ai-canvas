@@ -145,7 +145,9 @@ export type EmailSetting = {
     encryption: "starttls" | "tls" | "none";
     fromEmail: string;
     fromName: string;
+    fromNameInherited: boolean;
     hasPassword: boolean;
+    registrationAllowedDomains: string[];
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -268,9 +270,13 @@ export function listAdminChannelModels(channelId: string) {
     return request<{ models: ChannelModel[] }>(api.get(`/admin/channels/${encodeURIComponent(channelId)}/models`));
 }
 
-// 管理员从上游拉取模型目录；服务端只导入缺失项，价格和启用仍需人工确认。
+// 管理员从上游读取模型目录；确认导入后才会写入渠道模型，价格和启用仍需人工确认。
 export function fetchAdminChannelModels(channelId: string) {
-    return request<{ models: string[]; added: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`));
+	return request<{ models: string[] }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`));
+}
+
+export function importAdminChannelModels(channelId: string, models: string[]) {
+	return request<{ models: string[]; added: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models }));
 }
 
 export function testAdminChannelModel(channelId: string, input: Pick<ChannelModel, "modelKey" | "providerModelKey" | "capability" | "protocol"> & { capabilityConfig?: ChannelModel["capabilityConfig"] }) {

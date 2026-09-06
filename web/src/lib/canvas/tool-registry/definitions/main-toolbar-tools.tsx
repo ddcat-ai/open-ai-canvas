@@ -1,4 +1,4 @@
-import { Eraser, FolderOpen, Hand, Palette, Plus, Redo2, Settings2, SquareDashedMousePointer, Trash2, Undo2, X } from "lucide-react";
+import { Eraser, FolderOpen, Hand, Palette, Plus, Redo2, Settings2, SquareDashedMousePointer, Trash2, Undo2 } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 
@@ -7,26 +7,23 @@ export const mainToolbarTools: ToolDefinition[] = [
         id: "tool-move",
         toolbar: "main",
         category: "navigation",
-        label: (ctx) => ctx.canvasTool === "box-select" ? "移动与选择" : ctx.selectedCount ? `取消选择${ctx.selectedCount > 1 ? ` ${ctx.selectedCount} 个节点` : ""}` : "移动与选择",
-        icon: (ctx) => ctx.canvasTool === "box-select" ? <Hand /> : ctx.selectedCount ? <X /> : <Hand />,
+        label: "抓手工具",
+        icon: <Hand />,
         defaultVisible: true,
         defaultOrder: 10,
         active: (ctx) => ctx.canvasTool === "move",
-        run: (ctx) => {
-            if (ctx.canvasTool !== "move") ctx.handlers.onToolChange("move");
-            else ctx.handlers.onDeselect();
-        },
+        run: (ctx) => ctx.handlers.onToolChange("move"),
     },
     {
         id: "tool-box-select",
         toolbar: "main",
         category: "navigation",
-        label: "框选",
+        label: "区域选择",
         icon: <SquareDashedMousePointer />,
         defaultVisible: true,
         defaultOrder: 20,
         active: (ctx) => ctx.canvasTool === "box-select",
-        run: (ctx) => ctx.handlers.onToolChange(ctx.canvasTool === "box-select" ? "move" : "box-select"),
+        run: (ctx) => ctx.handlers.onToolChange("box-select"),
     },
     {
         id: "tool-undo",

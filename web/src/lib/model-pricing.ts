@@ -1,5 +1,6 @@
 import { modelRequestOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
+import { buildImageResolutionOptions, imageResolutionOption } from "@/lib/image-resolution-tiers";
 import type { ModelRequestIntent } from "@/services/api/logical-models";
 import { modelOptionName, resolveModelChannel, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
@@ -79,7 +80,7 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
-        operation: capability === "video" && input ? resolveVideoOperation(input, requirements?.videoOperation) : requirements?.videoOperation,
+        operation: capability === "image" ? imagePriceOperation(requirements) : capability === "video" && input ? resolveVideoOperation(input, requirements?.videoOperation) : requirements?.videoOperation,
         inputs: {
             image: (input?.imageCount || 0) + (input?.characterCount || 0),
             video: input?.videoCount || 0,
@@ -115,10 +116,25 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
         if (seconds > 0) requested.videoSeconds = String(seconds);
     }
     if (capability === "image") {
-        if (config.quality && config.quality !== "auto") requested.quality = config.quality.toLowerCase();
-        if (config.size && config.size !== "auto") requested.size = config.size.toLowerCase();
+        requested.operation = imagePriceOperation(requirements);
+        const options = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const imageQuality = String(options.quality ?? "").trim().toLowerCase();
+        const imageSize = String(options.size ?? "").trim();
+        if ((imageQuality === "" || imageQuality === "auto" || imageQuality === "any") && imageSize) {
+            const resolution = imageResolutionOption(buildImageResolutionOptions([imageSize]), imageSize)?.tier;
+            if (resolution) requested.quality = resolution;
+        }
+        for (const key of ["quality", "size"] as const) {
+            const value = String(options[key] ?? "").trim().toLowerCase();
+            if (value && value !== "auto" && value !== "any" && !requested[key]) requested[key] = value;
+        }
     }
     return requested;
+}
+
+function imagePriceOperation(requirements?: ModelRequirements) {
+    const input = requirements?.input;
+    return (input?.imageCount || 0) + (input?.characterCount || 0) > 0 ? "image_to_image" : "text_to_image";
 }
 
 function priceSelectorForTier(tier: ModelPriceTier) {

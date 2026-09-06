@@ -707,37 +707,22 @@ function LatestPreview({ artifact, emptyText, onPreviewImage }: { artifact?: Sho
 }
 
 function VideoArtifactPreview({ src, title }: { src: string; title: string }) {
-    const [posterUrl, setPosterUrl] = useState("");
     const [playing, setPlaying] = useState(false);
 
     useEffect(() => {
-        let active = true;
-        let objectUrl = "";
-        setPosterUrl("");
         setPlaying(false);
-        void captureVideoPoster(src, { maxWidth: 960 })
-            .then((captured) => {
-                if (!active || !captured.poster) return;
-                objectUrl = URL.createObjectURL(captured.poster);
-                setPosterUrl(objectUrl);
-            })
-            .catch(() => undefined);
-        return () => {
-            active = false;
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
-        };
     }, [src]);
 
-    if (playing) return <video className="workflow-preview-media" src={src} poster={posterUrl || undefined} controls autoPlay playsInline preload="metadata" aria-label={title} />;
+    if (playing) return <video className="workflow-preview-media" src={src} controls autoPlay playsInline preload="metadata" aria-label={title} />;
     return <button type="button" className="workflow-preview-media-button workflow-video-poster" onClick={() => setPlaying(true)} aria-label={`点击播放${title}`}>
-        {posterUrl ? <img className="workflow-preview-media" src={posterUrl} alt={`${title}首帧`} /> : <video className="workflow-preview-media" src={src} muted playsInline preload="auto" aria-hidden="true" />}
+        <span className="workflow-preview-media workflow-video-placeholder" aria-hidden="true"><Film /></span>
         <span className="workflow-video-play" aria-hidden="true"><Play className="size-6" fill="currentColor" /></span>
     </button>;
 }
 
 function ArtifactHistory({ artifacts, activeId, onSelect, compact = false }: { artifacts: ShotArtifact[]; activeId?: string; onSelect: (artifact: ShotArtifact) => void; compact?: boolean }) {
     if (!artifacts.length) return compact ? null : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史版本" />;
-    return <section className={`workflow-history ${compact ? "is-compact" : ""}`}><div className="workflow-history-title">历史版本</div>{artifacts.map((artifact) => <button key={artifact.id} type="button" className={artifact.id === activeId ? "is-active" : ""} onClick={() => onSelect(artifact)}>{artifact.resourceId ? artifact.type === "video" ? <video src={resourceFileUrl(artifact.resourceId)} muted preload="metadata" /> : <img src={resourceFileUrl(artifact.resourceId)} alt="" loading="lazy" /> : <span className="workflow-history-placeholder"><Layers3 /></span>}<span className="min-w-0 flex-1"><strong>v{artifact.version}{artifact.selected ? " · 当前" : ""}</strong><small>{new Date(artifact.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></span><ArtifactStatus artifact={artifact} compact /></button>)}</section>;
+    return <section className={`workflow-history ${compact ? "is-compact" : ""}`}><div className="workflow-history-title">历史版本</div>{artifacts.map((artifact) => <button key={artifact.id} type="button" className={artifact.id === activeId ? "is-active" : ""} onClick={() => onSelect(artifact)}>{artifact.resourceId ? artifact.type === "video" ? <span className="workflow-history-placeholder"><Film /></span> : <img src={resourceFileUrl(artifact.resourceId)} alt="" loading="lazy" /> : <span className="workflow-history-placeholder"><Layers3 /></span>}<span className="min-w-0 flex-1"><strong>v{artifact.version}{artifact.selected ? " · 当前" : ""}</strong><small>{new Date(artifact.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></span><ArtifactStatus artifact={artifact} compact /></button>)}</section>;
 }
 
 function ShotTimeline({ activeStage, detail, shots, timeline, selectedShotId, submittingShotIds, onSelectShot, onAddShot, addingShot }: { activeStage: ShortDramaWorkflowStage; detail: ProjectDetail; shots: ProjectShot[]; timeline: Map<string, ShotTimelineEntry>; selectedShotId: string; submittingShotIds: Set<string>; onSelectShot: (id: string) => void; onAddShot: () => void; addingShot: boolean }) {

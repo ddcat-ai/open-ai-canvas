@@ -2,10 +2,8 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
-import { RequireFeature } from "@/components/auth/require-feature";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
-import UserLayout from "@/layouts/user-layout";
+import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 
@@ -48,10 +46,12 @@ const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
 const WalletPage = lazy(loadWalletPage);
 const ProjectsPage = lazy(loadProjectsPage);
-const ProjectDetailPage = lazy(() => import("@/pages/projects/detail"));
+const ProjectDetailPage = lazy(loadProjectDetailPage);
 const BrewHubPage = lazy(() => import("@/pages/brew"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
+const UserLayout = lazy(() => import("@/layouts/user-layout"));
+const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
 
 function deferred(element: ReactNode) {
     return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
@@ -59,6 +59,10 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+function AuthenticatedWorkspaceLayout() {
+    return <RequireAuth>{fullScreenDeferred(<UserLayout><Outlet /></UserLayout>)}</RequireAuth>;
 }
 
 /**
@@ -91,11 +95,7 @@ export const router = createBrowserRouter([
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     ...(import.meta.env.DEV ? devRoutes() : []),
     {
-        element: (
-            <UserLayout>
-                <Outlet />
-            </UserLayout>
-        ),
+        element: <AuthenticatedWorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
             { path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
@@ -190,32 +190,32 @@ export const router = createBrowserRouter([
                 path: "/admin",
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
-                    { index: true, element: deferred(<AnalyticsPage />) },
-                    { path: "users", element: deferred(<UsersPage />) },
-                    { path: "channels", element: deferred(<ChannelsPage />) },
-                    { path: "models", element: <RequireFeature feature="frontendModelsEnabled">{deferred(<LogicalModelsPage />)}</RequireFeature> },
-                    { path: "plugins", element: deferred(<AdminPluginsPage />) },
-                    { path: "payments", element: deferred(<AdminPaymentsPage />) },
-                    { path: "prompt-templates", element: deferred(<StoryboardPromptsPage />) },
+                    { index: true, element: <AnalyticsPage /> },
+                    { path: "users", element: <UsersPage /> },
+                    { path: "channels", element: <ChannelsPage /> },
+                    { path: "models", element: <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature> },
+                    { path: "plugins", element: <AdminPluginsPage /> },
+                    { path: "payments", element: <AdminPaymentsPage /> },
+                    { path: "prompt-templates", element: <StoryboardPromptsPage /> },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
-                    { path: "announcements", element: deferred(<AnnouncementsPage />) },
-                    { path: "resources", element: deferred(<StorageResourcesPage />) },
-                    { path: "credit-operations", element: deferred(<CreditOperationsPage />) },
-                    { path: "redemption-codes", element: deferred(<RedemptionCodesPage />) },
-                    { path: "logs", element: deferred(<LogsPage />) },
+                    { path: "announcements", element: <AnnouncementsPage /> },
+                    { path: "resources", element: <StorageResourcesPage /> },
+                    { path: "credit-operations", element: <CreditOperationsPage /> },
+                    { path: "redemption-codes", element: <RedemptionCodesPage /> },
+                    { path: "logs", element: <LogsPage /> },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
-                    { path: "settings/appearance", element: deferred(<AppearanceSettingsPage />) },
-                    { path: "settings/drawing-engine", element: deferred(<DrawingEngineSettingsPage />) },
+                    { path: "settings/appearance", element: <AppearanceSettingsPage /> },
+                    { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },
                     { path: "settings/concurrency", element: <Navigate to="/admin/settings/runtime-policy" replace /> },
-                    { path: "settings/runtime-policy", element: deferred(<RuntimePolicySettingsPage />) },
-                    { path: "settings/features", element: deferred(<FeatureAvailabilityPage />) },
-                    { path: "settings/access", element: deferred(<AccessSettingsPage />) },
-                    { path: "settings/email", element: deferred(<EmailSettingsPage />) },
-                    { path: "settings/storage", element: deferred(<StorageSettingsPage />) },
-                    { path: "settings/ark-private-assets", element: deferred(<ArkPrivateAssetsSettingsPage />) },
-                    { path: "settings/response-interception", element: deferred(<ResponseInterceptionSettingsPage />) },
-                    { path: "settings/third-party", element: deferred(<ThirdPartySettingsPage />) },
-                    { path: "settings/system-update", element: deferred(<SystemUpdatePage />) },
+                    { path: "settings/runtime-policy", element: <RuntimePolicySettingsPage /> },
+                    { path: "settings/features", element: <FeatureAvailabilityPage /> },
+                    { path: "settings/access", element: <AccessSettingsPage /> },
+                    { path: "settings/email", element: <EmailSettingsPage /> },
+                    { path: "settings/storage", element: <StorageSettingsPage /> },
+                    { path: "settings/ark-private-assets", element: <ArkPrivateAssetsSettingsPage /> },
+                    { path: "settings/response-interception", element: <ResponseInterceptionSettingsPage /> },
+                    { path: "settings/third-party", element: <ThirdPartySettingsPage /> },
+                    { path: "settings/system-update", element: <SystemUpdatePage /> },
                     { path: "settings/libtv", element: <Navigate to="/admin/settings/third-party" replace /> },
                 ],
             },

@@ -27,7 +27,7 @@ type taskTerminalCoordinator struct {
 
 type taskTerminalRepository interface {
 	Task(id string) (*model.Task, error)
-	UpdateTaskTerminalState(id string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error)
+	UpdateTaskTerminalState(id string, owner string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error)
 	// TouchShotLatestTask 回写分镜「最近一次成功任务」指针（F-25，W1-02）。
 	TouchShotLatestTask(shotID string, taskID string, now time.Time) error
 }
@@ -259,8 +259,12 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 func (c *taskTerminalCoordinator) markTerminalState(task *model.Task) error {
 	completedAt := time.Now()
 	task.CompletedAt = &completedAt
-	if _, err := c.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, completedAt); err != nil {
+	updated, err := c.repo.UpdateTaskTerminalState(task.ID, task.LeaseOwner, model.TaskStatusRunning, task.Status, task.Stage, task.Error, completedAt)
+	if err != nil {
 		return fmt.Errorf("写入任务终态失败：%w", err)
+	}
+	if !updated {
+		return repository.ErrTaskStateConflict
 	}
 	return nil
 }

@@ -46,7 +46,7 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
             destroyOnHidden
             closable={!uploading}
             keyboard={!uploading}
-            maskClosable={!uploading}
+            mask={{ closable: !uploading }}
             onCancel={onClose}
             styles={{ container: { padding: 0, overflow: "hidden" }, body: { padding: 0 } }}
         >

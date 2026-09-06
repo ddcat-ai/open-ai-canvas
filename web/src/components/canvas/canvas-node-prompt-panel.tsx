@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowUp, AtSign, ChevronDown, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
 import { Button, Image as AntImage, InputNumber, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -107,6 +107,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         }, mode),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
+    const resolvedRequirements: ModelRequirements = {
+        ...requirements,
+        options: modelRequestOptions(config, mode),
+        videoSeconds: mode === "video" ? config.videoSeconds : undefined,
+    };
     const promptOptimizerProvider = useMemo(() => {
         if (!promptOptimizerEnabled || !promptOptimizerInstallation || !promptOptimizerPlugin.createPromptOptimizer) return null;
         return promptOptimizerPlugin.createPromptOptimizer(createPluginHostContext(promptOptimizerPlugin, promptOptimizerInstallation, globalConfig));
@@ -121,9 +126,9 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         seconds: mode === "video" ? config.videoSeconds : 1,
         capability: mode,
         config,
-        requirements,
+        requirements: resolvedRequirements,
     });
-    const quoteRequest = modelQuoteRequest(config, config.model, mode, requirements);
+    const quoteRequest = modelQuoteRequest(config, config.model, mode, resolvedRequirements);
     const quoteRequestKey = JSON.stringify(quoteRequest || null);
     const [quotedCredits, setQuotedCredits] = useState<number | null>(null);
     const credits = quotedCredits ?? configuredCredits;
@@ -244,32 +249,29 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
-                    <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}创作</span>
+                    <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}生成</span>
                 </div>
             )}
-            {!simpleMode ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense /> : null}
+            <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
+            {!simpleMode ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense appearance="quiet" /> : null}
             {canOptimizePrompt ? (
-                <Tooltip title="用 AI 优化提示词">
+                <Tooltip title="用 AI 润色提示词">
                     <button
                         type="button"
-                        className="canvas-node-composer-icon-button inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 transition-[background-color,filter] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                        style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
+                        className="canvas-node-composer-header-action inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5"
                         onClick={() => setPromptOptimizerOpen(true)}
-                        aria-label="优化提示词"
+                        aria-label="润色提示词"
                     >
                         <WandSparkles className="size-3" />
-                        <span className="hidden text-[var(--fs-micro)] font-medium sm:inline">优化</span>
+                        <span className="text-[var(--fs-tiny)] font-medium">润色</span>
                     </button>
                 </Tooltip>
             ) : null}
-            <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-                {activeReferenceCount ? <ComposerPill theme={theme} icon={<Boxes className="size-2.5" />} label={`参考 ${activeReferenceCount}`} /> : null}
                 {!expanded && canExpandPrompt ? (
                     <Tooltip title="放大编辑">
                         <button
                             type="button"
-                            className="canvas-node-composer-icon-button grid size-6 shrink-0 place-items-center rounded-md transition-[background-color,filter] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                            style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
+                            className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
                             onClick={() => setExpandedPromptOpen(true)}
                             aria-label="放大编辑提示词"
                         >
@@ -281,8 +283,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <Tooltip title="关闭">
                         <button
                             type="button"
-                            className="canvas-node-composer-icon-button grid size-6 shrink-0 place-items-center rounded-md transition-[background-color,filter] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                            style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
+                            className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
                             onClick={onClose}
                             aria-label="关闭创作面板"
                         >
@@ -345,9 +346,10 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         value={config.model}
                         onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })}
                         capability={mode}
-                        requirements={requirements}
+                        requirements={resolvedRequirements}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         showSelectedPrice={false}
+                        showOptionPrices={creditsEnabled}
                         variant="creation"
                         showConfiguredModelName
                     />
@@ -508,15 +510,6 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     );
 }
 
-function ComposerPill({ theme, icon, label }: { theme: CanvasTheme; icon: ReactNode; label: string }) {
-    return (
-        <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[var(--r-sm)] px-1.5 text-[var(--fs-micro)] font-medium" style={{ background: "var(--canvas-composer-control-surface)", color: theme.node.activeStroke }}>
-            {icon}
-            {label}
-        </span>
-    );
-}
-
 function GenerationModeIcon({ mode }: { mode: CanvasNodeGenerationMode }) {
     if (mode === "image") return <ImagePlus className="size-3" />;
     if (mode === "video") return <Video className="size-3" />;
@@ -539,6 +532,9 @@ function ConnectedReferenceShelf({ references, theme, onInsert, onRemove }: { re
     return (
         <>
             <div className="canvas-node-composer-references thin-scrollbar" role="group" aria-label="已连接素材">
+                <span className="canvas-node-composer-reference-heading">
+                    {activeReferences.every((reference) => reference.kind === "image" || reference.kind === "character") ? "参考图" : "参考素材"} · {activeReferences.length}
+                </span>
                 {activeReferences.map((reference) => {
                     const canPreview = (reference.kind === "image" || reference.kind === "character") && Boolean(reference.previewUrl);
                     return (
@@ -700,7 +696,7 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text || type === CanvasNodeType.Skill ? "text" : type === CanvasNodeType.Video ? "video" : type === CanvasNodeType.Audio ? "audio" : "image";
 }
 
-function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode, requirements: ModelRequirements): AiConfig {
+export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode, requirements: ModelRequirements): AiConfig {
     const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const preferredModel = resolveCanvasGenerationModel(globalConfig, node.metadata?.model, mode) || resolveCanvasGenerationModel(globalConfig, defaultModel, mode) || fallbackModel;

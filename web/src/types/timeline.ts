@@ -60,6 +60,10 @@ export type TimelineTrack = {
     label: string;
     order: number;
     locked?: boolean;
+    /** 轨道可见性（预览/导出跳过不可见轨）。undefined = true。 */
+    visible?: boolean;
+    /** 轨道静音（音频轨在播放/导出时静音）。undefined = false。 */
+    muted?: boolean;
 };
 
 export type TimelineClipKind = "video" | "audio" | "subtitle" | "text" | "image";

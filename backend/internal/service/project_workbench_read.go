@@ -33,6 +33,7 @@ type ProjectOverviewMetrics struct {
 	ReadyStoryboardCount  int64 `json:"readyStoryboardCount"`
 	ReadyPrevizCount      int64 `json:"readyPrevizCount"`
 	ReadyVideoCount       int64 `json:"readyVideoCount"`
+	RenderSucceededCount  int64 `json:"renderSucceededCount"`
 	StaleArtifactCount    int64 `json:"staleArtifactCount"`
 }
 
@@ -152,7 +153,7 @@ func (s *Service) ProjectOverview(userID string, projectID string) (ProjectOverv
 			UnitsWithoutText: row.UnitsWithoutText, UnitsWithoutShots: row.UnitsWithoutShots, CanvasCount: row.CanvasCount,
 			AssetCount: row.AssetCount, ShotCount: row.ShotCount, PendingCandidateCount: row.PendingCandidateCount,
 			ReadyStoryboardCount: row.ReadyStoryboardCount, ReadyPrevizCount: row.ReadyPrevizCount, ReadyVideoCount: row.ReadyVideoCount,
-			StaleArtifactCount: row.StaleArtifactCount,
+			RenderSucceededCount: row.TimelineRenderSucceededCount, StaleArtifactCount: row.StaleArtifactCount,
 		}
 		return nil
 	})

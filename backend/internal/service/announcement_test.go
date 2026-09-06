@@ -262,6 +262,19 @@ func TestAnnouncementPublishRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestAnnouncementPublishAllowsEmptyContent(t *testing.T) {
+	svc, _ := newAnnouncementImageTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+
+	announcement, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "仅标题公告", Content: "   ", Level: model.AnnouncementLevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if announcement.Title != "仅标题公告" || announcement.Content != "" {
+		t.Fatalf("announcement = %+v", announcement)
+	}
+}
+
 func newAnnouncementImageTestService(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

@@ -3,7 +3,6 @@ import { App, Button, Divider, Input } from "antd";
 import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import { applyUserSession } from "@/lib/user-session";
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, login } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { LinuxDOIcon } from "./auth-scene";
@@ -41,6 +40,7 @@ export default function LoginPage() {
         setSubmitting(true);
         try {
             await login({ username, password });
+            const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             message.success("登录成功");
             navigate(next, { replace: true });

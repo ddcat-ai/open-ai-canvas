@@ -21,7 +21,8 @@ func TestPasswordResetChangesPasswordConsumesCodeAndRevokesSessions(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := model.User{ID: "user-1", Username: "creator", Email: "creator@example.com", DisplayName: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: oldHash}
+	// Existing users can reset passwords even outside the registration whitelist.
+	user := model.User{ID: "user-1", Username: "creator", Email: "creator@external.example", DisplayName: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: oldHash}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +188,98 @@ func TestPasswordResetDeliveryFailureRemovesUnusableCode(t *testing.T) {
 	}
 }
 
+func TestSenderNameBrandsRegistrationAndPasswordResetEmails(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fromName string
+		wantName string
+	}{
+		{name: "default inherits appearance", fromName: defaultAppearanceBrandName, wantName: "HIMA Studio"},
+		{name: "empty inherits appearance", fromName: "", wantName: "HIMA Studio"},
+		{name: "custom sender overrides appearance", fromName: "Custom Canvas", wantName: "Custom Canvas"},
+		{name: "custom sender is trimmed", fromName: "  自定义工作台  ", wantName: "自定义工作台"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRegistrationAndPasswordResetEmailBrand(t, tc.fromName, tc.wantName)
+		})
+	}
+}
+
+func assertRegistrationAndPasswordResetEmailBrand(t *testing.T, fromName, wantName string) {
+	t.Helper()
+	svc, db := newPasswordResetTestService(t)
+	_, emailSetting, err := svc.readEmailSetting()
+	if err != nil {
+		t.Fatal(err)
+	}
+	emailSetting.FromName = fromName
+	settingJSON, err := json.Marshal(emailSetting)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.SystemSetting{}).Where("key = ?", emailSettingKey).Update("value_json", string(settingJSON)).Error; err != nil {
+		t.Fatal(err)
+	}
+	appearanceJSON, err := json.Marshal(AppearanceSetting{
+		SchemaVersion:    appearanceSchemaVersion,
+		BrandName:        "HIMA Studio",
+		BrandSlug:        "hima-studio",
+		AuthHeroTitle:    defaultAppearanceHeroTitle,
+		LogoFrameEnabled: true,
+		SkinID:           defaultAppearanceSkinID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(appearanceJSON)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: registrationSettingKey, ValueJSON: `{"enabled":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	passwordHash, err := hashPassword("strong-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing := model.User{ID: "brand-admin", Username: "brand-admin", Email: "admin@example.com", Role: model.UserRoleAdmin, Status: model.UserStatusActive, PasswordHash: passwordHash}
+	resetUser := model.User{ID: "brand-user", Username: "brand-user", Email: "member@example.com", Role: model.UserRoleUser, Status: model.UserStatusActive, PasswordHash: passwordHash}
+	if err := db.Create(&[]model.User{existing, resetUser}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	type delivery struct {
+		fromName  string
+		recipient string
+		subject   string
+		body      string
+	}
+	deliveries := make([]delivery, 0, 2)
+	svc.mailSender = func(setting emailSettingValue, recipient string, subject string, body string) error {
+		deliveries = append(deliveries, delivery{fromName: setting.FromName, recipient: recipient, subject: subject, body: body})
+		return nil
+	}
+	if err := svc.SendRegistrationEmailCode("new-member@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPasswordResetEmailCode(resetUser.Email); err != nil {
+		t.Fatal(err)
+	}
+	if len(deliveries) != 2 {
+		t.Fatalf("deliveries = %d, want 2", len(deliveries))
+	}
+	for _, delivered := range deliveries {
+		if delivered.fromName != wantName || !strings.Contains(delivered.subject, wantName) || !strings.Contains(delivered.body, wantName) || strings.Contains(delivered.subject, defaultAppearanceBrandName) || strings.Contains(delivered.body, defaultAppearanceBrandName) {
+			t.Fatalf("email did not use resolved sender name %q: %#v", wantName, delivered)
+		}
+	}
+	if deliveries[0].subject != wantName+"注册验证码" || deliveries[1].subject != wantName+"密码重置验证码" {
+		t.Fatalf("unexpected branded subjects: %#v", deliveries)
+	}
+	if !strings.Contains(deliveries[0].body, "你正在注册"+wantName+"。") {
+		t.Fatalf("registration body did not use resolved sender name: %q", deliveries[0].body)
+	}
+}
+
 func newPasswordResetTestService(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
@@ -196,7 +289,7 @@ func newPasswordResetTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.EmailVerificationCode{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
-	settingJSON, err := json.Marshal(emailSettingValue{Enabled: true, Host: "smtp.example.com", Port: 587, Encryption: "starttls", FromEmail: "noreply@example.com", FromName: "影策"})
+	settingJSON, err := json.Marshal(emailSettingValue{Enabled: true, Host: "smtp.example.com", Port: 587, Encryption: "starttls", FromEmail: "noreply@example.com", FromName: "影策", RegistrationAllowedDomains: []string{"example.com"}})
 	if err != nil {
 		t.Fatal(err)
 	}

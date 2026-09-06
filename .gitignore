@@ -4,6 +4,8 @@ node_modules/
 docs/*
 !docs/design/
 !docs/index.md
+!docs/adr/
+!docs/plans/
 # Keep the new plugin design spec versioned without unignoring generated docs.
 !docs/content/
 docs/content/*
@@ -12,6 +14,10 @@ docs/content/docs/*
 !docs/content/docs/plugins/
 docs/content/docs/plugins/*
 !docs/content/docs/plugins/ai-art-critique.mdx
+# Keep the task stability runbook versioned without unignoring generated docs.
+!docs/content/docs/backend/
+docs/content/docs/backend/*
+!docs/content/docs/backend/task-runtime-stability.mdx
 .env*
 !.env.example
 data/

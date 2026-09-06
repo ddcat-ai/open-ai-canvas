@@ -75,6 +75,7 @@ export function CanvasProjectAssetModal({
 
     return (
         <AssetLibraryPickerModal
+            remoteLibrary={!detail}
             open={open}
             items={pickerItems}
             categoryLabels={{ ...categoryLabels, ...externalAssetSources.categoryLabels }}

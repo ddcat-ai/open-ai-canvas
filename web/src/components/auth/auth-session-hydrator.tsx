@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-import { applyUserSession } from "@/lib/user-session";
-import { getAuthSession } from "@/services/api/auth";
+import { getAuthSession, type AuthSessionPayload } from "@/services/api/auth";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
@@ -19,11 +18,20 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
         preloadWorkspaceRoute(window.location.pathname);
         const sessionPromise = getAuthSession()
             .then(async (payload) => {
-                if (!cancelled) await applyUserSession(payload);
+                if (cancelled) return;
+                if (!payload.user) {
+                    applyAnonymousSession(payload);
+                    return;
+                }
+                // 账号数据、画布和素材持久化只属于已登录工作区，登录页不下载这些模块。
+                const { applyUserSession } = await import("@/lib/user-session");
+                if (cancelled) return;
+                await applyUserSession(payload);
+                preloadWorkspaceRoute(window.location.pathname);
             })
-            .catch(async (error) => {
+            .catch((error) => {
                 console.warn("[hydrate] 登录态恢复失败，按未登录继续渲染", error);
-                if (!cancelled) await applyUserSession({ user: null, logicalModels: [] });
+                if (!cancelled) applyAnonymousSession({ user: null, logicalModels: [] });
             });
         // 兜底：超时后强制把前端从骨架屏切出去，主人能进入登录页 / 创作页，至少能看到东西。
         const fallback = window.setTimeout(() => {
@@ -36,7 +44,9 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
             useUserStore.getState().setHydrated(true);
             void Promise.resolve().then(() => useUserStore.getState().setHydrated(true));
             // 异步继续给其他 store 灌水（让 fallback 不再阻塞 UI），失败也不影响 hydrate。
-            void applyUserSession({ user: null, logicalModels: [] }).catch((error) => console.warn("[hydrate] 后台恢复失败", error));
+            void import("@/lib/user-session")
+                .then(({ applyUserSession }) => applyUserSession({ user: null, logicalModels: [] }))
+                .catch((error) => console.warn("[hydrate] 后台恢复失败", error));
         }, HYDRATE_FALLBACK_MS);
         return () => {
             cancelled = true;
@@ -46,4 +56,13 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     }, []);
 
     return hydrated ? children : <FullScreenLoader />;
+}
+
+function applyAnonymousSession(payload: AuthSessionPayload) {
+    const store = useUserStore.getState();
+    store.clearSession();
+    store.setRuntimeLimits(payload.runtimeLimits);
+    store.setDrawingEngine(payload.drawingEngine);
+    store.setFeatures(payload.features);
+    store.setHydrated(true);
 }

@@ -7,19 +7,20 @@ import (
 )
 
 type ProjectOverviewMetrics struct {
-	UnitCount             int64 `gorm:"column:unit_count"`
-	CompletedUnitCount    int64 `gorm:"column:completed_unit_count"`
-	TotalWordCount        int64 `gorm:"column:total_word_count"`
-	UnitsWithoutText      int64 `gorm:"column:units_without_text"`
-	UnitsWithoutShots     int64 `gorm:"column:units_without_shots"`
-	CanvasCount           int64 `gorm:"column:canvas_count"`
-	AssetCount            int64 `gorm:"column:asset_count"`
-	ShotCount             int64 `gorm:"column:shot_count"`
-	PendingCandidateCount int64 `gorm:"column:pending_candidate_count"`
-	ReadyStoryboardCount  int64 `gorm:"column:ready_storyboard_count"`
-	ReadyPrevizCount      int64 `gorm:"column:ready_previz_count"`
-	ReadyVideoCount       int64 `gorm:"column:ready_video_count"`
-	StaleArtifactCount    int64 `gorm:"column:stale_artifact_count"`
+	UnitCount                    int64 `gorm:"column:unit_count"`
+	CompletedUnitCount           int64 `gorm:"column:completed_unit_count"`
+	TotalWordCount               int64 `gorm:"column:total_word_count"`
+	UnitsWithoutText             int64 `gorm:"column:units_without_text"`
+	UnitsWithoutShots            int64 `gorm:"column:units_without_shots"`
+	CanvasCount                  int64 `gorm:"column:canvas_count"`
+	AssetCount                   int64 `gorm:"column:asset_count"`
+	ShotCount                    int64 `gorm:"column:shot_count"`
+	PendingCandidateCount        int64 `gorm:"column:pending_candidate_count"`
+	ReadyStoryboardCount         int64 `gorm:"column:ready_storyboard_count"`
+	ReadyPrevizCount             int64 `gorm:"column:ready_previz_count"`
+	ReadyVideoCount              int64 `gorm:"column:ready_video_count"`
+	TimelineRenderSucceededCount int64 `gorm:"column:timeline_render_succeeded_count"`
+	StaleArtifactCount           int64 `gorm:"column:stale_artifact_count"`
 }
 
 type ProjectOverviewUnitRow struct {
@@ -62,8 +63,9 @@ func (r *Repository) ProjectOverviewMetrics(projectID string) (ProjectOverviewMe
 			(SELECT COUNT(DISTINCT shot_id) FROM shot_artifacts WHERE project_id = ? AND type = 'storyboard' AND selected = ? AND status = 'ready') AS ready_storyboard_count,
 			(SELECT COUNT(DISTINCT shot_id) FROM shot_artifacts WHERE project_id = ? AND type = 'action_board' AND selected = ? AND status = 'ready') AS ready_previz_count,
 			(SELECT COUNT(DISTINCT shot_id) FROM shot_artifacts WHERE project_id = ? AND type = 'video' AND selected = ? AND status = 'ready') AS ready_video_count,
+			(SELECT COUNT(*) FROM tasks WHERE project_id = ? AND type = ? AND status = ?) AS timeline_render_succeeded_count,
 			(SELECT COUNT(*) FROM shot_artifacts WHERE project_id = ? AND status = 'stale') AS stale_artifact_count
-	`, projectID, projectID, model.ProjectUnitStatusCompleted, projectID, projectID, projectID, model.ProjectUnitStatusDraft, projectID, projectID, projectID, projectID, projectID, true, projectID, true, projectID, true, projectID).Scan(&metrics).Error
+`, projectID, projectID, model.ProjectUnitStatusCompleted, projectID, projectID, projectID, model.ProjectUnitStatusDraft, projectID, projectID, projectID, projectID, projectID, true, projectID, true, projectID, true, projectID, model.TaskTypeTimelineRender, model.TaskStatusSucceeded, projectID).Scan(&metrics).Error
 	return metrics, err
 }
 
@@ -164,6 +166,34 @@ func (r *Repository) ProjectCanvasSummariesPage(userID string, projectID string,
 	}
 	err := query.Select("id", "user_id", "project_id", "title", "created_at", "updated_at").Order("updated_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&canvases).Error
 	return canvases, total, err
+}
+
+func (r *Repository) UserCanvasProjectsPage(userID string, page int, pageSize int, projectID string, search string, sort string) ([]model.CanvasProject, int64, error) {
+	var projects []model.CanvasProject
+	var total int64
+	query := r.db.Model(&model.CanvasProject{}).Where("user_id = ?", userID)
+	if projectID == "independent" {
+		query = query.Where("project_id = '' OR project_id IS NULL")
+	} else if projectID != "" && projectID != "all" {
+		query = query.Where("project_id = ?", projectID)
+	}
+	if search = strings.TrimSpace(search); search != "" {
+		query = query.Where("LOWER(title) LIKE ?", "%"+strings.ToLower(search)+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	order := "updated_at desc, id asc"
+	if sort == "name" {
+		order = "title asc, id asc"
+	} else if sort == "nodes" {
+		order = "COALESCE(json_array_length(payload_json, '$.nodes'), 0) desc, id asc"
+		if r.db.Dialector.Name() == "postgres" {
+			order = "COALESCE(jsonb_array_length(payload_json::jsonb->'nodes'), 0) desc, id asc"
+		}
+	}
+	err := query.Order(order).Offset((page - 1) * pageSize).Limit(pageSize).Find(&projects).Error
+	return projects, total, err
 }
 
 func (r *Repository) ProjectCanvasUnitLinksForCanvases(projectID string, canvasIDs []string) ([]model.CanvasUnitLink, error) {

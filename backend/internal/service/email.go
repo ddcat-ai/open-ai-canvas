@@ -28,40 +28,56 @@ const emailSettingKey = "email"
 const registrationEmailPurpose = "registration"
 const registrationCodeTTL = 10 * time.Minute
 
+var defaultRegistrationEmailDomains = []string{
+	"gmail.com",
+	"163.com",
+	"126.com",
+	"qq.com",
+	"outlook.com",
+	"hotmail.com",
+	"icloud.com",
+	"yahoo.com",
+	"foxmail.com",
+}
+
 type EmailSettingRequest struct {
-	Enabled    bool   `json:"enabled"`
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Encryption string `json:"encryption"`
-	FromEmail  string `json:"fromEmail"`
-	FromName   string `json:"fromName"`
+	Enabled                    bool     `json:"enabled"`
+	Host                       string   `json:"host"`
+	Port                       int      `json:"port"`
+	Username                   string   `json:"username"`
+	Password                   string   `json:"password"`
+	Encryption                 string   `json:"encryption"`
+	FromEmail                  string   `json:"fromEmail"`
+	FromName                   string   `json:"fromName"`
+	RegistrationAllowedDomains []string `json:"registrationAllowedDomains"`
 }
 
 type PublicEmailSetting struct {
-	Enabled     bool      `json:"enabled"`
-	Host        string    `json:"host"`
-	Port        int       `json:"port"`
-	Username    string    `json:"username"`
-	Encryption  string    `json:"encryption"`
-	FromEmail   string    `json:"fromEmail"`
-	FromName    string    `json:"fromName"`
-	HasPassword bool      `json:"hasPassword"`
-	UpdatedBy   string    `json:"updatedBy"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Enabled                    bool      `json:"enabled"`
+	Host                       string    `json:"host"`
+	Port                       int       `json:"port"`
+	Username                   string    `json:"username"`
+	Encryption                 string    `json:"encryption"`
+	FromEmail                  string    `json:"fromEmail"`
+	FromName                   string    `json:"fromName"`
+	FromNameInherited          bool      `json:"fromNameInherited"`
+	HasPassword                bool      `json:"hasPassword"`
+	RegistrationAllowedDomains []string  `json:"registrationAllowedDomains"`
+	UpdatedBy                  string    `json:"updatedBy"`
+	CreatedAt                  time.Time `json:"createdAt"`
+	UpdatedAt                  time.Time `json:"updatedAt"`
 }
 
 type emailSettingValue struct {
-	Enabled    bool   `json:"enabled"`
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Encryption string `json:"encryption"`
-	FromEmail  string `json:"fromEmail"`
-	FromName   string `json:"fromName"`
+	Enabled                    bool     `json:"enabled"`
+	Host                       string   `json:"host"`
+	Port                       int      `json:"port"`
+	Username                   string   `json:"username"`
+	Password                   string   `json:"password"`
+	Encryption                 string   `json:"encryption"`
+	FromEmail                  string   `json:"fromEmail"`
+	FromName                   string   `json:"fromName"`
+	RegistrationAllowedDomains []string `json:"registrationAllowedDomains"`
 }
 
 func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, error) {
@@ -72,7 +88,7 @@ func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, err
 	if err != nil {
 		return nil, err
 	}
-	return publicEmailSetting(setting, value), nil
+	return s.publicEmailSetting(setting, value), nil
 }
 
 func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest) (*PublicEmailSetting, error) {
@@ -83,7 +99,15 @@ func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest)
 	if err != nil {
 		return nil, err
 	}
-	next := normalizeEmailSetting(emailSettingValue{Enabled: req.Enabled, Host: req.Host, Port: req.Port, Username: req.Username, Password: req.Password, Encryption: req.Encryption, FromEmail: req.FromEmail, FromName: req.FromName})
+	allowedDomains := req.RegistrationAllowedDomains
+	if allowedDomains == nil {
+		allowedDomains = current.RegistrationAllowedDomains
+	}
+	next := normalizeEmailSetting(emailSettingValue{
+		Enabled: req.Enabled, Host: req.Host, Port: req.Port, Username: req.Username, Password: req.Password,
+		Encryption: req.Encryption, FromEmail: req.FromEmail, FromName: req.FromName,
+		RegistrationAllowedDomains: allowedDomains,
+	})
 	if next.Password == "" {
 		next.Password = current.Password
 	}
@@ -106,7 +130,7 @@ func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest)
 	if err := s.repo.SaveSystemSetting(&setting); err != nil {
 		return nil, err
 	}
-	return publicEmailSetting(&setting, next), nil
+	return s.publicEmailSetting(&setting, next), nil
 }
 
 func (s *Service) EmailEnabled() (bool, error) {
@@ -145,6 +169,9 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateRegistrationEmailDomain(email, setting.RegistrationAllowedDomains); err != nil {
+		return err
+	}
 	if !setting.Enabled {
 		return Forbidden("平台尚未启用注册邮件，请联系管理员")
 	}
@@ -168,7 +195,8 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	if err := s.deliverEmail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
+	setting = resolveEmailSender(setting, s.appearanceBrandName())
+	if err := s.deliverEmail(setting, email, setting.FromName+"注册验证码", registrationEmailBody(setting.FromName, code)); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
 			return errors.Join(
@@ -246,6 +274,9 @@ func (s *Service) readEmailSetting() (*model.SystemSetting, emailSettingValue, e
 }
 
 func validateEmailSetting(value emailSettingValue) error {
+	if err := validateRegistrationEmailDomains(value.RegistrationAllowedDomains); err != nil {
+		return err
+	}
 	if !value.Enabled {
 		return nil
 	}
@@ -270,6 +301,10 @@ func normalizeEmailSetting(value emailSettingValue) emailSettingValue {
 	value.Password = strings.TrimSpace(value.Password)
 	value.FromEmail = normalizeEmail(value.FromEmail)
 	value.FromName = strings.TrimSpace(value.FromName)
+	if value.RegistrationAllowedDomains == nil {
+		value.RegistrationAllowedDomains = append([]string(nil), defaultRegistrationEmailDomains...)
+	}
+	value.RegistrationAllowedDomains = normalizeEmailDomains(value.RegistrationAllowedDomains)
 	if value.Port == 0 {
 		value.Port = 587
 	}
@@ -278,20 +313,99 @@ func normalizeEmailSetting(value emailSettingValue) emailSettingValue {
 	default:
 		value.Encryption = "starttls"
 	}
-	if value.FromName == "" {
-		value.FromName = "影策"
-	}
 	return value
 }
 
-func publicEmailSetting(setting *model.SystemSetting, value emailSettingValue) *PublicEmailSetting {
-	result := &PublicEmailSetting{Enabled: value.Enabled, Host: value.Host, Port: value.Port, Username: value.Username, Encryption: value.Encryption, FromEmail: value.FromEmail, FromName: value.FromName, HasPassword: value.Password != ""}
+func (s *Service) publicEmailSetting(setting *model.SystemSetting, value emailSettingValue) *PublicEmailSetting {
+	inherited := value.FromName == "" || value.FromName == defaultAppearanceBrandName
+	value = resolveEmailSender(value, s.appearanceBrandName())
+	result := &PublicEmailSetting{
+		Enabled: value.Enabled, Host: value.Host, Port: value.Port, Username: value.Username, Encryption: value.Encryption,
+		FromEmail: value.FromEmail, FromName: value.FromName, FromNameInherited: inherited, HasPassword: value.Password != "",
+		RegistrationAllowedDomains: value.RegistrationAllowedDomains,
+	}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
 		result.CreatedAt = setting.CreatedAt
 		result.UpdatedAt = setting.UpdatedAt
 	}
 	return result
+}
+
+func normalizeEmailDomains(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, raw := range values {
+		value := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "@")))
+		value = strings.TrimSuffix(value, ".")
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
+}
+
+func validateRegistrationEmailDomains(allowed []string) error {
+	if len(allowed) > 100 {
+		return BadAuthRequest("电子邮件域名白名单最多填写 100 项")
+	}
+	for _, domain := range allowed {
+		if !validEmailDomain(domain) {
+			return BadAuthRequest("电子邮件域名格式不正确：" + domain)
+		}
+	}
+	return nil
+}
+
+func validEmailDomain(value string) bool {
+	if len(value) > 253 || !strings.Contains(value, ".") || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for _, char := range label {
+			if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (s *Service) validateRegistrationEmailDomain(email string) error {
+	_, setting, err := s.readEmailSetting()
+	if err != nil {
+		return err
+	}
+	return validateRegistrationEmailDomain(email, setting.RegistrationAllowedDomains)
+}
+
+func validateRegistrationEmailDomain(email string, allowedDomains []string) error {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return BadAuthRequest("邮箱格式不正确")
+	}
+	domain := strings.ToLower(parts[1])
+	if len(allowedDomains) == 0 {
+		return nil
+	}
+	for _, allowed := range allowedDomains {
+		if domain == allowed {
+			return nil
+		}
+	}
+	return BadAuthRequest("该邮箱域名不在管理员设置的白名单内")
+}
+
+func resolveEmailSender(value emailSettingValue, brandName string) emailSettingValue {
+	if value.FromName == "" || value.FromName == defaultAppearanceBrandName {
+		value.FromName = brandName
+	}
+	return value
 }
 
 func sendSMTPMail(setting emailSettingValue, recipient string, subject string, body string) error {
@@ -363,6 +477,6 @@ func randomNumericCode(length int) (string, error) {
 	return fmt.Sprintf("%0*d", length, value.Int64()), nil
 }
 
-func registrationEmailBody(code string) string {
-	return "你正在注册影策。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
+func registrationEmailBody(brandName string, code string) string {
+	return "你正在注册" + brandName + "。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
 }

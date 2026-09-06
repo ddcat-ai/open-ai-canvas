@@ -79,7 +79,7 @@ export function SkillInstallModal({ open, onClose, onInstalled, onManualCreate }
             open={open}
             width={680}
             destroyOnHidden
-            maskClosable={!installing}
+            mask={{ closable: !installing }}
             title="安装技能"
             onCancel={onClose}
             footer={(

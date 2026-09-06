@@ -35,4 +35,44 @@ export default defineConfig({
             "@": resolve(webDir, "src"),
         },
     },
+    build: {
+        rolldownOptions: {
+            output: {
+                strictExecutionOrder: true,
+                codeSplitting: {
+                    includeDependenciesRecursively: false,
+                    minSize: 20 * 1024,
+                    groups: [
+                        {
+                            name: "vendor-react",
+                            test: /node_modules[\\/](?:react(?:-dom|-router|-router-dom)?|scheduler|zustand|use-sync-external-store|@tanstack[\\/](?:query-core|react-query))[\\/]/,
+                            priority: 30,
+                        },
+                        {
+                            name: "vendor-icons",
+                            test: /node_modules[\\/](?:lucide-react|@ant-design[\\/]icons)[\\/]/,
+                            priority: 20,
+                            entriesAware: true,
+                            entriesAwareMergeThreshold: 48 * 1024,
+                        },
+                        {
+                            name: "vendor-antd",
+                            test: /node_modules[\\/](?:antd|@ant-design|@rc-component|rc-[^\\/]+|dayjs)[\\/]/,
+                            priority: 10,
+                            entriesAware: true,
+                            entriesAwareMergeThreshold: 80 * 1024,
+                        },
+                        {
+                            name: "app-shared",
+                            test: /[\\/]src[\\/]/,
+                            priority: 5,
+                            minShareCount: 2,
+                            entriesAware: true,
+                            entriesAwareMergeThreshold: 48 * 1024,
+                        },
+                    ],
+                },
+            },
+        },
+    },
 });
