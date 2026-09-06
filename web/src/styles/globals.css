@@ -8042,12 +8042,12 @@
     .canvas-node-composer {
         position: relative;
         overflow: hidden;
-        border: 0;
+        border: 1px solid color-mix(in srgb, var(--cn-text) 10%, transparent);
         border-radius: var(--canvas-composer-radius);
-        background: var(--canvas-composer-surface);
+        background: color-mix(in srgb, var(--canvas-composer-surface) 94%, var(--background));
         color: var(--cn-text);
         box-shadow: var(--canvas-composer-shadow);
-        padding: var(--space-3);
+        padding: 10px 12px;
     }
 
     /* 提示词优化保持在输入框附近，使用紧凑的 Popover 作为第二层输入工具。 */
@@ -9132,13 +9132,13 @@
         min-width: 0;
         align-items: center;
         gap: var(--space-1);
-        min-height: 28px;
+        min-height: 24px;
     }
 
     .canvas-node-composer-mode {
         display: flex;
         min-width: 0;
-        height: 28px;
+        height: 24px;
         align-items: center;
         gap: var(--space-1);
         padding-inline: var(--space-1);
@@ -9183,7 +9183,7 @@
         overflow: hidden;
         border-radius: var(--r-md);
         background: transparent;
-        margin-top: var(--space-1);
+        margin-top: 2px;
     }
 
     .canvas-node-composer-editor:focus-within {
@@ -9276,8 +9276,9 @@
         align-items: center;
         justify-content: space-between;
         gap: var(--space-1);
-        margin-top: var(--space-1);
-        padding-top: var(--space-2);
+        margin-top: 4px;
+        padding-top: 6px;
+        border-top: 1px solid color-mix(in srgb, var(--cn-text) 7%, transparent);
     }
 
     .canvas-node-composer-model {
@@ -9288,7 +9289,9 @@
 
     .canvas-node-composer-settings-trigger {
         height: 28px !important;
-        width: var(--canvas-composer-settings-width) !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: 168px;
         justify-content: flex-start !important;
         border: 0 !important;
         border-radius: var(--r-md) !important;

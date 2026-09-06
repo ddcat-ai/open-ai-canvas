@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUp, AtSign, ChevronDown, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
-import { Button, Image as AntImage, InputNumber, Modal, Tooltip } from "antd";
+import { ArrowUp, AtSign, ChevronDown, Ellipsis, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { Button, Dropdown, Image as AntImage, InputNumber, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -227,6 +227,26 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         }
     };
 
+    const renderComposerMore = (expanded: boolean) => {
+        const items = [
+            canOptimizePrompt ? { key: "optimize", label: "润色提示词", icon: <WandSparkles className="size-3.5" />, onClick: () => setPromptOptimizerOpen(true) } : null,
+            !expanded && canExpandPrompt ? { key: "expand", label: "放大编辑", icon: <Maximize2 className="size-3.5" />, onClick: () => setExpandedPromptOpen(true) } : null,
+        ].filter(Boolean);
+        if (!items.length) return null;
+        return (
+            <Dropdown trigger={["click"]} placement="topRight" menu={{ items }}>
+                <button
+                    type="button"
+                    className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
+                    aria-label="更多生成工具"
+                    title="更多生成工具"
+                >
+                    <Ellipsis className="size-3.5" />
+                </button>
+            </Dropdown>
+        );
+    };
+
     const renderComposerHeader = (expanded: boolean) => (
         <div
             className="canvas-node-composer-header cursor-grab select-none active:cursor-grabbing"
@@ -248,32 +268,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 </div>
             )}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-            {!simpleMode ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense appearance="quiet" /> : null}
-            {canOptimizePrompt ? (
-                <Tooltip title="用 AI 润色提示词">
-                    <button
-                        type="button"
-                        className="canvas-node-composer-header-action inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5"
-                        onClick={() => setPromptOptimizerOpen(true)}
-                        aria-label="润色提示词"
-                    >
-                        <WandSparkles className="size-3" />
-                        <span className="text-[var(--fs-tiny)] font-medium">润色</span>
-                    </button>
-                </Tooltip>
-            ) : null}
-                {!expanded && canExpandPrompt ? (
-                    <Tooltip title="放大编辑">
-                        <button
-                            type="button"
-                            className="canvas-node-composer-header-action grid size-6 shrink-0 place-items-center rounded-md"
-                            onClick={() => setExpandedPromptOpen(true)}
-                            aria-label="放大编辑提示词"
-                        >
-                            <Maximize2 className="size-3" />
-                        </button>
-                    </Tooltip>
-                ) : null}
+                {!simpleMode ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} compact appearance="quiet" /> : null}
+                {renderComposerMore(expanded)}
                 {!expanded && onClose ? (
                     <Tooltip title="关闭">
                         <button
