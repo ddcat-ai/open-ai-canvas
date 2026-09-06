@@ -42,7 +42,7 @@
 | 图标由调用方传任意尺寸 class | Icon 以**组件引用**传入，尺寸/颜色由宿主组件用 token 决定（`@remixicon/react`） | ✅ §8 图标契约（本项目沿用 lucide-react） |
 | 动效无统一纪律 | `button-press-motion` 等工具类 + `::before` 渐变悬停交叉淡化 + `prefers-reduced-motion` | ✅ §9 动效纪律（本项目已有 motion v12） |
 | 组件注释缺溯源 | 每个组件头注释标注 Figma 源节点、尺寸表、明暗差异 | ✅ §10 注释规范（引用 token 组 + 对标对象） |
-| 无"agentic 界面"沉淀 | `application/agent-chat`（composer/history/message）、`agent-thinking`、`notification-center`、`app-shell`、`data-table` 等产品块 | ✅ §12 backlog 的 P3 application 层（对齐影策 AI 工作台） |
+| 无"agentic 界面"沉淀 | `application/agent-chat`（composer/history/message）、`agent-thinking`、`app-shell`、`data-table` 等产品块（~~notification-center~~ 🚫已禁用，不实施） | ✅ §12 backlog 的 P3 application 层（对齐影策 AI 工作台） |
 
 ### 2.3 BoardUI 事实基线（2026-09-05 勘察）
 
@@ -88,7 +88,7 @@ web/src/
     base/                   # 原语 + 基础件：buttons/ badges/ kbd/ segmented-control/ …
     product/                # 模式件：empty-state/ callout/ loading-state/ section-card/ property-row/ …
     fx/                     # 特效件（现 aceternity/ 归位命名空间，引用随用随迁）
-    application/            # 产品块（P3 起）：agent-chat/ notification-center/ app-shell/ …（对齐 BoardUI application）
+     application/            # 产品块（P3 起）：agent-chat/ app-shell/ …（对齐 BoardUI application；~~notification-center~~ 🚫已禁用，不实施）
 ```
 
 导入约定：一律深路径 `@/components/ui/{base,product,fx,application}/<family>/<file>`（或族级 barrel）；不建全局 barrel。
@@ -196,7 +196,7 @@ NodeTypeBadge、TextTooltip、LoadingState、SectionCard、PropertyRow、IconGro
 - 验证：`tsc --noEmit` + `vite build` 通过（跳过与本次无关的 build:bridge 预构建）；浏览器目验清单见 `docs/content/docs/progress/pending-test.mdx`（UI 组件同角色迁移节）。git 改动未提交。
 
 ### 阶段 E：application 产品块（P3，按需立项）
-对齐 BoardUI `application/`：agent-chat（composer/history/message）、agent-thinking 指示、notification-center、app-shell、data-table 等，映射影策 AI 工作台场景（画布 AI 助手面板、生成/转写日志、通知中心）。每块立项前先有真实页面需求与 ≥2 处重复证据。
+ 对齐 BoardUI `application/`：agent-chat（composer/history/message）、agent-thinking 指示、app-shell、data-table 等，映射影策 AI 工作台场景（画布 AI 助手面板、生成/转写日志等；~~notification-center/通知中心~~ 🚫已禁用，不实施）。每块立项前先有真实页面需求与 ≥2 处重复证据。
 
 ## 12. 组件 backlog（汇总）
 

@@ -13,7 +13,7 @@
 | base | `ui/base/` | 原语 + 基础件：`buttons/`、`badges/`、`kbd/`、`segmented-control/` 等 |
 | product | `ui/product/` | 跨页面模式件：`empty-state/`、`callout/`、`loading-state/`、`section-card/`、`property-row/`、`text-tooltip/` |
 | fx | `ui/fx/` | 特效件（现 `aceternity/*` 归位至此命名空间，引用随用随迁，不重写） |
-| application | `ui/application/` | 产品块（P3 起）：agent-chat、notification-center、app-shell 等，对齐 BoardUI application |
+| application | `ui/application/` | 产品块（P3 起）：agent-chat、app-shell 等，对齐 BoardUI application（~~notification-center~~ 🚫已禁用，不实施） |
 
 替换完成前 AntD 用法与皮肤仍由 `web/src/lib/app-theme.ts` 统一管理；**同一控件职能不允许两套实现并存超过一个替换周期**。
 
@@ -95,7 +95,7 @@ Button/Input 全量、Dialog/Modal、Drawer、Popconfirm、Tabs、Combobox/Selec
 
 ### P3（阶段 E，先立证据）
 
-application 产品块：agent-chat（composer/history/message）、agent-thinking 指示、notification-center、app-shell、data-table——映射影策 AI 工作台场景。
+ application 产品块：agent-chat（composer/history/message）、agent-thinking 指示、app-shell、data-table——映射影策 AI 工作台场景（~~notification-center/通知中心~~ 🚫已禁用，不实施）。
 
 ### fx
 
