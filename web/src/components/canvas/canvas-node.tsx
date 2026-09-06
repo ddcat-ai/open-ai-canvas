@@ -6,9 +6,9 @@ import { useCanvasNodeActions } from "./canvas-node-action-context";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
-import { isEmptyMediaNode, shouldShowInlineNodeStatus } from "@/lib/canvas/canvas-node-ui-policy";
+import { isEmptyMediaNode, isLocalReadOnlyAssetNode, shouldShowInlineNodeStatus } from "@/lib/canvas/canvas-node-ui-policy";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, isLocalUploadedAssetNode, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { getNodeDefinition, getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
@@ -121,7 +121,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content || data.metadata?.storageKey);
     const mediaDimensionLabel = formatMediaDimensionLabel(data, hasImageContent || hasVideoContent);
     const isComposerNode = data.type === CanvasNodeType.Config;
-    const isLocalUploadedAsset = isLocalUploadedAssetNode(data);
+    const isLocalUploadedAsset = isLocalReadOnlyAssetNode(data);
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
