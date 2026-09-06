@@ -15,8 +15,8 @@ import { appQueryClient } from "@/lib/query-client";
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
     const userId = useUserStore((state) => state.user?.id || "");
-    const localRuntimeConfigured = config.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false);
-    useLocalRuntimeBootstrap(localRuntimeConfigured);
+    // Runtime 模型渠道是临时投影，不写入持久化 config；应用启动时必须先主动探测，否则首页永远无法发现即梦模型。
+    useLocalRuntimeBootstrap();
     useLocalDreaminaModelBootstrap();
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);

@@ -69,6 +69,7 @@ export type LocalDreaminaGenerationInput = {
     prompt: string;
     settings: { aspect?: string; resolution?: string; duration?: number; count?: number };
     references: LocalDreaminaReference[];
+    videoOperation?: "text_to_video" | "image_to_video" | "reference_to_video" | "audio_to_video" | "multi_frame_to_video";
     resumeOnly?: boolean;
     idempotencyKey?: string;
     clientOperationId?: string;
@@ -405,7 +406,7 @@ async function submitParsedTask(parsed: ParsedInput, idempotencyKey: string, cli
             body: JSON.stringify({
                 idempotencyKey,
                 clientOperationId: parsed.clientOperationId ?? idempotencyKey,
-                operation: operationFor(parsed.mode, parsed.references),
+                operation: operationFor(parsed.mode, parsed.references, parsed.videoOperation),
                 model: parsed.model,
                 prompt: parsed.prompt,
                 settings: parsed.settings,
@@ -464,6 +465,7 @@ function parseInput(value: LocalDreaminaGenerationInput): ParsedInput {
         value.prompt.length > 20_000 ||
         !Array.isArray(value.references) ||
         !validReferenceCounts(value.model, value.references) ||
+        (value.videoOperation !== undefined && !["text_to_video", "image_to_video", "reference_to_video", "audio_to_video", "multi_frame_to_video"].includes(value.videoOperation)) ||
         (value.idempotencyKey !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.idempotencyKey)) ||
         (value.clientOperationId !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.clientOperationId))
     )
@@ -475,7 +477,7 @@ function parseInput(value: LocalDreaminaGenerationInput): ParsedInput {
     if (settings.count !== undefined && (!Number.isInteger(settings.count) || settings.count < 1 || settings.count > 4)) throw invalidRequest();
     if (value.mode === "video" && settings.count !== undefined && settings.count !== 1) throw invalidRequest();
     if (value.mode === "image" && settings.duration !== undefined) throw invalidRequest();
-    if (model === "seedance2.0mini" && ((settings.duration ?? 4) < 4 || (settings.duration ?? 4) > 15)) throw unavailable();
+    if (value.videoOperation !== "multi_frame_to_video" && model === "seedance2.0mini" && ((settings.duration ?? 4) < 4 || (settings.duration ?? 4) > 15)) throw unavailable();
     if (value.context !== undefined) parseInputContext(value.context);
     let bytes = 0;
     for (const reference of value.references) {
@@ -504,8 +506,12 @@ function validReferenceCounts(model: string, references: LocalDreaminaReference[
     return counts.image <= 30 && counts.video <= 10 && counts.audio <= 10;
 }
 
-function operationFor(mode: "image" | "video", references: LocalDreaminaReference[]) {
+function operationFor(mode: "image" | "video", references: LocalDreaminaReference[], requested?: LocalDreaminaGenerationInput["videoOperation"]) {
     if (mode === "image") return references.length ? "image-to-image" : "text-to-image";
+    if (requested === "multi_frame_to_video") return "multi-frame-to-video";
+    if (requested === "reference_to_video" || requested === "audio_to_video") return "reference-to-video";
+    if (requested === "image_to_video") return "image-to-video";
+    if (requested === "text_to_video") return "text-to-video";
     const imageCount = references.filter((reference) => (reference.kind ?? "image") === "image").length;
     const hasMultimodal = references.some((reference) => reference.kind === "video" || reference.kind === "audio");
     if (!references.length) return "text-to-video";

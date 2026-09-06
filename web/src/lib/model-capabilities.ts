@@ -185,7 +185,15 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         outputFormat: { supported: true },
         maxOutputs: 15,
     };
-    if (protocol === "grok-image") {
+    if (protocol === "gemini-web2api-image") {
+        image.references.maskSupported = false;
+        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
+        image.quality = { supported: false, values: [], default: "auto" };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: false };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 1;
+    } else if (protocol === "grok-image") {
         image.references.maxImages = 1;
         image.references.maskSupported = false;
         // grok2api / xAI Imagine：size→aspect_ratio，quality→resolution(1k/2k)。
@@ -352,13 +360,57 @@ export function pluginWorkflowCapabilityConfig(protocol: ModelProtocol, workflow
     return { ...fallback, video: workflowVideoCapabilityConfig(fields, fallback.video!) };
 }
 
-export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
+type CapabilityModelChannel = {
+    id: string;
+    models: string[];
+    modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }>;
+    localModels?: Array<{
+        id: string;
+        modality: "image" | "video";
+        operations: string[];
+        settings: { aspects: string[]; maxReferenceImages: number; minDuration?: number; maxDuration?: number; tiers?: string[] };
+    }>;
+};
+
+export function modelCapabilityConfigFor(config: { channels: CapabilityModelChannel[] }, model: string): ModelCapabilityConfig {
+    const localDreamina = /^local:dreamina-cli:([A-Za-z0-9][A-Za-z0-9._:-]{0,119})$/.exec(model.trim());
     const separator = model.indexOf("::");
-    const channelId = separator >= 0 ? model.slice(0, separator) : "";
-    const modelName = separator >= 0 ? model.slice(separator + 2) : model;
+    const channelId = localDreamina ? "local:dreamina-cli" : separator >= 0 ? model.slice(0, separator) : "";
+    const modelName = localDreamina?.[1] || (separator >= 0 ? model.slice(separator + 2) : model);
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
+    const localModel = channel?.localModels?.find((item) => item.id === modelName);
+    if (localModel?.modality === "video") {
+        const operations = localModel.operations.map((operation) => operation.replaceAll("-", "_"));
+        const supportsAllReference = operations.includes("reference_to_video");
+        const supportsSmartMultiFrame = operations.includes("multi_frame_to_video");
+        return {
+            ...fallback,
+            video: {
+                ...fallback.video!,
+                references: {
+                    ...fallback.video!.references,
+                    maxImages: Math.max(localModel.settings.maxReferenceImages, supportsSmartMultiFrame ? 20 : 0),
+                    maxVideos: supportsAllReference ? (modelName === "seedance2.5" ? 10 : 3) : 0,
+                    maxAudios: supportsAllReference ? (modelName === "seedance2.5" ? 10 : 3) : 0,
+                },
+                duration: {
+                    selection: "range",
+                    min: localModel.settings.minDuration ?? fallback.video!.duration.min ?? 1,
+                    max: localModel.settings.maxDuration ?? fallback.video!.duration.max ?? 15,
+                    step: 1,
+                    default: localModel.settings.minDuration ?? fallback.video!.duration.default,
+                },
+                ratios: localModel.settings.aspects.length ? [...localModel.settings.aspects] : fallback.video!.ratios,
+                defaultRatio: localModel.settings.aspects.includes("16:9") ? "16:9" : localModel.settings.aspects[0] || fallback.video!.defaultRatio,
+                resolutions: localModel.settings.tiers?.length ? [...localModel.settings.tiers] : fallback.video!.resolutions,
+                defaultResolution: localModel.settings.tiers?.includes("720p") ? "720p" : localModel.settings.tiers?.[0] || fallback.video!.defaultResolution,
+                operations,
+                defaultOperation: operations.includes("text_to_video") ? "text_to_video" : operations[0] || fallback.video!.defaultOperation,
+            },
+        };
+    }
     if (!cost?.capabilityConfig) return fallback;
     const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
     const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;

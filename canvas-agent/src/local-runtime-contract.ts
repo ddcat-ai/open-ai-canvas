@@ -27,6 +27,7 @@ export type DreaminaModelOperation =
     | "image-to-image"
     | "text-to-video"
     | "image-to-video"
+    | "multi-frame-to-video"
     | "reference-to-video";
 
 export type DreaminaModelDescriptor = {

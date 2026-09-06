@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
 import { Reorder } from "motion/react";
-import { ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, Waves, X } from "lucide-react";
+import { ArrowDown, ArrowRightLeft, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, Waves, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -19,10 +19,12 @@ import type { GenerationRetryContext } from "@/lib/canvas/canvas-project-generat
 import { createClientId } from "@/lib/client-id";
 import { formatShotOrdinal } from "@/lib/shot-label";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { dreaminaVideoModeAcceptsKind, dreaminaVideoModeError, dreaminaVideoModeMaxReferences, dreaminaVideoModeOptions, dreaminaVideoOperation, dreaminaVideoProfileForMode, isLocalDreaminaVideoModel, type DreaminaVideoMode, type DreaminaVideoReferenceCounts } from "@/lib/dreamina-video-modes";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
 import { formatVideoResolutionLabel as videoResolutionLabel, VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
+import { videoDurationScalePosition, videoDurationScaleTicks } from "@/lib/video-duration-scale";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { inferVideoOperation, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
@@ -53,7 +55,7 @@ type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
 const CREATION_COMPOSER_COMPACT_DELAY_MS = 160;
 const CREATION_COMPOSER_INITIAL_COMPACT_DELAY_MS = 420;
 const CREATION_COMPOSER_PROXIMITY_PX = 28;
-type CreationSettings = { ratio: string; seconds: string; quality: string; videoQuality: string; count: string };
+type CreationSettings = { ratio: string; seconds: string; quality: string; videoQuality: string; count: string; dreaminaMode?: DreaminaVideoMode };
 type CreationRetryContext = GenerationRetryContext & { retryContextsByBatchIndex?: GenerationRetryContext[] };
 type CreationMessage = {
     id: string;
@@ -103,6 +105,10 @@ const resolutionOptions = VIDEO_RESOLUTION_OPTIONS.map((value) => ({ value: Stri
 const countOptions = ["1", "2", "3", "4"];
 const conversationTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const messageTimeFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+function dreaminaReferenceKind(kind: string): "image" | "video" | "audio" | "file" {
+    return kind === "image" || kind === "video" || kind === "audio" ? kind : "file";
+}
 
 function newConversation(): CreationConversation {
     return { id: createClientId(), title: "新创作", updatedAt: new Date().toISOString(), messages: [] };
@@ -158,6 +164,7 @@ export default function CreatePage() {
     const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
     const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || "video");
+    const [dreaminaVideoMode, setDreaminaVideoMode] = useState<DreaminaVideoMode>(() => initialComposerPreferences.video?.dreaminaMode || "all_reference");
     const [prompt, setPrompt] = useState("");
     const [attachments, setAttachments] = useState<CreationAttachment[]>([]);
     const promptRef = useRef(prompt);
@@ -200,6 +207,11 @@ export default function CreatePage() {
     );
     const preferredModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
     const hasPrompt = Boolean(prompt.trim());
+    const videoReferenceCounts = useMemo<DreaminaVideoReferenceCounts>(() => attachments.reduce((counts, attachment) => {
+        const kind = creationAttachmentKind(attachment);
+        if (kind === "image" || kind === "video" || kind === "audio") counts[kind] += 1;
+        return counts;
+    }, { image: 0, video: 0, audio: 0 }), [attachments]);
     const modelRequirements = useMemo<ModelRequirements>(() => ({
         capability: mode,
         input: {
@@ -219,8 +231,15 @@ export default function CreatePage() {
 	}), [attachments, config.transparentBackground, config.videoGenerateAudio, config.videoWatermark, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
-    const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
-    const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
+    const baseVideoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
+    const selectedUsesLocalDreamina = mode === "video" && isLocalDreaminaVideoModel(selectedModel);
+    const videoProfile = useMemo(() => selectedUsesLocalDreamina ? dreaminaVideoProfileForMode(baseVideoProfile, dreaminaVideoMode, videoReferenceCounts) : baseVideoProfile, [baseVideoProfile, dreaminaVideoMode, selectedUsesLocalDreamina, videoReferenceCounts]);
+    const maxReferences = mode === "video"
+        ? selectedUsesLocalDreamina
+            ? dreaminaVideoModeMaxReferences(dreaminaVideoMode, selectedModel)
+            : videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0
+        : mode === "image" ? imageProfile.references.maxImages : 6;
+    const videoModeError = selectedUsesLocalDreamina ? dreaminaVideoModeError(dreaminaVideoMode, selectedModel, videoReferenceCounts) : "";
     const referenceImageSize = useMemo(() => {
         const imageAttachments = attachments.filter(isImageAttachment);
         if (imageAttachments.length !== 1) return undefined;
@@ -249,6 +268,7 @@ export default function CreatePage() {
             if (saved.video.ratio) setRatio(saved.video.ratio);
             if (saved.video.seconds) setSeconds(saved.video.seconds);
             if (saved.video.videoQuality) setVideoQuality(saved.video.videoQuality);
+            if (saved.video.dreaminaMode) setDreaminaVideoMode(saved.video.dreaminaMode);
         }
         setComposerPreferencesInitialized(true);
     }, [composerPreferencesHydrated, composerPreferencesInitialized]);
@@ -279,9 +299,8 @@ export default function CreatePage() {
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
-        const maxReferences = videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0;
         if (attachments.length > maxReferences) setAttachments((current) => current.slice(0, maxReferences));
-    }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, videoProfile]);
+    }, [attachments.length, composerPreferencesHydrated, composerPreferencesInitialized, maxReferences, mode, selectedModel, videoProfile]);
 
     useEffect(() => {
         const reconciled = reconcileCreationAttachmentLimit(attachments, mentionReferences, maxReferences);
@@ -433,6 +452,10 @@ export default function CreatePage() {
         setVideoQuality(value);
         if (mode === "video") rememberVideoSettings({ videoQuality: value });
     };
+    const setComposerDreaminaVideoMode = (value: DreaminaVideoMode) => {
+        setDreaminaVideoMode(value);
+        rememberVideoSettings({ dreaminaMode: value });
+    };
     const setComposerCount = (value: string) => {
         setCount(value);
         if (mode === "image") rememberImageSettings({ count: value });
@@ -441,9 +464,13 @@ export default function CreatePage() {
     const externalLibraryItems = useMemo<AssetLibraryPickerItem[]>(
         () => externalAssetSources.items.map((item) => ({
             ...item,
-            disabledReason: mode === "image" && item.external?.item.kind !== "image" ? "图片创作仅支持参考图" : undefined,
+            disabledReason: mode === "image" && item.external?.item.kind !== "image"
+                ? "图片创作仅支持参考图"
+                : selectedUsesLocalDreamina && item.external?.item.kind && !dreaminaVideoModeAcceptsKind(dreaminaVideoMode, dreaminaReferenceKind(item.external.item.kind))
+                    ? `${dreaminaVideoModeOptions.find((option) => option.value === dreaminaVideoMode)?.label || "当前"}模式仅支持图片`
+                    : undefined,
         })),
-        [externalAssetSources.items, mode],
+        [dreaminaVideoMode, externalAssetSources.items, mode, selectedUsesLocalDreamina],
     );
     const libraryItems = useMemo<AssetLibraryPickerItem[]>(() => [
         ...assets
@@ -455,10 +482,14 @@ export default function CreatePage() {
                 kindLabel: asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "图片",
                 asset,
                 searchText: (asset.tags || []).join(" "),
-                disabledReason: mode === "image" && asset.kind !== "image" ? "图片创作仅支持参考图" : undefined,
+                disabledReason: mode === "image" && asset.kind !== "image"
+                    ? "图片创作仅支持参考图"
+                    : selectedUsesLocalDreamina && !dreaminaVideoModeAcceptsKind(dreaminaVideoMode, asset.kind)
+                        ? `${dreaminaVideoModeOptions.find((option) => option.value === dreaminaVideoMode)?.label || "当前"}模式仅支持图片`
+                        : undefined,
             })),
         ...externalLibraryItems,
-    ], [assets, externalLibraryItems, mode]);
+    ], [assets, dreaminaVideoMode, externalLibraryItems, mode, selectedUsesLocalDreamina]);
     const uploadCreationAsset = async (file: File) => {
         const { uploadImage, uploadMediaFile } = await loadCreationRuntime();
         if (file.type.startsWith("video/")) {
@@ -486,7 +517,7 @@ export default function CreatePage() {
         };
     };
     const uploadLibraryAssets = async (files: FileList | File[]) => {
-        const next = Array.from(files).filter((file) => creationFileAccepted(mode, file));
+        const next = Array.from(files).filter((file) => creationFileAccepted(mode, file) && (!selectedUsesLocalDreamina || dreaminaVideoMode === "all_reference" || file.type.startsWith("image/")));
         if (!next.length) return [];
         const settled = await Promise.allSettled(next.map(async (file) => {
             const { asset } = await uploadCreationAsset(file);
@@ -503,8 +534,8 @@ export default function CreatePage() {
         const next = selectedIds.flatMap((id): CreationAttachment[] => {
             const asset = assets.find((item) => item.id === id);
             if (asset?.kind === "image") return [creationAttachmentFromAsset(asset)];
-            if (asset?.kind === "video" && mode !== "image") return [creationAttachmentFromVideoAsset(asset)];
-            if (asset?.kind === "audio" && mode !== "image") return [creationAttachmentFromAudioAsset(asset)];
+            if (asset?.kind === "video" && mode !== "image" && (!selectedUsesLocalDreamina || dreaminaVideoModeAcceptsKind(dreaminaVideoMode, "video"))) return [creationAttachmentFromVideoAsset(asset)];
+            if (asset?.kind === "audio" && mode !== "image" && (!selectedUsesLocalDreamina || dreaminaVideoModeAcceptsKind(dreaminaVideoMode, "audio"))) return [creationAttachmentFromAudioAsset(asset)];
             const external = libraryItems.find((item) => item.id === id)?.external;
             return external ? [creationAttachmentFromExternalAsset(external)] : [];
         });
@@ -597,6 +628,11 @@ export default function CreatePage() {
             releaseRetryLock();
             return;
         }
+        if (mode === "video" && videoModeError) {
+            toast.warning(videoModeError);
+            releaseRetryLock();
+            return;
+        }
         if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
             toast.error("当前模型不支持所选视频时长，请重新选择");
             releaseRetryLock();
@@ -607,17 +643,19 @@ export default function CreatePage() {
             releaseRetryLock();
             return;
         }
-        const settings = { ratio, seconds, quality, videoQuality, count };
+        const settings: CreationSettings = { ratio, seconds, quality, videoQuality, count, ...(selectedUsesLocalDreamina ? { dreaminaMode: dreaminaVideoMode } : {}) };
         const references = selectedCreationReferences(text, mentionReferences);
         // 后端对图片和视频使用不同的参考字段；这里先拆分，避免媒体类型在写入任务时被误判。
         const { referenceImages, referenceVideos, referenceAudios } = splitCreationAttachments(attachments);
-        const videoOperation = inferVideoOperation({
-            textCount: text ? 1 : 0,
-            imageCount: referenceImages.length,
-            videoCount: referenceVideos.length,
-            audioCount: referenceAudios.length,
-            characterCount: 0,
-        });
+        const videoOperation = selectedUsesLocalDreamina
+            ? dreaminaVideoOperation(dreaminaVideoMode, { image: referenceImages.length, video: referenceVideos.length, audio: referenceAudios.length })
+            : inferVideoOperation({
+                textCount: text ? 1 : 0,
+                imageCount: referenceImages.length,
+                videoCount: referenceVideos.length,
+                audioCount: referenceAudios.length,
+                characterCount: 0,
+            });
         const skillReferences = references.flatMap((reference) => (reference.skill ? [reference.skill] : []));
         const runtime = await loadCreationRuntime();
         let skillExecution: Awaited<ReturnType<typeof runtime.skillRuntime.prepare>>;
@@ -872,8 +910,9 @@ export default function CreatePage() {
         setQuality(nextSettings.quality);
         setVideoQuality(nextSettings.videoQuality);
         setCount(nextSettings.count);
+        if (nextSettings.dreaminaMode) setDreaminaVideoMode(nextSettings.dreaminaMode);
         if (nextMode === "image") rememberImageSettings({ ratio: nextSettings.ratio, quality: nextSettings.quality, count: nextSettings.count });
-        if (nextMode === "video") rememberVideoSettings({ ratio: nextSettings.ratio, seconds: nextSettings.seconds, videoQuality: nextSettings.videoQuality });
+        if (nextMode === "video") rememberVideoSettings({ ratio: nextSettings.ratio, seconds: nextSettings.seconds, videoQuality: nextSettings.videoQuality, ...(nextSettings.dreaminaMode ? { dreaminaMode: nextSettings.dreaminaMode } : {}) });
     };
 
     const retryFailedMessage = async (item: CreationMessage, index: number) => {
@@ -957,6 +996,9 @@ export default function CreatePage() {
         modelRequirements,
         imageProfile,
         videoProfile,
+        dreaminaVideoMode: selectedUsesLocalDreamina ? dreaminaVideoMode : undefined,
+        onDreaminaVideoModeChange: setComposerDreaminaVideoMode,
+        videoModeError,
         config,
         onModelChange: (value: string) => updateConfig(mode === "text" ? "textModel" : mode === "image" ? "imageModel" : "videoModel", value),
         ratio,
@@ -1056,7 +1098,7 @@ export default function CreatePage() {
             categoryLabels={{ ...creationAssetCategoryLabels, ...externalAssetSources.categoryLabels }}
             folders={externalAssetSources.folders}
             initialSelectedIds={attachments.flatMap((item) => item.id.startsWith("asset:") ? [item.id.slice(6)] : item.id.startsWith("external:") ? [item.id] : [])}
-            upload={{ accept: creationUploadAccept(mode), description: mode === "text" ? "支持图片、视频、音频和常用文档；媒体会保存到素材库" : `支持图片${mode === "video" ? "、视频和音频" : ""}，上传后保存到素材库`, onUpload: uploadLibraryAssets, external: { accept: "image/*", description: "写入当前 Eagle 文件夹；Eagle 当前支持图片文件", onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) } }}
+            upload={{ accept: selectedUsesLocalDreamina && dreaminaVideoMode !== "all_reference" ? "image/*" : creationUploadAccept(mode), description: selectedUsesLocalDreamina && dreaminaVideoMode !== "all_reference" ? `${dreaminaVideoModeOptions.find((option) => option.value === dreaminaVideoMode)?.label || "当前模式"}仅支持图片，按素材顺序生成视频` : mode === "text" ? "支持图片、视频、音频和常用文档；媒体会保存到素材库" : `支持图片${mode === "video" ? "、视频和音频" : ""}，上传后保存到素材库`, onUpload: uploadLibraryAssets, external: { accept: "image/*", description: "写入当前 Eagle 文件夹；Eagle 当前支持图片文件", onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) } }}
             onClose={() => setLibraryOpen(false)}
             onConfirm={handleLibrarySelect}
         /></Suspense> : null}
@@ -1288,6 +1330,45 @@ function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
     </div>;
 }
 
+function FirstLastFrameReferenceSlots({ attachments, busy, canAddMore, onOpenLibrary, onPreview, onRemove, onSwap }: {
+    attachments: CreationAttachment[];
+    busy: boolean;
+    canAddMore: boolean;
+    onOpenLibrary: () => void;
+    onPreview: (type: "image" | "video", url: string) => void;
+    onRemove: (id: string) => void;
+    onSwap: () => void;
+}) {
+    const startFrame = attachments[0];
+    const endFrame = attachments[1];
+    const slot = (item: CreationAttachment | undefined, role: "start" | "end", label: "首帧" | "尾帧") => {
+        const waitingForStart = role === "end" && !startFrame;
+        const disabled = busy || !canAddMore || waitingForStart;
+        const actionLabel = busy ? "生成中暂不能添加参考图" : waitingForStart ? "请先添加首帧" : `添加${label}`;
+        return <li key={role} className={`creation-first-last-frame-slot is-${role}${item ? " has-media" : ""}`}>
+            {item ? <>
+                <CreationAttachmentThumbnail item={item} onPreview={onPreview} onRemove={onRemove} />
+                <span className="creation-first-last-frame-role">{label}</span>
+            </> : <button type="button" className="creation-first-last-frame-add" onClick={onOpenLibrary} disabled={disabled} aria-label={actionLabel} title={actionLabel}>
+                <Plus aria-hidden="true" />
+                <span>{label}</span>
+            </button>}
+        </li>;
+    };
+
+    return <div className="creation-first-last-frame-panel" aria-busy={busy}>
+        <ol className="creation-first-last-frame-slots" aria-label="首尾帧参考图">
+            {slot(startFrame, "start", "首帧")}
+            <li className="creation-first-last-frame-swap-slot">
+                <button type="button" className="creation-first-last-frame-swap" onClick={onSwap} disabled={busy || !startFrame || !endFrame} aria-label="交换首帧和尾帧" title={startFrame && endFrame ? "交换首帧和尾帧" : "添加两张图片后可交换"}>
+                    <ArrowRightLeft aria-hidden="true" />
+                </button>
+            </li>
+            {slot(endFrame, "end", "尾帧")}
+        </ol>
+    </div>;
+}
+
 type ComposerProps = {
     variant: "empty" | "thread";
     mode: CreationMode;
@@ -1310,6 +1391,9 @@ type ComposerProps = {
     model: string;
     modelRequirements: ModelRequirements;
     videoProfile: VideoCapabilityConfig;
+    dreaminaVideoMode?: DreaminaVideoMode;
+    onDreaminaVideoModeChange: (mode: DreaminaVideoMode) => void;
+    videoModeError: string;
     imageProfile: ImageCapabilityConfig;
     config: ReturnType<typeof useEffectiveConfig>;
     onModelChange: (value: string) => void;
@@ -1355,7 +1439,8 @@ function CreationComposer(props: ComposerProps) {
     const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: true, isDragging: false });
     const previousAttachmentCountRef = useRef(0);
     const interactionBusy = props.busy || props.referenceReplacementBusy;
-    const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
+    const firstLastFrameMode = props.mode === "video" && props.dreaminaVideoMode === "first_last_frames";
+    const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy && !props.videoModeError;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
     const canOptimizePrompt = Boolean(props.promptOptimizerProvider) && (props.mode === "image" || props.mode === "video");
@@ -1369,15 +1454,19 @@ function CreationComposer(props: ComposerProps) {
     });
     const showCost = creditsEnabled && credits !== null;
     const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : props.busy ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送";
+    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : props.busy ? "生成中" : props.videoModeError || (showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送");
     const placeholder = props.mode === "text"
         ? "描述你的故事、角色或想继续讨论的创意"
         : props.mode === "image"
             ? "描述画面、人物、场景、构图与风格"
-            : "描述镜头内容、运动、光线与节奏";
+            : props.dreaminaVideoMode === "first_last_frames"
+                ? "描述首帧到尾帧之间的运动与变化"
+                : props.dreaminaVideoMode === "smart_multi_frame"
+                    ? "描述多帧画面之间的转场、运动与节奏"
+                    : "描述镜头内容、运动、光线与节奏";
     const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
-    const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
+    const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.maxReferences > 0;
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
     const addReferenceLabel = interactionBusy ? (props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
     const referenceCounts = useMemo(() => props.attachments.reduce((counts, attachment) => {
@@ -1557,9 +1646,17 @@ function CreationComposer(props: ComposerProps) {
         onKeyDownCapture={expandComposer}
     >
         <div className="creation-chat-writing-surface">
-            <div className="creation-chat-editor">
+            <div className={`creation-chat-editor${firstLastFrameMode ? " is-first-last-frame-mode" : ""}`}>
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
-                {props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
+                {firstLastFrameMode ? <FirstLastFrameReferenceSlots
+                    attachments={props.attachments}
+                    busy={interactionBusy}
+                    canAddMore={canAddMoreReferences}
+                    onOpenLibrary={props.onOpenLibrary}
+                    onPreview={previewAttachment}
+                    onRemove={props.onRemoveAttachment}
+                    onSwap={() => props.onReorderAttachments([props.attachments[1], props.attachments[0], ...props.attachments.slice(2)].filter(Boolean) as CreationAttachment[])}
+                /> : props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
                     {trackState.isExpanded ? <div className="creation-reference-panel-header">
                         <div className="creation-reference-filter-tabs" role="group" aria-label="筛选参考内容">
                             {([
@@ -1646,6 +1743,7 @@ function CreationComposer(props: ComposerProps) {
                     </button>
                 </Tooltip> : null}
 				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice={false} showOptionPrices variant="creation" />
+                {props.mode === "video" && props.dreaminaVideoMode ? <DreaminaVideoModePicker value={props.dreaminaVideoMode} onChange={props.onDreaminaVideoModeChange} error={props.videoModeError} /> : null}
                 {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                 {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
                 {props.mode === "text" ? <>
@@ -1704,7 +1802,16 @@ function ModePicker({ mode, onModeChange }: { mode: CreationMode; onModeChange: 
     ];
     const current = items.find((item) => item.mode === mode) || items[0];
     return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottomLeft" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={<div className="creation-mode-picker-menu" role="listbox" aria-label="选择生成类型">{items.map((item) => <button key={item.mode} type="button" role="option" aria-selected={item.mode === mode} className={item.mode === mode ? "is-selected" : ""} onClick={() => { onModeChange(item.mode); setOpen(false); }}><span className="creation-menu-icon">{item.icon}</span><span>{item.label}</span>{item.mode === mode ? <Check /> : null}</button>)}</div>}>
-        <button type="button" className="creation-chat-control is-mode" aria-label={`生成类型：${current.label}`}>{current.icon}<span>{current.label}</span><ChevronDown className={open ? "is-open" : ""} /></button>
+        <button type="button" className="creation-chat-control is-mode" aria-label={`生成类型：${current.label}`} aria-expanded={open}>{current.icon}<span>{current.label}</span><ChevronDown className={open ? "is-open" : ""} /></button>
+    </Popover>;
+}
+
+function DreaminaVideoModePicker({ value, onChange, error }: { value: DreaminaVideoMode; onChange: (mode: DreaminaVideoMode) => void; error: string }) {
+    const [open, setOpen] = useState(false);
+    const current = dreaminaVideoModeOptions.find((option) => option.value === value) || dreaminaVideoModeOptions[0];
+    const iconFor = (mode: DreaminaVideoMode) => mode === "all_reference" ? <Sparkles /> : mode === "first_last_frames" ? <Clapperboard /> : <Film />;
+    return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottomLeft" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={<div className="creation-mode-picker-menu creation-video-mode-picker-menu" role="listbox" aria-label="选择即梦视频生成模式">{dreaminaVideoModeOptions.map((option) => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "is-selected" : ""} onClick={() => { onChange(option.value); setOpen(false); }}><span className="creation-menu-icon">{iconFor(option.value)}</span><span className="creation-video-mode-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{option.value === value ? <Check /> : null}</button>)}</div>}>
+        <button type="button" className={`creation-chat-control is-dreamina-video-mode${error ? " is-invalid" : ""}`} aria-label={`即梦视频模式：${current.label}`} aria-expanded={open} title={error || current.description}>{iconFor(current.value)}<span>{current.label}</span><ChevronDown className={open ? "is-open" : ""} /></button>
     </Popover>;
 }
 
@@ -1784,12 +1891,76 @@ function DurationMenu({ profile, seconds, onChange }: { profile: VideoCapability
     const min = profile.duration.selection === "range" ? profile.duration.min || 1 : Math.min(...fallbackPreset);
     const max = profile.duration.selection === "range" ? Math.max(min, profile.duration.max || min) : Math.max(...fallbackPreset);
     const step = Math.max(1, profile.duration.step || 1);
-    const durationControl = profile.duration.selection === "range" ? <>
-        <input className="h-8 w-full" style={{ accentColor: "var(--creation-text)" }} type="range" min={min} max={max} step={step} value={value} aria-label="视频时长（秒）" onChange={(event) => onChange(event.target.value)} />
-        <div className="flex justify-between px-0.5 text-[var(--fs-tiny)] text-[var(--creation-muted)]"><span>{min}s</span><span>{max}s</span></div>
-        <label className="creation-custom-value is-duration"><span>自定义时长</span><span className="creation-duration-custom-field"><input type="number" min={min} max={max} step={step} inputMode="numeric" value={seconds} onFocus={(event) => event.currentTarget.select()} onBlur={() => onChange(String(value))} onChange={(event) => onChange(event.target.value)} aria-label="自定义视频时长，单位秒" /><em>秒</em></span></label>
-    </> : <div className="creation-duration-choices">{presets.map((item) => <button key={item} type="button" className={item === value ? "is-selected" : ""} onClick={() => onChange(String(item))}>{item}s</button>)}</div>;
-    return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottom" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={<div className="creation-duration-menu"><div className="creation-duration-heading"><span>时长</span><strong>{value} 秒</strong></div>{durationControl}</div>}>
+    const [draftValue, setDraftValue] = useState(value);
+    const [draftInput, setDraftInput] = useState(String(value));
+    const draggingRef = useRef(false);
+    const ticks = useMemo(() => videoDurationScaleTicks(min, max, step), [max, min, step]);
+    const progressStyle = { "--creation-duration-progress": `${videoDurationScalePosition(draftValue, min, max)}%` } as CSSProperties;
+
+    useEffect(() => {
+        if (draggingRef.current) return;
+        setDraftValue(value);
+        setDraftInput(String(value));
+    }, [value]);
+
+    const commitDuration = (candidate: string | number) => {
+        const normalized = Number(normalizeVideoValue(profile, { seconds: String(candidate) }).seconds);
+        draggingRef.current = false;
+        setDraftValue(normalized);
+        setDraftInput(String(normalized));
+        onChange(String(normalized));
+    };
+
+    const durationControl = profile.duration.selection === "range" ? <div className="creation-duration-scale-layout">
+        <div className="creation-duration-scale">
+            <input
+                className="creation-duration-range"
+                style={progressStyle}
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={draftValue}
+                aria-label="视频时长（秒）"
+                aria-valuetext={`${draftValue} 秒`}
+                onPointerDown={() => { draggingRef.current = true; }}
+                onPointerUp={(event) => commitDuration(event.currentTarget.value)}
+                onPointerCancel={(event) => commitDuration(event.currentTarget.value)}
+                onChange={(event) => {
+                    const nextValue = Number(event.target.value);
+                    setDraftValue(nextValue);
+                    setDraftInput(String(nextValue));
+                    if (!draggingRef.current) commitDuration(nextValue);
+                }}
+            />
+            <div className="creation-duration-ticks" aria-hidden="true">
+                {ticks.map((tick) => <span key={tick.value} style={{ left: `${tick.position}%` }}><i /><em>{tick.value}</em></span>)}
+            </div>
+        </div>
+        <label className="creation-duration-value-field">
+            <input
+                type="number"
+                min={min}
+                max={max}
+                step={step}
+                inputMode="numeric"
+                value={draftInput}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => {
+                    setDraftInput(event.target.value);
+                    const nextValue = Number(event.target.value);
+                    if (Number.isFinite(nextValue)) setDraftValue(Math.min(max, Math.max(min, nextValue)));
+                }}
+                onBlur={() => commitDuration(draftInput)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                aria-label="自定义视频时长，单位秒"
+            />
+            <span>S</span>
+        </label>
+    </div> : <div className="creation-duration-choices">{presets.map((item) => <button key={item} type="button" className={item === value ? "is-selected" : ""} onClick={() => onChange(String(item))}>{item}s</button>)}</div>;
+    return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottom" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={<div className={`creation-duration-menu${profile.duration.selection === "range" ? " has-scale" : ""}`}><div className="creation-duration-heading"><span>选择视频生成时长</span>{profile.duration.selection === "enum" ? <strong>{value} 秒</strong> : null}</div>{durationControl}</div>}>
         <button type="button" className="creation-chat-control is-duration" aria-label={`视频时长：${value}秒`}><Clock3 /><span>{value}s</span><ChevronDown className={open ? "is-open" : ""} /></button>
     </Popover>;
 }
