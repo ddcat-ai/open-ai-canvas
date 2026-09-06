@@ -1,0 +1,105 @@
+# BoardUI 吸收整合方案（2026-09-06）
+
+> 关联：`docs/plans/ui-kit-rollout-plan.mdx`（自研 Celadon UI 落地计划）、`docs/plans/ui-kit-consumption-audit.md`（消费审计）、`docs/plans/ui-design-system.mdx`（设计规范）。
+> 来源：BoardUI（https://github.com/BoardUI/boardui ），MIT License © 2026 Mertcan Dundar Esmergul。吸收时保留来源归属。
+
+## 1. 自研 UI 完整度现状（核实于 2026-09-06）
+
+自研 Celadon UI 层位于 `web/src/components/ui/`，按 rollout 计划推进：
+
+| 层 | 现状 | 说明 |
+|---|---|---|
+| base（基础原子） | 8 族完成 | buttons / badges / tooltip / select / switch / segmented-control / checkbox / kbd |
+| product（业务复合） | 2 族 | 供页面直接消费的高阶形态 |
+| application（应用场景块） | 未启动 | rollout 计划的 P3，Canvas AI 助手等高阶场景尚未组件化 |
+
+主界面（Canvas 工作台 `web/src/pages/canvas/` 与 `web/src/components/canvas/`）自研组件消费处于**扩散中**：114 个 tsx 中 35 个已引用 `@/components/ui`（约 31%），但画布 AI 助手等高阶场景仍大量直接使用 AntD 原子或裸 Tailwind，应用层组件缺位。后台管理区（`web/src/pages/admin/`）是另一主要消费方，与画布主界面的「AI 优先」场景仍有落差。
+
+**结论**：基础能力已可用，短板在「应用层组件」与「主界面消费率」。BoardUI 恰以 AI/agent 界面应用层组件见长，与影策画布 AI 助手场景天然互补，不是重复造轮子。
+
+## 2. BoardUI 可吸收清单（不只 UI）
+
+BoardUI 是面向 AI/agent 界面的 React 组件库（62+ 源码组件、400+ 语义 token、明暗主题）。以下按「直接吸收 / 形态参考 / 不吸收」分级：
+
+### 2.1 已吸收（本轮落地）
+
+| 资产 | 吸收方式 | 消费点 |
+|---|---|---|
+| `hooks/use-count-up.ts`（数字滚动） | 抄写至 `web/src/hooks/use-count-up.ts`，保留 easeOutCubic/取消动画语义；适配项目规范：尊重 `prefers-reduced-motion`、暴露 `from` 参数 | 后台运营健康卡（活跃用户 / 生成任务 / 服务质量）数值滚动 |
+| agent-thinking（wave 点阵指示器形态） | 形态吸收至 `canvas-agent-chat-ui.tsx`：3×3 对角波光点阵 + `role="status"` + 秒数计时 + reduced-motion 静态降级（不引 UI 资产与 motion 依赖） | Canvas AI 助手工作状态 `AgentWorkingMessage` |
+| composer-loader（发送态点亮语义） | 语义吸收：发送中胶囊加主题色呼吸光环（1.6s 周期，reduced-motion 关闭） | Canvas AI 助手输入胶囊 |
+
+### 2.2 待吸收（按 rollout 计划后续执行）
+
+| BoardUI 资产 | 内容 | 本项目落点 |
+|---|---|---|
+| agent-log | Agent 执行过程日志/事件流渲染 | Canvas 任务运行面板（TaskLog 升级） |
+| notification-center | 通知中心（含 agent 完成/失败分组） | 全局通知浮层 / 后台 |
+| styles/typography.css | text-* 排版复合类体系 | 对照 `ui-design-system.mdx` 融入 globals.css（rollout §6.2 缺口） |
+| utils/cx.ts（tailwind-merge） | 类名合并 | 与项目 `lib/utils.ts` 对齐补 cn() |
+| AGENTS.md / .cursor/rules | AI 协作纪律（组件规则、命名、无障碍） | 供项目 AGENTS.md 参考沉淀组件纪律 |
+
+### 2.3 形态参考（不直接搬代码）
+
+- 语义 token 命名/分层结构 → 校验本项目 Primitive/Semantic/Component 三层 token 是否对齐。
+- 数据表格组件族（`react-aria-components` 实现）→ 作为后台表格后续脱离 AntD Table 的形态参考。
+- 技术栈注意：BoardUI 基于 React Aria + Tailwind v4 + `motion`；本项目为 AntD + Tailwind（自研层替换中），**不引入 react-aria-components 与 motion 依赖**，仅吸收视觉形态与交互语义，落到现有栈。
+
+## 3. 消费落地样板（本轮，可直接验证）
+
+BoardUI 最典型消费场景是「数据变化时数字平滑滚动」。已在运营健康卡落地：
+
+- `web/src/hooks/use-count-up.ts`：新 hook（吸收自 BoardUI，MIT）。
+- `web/src/pages/admin/components/analytics-panel.tsx`：新增 `AnimatedHealthValue`，活跃用户/生成任务/服务质量 3 张卡 value 改为滚动呈现；估算费用卡金额含币种分支保持静态，避免逐帧金额抖动。
+- `web/src/components/canvas/canvas-agent-chat-ui.tsx`（第二阶段落地，2026-09-06）：`AgentWorkingMessage` 由打字机替换为 3×3 对角波点阵 + 计时（吸收 agent-thinking wave 形态，`role="status"`/aria-live 保持）；发送中输入胶囊加呼吸光环（吸收 composer-loader 发送态语义）。两处消费点（本地 Agent 面板 / 云端助手面板）经同一组件自动生效。
+- 验证：`tsc --noEmit` 零错误；Vite dev 模块编译 200（canvas-agent-chat-ui / 两个消费面板 / hooks / analytics-panel）。
+- 验证：`tsc --noEmit` 无新错误。
+
+## 4. 下一步（建议顺序）
+
+1. ✅ **Canvas AI 助手应用层**（已完成 2026-09-06）：agent-thinking / composer-loader 形态落地于 `canvas-agent-chat-ui` 工作态与发送态；待浏览器视觉验收。
+2. **Typography 复合类**：吸收 boardui 排版节奏到 globals.css 的 `@theme`（font-size/weight/leading 映射），供主界面使用。
+3. **通知中心**：把 agent-log/notification-center 形态用于任务完成/失败推送浮层。
+4. 每步遵循 rollout 计划阶段门：先建组件 → 单页替换样板 → 批量消费审计。
+2. **Typography 复合类**：吸收 boardui 排版节奏到 globals.css 的 `@theme`（font-size/weight/leading 映射），供主界面使用。
+3. **通知中心**：把 agent-log/notification-center 形态用于任务完成/失败推送浮层。
+4. 每步遵循 rollout 计划阶段门：先建组件 → 单页替换样板 → 批量消费审计。
+
+## 5. 备注
+
+- 涉及 `web/src/styles/globals.css` 的大范围改动（typography/主题）需与既有 composio 视觉迁移（用户的未提交 WIP）错峰，先落独立文件或确认无冲突。
+- Canvas 主界面用户 WIP（`task-list-row.tsx`/`tooltip.tsx` 编译阻塞）已合入/清理（git status 干净），主界面视觉改造可正常验证。
+70:ntfp→
+## 6. 主界面全量对照（第二轮 · 页面级，2026-09-06）
+
+> 方法：两路并行盘点——boardui `components/application` 13 个候选组件 vs 我方用户主界面 9 页面 + 全局 shell，逐页比对，结论均回溯代码/文件证据（AGENTS.md 纪律）。四个 skill 规范已加载：astravia-ui-design（视觉一致性、反模板化）、frontend-design（刻意设计、不搬默认）、code-review（对照证据、不臆断）、domain-modeling（术语对齐）。本节点为审计结论，实施仍遵循 §4 rollout 门。
+
+### 6.1 逐页对照结论
+
+| 页面/模块 | 我方现状（文件证据） | boardui 参照 | 结论 |
+| --- | --- | --- | --- |
+| create 创作工作台 | 消息组件齐（用户/助手头已对称化、复制/编辑回填、MediaResult、GenerationToolCard、MessageReasoning+流式计时）；空态 CreationEmptySuggest（hero 大卡含 rays + 3 网格卡，index.tsx 1825）；历史行更多菜单已含导出 | agent-chat 消息/actions/history | **C1 已覆盖 / C2 已实施** |
+| canvas 画布 | canvas-agent-chat-ui 双套主题化消息 + 阶段日志；reasoning 用原生 details 折叠 | agent-thinking | 已吸收形态；消息视觉与 create 页不同源（已知结构差异，非本轮消） |
+| assets 素材库 | 分类/筛选/密度/回收站/批量/编辑抽屉，强于参照 | — | 无吸收项 |
+| projects 项目 | 列表/详情/多 Tab/分镜工作流 | dashboard-sidebar 菜单 | 无吸收项 |
+| tasks 任务中心 | 状态/模型筛选、按画布分组、批量重试、详情抽屉 | — | 无吸收项 |
+| settings 设置 | 左 rail + 内容两栏，AntD Form 网格行，各 Pane 行式不统一 | settings-rows 三列行配方 | **C3 待决策** |
+| auth 登录 | AuthScene 左右分栏媒体区（影片/海报+渐变）更强 | auth-card + 媒体轮播 | 无吸收项（我方更完整） |
+| wallet/skills/plugins | 余额卡/技能安装/插件管理，均成体系 | — | 无吸收项 |
+| 全局 shell | AnimatedThemeToggler（view-transition）、SystemAnnouncementCenter、WorkspaceAccountMenu、WorkspaceTopBar | theme-toggle / team-menu / user-menu | 无吸收项（我方更强或已有同类） |
+
+### 6.2 本轮新增吸收候选（按 ROI 排序）
+
+1. **C1 create 空态灵感建议卡 —— ✅ 已覆盖，无需吸收（审计修正）**：盘点子代理漏报；`CreationEmptySuggest`（index.tsx 1825）已有 hero 大卡（含 rays 光效）+ 3 张可点击网格卡（含“从参考图开始”→开素材库），点击按模式回填输入框并聚焦，能力与视觉均 ≥ boardui pro-prompt-card。结论：不新增，保留现状。
+2. **C2 会话导出 —— ✅ 已实施（2026-09-06）**：历史抽屉行更多菜单新增“导出对话”（index.tsx 1160）；`buildConversationExportMarkdown`（1864）按 角色/时间/模式标签/思考过程 拼 Markdown，`downloadCreationConversation` 下载 `.md`（标题净化文件名）。不做 Web Share（桌面场景下载更稳）。
+3. **C3 settings 行三列配方**（源：settings-rows `220px_1fr_auto` 标签/控件/提示行）：我方各设置 Pane 行式由 AntD Form 拼装、形态不一。吸收为共享行组件渐进替换。价值=一致性，成本=全套 Pane 触碰，**需用户决策是否立项**。
+4. **弱候选（默认不做，留痕）**：会话列表“未读点/标记未读”（需求证据弱，我方已有选中/删除）；dashboard 图表卡（recharts 已在仓内、admin 已有 analytics-panel，主界面无看板场景）；pro rays 光效引擎（create 空态 hero 卡已用等价 CSS 光效，不再引 WebGL 引擎）。
+
+### 6.3 语义/结构备注（domain 对齐）
+
+- 我方以“镜/分镜”为叙事单位（shot → message 分组），boardui 为 thread/message：吸收 UI 形态时保持我方语义命名（`creation-*`），不引 thread 术语。
+- create 助手消息与 canvas 侧栏消息为两套视觉（主题化 inline style vs home CSS），若要同源需先抽无主题共享组件（已知中等重构，未立项）。
+
+### 6.4 建议下一步
+
+C3（settings 行三列配方）立项与否待用户决策——若立项：先抽共享行组件（`components/settings/`），再单 Pane 试点替换，最后批量审计，遵循 §4 门。其余候选均按上文处置。
