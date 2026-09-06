@@ -703,15 +703,27 @@ function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }
 function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown }: { side: "left" | "right"; scale: number; theme: CanvasTheme; visible?: boolean; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
     const handleRef = useRef<HTMLSpanElement>(null);
     const [railHovered, setRailHovered] = useState(false);
+    const [railFocused, setRailFocused] = useState(false);
     const inverseScale = 1 / Math.max(scale, 0.05);
     const railSize = 80;
-    // Keep the control responsive to zoom, but avoid sub-pixel circles and
-    // strokes at far zoom levels where the plus sign appears visually off-center.
-    const handleSize = Math.max(20, 8 * inverseScale);
-    // LibTV centers the visual quick-add icon in an approximately 80px
-    // circular hit zone, then offsets it toward the node edge. Keep that
-    // visual layer separate from the real centered connection anchor.
-    const sideOffset = side === "left" ? 25 : -25;
+    // Keep the visible icon tied to the canvas scale. The world-space size is
+    // inverse-scaled so the pin stays legible without jumping when the canvas
+    // zoom changes, while the hit zone remains larger than the visual icon.
+    const handleSize = Math.min(48, Math.max(14, 20 * inverseScale));
+    const desiredOutsideScreen = 8;
+    // The rail is centered 40 world px outside the node. Move the icon back
+    // toward the node by a scale-aware amount so its edge gap stays stable.
+    const edgeOffset = Math.max(4, railSize / 2 - desiredOutsideScreen * inverseScale);
+    const sideOffset = side === "left" ? edgeOffset : -edgeOffset;
+    const isVisible = visible || railHovered || railFocused;
+    const restRailOffset = side === "left" ? "-4px" : "4px";
+    const railStyle = {
+        width: railSize,
+        height: `min(100%, ${railSize}px)`,
+        cursor: "crosshair",
+        "--canvas-connection-rail-rest-x": restRailOffset,
+        ...(side === "left" ? { right: "100%" } : { left: "100%" }),
+    } as React.CSSProperties & Record<string, string | number>;
 
     const resetHandle = useCallback(() => {
         if (!handleRef.current) return;
@@ -740,8 +752,9 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
         <button
             type="button"
             data-canvas-connection-rail={side}
-            className={`canvas-connection-rail group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex -translate-y-1/2 items-center justify-center touch-none cursor-crosshair rounded-full outline-none ${visible || railHovered ? "opacity-100" : "opacity-0"}`}
-            style={{ width: railSize, height: `min(100%, ${railSize}px)`, cursor: "crosshair", ...(side === "left" ? { right: "100%" } : { left: "100%" }) }}
+            data-visible={isVisible ? "true" : "false"}
+            className="canvas-connection-rail canvas-connection-handle group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex items-center justify-center touch-none cursor-crosshair rounded-full outline-none"
+            style={railStyle}
             onPointerEnter={(event) => {
                 setRailHovered(true);
                 updateHandle(event);
@@ -751,6 +764,8 @@ function ConnectionSideRail({ side, scale, theme, visible = false, onPointerDown
                 setRailHovered(false);
                 resetHandle();
             }}
+            onFocus={() => setRailFocused(true)}
+            onBlur={() => setRailFocused(false)}
             onPointerDown={(event) => onPointerDown(event, 0.5)}
             aria-label={`${side === "left" ? "输入" : "输出"}连接点，单击创建节点或拖动连线`}
         >

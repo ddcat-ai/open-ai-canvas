@@ -7571,7 +7571,35 @@
     }
 
     .canvas-connection-rail {
-        transition: opacity 150ms var(--motion-ease-out), transform 180ms var(--motion-ease-out);
+        opacity: 0;
+        transform: translate3d(var(--canvas-connection-rail-rest-x, 0px), -50%, 0) scale(0.92);
+        transform-origin: center;
+        transition:
+            opacity 150ms var(--motion-ease-out),
+            transform 180ms var(--motion-ease-out),
+            filter 150ms var(--motion-ease-out);
+    }
+
+    .canvas-connection-rail[data-visible="true"] {
+        opacity: 1;
+        transform: translate3d(0, -50%, 0) scale(1);
+    }
+
+    .canvas-connection-rail:focus-visible {
+        opacity: 1;
+        transform: translate3d(0, -50%, 0) scale(1);
+        outline: 2px solid color-mix(in srgb, var(--canvas-accent-primary) 72%, transparent);
+        outline-offset: 3px;
+    }
+
+    .canvas-connection-rail:hover {
+        filter: brightness(1.08);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-connection-rail {
+            transition: opacity 100ms linear;
+        }
     }
 
     .canvas-folder-shell {
