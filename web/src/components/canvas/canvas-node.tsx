@@ -714,7 +714,7 @@ function ConnectionSideRail({ side, scale: _scale, theme, visible = false, onPoi
             data-canvas-connection-rail={side}
             data-visible={isVisible ? "true" : "false"}
             className="canvas-connection-rail canvas-connection-handle group pointer-events-auto absolute top-1/2 z-[var(--node-z-overlay)] flex items-center justify-center touch-none cursor-crosshair rounded-full outline-none"
-            style={{ background: theme.spatial.elevated, borderColor: theme.node.activeStroke, color: theme.node.activeStroke }}
+            style={{ background: theme.spatial.elevated, borderColor: theme.node.activeStroke, color: theme.node.activeStroke, cursor: "crosshair" }}
             onFocus={() => setRailFocused(true)}
             onBlur={() => setRailFocused(false)}
             onPointerDown={(event) => onPointerDown(event, 0.5)}

@@ -7607,6 +7607,21 @@
         transform: translate3d(0, -50%, 0) scale(1);
     }
 
+    /* Match TapNow's group-hover behavior: hovering a node reveals both
+       connection pins without requiring selection or focus. */
+    .node-element:hover .canvas-connection-rail[data-visible="false"] {
+        opacity: 1;
+        transform: translate3d(0, -50%, 0) scale(1);
+    }
+
+    .node-element:hover .canvas-connection-rail[data-visible="false"][data-canvas-connection-rail="left"] {
+        transform: translate3d(-18px, -50%, 0) scale(1);
+    }
+
+    .node-element:hover .canvas-connection-rail[data-visible="false"][data-canvas-connection-rail="right"] {
+        transform: translate3d(18px, -50%, 0) scale(1);
+    }
+
     .canvas-connection-rail[data-visible="true"][data-canvas-connection-rail="left"] {
         transform: translate3d(-18px, -50%, 0) scale(1);
     }
