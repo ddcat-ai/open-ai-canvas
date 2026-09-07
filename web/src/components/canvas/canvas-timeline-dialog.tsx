@@ -1,9 +1,11 @@
+import { App, Button, Dropdown, Input, InputNumber, Modal, Progress } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 // 二期：多轨时间线编辑弹窗。
 // 数据源是项目级 TimelineProject：视频/音频节点自动入轨，字幕条目转字幕片段。
 // 交互：拖拽移动片段（吸附播放头/片段边缘）、左右边缘裁剪、删除、播放头跳转。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { App, Button, Dropdown, Input, InputNumber, Modal, Progress, Tooltip } from "antd";
+
 import { Captions, Clapperboard, FolderOpen, Library, Lock, LockOpen, Maximize2, MoreHorizontal, Music2, Plus, Scissors, Trash2, Upload, Video, Wand2, ZoomIn, ZoomOut } from "lucide-react";
 import { saveAs } from "file-saver";
 

@@ -358,8 +358,9 @@ func capabilityOptionValuesEqual(name string, candidate any, value any) bool {
 	left := normalizedScalar(candidate)
 	right := normalizedScalar(value)
 	if canonicalCapabilityOptionName(name) == "vquality" {
-		left = strings.TrimSuffix(left, "p")
-		right = strings.TrimSuffix(right, "p")
+		// Compare using the same aliases as request intents and price tiers.
+		left = strings.TrimSuffix(normalizedScalar(normalizeModelRequestOption(name, left)), "p")
+		right = strings.TrimSuffix(normalizedScalar(normalizeModelRequestOption(name, right)), "p")
 	}
 	return left == right
 }

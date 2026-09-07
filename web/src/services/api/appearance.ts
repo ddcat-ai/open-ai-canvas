@@ -12,6 +12,7 @@ export type PublicAppearance = {
     logoFrameEnabled: boolean;
     authVideoUrl: string;
     authVideoPosterUrl: string;
+    authVideoAutoplay: boolean;
     skinId: string;
     activeSkin: SkinDefinition;
     seoTitle: string;
@@ -40,6 +41,7 @@ export type AdminAppearance = {
     logoFrameEnabled: boolean;
     authVideoResourceId: string;
     authVideoPosterResourceId: string;
+    authVideoAutoplay: boolean;
     skinId: string;
     skinThemes: SkinDefinition[];
     seoTitle: string;
@@ -87,6 +89,7 @@ export async function updateAdminAppearance(
         | "logoFrameEnabled"
         | "authVideoResourceId"
         | "authVideoPosterResourceId"
+        | "authVideoAutoplay"
         | "skinId"
         | "skinThemes"
         | "seoTitle"

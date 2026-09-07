@@ -120,6 +120,7 @@ func run(ctx context.Context) error {
 	handler.RegisterAdminAnalyticsRoutes(api, svc)
 	handler.RegisterAdminStorageRoutes(api, svc)
 	handler.RegisterAdminUpdateRoutes(api, svc)
+	handler.RegisterAdminSystemPerformanceRoutes(api, svc)
 	handler.RegisterAnnouncementRoutes(api, svc)
 	handler.RegisterFinanceRoutes(api, svc)
 	handler.RegisterPaymentRoutes(api, svc)

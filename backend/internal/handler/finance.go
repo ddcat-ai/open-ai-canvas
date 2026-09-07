@@ -269,6 +269,27 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/admin/channels/:id/models", func(c *gin.Context) {
 		saveChannelModel(c, svc, "")
 	})
+	r.POST("/admin/channels/:id/models/batch-delete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
+		var req struct {
+			ModelIDs []string `json:"modelIds"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		deleted, err := svc.DeleteAdminChannelModels(user, c.Param("id"), req.ModelIDs)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"deleted": deleted})
+	})
 	r.PATCH("/admin/channels/:id/models/:modelId", func(c *gin.Context) {
 		saveChannelModel(c, svc, c.Param("modelId"))
 	})

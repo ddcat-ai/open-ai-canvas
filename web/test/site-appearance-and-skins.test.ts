@@ -155,6 +155,10 @@ describe("site appearance and editable skin library", () => {
         expect(editorSource).toContain("后台菜单");
         expect(globalStyles).toContain("--control-switch-checked-bg: #16a34a");
         expect(globalStyles).toContain("--plugin-switch-checked-bg: var(--control-switch-checked-bg)");
+        expect(globalStyles).toContain("--ant-tooltip-arrow-background-color: var(--popover) !important");
+        expect(globalStyles).toContain("--ant-tooltip-overlay-color: var(--popover-foreground) !important");
+        expect(globalStyles).toContain(":where(.ant-tooltip-container, .ant-tooltip-inner)");
+        expect(globalStyles).toContain("color: var(--popover-foreground) !important");
         expect(adminStyles).toContain("--admin-status-warning: var(--palette-status-warning)");
         expect(adminStyles).toContain("border-radius: var(--menu-radius);");
     });

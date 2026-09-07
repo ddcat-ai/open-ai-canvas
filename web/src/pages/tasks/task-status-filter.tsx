@@ -1,4 +1,4 @@
-import { Segmented } from "antd";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 
 export type TaskStatusFilter = "all" | "failed" | "active" | "succeeded";
 
@@ -15,12 +15,17 @@ export function TaskStatusFilterBar({ stats, value, onChange }: { stats: TaskSta
     return (
         <div className="task-status-filter">
             <span className="task-status-today">今日生成 <strong>{stats.today}</strong></span>
-            <Segmented<TaskStatusFilter>
-                size="small"
+            <SegmentedControl<TaskStatusFilter>
+                size="sm"
                 value={value}
                 options={options.map((option) => ({
                     value: option.value,
-                    label: <span>{option.label}<b>{option.count}</b></span>,
+                    label: (
+                        <span>
+                            {option.label}
+                            <b>{option.count}</b>
+                        </span>
+                    ),
                 }))}
                 onChange={onChange}
             />

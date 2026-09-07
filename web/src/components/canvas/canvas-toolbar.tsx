@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Switch } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { Palette, Info } from "lucide-react";
 
 import { FloatingDock } from "@/components/ui/aceternity/floating-dock";
@@ -207,7 +207,7 @@ export function CanvasToolbar({
                             <CanvasAppearanceControls appearance={appearance} backgroundMode={backgroundMode} colorTheme={colorTheme} theme={theme} onAppearanceChange={onAppearanceChange} onSaveAppearanceDefault={onSaveAppearanceDefault} onBackgroundModeChange={onBackgroundModeChange} />
                             <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                                 <span className="inline-flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] font-semibold"><Info className="size-3" />图片信息</span>
-                                <Switch size="small" checked={showImageInfo} onChange={onShowImageInfoChange} />
+                                <Switch size="sm" checked={showImageInfo} onChange={onShowImageInfoChange} />
                             </div>
                         </SpotlightSurface>
                     </motion.div>

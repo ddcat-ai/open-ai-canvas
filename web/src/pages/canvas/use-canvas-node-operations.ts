@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_HEADER_HEIGHT, getFrameChildIds, getFrameChildren, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
+import { applyCanvasConnectionPromptSync } from "@/lib/canvas/canvas-resource-references";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
@@ -325,20 +326,28 @@ export function useCanvasNodeOperations({
 
     const deleteNodes = useCallback((ids: Set<string>) => {
         if (!ids.size) return;
-        const result = removeCanvasNodes(nodesRef.current, ids);
-        const removedNodes = nodesRef.current.filter((node) => result.removedIds.has(node.id));
-        const nextConnections = connectionsRef.current.filter((connection) => !result.removedIds.has(connection.fromNodeId) && !result.removedIds.has(connection.toNodeId));
-        commitNodes(result.nodes);
+        const previousNodes = nodesRef.current;
+        const previousConnections = connectionsRef.current;
+        const result = removeCanvasNodes(previousNodes, ids);
+        const removedNodes = previousNodes.filter((node) => result.removedIds.has(node.id));
+        const nextConnections = previousConnections.filter((connection) => !result.removedIds.has(connection.fromNodeId) && !result.removedIds.has(connection.toNodeId));
+        const nextNodes = applyCanvasConnectionPromptSync(previousNodes, previousConnections, result.nodes, nextConnections);
+        commitNodes(nextNodes);
         commitConnections(nextConnections);
         selectNodes(new Set());
-        onNodesDeleted(result.removedIds, result.nodes, removedNodes);
+        onNodesDeleted(result.removedIds, nextNodes, removedNodes);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, onNodesDeleted, selectNodes]);
 
     const deleteConnection = useCallback((connectionId: string) => {
-        commitConnections(connectionsRef.current.filter((connection) => connection.id !== connectionId));
+        const previousNodes = nodesRef.current;
+        const previousConnections = connectionsRef.current;
+        const nextConnections = previousConnections.filter((item) => item.id !== connectionId);
+        const nextNodes = applyCanvasConnectionPromptSync(previousNodes, previousConnections, previousNodes, nextConnections);
+        if (nextNodes !== previousNodes) commitNodes(nextNodes);
+        commitConnections(nextConnections);
         setSelectedConnectionId((current) => current === connectionId ? null : current);
         setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
-    }, [commitConnections, connectionsRef, setContextMenu, setSelectedConnectionId]);
+    }, [commitConnections, commitNodes, connectionsRef, nodesRef, setContextMenu, setSelectedConnectionId]);
 
     const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);

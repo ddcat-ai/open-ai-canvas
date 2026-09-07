@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -275,6 +276,109 @@ func TestSaveAdminChannelModelRejectsActiveDuplicateKey(t *testing.T) {
 	}
 }
 
+func TestDeleteAdminChannelModelsDeletesSelectionAtomically(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: "https://example.com/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `["model-a","model-b","model-c"]`}
+	items := []model.ChannelModel{
+		{ID: "model-a", ChannelID: channel.ID, ModelKey: "model-a", DisplayName: "Model A", Enabled: true, PriceVersion: 1},
+		{ID: "model-b", ChannelID: channel.ID, ModelKey: "model-b", DisplayName: "Model B", Enabled: true, PriceVersion: 1},
+		{ID: "model-c", ChannelID: channel.ID, ModelKey: "model-c", DisplayName: "Model C", Enabled: true, PriceVersion: 1},
+	}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&items).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := svc.DeleteAdminChannelModels(admin, channel.ID, []string{" model-a ", "model-b", "model-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted = %d, want 2", deleted)
+	}
+	var storedChannel model.ModelChannel
+	if err := db.First(&storedChannel, "id = ?", channel.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedChannel.ModelsJSON != `["model-c"]` {
+		t.Fatalf("ModelsJSON = %s, want model-c only", storedChannel.ModelsJSON)
+	}
+	var active []model.ChannelModel
+	if err := db.Where("channel_id = ?", channel.ID).Find(&active).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 || active[0].ID != "model-c" {
+		t.Fatalf("active models = %#v, want model-c", active)
+	}
+	var removed []model.ChannelModel
+	if err := db.Unscoped().Where("channel_id = ? AND id IN ?", channel.ID, []string{"model-a", "model-b"}).Find(&removed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 2 {
+		t.Fatalf("removed models = %#v, want two", removed)
+	}
+	for _, item := range removed {
+		if item.Enabled || item.PriceVersion != 2 || !item.DeletedAt.Valid {
+			t.Fatalf("removed model state = %#v", item)
+		}
+	}
+}
+
+func TestDeleteAdminChannelModelsRejectsWholeSelectionWhenOneModelIsInUse(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: "https://example.com/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `["model-a","model-b"]`}
+	items := []model.ChannelModel{
+		{ID: "model-a", ChannelID: channel.ID, ModelKey: "model-a", DisplayName: "Model A", Enabled: true, PriceVersion: 1},
+		{ID: "model-b", ChannelID: channel.ID, ModelKey: "model-b", DisplayName: "Model B", Enabled: true, PriceVersion: 1},
+	}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&items).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.Task{ID: "task-running", ChannelModelID: "model-b", Status: model.TaskStatusRunning}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := svc.DeleteAdminChannelModels(admin, channel.ID, []string{"model-a", "model-b"})
+	var authErr *AuthError
+	if !errors.As(err, &authErr) || authErr.Message != "所选渠道模型中有模型仍被前台模型供应线路或进行中任务使用，本次未删除任何模型" {
+		t.Fatalf("DeleteAdminChannelModels() deleted = %d, error = %#v", deleted, err)
+	}
+	var active int64
+	if err := db.Model(&model.ChannelModel{}).Where("channel_id = ?", channel.ID).Count(&active).Error; err != nil {
+		t.Fatal(err)
+	}
+	if active != 2 {
+		t.Fatalf("active models = %d, want 2 after atomic rejection", active)
+	}
+	var storedChannel model.ModelChannel
+	if err := db.First(&storedChannel, "id = ?", channel.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedChannel.ModelsJSON != channel.ModelsJSON {
+		t.Fatalf("ModelsJSON changed after rejected batch: %s", storedChannel.ModelsJSON)
+	}
+}
+
+func TestNormalizeAdminChannelModelDeleteIDsRequiresBoundedSelection(t *testing.T) {
+	if _, err := normalizeAdminChannelModelDeleteIDs([]string{"", " "}); err == nil {
+		t.Fatal("empty selection should be rejected")
+	}
+	values := make([]string, 101)
+	for index := range values {
+		values[index] = "model-" + strconv.Itoa(index)
+	}
+	if _, err := normalizeAdminChannelModelDeleteIDs(values); err == nil {
+		t.Fatal("selection above 100 models should be rejected")
+	}
+}
+
 func TestResolveProviderConfigMapsSKUToProviderModel(t *testing.T) {
 	svc, db := newChannelModelTestService(t)
 	svc.dataDir = t.TempDir()
@@ -344,7 +448,7 @@ func newChannelModelTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.IDSequence{}); err != nil {
+	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.LogicalModel{}, &model.LogicalModelRevision{}, &model.LogicalModelRoute{}, &model.Task{}, &model.IDSequence{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db)}, db

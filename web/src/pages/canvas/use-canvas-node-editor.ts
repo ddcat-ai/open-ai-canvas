@@ -1,4 +1,4 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { saveAs } from "file-saver";
@@ -41,6 +41,10 @@ export function useCanvasNodeEditor({
     const queryClient = useQueryClient();
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
     const [openingBatchIds, setOpeningBatchIds] = useState<Set<string>>(new Set());
+    const batchMotionTimers = useRef(new Map<string, number>());
+    useEffect(() => () => {
+        batchMotionTimers.current.forEach((timer) => window.clearTimeout(timer));
+    }, []);
 
     const handleNodeResize = useCallback((nodeId: string, width: number, height: number, position?: Position) => {
         setNodes((current) => {
@@ -120,16 +124,26 @@ export function useCanvasNodeEditor({
     }, [setNodes]);
 
     const toggleBatchExpanded = useCallback((nodeId: string) => {
-        const isExpanded = Boolean(nodesRef.current.find((node) => node.id === nodeId)?.metadata?.imageBatchExpanded);
+        const root = nodesRef.current.find((node) => node.id === nodeId);
+        if (!root?.metadata?.isBatchRoot) return;
+        const isExpanded = Boolean(root.metadata.imageBatchExpanded);
+        window.clearTimeout(batchMotionTimers.current.get(nodeId));
         const updateMotionState = isExpanded ? setCollapsingBatchIds : setOpeningBatchIds;
+        const clearMotionState = isExpanded ? setOpeningBatchIds : setCollapsingBatchIds;
+        clearMotionState((current) => {
+            const next = new Set(current);
+            next.delete(nodeId);
+            return next;
+        });
         updateMotionState((current) => new Set(current).add(nodeId));
-        window.setTimeout(() => {
+        batchMotionTimers.current.set(nodeId, window.setTimeout(() => {
+            batchMotionTimers.current.delete(nodeId);
             updateMotionState((current) => {
                 const next = new Set(current);
                 next.delete(nodeId);
                 return next;
             });
-        }, isExpanded ? 320 : 260);
+        }, isExpanded ? 320 : 445 + (root.metadata.batchChildIds?.length || 1) * 24));
         setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, imageBatchExpanded: !node.metadata?.imageBatchExpanded } } : node)));
     }, [nodesRef, setNodes]);
 

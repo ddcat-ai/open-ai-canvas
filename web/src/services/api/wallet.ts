@@ -295,6 +295,10 @@ export function deleteAdminChannelModel(channelId: string, id: string) {
     return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
 }
 
+export function deleteAdminChannelModels(channelId: string, modelIds: string[]) {
+    return request<{ deleted: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-delete`, { modelIds }));
+}
+
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; limit?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {

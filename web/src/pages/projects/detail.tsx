@@ -1,6 +1,9 @@
 import { lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Tooltip } from "antd";
+// 合并说明：Tooltip 采用上游自研 Celadon 组件（ADR-0008 全量替换 AntD），
+// 但保留影策自有「酿造工坊」入口所需的 FlaskConical 图标（detail.tsx:35 使用）。
+import { Alert, App } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { ArrowLeft, BookOpenText, Clapperboard, FlaskConical, Images, LayoutDashboard, LayoutGrid, Plus, Scissors, Settings2, type LucideIcon } from "lucide-react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 
@@ -176,7 +179,7 @@ function ProjectWorkspaceTopBar({ detail, projectId, activeView, unitId, stage, 
                     const active = item.key === activeView;
                     const href = item.key === "chapters" ? chapterHref : item.key === "workflow" ? workflowHref : `/projects/${projectId}/${item.key}`;
                     return (
-                        <Tooltip key={item.key} title={item.label} mouseEnterDelay={0.15}>
+                        <Tooltip key={item.key} title={item.label} delay={150}>
                             <Link
                                 to={href}
                                 aria-label={item.label}
@@ -193,7 +196,7 @@ function ProjectWorkspaceTopBar({ detail, projectId, activeView, unitId, stage, 
             {activeView === "workflow" ? (
                 <WorkflowChapterNavigator projectId={projectId} units={detail.units} unitId={unitId} stage={stage} />
             ) : (
-                <Tooltip title={createCanvasLabel} mouseEnterDelay={0.15}><button type="button" onClick={onCreateCanvas} className="project-workspace-create" aria-label={createCanvasLabel}><Plus /></button></Tooltip>
+                <Tooltip title={createCanvasLabel} delay={150}><button type="button" onClick={onCreateCanvas} className="grid size-8 shrink-0 place-items-center rounded-md text-foreground/42 transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={createCanvasLabel}><Plus className="size-4" /></button></Tooltip>
             )}
         </div>
     );

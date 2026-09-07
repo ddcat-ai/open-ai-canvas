@@ -269,6 +269,17 @@ func validatePublicResourceBaseURL(raw string) (*url.URL, error) {
 }
 
 func (s *Service) UploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {
+	return s.uploadResource(userID, header, kind, width, height, durationMs, false, uploadIdentity...)
+}
+
+// uploadLocalResource keeps small system-owned assets on the server even when
+// the uploader or platform has enabled object storage. The resource still uses
+// the normal database record and persistent data directory lifecycle.
+func (s *Service) uploadLocalResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {
+	return s.uploadResource(userID, header, kind, width, height, durationMs, true, uploadIdentity...)
+}
+
+func (s *Service) uploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, forceLocal bool, uploadIdentity ...string) (*model.Resource, error) {
 	if header == nil {
 		return nil, BadAuthRequest("请选择要上传的文件")
 	}
@@ -298,7 +309,7 @@ func (s *Service) UploadResource(userID string, header *multipart.FileHeader, ki
 	if err != nil {
 		return nil, err
 	}
-	resource, stored, err := s.storeResource(userID, kind, header.Filename, mimeType, header.Size, width, height, durationMs, file, uploadKey)
+	resource, stored, err := s.storeResource(userID, kind, header.Filename, mimeType, header.Size, width, height, durationMs, file, uploadKey, forceLocal)
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, header.Size)
 	} else if stored {
@@ -334,7 +345,7 @@ func (s *Service) UploadResourceFile(userID string, fileName string, size int64,
 	if err != nil {
 		return nil, err
 	}
-	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, file, uploadKey)
+	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, file, uploadKey, false)
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, size)
 	} else if stored {
@@ -397,7 +408,7 @@ func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, w
 	if err != nil {
 		return nil, err
 	}
-	resource, stored, err := s.storeResource(userID, kind, payload.fileName, payload.mimeType, size, width, height, durationMs, bytes.NewReader(payload.data), uploadKey)
+	resource, stored, err := s.storeResource(userID, kind, payload.fileName, payload.mimeType, size, width, height, durationMs, bytes.NewReader(payload.data), uploadKey, false)
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, size)
 	} else if stored {
@@ -492,7 +503,7 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 	return &ResourceStream{Resource: resource, Body: stream.body, StatusCode: stream.statusCode, ContentLength: stream.contentLength, ContentRange: stream.contentRange, AcceptRanges: stream.acceptRanges}, nil
 }
 
-func (s *Service) storeResource(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string) (*model.Resource, bool, error) {
+func (s *Service) storeResource(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool) (*model.Resource, bool, error) {
 	if existing, err := s.resourceForUploadKey(userID, uploadKey); err != nil {
 		return nil, false, err
 	} else if existing != nil {
@@ -503,9 +514,15 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	}
 	now := time.Now()
 	kind = normalizeResourceKind(kind, mimeType)
-	setting, storageSettingID, useOSS, err := s.activeResourceOSSSetting(userID)
-	if err != nil {
-		return nil, false, err
+	var setting ossSettingValue
+	var storageSettingID string
+	var useOSS bool
+	var err error
+	if !forceLocal {
+		setting, storageSettingID, useOSS, err = s.activeResourceOSSSetting(userID)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	provider := "local"
 	objectKey := localObjectKey(userID, kind, fileName, mimeType, now)
@@ -752,7 +769,7 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 						return nil, err
 					}
 				}
-				resource, _, err := s.storeResource(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, int64(len(data)), width, height, int64(intValue(item["durationMs"])), bytes.NewReader(data), nil)
+				resource, _, err := s.storeResource(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, int64(len(data)), width, height, int64(intValue(item["durationMs"])), bytes.NewReader(data), nil, false)
 				if err != nil {
 					if enforceQuota {
 						s.releaseUserUploadQuota(userID, quotaDay, int64(len(data)))

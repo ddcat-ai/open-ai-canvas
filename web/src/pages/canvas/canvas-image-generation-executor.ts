@@ -52,7 +52,6 @@ export async function executeImageGeneration({
     const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
     const isImageNode = sourceNode?.type === CanvasNodeType.Image;
     const reuseSourceNode = canGenerateImageInPlace(sourceNode);
-    const directCopiedBatch = count > 1 && isImageNode && Boolean(sourceNode?.metadata?.content) && reuseSourceNode;
     // 已有图片生成新结果并保留旧版本；参考图只来自入边，避免把旧结果误当成自身输入。
     const referenceImages = generationContext.referenceImages;
     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
@@ -69,10 +68,10 @@ export async function executeImageGeneration({
     const parentPosition = sourceNode?.position || { x: 0, y: 0 };
     const parentWidth = sourceNode?.width || parentConfig.width;
     const parentHeight = sourceNode?.height || parentConfig.height;
-    const rootId = reuseSourceNode || directCopiedBatch ? nodeId : nanoid();
+    const rootId = reuseSourceNode ? nodeId : nanoid();
     const childIds = count > 1 ? Array.from({ length: count }, () => nanoid()) : [];
     const targetIds = count > 1 ? childIds : [rootId];
-    registerPendingNodeIds(reuseSourceNode || directCopiedBatch ? childIds : [rootId, ...childIds]);
+    registerPendingNodeIds(reuseSourceNode ? childIds : [rootId, ...childIds]);
     const rootWidth = outputNodeSize.width;
     const rootHeight = outputNodeSize.height;
     const preferredPosition = {
@@ -102,7 +101,7 @@ export async function executeImageGeneration({
             ...generationMetadata,
             ...styleMetadata,
             ...skillMetadata,
-            imageBatchExpanded: count > 1 ? true : undefined,
+            imageBatchExpanded: count > 1 ? false : undefined,
             generationErrorCode: undefined,
             resourceReloadAvailable: undefined,
             failedPromptFingerprint: undefined,
@@ -119,7 +118,7 @@ export async function executeImageGeneration({
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
             status: NODE_STATUS_LOADING,
             size: generationConfig.size,
-            batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined,
+            batchRootId: rootId,
             ...generationMetadata,
             ...styleMetadata,
             ...skillMetadata,
@@ -128,9 +127,7 @@ export async function executeImageGeneration({
             failedPromptFingerprint: undefined,
         },
     }));
-    const batchConnections = directCopiedBatch
-        ? childIds.map((childId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: childId }))
-        : [...(reuseSourceNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]), ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))];
+    const batchConnections = [...(reuseSourceNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]), ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))];
 
     const nextNodes: CanvasNodeData[] = [
         ...canvasNodes.map((node) => {
@@ -147,7 +144,7 @@ export async function executeImageGeneration({
                 metadata: { ...node.metadata, content: prompt, richText: undefined, prompt, composerContent: prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
             };
         }),
-        ...(reuseSourceNode || directCopiedBatch ? [] : [rootNode]),
+        ...(reuseSourceNode ? [] : [rootNode]),
         ...childNodes,
     ];
 
@@ -164,7 +161,7 @@ export async function executeImageGeneration({
     setDialogNodeId(nodeId);
 
     targetIds.forEach((targetId) => startGenerationRequest(targetId, nodeId, nodeId, controller));
-    if (count > 1 && !directCopiedBatch) startGenerationRequest(rootId, nodeId, nodeId, controller);
+    if (count > 1) startGenerationRequest(rootId, nodeId, nodeId, controller);
     let hasSuccess = false;
     let hasFailure = false;
     let failureCount = 0;
@@ -197,7 +194,7 @@ export async function executeImageGeneration({
                         consumeTask: (task) => applyGenerationTaskResult(targetId, task),
                     },
                 );
-                if (targetId !== rootId && !directCopiedBatch) {
+                if (targetId !== rootId) {
                     setNodes((current) => {
                         const child = current.find((node) => node.id === targetId);
                         const root = current.find((node) => node.id === rootId);
@@ -254,7 +251,7 @@ export async function executeImageGeneration({
             }
         }),
     );
-    if (count > 1 && !directCopiedBatch) finishGenerationRequest(rootId, controller);
+    if (count > 1) finishGenerationRequest(rootId, controller);
     if (controller.signal.aborted) {
         setNodes((current) => current.map((node) => (node.id === nodeId && isConfigNode && node.metadata?.status === NODE_STATUS_LOADING ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, errorDetails: undefined } } : node)));
         return;
@@ -272,7 +269,7 @@ export async function executeImageGeneration({
                     },
                 };
             }
-            if (node.id === rootId && (reuseSourceNode || !directCopiedBatch)) {
+            if (node.id === rootId) {
                 return {
                     ...node,
                     metadata: {

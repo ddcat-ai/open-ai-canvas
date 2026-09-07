@@ -37,6 +37,7 @@ type CanvasNodeProps = {
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     drawingProjectId?: string;
     batchCount?: number;
+    batchPreviewNodes?: CanvasNodeData[];
     batchExpanded?: boolean;
     batchClosing?: boolean;
     batchOpening?: boolean;
@@ -83,6 +84,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     renderNodeContent,
     drawingProjectId,
     batchCount = 0,
+    batchPreviewNodes,
     batchExpanded = false,
     batchClosing = false,
     batchOpening = false,
@@ -347,8 +349,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                             "--batch-from-x": `${batchMotion?.x || 0}px`,
                             "--batch-from-y": `${batchMotion?.y || 0}px`,
                             "--batch-from-rotate": `${6 + (batchMotion?.index || 0) * 4}deg`,
-                            animation: data.metadata?.batchRootId ? (batchClosing ? `canvas-batch-child-out var(--motion-dur-base-calc) var(--motion-ease-in-out) both` : `canvas-batch-child-in var(--motion-dur-slow-calc) var(--motion-ease-out) both`) : undefined,
-                            animationDelay: data.metadata?.batchRootId ? `${batchClosing ? 0 : 45 + (batchMotion?.index || 0) * 24}ms` : undefined,
+                            animation: isBatchChild && (batchClosing || batchOpening) ? (batchClosing ? `canvas-batch-child-out var(--motion-dur-base-calc) var(--motion-ease-in-out) both` : `canvas-batch-child-in var(--motion-dur-slow-calc) var(--motion-ease-out) both`) : undefined,
+                            animationDelay: isBatchChild && (batchClosing || batchOpening) ? `${batchClosing ? 0 : 45 + (batchMotion?.index || 0) * 24}ms` : undefined,
                         } as React.CSSProperties
                     }
                 >
@@ -363,6 +365,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         textareaRef={textareaRef}
                         isBatchRoot={isBatchRoot}
                         batchCount={batchCount}
+                        batchPreviewNodes={batchPreviewNodes}
                         batchExpanded={batchExpanded}
                         batchOpening={batchOpening}
                         batchRecovering={batchRecovering}
@@ -494,6 +497,7 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.renderNodeContent === next.renderNodeContent &&
         previous.drawingProjectId === next.drawingProjectId &&
         previous.batchCount === next.batchCount &&
+        previous.batchPreviewNodes === next.batchPreviewNodes &&
         previous.batchExpanded === next.batchExpanded &&
         previous.batchClosing === next.batchClosing &&
         previous.batchOpening === next.batchOpening &&
@@ -548,7 +552,7 @@ function NodeLockBadge({ theme }: { theme: CanvasTheme }) {
 
 function BatchToggleBadge({ count, expanded, theme, onToggle }: { count: number; expanded: boolean; theme: CanvasTheme; onToggle: () => void }) {
     return (
-        <button type="button" className="canvas-node-tool-button inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-semibold backdrop-blur-md" style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }} aria-label={expanded ? "图片组已展开" : "图片组已收起"} onClick={(event) => { event.stopPropagation(); onToggle(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" className="canvas-node-tool-button inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-semibold backdrop-blur-md" style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }} aria-expanded={expanded} aria-label={expanded ? "收起图片组" : "展开图片组"} onClick={(event) => { event.stopPropagation(); onToggle(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <span className="leading-none" style={{ color: theme.accent.primary }}>{count}</span>
             <ChevronRight className={`size-3 opacity-55 transition-transform ${expanded ? "rotate-90" : ""}`} />
         </button>

@@ -1,7 +1,9 @@
+import { Button, Modal, Segmented, Select } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import copyToClipboard from "copy-to-clipboard";
 import { Copy, Cpu, Settings2, Trash2, X } from "lucide-react";
-import { Button, Modal, Segmented, Select, Tooltip } from "antd";
+
 import { motion } from "motion/react";
 
 import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -1649,8 +1651,23 @@ function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
     return { type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments, ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}) };
 }
 
+// 上游兼容兜底：DeepSeek 等 OpenAI 兼容渠道的思考/推理模式不允许
+// tool_choice=required（后端归类文案见 providerPayloadErrorCategory）。
+// required 只用于对话首步把智能体拖入工具循环；遇到该类拒绝时降级为 auto
+// 重试一次——auto 在思考模式下可用，对话与工具调用均不受影响。
+// 语义与 image.ts 对非 auto tool_choice 的兼容降级策略一致。
+const THINKING_MODE_TOOL_CHOICE_REJECTION = "不支持强制工具调用";
+
 async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void) {
-    return runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice, onDelta });
+    const submit = (choice: "auto" | "required") => runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice: choice, onDelta });
+    try {
+        return await submit(toolChoice);
+    } catch (error) {
+        if (toolChoice !== "required" || !(error instanceof Error) || !error.message.includes(THINKING_MODE_TOOL_CHOICE_REJECTION)) {
+            throw error;
+        }
+        return submit("auto");
+    }
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {

@@ -87,12 +87,35 @@ test("channel model fetch requires explicit selection before import", async () =
     expect(component).toContain("默认已全选");
     expect(component).toContain("setFetchPreviewOpen(true)");
     expect(component).toContain("setSelectedFetchModels(result.models)");
+    expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
+    expect(component).toContain("disabled={importing || allFetchModelsSelected}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels(fetchPreviewModels)}");
+    expect(component).toContain("disabled={importing || selectedFetchModels.length === 0}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels([])}");
+    expect(component).toContain("取消全选");
+    expect(component).toContain("disabled={importing}");
     expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
     expect(component).toContain("disabled={!selectedFetchModels.length}");
     expect(component).not.toContain("disabled: alreadyExists");
     expect(component).not.toContain("const result = await fetchAdminChannelModels(channel.id); await reload();");
     expect(adminCssSource).toContain(".admin-model-import-modal .channel-model-import-picker .ant-checkbox-checked");
     expect(adminCssSource).toContain("border-color: var(--control-check-fg) !important");
+});
+
+test("channel model manager supports bounded atomic batch deletion", async () => {
+    const [componentSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/channel-model-manager.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/wallet.ts", import.meta.url)).text()]);
+    const component = compactSource(componentSource);
+
+    expect(apiSource).toContain("api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-delete`, { modelIds })");
+    expect(component).toContain("<AdminBatchBar count={selectedModelIds.length}");
+    expect(component).toContain("rowSelection:");
+    expect(component).toContain("selectedRowKeys: selectedModelIds");
+    expect(component).toContain("preserveSelectedRowKeys: true");
+    expect(component).toContain("setSelectedModelIds(next.slice(0, 100))");
+    expect(component).toContain("deleteAdminChannelModels(channel.id, selectedModelIds)");
+    expect(component).toContain("okButtonProps: { danger: true }");
+    expect(component).toContain("本次就不会删除任何模型");
+    expect(component).toContain("批量删除");
 });
 
 test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {

@@ -1,6 +1,9 @@
+import { Button, Input, InputNumber, Segmented, Select, Slider } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, Dice5, Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Sparkles, Video, Workflow as WorkflowIcon } from "lucide-react";
-import { Button, Input, InputNumber, Segmented, Select, Slider, Switch, Tooltip } from "antd";
+
+import { Switch } from "@/components/ui/base/switch";
 
 import { configuredModelMatchesCapability, defaultConfig, modelOptionName, normalizeRunningHubCapability, resolveModelChannel, useEffectiveConfig, type AiConfig, type RunningHubCapability, type RunningHubWorkflow, type RunningHubWorkflowKind } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -400,7 +403,7 @@ export function WorkflowParameterControls({ fields, node, theme, onConfigChange,
                 const control = fieldType === "SELECT" || selectOptions.length ? (
                     <Select status={valueError ? "error" : undefined} size="small" className="w-full" value={value === "" ? undefined : value as string | number} options={selectOptions.map((option) => ({ label: workflowParameterOptionLabel(option), value: workflowParameterOptionValue(option) }))} onChange={(next) => update(field, next)} />
                 ) : fieldType === "BOOLEAN" || typeof value === "boolean" ? (
-                    <Switch size="small" checked={value === true || value === "true"} onChange={(checked) => update(field, checked)} />
+                    <Switch size="sm" checked={value === true || value === "true"} onChange={(checked) => update(field, checked)} />
                 ) : fieldType === "SLIDER" && bounds.min !== undefined && bounds.max !== undefined ? (
                     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px] items-center gap-2">
                         <Slider disabled={randomEnabled} className="m-0" min={bounds.min} max={bounds.max} step={bounds.step || 0.01} value={numericValue ?? bounds.min} tooltip={{ open: false }} onChange={(next) => update(field, next)} />

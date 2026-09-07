@@ -1,4 +1,5 @@
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import type { ImageResolutionOption } from "@/lib/image-resolution-tiers";
 
 export type ModelCapabilityConfig = {
     version: number;
@@ -31,6 +32,7 @@ export type ImageCapabilityConfig = {
         values: string[];
         default: string;
         allowCustom: boolean;
+        presets?: ImageResolutionOption[];
     };
     quality: {
         supported: boolean;

@@ -1,0 +1,264 @@
+.image-size-picker,
+.image-size-presets-editor {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    width: 100%;
+}
+.image-size-label {
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.image-size-tiers {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 6px;
+}
+.image-size-tiers button,
+.image-size-ratios button,
+.image-size-auto {
+    border: 0;
+    border-radius: var(--r-md);
+    color: inherit;
+    background: var(--library-surface);
+    padding: 8px;
+    min-width: 0;
+    cursor: pointer;
+}
+.image-size-tiers button[aria-pressed="true"],
+.image-size-ratios button[aria-pressed="true"],
+.image-size-auto[aria-pressed="true"] {
+    background: var(--library-surface-hover);
+    box-shadow: inset 0 0 0 1px var(--library-selected-stroke);
+}
+.image-size-tiers button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+.image-size-picker button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+.image-size-ratios {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+    gap: 6px;
+}
+.image-size-ratios button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 62px;
+    font-size: var(--fs-label);
+    overflow-wrap: anywhere;
+}
+.image-size-ratio-icon {
+    display: block;
+    width: 26px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    opacity: 0.6;
+}
+.image-size-output {
+    padding: 9px 10px;
+    border-radius: var(--r-md);
+    background: var(--library-surface);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.image-size-hint,
+.image-size-error {
+    margin: 0;
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.image-size-hint {
+    opacity: 0.6;
+}
+.image-size-error {
+    color: var(--destructive);
+}
+.image-size-custom summary {
+    cursor: pointer;
+    font-size: var(--fs-label);
+    padding: 6px 0;
+}
+.image-size-custom-input {
+    display: flex;
+    min-width: 0;
+    gap: 6px;
+    margin-top: 8px;
+}
+.image-size-custom-input input {
+    min-width: 0;
+}
+.image-size-preset-group {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    min-width: 0;
+    gap: 16px;
+    padding: 16px;
+    border-radius: var(--r-lg);
+    background: var(--library-surface);
+}
+.image-size-presets-editor {
+    container: image-presets / inline-size;
+}
+.image-size-editor-intro {
+    margin: 0 0 2px;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+}
+.image-size-preset-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding-top: 4px;
+}
+.image-size-preset-heading strong {
+    font-size: var(--fs-body);
+    font-variant-numeric: tabular-nums;
+}
+.image-size-preset-heading > span,
+.image-size-defaults-heading > span {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+.image-size-preset-body {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+}
+.image-size-preset-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 84px), 1fr));
+    gap: 6px;
+}
+.image-size-preset-option,
+.image-size-default-options button {
+    min-width: 0;
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--library-icon-surface);
+    color: inherit;
+    font-size: var(--fs-label);
+    cursor: pointer;
+}
+.image-size-preset-option {
+    display: grid;
+    gap: 5px;
+    padding: 10px 8px;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.image-size-preset-option-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    font-weight: 600;
+}
+.image-size-preset-option-label svg {
+    flex: 0 0 auto;
+}
+.image-size-preset-option small {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.image-size-preset-option:hover:not(:disabled),
+.image-size-default-options button:hover:not(:disabled) {
+    background: var(--library-surface-hover);
+}
+.image-size-presets-editor button[aria-pressed="true"] {
+    background: var(--library-surface-hover);
+    box-shadow: inset 0 0 0 1px var(--library-selected-stroke);
+}
+.image-size-presets-editor button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+.image-size-presets-editor button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.image-size-preset-add {
+    display: flex;
+    gap: 8px;
+    width: min(100%, 304px);
+    min-width: 0;
+}
+.image-size-preset-add input {
+    min-width: 0;
+}
+.image-size-defaults {
+    display: grid;
+    gap: 10px;
+    padding-block: 6px;
+    min-width: 0;
+}
+.image-size-defaults-heading {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: var(--fs-label);
+}
+.image-size-default-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.image-size-default-options button {
+    padding: 7px 10px;
+    background: var(--library-surface);
+    overflow-wrap: anywhere;
+}
+.admin-image-protocol-editor {
+    container: image-protocol / inline-size;
+}
+.admin-capability-protocol-grid.admin-image-protocol-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: start;
+    gap: 16px;
+}
+.admin-image-size-card {
+    grid-column: 1 / -1;
+}
+.admin-image-size-intro {
+    display: grid;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 4px;
+}
+@container image-presets (max-width: 560px) {
+    .image-size-preset-group {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        padding: 12px;
+    }
+    .image-size-preset-heading {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 8px;
+        padding-top: 0;
+    }
+}
+@container image-protocol (max-width: 640px) {
+    .admin-capability-protocol-grid.admin-image-protocol-grid,
+    .admin-image-size-intro {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .admin-image-size-intro {
+        gap: 8px;
+    }
+}

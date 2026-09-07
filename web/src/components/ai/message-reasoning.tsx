@@ -3,6 +3,15 @@ import { ChevronDown, Sparkles } from "lucide-react";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 
+function LiveReasoningCount() {
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    useEffect(() => {
+        const startedAt = Date.now();
+        const timer = window.setInterval(() => setElapsedSeconds((Date.now() - startedAt) / 1000), 250);
+        return () => window.clearInterval(timer);
+    }, []);
+    return <span className="ml-0.5 font-mono text-[11px] tabular-nums opacity-80">{elapsedSeconds.toFixed(1)}s</span>;
+}
 export function MessageReasoning({ reasoning, isStreaming }: { reasoning: string; isStreaming: boolean }) {
     const [open, setOpen] = useState(isStreaming);
     const [durationSeconds, setDurationSeconds] = useState<number>();
@@ -33,7 +42,7 @@ export function MessageReasoning({ reasoning, isStreaming }: { reasoning: string
     return <div className="mb-2 text-xs text-foreground/55">
         <button type="button" className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 transition-colors hover:bg-surface-hover hover:text-foreground" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
             <Sparkles className="size-3.5" />
-            <span>{isStreaming ? "正在思考" : durationSeconds ? `已思考 ${durationSeconds} 秒` : "思考过程"}</span>
+            <span>{isStreaming ? <>正在思考<LiveReasoningCount /></> : durationSeconds ? <>已思考 <span className="font-mono tabular-nums">{durationSeconds}</span> 秒</> : "思考过程"}</span>
             <ChevronDown className={`size-3.5 transition-transform${open ? " rotate-180" : ""}`} />
         </button>
         {open ? <div className="mt-2 rounded-md bg-surface-active p-3 text-foreground/70"><AIMessageMarkdown isStreaming={isStreaming}>{reasoning}</AIMessageMarkdown></div> : null}

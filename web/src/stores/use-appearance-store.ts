@@ -4,7 +4,7 @@ import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -14,8 +14,12 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     logoFrameEnabled: true,
     // 本地化改造：默认用 web/public/ 下的压缩副本（103MB HEVC -> 6.4MB H.264，离线可用、秒开）。
     // 管理员可在「平台外观」设置里随时换回官方原片或任意远程地址。
+    // 合并说明：这两个资产由 .git/info/exclude 本地排除（6.4MB，刻意不入库），
+    // 因此远端 release 分支单独检出时登录视频会 404；生产工作区有实体文件，不受影响。
     authVideoUrl: "/auth-bg.mp4",
     authVideoPosterUrl: "/auth-poster.jpg",
+    // 吸收上游 #435：登录视频自动播放开关
+    authVideoAutoplay: true,
     skinId: "classic",
     activeSkin: DEFAULT_CLASSIC_SKIN,
     seoTitle: "影策",
@@ -61,7 +65,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
-        schemaVersion: 6,
+        schemaVersion: 7,
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -71,6 +75,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         logoFrameEnabled: value?.logoFrameEnabled !== false,
         authVideoUrl: safeAppearanceURL(value?.authVideoUrl, DEFAULT_PUBLIC_APPEARANCE.authVideoUrl),
         authVideoPosterUrl: safeAppearanceURL(value?.authVideoPosterUrl, customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl),
+        authVideoAutoplay: value?.authVideoAutoplay !== false,
         skinId: normalizeSkinDefinition(value?.activeSkin).id,
         activeSkin: normalizeSkinDefinition(value?.activeSkin),
         seoTitle,

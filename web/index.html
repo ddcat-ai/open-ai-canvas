@@ -19,13 +19,13 @@
                 position: fixed;
                 left: 50%;
                 top: 50%;
-                width: 42px;
-                height: 42px;
-                margin: -21px 0 0 -21px;
+                width: 12px;
+                height: 12px;
+                margin: -6px 0 0 -6px;
                 background: rgba(255, 255, 255, 0.84);
-                mask: url('/logo.svg') center / contain no-repeat;
-                -webkit-mask: url('/logo.svg') center / contain no-repeat;
-                animation: appearance-bootstrap-logo 1.8s ease-in-out infinite;
+                border-radius: 999px;
+                box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.08);
+                animation: appearance-bootstrap-pulse 1.8s ease-in-out infinite;
             }
             #root:empty::after {
                 content: "";
@@ -40,7 +40,7 @@
                 border-radius: 999px;
                 animation: appearance-bootstrap-orbit 2.8s linear infinite;
             }
-            @keyframes appearance-bootstrap-logo { 0%, 100% { opacity: .62; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.04); } }
+            @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
             @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
             @media (prefers-reduced-motion: reduce) {
                 #root:empty::before,

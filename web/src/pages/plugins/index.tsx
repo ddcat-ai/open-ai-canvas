@@ -1,4 +1,5 @@
-import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
+import { App, Button, Input, Modal, Select, Typography } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { AudioLines, CalendarDays, CheckCircle2, Clock3, CreditCard, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -159,8 +160,8 @@ export default function PluginsPage() {
         () => [
             ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => pluginMatchesCategory(plugin.manifest, section.key)) })),
             { key: "other", label: "应用插件", description: "画布、素材与工作流扩展", icon: PlugZap, plugins: filteredPlugins.filter((plugin) => pluginMatchesCategory(plugin.manifest, "other")) },
-        ],
-        [filteredPlugins],
+        ].filter((section) => categoryFilter === "all" || section.key === categoryFilter),
+        [categoryFilter, filteredPlugins],
     );
 
     const selectCategory = (key: string) => {

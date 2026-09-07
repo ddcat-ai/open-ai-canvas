@@ -1,4 +1,5 @@
-import { App, Button, Checkbox, Dropdown, Input, Select } from "antd";
+import { App, Button, Dropdown, Input, Select } from "antd";
+import { Checkbox } from "@/components/ui/base/checkbox";
 import { Ban, Search, Settings2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -182,6 +183,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                                         {userColumnOptions.map((option) => (
                                             <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
                                                 <Checkbox
+                                                    bare
                                                     checked={visibleColumns.has(option.key)}
                                                     disabled={option.locked}
                                                     onChange={(event) => setVisibleColumns((current) => {
