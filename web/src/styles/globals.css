@@ -14383,12 +14383,65 @@ html:not(.dark) .creation-history-drawer-root {
 .library-drawer .border-border\/70 { border-color: color-mix(in srgb, var(--foreground) 10%, transparent); }
 .library-drawer .asset-drawer-content { border-color: color-mix(in srgb, var(--foreground) 10%, transparent) !important; background: color-mix(in srgb, var(--foreground) 3%, transparent); }
 
+.framescript-analysis-panel {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
+}
+.framescript-analysis-header { display: flex; align-items: flex-start; gap: 12px; padding: 16px; }
+.framescript-analysis-mark { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--workspace-accent) 22%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--workspace-accent) 10%, transparent); color: var(--workspace-accent); }
+.framescript-analysis-mark svg { width: 18px; height: 18px; }
+.framescript-analysis-header h3 { margin: 0; color: var(--foreground); font-size: var(--fs-body); font-weight: 650; }
+.framescript-analysis-header p { margin: 5px 0 0; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-tiny); line-height: 1.55; }
+.framescript-analysis-status { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--r-full); background: color-mix(in srgb, var(--foreground) 7%, transparent); padding: 3px 7px; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: 10px; font-weight: 620; }
+.framescript-analysis-status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
+.framescript-analysis-status.is-ready { background: color-mix(in srgb, var(--status-success) 12%, transparent); color: var(--status-success); }
+.framescript-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 16px 14px; }
+.framescript-feature { position: relative; display: grid; min-width: 0; grid-template-columns: 28px minmax(0, 1fr) 12px; align-items: center; gap: 9px; border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 2%, transparent); padding: 10px; text-align: left; transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+.framescript-feature:hover:not(:disabled) { border-color: color-mix(in srgb, var(--foreground) 18%, transparent); background: color-mix(in srgb, var(--foreground) 5%, transparent); }
+.framescript-feature:active:not(:disabled) { transform: scale(.985); }
+.framescript-feature:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.framescript-feature:disabled { cursor: wait; opacity: .6; }
+.framescript-feature > svg { width: 16px; height: 16px; color: color-mix(in srgb, var(--foreground) 48%, transparent); }
+.framescript-feature > span { min-width: 0; }
+.framescript-feature strong, .framescript-feature small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.framescript-feature strong { color: color-mix(in srgb, var(--foreground) 72%, transparent); font-size: var(--fs-tiny); font-style: normal; font-weight: 620; }
+.framescript-feature small { margin-top: 2px; color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: 10px; }
+.framescript-feature > i { width: 12px; height: 12px; border: 1px solid color-mix(in srgb, var(--foreground) 24%, transparent); border-radius: 4px; }
+.framescript-feature.is-selected { border-color: color-mix(in srgb, var(--workspace-accent) 30%, transparent); background: color-mix(in srgb, var(--workspace-accent) 8%, transparent); }
+.framescript-feature.is-selected > svg, .framescript-feature.is-selected strong { color: var(--foreground); }
+.framescript-feature.is-selected > i { border-color: var(--workspace-accent); background: var(--workspace-accent); box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--popover) 85%, transparent); }
+.framescript-analysis-actions { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); padding: 10px 16px; }
+.framescript-analysis-actions > span { color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-tiny); text-align: right; }
+.framescript-analysis-progress { display: flex; align-items: center; gap: 11px; border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); padding: 13px 16px; }
+.framescript-analysis-progress > span { width: 18px; height: 18px; flex: 0 0 auto; border: 2px solid color-mix(in srgb, var(--workspace-accent) 24%, transparent); border-top-color: var(--workspace-accent); border-radius: 50%; animation: framescript-spin .7s linear infinite; }
+.framescript-analysis-progress p { margin: 0; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-tiny); line-height: 1.45; }
+.framescript-analysis-progress strong { display: block; color: color-mix(in srgb, var(--foreground) 76%, transparent); font-weight: 620; }
+.framescript-analysis-result { border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); padding: 14px 16px 16px; }
+.framescript-analysis-result-head { display: flex; align-items: center; justify-content: space-between; color: color-mix(in srgb, var(--foreground) 54%, transparent); font-size: var(--fs-tiny); font-weight: 620; }
+.framescript-analysis-result-head strong { color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: 10px; font-weight: 560; }
+.framescript-analysis-summary { margin: 10px 0 0; color: color-mix(in srgb, var(--foreground) 72%, transparent); font-size: var(--fs-caption); line-height: 1.65; white-space: pre-wrap; }
+.framescript-analysis-segments { display: grid; gap: 6px; margin-top: 12px; }
+.framescript-analysis-segments details { overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 2%, transparent); }
+.framescript-analysis-segments summary { display: flex; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; color: color-mix(in srgb, var(--foreground) 64%, transparent); font-size: var(--fs-tiny); }
+.framescript-analysis-segments summary::-webkit-details-marker { display: none; }
+.framescript-analysis-segments summary time { color: color-mix(in srgb, var(--foreground) 38%, transparent); font-variant-numeric: tabular-nums; }
+.framescript-analysis-segments details > div { display: grid; gap: 10px; border-top: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent); padding: 11px; }
+.framescript-analysis-field > span { color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: 10px; font-weight: 620; text-transform: uppercase; }
+.framescript-analysis-field > p { margin: 3px 0 0; color: color-mix(in srgb, var(--foreground) 68%, transparent); font-size: var(--fs-tiny); line-height: 1.6; white-space: pre-wrap; }
+.framescript-analysis-empty { margin: 10px 0 0; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-tiny); }
+@keyframes framescript-spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 680px) {
     .library-modal .ant-modal-header { padding: 22px 20px 8px; }
     .library-modal .ant-modal-body { padding: 10px 20px 20px; }
     .library-modal .ant-modal-footer { padding-inline: 20px; }
     .library-drawer .ant-drawer-header { padding: 18px 18px 13px; }
     .library-drawer .ant-drawer-body { padding: 18px; }
+    .framescript-feature-grid { grid-template-columns: minmax(0, 1fr); }
+    .framescript-analysis-actions { align-items: flex-start; flex-direction: column; }
+    .framescript-analysis-actions > span { text-align: left; }
 }
 
 /* ===== 工作台首页 · 创作仪表盘（欢迎区 + 统计卡 + 活跃度/素材图表 + 最近项目表格） ===== */
@@ -16664,7 +16717,7 @@ html:not(.dark) .creation-home .creation-user-message { background: transparent;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
 }
 
-/* 即梦 CLI 视频模式：显式区分全能参考、首尾帧与智能多帧。 */
+/* 即梦 CLI 视频模式：完整呈现官网模式；未接通的能力保留为明确的 Beta 占位。 */
 .creation-video-mode-picker-menu {
     width: 238px;
     padding: 6px;
@@ -16707,10 +16760,37 @@ html:not(.dark) .creation-home .creation-user-message { background: transparent;
     line-height: 1.25;
 }
 
+.creation-video-mode-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+}
+
+.creation-video-mode-title em {
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: rgb(59 130 246 / 0.16);
+    color: #60a5fa;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
 .creation-video-mode-copy small {
     color: var(--creation-muted);
     font-size: 10px;
     line-height: 1.35;
+}
+
+.creation-video-mode-picker-menu button.is-coming-soon {
+    cursor: not-allowed;
+    opacity: 0.64;
+}
+
+.creation-video-mode-picker-menu button.is-coming-soon:hover {
+    background: transparent;
 }
 
 .creation-home .creation-chat-control.is-dreamina-video-mode {

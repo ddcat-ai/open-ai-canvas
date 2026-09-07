@@ -1,6 +1,21 @@
 import type { VideoCapabilityConfig } from "@/lib/model-capabilities";
 
 export type DreaminaVideoMode = "all_reference" | "first_last_frames" | "smart_multi_frame";
+export type DreaminaVideoComingSoonMode = "smart_edit" | "long_video";
+
+type DreaminaVideoModeOption = {
+    value: DreaminaVideoMode;
+    label: string;
+    description: string;
+    available: true;
+    beta?: false;
+} | {
+    value: DreaminaVideoComingSoonMode;
+    label: string;
+    description: string;
+    available: false;
+    beta: true;
+};
 
 export type DreaminaVideoReferenceCounts = {
     image: number;
@@ -8,14 +23,12 @@ export type DreaminaVideoReferenceCounts = {
     audio: number;
 };
 
-export const dreaminaVideoModeOptions: Array<{
-    value: DreaminaVideoMode;
-    label: string;
-    description: string;
-}> = [
-    { value: "all_reference", label: "全能参考", description: "图片、视频和音频共同参考" },
-    { value: "first_last_frames", label: "首尾帧", description: "依次使用首帧和尾帧 2 张图片" },
-    { value: "smart_multi_frame", label: "智能多帧", description: "按顺序衔接 2–20 张图片" },
+export const dreaminaVideoModeOptions: DreaminaVideoModeOption[] = [
+    { value: "all_reference", label: "全能参考", description: "图片、视频和音频共同参考", available: true },
+    { value: "first_last_frames", label: "首尾帧", description: "依次使用首帧和尾帧 2 张图片", available: true },
+    { value: "smart_multi_frame", label: "智能多帧", description: "按顺序衔接 2–20 张图片", available: true },
+    { value: "smart_edit", label: "智能编辑", description: "官方 CLI 暂未开放", available: false, beta: true },
+    { value: "long_video", label: "超长视频", description: "官方 CLI 暂未开放", available: false, beta: true },
 ];
 
 export function isLocalDreaminaVideoModel(model: string) {

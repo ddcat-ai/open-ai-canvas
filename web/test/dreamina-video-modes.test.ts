@@ -10,8 +10,10 @@ import {
     isLocalDreaminaVideoModel,
 } from "../src/lib/dreamina-video-modes";
 
-test("Create exposes exactly the three Dreamina CLI video modes requested by the product", async () => {
-    expect(dreaminaVideoModeOptions.map((option) => option.label)).toEqual(["全能参考", "首尾帧", "智能多帧"]);
+test("Create exposes the complete Dreamina video mode menu without faking unsupported CLI operations", async () => {
+    expect(dreaminaVideoModeOptions.map((option) => option.label)).toEqual(["全能参考", "首尾帧", "智能多帧", "智能编辑", "超长视频"]);
+    expect(dreaminaVideoModeOptions.filter((option) => option.available).map((option) => option.label)).toEqual(["全能参考", "首尾帧", "智能多帧"]);
+    expect(dreaminaVideoModeOptions.filter((option) => option.beta).map((option) => option.label)).toEqual(["智能编辑", "超长视频"]);
     expect(isLocalDreaminaVideoModel("local:dreamina-cli:seedance2.5")).toBe(true);
     expect(isLocalDreaminaVideoModel("system::seedance2.5")).toBe(false);
 
@@ -20,8 +22,8 @@ test("Create exposes exactly the three Dreamina CLI video modes requested by the
     expect(source).toContain("<FirstLastFrameReferenceSlots");
     expect(source).toContain('aria-label="首尾帧参考图"');
     expect(source).toContain('aria-label="交换首帧和尾帧"');
-    expect(source).not.toContain("智能编辑 Beta");
-    expect(source).not.toContain("超长视频 Beta");
+    expect(source).toContain("disabled={!option.available}");
+    expect(source).toContain("option.beta ? <em>Beta</em>");
 });
 
 test("Dreamina menu choices map to distinct official CLI operations", () => {
