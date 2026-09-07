@@ -109,6 +109,11 @@ func run(ctx context.Context) error {
 	r.Use(corsMiddleware)
 	handler.ConfigureRuntime(svc)
 	api := r.Group("/api")
+	// D-057A：Agent Service Token 通道。必须**在任何 /api 路由注册之前**挂载——
+	// gin 的 Group.Use 只对该调用之后注册的路由生效；挂在后面会导致
+	// /api/admin/* 等先注册的分组根本不经过中间件（生产实测踩坑）。
+	// 中间件本身很保守：仅「无会话 cookie + ycat_ 前缀 Bearer」才接管。
+	api.Use(handler.AgentTokenMiddleware(svc))
 	status := newSystemStatus(db, svc)
 	registerSystemStatusRoutes(api, status)
 	handler.RegisterOAuthCallbackRoutes(r, svc)
@@ -131,9 +136,6 @@ func run(ctx context.Context) error {
 	handler.RegisterModelCatalogRoutes(api, svc)
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterCustomRelayRoutes(api, svc)
-	// D-057A：Agent Service Token 通道——仅在无会话 cookie 且带影策 Agent Bearer 时才接管，
-	// 既有会话鉴权行为完全不变。
-	api.Use(handler.AgentTokenMiddleware(svc))
 	handler.RegisterAgentTokenRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
 	handler.RegisterComfyBridgeRoutes(api, svc)
