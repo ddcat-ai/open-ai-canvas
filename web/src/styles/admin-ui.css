@@ -248,6 +248,50 @@
     margin-top: 4px;
 }
 
+.admin-appearance-video-autoplay-option {
+    display: flex;
+    min-height: 72px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--r-md);
+    background: var(--admin-layer-2);
+    padding: 12px 14px;
+}
+
+.admin-appearance-video-autoplay-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.admin-appearance-video-autoplay-copy strong {
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.admin-appearance-video-autoplay-copy small,
+.admin-appearance-video-autoplay-control > span {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-appearance-video-autoplay-control {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-appearance-video-autoplay-control > span {
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .admin-appearance-asset-row {
     display: grid;
     grid-template-columns: 36px minmax(0, 1fr) auto;
@@ -1218,6 +1262,16 @@
     }
 
     .admin-appearance-logo-frame-control {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .admin-appearance-video-autoplay-option {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-appearance-video-autoplay-control {
         width: 100%;
         justify-content: space-between;
     }
