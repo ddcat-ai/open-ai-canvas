@@ -375,6 +375,8 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
     const fontSize = node.metadata?.fontSize || 14;
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, height: "100%", boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
+    // Keep the prop identity stable so selection rerenders do not replace the rich-text subtree mid-click.
+    const richTextMarkup = useMemo(() => ({ __html: richTextHTML }), [richTextHTML]);
 
     return (
         <div
@@ -411,7 +413,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     className="thin-scrollbar block min-h-0 min-w-0 flex-1 select-text overflow-y-auto break-words bg-transparent font-sans [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:pl-2.5 [&_blockquote]:opacity-70 [&_code]:rounded [&_code]:bg-black/6 [&_code]:px-1 dark:[&_code]:bg-white/8 [&_h1]:my-1.5 [&_h1]:text-[1.55em] [&_h1]:font-semibold [&_h2]:my-1.5 [&_h2]:text-[1.3em] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[1.12em] [&_h3]:font-semibold [&_hr]:my-2 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-0.5 [&_pre]:my-1.5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/90 [&_pre]:p-2 [&_pre]:text-white [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&>:first-child]:mt-0 [&>:last-child]:mb-0"
                     style={textStyle}
                     onWheel={(event) => event.stopPropagation()}
-                    dangerouslySetInnerHTML={{ __html: richTextHTML }}
+                    dangerouslySetInnerHTML={richTextMarkup}
                 />
             ) : (
                 <div

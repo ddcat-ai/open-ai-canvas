@@ -27,6 +27,12 @@ test("text body exposes a direct double-click edit entry point", () => {
     expect(textContent).toContain("event.stopPropagation();");
 });
 
+test("rich text markup stays referentially stable across unrelated renders", () => {
+    const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
+    expect(textContent).toContain("const richTextMarkup = useMemo(() => ({ __html: richTextHTML }), [richTextHTML]);");
+    expect(textContent).toContain("dangerouslySetInnerHTML={richTextMarkup}");
+});
+
 test("text cards do not render an inline expand editor overlay", () => {
     const nodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
     expect(nodeSource).not.toContain("放大编辑文本");
