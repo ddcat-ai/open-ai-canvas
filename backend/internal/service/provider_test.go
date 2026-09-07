@@ -2706,6 +2706,39 @@ func TestRunMiniMaxVideoTaskCreatesPollsAndDownloads(t *testing.T) {
 	}
 }
 
+func TestRunMiniMaxVideoTaskSendsOfficial2KResolution(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	for _, quality := range []string{"2K", "1440p"} {
+		t.Run(quality, func(t *testing.T) {
+			requested := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/v2/video_generation" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				requested = true
+				var body miniMaxVideoRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request: %v", err)
+				}
+				if body.Resolution != "2K" {
+					t.Errorf("resolution = %q, want official API value 2K", body.Resolution)
+				}
+				// End at submission: this test inspects the wire payload without polling.
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{}`))
+			}))
+			defer server.Close()
+			_, err := runMiniMaxVideoTask(context.Background(), canvasGenerationInput{
+				Mode: "video", Prompt: "make it move",
+				Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "MiniMax-H3", VQuality: quality},
+			})
+			if !requested || err == nil || !strings.Contains(err.Error(), "没有返回任务 ID") {
+				t.Fatalf("expected submission without task ID, requested=%v err=%v", requested, err)
+			}
+		})
+	}
+}
+
 func TestRunMiniMaxVideoTaskUsesExplicitReferenceRoles(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	var server *httptest.Server
