@@ -1104,6 +1104,13 @@ func readPayloadModel(body []byte) string {
 }
 
 func currentUser(c *gin.Context, svc *service.Service) (*model.User, error) {
+	// D-057A：Agent 服务令牌通道——身份有效，但**不得访问管理端接口**（裁决：不给 admin scope）。
+	if user, ok := agentUserFromContext(c); ok {
+		if strings.HasPrefix(c.FullPath(), "/api/admin") {
+			return nil, service.ErrAgentTokenAdminDenied
+		}
+		return user, nil
+	}
 	return svc.CurrentUser(sessionCookie(c))
 }
 
