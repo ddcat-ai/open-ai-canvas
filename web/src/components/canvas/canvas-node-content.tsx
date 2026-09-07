@@ -372,7 +372,7 @@ function UnknownNodeContent({ theme }: Pick<CanvasNodeContentProps, "theme">) {
 
 function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing }: CanvasNodeContentProps) {
     const fontSize = node.metadata?.fontSize || 14;
-    const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, boxSizing: "border-box" } as CSSProperties;
+    const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, height: "100%", boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
 
     return (
@@ -380,7 +380,8 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
             {isEditingContent ? (
                 <CanvasResourceMentionTextarea
                     ref={textareaRef}
-                    className="thin-scrollbar m-0 block min-h-0 min-w-0 flex-1 resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent font-sans outline-none select-text"
+                    containerClassName="h-full min-h-0 flex-1"
+                    className="thin-scrollbar m-0 block h-full min-h-0 min-w-0 w-full flex-1 resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent font-sans outline-none select-text"
                     style={textStyle}
                     value={node.metadata?.content || ""}
                     references={mentionReferences}

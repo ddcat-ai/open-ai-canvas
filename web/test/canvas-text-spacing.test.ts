@@ -13,6 +13,13 @@ test("text nodes use compact, consistent spacing in edit and view states", () =>
     expect(source).not.toContain("font-mono outline-none select-text");
 });
 
+test("text editor keeps the card content height when entering edit mode", () => {
+    const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
+    expect(textContent).toContain('height: "100%"');
+    expect(textContent).toContain('containerClassName="h-full min-h-0 flex-1"');
+    expect(textContent).toContain("block h-full min-h-0 min-w-0 w-full flex-1");
+});
+
 test("text cards do not render an inline expand editor overlay", () => {
     const nodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
     expect(nodeSource).not.toContain("放大编辑文本");
