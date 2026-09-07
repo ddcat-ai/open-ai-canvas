@@ -70,7 +70,7 @@ import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-co
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
-import { getContextResourceNodes, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { applyCanvasConnectionPromptSync, getContextResourceNodes, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
@@ -1173,20 +1173,28 @@ function InfiniteCanvasPage() {
         const referenceNodeId = reference.nodeId;
         if (!referenceNodeId) return;
         // 生成节点可能通过配置节点接收参考，只移除参考来源边，保留目标到配置节点的主链。
-        const configNodeId = connectionsRef.current.find((connection) => {
+        const previousNodes = nodesRef.current;
+        const previousConnections = connectionsRef.current;
+        const configNodeId = previousConnections.find((connection) => {
             if (connection.fromNodeId !== targetNodeId) return false;
-            return nodesRef.current.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config;
+            return previousNodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config;
         })?.toNodeId;
         const removedConnectionIds = new Set(
-            connectionsRef.current
+            previousConnections
                 .filter((connection) => connection.fromNodeId === referenceNodeId && (connection.toNodeId === targetNodeId || connection.toNodeId === configNodeId))
                 .map((connection) => connection.id),
         );
         if (!removedConnectionIds.size) return;
-        connectionsRef.current = connectionsRef.current.filter((connection) => !removedConnectionIds.has(connection.id));
-        setConnections(connectionsRef.current);
+        const nextConnections = previousConnections.filter((connection) => !removedConnectionIds.has(connection.id));
+        const nextNodes = applyCanvasConnectionPromptSync(previousNodes, previousConnections, previousNodes, nextConnections);
+        if (nextNodes !== previousNodes) {
+            nodesRef.current = nextNodes;
+            setNodes(nextNodes);
+        }
+        connectionsRef.current = nextConnections;
+        setConnections(nextConnections);
         setSelectedConnectionId((current) => current && removedConnectionIds.has(current) ? null : current);
-    }, [connectionsRef, nodesRef, setConnections, setSelectedConnectionId]);
+    }, [connectionsRef, nodesRef, setConnections, setNodes, setSelectedConnectionId]);
 
     const handleProjectFolderInsert = useCallback((folderId: string) => {
         const folder = linkedProjectQuery.data?.assetFolders.find((item) => item.id === folderId);

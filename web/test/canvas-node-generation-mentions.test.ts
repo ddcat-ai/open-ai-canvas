@@ -93,4 +93,16 @@ describe("canvas node generation position mentions", () => {
         expect(context.prompt).toBe("让 @图片1 进入画面");
         expect(context.prompt).not.toContain("@[node:");
     });
+
+    test("取消引用后的提示词不再因为悬挂 @图片1 阻断生成", () => {
+        const target = targetNode();
+        const image = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const { applyCanvasConnectionPromptSync } = require("../src/lib/canvas/canvas-resource-references") as typeof import("../src/lib/canvas/canvas-resource-references");
+        const [nextTarget] = applyCanvasConnectionPromptSync([image, target], [connection(image.id)], [image, target], []).filter((item: typeof target) => item.id === target.id);
+        const context = buildNodeGenerationContext(nextTarget.id, [image, nextTarget], [], nextTarget.metadata?.composerContent || "", []);
+
+        expect(nextTarget.metadata?.composerContent).toBe("让 进入画面");
+        expect(context.referenceImages).toEqual([]);
+        expect(context.prompt).toBe("让 进入画面");
+    });
 });
