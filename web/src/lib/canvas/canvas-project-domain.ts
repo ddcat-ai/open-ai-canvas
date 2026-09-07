@@ -5,7 +5,7 @@ import { bindingForConnectedNode, storyboardComposerContent, storyboardRowRefere
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import type { NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
-import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { IMAGE_NODE_MAX_SIZE, IMAGE_NODE_MIN_SIZE, VIDEO_NODE_MAX_SIZE, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { scopedLocalStorage } from "@/lib/user-scope";
@@ -162,7 +162,9 @@ export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<Canvas
     const nextPatch = resetGenerationParamsOnModelSwitch(node, safePatch);
     const next = { ...node, metadata: { ...node.metadata, ...nextPatch } };
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
-    const size = typeof safePatch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
+    const size = typeof safePatch.size === "string" && !node.metadata?.content
+        ? nodeSizeFromRatio(safePatch.size, node.type === CanvasNodeType.Image ? IMAGE_NODE_MAX_SIZE.width : VIDEO_NODE_MAX_SIZE.width, node.type === CanvasNodeType.Image ? IMAGE_NODE_MAX_SIZE.height : VIDEO_NODE_MAX_SIZE.height, node.type === CanvasNodeType.Image ? IMAGE_NODE_MIN_SIZE.width : undefined, node.type === CanvasNodeType.Image ? IMAGE_NODE_MIN_SIZE.height : undefined)
+        : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
 }
 

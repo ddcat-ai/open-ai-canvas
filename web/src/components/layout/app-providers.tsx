@@ -16,11 +16,14 @@ const ClientRootInit = lazy(() => import("@/components/layout/client-root-init")
 
 function ClientRootBoundary({ children }: { children: ReactNode }) {
     const authenticated = useUserStore((state) => Boolean(state.user));
-    if (!authenticated) return children;
-    // ClientRootInit only starts background diagnostics and plugin hydration.
-    // It must not add a second full-screen mask while the route boundary is
-    // already showing the page loading state.
-    return <Suspense fallback={null}><ClientRootInit>{children}</ClientRootInit></Suspense>;
+    // Keep the route tree mounted while the session changes from its initial
+    // anonymous state to the restored user. Wrapping `children` only after
+    // authentication would unmount RouterProvider and visibly flash the
+    // workspace sidebar during refresh.
+    return <>
+        {children}
+        {authenticated ? <Suspense fallback={null}><ClientRootInit>{null}</ClientRootInit></Suspense> : null}
+    </>;
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {

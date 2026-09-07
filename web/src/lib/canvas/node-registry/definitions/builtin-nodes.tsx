@@ -1,7 +1,7 @@
 import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
-import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
+import { IMAGE_NODE_MIN_SIZE, MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasNodeDefinition } from "../node-definition";
@@ -22,7 +22,7 @@ const BUILTIN_NODE_TRAITS = {
     [CanvasNodeType.Image]: {
         label: "图片",
         icon: <ImageIcon />,
-        minSize: MEDIA_NODE_MIN_SIZE,
+        minSize: IMAGE_NODE_MIN_SIZE,
         keepAspectRatio: (node: CanvasNodeData) => !node.metadata?.freeResize,
         showInCreateMenu: true,
         resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "image" : null),

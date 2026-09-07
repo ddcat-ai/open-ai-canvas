@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { ListToolbar, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { fallbackSkillCategories, formatSkillCount, groupSkills, skillCategoryLabel } from "@/pages/skills/skill-catalog";
@@ -241,7 +242,7 @@ export default function SkillsPage() {
                         <Select className="w-24" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
                 </ListToolbar>
 
-                {loading && !skills.length ? <SkillSkeleton /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : groupedSkills.length ? (
+                {loading && !skills.length ? <WorkspaceRouteLoader inline label="正在加载技能库" detail="读取技能与分类信息" /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : groupedSkills.length ? (
                     <div key={`${scope}-${page}`} className="skills-scope-panel space-y-9 py-6">
                         {groupedSkills.map((group) => {
                             const GroupIcon = categoryIconOf(group.value);
@@ -339,8 +340,4 @@ function SkillCard({ skill, categories, loading, style, onOpen, onAdd, onLike, o
                 )}
         </article>
     );
-}
-
-function SkillSkeleton() {
-    return <div className="library-grid skill-library-grid py-6">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[260px] animate-pulse rounded-[var(--r-xl)] bg-foreground/[.035]" />)}</div>;
 }

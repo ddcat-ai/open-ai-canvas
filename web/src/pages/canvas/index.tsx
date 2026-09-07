@@ -5,7 +5,8 @@ import { App, Button, Dropdown, Modal, Select } from "antd";
 import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
-import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
+import { WorkspaceState } from "@/components/layout/workspace-state";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
 
 import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
@@ -13,6 +14,7 @@ import { setImageBlob } from "@/services/image-storage";
 import { CanvasCreateCard } from "@/components/canvas/canvas-project-card";
 import { CanvasFolderCard } from "@/components/canvas/canvas-folder-card";
 import { CanvasHistoryDrawer } from "@/components/canvas/canvas-history-drawer";
+import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import type { CanvasExportFile } from "@/types/canvas-export";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -110,6 +112,9 @@ export default function CanvasPage() {
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const projectFilterLabel = projectFilter === "all" ? "全部画布" : projectFilter === "independent" ? "自由画布" : projectNames.get(projectFilter) || "项目画布";
     const sortLabel = sort === "name" ? "按名称" : sort === "nodes" ? "按节点" : "最近更新";
+    const pageLoading = !hydrated || Boolean(userId && libraryQuery.isPending);
+    const [pageLoaderVisible, setPageLoaderVisible] = useState(true);
+    const [pageLoaderExiting, setPageLoaderExiting] = useState(false);
     const projectFilterItems = useMemo(() => [{ key: "all", label: "全部画布" }, { key: "independent", label: "自由画布" }, ...(projectQuery.data?.projects || []).map(({ project }) => ({ key: project.id, label: project.name }))], [projectQuery.data]);
     const sortItems = [
         { key: "updated", label: "最近更新", icon: <Clock3 className="size-3.5" /> },
@@ -119,6 +124,20 @@ export default function CanvasPage() {
     useEffect(() => {
         setLoadedProjectCount(50);
     }, [keyword, projectFilter, sort]);
+    useEffect(() => {
+        if (pageLoading) {
+            setPageLoaderVisible(true);
+            setPageLoaderExiting(false);
+            return;
+        }
+        if (!pageLoaderVisible) return;
+        setPageLoaderExiting(true);
+        const timer = window.setTimeout(() => {
+            setPageLoaderVisible(false);
+            setPageLoaderExiting(false);
+        }, 180);
+        return () => window.clearTimeout(timer);
+    }, [pageLoaderVisible, pageLoading]);
     useEffect(() => {
         const node = loadMoreRef.current;
         if (!node || !hasMore) return;
@@ -400,10 +419,11 @@ export default function CanvasPage() {
         });
     }, [hydrated, message, mode, projects, sessionHydrated, userId, libraryQuery.isSuccess]);
 
-    if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
+    if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <CanvasRefreshShell />;
 
     return (
         <WorkspacePage grid className="canvas-library-page">
+            {pageLoaderVisible ? <WorkspaceRouteLoader className={pageLoaderExiting ? "is-exiting" : undefined} label="正在整理创作空间" detail="准备页面内容" /> : null}
             <div className="studio-band">
                 <PageHeader
                     title="画布"
@@ -552,8 +572,8 @@ export default function CanvasPage() {
 
                 {userId && libraryQuery.isError ? (
                     <div role="alert">画布列表读取失败<Button onClick={() => void libraryQuery.refetch()}>重试</Button></div>
-                ) : !hydrated || (userId && libraryQuery.isPending) ? (
-                    <WorkspaceLoadingState label="正在恢复画布" detail="读取本地缓存与账号同步状态" />
+                ) : pageLoading ? (
+                    null
                 ) : showCreateCard || visibleProjects.length ? (
                     <CollectionGrid className="canvas-library-grid">
                         {showCreateCard ? <CanvasCreateCard disabled={!hydrated} onClick={createAndEnter} /> : null}

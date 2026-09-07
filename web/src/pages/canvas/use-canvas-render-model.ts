@@ -4,7 +4,7 @@ import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/component
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
-import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
+import { buildCanvasNodeMentionReferenceMap } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
 import type { Skill } from "@/services/api/skills";
@@ -27,7 +27,6 @@ type UseCanvasRenderModelOptions = {
     collapsingBatchIds: Set<string>;
     addedSkills: Skill[];
     directorScenes?: DirectorScene[];
-    infoNodeId: string | null;
     cropNodeId: string | null;
     maskEditNodeId: string | null;
     annotationNodeId: string | null;
@@ -57,7 +56,6 @@ export function useCanvasRenderModel({
     collapsingBatchIds,
     addedSkills,
     directorScenes,
-    infoNodeId,
     cropNodeId,
     maskEditNodeId,
     annotationNodeId,
@@ -217,7 +215,6 @@ export function useCanvasRenderModel({
     const selectedNodeIdForToolbar = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
     const toolbarCandidate = selectedNodeIdForToolbar ? nodeById.get(selectedNodeIdForToolbar) || null : null;
     const toolbarNode = isFrameNode(toolbarCandidate) ? null : toolbarCandidate;
-    const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
     const maskEditNode = maskEditNodeId ? nodeById.get(maskEditNodeId) || null : null;
     const annotationNode = annotationNodeId ? nodeById.get(annotationNodeId) || null : null;
@@ -332,20 +329,6 @@ export function useCanvasRenderModel({
     const activeStylePresetId = useMemo(() => semanticNodes.find((node) => node.metadata?.workflowKind === "styleboard")?.metadata?.stylePresetId, [semanticNodes]);
     const activeScriptNode = useMemo(() => semanticNodes.find((node) => node.id === scriptEditorNodeId && node.type === CanvasNodeType.Script) || null, [scriptEditorNodeId, semanticNodes]);
     const activeDirectorScene = useMemo(() => directorScenes?.find((scene) => scene.id === activeDirectorNode?.metadata?.directorSceneId) || null, [activeDirectorNode?.metadata?.directorSceneId, directorScenes]);
-    const resourceReferenceTargetNodes = useMemo(() => {
-        const targetNodes = [...visibleNodes];
-        const activeId = dialogNodeId || activeNodeId;
-        if (activeId) {
-            const activeNode = nodeById.get(activeId);
-            if (activeNode) targetNodes.push(activeNode);
-        }
-        return targetNodes;
-    }, [activeNodeId, dialogNodeId, nodeById, visibleNodes]);
-    const canvasResourceReferences = useMemo(
-        () => buildCanvasResourceReferences(semanticNodes, connections, dialogNodeId || activeNodeId, resourceReferenceTargetNodes),
-        [activeNodeId, connections, dialogNodeId, resourceReferenceTargetNodes, semanticNodes],
-    );
-    const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
     const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
     const mentionReferencesByNodeId = useMemo(() => {
         const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, visibleNodes);
@@ -373,14 +356,12 @@ export function useCanvasRenderModel({
         displayConnections,
         frameChildrenById,
         imageAssets,
-        infoNode,
         maskEditNode,
         mentionReferencesByNodeId,
         nodeById,
         previewNode,
         reduceMediaEffects,
         relatedHighlight,
-        resourceReferenceByNodeId,
         selectedNodeBounds,
         selectedVideoNodes,
         semanticNodes,

@@ -15,14 +15,23 @@ const addNodeMenuRegistry: AddNodeMenuCommand[] = [];
 export function registerToolbarTools(tools: ToolDefinition[]) {
     for (const tool of tools) {
         const list = registry.get(tool.toolbar) ?? [];
-        list.push(tool);
-        registry.set(tool.toolbar, list);
+        // Definition modules can be evaluated again during Vite HMR. Treat
+        // registration as an upsert so a reloaded module cannot duplicate
+        // every toolbar button in the live canvas.
+        const deduped = list.filter((item) => item.id !== tool.id);
+        deduped.push(tool);
+        registry.set(tool.toolbar, deduped);
     }
 }
 
 /** 注册添加节点菜单命令 */
 export function registerAddNodeMenuCommands(commands: AddNodeMenuCommand[]) {
-    addNodeMenuRegistry.push(...commands);
+    for (const command of commands) {
+        for (let index = addNodeMenuRegistry.length - 1; index >= 0; index -= 1) {
+            if (addNodeMenuRegistry[index]?.id === command.id) addNodeMenuRegistry.splice(index, 1);
+        }
+        addNodeMenuRegistry.push(command);
+    }
 }
 
 /** 获取某工具栏全部已注册工具（按 defaultOrder 升序） */

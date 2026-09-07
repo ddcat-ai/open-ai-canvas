@@ -52,7 +52,9 @@ export function useResolvedCanvasResourceReferences(references: CanvasResourceRe
         () => references.map((reference) => {
             const identity = previewIdentity(reference);
             const resolved = identity ? resolvedById[reference.id] : undefined;
-            if (resolved?.identity === identity && resolved.url !== reference.previewUrl) return { ...reference, previewUrl: resolved.url };
+            if (resolved?.identity === identity) {
+                return resolved.url !== reference.previewUrl ? { ...reference, previewUrl: resolved.url } : reference;
+            }
             // A persisted canvas can still carry the legacy same-origin
             // `/api/resources/:id/file` URL. Do not mount it for one render
             // while the Blob/direct provider URL is being resolved; every

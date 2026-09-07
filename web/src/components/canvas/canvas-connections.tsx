@@ -146,9 +146,7 @@ export function canvasConnectionPath(connection: CanvasConnection, from: CanvasN
     const startY = connectionHandleY(from, connection.fromHandleId, fromScrollTop);
     const endX = to.position.x;
     const endY = connectionHandleY(to, connection.toHandleId, toScrollTop);
-    const dx = Math.abs(endX - startX);
-    const curvature = Math.max(dx * 0.5, 50);
-    return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
+    return { pathD: smoothConnectionPath(startX, startY, endX, endY), startX, startY, endX, endY };
 }
 
 export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0) {
@@ -161,8 +159,27 @@ export function activeConnectionPath(node: CanvasNodeData | undefined, handle: C
     const snappedStartY = handle.handleType === "target" && target ? connectionHandleY(target) : startY;
     const snappedEndX = handle.handleType === "source" && target ? target.position.x : endX;
     const snappedEndY = handle.handleType === "source" && target ? connectionHandleY(target) : endY;
-    const distance = Math.abs(snappedEndX - snappedStartX);
-    return `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
+    return smoothConnectionPath(snappedStartX, snappedStartY, snappedEndX, snappedEndY);
+}
+
+const MIN_CONNECTION_CONTROL_OFFSET = 48;
+const MAX_REVERSE_CONNECTION_CONTROL_OFFSET = 320;
+
+/**
+ * Builds a right-to-left cubic Bezier with stable endpoint tangents.
+ *
+ * A simple `abs(endX - startX) / 2` collapses both controls when the pointer
+ * is close to the source, which makes the draft line look like it snaps or
+ * kinks. Keep a minimum tangent length for near-vertical drags, and use a
+ * square-root falloff when the pointer moves behind the source so the curve
+ * stays relaxed instead of folding into a tight S.
+ */
+function smoothConnectionPath(startX: number, startY: number, endX: number, endY: number) {
+    const horizontalGap = endX - startX;
+    const controlOffset = horizontalGap >= 0
+        ? Math.max(horizontalGap * 0.5, MIN_CONNECTION_CONTROL_OFFSET)
+        : Math.min(MAX_REVERSE_CONNECTION_CONTROL_OFFSET, MIN_CONNECTION_CONTROL_OFFSET + Math.sqrt(-horizontalGap) * 12);
+    return `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
 }
 
 /**

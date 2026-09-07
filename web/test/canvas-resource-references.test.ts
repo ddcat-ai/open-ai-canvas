@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes } from "../src/lib/canvas/canvas-resource-references";
 import { canvasNodeToAsset } from "../src/lib/canvas/canvas-node-asset";
@@ -78,6 +80,18 @@ describe("collectUpstreamVideoNodes", () => {
 });
 
 describe("canvas resource mention slots", () => {
+    test("资源编号只保留在引用协议，不渲染到画布节点左下角", () => {
+        const canvasNodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
+        const worldLayersSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/canvas-project-world-layers.tsx"), "utf8");
+        const renderModelSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-render-model.ts"), "utf8");
+        expect(canvasNodeSource).not.toContain("resourceLabel");
+        expect(worldLayersSource).not.toContain("resourceReferenceByNodeId");
+        expect(renderModelSource).not.toContain("resourceReferenceByNodeId");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([imageNode("image-1")])[0]!)).toBe("@图片1");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([videoNode("video-1")])[0]!)).toBe("@视频1");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([audioNode("audio-1")])[0]!)).toBe("@音频1");
+    });
+
     test("素材库视频优先使用封面，没有封面时保留首帧视频回退源", () => {
         const poster = buildAssetMentionReferences([{
             id: "video-with-poster",

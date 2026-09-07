@@ -38,7 +38,7 @@ import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-charac
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
-import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
+import { CanvasNodeToolbar } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
 import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
@@ -248,6 +248,7 @@ function InfiniteCanvasPage() {
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
+    const [isMiniMapPanning, setIsMiniMapPanning] = useState(false);
     const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(DEFAULT_CANVAS_BACKGROUND_MODE);
     const [showImageInfo, setShowImageInfo] = useState(false);
@@ -273,7 +274,6 @@ function InfiniteCanvasPage() {
     const [projectAssetInitialCategory, setProjectAssetInitialCategory] = useState("all");
     const [projectAssetInitialFolderId, setProjectAssetInitialFolderId] = useState("all");
     const [projectAssetInsertPosition, setProjectAssetInsertPosition] = useState<Position | undefined>();
-    const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
     const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
@@ -294,7 +294,8 @@ function InfiniteCanvasPage() {
         if (vw < 768) return 300;
         if (vw < 1024) return 360;
         if (vw < 1440) return 440;
-        return 520;
+        // 参考站 Agent 面板在宽屏上约占 480px，给画布保留更接近原站的呼吸空间。
+        return 480;
     });
     // 窗口跨越断点时把面板宽度 clamp 到当前断点的合理区间，避免宽屏值在窄屏挤压画布
     useEffect(() => {
@@ -386,6 +387,8 @@ function InfiniteCanvasPage() {
         },
         [cleanupAssetImages, getHistoryCleanupContext],
     );
+
+    const minimapVisible = !focusMode && (isMiniMapOpen || isMiniMapPanning);
 
     const { loadError, retryLoad, addedSkills, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
         projectId,
@@ -608,6 +611,23 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         setToolbarNodeId,
     });
+
+    const toggleMiniMap = useCallback(() => {
+        setIsMiniMapOpen((current) => !current);
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented || event.repeat || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+            if (event.key.toLowerCase() !== "m") return;
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='dialog']")) return;
+            event.preventDefault();
+            toggleMiniMap();
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [toggleMiniMap]);
 
     useEffect(() => {
         const project = linkedProjectQuery.data?.project;
@@ -889,7 +909,6 @@ function InfiniteCanvasPage() {
             setTextEditorNodeId(clearDeletedId);
             setCharacterReferenceNodeId(clearDeletedId);
             setDrawingNodeId(clearDeletedId);
-            setInfoNodeId(clearDeletedId);
             setSubtitleNodeId(clearDeletedId);
             setFrameDialogNodeId(clearDeletedId);
             setSegmentDialogNodeId(clearDeletedId);
@@ -976,6 +995,7 @@ function InfiniteCanvasPage() {
         defaultDrawingEngine,
         nodesRef,
         connectionsRef,
+        containerRef,
         viewportRef,
         scriptScrollTopById,
         screenToCanvas,
@@ -1218,14 +1238,12 @@ function InfiniteCanvasPage() {
         displayConnections,
         frameChildrenById,
         imageAssets,
-        infoNode,
         maskEditNode,
         mentionReferencesByNodeId,
         nodeById,
         previewNode,
         reduceMediaEffects,
         relatedHighlight,
-        resourceReferenceByNodeId,
         selectedNodeBounds,
         selectedVideoNodes,
         skillMentionReferences,
@@ -1248,7 +1266,6 @@ function InfiniteCanvasPage() {
         collapsingBatchIds,
         addedSkills,
         directorScenes: currentProject?.directorScenes,
-        infoNodeId,
         cropNodeId,
         maskEditNodeId,
         annotationNodeId,
@@ -1465,7 +1482,6 @@ function InfiniteCanvasPage() {
         setConnections([]);
         setTextEditorNodeId(null);
         setDrawingNodeId(null);
-        setInfoNodeId(null);
         setSubtitleNodeId(null);
         setCropNodeId(null);
         setMaskEditNodeId(null);
@@ -1488,7 +1504,6 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setContextMenu,
         setShortcutRequestNonce,
-        setInfoNodeId,
         setCropNodeId,
         setMaskEditNodeId,
         setAnnotationNodeId,
@@ -2230,7 +2245,6 @@ function InfiniteCanvasPage() {
                                     batchMotionById={batchMotionById}
                                     showImageInfo={showImageInfo}
                                     reduceMediaEffects={reduceMediaEffects}
-                                    resourceReferenceByNodeId={resourceReferenceByNodeId}
                                     mentionReferencesByNodeId={mentionReferencesByNodeId}
                                     mediaEffectsDisabledNodeId={emotionNodeId}
                                     selectedNodeBounds={selectedNodeBounds}
@@ -2464,7 +2478,9 @@ function InfiniteCanvasPage() {
                         containerRef={containerRef}
                         onKeep={keepNodeToolbar}
                         onLeave={hideNodeToolbar}
-                        onInfo={(node) => (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId ? openTextNodeEditor(node) : setInfoNodeId(node.id))}
+                        onInfo={(node) => {
+                            if (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId) openTextNodeEditor(node);
+                        }}
                         onEditText={openTextNodeEditor}
                         onDecreaseFont={(node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2))}
                         onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
@@ -2504,7 +2520,7 @@ function InfiniteCanvasPage() {
                         onDelete={(node) => deleteNodes(new Set([node.id]))}
                     />
 
-                    {isMiniMapOpen && !focusMode ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} canvasContainerRef={containerRef} onViewportPreviewChange={previewViewport} onViewportChange={handleViewportChange} /> : null}
+                    {minimapVisible ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} canvasContainerRef={containerRef} onViewportPreviewChange={previewViewport} onViewportChange={handleViewportChange} onPanStart={() => setIsMiniMapPanning(true)} onPanEnd={() => setIsMiniMapPanning(false)} /> : null}
 
                     {!focusMode ? (
                         <CanvasOverlayLayerContainer
@@ -2521,8 +2537,8 @@ function InfiniteCanvasPage() {
                                 onScaleChange={setZoomScale}
                                 onFitContent={fitCanvasContent}
                                 onAutoArrange={autoArrangeCanvasNodes}
-                                isMiniMapOpen={isMiniMapOpen}
-                                onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)}
+                                isMiniMapOpen={minimapVisible}
+                                onToggleMiniMap={toggleMiniMap}
                                 onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)}
                             />
                             <CanvasAssetTray
@@ -2582,8 +2598,6 @@ function InfiniteCanvasPage() {
                     <CanvasUploadModal open={uploadModalOpen} onClose={closeUploadModal} onUpload={handleUploadFiles} />
 
                     <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
-
-                    <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} onMetadataChange={handleConfigNodeChange} />
 
                     {subtitleNode ? (
                         <CanvasSubtitleDialog
@@ -2797,6 +2811,7 @@ function InfiniteCanvasPage() {
                         onCloseSuperResolve={() => setSuperResolveNodeId(null)}
                         previewNode={previewNode}
                         onClosePreview={() => setPreviewNodeId(null)}
+                        onDownloadPreview={downloadNodeImage}
                         clearConfirmOpen={clearConfirmOpen}
                         onCancelClear={() => setClearConfirmOpen(false)}
                         onConfirmClear={clearCanvas}

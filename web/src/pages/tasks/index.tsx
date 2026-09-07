@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { MediaPreview } from "@/components/media-preview";
 import { ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, isGenerationTaskSubmissionUncertain, operationOptions, statusLabel } from "@/lib/generation-task-display";
@@ -433,7 +434,7 @@ export default function TasksPage() {
                 </div>
 
                 <div className="canvas-library-frame task-library-frame">
-                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
+                    {loading && !tasks.length ? <WorkspaceRouteLoader inline label="正在加载任务" detail="读取任务状态与实时进度" /> : null}
                     {!loading || tasks.length ? (
                         visibleTasks.length ? (
                             viewMode === "grid" ? (

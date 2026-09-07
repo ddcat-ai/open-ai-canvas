@@ -60,6 +60,9 @@ type CanvasNodeProps = {
     onOpenDirector?: (node: CanvasNodeData) => void;
     onOpenDrawing?: (node: CanvasNodeData) => void;
     onMediaPlayRequest?: (nodeId: string) => void;
+    mediaPreloadRequested?: boolean;
+    onMediaPreloadRequest?: (nodeId: string) => void;
+    onMediaPreloadCancel?: (nodeId: string) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -106,6 +109,9 @@ export const CanvasNode = React.memo(function CanvasNode({
     onOpenDirector,
     onOpenDrawing,
     onMediaPlayRequest,
+    mediaPreloadRequested = false,
+    onMediaPreloadRequest,
+    onMediaPreloadCancel,
     onContextMenu,
 }: CanvasNodeProps) {
     const canvasThemeName = useThemeStore((state) => state.theme);
@@ -292,10 +298,12 @@ export const CanvasNode = React.memo(function CanvasNode({
             onMouseEnter={() => {
                 setHovered(true);
                 onHoverStart(data.id);
+                if (data.type === CanvasNodeType.Video) onMediaPreloadRequest?.(data.id);
             }}
             onMouseLeave={() => {
                 setHovered(false);
                 onHoverEnd(data.id);
+                if (data.type === CanvasNodeType.Video && !mediaActive) onMediaPreloadCancel?.(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
@@ -399,6 +407,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         reduceMediaEffects={reduceMediaEffects}
                         mediaActive={mediaActive}
                         onMediaPlayRequest={onMediaPlayRequest}
+                        mediaPreloadRequested={mediaPreloadRequested}
                     />
                 </div>
 
@@ -476,6 +485,7 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.scale === next.scale &&
         previous.isSelected === next.isSelected &&
         previous.mediaActive === next.mediaActive &&
+        previous.mediaPreloadRequested === next.mediaPreloadRequested &&
         previous.isRelated === next.isRelated &&
         previous.isFocusRelated === next.isFocusRelated &&
         previous.isConnectionTarget === next.isConnectionTarget &&

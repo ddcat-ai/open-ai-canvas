@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canGenerateMediaInPlace } from "@/lib/canvas/canvas-generation-layout";
-import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { nextCanvasVersionLabel } from "@/lib/canvas/canvas-layout";
 import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationReferenceUrls, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
@@ -35,7 +35,7 @@ export async function executeVideoGeneration({
     taskContext,
     retryContext,
 }: CanvasGenerationExecution) {
-    const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+    const spec = nodeSizeFromRatio(generationConfig.size, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
     const reuseSourceNode = canGenerateMediaInPlace(sourceNode, CanvasNodeType.Video);
     const isExistingVideoNode = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content) && !reuseSourceNode;
     const videoId = reuseSourceNode ? nodeId : nanoid();

@@ -3,7 +3,7 @@ import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
-import { subscribeCanvasAlignmentGuidesPreview, subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
+import { subscribeCanvasAlignmentGuidesPreview, subscribeCanvasConnectionPreview, subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasConnectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
@@ -123,6 +123,13 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             const rect = container.getBoundingClientRect();
             syncOverlayGuides(overlay, viewportRef.current, rect.width, rect.height, propsRef.current.theme, guides);
         });
+        const unsubscribeConnectionPreview = subscribeCanvasConnectionPreview(container, (preview) => {
+            if (!preview) {
+                overlay.draft.visible = false;
+                return;
+            }
+            syncConnectionDraft(overlay, propsRef.current, preview);
+        });
         resize();
 
         return () => {
@@ -130,6 +137,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             unsubscribeSelection();
             unsubscribeNodeDrag();
             unsubscribeAlignmentGuides();
+            unsubscribeConnectionPreview();
             resizeObserver.disconnect();
             window.removeEventListener("resize", resize);
             underlay.leafer.destroy(true);
@@ -334,21 +342,11 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
     }
 
     const connecting = props.connectingParams;
-    scene.draft.visible = Boolean(connecting);
-    if (connecting) {
-        scene.draft.set({
-            path: activeConnectionPath(
-                props.nodeById.get(connecting.nodeId),
-                connecting,
-                props.mouseWorld,
-                props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined,
-                props.scriptScrollTopById[connecting.nodeId] || 0,
-            ),
-            stroke: props.theme.accent.primary,
-            strokeCap: "round",
-            opacity: 0.72,
-        });
-    }
+    syncConnectionDraft(scene, props, {
+        mouseWorld: props.mouseWorld,
+        targetNodeId: props.connectionTargetNodeId,
+        targetAnchorRatio: props.connectionTargetAnchorRatio,
+    });
 
     scene.batchDrafts.removeAll(true);
     const batch = props.batchConnectionPreview;
@@ -373,15 +371,33 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
     });
 }
 
+function syncConnectionDraft(scene: OverlayScene, props: CanvasLeaferGraphicsLayerProps, preview: CanvasConnectionPreview) {
+    const connecting = props.connectingParams;
+    scene.draft.visible = Boolean(connecting);
+    if (!connecting) return;
+    scene.draft.set({
+        path: activeConnectionPath(
+            props.nodeById.get(connecting.nodeId),
+            connecting,
+            preview.mouseWorld,
+            preview.targetNodeId ? props.nodeById.get(preview.targetNodeId) : undefined,
+            props.scriptScrollTopById[connecting.nodeId] || 0,
+        ),
+        stroke: props.theme.accent.primary,
+        strokeCap: "round",
+        opacity: 0.72,
+    });
+}
+
 function syncSelection(rect: Rect, selection: SelectionBox, theme: CanvasTheme) {
     rect.set({
         x: Math.min(selection.startWorldX, selection.currentWorldX),
         y: Math.min(selection.startWorldY, selection.currentWorldY),
         width: Math.abs(selection.currentWorldX - selection.startWorldX),
         height: Math.abs(selection.currentWorldY - selection.startWorldY),
-        fill: "transparent",
-        stroke: theme.node.label,
-        opacity: selection.hitMode === "intersect" ? 0.82 : 0.68,
+        fill: theme.canvas.selectionFill,
+        stroke: theme.canvas.selectionStroke,
+        opacity: 1,
     });
 }
 
@@ -391,15 +407,17 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
 
     overlay.selection.set({
         strokeWidth: 1 / scale,
-        cornerRadius: 2 / scale,
-        dashPattern: [4 / scale, 4 / scale],
+        cornerRadius: 16 / scale,
+        dashPattern: [],
     });
     if (props.selectedNodeBounds) syncSelectionBounds(overlay.selectionBounds, props.selectedNodeBounds, scale);
     overlay.selectionBounds.set({
         strokeWidth: 1 / scale,
-        cornerRadius: 2 / scale,
-        dashPattern: [4 / scale, 4 / scale],
-        opacity: 0.68,
+        cornerRadius: 16 / scale,
+        dashPattern: [],
+        fill: props.theme.canvas.selectionFill,
+        stroke: props.theme.canvas.selectionStroke,
+        opacity: 1,
     });
     overlay.draft.set({ strokeWidth: 1.4 / scale, dashPattern: [8 / scale, 8 / scale] });
     syncOverlayGuides(overlay, viewport, width, height, props.theme, props.alignmentGuides);

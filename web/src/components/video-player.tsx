@@ -110,6 +110,18 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
     }, [src]);
 
     useEffect(() => {
+        if (!autoPlay) return;
+        const frame = requestAnimationFrame(() => {
+            void mediaPlayerRef.current?.play()
+                .then(() => {
+                    autoPlayAttemptedRef.current = true;
+                })
+                .catch(() => undefined);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [autoPlay]);
+
+    useEffect(() => {
         const player = mediaPlayerRef.current?.el;
         if (!player) return;
         // Vidstack exposes these controls as custom elements. Setting their
@@ -165,8 +177,11 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
         // event may satisfy the activation autoplay intent; later events must
         // not override a user pause.
         if (autoPlay && !autoPlayAttemptedRef.current) {
-            autoPlayAttemptedRef.current = true;
-            void event.target.play().catch(() => undefined);
+            void event.target.play()
+                .then(() => {
+                    autoPlayAttemptedRef.current = true;
+                })
+                .catch(() => undefined);
         }
         onCanPlay?.(detail, event);
     };

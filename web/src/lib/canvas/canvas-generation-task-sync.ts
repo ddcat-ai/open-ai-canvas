@@ -1,5 +1,5 @@
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { fitNodeSize, nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
+import { fitNodeSize, nodeSizeFromRatio, IMAGE_NODE_MAX_SIZE, IMAGE_NODE_MIN_SIZE, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
@@ -131,14 +131,14 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
                 ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
                 : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
-        const requestedImageSize = nodeSizeFromRatio(node.metadata?.size || "auto", imageConfig.width, imageConfig.height);
+        const requestedImageSize = nodeSizeFromRatio(node.metadata?.size || "auto", IMAGE_NODE_MAX_SIZE.width, IMAGE_NODE_MAX_SIZE.height, IMAGE_NODE_MIN_SIZE.width, IMAGE_NODE_MIN_SIZE.height);
         const imageSizeBounds = requestedImageSize || { width: node.width || imageConfig.width, height: node.height || imageConfig.height };
         const hasReportedImageSize = Boolean(image.width && image.width > 0 && image.height && image.height > 0);
         const resultWidth = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.width : uploaded.width;
         const resultHeight = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.height : uploaded.height;
         const normalizedImage = resultWidth === uploaded.width && resultHeight === uploaded.height ? uploaded : { ...uploaded, width: resultWidth, height: resultHeight };
         const imageSize =
-            node.metadata?.generationType === "edit" && !requestedImageSize ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height } : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
+            node.metadata?.generationType === "edit" && !requestedImageSize ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height } : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height, IMAGE_NODE_MIN_SIZE.width, IMAGE_NODE_MIN_SIZE.height);
         return {
             ...node,
             type: CanvasNodeType.Image,

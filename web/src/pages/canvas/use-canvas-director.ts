@@ -3,7 +3,7 @@ import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createDirectorSceneFromTemplate, type DirectorTemplateId } from "@/lib/canvas/director/director-templates";
 import { mergeDirectorOutputPreview, upsertDirectorSceneById } from "@/lib/canvas/director/director-session";
@@ -140,7 +140,7 @@ export function useCanvasDirector({
         const previewId = sourceNode.metadata?.directorPreviewNodeId || `image-director-${Date.now()}`;
         const mergedScene = mergeDirectorOutputPreview(latestScene, { sceneId: output.scene.id, shotId: output.shot.id, previewNodeId: previewId });
         if (!mergedScene) throw new Error("输出期间镜头已切换或删除，请重试");
-        const previewSize = fitNodeSize(image.width, image.height);
+        const previewSize = fitImageNodeSize(image.width, image.height);
         const nextNodes = [...nodesRef.current];
         const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
         const existingPreview = previewIndex >= 0 ? nextNodes[previewIndex] : null;

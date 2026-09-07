@@ -5,7 +5,8 @@ import { ArrowRight, BookOpenText, FileText, FolderKanban, Images, LayoutGrid, P
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { CollectionGrid, ListToolbar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
-import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
+import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasStylePickerModal, resolveCanvasStylePreset, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { resourceFileUrl } from "@/services/api/resources";
@@ -162,6 +163,22 @@ export default function ProjectsPage() {
             });
     }, [allProjects, keyword, sort, status]);
     const totalProjectCount = query.data?.pages[0]?.total ?? allProjects.length;
+    const [pageLoaderVisible, setPageLoaderVisible] = useState(true);
+    const [pageLoaderExiting, setPageLoaderExiting] = useState(false);
+    useEffect(() => {
+        if (query.isLoading) {
+            setPageLoaderVisible(true);
+            setPageLoaderExiting(false);
+            return;
+        }
+        if (!pageLoaderVisible) return;
+        setPageLoaderExiting(true);
+        const timer = window.setTimeout(() => {
+            setPageLoaderVisible(false);
+            setPageLoaderExiting(false);
+        }, 180);
+        return () => window.clearTimeout(timer);
+    }, [pageLoaderVisible, query.isLoading]);
     useEffect(() => {
         const node = loadMoreRef.current;
         if (!node || !query.hasNextPage || query.isError) return;
@@ -177,6 +194,7 @@ export default function ProjectsPage() {
     const hasInitialError = query.isError && !query.data;
     return (
         <WorkspacePage className="library-page" grid>
+            {pageLoaderVisible ? <WorkspaceRouteLoader className={pageLoaderExiting ? "is-exiting" : undefined} label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             <section className="app-story-create-panel mt-4" aria-label="开始一部新短剧">
                 <div className="app-story-create-head">
                     <div className="app-story-create-title">
@@ -234,7 +252,6 @@ export default function ProjectsPage() {
             </ListToolbar>
 
             {hasInitialError ? <WorkspaceErrorState description={query.error instanceof Error ? query.error.message : "项目列表加载失败"} onRetry={() => void query.refetch()} /> : null}
-            {query.isLoading ? <WorkspaceLoadingState label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             {!query.isLoading && !hasInitialError && rows.length ? (
                 <CollectionGrid className="library-grid project-library-grid">
                     {rows.map((row) => <ProjectRow key={row.project.id} row={row} onDelete={() => confirmDeleteProject(row.project.id, row.project.name)} />)}

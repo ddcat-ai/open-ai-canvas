@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workspace refresh lifecycle regression</title>
+    <script type="module">
+      import RefreshRuntime from "/@react-refresh";
+      RefreshRuntime.injectIntoGlobalHook(window);
+      window.$RefreshReg$ = () => {};
+      window.$RefreshSig$ = () => (type) => type;
+      window.__vite_plugin_react_preamble_installed__ = true;
+    </script>
+  </head>
+  <body>
+    <pre id="result" style="position:fixed;right:16px;bottom:16px;z-index:9999;background:#181818;color:white;padding:16px">正在记录会话恢复；需要已有登录会话。</pre>
+    <div id="root"></div>
+    <script type="module" src="./workspace-refresh-lifecycle.tsx"></script>
+  </body>
+</html>

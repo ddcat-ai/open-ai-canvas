@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canGenerateImageInPlace, findAvailableGenerationGroupPosition, imageGenerationChildPosition, imageGenerationGroupSize } from "@/lib/canvas/canvas-generation-layout";
 import { buildImageGenerationNodeTitle } from "@/lib/canvas/canvas-generation-title";
-import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { IMAGE_NODE_MAX_SIZE, IMAGE_NODE_MIN_SIZE, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasImageReferenceLimitError, buildImageGenerationMetadata, getGenerationCount, isGenerationCanceled, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
 import { CONTENT_MODERATION_ERROR_CODE, generationFailureMetadata, type GenerationFailureMetadata } from "@/lib/generation-error";
@@ -60,7 +60,7 @@ export async function executeImageGeneration({
     const parentConfig = NODE_DEFAULT_SIZE[isConfigNode ? CanvasNodeType.Config : isImageNode ? CanvasNodeType.Image : CanvasNodeType.Text];
     const imageDefaults = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     // 生成中占位框按设置比例显示，避免 16:9 任务显示成默认 340x240。
-    const requestedImageSize = nodeSizeFromRatio(generationConfig.size || "auto", imageDefaults.width, imageDefaults.height);
+    const requestedImageSize = nodeSizeFromRatio(generationConfig.size || "auto", IMAGE_NODE_MAX_SIZE.width, IMAGE_NODE_MAX_SIZE.height, IMAGE_NODE_MIN_SIZE.width, IMAGE_NODE_MIN_SIZE.height);
     const imageConfig = requestedImageSize || imageDefaults;
     // auto 图生图沿用来源节点尺寸；用户明确选择比例时必须以目标比例创建节点。
     const referenceNode = referenceImages.length === 1 ? canvasNodes.find((node) => node.id === referenceImages[0].id && node.type === CanvasNodeType.Image) : undefined;

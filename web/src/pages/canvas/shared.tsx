@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router";
 import { nanoid } from "nanoid";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
-import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
+import { CanvasNodeToolbar } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
@@ -40,7 +40,6 @@ export default function SharedCanvasPage() {
     const [backgroundMode, setBackgroundMode] = useState<"lines" | "dots" | "blank">("lines");
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-    const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [dragOffset, setDragOffset] = useState<Position | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -48,7 +47,6 @@ export default function SharedCanvasPage() {
     const [loadError, setLoadError] = useState("");
 
     const unauthorized = useCallback(() => message.warning("未授权：分享画布仅供查看，该操作不会执行。"), [message]);
-    const infoNode = nodes.find((node) => node.id === infoNodeId) || null;
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
     const frameChildrenById = useMemo(() => {
         const result = new Map<string, CanvasNodeData[]>();
@@ -127,7 +125,6 @@ export default function SharedCanvasPage() {
                 const origin = drag.origins.get(node.id);
                 return origin ? { ...node, position: { x: origin.x + offset.x, y: origin.y + offset.y } } : node;
             }));
-            else setInfoNodeId(drag.primaryId);
             dragRef.current = null;
             setDragOffset(null);
             document.body.style.cursor = "default";
@@ -253,7 +250,7 @@ export default function SharedCanvasPage() {
 
             <InfiniteCanvas containerRef={containerRef} viewport={viewport} appearance={appearance} backgroundMode={backgroundMode} onViewportChange={onViewportChange} onViewportPreviewChange={(next) => { viewportRef.current = next; }} onCanvasDeselect={() => { setSelectedNodeId(null); setContextMenu(null); }} onContextMenu={(event) => openContextMenu(event)} onDrop={(event) => { event.preventDefault(); unauthorized(); }}>
                 <svg className="absolute overflow-visible" viewBox={`${connectionBounds.left} ${connectionBounds.top} ${connectionBounds.width} ${connectionBounds.height}`} style={{ left: connectionBounds.left, top: connectionBounds.top, width: connectionBounds.width, height: connectionBounds.height, pointerEvents: "none", zIndex: 0 }}>
-                    {visibleConnections.map(({ connection, from, to }) => <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={false} onSelect={() => setInfoNodeId(to.id)} />)}
+                    {visibleConnections.map(({ connection, from, to }) => <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={false} onSelect={() => setSelectedNodeId(to.id)} />)}
                 </svg>
                 {visibleNodes.map((node) => isFrameNode(node) ? <CanvasFrameNode key={node.id} data={node} dragOffset={dragRef.current?.nodeIds.includes(node.id) && dragOffset ? dragOffset : undefined} childNodes={frameChildrenById.get(node.id) || []} scale={viewport.k} isSelected={selectedNodeId === node.id} isDropTarget={false} readOnly onMouseDown={(event, nodeId) => {
                     event.stopPropagation();
@@ -272,24 +269,23 @@ export default function SharedCanvasPage() {
                     setContextMenu(null);
                     dragRef.current = { primaryId: nodeId, nodeIds: [nodeId], startX: event.clientX, startY: event.clientY, origins: new Map([[nodeId, target.position]]), moved: false };
                     document.body.style.cursor = "grabbing";
-                }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onOpenTaskDetails={unauthorized} onViewImage={(target) => setInfoNodeId(target.id)} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
+                }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onOpenTaskDetails={unauthorized} onViewImage={unauthorized} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
             </InfiniteCanvas>
 
-            <CanvasNodeToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onEmotion={unauthorized} onPortraitTexture={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onViewImage={unauthorized} onExtractVideoFrames={unauthorized} onExtractAudioFromVideo={unauthorized} onTrimVideoSegments={unauthorized} extractingVideoFrames={false} extractingAudio={false} trimmingVideo={false} onSubtitles={unauthorized} onTimeline={unauthorized} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
+            <CanvasNodeToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={unauthorized} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onEmotion={unauthorized} onPortraitTexture={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onViewImage={unauthorized} onExtractVideoFrames={unauthorized} onExtractAudioFromVideo={unauthorized} onTrimVideoSegments={unauthorized} extractingVideoFrames={false} extractingAudio={false} trimmingVideo={false} onSubtitles={unauthorized} onTimeline={unauthorized} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
 
             <div className="absolute bottom-5 left-5 z-[var(--z-panel-floating)]"><CanvasZoomControls scale={viewport.k} containerRef={containerRef} onScaleChange={setZoom} onFitContent={resetViewport} isMiniMapOpen={false} onToggleMiniMap={unauthorized} onOpenShortcuts={unauthorized} /></div>
             <div className="pointer-events-none absolute bottom-5 right-5 z-[var(--z-panel-floating)] max-w-[340px] text-right text-xs leading-5" style={{ color: theme.node.muted }}>访客操作仅在当前页面临时生效</div>
 
-            {contextMenu ? <SharedContextMenu menu={contextMenu} onAdd={addNode} onInfo={() => { if (contextMenu.nodeId) setInfoNodeId(contextMenu.nodeId); setContextMenu(null); }} onUnauthorized={() => { setContextMenu(null); unauthorized(); }} /> : null}
-            <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} readOnly onUnauthorized={unauthorized} />
+            {contextMenu ? <SharedContextMenu menu={contextMenu} onAdd={addNode} onUnauthorized={() => { setContextMenu(null); unauthorized(); }} /> : null}
         </main>
     );
 }
 
-function SharedContextMenu({ menu, onAdd, onInfo, onUnauthorized }: { menu: ContextMenu; onAdd: (type: CanvasNodeType) => void; onInfo: () => void; onUnauthorized: () => void }) {
+function SharedContextMenu({ menu, onAdd, onUnauthorized }: { menu: ContextMenu; onAdd: (type: CanvasNodeType) => void; onUnauthorized: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return <div data-canvas-no-zoom className="absolute z-[var(--z-modal)] min-w-48 rounded-lg border p-1.5 shadow-xl" style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
-        {menu.nodeId ? <><MenuButton icon={<Eye />} label="查看节点信息" onClick={onInfo} /><MenuButton icon={<LockKeyhole />} label="编辑或生成" onClick={onUnauthorized} /></> : <>
+        {menu.nodeId ? <MenuButton icon={<LockKeyhole />} label="编辑或生成" onClick={onUnauthorized} /> : <>
             <div className="px-2 py-1.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>添加临时节点</div>
             <MenuButton icon={<FileText />} label="文本节点" onClick={() => onAdd(CanvasNodeType.Text)} />
             <MenuButton icon={<ImageIcon />} label="图片节点" onClick={() => onAdd(CanvasNodeType.Image)} />

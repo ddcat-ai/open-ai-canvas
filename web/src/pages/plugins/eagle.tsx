@@ -1,6 +1,6 @@
 import { ArrowLeft, ChevronDown, ChevronUp, Download, FileAudio, FileBox, FileImage, FileVideo, FolderOpen, FolderPlus, RefreshCw, Search, Settings2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { App, Button, Drawer, Empty, Input, Spin, Tag, Tree, Typography } from "antd";
+import { App, Button, Drawer, Empty, Input, Tag, Tree, Typography } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { useNavigate } from "react-router";
 
@@ -11,6 +11,7 @@ import type { Asset } from "@/stores/use-asset-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import "./eagle.css";
 
@@ -226,7 +227,7 @@ export default function EagleLibraryPage() {
                                 <Button onClick={() => setFolderName("")}>取消</Button>
                             </div> : null}
 
-                            {loading ? <div className="library-loading-grid grid min-h-64 place-items-center"><Spin tip="读取 Eagle 文件…"/></div> : items.length ? (
+                            {loading ? <WorkspaceRouteLoader inline label="正在读取 Eagle 素材" detail="同步文件夹与素材列表" /> : items.length ? (
                                 <>
                                     <CollectionGrid className="library-grid assets-library-grid eagle-assets-grid">
                                         {visibleItems.map((item) => <EagleItemCard key={item.id} item={item} selected={previewItem?.id === item.id} onOpen={() => setPreviewItem(item)} />)}

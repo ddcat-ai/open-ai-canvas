@@ -127,15 +127,26 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         const container = containerRef.current;
         if (!element || !container || !onContentSizeChange) return;
         reportContentSize(element);
+        let frame = requestAnimationFrame(() => reportContentSize(element));
+        let cancelled = false;
+        const reportAfterFonts = () => {
+            if (!cancelled) reportContentSize(element);
+        };
+        document.fonts?.ready.then(reportAfterFonts).catch(() => undefined);
         let width = container.clientWidth;
         const observer = new ResizeObserver(() => {
             const nextWidth = container.clientWidth;
             if (nextWidth === width) return;
             width = nextWidth;
-            reportContentSize(element);
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => reportContentSize(element));
         });
         observer.observe(container);
-        return () => observer.disconnect();
+        return () => {
+            cancelled = true;
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
     }, [onContentSizeChange, reportContentSize, useRichEditor, value]);
 
     const focusEditor = (selectionStart?: number) => {
@@ -177,6 +188,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             setActiveIndex(-1);
         }
     };
+
+    // Toolbar @ inserts the trigger from outside the editor; mirror a typed
+    // trigger so the anchored menu opens without requiring a second keypress.
+    useLayoutEffect(() => {
+        if (value.endsWith("@") && availableReferences.length) syncMention(value, value.length);
+    }, [availableReferences.length, value]);
 
     const insertReference = (reference: CanvasResourceReference) => {
         if (!mention) return;
@@ -464,11 +481,6 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     chip.dataset.mentionToken = token;
     chip.dataset.mentionReferenceId = reference.id;
     chip.className = "canvas-resource-inline-mention";
-
-    const at = document.createElement("span");
-    at.className = "canvas-resource-inline-at";
-    at.textContent = "@";
-    chip.appendChild(at);
 
     chip.appendChild(createInlinePreview(reference));
 

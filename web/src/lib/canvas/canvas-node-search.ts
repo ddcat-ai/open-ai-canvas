@@ -1,6 +1,38 @@
-import { getNodeListLabel } from "@/lib/canvas/node-registry";
+import { getNodeDefinition, getNodeListLabel } from "@/lib/canvas/node-registry";
 import { canvasNodeCreatedAt, canvasNodeUpdatedAt } from "@/lib/canvas/canvas-node-timestamps";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+
+export type CanvasNodeSearchCategory = "all" | "image" | "video" | "text" | "audio" | "panorama" | "group";
+
+export function canvasNodeSearchCategory(node: CanvasNodeData): Exclude<CanvasNodeSearchCategory, "all"> | null {
+    switch (node.type) {
+        case CanvasNodeType.Image:
+        case CanvasNodeType.Drawing:
+        case CanvasNodeType.Compare:
+        case CanvasNodeType.ColorGrade:
+            return "image";
+        case CanvasNodeType.Video:
+            return "video";
+        case CanvasNodeType.Text:
+        case CanvasNodeType.Markdown:
+        case CanvasNodeType.Script:
+        case CanvasNodeType.Skill:
+        case CanvasNodeType.Svg:
+        case CanvasNodeType.Html:
+        case CanvasNodeType.Chart:
+            return "text";
+        case CanvasNodeType.Audio:
+            return "audio";
+        case CanvasNodeType.Panorama:
+            return "panorama";
+        case CanvasNodeType.Frame:
+            return "group";
+        default: {
+            const inputKind = getNodeDefinition(node.type)?.inputKind;
+            return inputKind || null;
+        }
+    }
+}
 
 const searchTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",
@@ -10,10 +42,11 @@ const searchTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
     hour12: false,
 });
 
-export function searchCanvasNodes(nodes: CanvasNodeData[], query: string, limit = 80) {
+export function searchCanvasNodes(nodes: CanvasNodeData[], query: string, limit = 80, category: CanvasNodeSearchCategory = "all") {
     const keyword = query.trim().toLocaleLowerCase();
     return nodes
-        .filter((node) => !keyword || canvasNodeSearchTerms(node).some((value) => value.toLocaleLowerCase().includes(keyword)))
+        .filter((node) => (category === "all" || canvasNodeSearchCategory(node) === category)
+            && (!keyword || canvasNodeSearchTerms(node).some((value) => value.toLocaleLowerCase().includes(keyword))))
         .toSorted((left, right) => timestampValue(canvasNodeUpdatedAt(right)) - timestampValue(canvasNodeUpdatedAt(left)))
         .slice(0, keyword ? limit : Math.min(limit, 40));
 }

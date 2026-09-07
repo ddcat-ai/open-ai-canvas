@@ -1,4 +1,4 @@
-import { Button, Image, Modal } from "antd";
+import { Button, Modal } from "antd";
 import { XCircle } from "lucide-react";
 
 import { TaskDetailItem } from "./canvas-project-feedback";
@@ -7,9 +7,10 @@ import { formatTaskLog, type GenerationTask, type TaskLog } from "@/services/api
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { VideoPlayer } from "@/components/video-player";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
+import { CanvasImagePreview } from "./canvas-image-preview";
 
 type CanvasProjectStatusDialogsProps = {
-    theme: { node: { stroke: string; panel: string; muted: string; fill: string } };
+    theme: { node: { text: string; stroke: string; panel: string; muted: string; fill: string } };
     task: GenerationTask | null;
     taskLogs: TaskLog[];
     taskLoading: boolean;
@@ -19,12 +20,13 @@ type CanvasProjectStatusDialogsProps = {
     onCloseSuperResolve: () => void;
     previewNode: CanvasNodeData | null;
     onClosePreview: () => void;
+    onDownloadPreview: (node: CanvasNodeData) => void;
     clearConfirmOpen: boolean;
     onCancelClear: () => void;
     onConfirmClear: () => void;
 };
 
-export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading, superResolveNode, previewNode, clearConfirmOpen, onCloseTask, onCancelTask, onCloseSuperResolve, onClosePreview, onCancelClear, onConfirmClear }: CanvasProjectStatusDialogsProps) {
+export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading, superResolveNode, previewNode, clearConfirmOpen, onCloseTask, onCancelTask, onCloseSuperResolve, onClosePreview, onDownloadPreview, onCancelClear, onConfirmClear }: CanvasProjectStatusDialogsProps) {
     const config = useEffectiveConfig();
     return (
         <>
@@ -87,21 +89,13 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                 ) : null}
             </Modal>
 
-            {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? (
-                <Image
-                    src={previewNode.metadata.content}
-                    alt={previewNode.title || "图片"}
-                    style={{ display: "none" }}
-                    preview={{
-                        open: true,
-                        movable: true,
-                        minScale: 0.5,
-                        maxScale: 12,
-                        scaleStep: 0.25,
-                        onOpenChange: (open) => !open && onClosePreview(),
-                    }}
-                />
-            ) : null}
+            <CanvasImagePreview
+                open={Boolean(previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image)}
+                node={previewNode}
+                theme={theme}
+                onClose={onClosePreview}
+                onDownload={onDownloadPreview}
+            />
 
             <Modal
                 title="清空画布？"

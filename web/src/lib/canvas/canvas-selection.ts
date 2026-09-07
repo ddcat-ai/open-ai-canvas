@@ -67,8 +67,10 @@ export function resolveCanvasSelectionStrategy(modifiers: SelectionModifiers): C
     return "replace";
 }
 
-export function resolveCanvasSelectionHitMode(startWorldX: number, currentWorldX: number): CanvasSelectionHitMode {
-    return currentWorldX >= startWorldX ? "contain" : "intersect";
+export function resolveCanvasSelectionHitMode(_startWorldX: number, _currentWorldX: number): CanvasSelectionHitMode {
+    // TapNow-style marquee selection treats the rectangle as a hit area in
+    // either drag direction. A node only needs to cross the rectangle once.
+    return "intersect";
 }
 
 export function createCanvasSelectionBounds(startWorldX: number, startWorldY: number, currentWorldX: number, currentWorldY: number): CanvasSpatialBounds {

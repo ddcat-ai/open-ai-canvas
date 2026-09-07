@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
@@ -41,7 +41,6 @@ type CanvasProjectWorldLayersProps = {
     batchMotionById: Map<string, { x: number; y: number; index: number }>;
     showImageInfo: boolean;
     reduceMediaEffects: boolean;
-    resourceReferenceByNodeId: Map<string, CanvasResourceReference>;
     mentionReferencesByNodeId: Map<string, CanvasResourceReference[]>;
     mediaEffectsDisabledNodeId?: string | null;
     selectedNodeBounds: NodeBounds;
@@ -83,9 +82,38 @@ const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
     const { viewportScale } = props;
     const [activeMediaNodeId, setActiveMediaNodeId] = useState<string | null>(null);
+    const [preloadingMediaNodeId, setPreloadingMediaNodeId] = useState<string | null>(null);
+    const preloadTimerRef = useRef<number | null>(null);
+    const preloadGenerationRef = useRef(0);
+    const canHoverPreload = () => {
+        if (typeof window === "undefined" || window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(prefers-reduced-data: reduce)").matches) return false;
+        const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+        return connection?.saveData !== true;
+    };
+    const requestMediaPreload = (nodeId: string) => {
+        if (!canHoverPreload()) return;
+        if (preloadTimerRef.current !== null) window.clearTimeout(preloadTimerRef.current);
+        const generation = ++preloadGenerationRef.current;
+        preloadTimerRef.current = window.setTimeout(() => {
+            preloadTimerRef.current = null;
+            if (generation === preloadGenerationRef.current) setPreloadingMediaNodeId(nodeId);
+        }, 0);
+    };
+    const cancelMediaPreload = (nodeId: string) => {
+        if (preloadTimerRef.current !== null) window.clearTimeout(preloadTimerRef.current);
+        preloadTimerRef.current = null;
+        preloadGenerationRef.current += 1;
+        // Once the delayed request has started, keep the resolved URL warm so
+        // a subsequent click can reuse it. Only the not-yet-started timer is
+        // cancelled on mouse leave.
+    };
     useEffect(() => {
         if (activeMediaNodeId && !props.nodeById.has(activeMediaNodeId)) setActiveMediaNodeId(null);
-    }, [activeMediaNodeId, props.nodeById]);
+        if (preloadingMediaNodeId && !props.nodeById.has(preloadingMediaNodeId)) setPreloadingMediaNodeId(null);
+    }, [activeMediaNodeId, preloadingMediaNodeId, props.nodeById]);
+    useEffect(() => () => {
+        if (preloadTimerRef.current !== null) window.clearTimeout(preloadTimerRef.current);
+    }, []);
     const orderedVisibleNodes = useMemo(() => [
         ...props.visibleNodes.filter(isFrameNode),
         ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
@@ -151,6 +179,9 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         isSelected={props.selectedNodeIds.has(node.id)}
                         mediaActive={activeMediaNodeId === node.id}
                         onMediaPlayRequest={setActiveMediaNodeId}
+                        mediaPreloadRequested={preloadingMediaNodeId === node.id}
+                        onMediaPreloadRequest={requestMediaPreload}
+                        onMediaPreloadCancel={cancelMediaPreload}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}
@@ -164,7 +195,6 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         batchMotion={props.batchMotionById.get(node.id)}
                         showImageInfo={props.showImageInfo}
                         reduceMediaEffects={props.reduceMediaEffects || props.mediaEffectsDisabledNodeId === node.id}
-                        resourceLabel={props.resourceReferenceByNodeId.get(node.id)}
                         mentionReferences={props.mentionReferencesByNodeId.get(node.id) || EMPTY_RESOURCE_REFERENCES}
                         renderNodeContent={props.renderCanvasNodeContent}
                         drawingProjectId={props.projectId}

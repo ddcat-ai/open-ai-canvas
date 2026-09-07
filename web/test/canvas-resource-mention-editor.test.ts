@@ -11,6 +11,7 @@ describe("canvas resource mention editor", () => {
         const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
 
         expect(component).toContain('chip.className = "canvas-resource-inline-mention"');
+        expect(component).not.toContain('className = "canvas-resource-inline-at"');
         expect(component).toContain("canvas-resource-inline-preview is-${reference.kind}");
         expect(component).not.toContain("size-[1.18em]");
     });
@@ -44,9 +45,12 @@ describe("canvas resource mention editor", () => {
         const editor = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
         const panel = source("../src/components/canvas/canvas-node-prompt-panel.tsx");
         const configComposer = source("../src/components/canvas/canvas-config-composer.tsx");
+        const resolver = source("../src/components/canvas/use-resolved-canvas-resource-references.ts");
         const project = source("../src/pages/canvas/project.tsx");
 
         expect(editor).toContain("useResolvedCanvasResourceReferences");
+        expect(resolver).toContain("if (resolved?.identity === identity)");
+        expect(resolver).toContain("resolved.url !== reference.previewUrl ? { ...reference, previewUrl: resolved.url } : reference");
         expect(panel).toContain("<LoaderCircle className=");
         expect(panel).toContain("animate-spin motion-reduce:animate-none");
         expect(panel).not.toContain("isRunning ? theme.accent.danger");

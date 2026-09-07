@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import copyToClipboard from "copy-to-clipboard";
-import { Copy, Cpu, Settings2, Trash2, X } from "lucide-react";
+import { ArrowDown, Copy, Cpu, Settings2, Trash2, X } from "lucide-react";
 import { Button, Modal, Segmented, Select, Tooltip } from "antd";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -21,7 +21,8 @@ import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessionPollingAbort, resumeCinematicAgentSession } from "@/lib/canvas/canvas-agent-session";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
-import { buildOrderedCanvasResourceReferences, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { buildAssetMentionReferences, buildOrderedCanvasResourceReferences, canvasNodeMentionToken, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { canvasNodeToAssistantReference as nodeToReference, collectAgentMentionReferences } from "@/lib/canvas/canvas-agent-input";
 import { AgentChatComposer, AgentChatMessage, AgentWorkingMessage, type CanvasAgentChatMessage } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelLogo } from "@/components/model-logo";
@@ -354,6 +355,8 @@ export function CanvasAssistantPanel({
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
     const cleanupImages = useAssetStore((state) => state.cleanupImages);
+    const assets = useAssetStore((state) => state.assets);
+    const reducedMotion = useReducedMotion();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const confirmTools = useCanvasAgentStore((state) => state.confirmTools);
@@ -362,6 +365,8 @@ export function CanvasAssistantPanel({
     const [prompt, setPrompt] = useState("");
     const [cinematicEntryActive, setCinematicEntryActive] = useState(cinematicEntry);
     const [isRunning, setIsRunning] = useState(false);
+    const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+    const [showScrollToBottom, setShowScrollToBottom] = useState(false);
     const [deleteChatIds, setDeleteChatIds] = useState<string[]>([]);
     const [onlineLogs, setOnlineLogs] = useState<OnlineAgentLog[]>([]);
     const [composerSkills, setComposerSkills] = useState<Skill[]>([]);
@@ -376,6 +381,8 @@ export function CanvasAssistantPanel({
     };
     const applyingExternalSessionsRef = useRef(false);
     const chatListRef = useRef<HTMLDivElement>(null);
+    const chatContentRef = useRef<HTMLDivElement>(null);
+    const followOutputRef = useRef(true);
     const snapshotRef = useRef(snapshot);
     const pendingToolContextRef = useRef(new Map<string, PendingOnlineToolContext>());
     const cinematicSessionControllersRef = useRef(new Map<string, AbortController>());
@@ -436,14 +443,40 @@ export function CanvasAssistantPanel({
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
+    const composerReferences = useMemo(() => {
+        const seen = new Set<string>();
+        return [...buildOrderedCanvasResourceReferences(nodes, true).map((reference) => ({ ...reference, mentionToken: canvasNodeMentionToken(reference.nodeId) })), ...buildSkillMentionReferences(composerSkills)].filter((reference) => {
+            if (seen.has(reference.id)) return false;
+            seen.add(reference.id);
+            return true;
+        });
+    }, [composerSkills, nodes]);
+    const assetMentionReferences = useMemo(() => buildAssetMentionReferences(assets), [assets]);
     const contextSummary = useMemo(() => summarizeCanvasContext(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
     const iconButtonStyle = { color: theme.node.muted };
 
     useEffect(() => {
         if (view !== "chat") return;
-        const frame = requestAnimationFrame(() => chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight }));
+        followOutputRef.current = true;
+        setShowScrollToBottom(false);
+    }, [localActiveSessionId, view]);
+
+    useEffect(() => {
+        if (view !== "chat") return;
+        const frame = requestAnimationFrame(() => {
+            if (followOutputRef.current) chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight });
+        });
         return () => cancelAnimationFrame(frame);
     }, [agentBusy, localActiveSessionId, messages, view]);
+
+    useEffect(() => {
+        if (!chatContentRef.current || view !== "chat") return;
+        const observer = new ResizeObserver(() => {
+            if (followOutputRef.current) chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight });
+        });
+        observer.observe(chatContentRef.current);
+        return () => observer.disconnect();
+    }, [view]);
 
     useEffect(() => {
         setRemovedReferenceIds(new Set());
@@ -646,12 +679,16 @@ export function CanvasAssistantPanel({
             setLocalActiveSessionId(session.id);
         }
 
-        const refs = savedReferences || selectedReferences;
+        const explicitReferences = savedReferences || selectedReferences;
+        const mentionedReferences = collectAgentMentionReferences(text, [...composerReferences, ...assetMentionReferences], nodes, assets);
+        const refs = Array.from(new Map([...explicitReferences, ...mentionedReferences].map((item) => [item.id, item])).values());
         const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", text, references: refs };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
         addOnlineLog("发送请求", { text, selectedNodeIds: snapshotRef.current.selectedNodeIds, nodeCount: snapshotRef.current.nodes.length, connectionCount: snapshotRef.current.connections.length });
         setPrompt("");
+        followOutputRef.current = true;
+        setShowScrollToBottom(false);
         setIsRunning(true);
         void runOnlineAgentStep(session.id, assistantId, history, userMessage, { step: 1 });
     };
@@ -660,6 +697,7 @@ export function CanvasAssistantPanel({
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         try {
             setIsRunning(true);
+            setStreamingMessageId(assistantId);
             const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage, composerSkills);
             addOnlineLog(`Agent Tool Loop ${loop.step} 开始`, { toolChoice: "required" });
             let streamed = "";
@@ -697,6 +735,7 @@ export function CanvasAssistantPanel({
             appendMessage(sessionId, { id: nanoid(), role: "error", title: "操作失败", text: error instanceof Error ? error.message : "操作失败" });
         } finally {
             setIsRunning(false);
+            setStreamingMessageId(null);
         }
     };
 
@@ -1068,14 +1107,26 @@ export function CanvasAssistantPanel({
                     />
                 </div>
             ) : (
-                <div ref={chatListRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                <div ref={chatListRef} className="relative thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4" onScroll={(event) => {
+                    const element = event.currentTarget;
+                    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 32;
+                    followOutputRef.current = atBottom;
+                    setShowScrollToBottom(!atBottom);
+                }}>
+                    <div ref={chatContentRef} className="space-y-4">
                     {messages.length ? (
                         <>
-                            {messages.map((message) => (
-                                <div key={message.id} className="space-y-2">
-                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} isStreaming={agentBusy && message.id === messages.at(-1)?.id && message.role === "assistant"} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} onQuickAction={submitQuickAction} />
+                            {messages.map((message, index) => (
+                                <motion.div
+                                    key={message.id}
+                                    className="space-y-2"
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.24, delay: Math.min(index * 0.018, 0.12), ease: [0.22, 1, 0.36, 1] }}
+                                >
+                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} isStreaming={message.id === streamingMessageId && message.role === "assistant"} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} onQuickAction={submitQuickAction} />
                                     {message.references?.length ? <MessageReferences message={message} /> : null}
-                                </div>
+                                </motion.div>
                             ))}
                             {agentBusy ? <AgentWorkingMessage theme={theme} /> : null}
                         </>
@@ -1089,6 +1140,8 @@ export function CanvasAssistantPanel({
                             }}
                         />
                     )}
+                    </div>
+                    {showScrollToBottom ? <button type="button" aria-label="回到底部" className="sticky bottom-2 left-1/2 z-10 ml-[calc(50%-18px)] grid size-8 place-items-center rounded-full shadow-lg transition-transform hover:-translate-y-0.5" style={{ background: theme.toolbar.panel, color: theme.node.text }} onClick={() => { followOutputRef.current = true; setShowScrollToBottom(false); chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" }); }}><ArrowDown className="size-3.5" /></button> : null}
                 </div>
             )}
 
@@ -1114,8 +1167,9 @@ export function CanvasAssistantPanel({
                         sending={agentBusy}
                         placeholder={cinematicEntryActive ? "一句话描述题材、角色和核心冲突" : "描述你想让 Agent 如何操作画布"}
                         theme={theme}
-                        references={buildSkillMentionReferences(composerSkills)}
+                        references={composerReferences}
                         slashSkills={composerSkills}
+                        includeAssetLibrary
                         onPromptChange={setPrompt}
                         onSubmit={cinematicEntryActive ? () => submitCinematicProject(prompt) : submit}
                         onAddFiles={addImagesToCanvas}
@@ -1188,6 +1242,8 @@ export function CanvasAssistantPanel({
                 onOpenHistory={() => setView((current) => current === "history" ? "chat" : "history")}
                 onNewChat={() => { startChatSession(); setView("chat"); }}
                 newChatDisabled={false}
+                conversationTitle={activeSession?.title || "AI 助手对话"}
+                onRenameConversation={(title) => { if (activeSession) updateSession(activeSession.id, (session) => ({ ...session, title, updatedAt: new Date().toISOString() })); }}
             />
             {onlineContent}
         </motion.aside>
@@ -1860,19 +1916,6 @@ function explainNoop(ops: CanvasAgentOp[], snapshot: CanvasAgentSnapshot) {
     if (ops.every((op) => op.type === "set_viewport")) return "视图已经是目标状态。";
     if (selectOps.length && selectOps.every((op) => JSON.stringify(op.ids || []) === JSON.stringify(snapshot.selectedNodeIds))) return "选区已经是目标状态。";
     return "工具已执行，但画布状态没有变化；请在日志 tab 查看工具参数和执行前后状态。";
-}
-
-function nodeToReference(node: CanvasNodeData): CanvasAssistantReference | null {
-    if (node.type === CanvasNodeType.Image && node.metadata?.content) {
-        return { id: node.id, type: node.type, title: node.title, dataUrl: node.metadata.content, storageKey: node.metadata.storageKey };
-    }
-    if (node.type === CanvasNodeType.Text && node.metadata?.content) {
-        return { id: node.id, type: node.type, title: node.title, text: node.metadata.content };
-    }
-    if (node.type === CanvasNodeType.Skill && node.metadata?.skillSnapshot) {
-        return { id: node.id, type: node.type, title: node.title, text: [node.metadata.skillSnapshot.name, node.metadata.skillSnapshot.template, node.metadata.skillSnapshot.outputContract].filter(Boolean).join("\n\n") };
-    }
-    return null;
 }
 
 function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<string>) {

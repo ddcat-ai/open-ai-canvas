@@ -23,7 +23,7 @@ import {
     isGenerationCanceled,
     runBackendCanvasGenerationTask,
 } from "@/lib/canvas/canvas-project-generation";
-import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { captureVideoFrames } from "@/lib/canvas/canvas-video-frame";
@@ -195,7 +195,7 @@ export function useCanvasMediaTools({
         if (!node.metadata?.content) return;
         const cropped = await cropDataUrl(node.metadata.content, crop);
         const image = await uploadImage(cropped);
-        const size = fitNodeSize(image.width, image.height, node.width, node.height);
+            const size = fitImageNodeSize(image.width, image.height, node.width, node.height);
         const childId = nanoid();
         const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 裁剪`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
@@ -208,7 +208,7 @@ export function useCanvasMediaTools({
 
     const saveAnnotatedImageNode = useCallback(async (node: CanvasNodeData, dataUrl: string) => {
         const image = await uploadImage(dataUrl);
-        const size = fitNodeSize(image.width, image.height, node.width, node.height);
+        const size = fitImageNodeSize(image.width, image.height, node.width, node.height);
         const childId = nanoid();
         const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 标注`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
@@ -595,7 +595,7 @@ export function useCanvasMediaTools({
             const image = result.images?.[0];
             if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
             const uploaded = await uploadImage(image.dataUrl);
-            const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
+            const size = fitImageNodeSize(uploaded.width, uploaded.height, node.width, node.height);
             const currentNode = nodesRef.current.find((item) => item.id === childId);
             if (!currentNode) throw new Error("局部编辑节点已被删除");
             const finalizedNode = { ...currentNode, width: size.width, height: size.height, metadata: { ...currentNode.metadata, ...imageMetadata(uploaded), prompt: effectivePrompt, ...generationMetadata } };
@@ -617,7 +617,7 @@ export function useCanvasMediaTools({
         setUpscaleNodeId(null);
         const upscaled = await upscaleDataUrl(node.metadata.content, params);
         const image = await uploadImage(upscaled);
-        const size = fitNodeSize(image.width, image.height);
+        const size = fitImageNodeSize(image.width, image.height);
         const childId = nanoid();
         const child: CanvasNodeData = { id: childId, type: CanvasNodeType.Image, title: `${node.title || "图片"} · 放大`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: size.width, height: size.height, metadata: { ...imageMetadata(image), prompt: node.metadata?.prompt } };
         setNodes((current) => [...current, child]);
@@ -656,7 +656,7 @@ export function useCanvasMediaTools({
             const image = result.images?.[0];
             if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
             const uploaded = await uploadImage(image.dataUrl);
-            const size = fitNodeSize(uploaded.width, uploaded.height, imageSpec.width, imageSpec.height);
+            const size = fitImageNodeSize(uploaded.width, uploaded.height, imageSpec.width, imageSpec.height);
             const currentNode = nodesRef.current.find((item) => item.id === childId);
             if (!currentNode) throw new Error("视角生成节点已被删除");
             const finalizedNode = { ...currentNode, width: size.width, height: size.height, metadata: { ...currentNode.metadata, ...imageMetadata(uploaded), prompt: effectivePrompt, ...generationMetadata } };
@@ -721,7 +721,7 @@ export function useCanvasMediaTools({
             if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
             const composited = await compositeEmotionImage(node.metadata.content, image.dataUrl, payload.editRegion, payload.faceBox);
             const uploaded = await uploadImage(composited);
-            const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
+            const size = fitImageNodeSize(uploaded.width, uploaded.height, node.width, node.height);
             const currentNode = nodesRef.current.find((item) => item.id === childId);
             if (!currentNode) throw new Error("表情编辑节点已被删除");
             const finalizedNode = { ...currentNode, width: size.width, height: size.height, metadata: { ...currentNode.metadata, ...imageMetadata(uploaded), prompt: providerPrompt, ...generationMetadata, emotionEdit } };

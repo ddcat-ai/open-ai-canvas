@@ -18,6 +18,14 @@
     --video-volume-slider-max-width: 48px;
 }
 
+/* The canvas keeps the poster visible until the first playable frame is
+   ready, so a large buffering spinner only flashes over useful content. Keep
+   the video surface stable and let the poster/last decoded frame carry the
+   loading state instead. */
+.canvas-video-player[data-player-variant="compact"] .vds-buffering-indicator {
+    display: none;
+}
+
 .canvas-video-player [data-media-provider] video {
     width: 100%;
     height: 100%;

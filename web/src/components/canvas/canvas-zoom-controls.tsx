@@ -16,13 +16,14 @@ type CanvasZoomControlsProps = {
     onAutoArrange?: () => void;
     isMiniMapOpen: boolean;
     onToggleMiniMap: () => void;
+    onMiniMapHoverChange?: (hovered: boolean) => void;
     onOpenShortcuts: () => void;
     containerRef?: RefObject<HTMLDivElement | null>;
 };
 
 const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 
-export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
+export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, isMiniMapOpen, onToggleMiniMap, onMiniMapHoverChange, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
@@ -90,7 +91,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseEnter={() => onMiniMapHoverChange?.(true)} onMouseLeave={() => onMiniMapHoverChange?.(false)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {precisionOpen ? (
                     <motion.div

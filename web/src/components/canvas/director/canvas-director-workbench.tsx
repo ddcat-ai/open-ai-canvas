@@ -20,7 +20,7 @@ import { resolveDirectorPlacement, resolveDirectorPlacementAnchor } from "@/lib/
 import { isDirectorOutputSnapshotCurrent, shouldReinitializeDirectorSession } from "@/lib/canvas/director/director-session";
 import { blocksDirectorShortcut, releaseDirectorFocusAfterPointer, resolveDirectorShortcut, type DirectorShortcutAction } from "@/lib/canvas/director/director-shortcuts";
 import { createDirectorActor, createDirectorBillboard, createDirectorCamera, createDirectorLight, createDirectorModel, createDirectorObject, DIRECTOR_ACTOR_COLORS, directorBoneLabel, directorFocalLengthToFov, directorPoseLabel, interpolateDirectorTransform, removeDirectorSceneKeyframe, setDirectorSceneKeyframeEasing, touchDirectorScene, upsertDirectorBoneKeyframe } from "@/lib/canvas/director/director-scene";
-import { describeDirectorSaveStatus, resolveDirectorCloseOutcome, shouldBlockDirectorUnload, shouldOfferDirectorDraftRecovery } from "@/lib/canvas/director/director-save-wiring";
+import { describeDirectorSaveStatus, resolveDirectorCloseOutcome, shouldOfferDirectorDraftRecovery } from "@/lib/canvas/director/director-save-wiring";
 import { useDirectorSaveCoordinator } from "@/components/canvas/director/use-director-save-coordinator";
 import { uploadMediaFile } from "@/services/file-storage";
 import { saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -277,18 +277,9 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
             // 只调用 handlePageHide：dirty 时它自己会 persist + flush，组件再叠一次就是重复落盘。
             void saveControllerRef.current?.handlePageHide();
         };
-        // 异步 flush 不可能阻塞卸载：这里只同步声明「仍有未确认改动」，让浏览器自己弹保护。
-        const onBeforeUnload = (event: BeforeUnloadEvent) => {
-            const controller = saveControllerRef.current;
-            if (!controller || !shouldBlockDirectorUnload(controller.progress)) return;
-            event.preventDefault();
-            event.returnValue = "";
-        };
         window.addEventListener("pagehide", onPageHide);
-        window.addEventListener("beforeunload", onBeforeUnload);
         return () => {
             window.removeEventListener("pagehide", onPageHide);
-            window.removeEventListener("beforeunload", onBeforeUnload);
         };
     }, [mirrorDraft, stagedTransaction]);
 

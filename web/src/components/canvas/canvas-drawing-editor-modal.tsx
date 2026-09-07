@@ -32,6 +32,15 @@ export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSav
     const [ready, setReady] = useState(false);
     const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState("");
+    const mountedRef = useRef(true);
+
+    useEffect(() => () => {
+        mountedRef.current = false;
+    }, []);
+
+    const handleEditorReady = () => {
+        if (mountedRef.current) setReady(true);
+    };
 
     useEffect(() => {
         if (!open || !node?.metadata?.drawingId) return;
@@ -93,8 +102,8 @@ export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSav
                     {unavailable ? <EditorState title="tldraw 未授权" detail="当前生产构建没有配置有效的 tldraw License Key。" /> : loadError ? <EditorState title="绘图无法打开" detail={loadError} /> : loaded ? (
                         <Suspense fallback={<EditorState title="正在载入绘图工具" />}>
                             {engine === "excalidraw"
-                                ? <CanvasDrawingExcalidrawEditor ref={editorRef} snapshot={snapshot} colorScheme={colorScheme} onReady={() => setReady(true)} />
-                                : <CanvasDrawingTldrawEditor ref={editorRef} snapshot={snapshot} colorScheme={colorScheme} onReady={() => setReady(true)} />}
+                                ? <CanvasDrawingExcalidrawEditor ref={editorRef} snapshot={snapshot} colorScheme={colorScheme} onReady={handleEditorReady} />
+                                : <CanvasDrawingTldrawEditor ref={editorRef} snapshot={snapshot} colorScheme={colorScheme} onReady={handleEditorReady} />}
                         </Suspense>
                     ) : <EditorState title="正在准备绘图画布" />}
                 </div>

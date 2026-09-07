@@ -1,38 +1,20 @@
+import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { useEffect, useState } from "react";
+
+const CANVAS_LOADING_STAGES = [
+    { label: "正在准备创作环境", detail: "连接本地能力与模型配置" },
+    { label: "正在恢复工作区", detail: "读取画布、素材和插件缓存" },
+    { label: "正在恢复画布", detail: "读取画布布局与项目数据" },
+];
+
 export function CanvasRefreshShell() {
-    return (
-        <main className="relative h-full min-h-0 overflow-hidden bg-background text-foreground">
-            <div
-                className="absolute inset-0 opacity-60"
-                style={{
-                    backgroundImage: "radial-gradient(circle, var(--border) 1px, transparent 1px)",
-                    backgroundSize: "28px 28px",
-                }}
-            />
+    const [stageIndex, setStageIndex] = useState(0);
 
-            <div
-                className="absolute bottom-5 left-1/2 z-[var(--z-toolbar)] flex h-14 -translate-x-1/2 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur"
-                style={{ background: "var(--background)", borderColor: "var(--border)" }}
-                aria-hidden="true"
-            >
-                {Array.from({ length: 7 }).map((_, index) => (
-                    <div key={index} className="size-8 rounded-md bg-current opacity-10" />
-                ))}
-            </div>
+    useEffect(() => {
+        const timer = window.setInterval(() => setStageIndex((current) => (current + 1) % CANVAS_LOADING_STAGES.length), 900);
+        return () => window.clearInterval(timer);
+    }, []);
 
-            <div className="absolute bottom-24 left-6 z-[var(--z-toolbar)] h-40 w-[240px] rounded-lg border shadow-2xl backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
-                <div className="absolute left-7 top-7 h-5 w-12 rounded-sm bg-current opacity-10" />
-                <div className="absolute left-28 top-16 h-6 w-16 rounded-sm bg-current opacity-10" />
-                <div className="absolute bottom-7 left-16 h-8 w-20 rounded-sm bg-current opacity-10" />
-                <div className="absolute inset-5 rounded border border-current opacity-15" />
-            </div>
-
-            <div className="absolute bottom-5 left-5 z-[var(--z-toolbar)] flex h-14 w-[260px] items-center gap-2 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
-                <div className="size-8 rounded-md bg-current opacity-10" />
-                <div className="size-8 rounded-md bg-current opacity-10" />
-                <div className="h-1 flex-1 rounded-full bg-current opacity-10" />
-                <div className="h-4 w-10 rounded bg-current opacity-10" />
-                <div className="size-8 rounded-md bg-current opacity-10" />
-            </div>
-        </main>
-    );
+    const stage = CANVAS_LOADING_STAGES[stageIndex];
+    return <FullScreenLoader kind="route" label={stage.label} detail={stage.detail} />;
 }

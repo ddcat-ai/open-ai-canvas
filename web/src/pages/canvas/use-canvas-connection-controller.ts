@@ -16,6 +16,8 @@ import { useUserStore } from "@/stores/use-user-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
 import { workflowProviderPluginEnabled } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
+import { applyCanvasConnectionPreview } from "@/lib/canvas/canvas-live-viewport";
+import { shouldOpenNodeGenerationPanelOnCreate } from "@/lib/canvas/canvas-node-ui-policy";
 
 type UseCanvasConnectionControllerOptions = {
     projectId: string;
@@ -23,6 +25,7 @@ type UseCanvasConnectionControllerOptions = {
     defaultDrawingEngine: CanvasDrawingEngine;
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
+    containerRef: { current: HTMLDivElement | null };
     viewportRef: { current: ViewportTransform };
     scriptScrollTopById: Record<string, number>;
     screenToCanvas: (clientX: number, clientY: number) => Position;
@@ -70,6 +73,7 @@ export function useCanvasConnectionController({
     defaultDrawingEngine,
     nodesRef,
     connectionsRef,
+    containerRef,
     viewportRef,
     scriptScrollTopById,
     screenToCanvas,
@@ -120,12 +124,13 @@ export function useCanvasConnectionController({
         connectingParamsRef.current = next;
         setConnectingParams(next);
         if (!next) {
+            applyCanvasConnectionPreview(containerRef.current, null);
             connectingPointerIdRef.current = null;
             connectingPointerStartRef.current = null;
             setConnectionTargetNodeId(null);
             setConnectionTargetAnchorRatio(undefined);
         }
-    }, []);
+    }, [containerRef]);
 
     const closeConnectionCreateMenu = useCallback(() => {
         pendingConnectionCreateRef.current = null;
@@ -294,7 +299,7 @@ export function useCanvasConnectionController({
             setConnections(nextConnections);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+            if (shouldOpenNodeGenerationPanelOnCreate(nodeType)) setDialogNodeId(newNode.id);
             const skippedCount = batchPlan.skipped.length;
             const duplicateCount = batchPlan.duplicates.length;
             const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
@@ -360,7 +365,7 @@ export function useCanvasConnectionController({
         setSelectedNodeIds(new Set([newNode.id]));
         setSelectedConnectionId(null);
         if (nodeType === CanvasNodeType.Drawing) setDrawingNodeId(newNode.id);
-        else if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+        else if (shouldOpenNodeGenerationPanelOnCreate(nodeType)) setDialogNodeId(newNode.id);
         closeConnectionCreateMenu();
         setConnecting(null);
     }, [closeConnectionCreateMenu, config, connectionsRef, defaultDrawingEngine, message, nodesRef, projectId, runtimeStatuses, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, tldrawLicenseKey]);
@@ -596,9 +601,14 @@ export function useCanvasConnectionController({
             const current = connectingParamsRef.current;
             if (!current || connectingPointerIdRef.current !== event.pointerId || pendingConnectionCreateRef.current) return;
             const dropTarget = getConnectionDropTarget(event.clientX, event.clientY, current);
-            setConnectionTargetNodeId(dropTarget.nodeId);
-            setConnectionTargetAnchorRatio(dropTarget.anchorRatio);
-            setMouseWorld(screenToCanvas(event.clientX, event.clientY));
+            const mouseWorld = screenToCanvas(event.clientX, event.clientY);
+            setConnectionTargetNodeId((previous) => previous === dropTarget.nodeId ? previous : dropTarget.nodeId);
+            setConnectionTargetAnchorRatio((previous) => previous === dropTarget.anchorRatio ? previous : dropTarget.anchorRatio);
+            applyCanvasConnectionPreview(containerRef.current, {
+                mouseWorld,
+                targetNodeId: dropTarget.nodeId,
+                targetAnchorRatio: dropTarget.anchorRatio,
+            });
         };
         const handlePointerMove = (event: PointerEvent) => {
             // Pointer events can arrive faster than the canvas can paint. Keep
@@ -671,7 +681,7 @@ export function useCanvasConnectionController({
             window.removeEventListener("pointercancel", handlePointerCancel);
             window.removeEventListener("blur", cancel);
         };
-    }, [clearBatchConnection, commitBatchConnection, finishBatchConnection, finishConnection, getBatchConnectionDropTarget, getConnectionDropTarget, openBatchConnectionCreateMenu, previewBatchConnection, screenToCanvas, setConnecting]);
+    }, [clearBatchConnection, commitBatchConnection, containerRef, finishBatchConnection, finishConnection, getBatchConnectionDropTarget, getConnectionDropTarget, openBatchConnectionCreateMenu, previewBatchConnection, screenToCanvas, setConnecting]);
 
     return {
         cancelPendingConnectionCreate,

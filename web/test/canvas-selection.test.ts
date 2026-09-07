@@ -12,8 +12,8 @@ describe("canvas selection semantics", () => {
         expect(resolveCanvasSelectionStrategy({ altKey: true, ctrlKey: true, metaKey: true, shiftKey: true })).toBe("subtract");
     });
 
-    test("uses containment from left to right and intersection from right to left", () => {
-        expect(resolveCanvasSelectionHitMode(0, 100)).toBe("contain");
+    test("uses intersection in both drag directions", () => {
+        expect(resolveCanvasSelectionHitMode(0, 100)).toBe("intersect");
         expect(resolveCanvasSelectionHitMode(100, 0)).toBe("intersect");
         expect(createCanvasSelectionBounds(100, 80, 0, 20)).toEqual({ left: 0, top: 20, right: 100, bottom: 80 });
     });
@@ -26,6 +26,7 @@ describe("canvas selection semantics", () => {
         expect(canvasSelectionHitsBounds(selection, contained, "contain")).toBe(true);
         expect(canvasSelectionHitsBounds(selection, partial, "contain")).toBe(false);
         expect(canvasSelectionHitsBounds(selection, partial, "intersect")).toBe(true);
+        expect(canvasSelectionHitsBounds({ left: 100, top: 100, right: 200, bottom: 200 }, partial, "intersect")).toBe(true);
     });
 
     test("applies all four selection strategies against the gesture-start snapshot", () => {
@@ -90,8 +91,13 @@ describe("canvas selection semantics", () => {
         expect(controllerSource).toContain("updateSelectionPreview(screenToCanvas(clientX, clientY), true)");
         expect(canvasSource).toContain('"canvas-cursor-select"');
         expect(canvasSource).not.toContain('"cursor-crosshair"');
-        expect(graphicsSource).toContain('fill: "transparent"');
-        expect(graphicsSource).toContain('dashPattern: [4 / scale, 4 / scale]');
+        expect(graphicsSource).toContain("fill: theme.canvas.selectionFill");
+        expect(graphicsSource).toContain("cornerRadius: 16 / scale");
+        expect(graphicsSource).toContain("dashPattern: []");
+        const nodeSource = await Bun.file(new URL("../src/components/canvas/canvas-node.tsx", import.meta.url)).text();
+        expect(nodeSource).toContain("NodeExternalHeader");
+        expect(nodeSource).toContain('data-node-selected={isSelected ? "true" : "false"}');
+        expect(nodeSource).toContain('data-node-card={!isComposerNode ? "true" : undefined}');
         expect(globalStyles).toContain(".canvas-cursor-select");
         expect(globalStyles).not.toContain("filter='drop-shadow");
     });

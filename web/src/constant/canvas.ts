@@ -9,15 +9,17 @@ type CanvasNodeSpec = {
 };
 
 export const NODE_DEFAULT_SIZE = {
-    [CanvasNodeType.Image]: { width: 720, height: 405, title: "图片" },
-    [CanvasNodeType.Text]: { width: 340, height: 240, title: "Note" },
+    // 与 TapNow 100% 画布的图片节点基准对齐，空白图片保持 250×250 的紧凑占位。
+    [CanvasNodeType.Image]: { width: 250, height: 250, title: "图片" },
+    [CanvasNodeType.Text]: { width: 250, height: 250, title: "Note" },
     [CanvasNodeType.Drawing]: { width: 440, height: 300, title: "绘图" },
     [CanvasNodeType.Script]: { width: 920, height: 360, title: "分镜脚本" },
     [CanvasNodeType.Skill]: { width: 360, height: 220, title: "技能" },
     // 配置节点同时承载模式、渠道、工作流和参数；预留稳定空间，避免控件和错误状态互相挤压。
     [CanvasNodeType.Config]: { width: 480, height: 390, title: "生成配置" },
-    [CanvasNodeType.Video]: { width: 720, height: 405, title: "视频" },
-    [CanvasNodeType.Audio]: { width: 340, height: 120, title: "Audio" },
+    // 与 TapNow 100% 画布的视频节点基准对齐，保持 16:9 的 444×250 占位。
+    [CanvasNodeType.Video]: { width: 444, height: 250, title: "视频" },
+    [CanvasNodeType.Audio]: { width: 444, height: 250, title: "Audio" },
     [CanvasNodeType.Frame]: { width: 760, height: 520, title: "未命名背板" },
     [CanvasNodeType.Markdown]: { width: 420, height: 320, title: "Markdown" },
     [CanvasNodeType.Svg]: { width: 420, height: 320, title: "SVG" },

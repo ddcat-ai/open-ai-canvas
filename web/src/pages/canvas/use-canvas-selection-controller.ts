@@ -5,7 +5,7 @@ import { calculateNodeAlignment, createNodeAlignmentContext, sameStringSet, type
 import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy } from "@/lib/canvas/canvas-selection";
 import { canvasNodeBounds } from "@/lib/canvas/canvas-spatial-index";
-import type { CanvasNodeData, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type Position, type SelectionBox, type ViewportTransform } from "@/types/canvas";
 
 type UseCanvasSelectionControllerOptions = {
     containerRef: RefObject<HTMLDivElement | null>;
@@ -100,12 +100,17 @@ export function useCanvasSelectionController({
     const dragPreviewRef = useRef<CanvasNodeDragPreview | null>(null);
     const dragPreviewClearPendingRef = useRef(false);
     const dragPreviewContainerRef = useRef<HTMLDivElement | null>(null);
+    const selectionPreviewClearPendingRef = useRef(false);
     const [alignmentGuides, setAlignmentGuides] = useState<{ vertical?: number; horizontal?: number }>({});
 
     // React may repaint for alignment/drop-target state while a drag is active.
     // Re-apply the compositor offset after such commits so React's style diff
     // cannot clear the imperative `translate` property.
     useLayoutEffect(() => {
+        if (selectionPreviewClearPendingRef.current) {
+            selectionPreviewClearPendingRef.current = false;
+            applyCanvasNodeSelectionPreview(containerRef.current, null);
+        }
         if (dragPreviewClearPendingRef.current) {
             dragPreviewClearPendingRef.current = false;
             dragPreviewRef.current = null;
@@ -118,12 +123,13 @@ export function useCanvasSelectionController({
         if (preview) applyCanvasNodeDragPreview(containerRef.current || dragPreviewContainerRef.current, preview);
     });
 
-    const resetSelectionBox = useCallback(() => {
+    const resetSelectionBox = useCallback((preserveNodePreview = false) => {
         selectionGestureRef.current = { phase: "idle" };
         pendingSelectionPointRef.current = null;
         if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
         selectionFrameRef.current = null;
-        applyCanvasNodeSelectionPreview(containerRef.current, null);
+        if (preserveNodePreview) selectionPreviewClearPendingRef.current = true;
+        else applyCanvasNodeSelectionPreview(containerRef.current, null);
         setSelectionBox(null);
     }, [containerRef]);
 
@@ -161,7 +167,7 @@ export function useCanvasSelectionController({
             currentWorldX: world.x,
             currentWorldY: world.y,
             strategy,
-            hitMode: "contain",
+            hitMode: "intersect",
             initialSelectedNodeIds: Array.from(initialSelection),
         };
         selectionGestureRef.current = { phase: "pending", initialSelection, selection: nextSelectionBox };
@@ -178,6 +184,12 @@ export function useCanvasSelectionController({
         onNodeBringToFront?.(nodeId);
         setSelectedConnectionId(null);
         const currentNodes = nodesRef.current;
+        const clickedNode = currentNodes.find((node) => node.id === nodeId);
+        // The second press of a text-node double click belongs to inline
+        // editing, not a new drag gesture. Starting a drag here briefly clears
+        // the node toolbar and generation panel before the double-click event
+        // arrives, which causes a visible flash.
+        if (event.detail >= 2 && clickedNode?.type === CanvasNodeType.Text && !nodeDraggingRef.current) return;
         const nextSelected = new Set(selectedNodeIdsRef.current);
         const isSubtractClick = event.altKey;
         const isMultiSelectClick = !isSubtractClick && (event.shiftKey || event.metaKey || event.ctrlKey);
@@ -200,7 +212,6 @@ export function useCanvasSelectionController({
             return;
         }
 
-        const clickedNode = currentNodes.find((node) => node.id === nodeId);
         if (clickedNode?.metadata?.locked) {
             dragRef.current = { ...EMPTY_DRAG_STATE };
             onNodeClick(clickedNode);
@@ -350,7 +361,7 @@ export function useCanvasSelectionController({
         const hitNodeIds = new Set(selectionSpatialIndexCacheRef.current
             .get(nodesRef.current)
             .query(queryBounds)
-            .filter((node) => canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode || "contain"))
+            .filter((node) => canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode || "intersect"))
             .map((node) => node.id));
         applyCanvasNodeSelectionPreview(containerRef.current, resolveCanvasSelectionPreviewDelta(gesture.initialSelection, hitNodeIds, selection.strategy || "replace"));
         if (!commit) return true;
@@ -385,7 +396,7 @@ export function useCanvasSelectionController({
         if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
         selectionFrameRef.current = null;
         const wasSelection = hadPendingSelection && updateSelectionPreview(screenToCanvas(clientX, clientY), true);
-        resetSelectionBox();
+        resetSelectionBox(wasSelection);
         if (hadPendingSelection && !wasSelection && strategy === "replace") deselectCanvas();
         onSelectionBoxEnd?.();
     }, [deselectCanvas, onSelectionBoxEnd, resetSelectionBox, screenToCanvas, updateSelectionPreview]);

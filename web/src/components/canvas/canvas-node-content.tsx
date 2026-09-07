@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ComponentType, type ReactNode, type RefObject } from "react";
+import { flushSync } from "react-dom";
 import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, RefreshCw, Upload, Video } from "lucide-react";
 
 import { VideoPlayer } from "@/components/video-player";
@@ -51,6 +52,7 @@ export type CanvasNodeContentProps = {
     reduceMediaEffects?: boolean;
     mediaActive?: boolean;
     onMediaPlayRequest?: (nodeId: string) => void;
+    mediaPreloadRequested?: boolean;
 };
 
 type LazyNodeRendererProps = Pick<CanvasNodeContentProps, "node" | "theme" | "reduceMediaEffects">;
@@ -199,7 +201,7 @@ function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProp
                         <span className="grid size-10 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.panel, border: `1px solid ${theme.node.edge}`, color: theme.node.text }}>
                             <Pencil className="size-5" />
                         </span>
-                        <span className="text-[var(--fs-tiny)] font-medium">打开绘图</span>
+                        <span className="text-[var(--fs-tiny)] font-medium">点击打开绘图</span>
                     </div>
                 </div>
             )}
@@ -412,7 +414,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     style={textStyle}
                     onWheel={(event) => event.stopPropagation()}
                 >
-                    {textContent || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
+                    {textContent || <span style={{ color: theme.node.muted }}>双击输入文字</span>}
                 </div>
             )}
         </div>
@@ -469,7 +471,7 @@ function SkillContent({ node, theme }: CanvasNodeContentProps) {
                     ))
                 ) : (
                     <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                        连接到图片、视频、音频或文本节点后生效
+                        连接素材后使用
                     </span>
                 )}
             </div>
@@ -526,8 +528,10 @@ function ImageNodeContent(props: CanvasNodeContentProps) {
 function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, onReplaceMedia }: CanvasNodeContentProps) {
     const isCharacterReference = node.metadata?.workflowKind === "character" && node.metadata?.characterView === "multi";
     const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5" style={{ color: theme.node.placeholder }}>
-            <ImageIcon className="size-7 opacity-45" />
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-4 text-center" style={{ color: theme.node.text }}>
+            <span className="grid size-10 place-items-center rounded-xl border" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+                <ImageIcon className="size-5" style={{ color: theme.node.muted }} />
+            </span>
             {isCharacterReference ? (
                 <div className="max-w-[80%] text-center">
                     <div className="truncate text-xs font-medium" title={node.metadata?.characterName || node.title} style={{ color: theme.node.muted }}>
@@ -537,11 +541,14 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
                 </div>
             ) : (
                 <>
-                    <span className="text-xs opacity-70">尝试上传或生成图片</span>
+                    <div>
+                        <div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>上传图片，或输入提示词生成</div>
+                    </div>
                     {onReplaceMedia ? (
                         <button
                             type="button"
-                            className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-black shadow-sm transition-[transform,background-color,box-shadow] duration-150 hover:bg-white/90 hover:shadow-md active:scale-[.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+                            className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-[transform,background-color,border-color] duration-150 hover:bg-white/10 active:scale-[.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+                            style={{ borderColor: theme.toolbar.border, background: theme.spatial.surface, color: theme.node.text }}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
@@ -566,16 +573,25 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
     return content;
 }
 
-function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, onMediaPlayRequest, onReplaceMedia }: CanvasNodeContentProps) {
+function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false, mediaPreloadRequested = false, onMediaPlayRequest, onReplaceMedia }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMediaNode } = useCanvasNodeActions();
     const hasPassivePreview = Boolean(canvasNodeVideoPreviewUrl(node) || node.metadata?.videoPreview?.storageKey);
-    const { url, loading } = useNodeResourceUrl(node, mediaActive || !hasPassivePreview);
+    const { url, loading } = useNodeResourceUrl(node, mediaActive || mediaPreloadRequested || !hasPassivePreview);
     const { url: previewUrl, loading: previewLoading } = useVideoPreviewUrl(node);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+    const [playerReady, setPlayerReady] = useState(false);
+
+    useEffect(() => {
+        // Keep the passive poster visible until the real player can render a
+        // frame. URL resolution and media buffering are independent async
+        // steps, so hiding the poster as soon as the node becomes active
+        // creates the large loading gap this surface used to show.
+        setPlayerReady(false);
+    }, [url]);
 
     useEffect(() => {
         const box = playerBoxRef.current;
@@ -599,18 +615,43 @@ function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false
         };
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
-    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Video className="size-7 opacity-35" />} label="尝试上传或生成视频" uploadLabel="上传视频" color={theme.node.placeholder} onReplaceMedia={onReplaceMedia} />;
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Video className="size-5" />} label="上传视频，或输入提示词生成" uploadLabel="上传视频" theme={theme} onReplaceMedia={onReplaceMedia} />;
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
     const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
     const fitWidth = Math.round(fitHeight * sourceRatio);
     const activeEntry = subtitleEntries.find((entry) => currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs);
     const activeHighlight = activeEntry ? (node.metadata?.subtitleHighlights || []).find((item) => item.entryIndex === activeEntry.index) : undefined;
+    const shouldMountPlayer = mediaActive || mediaPreloadRequested;
+    const playerVisible = mediaActive && playerReady;
+    const requestPlayback = () => {
+        // Mount/show the player within the click's user-activation scope, then
+        // start the native media element before returning to the event loop.
+        flushSync(() => onMediaPlayRequest?.(node.id));
+        const video = playerBoxRef.current?.querySelector<HTMLVideoElement>("[data-media-player] video");
+        if (video) {
+            // The player is created during this same click, so the provider
+            // may not have applied the audio-track metadata yet. Start the
+            // native element muted while the click's user activation is
+            // still valid; restore its prior volume as soon as playback has
+            // actually started. This prevents Chromium from treating the
+            // first click as a blocked audible autoplay attempt.
+            const wasMuted = video.muted;
+            video.muted = true;
+            void video.play()
+                .then(() => {
+                    if (!wasMuted) video.muted = false;
+                })
+                .catch(() => {
+                    if (!wasMuted) video.muted = false;
+                });
+        }
+    };
 
     return (
         <div ref={playerBoxRef} className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[var(--node-radius)] bg-black">
-            <InactiveVideoPreview node={node} theme={theme} sourceUrl={url} sourceLoading={loading} previewUrl={previewUrl} previewLoading={previewLoading} active={mediaActive} onPlayRequest={onMediaPlayRequest} />
-            {mediaActive && url ? (
-                <div className="absolute inset-0 z-[1] flex items-center justify-center">
+            <InactiveVideoPreview node={node} theme={theme} sourceUrl={url} sourceLoading={loading} previewUrl={previewUrl} previewLoading={previewLoading} active={playerVisible} onPlayRequest={requestPlayback} />
+            {shouldMountPlayer && url ? (
+                <div className={`absolute inset-0 z-[1] flex items-center justify-center transition-opacity duration-200 ${playerVisible ? "opacity-100" : "pointer-events-none opacity-0"}`} aria-hidden={!playerVisible}>
                     <div className="relative" style={{ width: fitWidth, height: Math.round(fitHeight) }}>
                         <VideoPlayer
                             src={url}
@@ -618,17 +659,17 @@ function VideoNodeContent({ node, theme, reduceMediaEffects, mediaActive = false
                             title={node.title || "视频"}
                             hasAudio={inferVideoHasAudio(node.metadata)}
                             autoPlay={mediaActive}
-                            preload={reduceMediaEffects ? "none" : "metadata"}
+                            preload={reduceMediaEffects ? "metadata" : "auto"}
                             brandColor={theme.accent.primary}
                             className="h-full w-full rounded-[var(--node-radius)] bg-black"
                             dataCanvasNoZoom
                             compactControls
+                            onCanPlay={() => setPlayerReady(true)}
+                            onPlay={() => setPlayerReady(true)}
                         />
                         {activeEntry && activeEntry.text.trim() ? <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} /> : null}
                     </div>
                 </div>
-            ) : mediaActive && !url ? (
-                <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />
             ) : null}
         </div>
     );
@@ -646,7 +687,7 @@ function inferVideoHasAudio(metadata: CanvasNodeData["metadata"]): boolean | und
 }
 
 function AudioNodeContent({ node, theme, onReplaceMedia }: CanvasNodeContentProps) {
-    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Music2 className="size-7 opacity-35" />} label="尝试上传或生成音频" uploadLabel="上传音频" color={theme.node.placeholder} onReplaceMedia={onReplaceMedia} />;
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent node={node} icon={<Music2 className="size-5" />} label="上传音频，或输入提示词生成" uploadLabel="上传音频" theme={theme} onReplaceMedia={onReplaceMedia} />;
     return <CanvasAudioPlayer node={node} theme={theme} />;
 }
 
@@ -689,7 +730,16 @@ function InactiveVideoPreview({
 
     if (previewUrl) {
         return (
-            <div className={`relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black transition-opacity ${active ? "pointer-events-none opacity-0" : "cursor-pointer"}`} aria-hidden={active} onClick={() => onPlayRequest?.(node.id)}>
+            <div
+                className={`relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black transition-opacity ${active ? "pointer-events-none opacity-0" : "cursor-pointer"}`}
+                aria-hidden={active}
+                onPointerDown={(event) => {
+                    if (event.button !== 0 || active) return;
+                    event.stopPropagation();
+                    onPlayRequest?.(node.id);
+                }}
+                onClick={() => onPlayRequest?.(node.id)}
+            >
                 <img src={previewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
             </div>
         );
@@ -698,7 +748,16 @@ function InactiveVideoPreview({
     if (hydrating) return <InactiveMediaCard icon={<LoaderCircle className="size-5 animate-spin" />} title={node.title || "视频"} hint="正在保存首帧" theme={theme} />;
     if (sourceUrl) {
         return (
-            <div className={`relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black transition-opacity ${active ? "pointer-events-none opacity-0" : "cursor-pointer"}`} aria-hidden={active} onClick={() => onPlayRequest?.(node.id)}>
+            <div
+                className={`relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black transition-opacity ${active ? "pointer-events-none opacity-0" : "cursor-pointer"}`}
+                aria-hidden={active}
+                onPointerDown={(event) => {
+                    if (event.button !== 0 || active) return;
+                    event.stopPropagation();
+                    onPlayRequest?.(node.id);
+                }}
+                onClick={() => onPlayRequest?.(node.id)}
+            >
                 <video
                     src={sourceUrl}
                     aria-label={`${node.title || "视频"} 首帧预览`}
@@ -777,24 +836,16 @@ function InactiveMediaCard({ icon, title, hint, theme }: { icon: ReactNode; titl
     );
 }
 
-function MediaLoadingState({ icon, label }: { icon: ReactNode; label: string }) {
+function EmptyMediaContent({ node, icon, label, uploadLabel, theme, onReplaceMedia }: { node: CanvasNodeData; icon: ReactNode; label: string; uploadLabel: string; theme: CanvasTheme; onReplaceMedia?: (node: CanvasNodeData) => void }) {
     return (
-        <div role="status" className="flex size-full flex-col items-center justify-center gap-2 rounded-[var(--node-radius)] bg-black text-white/75">
-            <span className="grid size-10 place-items-center rounded-full bg-white/10">{icon}</span>
-            <span className="text-xs font-medium">{label}</span>
-        </div>
-    );
-}
-
-function EmptyMediaContent({ node, icon, label, uploadLabel, color, onReplaceMedia }: { node: CanvasNodeData; icon: ReactNode; label: string; uploadLabel: string; color: string; onReplaceMedia?: (node: CanvasNodeData) => void }) {
-    return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5" style={{ color }}>
-            {icon}
-            <span className="text-xs opacity-70">{label}</span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-4 text-center" style={{ color: theme.node.text }}>
+            <span className="grid size-10 place-items-center rounded-xl border" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>{icon}</span>
+            <span className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{label}</span>
             {onReplaceMedia ? (
                 <button
                     type="button"
-                    className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-black shadow-sm transition-[transform,background-color,box-shadow] duration-150 hover:bg-white/90 hover:shadow-md active:scale-[.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+                    className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-[transform,background-color,border-color] duration-150 hover:bg-white/10 active:scale-[.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+                    style={{ borderColor: theme.toolbar.border, background: theme.spatial.surface, color: theme.node.text }}
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {

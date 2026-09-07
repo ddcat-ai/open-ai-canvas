@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Button, Tooltip } from "antd";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
+import { ArrowUp, AtSign, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Slash, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
@@ -10,6 +10,7 @@ import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
+import { agentSlashQuery, insertAgentSkill } from "@/lib/canvas/canvas-agent-input";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
 export type CanvasAgentChatMessage = {
@@ -250,19 +251,20 @@ export function AgentChatComposer({
     includeAssetLibrary?: boolean;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const mentionInputRef = useRef<HTMLTextAreaElement>(null);
     const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
     const availableSlashSkills = slashSkills ?? [];
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
-    const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(availableSlashSkills.length - 1, 0));
+    const visibleSlashSkills = slash ? availableSlashSkills.filter((skill) => `${skill.skill_name} ${skill.description || ""}`.toLowerCase().includes(slash.query.toLowerCase())) : availableSlashSkills;
+    const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(visibleSlashSkills.length - 1, 0));
 
     // 在输入值末尾检测「/关键词」打开技能候选；选择后替换为 @[skill:xxx] 引用 token（保持在 prompt 文本里）。
     const handlePromptChange = (value: string) => {
         onPromptChange(value);
-        const match = /(^|\s)\/([^\s/]*)$/.exec(value);
-        if (match && availableSlashSkills.length) {
-            const next = { start: match.index + match[1].length, query: match[2] };
+        const next = agentSlashQuery(value);
+        if (next) {
             setSlash((current) => (current && current.start === next.start && current.query === next.query ? current : next));
             setSlashIndex(0);
         } else if (slash) {
@@ -271,12 +273,7 @@ export function AgentChatComposer({
     };
 
     const applySlashSkill = (skill: Skill) => {
-        const token = `@[skill:${skill.skill_id}] `;
-        const next = slash
-            ? `${prompt.slice(0, slash.start)}${token}${prompt.slice(slash.start + slash.query.length)}`
-            : prompt
-                ? `${prompt.replace(/\s+$/u, "")} ${token}`
-                : token;
+        const next = insertAgentSkill(prompt, slash, skill.skill_id);
         setSlash(null);
         setSlashIndex(0);
         onPromptChange(next);
@@ -284,12 +281,12 @@ export function AgentChatComposer({
 
     // slash 菜单的键盘控制在 capture 阶段拦截（contentEditable/textarea 内部先消费 Enter，外层冒泡拿不到）
     const handleSlashKeyCapture = (event: ReactKeyboardEvent) => {
-        if (!slash || !availableSlashSkills.length) return;
+        if (!slash || !visibleSlashSkills.length) return;
         if (event.nativeEvent.isComposing || event.keyCode === 229) return;
         if (event.key === "ArrowDown") {
             event.preventDefault();
             event.stopPropagation();
-            setSlashIndex((index) => Math.min(index + 1, availableSlashSkills.length - 1));
+            setSlashIndex((index) => Math.min(index + 1, visibleSlashSkills.length - 1));
         } else if (event.key === "ArrowUp") {
             event.preventDefault();
             event.stopPropagation();
@@ -297,7 +294,7 @@ export function AgentChatComposer({
         } else if (event.key === "Enter" || event.key === "Tab") {
             event.preventDefault();
             event.stopPropagation();
-            applySlashSkill(availableSlashSkills[activeSlashIndex]);
+            applySlashSkill(visibleSlashSkills[activeSlashIndex]);
         } else if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
@@ -342,6 +339,7 @@ export function AgentChatComposer({
                 <div className="relative" onKeyDownCapture={handleSlashKeyCapture} onPasteCapture={handlePasteCapture}>
                     <div className="thin-scrollbar max-h-40 min-h-[60px] overflow-y-auto">
                         <CanvasResourceMentionTextarea
+                            ref={mentionInputRef}
                             value={prompt}
                             references={references}
                             includeAssetLibrary={includeAssetLibrary}
@@ -356,14 +354,14 @@ export function AgentChatComposer({
                             aria-label="Agent 输入"
                         />
                     </div>
-                    {slash && availableSlashSkills.length ? (
+                    {slash ? (
                         <div
                             data-agent-slash-menu
                             className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
                             style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
                             onMouseDown={(event) => event.preventDefault()}
                         >
-                            {availableSlashSkills.map((skill, index) => (
+                            {visibleSlashSkills.length ? visibleSlashSkills.map((skill, index) => (
                                 <button
                                     key={skill.skill_id}
                                     type="button"
@@ -376,7 +374,12 @@ export function AgentChatComposer({
                                     <span className="min-w-0 truncate font-medium">{skill.skill_name}</span>
                                     {skill.description ? <span className="min-w-0 flex-1 truncate opacity-50">{skill.description}</span> : null}
                                 </button>
-                            ))}
+                            )) : (
+                                <div className="flex items-center gap-2 px-2.5 py-2 text-xs" style={{ color: theme.node.muted }}>
+                                    <Sparkles className="size-3.5 shrink-0 opacity-70" />
+                                    <span>暂无已加入技能，请先在技能库安装</span>
+                                </div>
+                            )}
                         </div>
                     ) : null}
                 </div>
@@ -393,6 +396,12 @@ export function AgentChatComposer({
                                 </Tooltip>
                             </>
                         ) : null}
+                        <Tooltip title="引用画布素材 (@)">
+                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<AtSign className="size-4" />} aria-label="引用画布素材" onClick={() => { const next = `${prompt}${prompt && !prompt.endsWith(" ") ? " " : ""}@`; onPromptChange(next); mentionInputRef.current?.focus(); }} />
+                        </Tooltip>
+                        <Tooltip title="调用技能 (/)">
+                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<Slash className="size-4" />} aria-label="调用技能" onClick={() => { const next = `${prompt}${prompt && !prompt.endsWith(" ") ? " " : ""}/`; onPromptChange(next); mentionInputRef.current?.focus(); }} />
+                        </Tooltip>
                         {left}
                     </div>
                     <motion.button

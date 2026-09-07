@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Excalidraw, exportToBlob, getNonDeletedElements, serializeAsJSON } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
@@ -10,6 +10,13 @@ const DRAWING_RENDER_PADDING = 24;
 
 export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandle, CanvasDrawingEditorProps>(function CanvasDrawingExcalidrawEditor({ snapshot, colorScheme, onReady }, ref) {
     const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+    const activateFrameRef = useRef<number | null>(null);
+
+    useEffect(() => () => {
+        if (activateFrameRef.current !== null) cancelAnimationFrame(activateFrameRef.current);
+        activateFrameRef.current = null;
+        apiRef.current = null;
+    }, []);
 
     useImperativeHandle(ref, () => ({
         createSave: async () => {
@@ -55,8 +62,17 @@ export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandl
             autoFocus
             excalidrawAPI={(api) => {
                 apiRef.current = api;
-                api.setActiveTool({ type: "freedraw" });
-                onReady();
+                // Excalidraw invokes this callback while its internal store is
+                // still mounting. Defer the tool update until the next frame;
+                // otherwise closing the modal during lazy loading can call its
+                // internal setState before the component is mounted.
+                if (activateFrameRef.current !== null) cancelAnimationFrame(activateFrameRef.current);
+                activateFrameRef.current = requestAnimationFrame(() => {
+                    activateFrameRef.current = null;
+                    if (apiRef.current !== api) return;
+                    api.setActiveTool({ type: "freedraw" });
+                    onReady();
+                });
             }}
             UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
         />

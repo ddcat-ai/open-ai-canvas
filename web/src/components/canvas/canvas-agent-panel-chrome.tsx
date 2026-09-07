@@ -1,5 +1,6 @@
-import { Button, Switch, Tooltip } from "antd";
-import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, History, LayoutTemplate, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
+import { Button, Input, Switch, Tooltip } from "antd";
+import { useState } from "react";
+import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, History, LayoutTemplate, MessageCircle, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
 import { useNavigate } from "react-router";
 
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
@@ -21,6 +22,8 @@ export function AgentPanelChrome({
     onOpenHistory,
     onNewChat,
     newChatDisabled = false,
+    conversationTitle = "AI 助手对话",
+    onRenameConversation,
 }: {
     theme: CanvasTheme;
     context: CanvasContextSummary;
@@ -36,8 +39,17 @@ export function AgentPanelChrome({
     onOpenHistory?: () => void;
     onNewChat?: () => void;
     newChatDisabled?: boolean;
+    conversationTitle?: string;
+    onRenameConversation?: (title: string) => void;
 }) {
     const navigate = useNavigate();
+    const [editingTitle, setEditingTitle] = useState(false);
+    const [draftTitle, setDraftTitle] = useState(conversationTitle);
+    const commitTitle = () => {
+        const next = draftTitle.trim();
+        if (next) onRenameConversation?.(next);
+        setEditingTitle(false);
+    };
 
     return (
         <header className="shrink-0 px-3 pb-1.5 pt-2.5">
@@ -47,11 +59,14 @@ export function AgentPanelChrome({
                 </span>
                 <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-baseline gap-1.5">
-                        <div className="truncate text-sm font-semibold leading-5">Agent</div>
-                        <span className="truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>画布协作</span>
+                        {editingTitle ? <Input autoFocus size="small" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} onPressEnter={commitTitle} onBlur={commitTitle} onKeyDown={(event) => { if (event.key === "Escape") setEditingTitle(false); }} className="!w-36 !px-1 !text-sm !font-semibold" aria-label="编辑对话名" /> : <button type="button" className="truncate text-left text-sm font-semibold leading-5 hover:underline" onClick={() => { setDraftTitle(conversationTitle); setEditingTitle(true); }} aria-label="编辑对话名">{conversationTitle}</button>}
+                        <span className="truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>Agent · 画布协作</span>
                     </div>
                 </div>
                 <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                    <Tooltip title="编辑当前对话名">
+                        <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<MessageCircle className="size-3.5" />} onClick={() => { setDraftTitle(conversationTitle); setEditingTitle(true); }} aria-label="当前对话" />
+                    </Tooltip>
                     <Tooltip title="技能库">
                         <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<BookOpenCheck className="size-3.5" />} onClick={() => navigate("/skills")} aria-label="打开技能库" />
                     </Tooltip>

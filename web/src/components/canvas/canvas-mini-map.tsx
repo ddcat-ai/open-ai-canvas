@@ -4,31 +4,34 @@ import { CachedResourceImage } from "@/components/cached-resource-image";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
 import { buildLibTVImagePreviewUrl } from "@/lib/canvas/libtv-import";
-import { getNodeLabel } from "@/lib/canvas/node-registry/node-registry";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+import { isHiddenBatchChild } from "@/lib/canvas/canvas-project-domain";
+import { calculateMinimapWorldBounds, minimapScaleForWorldBounds, minimapViewportRect, viewportWorldRect } from "@/lib/canvas/canvas-minimap-geometry";
+import { useCanvasMinimapPan } from "./use-canvas-minimap-pan";
 
 const MINIMAP_WIDTH = 240;
 const MINIMAP_HEIGHT = 160;
 const MINIMAP_IMAGE_PREVIEW_LIMIT = 24;
+const MINIMAP_NODE_COLOR = "rgba(120, 120, 120, 0.92)";
+const MINIMAP_GROUP_FILL = "rgba(120, 120, 120, 0.28)";
+const MINIMAP_MASK_COLOR = "rgba(0, 0, 0, 0.62)";
 
-export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onViewportPreviewChange, onViewportChange }: { nodes: CanvasNodeData[]; viewport: ViewportTransform; viewportSize: { width: number; height: number }; canvasContainerRef?: RefObject<HTMLDivElement | null>; onViewportPreviewChange?: (viewport: ViewportTransform) => void; onViewportChange: (viewport: ViewportTransform) => void }) {
+export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onViewportPreviewChange, onViewportChange, onHoverChange, onPanStart, onPanEnd }: { nodes: CanvasNodeData[]; viewport: ViewportTransform; viewportSize: { width: number; height: number }; canvasContainerRef?: RefObject<HTMLDivElement | null>; onViewportPreviewChange?: (viewport: ViewportTransform) => void; onViewportChange: (viewport: ViewportTransform) => void; onHoverChange?: (hovered: boolean) => void; onPanStart?: () => void; onPanEnd?: (pointerInsideMinimap: boolean) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const containerRef = useRef<HTMLDivElement>(null);
     const viewportRectRef = useRef<HTMLDivElement>(null);
     const liveViewportRef = useRef(viewport);
-    const [isDragging, setIsDragging] = useState(false);
+    const [liveViewport, setLiveViewport] = useState(viewport);
+    const [isPanning, setIsPanning] = useState(false);
     const width = MINIMAP_WIDTH;
     const height = MINIMAP_HEIGHT;
-    const displayNodes = useMemo(() => nodes.filter((node) => !isNodeHiddenByCollapsedFrame(node, nodes)), [nodes]);
+    const displayNodes = useMemo(() => nodes.filter((node) => !isNodeHiddenByCollapsedFrame(node, nodes) && !isHiddenBatchChild(node, nodes)), [nodes]);
     const showImagePreviews = useMemo(() => displayNodes.filter((node) => node.type === CanvasNodeType.Image && Boolean(getImagePreviewSource(node) || node.metadata?.storageKey)).length <= MINIMAP_IMAGE_PREVIEW_LIMIT, [displayNodes]);
 
-    const { worldBounds, scale, offset } = useMemo(() => {
-        if (!displayNodes.length) {
-            return { worldBounds: { x: -500, y: -500, w: 1000, h: 1000 }, scale: 0.16, offset: { x: 40, y: 0 } };
-        }
-
+    const nodeBounds = useMemo(() => {
+        if (!displayNodes.length) return null;
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -41,23 +44,16 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
             maxY = Math.max(maxY, node.position.y + node.height);
         });
 
-        minX -= 500;
-        minY -= 500;
-        maxX += 500;
-        maxY += 500;
-
-        const boundsWidth = maxX - minX;
-        const boundsHeight = maxY - minY;
-        const nextScale = Math.min(width / boundsWidth, height / boundsHeight);
-        const mapContentW = boundsWidth * nextScale;
-        const mapContentH = boundsHeight * nextScale;
-
-        return {
-            worldBounds: { x: minX, y: minY, w: boundsWidth, h: boundsHeight },
-            scale: nextScale,
-            offset: { x: (width - mapContentW) / 2, y: (height - mapContentH) / 2 },
-        };
+        return { x: minX, y: minY, w: Math.max(maxX - minX, 1), h: Math.max(maxY - minY, 1) };
     }, [displayNodes]);
+
+    const liveViewportBounds = useMemo(() => viewportWorldRect(liveViewport, viewportSize), [liveViewport, viewportSize.height, viewportSize.width]);
+    const worldBounds = useMemo(() => calculateMinimapWorldBounds(nodeBounds, liveViewportBounds, 5, { width, height }), [height, liveViewportBounds, nodeBounds, width]);
+    const scale = useMemo(() => minimapScaleForWorldBounds(worldBounds, { width, height }), [worldBounds, width, height]);
+    const offset = useMemo(() => ({
+        x: (width - worldBounds.w * scale) / 2,
+        y: (height - worldBounds.h * scale) / 2,
+    }), [height, scale, width, worldBounds.h, worldBounds.w]);
 
     const toMinimap = useCallback(
         (worldX: number, worldY: number) => {
@@ -79,37 +75,87 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
         [offset.x, offset.y, scale, worldBounds.x, worldBounds.y],
     );
 
-    const viewportRect = useMemo(() => {
-        const vx = -viewport.x / viewport.k;
-        const vy = -viewport.y / viewport.k;
-        const vw = viewportSize.width / viewport.k;
-        const vh = viewportSize.height / viewport.k;
-        const p1 = toMinimap(vx, vy);
-        const p2 = toMinimap(vx + vw, vy + vh);
-
-        return {
-            x: p1.x,
-            y: p1.y,
-            w: Math.max(p2.x - p1.x, 4),
-            h: Math.max(p2.y - p1.y, 4),
-        };
-    }, [toMinimap, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
+    const viewportRect = useMemo(() => minimapViewportRect(liveViewportBounds, worldBounds, { width, height }), [height, liveViewportBounds, width, worldBounds]);
 
     const updateViewportRect = useCallback((nextViewport: ViewportTransform) => {
         liveViewportRef.current = nextViewport;
+        setLiveViewport(nextViewport);
         const element = viewportRectRef.current;
         if (!element) return;
-        const vx = -nextViewport.x / nextViewport.k;
-        const vy = -nextViewport.y / nextViewport.k;
-        const p1 = toMinimap(vx, vy);
-        const p2 = toMinimap(vx + viewportSize.width / nextViewport.k, vy + viewportSize.height / nextViewport.k);
-        element.style.left = `${p1.x}px`;
-        element.style.top = `${p1.y}px`;
-        element.style.width = `${Math.max(p2.x - p1.x, 4)}px`;
-        element.style.height = `${Math.max(p2.y - p1.y, 4)}px`;
-    }, [toMinimap, viewportSize.height, viewportSize.width]);
+        const nextRect = minimapViewportRect(viewportWorldRect(nextViewport, viewportSize), worldBounds, { width, height });
+        element.style.left = `${nextRect.x}px`;
+        element.style.top = `${nextRect.y}px`;
+        element.style.width = `${nextRect.w}px`;
+        element.style.height = `${nextRect.h}px`;
+    }, [height, viewportSize.height, viewportSize.width, width, worldBounds]);
 
-    useEffect(() => updateViewportRect(viewport), [updateViewportRect, viewport]);
+    const applyPreview = useCallback((nextViewport: ViewportTransform) => {
+        liveViewportRef.current = nextViewport;
+        updateViewportRect(nextViewport);
+        onViewportPreviewChange?.(nextViewport);
+    }, [onViewportPreviewChange, updateViewportRect]);
+
+    const handlePanStart = useCallback(() => {
+        setIsPanning(true);
+        onPanStart?.();
+    }, [onPanStart]);
+
+    const handlePanEnd = useCallback((pointerInsideMinimap: boolean) => {
+        setIsPanning(false);
+        onPanEnd?.(pointerInsideMinimap);
+    }, [onPanEnd]);
+
+    useCanvasMinimapPan({
+        enabled: true,
+        minimapRef: containerRef,
+        viewportRef: liveViewportRef,
+        getMoveScale: () => Math.max((nodeBounds?.w ?? worldBounds.w) / width, (nodeBounds?.h ?? worldBounds.h) / height),
+        onPreview: applyPreview,
+        onSettled: onViewportChange,
+        onPanStart: handlePanStart,
+        onPanEnd: handlePanEnd,
+    });
+
+    const handleMapClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (containerRef.current?.dataset.canvasMinimapDidPan === "true") {
+            delete containerRef.current.dataset.canvasMinimapDidPan;
+            return;
+        }
+        if (event.defaultPrevented) return;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const world = toWorld(event.clientX - rect.left, event.clientY - rect.top);
+        const current = liveViewportRef.current;
+        onViewportChange({
+            x: viewportSize.width / 2 - world.x * current.k,
+            y: viewportSize.height / 2 - world.y * current.k,
+            k: current.k,
+        });
+    }, [onViewportChange, toWorld, viewportSize.height, viewportSize.width]);
+
+    const handleMapWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const world = toWorld(event.clientX - rect.left, event.clientY - rect.top);
+        const current = liveViewportRef.current;
+        const nextScale = Math.min(2, Math.max(0.05, current.k * Math.pow(1.0015, -event.deltaY)));
+        const next = {
+            x: viewportSize.width / 2 - world.x * nextScale,
+            y: viewportSize.height / 2 - world.y * nextScale,
+            k: nextScale,
+        };
+        applyPreview(next);
+        onViewportChange(next);
+    }, [applyPreview, onViewportChange, toWorld, viewportSize]);
+
+    useEffect(() => {
+        if (liveViewportRef.current.x === viewport.x && liveViewportRef.current.y === viewport.y && liveViewportRef.current.k === viewport.k) return;
+        liveViewportRef.current = viewport;
+        setLiveViewport(viewport);
+    }, [viewport.k, viewport.x, viewport.y]);
+
+    useEffect(() => updateViewportRect(liveViewport), [liveViewport, updateViewportRect]);
 
     useEffect(() => {
         const canvasContainer = canvasContainerRef?.current;
@@ -117,65 +163,40 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
         return subscribeCanvasViewportPreview(canvasContainer, updateViewportRect);
     }, [canvasContainerRef, updateViewportRect]);
 
-    const updateViewportFromEvent = (event: React.PointerEvent) => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-
-        const world = toWorld(event.clientX - rect.left, event.clientY - rect.top);
-        const scale = liveViewportRef.current.k;
-        const next = {
-            x: viewportSize.width / 2 - world.x * scale,
-            y: viewportSize.height / 2 - world.y * scale,
-            k: scale,
-        };
-        liveViewportRef.current = next;
-        onViewportPreviewChange?.(next);
-    };
-
     return (
-        <div className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-10))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel }}>
+        <div data-canvas-no-zoom aria-label="小地图" className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-3))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm [isolation:isolate] lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel, border: `1px solid ${theme.toolbar.border}`, boxSizing: "border-box", transform: "translateZ(0)" }}>
             <div
                 ref={containerRef}
-                className="relative h-full w-full cursor-crosshair"
-                onPointerDown={(event) => {
-                    event.preventDefault();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    setIsDragging(true);
-                    updateViewportFromEvent(event);
-                }}
-                onPointerMove={(event) => {
-                    if (isDragging) updateViewportFromEvent(event);
-                }}
-                onPointerUp={() => {
-                    setIsDragging(false);
-                    onViewportChange(liveViewportRef.current);
-                }}
-                onPointerCancel={() => {
-                    setIsDragging(false);
-                    onViewportChange(liveViewportRef.current);
-                }}
+                className={`relative h-full w-full touch-none select-none overflow-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+                onMouseEnter={() => onHoverChange?.(true)}
+                onMouseLeave={() => onHoverChange?.(false)}
+                onClick={handleMapClick}
+                onWheel={handleMapWheel}
             >
                 {displayNodes.map((node) => {
                     const pos = toMinimap(node.position.x, node.position.y);
                     const frame = isFrameNode(node);
-                    const color = node.type === CanvasNodeType.Image ? "#10b981" : node.type === CanvasNodeType.Video ? "#f97316" : node.type === CanvasNodeType.Audio ? "#a855f7" : node.type === CanvasNodeType.Config ? "#60a5fa" : node.type === CanvasNodeType.Skill ? "#818cf8" : frame ? theme.frame.stroke : theme.node.muted;
+                    const referenceGroup = frame && (node.metadata?.workflowKind === "reference_set" || (node.metadata?.referenceAssetNodeIds?.length ?? 0) > 0);
+                    const color = MINIMAP_NODE_COLOR;
                     const imagePreviewSource = showImagePreviews && node.type === CanvasNodeType.Image ? getImagePreviewSource(node) : "";
-                    const nodeLabel = node.title?.trim() || getNodeLabel(node.type);
                     return (
                         <div
                             key={node.id}
-                            className="absolute rounded-[1px]"
+                            className="absolute overflow-hidden rounded-[2px]"
                             style={{
                                 left: pos.x,
                                 top: pos.y,
                                 width: Math.max(node.width * scale, 2),
                                 height: Math.max(node.height * scale, 2),
-                                backgroundColor: frame ? (node.metadata?.frame?.collapsed ? theme.frame.preview : "transparent") : color,
+                                backgroundColor: frame ? (referenceGroup ? MINIMAP_GROUP_FILL : node.metadata?.frame?.collapsed ? theme.frame.preview : "transparent") : color,
                                 border: frame ? `1px solid ${color}` : undefined,
+                                borderRadius: frame ? 3 : 2,
+                                backgroundClip: "padding-box",
                                 opacity: frame ? 0.95 : 0.8,
+                                zIndex: frame ? 0 : 1,
                             }}
                         >
-                            <div className="absolute inset-0 overflow-hidden rounded-[1px]">
+                            <div className="absolute inset-0 overflow-hidden rounded-[2px]">
                                 {imagePreviewSource || (showImagePreviews && node.type === CanvasNodeType.Image && node.metadata?.storageKey) ? (
                                     <CachedResourceImage
                                         storageKey={node.metadata?.storageKey}
@@ -189,18 +210,16 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                                     />
                                 ) : null}
                             </div>
-                            <span
-                                title={nodeLabel}
-                                aria-label={nodeLabel}
-                                className="pointer-events-none absolute left-0 top-0 z-[1] max-w-[7.5rem] -translate-y-1/2 truncate whitespace-nowrap rounded-[2px] border px-1 py-px text-[9px] font-medium leading-[1.15] shadow-sm"
-                                style={{ color: theme.node.text, background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
-                            >
-                                {nodeLabel}
-                            </span>
                         </div>
                     );
                 })}
-                <div ref={viewportRectRef} className="pointer-events-none absolute rounded-[var(--r-xs)]" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }} />
+                <div className="pointer-events-none absolute inset-0 z-[2]" aria-hidden="true">
+                    <div className="absolute left-0 right-0 top-0" style={{ height: viewportRect.y, background: MINIMAP_MASK_COLOR }} />
+                    <div className="absolute bottom-0 left-0 right-0" style={{ top: viewportRect.y + viewportRect.h, background: MINIMAP_MASK_COLOR }} />
+                    <div className="absolute left-0" style={{ top: viewportRect.y, width: viewportRect.x, height: viewportRect.h, background: MINIMAP_MASK_COLOR }} />
+                    <div className="absolute right-0" style={{ top: viewportRect.y, left: viewportRect.x + viewportRect.w, height: viewportRect.h, background: MINIMAP_MASK_COLOR }} />
+                </div>
+                    <div ref={viewportRectRef} className="pointer-events-none absolute overflow-hidden rounded-none" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, backgroundClip: "padding-box", transform: "translateZ(0)" }} />
             </div>
         </div>
     );

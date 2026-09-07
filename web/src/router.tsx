@@ -3,10 +3,11 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireFeature } from "@/components/auth/require-feature";
-import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { WorkspaceRouteLoader } from "@/components/layout/workspace-route-loader";
 import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import UserLayout from "@/layouts/user-layout";
 import { AuthScene } from "@/pages/auth/auth-scene";
+import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import RouteErrorPage from "@/pages/route-error";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
@@ -55,18 +56,27 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 
 function deferred(element: ReactNode) {
-    // AuthSessionHydrator owns the only full-screen loading surface for the
-    // workspace. Keep the current shell visible while a route chunk resolves
-    // so hydration cannot hand off to a second flashing mask.
-    return <Suspense fallback={null}>{element}</Suspense>;
+    return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
+}
+
+function canvasDeferred(element: ReactNode) {
+    return <Suspense fallback={<WorkspaceRouteLoader label="正在整理创作空间" detail="准备页面内容" />}>{element}</Suspense>;
+}
+
+function projectsDeferred(element: ReactNode) {
+    return <Suspense fallback={<WorkspaceRouteLoader label="正在整理项目" detail="读取章节、画布与资产进度" />}>{element}</Suspense>;
+}
+
+function canvasProjectDeferred(element: ReactNode) {
+    return <Suspense fallback={<CanvasRefreshShell />}>{element}</Suspense>;
 }
 
 function fullScreenDeferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader kind="route" label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+    return <Suspense fallback={null}>{element}</Suspense>;
 }
 
 function publicCliDeferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader kind="public" label="正在打开 KraftReel CLI" detail="准备安装与 MCP 指南" />}>{element}</Suspense>;
+    return <Suspense fallback={null}>{element}</Suspense>;
 }
 
 /**
@@ -96,7 +106,7 @@ export const router = createBrowserRouter([
             { path: "/forgot-password", element: fullScreenDeferred(<ForgotPasswordPage />) },
         ],
     },
-    { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
+    { path: "/share/canvas/:token", element: deferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     { path: "/mcp/device", element: fullScreenDeferred(<MCPDevicePage />), errorElement: <RouteErrorPage /> },
     { path: "/cli", element: publicCliDeferred(<KraftReelCliPage />), errorElement: <RouteErrorPage /> },
     ...(import.meta.env.DEV ? devRoutes() : []),
@@ -149,8 +159,8 @@ export const router = createBrowserRouter([
             {
                 path: "/projects",
                 element: (
-                    <RequireAuth>
-                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>
+                    <RequireAuth loading={<WorkspaceRouteLoader label="正在整理项目" detail="读取章节、画布与资产进度" />}>
+                        <RequireFeature feature="shortDramaEnabled">{projectsDeferred(<ProjectsPage />)}</RequireFeature>
                     </RequireAuth>
                 ),
             },
@@ -186,8 +196,8 @@ export const router = createBrowserRouter([
                     </RequireAuth>
                 ),
             },
-            { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
-            { path: "/canvas/:id", element: <RequireAuth>{deferred(<CanvasProjectPage />)}</RequireAuth> },
+            { path: "/canvas", element: <RequireAuth loading={<WorkspaceRouteLoader label="正在整理创作空间" detail="准备页面内容" />}>{canvasDeferred(<CanvasPage />)}</RequireAuth> },
+            { path: "/canvas/:id", element: <RequireAuth loading={<CanvasRefreshShell />}>{canvasProjectDeferred(<CanvasProjectPage />)}</RequireAuth> },
             {
                 path: "/admin",
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,

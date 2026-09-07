@@ -10,7 +10,7 @@ import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { isAudioFile } from "@/lib/canvas/canvas-project-generation";
-import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, fitNodeSize, VIDEO_NODE_MAX_SIZE, VIDEO_NODE_UPLOAD_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { getProjectUnit } from "@/services/api/projects";
@@ -147,7 +147,7 @@ export function useCanvasUpload({
             progress.update("上传到服务器并同步资源", 2);
             const image = await uploadImage(file);
             progress.update("更新画布节点", 3);
-            const size = fitNodeSize(image.width, image.height);
+            const size = fitImageNodeSize(image.width, image.height);
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const node: CanvasNodeData = {
                 id,
@@ -179,7 +179,7 @@ export function useCanvasUpload({
                 message.error("素材图片不可用");
                 return;
             }
-            const size = fitNodeSize(asset.data.width || NODE_DEFAULT_SIZE[CanvasNodeType.Image].width, asset.data.height || NODE_DEFAULT_SIZE[CanvasNodeType.Image].height);
+            const size = fitImageNodeSize(asset.data.width || NODE_DEFAULT_SIZE[CanvasNodeType.Image].width, asset.data.height || NODE_DEFAULT_SIZE[CanvasNodeType.Image].height);
             const center = position || getCanvasCenter();
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const node: CanvasNodeData = {
@@ -216,7 +216,7 @@ export function useCanvasUpload({
             progress.update("上传到服务器并同步资源", 2);
             const video = await uploadMediaFile(file, "video");
             progress.update("更新画布节点", 3);
-            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_UPLOAD_MAX_SIZE.width, VIDEO_NODE_UPLOAD_MAX_SIZE.height);
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const node = { id, type: CanvasNodeType.Video, title: file.name, position: { x: position.x - size.width / 2, y: position.y - size.height / 2 }, width: size.width, height: size.height, metadata: videoMetadata(video) } satisfies CanvasNodeData;
             setNodes((current) => [...current, node]);
@@ -414,7 +414,7 @@ export function useCanvasUpload({
             progress.update("上传到服务器并同步资源", 2);
             const video = await uploadMediaFile(blob, "video");
             progress.update("更新画布节点", 3);
-            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_UPLOAD_MAX_SIZE.width, VIDEO_NODE_UPLOAD_MAX_SIZE.height);
             const center = getCanvasCenter();
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const node = {
@@ -468,7 +468,10 @@ export function useCanvasUpload({
                 progress.update("上传到服务器并同步资源", 2);
                 const video = await uploadMediaFile(file, "video");
                 progress.update("更新画布节点", 3);
-                const node = { ...currentNode, type: CanvasNodeType.Video, title: file.name, metadata: { ...currentNode.metadata, ...videoMetadata(video), assetId: undefined, taskId: undefined, errorDetails: undefined } } satisfies CanvasNodeData;
+                const compact = currentNode.metadata?.freeResize || currentNode.metadata?.manualSize || currentNode.metadata?.locked
+                    ? { width: currentNode.width, height: currentNode.height }
+                    : fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+                const node = { ...currentNode, type: CanvasNodeType.Video, title: file.name, width: compact.width, height: compact.height, position: { x: currentNode.position.x + currentNode.width / 2 - compact.width / 2, y: currentNode.position.y + currentNode.height / 2 - compact.height / 2 }, metadata: { ...currentNode.metadata, ...videoMetadata(video), assetId: undefined, taskId: undefined, errorDetails: undefined } } satisfies CanvasNodeData;
                 setNodes((current) => current.map((item) => item.id === nodeId ? node : item));
                 selectInsertedNode(nodeId, "open");
                 const persisted = await persistMediaNode(node);
@@ -486,10 +489,16 @@ export function useCanvasUpload({
             progress.update("上传到服务器并同步资源", 2);
             const image = await uploadImage(file);
             progress.update("更新画布节点", 3);
+            const compact = currentNode.metadata?.freeResize || currentNode.metadata?.manualSize || currentNode.metadata?.locked
+                ? { width: currentNode.width, height: currentNode.height }
+                : fitImageNodeSize(image.width, image.height);
             const node = {
                 ...currentNode,
                 type: CanvasNodeType.Image,
                 title: file.name,
+                width: compact.width,
+                height: compact.height,
+                position: { x: currentNode.position.x + currentNode.width / 2 - compact.width / 2, y: currentNode.position.y + currentNode.height / 2 - compact.height / 2 },
                 metadata: {
                     ...currentNode.metadata,
                     ...imageMetadata(image),
@@ -737,7 +746,7 @@ export function useCanvasUpload({
         }
         if (payload.kind === "video") {
             const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
-            const size = fitNodeSize(payload.width || spec.width, payload.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+            const size = fitNodeSize(payload.width || spec.width, payload.height || spec.height, VIDEO_NODE_UPLOAD_MAX_SIZE.width, VIDEO_NODE_UPLOAD_MAX_SIZE.height);
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             return { id, type: CanvasNodeType.Video, title: payload.title, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { content: payload.url, storageKey: payload.storageKey, status: NODE_STATUS_SUCCESS, naturalWidth: payload.width, naturalHeight: payload.height, durationMs: payload.durationMs, hasAudio: payload.hasAudio, bytes: payload.bytes, mimeType: payload.mimeType || "video/mp4", assetId: payload.assetId } } satisfies CanvasNodeData;
         }
@@ -747,7 +756,7 @@ export function useCanvasUpload({
                 ? { url: payload.dataUrl, storageKey: payload.storageKey, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
                 : await uploadImage(payload.dataUrl);
         const meta = !payload.storageKey && (!payload.width || !payload.height) ? await readImageMeta(storedImage.url) : storedImage;
-        const size = fitNodeSize(meta.width, meta.height);
+        const size = fitImageNodeSize(meta.width, meta.height);
         const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const metadata = storedImage.storageKey
             ? imageMetadata({ ...storedImage, storageKey: storedImage.storageKey, width: meta.width, height: meta.height })
