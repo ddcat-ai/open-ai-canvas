@@ -33,6 +33,17 @@ test("rich text markup stays referentially stable across unrelated renders", () 
     expect(textContent).toContain("dangerouslySetInnerHTML={richTextMarkup}");
 });
 
+test("rich text edit mode derives its text from the displayed document", () => {
+    const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
+    expect(textContent).toContain("const richTextText = useMemo(() => canvasRichTextText(node.metadata?.richText), [node.metadata?.richText]);");
+    expect(textContent).toContain("value={richTextText || node.metadata?.content || \"\"}");
+});
+
+test("rich text edit text keeps a blank line between displayed blocks", () => {
+    const richTextSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/canvas-rich-text.ts"), "utf8");
+    expect(richTextSource).toContain('{ blockSeparator: "\\n\\n" }');
+});
+
 test("text cards do not render an inline expand editor overlay", () => {
     const nodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
     expect(nodeSource).not.toContain("放大编辑文本");

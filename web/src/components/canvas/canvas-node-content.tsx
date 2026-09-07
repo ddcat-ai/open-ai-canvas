@@ -4,7 +4,7 @@ import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageI
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
-import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
+import { canvasRichTextHTML, canvasRichTextText } from "@/lib/canvas/canvas-rich-text";
 import { fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
@@ -375,6 +375,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
     const fontSize = node.metadata?.fontSize || 14;
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, height: "100%", boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
+    const richTextText = useMemo(() => canvasRichTextText(node.metadata?.richText), [node.metadata?.richText]);
     // Keep the prop identity stable so selection rerenders do not replace the rich-text subtree mid-click.
     const richTextMarkup = useMemo(() => ({ __html: richTextHTML }), [richTextHTML]);
 
@@ -396,7 +397,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     containerClassName="h-full min-h-0 flex-1"
                     className="thin-scrollbar m-0 block h-full min-h-0 min-w-0 w-full flex-1 resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent font-sans outline-none select-text"
                     style={textStyle}
-                    value={node.metadata?.content || ""}
+                    value={richTextText || node.metadata?.content || ""}
                     references={mentionReferences}
                     highlightLabels={false}
                     onChange={(value) => onContentChange(node.id, value)}

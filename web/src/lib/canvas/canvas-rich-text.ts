@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import { generateHTML } from "@tiptap/core";
+import { generateHTML, generateText } from "@tiptap/core";
 import CharacterCount from "@tiptap/extension-character-count";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
@@ -30,6 +30,15 @@ export function canvasRichTextHTML(document?: Record<string, unknown>) {
             if (!isSafeCanvasRichTextLink(link.getAttribute("href") || "")) link.removeAttribute("href");
         });
         return template.innerHTML;
+    } catch {
+        return "";
+    }
+}
+
+export function canvasRichTextText(document?: Record<string, unknown>) {
+    if (!document) return "";
+    try {
+        return generateText(document as JSONContent, createCanvasRichTextExtensions(), { blockSeparator: "\n\n" }).trimEnd();
     } catch {
         return "";
     }
