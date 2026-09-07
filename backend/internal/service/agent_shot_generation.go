@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -9,6 +10,8 @@ import (
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
+
+	"gorm.io/gorm"
 )
 
 /* ------------------------------------------------------------------ *
@@ -111,6 +114,13 @@ func (s *Service) AgentGenerateShot(userID string, projectID string, req AgentSh
 	}
 
 	shot, err := s.repo.ShotForProject(projectID, shotID)
+	// gorm 查不到时返回 ErrRecordNotFound（是 error 而不是 nil, nil）——
+	// 它是"确实没有这个镜头"，属于业务 400；只有其它错误才是基础设施 500。
+	// 2026-09-08 生产冒烟抓到过：一开始把它一律当 500，假镜头就返回了
+	// 「读取镜头失败」，语义误导。下方判断顺序不可调换。
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, WrapAppError(http.StatusInternalServerError, "读取镜头失败", err)
+	}
 	if err != nil || shot == nil {
 		return nil, NewAppError(http.StatusBadRequest, "镜头不存在或不属于该项目")
 	}
