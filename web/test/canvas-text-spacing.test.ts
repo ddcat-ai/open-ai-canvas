@@ -27,16 +27,17 @@ test("text body exposes a direct double-click edit entry point", () => {
     expect(textContent).toContain("event.stopPropagation();");
 });
 
-test("rich text markup stays referentially stable across unrelated renders", () => {
+test("view and edit states share one text representation", () => {
     const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
-    expect(textContent).toContain("const richTextMarkup = useMemo(() => ({ __html: richTextHTML }), [richTextHTML]);");
-    expect(textContent).toContain("dangerouslySetInnerHTML={richTextMarkup}");
+    expect(textContent).toContain("const textContent = useMemo(() => canvasRichTextText(node.metadata?.richText) || node.metadata?.content || \"\", [node.metadata?.content, node.metadata?.richText]);");
+    expect(textContent).toContain("value={textContent}");
+    expect(textContent).toContain("{textContent || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}");
 });
 
 test("rich text edit mode derives its text from the displayed document", () => {
     const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
-    expect(textContent).toContain("const richTextText = useMemo(() => canvasRichTextText(node.metadata?.richText), [node.metadata?.richText]);");
-    expect(textContent).toContain("value={richTextText || node.metadata?.content || \"\"}");
+    expect(textContent).toContain("canvasRichTextText(node.metadata?.richText)");
+    expect(textContent).not.toContain("dangerouslySetInnerHTML");
 });
 
 test("rich text edit text keeps a blank line between displayed blocks", () => {

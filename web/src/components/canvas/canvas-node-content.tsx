@@ -4,7 +4,7 @@ import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageI
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
-import { canvasRichTextHTML, canvasRichTextText } from "@/lib/canvas/canvas-rich-text";
+import { canvasRichTextText } from "@/lib/canvas/canvas-rich-text";
 import { fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
@@ -374,10 +374,7 @@ function UnknownNodeContent({ theme }: Pick<CanvasNodeContentProps, "theme">) {
 function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStartEditing, onStopEditing }: CanvasNodeContentProps) {
     const fontSize = node.metadata?.fontSize || 14;
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, height: "100%", boxSizing: "border-box" } as CSSProperties;
-    const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
-    const richTextText = useMemo(() => canvasRichTextText(node.metadata?.richText), [node.metadata?.richText]);
-    // Keep the prop identity stable so selection rerenders do not replace the rich-text subtree mid-click.
-    const richTextMarkup = useMemo(() => ({ __html: richTextHTML }), [richTextHTML]);
+    const textContent = useMemo(() => canvasRichTextText(node.metadata?.richText) || node.metadata?.content || "", [node.metadata?.content, node.metadata?.richText]);
 
     return (
         <div
@@ -397,7 +394,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     containerClassName="h-full min-h-0 flex-1"
                     className="thin-scrollbar m-0 block h-full min-h-0 min-w-0 w-full flex-1 resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent font-sans outline-none select-text"
                     style={textStyle}
-                    value={richTextText || node.metadata?.content || ""}
+                    value={textContent}
                     references={mentionReferences}
                     highlightLabels={false}
                     onChange={(value) => onContentChange(node.id, value)}
@@ -409,20 +406,13 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     onPointerDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                 />
-            ) : richTextHTML ? (
-                <div
-                    className="thin-scrollbar block min-h-0 min-w-0 flex-1 select-text overflow-y-auto break-words bg-transparent font-sans [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:pl-2.5 [&_blockquote]:opacity-70 [&_code]:rounded [&_code]:bg-black/6 [&_code]:px-1 dark:[&_code]:bg-white/8 [&_h1]:my-1.5 [&_h1]:text-[1.55em] [&_h1]:font-semibold [&_h2]:my-1.5 [&_h2]:text-[1.3em] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[1.12em] [&_h3]:font-semibold [&_hr]:my-2 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-0.5 [&_pre]:my-1.5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/90 [&_pre]:p-2 [&_pre]:text-white [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&>:first-child]:mt-0 [&>:last-child]:mb-0"
-                    style={textStyle}
-                    onWheel={(event) => event.stopPropagation()}
-                    dangerouslySetInnerHTML={richTextMarkup}
-                />
             ) : (
                 <div
                     className="thin-scrollbar block min-h-0 min-w-0 flex-1 select-text overflow-y-auto whitespace-pre-wrap break-words bg-transparent font-sans"
                     style={textStyle}
                     onWheel={(event) => event.stopPropagation()}
                 >
-                    {node.metadata?.content || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
+                    {textContent || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
                 </div>
             )}
         </div>
