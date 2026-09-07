@@ -10,11 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// CurrentSchemaVersion = 9：影策 fork 与上游迁移编号在此分叉（D-053）。
+// CurrentSchemaVersion = 10：影策 fork 与上游迁移编号在此分叉（D-053）。
 // 本地生产库已应用 6=asset_library_folders、7=shot_task_chain（W1-01），
 // 上游 main 在 v1.2.5 后将 6 改派 resource_playback_variant 并把 folders 挪到 7。
-// 为免生产库记录作废，fork 保留自有编号，上游两个新迁移顺延为 8/9。
-const CurrentSchemaVersion int64 = 9
+// 为免生产库记录作废，fork 保留自有编号，上游两个新迁移顺延为 8/9，
+// fork 自有 10=agent_tokens（D-057A Agent Service Token 基础设施）。
+const CurrentSchemaVersion int64 = 10
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -25,6 +26,7 @@ const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const shotTaskChainChecksum = "sha256:shot-task-chain-v7-20260904"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
+const agentTokensChecksum = "sha256:agent-tokens-v10-20260907"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -60,6 +62,7 @@ var schemaMigrations = []migration{
 	{version: 7, name: "shot_task_chain", checksum: shotTaskChainChecksum, apply: migrateSchemaShotTaskChain},
 	{version: 8, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaResourcePlaybackVariant},
 	{version: 9, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaLogicalModelActiveCode},
+	{version: 10, name: "agent_tokens", checksum: agentTokensChecksum, apply: migrateSchemaAgentTokens},
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
@@ -273,6 +276,15 @@ func migrateSchemaLogicalModelActiveCode(tx *gorm.DB) error {
 	}
 	if err := tx.Exec("CREATE UNIQUE INDEX idx_logical_models_code ON logical_models(code) WHERE archived_at IS NULL").Error; err != nil {
 		return fmt.Errorf("创建前台模型活动 code 唯一索引：%w", err)
+	}
+	return nil
+}
+
+// migrateSchemaAgentTokens：D-057A —— Agent Service Token 基础设施（fork 自有编号 10）。
+// 只新建凭据表 agent_tokens，不改动任何业务表，也不回写既有数据。
+func migrateSchemaAgentTokens(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.AgentToken{}); err != nil {
+		return fmt.Errorf("创建 Agent 服务令牌表：%w", err)
 	}
 	return nil
 }

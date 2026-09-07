@@ -131,6 +131,10 @@ func run(ctx context.Context) error {
 	handler.RegisterModelCatalogRoutes(api, svc)
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterCustomRelayRoutes(api, svc)
+	// D-057A：Agent Service Token 通道——仅在无会话 cookie 且带影策 Agent Bearer 时才接管，
+	// 既有会话鉴权行为完全不变。
+	api.Use(handler.AgentTokenMiddleware(svc))
+	handler.RegisterAgentTokenRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
 	handler.RegisterComfyBridgeRoutes(api, svc)
 	handler.RegisterRunningHubRoutes(api, svc)
