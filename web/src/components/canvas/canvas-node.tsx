@@ -264,6 +264,16 @@ export const CanvasNode = React.memo(function CanvasNode({
     };
 
     const dragActive = isDragging ?? Boolean(dragOffset);
+    const versionBadgeBackground = data.metadata?.versionPrimary
+        ? theme.accent.primary
+        : canvasThemeName === "dark"
+            ? theme.node.panel
+            : theme.node.activeStroke;
+    const versionBadgeForeground = data.metadata?.versionPrimary
+        ? theme.accent.onPrimary
+        : canvasThemeName === "dark"
+            ? theme.node.text
+            : theme.accent.onPrimary;
 
     return (
         <div
@@ -392,11 +402,11 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {data.metadata?.versionLabel ? (
                     <button
                         type="button"
-                        className="absolute left-3 top-3 z-[var(--node-z-overlay)] grid size-7 place-items-center rounded-[var(--r-full)] border p-0.5 text-[var(--node-badge-fs)] font-semibold leading-none backdrop-blur-md transition-[transform,background,border-color,box-shadow] hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:hover:translate-y-0"
+                        className="absolute left-2.5 top-2.5 z-[var(--node-z-overlay)] grid size-7 place-items-center rounded-[var(--r-full)] border p-0 font-sans text-xs font-semibold leading-none tracking-tight shadow-[var(--canvas-icon-shadow)] backdrop-blur-md transition-[transform,background,border-color,box-shadow] hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:hover:translate-y-0"
                         style={{
-                            background: data.metadata.versionPrimary ? theme.accent.primarySoft : theme.toolbar.panel,
-                            borderColor: data.metadata.versionPrimary ? theme.accent.primary : theme.toolbar.border,
-                            color: data.metadata.versionPrimary ? theme.accent.primary : theme.node.text,
+                            background: versionBadgeBackground,
+                            borderColor: data.metadata.versionPrimary ? theme.accent.primary : theme.node.text,
+                            color: versionBadgeForeground,
                             outlineColor: theme.accent.primary,
                         }}
                         title={data.metadata.versionLabel + (data.metadata.versionPrimary ? " · 主版本" : "") + "，点击查看版本对比"}
