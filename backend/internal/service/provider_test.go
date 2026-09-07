@@ -23,6 +23,34 @@ import (
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
 const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
+func TestProviderMediaHydrationPolicyPrefersObjectURLs(t *testing.T) {
+	prefer := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceGrokImage)}})
+	if prefer.requireURL || !prefer.preferURL {
+		t.Fatalf("grok image policy = %#v", prefer)
+	}
+	required := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceMiniMaxVideo)}})
+	if !required.requireURL || !required.preferURL {
+		t.Fatalf("minimax policy = %#v", required)
+	}
+	bytesOnly := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceGeminiImage)}})
+	if bytesOnly.requireURL || bytesOnly.preferURL {
+		t.Fatalf("gemini image policy = %#v", bytesOnly)
+	}
+	masked := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceOpenAIImage)}, Mask: &providerMedia{ID: "mask"}})
+	if masked.requireURL || masked.preferURL {
+		t.Fatalf("openai mask policy = %#v", masked)
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "aliyun"}) != true {
+		t.Fatal("aliyun should use object storage URLs")
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "tencent"}) != true || resourceUsesObjectStorage(&model.Resource{Provider: "qiniu"}) != true || resourceUsesObjectStorage(&model.Resource{Provider: "s3"}) != true {
+		t.Fatal("cos/kodo/s3 should use object storage URLs")
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "local"}) {
+		t.Fatal("local resources should fall back to protocol-compatible bytes")
+	}
+}
+
 func TestProviderRequestErrorDetails(t *testing.T) {
 	tests := []struct {
 		name string
