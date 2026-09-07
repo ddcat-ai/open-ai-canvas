@@ -1,0 +1,167 @@
+---
+title: 后端数据库
+description: 影策后端核心持久化表与状态边界
+---
+
+# 后端数据库
+
+后端通过 GORM 管理 SQLite 与 PostgreSQL 表结构。结构变化由 `migrate-schema` 按版本顺序执行并写入 `schema_migrations`；受管生产部署在 Backend 启动前运行独立迁移服务，Backend 只校验当前 Schema 是否与二进制兼容。业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。
+
+## 结构迁移与版本
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `schema_migrations` | 保存已成功应用的结构版本、名称、校验和与时间 | 已应用版本的校验和发生变化时拒绝启动；数据库版本高于当前二进制支持版本时拒绝旧程序连接 |
+
+容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
+
+当前结构版本为 8。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录。
+
+历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
+
+升级前备份数据库，迁移命令必须沿用部署实际配置的数据库连接和数据目录。开发环境启用自动迁移时重新启动新代码即可；关闭自动迁移的部署先使用新构建的 `migrate-schema up`，然后 `migrate-schema verify`，成功后启动 Backend。迁移与记录写入在事务中执行；此修复不提供降级迁移，回退旧二进制可能无法识别历史顺序，应恢复匹配的备份和版本，不手工改迁移表。
+
+版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
+
+## 平台外观配置
+
+平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 的 JSON 值使用版本化合同；版本 3 保存品牌名称、英文品牌标识、登录页主标题与可选说明文案、浅色与可选深色 Logo 资源 ID、Logo 外框开关、登录页视频资源 ID、可选封面资源 ID 和预留皮肤 ID。只配置一套 Logo 时，公开投影会在浅色和深色主题复用同一资源；旧版本缺少深色 Logo 与外框字段时分别回退到单 Logo 和启用外框，不改变既有视觉。资源元数据和文件仍分别由 `resources` 表与当前资源存储承担。恢复默认外观时删除这条设置记录并回到内置值，不级联删除已经上传的资源。
+
+公开接口只投影品牌名、英文品牌标识、登录页公开文案、深浅主题使用的稳定 slot 资源 URL、Logo 外框状态、配置状态和修订标识，不返回内部资源 ID、对象路径或存储凭据。管理员保存新配置前，服务层会校验文本长度与安全字符、资源为就绪状态、类型与 slot 匹配，且新绑定资源由当前管理员上传；两套 Logo、视频和封面中任何正在使用的资源都会进入管理员删除保护。品牌变更同时写入 `admin_audit_events`。
+
+## 账号认证与密码找回
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `users` | 保存用户名、唯一非空邮箱、本地密码哈希、角色和状态 | 密码只保存 bcrypt 哈希；密码找回只面向状态正常且已有本地密码的账号 |
+| `auth_sessions` | 保存登录 Cookie 对应的服务端会话和令牌哈希 | 密码重置成功时删除该用户全部会话，旧 Cookie 立即失效 |
+| `email_verification_codes` | 保存注册和密码重置的一次性邮箱验证码 | 只保存带用途隔离的 HMAC 哈希；验证码 10 分钟过期、只能消费一次，明文不进入数据库 |
+
+密码重置在单个数据库事务中条件消费 `password_reset` 验证码、更新 `users.password_hash` 并删除 `auth_sessions`。任一步失败都会回滚，不能出现密码已修改但旧会话仍有效，或验证码已消耗但密码未更新的部分状态。
+
+邮件系统设置还保存电子邮件域名白名单。新配置默认填入 Gmail、163、126、QQ、Outlook、Hotmail、iCloud、Yahoo 和 Foxmail；管理员可按行编辑完整域名。白名单为空时不限制邮箱域名，非空时只有精确匹配的域名可注册。该规则只作用于新用户注册和注册验证码，不限制 SMTP 发件邮箱，也不影响已有账号找回密码。
+
+## 技能包与版本
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `skills` | 保存技能公开元数据、当前版本指针、来源和 GitHub 同步状态 | `instruction` 仅保留入口 `SKILL.md` 的兼容投影；目录文件不展开写入该字段 |
+| `skill_versions` | 保存每次安装、编辑或同步形成的不可变技能版本 | 记录内容哈希、入口路径、规范化 ZIP 的存储键、文件数、总大小和 GitHub commit |
+| `skill_files` | 保存某个版本的文件索引 | `(skill_version_id, path)` 唯一；只保存路径、类型、MIME、大小和 SHA-256，不保存正文 |
+| `user_skill_states` | 保存用户的加入、收藏、安装版本和自动更新选择 | 技能正文读取仍经过公开性和归属校验，不能通过文件接口绕过私有技能权限 |
+
+规范化技能包保存在后端数据目录的 `skill-packages/<skill-id>/<version-id>.zip`，数据库只保存索引和版本指针。上传 ZIP 时强制校验 `SKILL.md`、路径越界、软链接、重复路径、文件数量和解压大小；GitHub 技能保存公开仓库、分支、子目录和提交 SHA，后台每 6 小时检查一次开启自动更新的技能，并记录最近检查、同步时间及失败状态。
+
+## 短剧分镜生产
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `projects` | 保存短剧项目基础设置、画幅、画风快照、项目主图和默认图片/视频模型 | `default_image_model` / `default_video_model` 保存前端模型选择器的渠道限定引用；模型下架或渠道停用时前端回退当前全局默认。`cover_resource_id` 只能引用当前用户已就绪的图片资源；资源删除检查会阻止仍被项目主图使用的图片被回收 |
+| `project_units` | 保存项目章节或集数的正文、排序和状态 | `word_count` 在正文创建、导入和更新时同步维护，项目详情只返回摘要和字数，不批量返回长篇正文；升级时会为旧正文回填字数 |
+| `assets` / `asset_folders` / `asset_versions` / `project_asset_links` | 保存用户资产、自定义分类、不可变版本及项目引用 | 业务分类统一为 `character`、`environment`、`prop`、`material`、`other`；自定义分类通过用户级 `asset_folders` 与 `assets.folder_id` 表达，不改变业务分类语义 |
+| `project_asset_candidates` | 保存章节或 Agent 提取后等待用户确认的资产候选 | `name_key` 保存规范化名称，`source` 记录提取入口；角色候选只允许来自 `chapter_character_extract` 且必须关联章节，同一项目、分类和规范化名称的待确认候选保持唯一 |
+| `shots` | 保存章节内稳定的镜头身份、排序和当前版本指针 | 不保存完整生成历史；`current_revision_id` 指向当前采用的分镜脚本版本 |
+| `shot_revisions` | 保存画面、动作、台词、景别、机位、运镜、提示词和动作节拍 | 每次编辑创建新版本；历史版本不可被静默覆盖 |
+| `shot_asset_references` | 将镜头绑定到具体资产版本 | 修改引用时只使该镜头的下游产物过期，不影响其他镜头 |
+| `shot_artifacts` | 保存分镜图、动作预演、首尾帧、视频等版本化产物 | `selected` 表示当前采用版本；上游变化后状态转为 `stale`，历史资源继续保留 |
+| `production_task_links` | 显式记录生成任务所属的领域项目、画布、章节、镜头和工作流步骤 | `Task.project_id` 仍兼容画布任务身份，不再用它单独推断短剧领域归属 |
+| `workflow_template_versions` / `workflow_instances` / `workflow_step_instances` | 保存短剧生产模板和项目、章节实例 | 短剧分镜工作流 v2 顺序为剧情、资产、分镜、动作预演、视频、交付 |
+
+短剧项目状态以这些领域表为准。自由画布可以承载探索节点，但画布 metadata 不作为生产完成度、镜头版本或交付可用性的真相源。
+
+### 长篇项目读取边界
+
+短剧工作台不再通过单个项目详情响应下载全部章节正文、镜头历史、产物、画布和资产。读取按页面职责拆分：
+
+| 接口 | 返回范围 |
+| --- | --- |
+| `GET /api/projects/:id/core` | 项目基础设置，不包含业务集合 |
+| `GET /api/projects/:id/overview` | 项目聚合计数与前 8 个章节进度 |
+| `GET /api/projects/:id/units` | 全部章节摘要与字数，不包含正文 |
+| `GET /api/projects/:id/units/:unitId` | 单章正文 |
+| `GET /api/projects/:id/units/:unitId/workspace` | 当前章节的镜头、版本、产物、引用、候选、相关任务和已绑定资产 |
+| `GET /api/projects/:id/canvases` | 项目画布与当前页章节关联，使用 `page`、`page_size` |
+| `GET /api/projects/:id/assets` | 项目资产分页、分类/目录计数，支持分类、媒体类型、目录和关键词筛选 |
+| `GET /api/projects/:id/asset-candidates` | 资产候选分页，支持章节、状态、分类和名称关键词筛选 |
+
+旧 `GET /api/projects/:id` 暂时保留给尚未迁移的调用方；短剧工作台页面不得重新依赖该整包接口。
+
+面向上千章、上万镜头的数据量，迁移会建立以下组合索引：
+
+- `idx_project_units_project_position`：章节按项目和位置读取。
+- `idx_shots_project_unit_position`：当前章节镜头按位置读取。
+- `idx_shot_artifacts_project_unit`：当前章节产物读取。
+- `idx_canvas_unit_links_project_unit`：章节关联画布聚合。
+- `idx_canvas_projects_user_project_updated`：项目画布倒序分页。
+- `idx_project_asset_links_project_folder_position`：项目目录资产分页与排序。
+- `idx_project_asset_candidates_project_unit_status`、`idx_project_asset_candidates_project_status_category`：章节候选和待确认分类队列。
+- `idx_tasks_user_project_created`：项目任务恢复读取。
+
+## 支付与插件版本
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `topup_products` | 保存服务端维护的充值商品、金额和积分快照 | 客户端只能提交商品 ID；金额和积分由 service 读取，不能由请求覆盖 |
+| `payment_provider_configs` | 保存支付插件某个渠道配置的不可变版本 | `provider_id + version` 唯一；密钥只保存加密密文；`plugin_id` / `plugin_version` 记录配置对应的插件版本 |
+| `payment_orders` | 保存充值订单、幂等键、渠道交易号和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本 |
+| `payment_notifications` | 保存已验签的支付通知收件箱 | 以渠道事件 ID 幂等；只保存用于异步入账的标准化证据，重复通知不会重复发放积分 |
+| `payment_reconciliation_runs` / `payment_reconciliation_items` | 保存渠道账单下载和对账结果 | 账单只能作为发现线索，金额、币种和交易号仍需由插件查单确认；历史订单继续绑定原插件版本 |
+
+支付宝、微信及后续聚合平台都只作为支付插件包提供 `yingce.payment/v1` 适配器，宿主数据库不保存平台专用字段。插件升级不会改写历史订单的 `plugin_version`；存在未完成订单时，原插件版本和配置必须继续可解析通知、查单和关单。
+
+## 模型渠道与目录
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `model_channels` | 保存系统渠道与用户渠道的连接配置 | 系统渠道密钥不进入公开目录；普通用户只能读取脱敏后的可用模型集合 |
+| `channel_models` | 保存系统渠道中的产品模型标识、上游模型 ID、显示名称、模型 Logo、能力、协议和版本状态 | `icon` 只用于模型选择器展示；能力、协议、启用状态和价格仍由 service 强校验 |
+| `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录 |
+| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一，归档后可用同 code 重建目录项 |
+
+## 插件管理
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `plugin_platform_states` | 保存管理员设置的平台可用状态 | `plugin_id` 为主键；平台停用是所有用户的硬上限，管理员变更写入审计日志 |
+| `user_plugin_states` | 保存用户对官方应用插件的个人启用状态 | `(user_id, plugin_id)` 唯一；系统协议和管理员上传插件不得写入用户级状态 |
+
+有效状态由服务端计算为 `platform_available AND user_enabled`。官方应用插件没有平台状态记录时默认可用；用户没有个人记录时默认停用，历史上全局启用的工作流插件在用户首次保存个人选择前沿用旧状态。管理员上传包的来源和作用域由宿主覆盖，不能通过 Manifest 提权。
+
+## ComfyUI Bridge
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `comfy_bridges` | 保存用户注册的 Bridge 身份、Token 摘要、启用状态和心跳能力 | Token 明文只在注册时返回一次；查询和日志只使用摘要 |
+| `comfy_bridge_requests` | 保存云端任务交给本地 Bridge 的请求、领取状态和完成结果 | `id` 同时作为任务的 `provider_request_id`；状态按 `queued -> claimed -> succeeded/failed/cancelled` 单向流转 |
+
+`comfy_bridge_requests` 是 Bridge 交接的真相源。后端进程重启后，未领取请求继续从数据库投递；已领取请求的迟到结果先落库，任务 worker 恢复后使用原请求 ID 读取结果，不会创建第二次本地工作流执行。请求有效期当前为两小时，过期的排队或执行记录会转为失败。
+
+请求表保存工作流执行 payload 和结果，但不保存 Bridge Token。任务取消时，未领取请求可以确定取消；已经领取的本机工作流无法可靠中止，迟到结果会被丢弃并进入费用核对流程。
+
+## 系统公告
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `announcements` | 保存管理员发布的系统公告 | `pinned` 只改变排序；`image_resource_id` 只能绑定由当前管理员上传并在发布事务中消费的公告配图草稿 |
+| `announcement_image_drafts` | 标记尚未发布的公告配图资源 | 发布/更新事务消费草稿；取消编辑显式回收，超过 24 小时的异常遗留草稿由后台清理 |
+| `user_announcement_reads` | 保存用户已读状态 | 同一用户和公告唯一；公告重新发布时清除旧已读记录 |
+
+活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。公告只要求标题，正文和配图均可为空。用户首次进入工作区时会自动看到未读公告，可以只关闭本次或选择今日不再提醒；主动打开公告中心后才会写入服务端已读状态。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
+
+## 资源存储
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `resources` | 保存资源元数据和实际存储位置引用 | `user_id + upload_key` 唯一约束保证逻辑上传幂等；S3 资源必须通过 `storage_setting_id` 固定绑定创建时的位置；浏览器默认经同源接口读取 |
+| `storage_locations` | 保存平台或个人 S3 位置版本、加密凭据和连接测试摘要 | Endpoint、Bucket、Region、PathStyle、PathPrefix、Provider 组成不可变位置；同位置只轮换凭据，位置变化创建新记录 |
+| `resource_deletion_jobs` | 在业务记录删除后可靠清理物理对象 | 固化资源的存储位置与对象键；删除失败保留任务并重试，S3 404 按幂等成功处理 |
+
+`storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。
+
+`resources.upload_key` 保存客户端 `X-Idempotency-Key` 的 SHA-256 摘要。相同用户重复提交同一逻辑上传时复用已有资源；失败重试继续使用原对象路径，避免对象存储已经接收请求但响应丢失时产生第二份物理对象。未提供幂等标识的后台生成资源保持 `NULL`，不参与该唯一约束。
+
+个人画布中的图片、视频和音频采用 `Asset -> Resource` 所有权约束：前端先提交素材，再提交带 `assetId` 的画布节点或时间线直连媒体；后端保存画布前校验资源属于当前用户、状态为 `ready`、素材存在且引用同一资源。素材更新、全量替换和删除也会反向检查已有画布，不能把仍在使用的资源从素材库中移除或替换成其他资源。登录历史账号时，前端会按资源键补建缺失素材并回写 `assetId`。这项修复复用现有表和 Outbox，不新增结构迁移。
+
+账号文件容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重；上传中或失败记录不占用已存储容量，`session_files` 仍按实际大小计入。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
+
+素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。自动清理与用户手动彻底删除复用同一 service 引用校验和 `resource_deletion_jobs` Outbox，仍被画布、项目、任务或其他业务记录引用的素材不会被删除。

@@ -1,0 +1,14 @@
+{
+  "title": "开发文档",
+  "root": true,
+  "defaultOpen": true,
+  "pages": [
+    "local-development",
+    "code-map",
+    "backend-database",
+    "task-runtime-stability",
+    "system-update",
+    "protocol-plugins",
+    "canvas-data-structure"
+  ]
+}
