@@ -6,6 +6,7 @@ import { buildCanvasContext, findCanvasNodes, getCanvasConnection, getCanvasGene
 import { type ToolName } from "./schemas.js";
 import { withProjectContext } from "./project-context.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
+import { serverGenerateShot } from "./yingce-server-executor.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
 type PendingRequest = { clientId: string; recoverable: boolean; resolve: (value: unknown) => void; reject: (error: Error) => void };
@@ -98,8 +99,15 @@ export class CanvasSession {
         let input = parseToolInput(tool, rawInput) as Record<string, unknown>;
         const projectTool = tool.startsWith("project_");
         if (projectTool) {
-            if (!this.clients.size || !this.canvasState) throw new Error("当前没有已连接画布");
-            if (!input.projectId && this.canvasState.domainProjectId) input.projectId = this.canvasState.domainProjectId;
+            if (!input.projectId && this.canvasState?.domainProjectId) input.projectId = this.canvasState.domainProjectId;
+            // D-057B（D-056）：没有已连接画布时不再直接抛错——先尝试 Server Executor。
+            // projectId 是 Server 模式唯一的归属依据，缺失必须显式报错而不是猜。
+            if (!this.clients.size || !this.canvasState) {
+                if (!input.projectId) throw new Error("当前没有已连接画布，Server 执行模式要求显式传入 projectId");
+                const serverResult = await this.runServerExecutor(tool, input);
+                if (serverResult === undefined) throw new Error(`当前没有已连接画布，且 ${tool} 暂不支持 Server 执行`);
+                return serverResult;
+            }
             if (!input.projectId) throw new Error("当前画布没有关联短剧项目");
             return await this.requestCanvasTool(tool, input);
         }
@@ -216,6 +224,22 @@ export class CanvasSession {
         const validation = validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
         if (!validation.ok) throw new Error(`画布操作校验失败：${validation.issues.filter((item) => item.severity === "error").map((item) => item.message).join("；")}`);
         return await this.requestCanvasTool(tool, input);
+    }
+
+    /**
+     * D-057B：Server Executor 派发。返回 undefined 表示该工具尚无服务端实现，
+     * 交由调用方走"不支持 Server 执行"的报错路径。
+     *
+     * 只挑参数、不做业务判断——生产语义整体在后端 Go 生产域，避免两套语义漂移。
+     */
+    private async runServerExecutor(tool: ToolName, input: Record<string, unknown>) {
+        if (tool !== "project_generate_shot") return undefined;
+        return await serverGenerateShot(String(input.projectId || ""), String(input.shotId || ""), {
+            ...(typeof input.videoSeconds === "number" ? { videoSeconds: input.videoSeconds } : {}),
+            ...(typeof input.resolution === "string" && input.resolution ? { resolution: input.resolution } : {}),
+            ...(Array.isArray(input.referenceImageUrls) ? { referenceImageUrls: input.referenceImageUrls.map((item) => String(item)) } : {}),
+            ...(typeof input.workflowStepId === "string" && input.workflowStepId ? { workflowStepId: input.workflowStepId } : {}),
+        });
     }
 
     private async requestCanvasTool(name: ToolName, input: Record<string, unknown>) {

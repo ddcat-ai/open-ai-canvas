@@ -137,6 +137,9 @@ func run(ctx context.Context) error {
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterCustomRelayRoutes(api, svc)
 	handler.RegisterAgentTokenRoutes(api, svc)
+	// D-057B：Server Executor（Agent 自主生产通道）。与令牌管理接口相邻注册，
+	// 但作用域门禁由 AgentScopeGuard 独立保证，不依赖注册顺序。
+	handler.RegisterAgentShotRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
 	handler.RegisterComfyBridgeRoutes(api, svc)
 	handler.RegisterRunningHubRoutes(api, svc)

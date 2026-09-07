@@ -1,24 +1,22 @@
-import { getProject, type ProjectDetail } from "./projects";
-import { submitBackendGenerationTask } from "./generation-task";
-import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
-import type { ReferenceImage } from "@/types/image";
+import { apiClient, request } from "./request";
 
 /* ------------------------------------------------------------------ *
- * D-055 第二阶段（H3 Production Vertical Slice）
- * project_generate_shot 的前端执行体：镜头 → H3 生成任务。
+ * D-057C —— 语义收口：浏览器侧的 project_generate_shot 不再自己实现业务规则
  *
- * 设计边界（D-054A / D-055 工单）：
- * - 提示词只来自镜头当前修订版的 videoPrompt（用户创作），Agent 不改写、
- *   不拼装 prompt——nxf 是编译器，硬规则不允许模型在调用侧重新组织提示词。
- * - 模型自动使用系统渠道里的 MiniMax H3（渠道直连 config，不带 logicalModelId，
- *   与 D-055 第一阶段实测可用的 payload 形态一致；FeatureFrontendModels 关闭时
- *   logicalModelId 路由会被拒）。
- * - 带 referenceImageUrls ⇒ operation 自动判 image_to_video（与后端
- *   model_capability 强制规则一致），渠道模型画像 operations 已含该模式。
- * - 任务带 metadata.shotId/unitId/artifactType，成功收口后由后端做 G2 链回写；
- *   若还带 workflowStepId（G1 语境），RegisterTaskOutputFromTask 会自动落
- *   ShotArtifact——不带则只建任务不落产物行（G1 边界，2026-09-06 实锤）。
+ * 背景（D-056「单一 Domain Semantics + 双执行通道」）：
+ * 本文件原先在前端自行完成「取镜头提示词 → 发现 H3 模型 → 钳时长 → 建任务」，
+ * 与 D-057B 新增的 Go 服务端执行体构成**两份生产语义**——靠人肉同步，必然漂移。
+ *
+ * 现在两通道共用同一个后端端点：
+ *   - Browser 通道：带会话 cookie 调用 `POST /api/agent/projects/:id/shots/:sid/generate`
+ *   - Server  通道：canvas-agent 带 Agent 服务令牌调用同一端点
+ * 后端 `RequireAgentScope` 对会话态直接放行，故浏览器可正常调用。
+ *
+ * 本文件只做参数整理与结果透传——**不再有任何模型发现、时长钳制或提示词组装**。
+ * 语义锚点唯一：backend/internal/service/agent_shot_generation.go。
  * ------------------------------------------------------------------ */
+
+const api = apiClient;
 
 export type GenerateShotInput = {
     shotId: string;
@@ -40,119 +38,23 @@ export type GenerateShotResult = {
     resolution: string;
     status: string;
     promptSource: "revision";
+    /** 执行通道标记（server / browser），便于可观测性与问题定位。 */
+    executor?: string;
 };
-
-const DEFAULT_RESOLUTION = "768p横";
-/** v5（非 15s 版）的时长上限是 10s；no_pic 与 v5_15s 都是 15s。 */
-const H3_MODEL_SECOND_LIMITS: Array<{ match: RegExp; maxSeconds: number }> = [
-    { match: /_v5_15s$/i, maxSeconds: 15 },
-    { match: /_no_pic$/i, maxSeconds: 15 },
-    { match: /_v5$/i, maxSeconds: 10 },
-];
-const H3_FALLBACK_MAX_SECONDS = 5;
-
-/** 从配置 store 的渠道目录里发现 MiniMax H3 视频模型（系统渠道同步进来的 minimax_h3_*）。 */
-export function discoverH3VideoModel(config: AiConfig, withReferences: boolean): { channelId: string; model: string } {
-    const candidates = config.channels.flatMap((channel) =>
-        channel.models
-            .filter((model) => /^minimax_h3_/i.test(model))
-            .map((model) => ({ channelId: channel.id, model })),
-    );
-    if (!candidates.length) {
-        throw new Error("模型目录里没有 MiniMax H3 视频模型：请先在后台配置 AutoDL 渠道并同步模型目录（D-055 第一阶段）");
-    }
-    const ordered = withReferences
-        ? [/^minimax_h3_lightx2v_v5_15s$/i, /^minimax_h3_lightx2v_v5$/i]
-        : [/^minimax_h3_lightx2v_no_pic$/i, /^minimax_h3_lightx2v_/i];
-    for (const pattern of ordered) {
-        const hit = candidates.find((candidate) => pattern.test(candidate.model));
-        if (hit) return hit;
-    }
-    return candidates[0];
-}
-
-function maxSecondsForModel(model: string): number {
-    return H3_MODEL_SECOND_LIMITS.find((entry) => entry.match.test(model))?.maxSeconds ?? H3_FALLBACK_MAX_SECONDS;
-}
-
-function clampSeconds(value: number, maxSeconds: number): number {
-    if (!Number.isFinite(value) || value <= 0) return Math.min(5, maxSeconds);
-    return Math.max(1, Math.min(Math.round(value), maxSeconds));
-}
-
-/** 从项目蒸馏里取镜头 + 当前修订版；校验提示词存在。 */
-export function resolveShotPrompt(detail: ProjectDetail, shotId: string): {
-    shot: ProjectDetail["shots"][number];
-    videoPrompt: string;
-    durationMs: number;
-} {
-    const shot = (detail.shots || []).find((item) => item.id === shotId);
-    if (!shot) throw new Error(`镜头不存在或不属于该项目：${shotId}`);
-    const revision = (detail.shotRevisions || [])
-        .filter((item) => item.shotId === shotId)
-        .slice()
-        .sort((left, right) => right.version - left.version)[0];
-    const videoPrompt = (revision?.videoPrompt || "").trim();
-    if (!videoPrompt) {
-        throw new Error(`镜头「${shot.title || shotId}」的当前版本还没有视频提示词（videoPrompt），请先在镜头编辑里填写后再生成`);
-    }
-    return { shot, videoPrompt, durationMs: revision?.durationMs || shot.durationMs || 0 };
-}
 
 /**
  * project_generate_shot 执行体：从镜头当前修订版发起 H3 视频生成。
- * 返回创建好的任务（不等待完成；进度由项目工作区轮询，产物自动挂镜头）。
+ * 只建任务不等待完成（与 Server 通道一致）：进度由项目工作区轮询，产物自动挂镜头。
  */
 export async function generateShot(projectId: string, rawInput: GenerateShotInput): Promise<GenerateShotResult> {
-    const detail = await getProject(projectId);
-    const { shot, videoPrompt, durationMs } = resolveShotPrompt(detail, String(rawInput.shotId || "").trim());
+    const shotId = String(rawInput.shotId || "").trim();
+    const body: Record<string, unknown> = {};
+    if (typeof rawInput.videoSeconds === "number" && Number.isFinite(rawInput.videoSeconds)) body.videoSeconds = rawInput.videoSeconds;
+    if (rawInput.resolution?.trim()) body.resolution = rawInput.resolution.trim();
+    if (rawInput.referenceImageUrls?.length) body.referenceImageUrls = rawInput.referenceImageUrls.map((item) => String(item).trim()).filter(Boolean);
+    if (rawInput.workflowStepId?.trim()) body.workflowStepId = rawInput.workflowStepId.trim();
 
-    const referenceUrls = (rawInput.referenceImageUrls || []).map((url) => url.trim()).filter(Boolean);
-    const baseConfig = useConfigStore.getState().config;
-    const selection = discoverH3VideoModel(baseConfig, referenceUrls.length > 0);
-    const maxSeconds = maxSecondsForModel(selection.model);
-    const videoSeconds = clampSeconds(rawInput.videoSeconds ?? (durationMs > 0 ? durationMs / 1000 : 5), maxSeconds);
-    const resolution = (rawInput.resolution || DEFAULT_RESOLUTION).trim();
-
-    const config: AiConfig = {
-        ...baseConfig,
-        model: selection.model,
-        size: "16:9",
-        vquality: resolution,
-        videoSeconds: String(videoSeconds),
-    };
-    const referenceImages: ReferenceImage[] = referenceUrls.map((url, index) => ({
-        id: crypto.randomUUID(),
-        name: `shot-reference-${index + 1}`,
-        type: "image/jpeg",
-        dataUrl: "",
-        url,
-    }));
-
-    const task = await submitBackendGenerationTask({
-        projectId,
-        mode: "video",
-        prompt: videoPrompt,
-        config,
-        referenceImages,
-        metadata: {
-            shotId: shot.id,
-            ...(shot.unitId ? { unitId: shot.unitId } : {}),
-            ...(rawInput.workflowStepId?.trim() ? { workflowStepId: rawInput.workflowStepId.trim() } : {}),
-            artifactType: "video",
-            source: "agent-generate-shot",
-        },
-    });
-    return {
-        taskId: task.id,
-        shotId: shot.id,
-        ...(shot.unitId ? { unitId: shot.unitId } : {}),
-        model: selection.model,
-        channelId: selection.channelId,
-        operation: referenceImages.length ? "image_to_video" : "text_to_video",
-        videoSeconds,
-        resolution,
-        status: task.status,
-        promptSource: "revision",
-    };
+    return await request<GenerateShotResult>(
+        api.post(`/agent/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/generate`, body),
+    );
 }

@@ -60,3 +60,6 @@ camera_language_guide.md
 .superdesign
 .playwright-cli/
 /project-memory/
+# D-057B：Agent 服务令牌（本地凭据，绝不进仓库；只存 canvas-agent 本地文件，环境变量优先）
+canvas-agent/agent-server.json
+.workbuddy/
