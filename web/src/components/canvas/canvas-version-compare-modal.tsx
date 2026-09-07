@@ -8,15 +8,18 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 export function CanvasVersionCompareModal({ open, versions, onClose, onSetPrimary, onFocus }: { open: boolean; versions: CanvasNodeData[]; onClose: () => void; onSetPrimary: (nodeId: string) => void; onFocus: (nodeId: string) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const modalWidth = Math.min(1180, Math.max(440, 112 + versions.length * 340));
+    const cardWidth = 328;
+    const cardGap = 12;
+    const modalHorizontalPadding = 48;
+    const modalWidth = Math.min(1180, Math.max(440, modalHorizontalPadding + versions.length * cardWidth + Math.max(0, versions.length - 1) * cardGap));
     return (
         <Modal title="版本对比" open={open} footer={null} width={modalWidth} centered onCancel={onClose} styles={{ body: { overflow: "hidden" } }}>
-            <div className="thin-scrollbar grid max-h-[70vh] grid-flow-col auto-cols-[328px] gap-2.5 overflow-x-auto pb-1.5">
+            <div className="thin-scrollbar grid max-h-[70vh] grid-flow-col auto-cols-[328px] gap-3 overflow-x-auto pb-1.5">
                 {versions.map((node) => {
                     const videoPreview = canvasNodeVideoPreviewUrl(node);
                     return (
                     <article key={node.id} className="overflow-hidden rounded-[var(--r-lg)] border" style={{ borderColor: node.metadata?.versionPrimary ? theme.accent.primary : theme.node.stroke, background: theme.node.panel, boxShadow: node.metadata?.versionPrimary ? "0 0 0 2px " + theme.accent.primarySoft : undefined }}>
-                        <div className="flex h-10 items-center justify-between gap-2 border-b px-2.5" style={{ borderColor: theme.node.stroke }}>
+                        <div className="flex h-11 items-center justify-between gap-2 border-b px-2.5" style={{ borderColor: theme.node.stroke }}>
                             <div className="flex min-w-0 flex-1 items-center gap-1.5"><span className="grid size-6 shrink-0 place-items-center rounded-[var(--r-full)] border text-[var(--node-badge-fs)] font-semibold leading-none" style={{ background: node.metadata?.versionPrimary ? theme.accent.primarySoft : theme.toolbar.itemHover, borderColor: node.metadata?.versionPrimary ? theme.accent.primary : theme.node.stroke, color: node.metadata?.versionPrimary ? theme.accent.primary : theme.node.text }}>{node.metadata?.versionLabel || "-"}</span><span className="min-w-0 truncate text-xs font-semibold" title={node.title}>{node.title}</span></div>
                             {node.metadata?.versionPrimary ? <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-medium" style={{ color: theme.accent.primary }}><Check className="size-3" />主版本</span> : null}
                         </div>
