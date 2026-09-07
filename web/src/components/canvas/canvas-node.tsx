@@ -264,6 +264,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     };
 
     const dragActive = isDragging ?? Boolean(dragOffset);
+    const canEditTextInline = !readOnly && data.type === CanvasNodeType.Text && !(data.metadata?.workflowKind === "character" && data.metadata.characterAssetId);
+    const startEditingContent = useCallback(() => setIsEditingContent(true), []);
     const versionBadgeBackground = data.metadata?.versionPrimary
         ? theme.accent.primary
         : canvasThemeName === "dark"
@@ -387,6 +389,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         drawingProjectId={drawingProjectId}
                         mentionReferences={mentionReferences}
                         onContentChange={onContentChange}
+                        onStartEditing={canEditTextInline ? startEditingContent : undefined}
                         onStopEditing={() => setIsEditingContent(false)}
                         onRetry={onRetry}
                         onReloadResource={onReloadResource}

@@ -40,6 +40,7 @@ export type CanvasNodeContentProps = {
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     drawingProjectId?: string;
     onContentChange: (nodeId: string, content: string) => void;
+    onStartEditing?: () => void;
     onStopEditing: () => void;
     mentionReferences: CanvasResourceReference[];
     onRetry?: (node: CanvasNodeData) => void;
@@ -370,13 +371,23 @@ function UnknownNodeContent({ theme }: Pick<CanvasNodeContentProps, "theme">) {
     );
 }
 
-function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing }: CanvasNodeContentProps) {
+function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStartEditing, onStopEditing }: CanvasNodeContentProps) {
     const fontSize = node.metadata?.fontSize || 14;
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.5)}px`, color: theme.node.text, height: "100%", boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
 
     return (
-        <div className="flex h-full w-full flex-col overflow-hidden pb-3 pl-3 pr-0 pt-3">
+        <div
+            className="flex h-full w-full flex-col overflow-hidden pb-3 pl-3 pr-0 pt-3"
+            onDoubleClick={
+                !isEditingContent && onStartEditing
+                    ? (event) => {
+                          event.stopPropagation();
+                          onStartEditing();
+                      }
+                    : undefined
+            }
+        >
             {isEditingContent ? (
                 <CanvasResourceMentionTextarea
                     ref={textareaRef}

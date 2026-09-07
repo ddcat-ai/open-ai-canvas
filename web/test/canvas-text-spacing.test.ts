@@ -20,6 +20,13 @@ test("text editor keeps the card content height when entering edit mode", () => 
     expect(textContent).toContain("block h-full min-h-0 min-w-0 w-full flex-1");
 });
 
+test("text body exposes a direct double-click edit entry point", () => {
+    const textContent = source.slice(source.indexOf("function TextContent"), source.indexOf("function SkillContent"));
+    expect(textContent).toContain("onStartEditing");
+    expect(textContent).toContain("onDoubleClick");
+    expect(textContent).toContain("event.stopPropagation();");
+});
+
 test("text cards do not render an inline expand editor overlay", () => {
     const nodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
     expect(nodeSource).not.toContain("放大编辑文本");
