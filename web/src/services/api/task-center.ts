@@ -69,6 +69,15 @@ export type GenerationTask = {
         amountMicrocredits: number;
         status: TaskBillingStatus;
     };
+    // W1-01 任务链 canonical 字段（D-025 / D-027 / D-031）
+    // 后端 canonical 是 tasks 表上的列；inputJson.metadata 里的同名键已降级为兼容镜像，
+    // 新代码一律读这里的字段（D-039）。
+    shotId?: string;
+    canvasNodeId?: string;
+    workflowStepId?: string;
+    // D-031：不建 AgentRun/Action 表，只用两列做 Agent 溯源
+    agentSessionId?: string;
+    agentTurnId?: string;
     clientContext?: {
         conversationId?: string;
         messageId?: string;
@@ -245,10 +254,22 @@ export type GenerationTaskPageRequest = {
     projectId?: string;
     activeOnly: boolean;
     cursor?: string;
+    // W1-01 #52：影策 2.0 按分镜 / 画布节点 / 工作流步骤 / 状态过滤
+    shotId?: string;
+    canvasNodeId?: string;
+    workflowStepId?: string;
+    status?: string;
 };
 
 type GenerationTaskPage<T> = { tasks: T[]; nextCursor?: string };
-type GenerationTaskListOptions = { projectId?: string; activeOnly?: boolean };
+type GenerationTaskListOptions = {
+    projectId?: string;
+    activeOnly?: boolean;
+    shotId?: string;
+    canvasNodeId?: string;
+    workflowStepId?: string;
+    status?: string;
+};
 type GenerationTaskListDependencies = {
     listBackend?(limit: number, options?: GenerationTaskListOptions, signal?: AbortSignal): Promise<GenerationTask[]>;
     listLocal?(options?: GenerationTaskListOptions, signal?: AbortSignal): Promise<LocalDreaminaGenerationTask[]>;
@@ -260,7 +281,16 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
     listBackendPage: async (page, signal) => ({
         tasks: await request<GenerationTask[]>(
             api.get("/tasks", {
-                params: { limit: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
+                params: {
+                    limit: Math.min(page.limit, 100),
+                    projectId: page.projectId,
+                    activeOnly: page.activeOnly || undefined,
+                    // W1-01 #52 新增过滤维度
+                    shotId: page.shotId,
+                    canvasNodeId: page.canvasNodeId,
+                    workflowStepId: page.workflowStepId,
+                    status: page.status,
+                },
                 signal,
             }),
         ),
@@ -268,13 +298,22 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
     listLocalPage: (page, signal) => listLocalDreaminaGenerationTaskPage(page, {}, signal),
 };
 
-export async function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }, dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies, signal?: AbortSignal) {
+export async function listGenerationTasks(
+    limit = 30,
+    options?: GenerationTaskListOptions,
+    dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies,
+    signal?: AbortSignal,
+) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(10_000, Math.trunc(limit))) : 30;
     const baseRequest = {
         limit: Math.min(100, boundedLimit),
         ...(options?.projectId ? { projectId: options.projectId } : {}),
         activeOnly: options?.activeOnly === true,
+        ...(options?.shotId ? { shotId: options.shotId } : {}),
+        ...(options?.canvasNodeId ? { canvasNodeId: options.canvasNodeId } : {}),
+        ...(options?.workflowStepId ? { workflowStepId: options.workflowStepId } : {}),
+        ...(options?.status ? { status: options.status } : {}),
     } satisfies GenerationTaskPageRequest;
     const backendPageReader =
         dependencies.listBackendPage ??

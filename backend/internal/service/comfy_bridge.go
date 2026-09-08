@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -258,10 +259,23 @@ func (s *Service) enqueueComfyBridgeRequest(ctx context.Context, userID string, 
 		}
 		requestID = newID()
 	}
+	// D-036 契约② SubmitComfyJob：创建 Bridge 请求时**必须**填全任务链字段。
+	// F-12 事故：此前这里只填基础字段，导致 generation_task_id / shot_id / canvas_node_id /
+	// attempt_no 六列永远为空——表建好了、列加上了，但任务链根本连不起来。
+	chain := s.resolveTaskChainContext(taskID)
+	attemptNo := 1
+	if count, err := s.repo.CountComfyBridgeRequestsByTask(taskID); err == nil && count > 0 {
+		attemptNo = int(count) + 1
+	}
 	now := time.Now()
 	record, created, err := s.repo.CreateOrGetComfyBridgeRequest(&model.ComfyBridgeRequest{
 		ID: requestID, TaskID: taskID, UserID: userID, BridgeID: bridgeID, Kind: ComfyBridgeRequestKindGenerate,
 		Status: "queued", PayloadJSON: string(encoded), ExpiresAt: now.Add(comfyBridgeRequestTTL), CreatedAt: now, UpdatedAt: now,
+		// 任务链字段（D-020 / F-12）
+		GenerationTaskID: taskID,
+		ShotID:           chain.ShotID,
+		CanvasNodeID:     chain.CanvasNodeID,
+		AttemptNo:        attemptNo,
 	})
 	if err != nil {
 		return nil, err
@@ -386,7 +400,8 @@ func (s *Service) CompleteComfyBridgeRequest(bridgeID string, completion ComfyBr
 		encoded, _ := json.Marshal(completion.Result)
 		resultJSON = string(encoded)
 	}
-	if _, err := s.repo.CompleteComfyBridgeRequest(bridgeID, completion.RequestID, completion.Status, resultJSON, completion.Error, time.Now()); err != nil {
+	assets := parseBridgeOutputAssets(completion.Result, completion.RequestID)
+	if _, _, err := s.repo.CompleteComfyBridgeRequestWithAssets(bridgeID, completion.RequestID, completion.Status, resultJSON, completion.Error, time.Now(), assets); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return BadAuthRequest("Bridge 请求不存在或已过期")
 		}
@@ -581,3 +596,144 @@ func contextError(ctx context.Context) error {
 		return nil
 	}
 }
+
+// taskChainContext 是任务的 canonical 执行上下文（D-027 / D-036）。
+type taskChainContext struct {
+	ShotID         string
+	CanvasNodeID   string
+	WorkflowStepID string
+}
+
+// resolveTaskChainContext 解析任务链上下文（D-036 契约② / D-039）。
+//
+// 规则：
+//  1. 优先取 canonical 列（tasks.shot_id / canvas_node_id / workflow_step_id）
+//  2. 缺失的项才回退到 inputJson.metadata —— **本函数是 D-039 唯一允许的 fallback 位置**，
+//     其他任何业务代码都禁止再解析 metadata（否则会退化成一半读列、一半读 JSON）
+//  3. 解析成功后回写 canonical 列，让历史数据逐步自愈
+//
+// 解析失败绝不影响主流程：拿不到上下文最多是任务链不完整，不能阻断任务派发。
+// （这些列是 W1-01 新增的，所有历史任务都是空值，所以 fallback 是必需的，不是可选优化。）
+func (s *Service) resolveTaskChainContext(taskID string) taskChainContext {
+	task, err := s.repo.Task(taskID)
+	if err != nil || task == nil {
+		return taskChainContext{}
+	}
+	result := taskChainContext{
+		ShotID:         strings.TrimSpace(task.ShotID),
+		CanvasNodeID:   strings.TrimSpace(task.CanvasNodeID),
+		WorkflowStepID: strings.TrimSpace(task.WorkflowStepID),
+	}
+	// 三项都已有 canonical 值 → 无需回退
+	if result.ShotID != "" && result.CanvasNodeID != "" && result.WorkflowStepID != "" {
+		return result
+	}
+	decrypted, err := s.decryptTaskInputJSON(task.InputJSON)
+	if err != nil || strings.TrimSpace(decrypted) == "" {
+		return result
+	}
+	var input struct {
+		ShotID         string         `json:"shotId"`
+		WorkflowStepID string         `json:"workflowStepId"`
+		Metadata       map[string]any `json:"metadata"`
+	}
+	if err := json.Unmarshal([]byte(decrypted), &input); err != nil {
+		return result
+	}
+	var nodeID string
+	if input.Metadata != nil {
+		if input.ShotID == "" {
+			input.ShotID, _ = input.Metadata["shotId"].(string)
+		}
+		if input.WorkflowStepID == "" {
+			input.WorkflowStepID, _ = input.Metadata["workflowStepId"].(string)
+		}
+		// 前端 canvas-generation-task-sync.ts 读的是 metadata.nodeId（另有 sourceNodeId 兜底）
+		nodeID, _ = input.Metadata["nodeId"].(string)
+		if nodeID == "" {
+			nodeID, _ = input.Metadata["sourceNodeId"].(string)
+		}
+	}
+	// 只补缺失项，不覆盖已有 canonical 值
+	if result.ShotID == "" {
+		result.ShotID = strings.TrimSpace(input.ShotID)
+	}
+	if result.CanvasNodeID == "" {
+		result.CanvasNodeID = strings.TrimSpace(nodeID)
+	}
+	if result.WorkflowStepID == "" {
+		result.WorkflowStepID = strings.TrimSpace(input.WorkflowStepID)
+	}
+	// 自愈回写：失败不影响主流程，下次仍可重试（只补空值，见 SaveTaskChainContext）
+	_ = s.repo.SaveTaskChainContext(taskID, result.ShotID, result.CanvasNodeID, result.WorkflowStepID)
+	return result
+}
+
+// parseBridgeOutputAssets 从 Bridge 结果里尽力解析产出资产（W1-01）。
+// 兼容两种常见结构：{"assets":[...]} 与 {"outputs":[...]}；
+// 解析不出来就返回空切片——资产缺失不应该阻断任务完成。
+func parseBridgeOutputAssets(result any, requestID string) []model.BridgeOutputAsset {
+	if result == nil {
+		return nil
+	}
+	raw, ok := result.(map[string]any)
+	if !ok {
+		return nil
+	}
+	items, _ := raw["assets"].([]any)
+	if len(items) == 0 {
+		items, _ = raw["outputs"].([]any)
+	}
+	assets := make([]model.BridgeOutputAsset, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		uri := firstString(entry, "storageUri", "storage_uri", "uri", "url", "path", "filename")
+		if uri == "" {
+			continue
+		}
+		assets = append(assets, model.BridgeOutputAsset{
+			AssetType:  firstNonEmpty(firstString(entry, "assetType", "type"), "video"),
+			StorageURI: uri,
+			PreviewURI: firstString(entry, "previewUri", "preview_url"),
+			DurationMs: firstFloat(entry, "duration"),
+			Width:      int(firstFloat(entry, "width")),
+			Height:     int(firstFloat(entry, "height")),
+			FPS:        firstFloat(entry, "fps"),
+			Mime:       firstString(entry, "mime", "mimeType"),
+			Checksum:   firstString(entry, "checksum", "hash"),
+			FileSize:   int64(firstFloat(entry, "fileSize", "size")),
+			Provider:   firstString(entry, "provider"),
+		})
+	}
+	return assets
+}
+
+func firstString(entry map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := entry[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func firstFloat(entry map[string]any, keys ...string) float64 {
+	for _, key := range keys {
+		switch value := entry[key].(type) {
+		case float64:
+			return value
+		case int:
+			return float64(value)
+		case string:
+			var parsed float64
+			if _, err := fmt.Sscanf(value, "%g", &parsed); err == nil {
+				return parsed
+			}
+		}
+	}
+	return 0
+}
+

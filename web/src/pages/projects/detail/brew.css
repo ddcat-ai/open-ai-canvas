@@ -1,0 +1,69 @@
+/* 酿造工坊 · 表单折叠区（可选配置） */
+.brew-advanced-collapse.ant-collapse {
+    margin-top: 6px;
+    border: 1px dashed var(--workspace-border);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-surface-strong) 55%, transparent);
+}
+
+.brew-advanced-collapse.ant-collapse > .ant-collapse-item {
+    border-block-end: 1px solid color-mix(in srgb, var(--workspace-border) 70%, transparent);
+}
+
+.brew-advanced-collapse.ant-collapse > .ant-collapse-item:last-child {
+    border-block-end: 0;
+}
+
+.brew-advanced-collapse.ant-collapse .ant-collapse-header {
+    padding: 7px 10px;
+    font-size: var(--fs-caption);
+}
+
+.brew-advanced-collapse.ant-collapse .ant-collapse-content > .ant-collapse-content-box {
+    padding: 4px 12px 12px;
+}
+
+.brew-advanced-collapse.ant-collapse .ant-form-item {
+    margin-bottom: 10px;
+}
+
+/* 酿造工坊 · 编译结果镜头卡列表 */
+.brew-shots-collapse.ant-collapse {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: transparent;
+    border: 0;
+}
+
+.brew-shots-collapse.ant-collapse > .ant-collapse-item {
+    overflow: hidden;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: var(--workspace-surface);
+    transition: border-color var(--motion-instant) ease-out;
+}
+
+.brew-shots-collapse.ant-collapse > .ant-collapse-item:hover {
+    border-color: var(--workspace-border-strong);
+}
+
+.brew-shots-collapse.ant-collapse > .ant-collapse-item-active {
+    border-color: color-mix(in srgb, var(--workspace-accent) 40%, var(--workspace-border));
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.brew-shots-collapse.ant-collapse .ant-collapse-header {
+    padding: 9px 12px;
+}
+
+.brew-shots-collapse.ant-collapse .ant-collapse-content > .ant-collapse-content-box {
+    background: color-mix(in srgb, var(--workspace-surface-strong) 50%, transparent);
+    padding: 10px 12px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .brew-shots-collapse.ant-collapse > .ant-collapse-item {
+        transition: none;
+    }
+}

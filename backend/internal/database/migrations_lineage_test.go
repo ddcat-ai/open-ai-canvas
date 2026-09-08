@@ -32,7 +32,7 @@ func legacyFolderMigrationDatabase(t *testing.T) *gorm.DB {
 			t.Fatal(err)
 		}
 	}
-	if err := migrateSchemaV7(db); err != nil {
+	if err := migrateSchemaAssetLibraryFolders(db); err != nil {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"playback_status", "playback_object_key", "playback_error"} {
@@ -73,7 +73,8 @@ func TestMigrateSchemaPreservesLegacyFolderMigration(t *testing.T) {
 		t.Fatalf("historical record changed: before=%+v after=%+v", before, after)
 	}
 	var playback schemaMigration
-	if err := db.First(&playback, "version = 7").Error; err != nil {
+	// fork 编号：resource_playback_variant 顺延为 8（见 migrations.go CurrentSchemaVersion 注释）
+	if err := db.First(&playback, "version = 8").Error; err != nil {
 		t.Fatal(err)
 	}
 	if playback.Name != "resource_playback_variant" || playback.Checksum != resourcePlaybackChecksum {

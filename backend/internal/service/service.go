@@ -107,6 +107,11 @@ type TaskListOptions struct {
 	Limit      int
 	ProjectID  string
 	ActiveOnly bool
+	// W1-01 #52：影策 2.0 需要按分镜 / 画布节点 / 工作流步骤 / 状态过滤
+	ShotID       string
+	CanvasNodeID string
+	WorkflowStep string
+	Status       string
 }
 
 func New(repo *repository.Repository, dataDir string) *Service {
@@ -214,7 +219,15 @@ func (s *Service) Tasks(userID string, limit int) ([]TaskSummary, error) {
 }
 
 func (s *Service) TasksWithOptions(userID string, options TaskListOptions) ([]TaskSummary, error) {
-	tasks, err := s.repo.Tasks(userID, options.Limit, options.ProjectID, options.ActiveOnly)
+	tasks, err := s.repo.Tasks(userID, repository.TaskQuery{
+		Limit:        options.Limit,
+		ProjectID:    options.ProjectID,
+		ShotID:       options.ShotID,
+		CanvasNodeID: options.CanvasNodeID,
+		WorkflowStep: options.WorkflowStep,
+		Status:       options.Status,
+		ActiveOnly:   options.ActiveOnly,
+	})
 	if err != nil {
 		return nil, err
 	}

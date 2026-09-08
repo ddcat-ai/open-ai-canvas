@@ -1,4 +1,4 @@
-import { Command, Home, Search, X } from "lucide-react";
+import { Command, FlaskConical, Home, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useNavigate } from "react-router";
 
@@ -29,7 +29,8 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
         };
         return [
             { id: "home", title: "首页", icon: Home, to: "/" },
-toolEntry("projects", "/projects"),
+            toolEntry("projects", "/projects"),
+            ...(features.shortDramaEnabled ? [{ id: "brew", title: "酿造工坊", icon: FlaskConical, to: "/brew" }] : []),
             toolEntry("canvas", "/canvas"),
             ...(features.taskCenterEnabled ? [toolEntry("tasks", "/tasks")] : []),
             toolEntry("assets", "/assets"),

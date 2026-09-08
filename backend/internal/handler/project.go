@@ -844,6 +844,83 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"unlinked": true})
 	})
+	// W1-01 #52：Timeline 投影（D-026 用 DTO 不落库、D-033 计划时长 vs 实际时长）
+	r.GET("/projects/:id/shots", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		entries, err := svc.ShotTimelineEntries(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"shots": entries})
+	})
+	// D-030：Retry = 同一 GenerationTask 新增一个 ComfyJob（不是新建 Task）
+	r.POST("/projects/:id/shots/:shotId/tasks/:taskId/retry", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		task, err := svc.RetryShotTask(user.ID, c.Param("id"), c.Param("shotId"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
+	// D-030：Regenerate = 新建一个 GenerationTask（与 Retry 语义不同，会产生新版本产物）
+	r.POST("/projects/:id/shots/:shotId/regenerate", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		task, err := svc.RegenerateShot(user.ID, c.Param("id"), c.Param("shotId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
+	// W1-B-02：切换分镜「当前采用的版本」——selected 是版本指针，不是状态
+	r.POST("/projects/:id/shots/:shotId/artifacts/:artifactId/select", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		artifact, err := svc.SelectShotArtifact(user.ID, c.Param("id"), c.Param("shotId"), c.Param("artifactId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"artifact": artifact})
+	})
+	// W1-B-02 part2：镜头审核结论（通过/打回）。
+	// 只改 Shot.Status；reason 不落库；不触发任何生成动作。
+	r.POST("/projects/:id/shots/:shotId/review", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.ReviewShotRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.ReviewShot(user.ID, c.Param("id"), c.Param("shotId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"review": result})
+	})
 	r.POST("/projects/:id/asset-candidates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

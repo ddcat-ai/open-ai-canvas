@@ -109,6 +109,47 @@ function containsAny(value: string, keywords: string[]) {
 function resolveModelAdaptationProfile(input: PromptOptimizationInput): ModelAdaptationProfile {
     const model = `${input.targetModel || ""} ${input.targetProtocol || ""}`.toLowerCase();
     if (input.generationMode === "image") {
+        // 本地补丁 2026-09-01：Krea 2 / Qwen-Image 专属档位。
+        // 必须放在 openai / flux 等判断之前——这两个模型常挂在 OpenAI 兼容端点上，
+        // model 串会带上 "openai"，若放在后面会被通用协议分支先截走。
+        if (containsAny(model, ["krea"])) {
+            return {
+                id: "krea-image",
+                label: "Krea 2 图片模型",
+                promptShape: "内容优先的短句描述，先说清画面里有什么（主体、动作、场景、光线），风格交给参考图或 moodboard 承载。",
+                rules: [
+                    "写成内容提示词而不是风格提示词：写清主体、动作、构图、光线这些可见的画面事实。",
+                    "已有参考图或 moodboard 时，风格交给参考承载，不要再往上堆叠风格形容词，堆多了反而把结果糊掉。",
+                    "想收紧结果就补具体细节（风格、媒介、光线、构图），写得越具体，输出范围越窄越可控。",
+                    "探索阶段反而适合先用短而模糊的提示词，看模型给出哪些方向，再逐轮收窄。",
+                ],
+                avoid: [
+                    "不要使用 SD 权重、逗号标签串或 -- 参数，Krea 2 不是 SD/Flux 架构，这类语法无效。",
+                    "不要在已有强参考的情况下重复描述风格，会让风格词与参考图互相打架。",
+                    "不要把本该由 moodboard 承担的风格任务全压进单条提示词。",
+                ],
+            };
+        }
+        if (containsAny(model, ["qwen", "tongyi", "wanxiang", "通义万相"])) {
+            return {
+                id: "qwen-image",
+                label: "Qwen-Image / 通义万相图片模型",
+                promptShape: "中文为主的具象描述，按构图 → 主体 → 环境与背景 → 风格与媒介 → 细节强化 → 画幅组织。",
+                rules: [
+                    "文化类概念优先用中文写：成语、典故、诗词意象、传统画论术语（如‘疏可走马，密不透风’‘计白当黑’‘气韵生动’）理解最准。",
+                    "文化术语直接写中文，不要译成英文：‘中国龙’不要写成 Chinese dragon，‘水墨画’不要写成 ink wash painting，直译会触发西方刻板印象。",
+                    "名词优先于形容词，具体优先于抽象：‘天青釉’‘冰裂纹’比‘高级感’‘有质感’可控得多。",
+                    "摄影与技术参数用英文解析更稳（如 f/2.8、85mm、centered composition），与文化术语混写效果最好。",
+                    "画面含文字时用引号标出原文，并写明位置、字体风格与排版（如‘右上角手写体’）。",
+                    "用正向表达替代否定：把‘不要复杂背景’改写为‘纯色背景’。",
+                ],
+                avoid: [
+                    "不要用空泛评价词（精美、震撼、大气、高级感、唯美），它们不提供视觉锚点，模型只会随机发挥。",
+                    "不要在同一次生成里混用互相冲突的风格标签，例如‘水墨 + 工笔’会触发内部权重冲突导致风格混乱。",
+                    "不要堆 SD 权重语法或质量词串，Qwen 对自然语言的理解明显好于标签堆砌。",
+                ],
+            };
+        }
         if (containsAny(model, ["gemini", "imagen", "nano-banana", "nanobanana"])) {
             return {
                 id: "gemini-image",
@@ -209,6 +250,26 @@ function resolveModelAdaptationProfile(input: PromptOptimizationInput): ModelAda
             promptShape: "简洁、连续的动作指令，明确主体运动和摄像机运动。",
             rules: ["每个动作都写清主体、方向、速度或结果，避免互相冲突的动作。", "优先保证物理连续性、角色一致性和镜头稳定。"],
             avoid: ["不要加入过多抽象叙事或无法在短片段中完成的事件。"],
+        };
+    }
+    // 本地补丁 2026-09-01：Wan / 通义万相专属档位。
+    // 必须放在下面 general-video-family 之前——那里的关键词 "wan" 会先截走 "wanxiang"（万相）。
+    if (containsAny(model, ["qwen-video", "wanxiang", "通义万相", "wan-video", "wan2", "wan 2"])) {
+        return {
+            id: "wan-video",
+            label: "Wan / 通义万相视频模型",
+            promptShape: "中文单镜头时序描述，按主体与动作 → 镜头运动 → 环境与光影 → 结尾状态组织。",
+            rules: [
+                "用连续的中文动词描述动作过程，明确运动主体是角色、镜头还是环境。",
+                "主体外观、服装与场景用具体名词锁定，避免用抽象形容词描述一致性。",
+                "有首帧或参考图时，明确写清哪些必须保持不变、哪些允许变化。",
+                "镜头语言用中文写清景别与运镜（如‘中景缓慢推近’），模型对中文镜头词响应稳定。",
+            ],
+            avoid: [
+                "不要在一条提示词里拼接多个互不相关的镜头。",
+                "不要把静态图片的质量词串当成动作指令。",
+                "不要空喊‘保持一致’，要写出具体保持哪些外观特征。",
+            ],
         };
     }
     if (containsAny(model, ["runway", "gen-3", "gen3", "minimax-video", "hailuo", "wan", "ltx-video", "hunyuan-video"])) {

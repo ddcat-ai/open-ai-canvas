@@ -51,7 +51,7 @@ func TestMigrateSchemaV8AllowsReusingArchivedLogicalModelCode(t *testing.T) {
 	if err := db.Exec(`INSERT INTO logical_models(id, code, archived_at) VALUES ('archived', 'gpt-image-2', CURRENT_TIMESTAMP)`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := migrateSchemaV8(db); err != nil {
+	if err := migrateSchemaLogicalModelActiveCode(db); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO logical_models(id, code, archived_at) VALUES ('active', 'gpt-image-2', NULL)`).Error; err != nil {
@@ -199,11 +199,12 @@ func TestMigrateSchemaRepairsLegacyAssetFoldersMigrationOrder(t *testing.T) {
 		t.Fatalf("historical migration 6 must be preserved: %#v", applied)
 	}
 	var playback schemaMigration
-	if err := db.First(&playback, "version = ?", 7).Error; err != nil {
+	// fork 编号：resource_playback_variant 顺延为 8（见 migrations.go CurrentSchemaVersion 注释）
+	if err := db.First(&playback, "version = ?", 8).Error; err != nil {
 		t.Fatal(err)
 	}
 	if playback.Name != "resource_playback_variant" || playback.Checksum != resourcePlaybackChecksum {
-		t.Fatalf("migration 7 must supply playback schema: %#v", playback)
+		t.Fatalf("migration 8 must supply playback schema: %#v", playback)
 	}
 }
 

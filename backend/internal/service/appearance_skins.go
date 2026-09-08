@@ -159,7 +159,26 @@ func defaultAppearanceSkinThemes() []AppearanceSkinTheme {
 	})
 	violet.Tokens.Components = appearanceSkinComponentPreset(7, 7, 12, 14, 9, 4)
 
-	return []AppearanceSkinTheme{classic, studio, warm, violet}
+	// niangxiao：酿笑坊皮肤（本地化资产，2026-09-06 自旧静态皮肤体系移植，D-053 待办）。
+	// 配色锚点：navy #0a2540 / gold #c9a961 / teal #0d9488；亮色=暖纸底+藏青墨字+青碧点缀，
+	// 暗色=深海军蓝+藏青卡面+鎏金强调；登录页沿用旧设计的深藏青卡+鎏金强调。
+	niangxiao := cloneAppearanceSkin(classic, "niangxiao", "酿笑坊", "暖纸藏青 · 鎏金点睛")
+	niangxiao.Tokens.Light = tintAppearanceSkinMode(niangxiao.Tokens.Light, appearanceSkinPalette{
+		canvas: "#f7f4ec", surface: "#fffdf8", subtle: "#f1ede2", raised: "#e9e4d6", overlay: "#fffdf8", text: "#0a2540", muted: "#5a6b7f", border: "#d9d3c3",
+		primary: "#0a2540", primaryHover: "#143354", primaryActive: "#1d4266", primaryForeground: "#f7f4ec", selected: "#e2efe9", selectedHover: "#d3e8de", selectedActive: "#c4e0d3", selectedForeground: "#0a2540", info: "#0d9488",
+		switchChecked: "#0d9488", switchCheckedHover: "#0b8077", switchCheckedHandle: "#ffffff", switchUnchecked: "#c2bda9", switchUncheckedHover: "#a8a48f", switchUncheckedHandle: "#ffffff",
+		success: "#16866f", warning: "#b96f16", danger: "#c83f3a", dangerHover: "#ad3532", dangerActive: "#922e2c", dangerForeground: "#ffffff",
+		workspace: "#f7f4ec", grid: "#ebe6d9", adminBackground: "#f1ede2", adminSurface: "#fffdf8", adminSubtle: "#f6f2e8", adminStrong: "#e6e1d2", authBackground: "#081829", authPanel: "#0a1e33", authCard: "#102a46", authAccent: "#c9a961", authMuted: "#9db4cc",
+	})
+	niangxiao.Tokens.Dark = tintAppearanceSkinMode(niangxiao.Tokens.Dark, appearanceSkinPalette{
+		canvas: "#0a1e33", surface: "#102a46", subtle: "#122c48", raised: "#133256", overlay: "#0d2339", text: "#e6edf5", muted: "#9db4cc", border: "#22364c",
+		primary: "#c9a961", primaryHover: "#d6ba7c", primaryActive: "#b8944e", primaryForeground: "#0a2540", selected: "#143354", selectedHover: "#1a3f63", selectedActive: "#214a72", selectedForeground: "#e6edf5", info: "#4fb3a3",
+		switchChecked: "#c9a961", switchCheckedHover: "#d6ba7c", switchCheckedHandle: "#0a2540", switchUnchecked: "#3d5470", switchUncheckedHover: "#4a6482", switchUncheckedHandle: "#e6edf5",
+		success: "#4ade80", warning: "#fbbf24", danger: "#f87171", dangerHover: "#fca5a5", dangerActive: "#ef4444", dangerForeground: "#2b0808",
+		workspace: "#0a1e33", grid: "#16304b", adminBackground: "#081829", adminSurface: "#102a46", adminSubtle: "#0d2339", adminStrong: "#133256", authBackground: "#071422", authPanel: "#0a1e33", authCard: "#102a46", authAccent: "#c9a961", authMuted: "#9db4cc",
+	})
+
+	return []AppearanceSkinTheme{classic, studio, warm, violet, niangxiao}
 }
 
 func defaultClassicAppearanceSkin() AppearanceSkinTheme {

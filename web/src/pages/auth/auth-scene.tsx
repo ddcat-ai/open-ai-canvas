@@ -10,6 +10,8 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { brandStudioLabel, useAppearanceStore } from "@/stores/use-appearance-store";
 
+// 本地化改造：登录视频默认值已迁移到 use-appearance-store（指向 web/public/ 压缩副本），
+// 管理员仍可在「平台外观」设置里改回任意远程视频，无需改代码。
 const AUTH_TABS = [
     { key: "login", label: "登录" },
     { key: "register", label: "注册" },

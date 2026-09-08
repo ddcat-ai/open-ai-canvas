@@ -1,8 +1,10 @@
 import { lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+// 合并说明：Tooltip 采用上游自研 Celadon 组件（ADR-0008 全量替换 AntD），
+// 但保留影策自有「酿造工坊」入口所需的 FlaskConical 图标（detail.tsx:35 使用）。
 import { Alert, App } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { ArrowLeft, BookOpenText, Clapperboard, Images, LayoutDashboard, LayoutGrid, Plus, Scissors, Settings2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookOpenText, Clapperboard, FlaskConical, Images, LayoutDashboard, LayoutGrid, Plus, Scissors, Settings2, type LucideIcon } from "lucide-react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 
 import { getProjectCore, getProjectOverview, getProjectUnitWorkspace, linkCanvasUnit, listProjectUnits } from "@/services/api/projects";
@@ -14,6 +16,7 @@ import type { ProjectDetail } from "@/services/api/projects";
 import { WorkflowChapterNavigator } from "./detail/workflow-chapter-navigator";
 
 const ProjectAssetsView = lazy(() => import("./detail/assets"));
+const ProjectBrewView = lazy(() => import("./detail/brew"));
 const ProjectCanvasesView = lazy(() => import("./detail/canvases"));
 const ProjectChaptersView = lazy(() => import("./detail/chapters"));
 const ProjectOverviewView = lazy(() => import("./detail/overview"));
@@ -21,11 +24,12 @@ const ProjectSettingsView = lazy(() => import("./detail/settings"));
 const ProjectWorkflowView = lazy(() => import("./detail/workflow"));
 const ProjectEditorView = lazy(() => import("./detail/editor"));
 
-type DetailView = "overview" | "chapters" | "workflow" | "canvases" | "editor" | "assets" | "settings";
+type DetailView = "overview" | "chapters" | "brew" | "workflow" | "canvases" | "editor" | "assets" | "settings";
 
 const views: Array<{ key: DetailView; label: string; icon: LucideIcon }> = [
     { key: "overview", label: "制作概览", icon: LayoutDashboard },
     { key: "chapters", label: "剧情章节", icon: BookOpenText },
+    { key: "brew", label: "酿造工坊", icon: FlaskConical },
     { key: "workflow", label: "分镜制作", icon: Clapperboard },
     { key: "canvases", label: "项目画布", icon: LayoutGrid },
     { key: "editor", label: "剪辑成片", icon: Scissors },
@@ -143,6 +147,7 @@ export default function ProjectDetailPage() {
                             <div className={activeView === "overview" ? "w-full" : activeView === "chapters" || activeView === "workflow" || activeView === "editor" ? "h-full w-full" : "w-full"}>
                                 {activeView === "overview" ? overviewQuery.isLoading ? <WorkspaceLoadingState label="正在统计制作进度" detail="只读取聚合数据，不加载全部镜头历史" /> : overviewQuery.data ? <ProjectOverviewView detail={detail} overview={overviewQuery.data} refreshProject={refreshProject} onCreateCanvas={createCanvas} /> : <WorkspaceErrorState title="制作概览读取失败" description="请稍后重试。" onRetry={() => void overviewQuery.refetch()} /> : null}
                                 {activeView === "chapters" ? workspaceQuery.isLoading ? <WorkspaceLoadingState label="正在读取当前章节" detail="正文与制作数据按章节加载" /> : workspaceQuery.isError ? <WorkspaceErrorState title="章节读取失败" description="当前章节可能已被删除，或服务暂时不可用。" onRetry={() => void workspaceQuery.refetch()} /> : <ProjectChaptersView detail={detail} refreshProject={refreshProject} onCreateCanvas={createCanvas} /> : null}
+                                {activeView === "brew" ? <ProjectBrewView detail={detail} projectId={projectId} refreshProject={refreshProject} /> : null}
                                 {activeView === "workflow" ? workspaceQuery.isLoading ? <WorkspaceLoadingState label="正在读取当前章节分镜" detail="仅加载本章镜头、版本和产物" /> : workspaceQuery.isError ? <WorkspaceErrorState title="分镜工作区读取失败" description="当前章节制作数据暂时不可用。" onRetry={() => void workspaceQuery.refetch()} /> : <ProjectWorkflowView detail={detail} projectId={projectId} unitId={unitId || ""} stage={stage || "video"} /> : null}
                                 {activeView === "canvases" ? <ProjectCanvasesView detail={detail} refreshProject={refreshProject} onCreateCanvas={createCanvas} /> : null}
                                 {activeView === "assets" ? <ProjectAssetsView detail={detail} refreshProject={refreshProject} onCreateCanvas={createCanvas} /> : null}

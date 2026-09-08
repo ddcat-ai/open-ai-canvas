@@ -667,17 +667,45 @@ func (r *Repository) ClaimNextTaskProviderCancellation(owner string, leaseDurati
 	return &task, nil
 }
 
-func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnly bool) ([]model.Task, error) {
+// TaskQuery 是任务列表的查询条件（W1-01 #52）。
+// 早期版本只有 project_id / activeOnly；影策 2.0 需要按分镜、画布节点、工作流步骤过滤，
+// 继续往函数签名里加参数会越来越难维护，故收敛为结构体。
+type TaskQuery struct {
+	Limit        int
+	ProjectID    string
+	ShotID       string
+	CanvasNodeID string
+	WorkflowStep string
+	Status       string
+	ActiveOnly   bool
+}
+
+func (r *Repository) Tasks(userID string, options TaskQuery) ([]model.Task, error) {
 	var tasks []model.Task
+	limit := options.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	// W1-01：把任务链 canonical 列纳入查询，否则上层拿到的 Task 里这些字段永远是零值。
+	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at",
+		"shot_id", "canvas_node_id", "workflow_step_id", "agent_session_id", "agent_turn_id").
 		Where("user_id = ?", userID)
-	if strings.TrimSpace(projectID) != "" {
-		query = query.Where("project_id = ?", strings.TrimSpace(projectID))
+	if projectID := strings.TrimSpace(options.ProjectID); projectID != "" {
+		query = query.Where("project_id = ?", projectID)
 	}
-	if activeOnly {
+	if shotID := strings.TrimSpace(options.ShotID); shotID != "" {
+		query = query.Where("shot_id = ?", shotID)
+	}
+	if nodeID := strings.TrimSpace(options.CanvasNodeID); nodeID != "" {
+		query = query.Where("canvas_node_id = ?", nodeID)
+	}
+	if stepID := strings.TrimSpace(options.WorkflowStep); stepID != "" {
+		query = query.Where("workflow_step_id = ?", stepID)
+	}
+	if status := strings.TrimSpace(options.Status); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if options.ActiveOnly {
 		query = query.Where("status IN ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning})
 	}
 	err := query.Order("created_at desc").Limit(limit).Find(&tasks).Error
@@ -1467,7 +1495,7 @@ func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit, invalidateWorkfl
 			return gorm.ErrRecordNotFound
 		}
 		if invalidateWorkflow {
-			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
+			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
 				return err
 			}
 			if err := invalidateUnitWorkflowTx(tx, unit.ProjectID, unit.ID, "story", unit.UpdatedAt); err != nil {
@@ -1879,7 +1907,7 @@ func (r *Repository) SaveShotWithRevision(shot *model.Shot, revision *model.Shot
 			return err
 		}
 		if !create {
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shot.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": shot.UpdatedAt}).Error; err != nil {
+			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shot.ID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": shot.UpdatedAt}).Error; err != nil {
 				return err
 			}
 		}
@@ -2018,24 +2046,197 @@ func (r *Repository) ProjectShotArtifacts(projectID string) ([]model.ShotArtifac
 	return artifacts, err
 }
 
-func (r *Repository) CreateShotArtifact(artifact *model.ShotArtifact) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		var currentVersion int
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Select("COALESCE(MAX(version), 0)").Scan(&currentVersion).Error; err != nil {
-			return err
+// ArtifactIdemKind 声明「按哪些列判定同一个产物」。
+//
+// 注意这是**去重维度**的声明，不是业务链的声明——
+// Repository 不需要知道 Bridge / Workflow / Veo / Kling 的存在，
+// 未来接新的生成端只是多一个去重维度，不会往这里堆业务判断。
+type ArtifactIdemKind string
+
+const (
+	// ArtifactIdemByRequest 按 (request_id, asset_index) 去重。
+	ArtifactIdemByRequest ArtifactIdemKind = "request_index"
+	// ArtifactIdemByTask 按 (task_id, shot_id, type) 去重。
+	ArtifactIdemByTask ArtifactIdemKind = "task_shot_type"
+	// ArtifactIdemNone 不去重，每次调用都新建。
+	ArtifactIdemNone ArtifactIdemKind = "none"
+)
+
+// ArtifactIdempotencyKey 由调用方（Service 层）显式声明幂等判定方式。
+// Repository 只把它翻译成查询条件，不解释它的业务含义。
+type ArtifactIdempotencyKey struct {
+	Kind       ArtifactIdemKind
+	RequestID  string // Kind=ArtifactIdemByRequest 时必填
+	AssetIndex int
+	TaskID     string // Kind=ArtifactIdemByTask 时必填；ShotID/Type 取自 artifact 本身
+}
+
+// artifactIdemQuery 把幂等键翻译成查询条件；返回 nil 表示不去重。
+func (k ArtifactIdempotencyKey) artifactIdemQuery(tx *gorm.DB, artifact *model.ShotArtifact) *gorm.DB {
+	base := tx.Model(&model.ShotArtifact{})
+	switch k.Kind {
+	case ArtifactIdemByRequest:
+		return base.Where("request_id = ? AND asset_index = ?", k.RequestID, k.AssetIndex)
+	case ArtifactIdemByTask:
+		return base.Where("task_id = ? AND shot_id = ? AND type = ?", k.TaskID, artifact.ShotID, artifact.Type)
+	default:
+		return nil
+	}
+}
+
+// artifactVersionRetryLimit 是 version 撞上唯一约束后的重算次数上限。
+const artifactVersionRetryLimit = 5
+
+// CreateOrGetShotArtifact 是全仓唯一的 ShotArtifact 创建入口。
+//
+// 返回**最终产物**——无论新建还是幂等命中，调用方都直接拿到可用的那一行，
+// 不必依赖入参被副作用修改（幂等命中时返回的是库里的既有行）。
+//
+// 它只做四件机械的事，不含业务判断：
+//  1. 按 key 判重 —— 命中则直接返回，created=false
+//  2. 分配 version = 同 (shot_id, type) 的 MAX(version) + 1
+//  3. 若 artifact.Selected 为真，先把同 (shot_id, type) 其余行 selected 置 false
+//  4. 落库；撞上 version 唯一约束则重算版本号重试
+//
+// 「用哪个 Status」「该不该带 ResourceID」「谁是当前版本」属于业务判断，
+// 由 Service 层决定后填进 artifact——Repository 不替 Service 做决定。
+func (r *Repository) CreateOrGetShotArtifact(artifact *model.ShotArtifact, key ArtifactIdempotencyKey) (*model.ShotArtifact, bool, error) {
+	if artifact == nil {
+		return nil, false, nil
+	}
+	var result *model.ShotArtifact
+	var created bool
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		out, ok, err := createOrGetShotArtifactTx(tx, artifact, key)
+		result, created = out, ok
+		return err
+	})
+	return result, created, err
+}
+
+// createOrGetShotArtifactTx 是事务内版本。调用方已持有事务时
+// （CompleteComfyBridgeRequestWithAssets、RegisterWorkflowTaskOutput）必须用这个，
+// 不能嵌套开新事务——否则外层回滚时内层已提交，产生分层提交问题。
+// 与 completeRequestTx / updateShotLatestPointers 的既有风格一致。
+func createOrGetShotArtifactTx(tx *gorm.DB, artifact *model.ShotArtifact, key ArtifactIdempotencyKey) (*model.ShotArtifact, bool, error) {
+	if artifact == nil {
+		return nil, false, nil
+	}
+	// 幂等键声明按 (request_id, asset_index) 去重，产物上这两个字段就必须与声明一致，
+	// 否则会变成「按 A 查重、却写入 B」——每次都查不到自己刚写的行，幂等键形同虚设。
+	// 以 key 为准回填，调用方漏填也不会静默退化成「每次都新建」。
+	if key.Kind == ArtifactIdemByRequest {
+		artifact.RequestID = key.RequestID
+		artifact.AssetIndex = key.AssetIndex
+	}
+	if query := key.artifactIdemQuery(tx, artifact); query != nil {
+		var existing model.ShotArtifact
+		if err := query.Limit(1).Find(&existing).Error; err != nil {
+			return nil, false, err
 		}
-		artifact.Version = currentVersion + 1
+		if existing.ID != "" {
+			return &existing, false, nil
+		}
+	}
+	// 并发下两个事务可能同时算出同一个 MAX+1，唯一约束 (shot_id,type,version) 是最后一道防线：
+	// 撞上就重算版本号再试，而不是把冲突直接抛给调用方。
+	// Q-29（ChatGPT 已批准）：5 次 bounded retry 只是防异常无限循环——真正的
+	// correctness barrier 是唯一约束本身；重试耗尽必须显式返回错误（下方
+	// return nil, false, lastErr），禁止静默吞掉。
+	var lastErr error
+	for attempt := 0; attempt < artifactVersionRetryLimit; attempt++ {
+		version, err := nextShotArtifactVersion(tx, artifact.ShotID, artifact.Type)
+		if err != nil {
+			return nil, false, err
+		}
+		artifact.Version = version
 		if artifact.Selected {
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
-				return err
+			if err := tx.Model(&model.ShotArtifact{}).
+				Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).
+				Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
+				return nil, false, err
 			}
 		}
-		return tx.Create(artifact).Error
-	})
+		lastErr = tx.Create(artifact).Error
+		if lastErr == nil {
+			return artifact, true, nil
+		}
+		if !isUniqueConstraintError(lastErr) {
+			return nil, false, lastErr
+		}
+	}
+	return nil, false, lastErr
+}
+
+// isUniqueConstraintError 判断是否为唯一约束冲突。
+// 项目同时支持 SQLite 与 PostgreSQL，两种库的文案不同，这里都覆盖。
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unique constraint failed") ||
+		strings.Contains(message, "duplicate key value")
 }
 
 func (r *Repository) MarkShotArtifactsStale(shotID string, updatedAt time.Time) error {
-	return r.db.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error
+	return r.db.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error
+}
+
+// SelectShotArtifact 把指定产物设为该分镜「当前采用的版本」（W1-B-02）。
+//
+// selected 是**版本指针**而非状态（W1-01 定死，与 status 正交）：
+// 同 (shot_id, type) 内只允许一个 true；切换是「清旧 + 置新 + 回写加速指针」的
+// 单事务操作，中途失败不得留下双 true 或零 true 的中间态。
+// 产物必须属于该分镜（D-024 归属校验的仓储层兜底，服务层另有用户→项目→分镜校验）。
+func (r *Repository) SelectShotArtifact(shotID string, artifactID string, updatedAt time.Time) (*model.ShotArtifact, error) {
+	var artifact model.ShotArtifact
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND shot_id = ?", artifactID, shotID).First(&artifact).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ShotArtifact{}).
+			Where("shot_id = ? AND type = ? AND id <> ?", artifact.ShotID, artifact.Type, artifactID).
+			Updates(map[string]any{"selected": false, "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ShotArtifact{}).Where("id = ?", artifactID).
+			Updates(map[string]any{"selected": true, "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Shot{}).Where("id = ?", shotID).
+			Updates(map[string]any{"latest_artifact_id": artifactID, "updated_at": updatedAt}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	artifact.Selected = true
+	artifact.UpdatedAt = updatedAt
+	return &artifact, nil
+}
+
+// ReviewShot 推进或回退分镜的审核状态（W1-B-02 part2 / Q-30 A 案）。
+//
+// 审核只改 Shot.Status 一个字段：approve → completed，reject → draft。
+// 理由/批注**不落库**（Q-31 A 案）——Shot 表没有批注字段，且不为此新增列；
+// 服务层只把 reason 回显给调用方，不写入任何表。
+// 审核**不触发任何生成动作**（Q-32 A 案）——regenerate 要花钱，必须由人或后续 Tool 显式发起。
+// 状态取值须落在 validShotStatus() 的合法集内，由服务层把关，此处只负责写入。
+func (r *Repository) ReviewShot(shotID string, status string, updatedAt time.Time) (*model.Shot, error) {
+	var shot model.Shot
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", shotID).First(&shot).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Shot{}).Where("id = ?", shotID).
+			Updates(map[string]any{"status": status, "updated_at": updatedAt}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	shot.Status = status
+	shot.UpdatedAt = updatedAt
+	return &shot, nil
 }
 
 func (r *Repository) UpsertProductionTaskLink(link *model.ProductionTaskLink) error {
@@ -2064,7 +2265,7 @@ func (r *Repository) UpsertShotAssetReferenceAndInvalidate(projectID string, ref
 				return err
 			}
 		}
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", reference.ShotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error; err != nil {
+		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", reference.ShotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error; err != nil {
 			return err
 		}
 		var shot model.Shot
@@ -2089,7 +2290,7 @@ func (r *Repository) DeleteShotAssetReferenceAndInvalidate(projectID string, sho
 			return nil
 		}
 		deleted = true
-		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": updatedAt}).Error; err != nil {
+		if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND status NOT IN ?", shotID, []string{"failed", model.ShotArtifactStatusStale}).Updates(map[string]any{"status": model.ShotArtifactStatusStale, "selected": false, "updated_at": updatedAt}).Error; err != nil {
 			return err
 		}
 		var shot model.Shot
@@ -2347,26 +2548,13 @@ func (r *Repository) RegisterWorkflowTaskOutput(step *model.WorkflowStepInstance
 				return err
 			}
 		}
+		// 幂等键按 (task_id, shot_id, type) 去重——沿用既有去重语义，行为不变。
+		// version 分配、selected 清零、冲突重试交给统一入口，此处不再手写。
 		if artifact != nil {
-			var existing model.ShotArtifact
-			if err := tx.Where("task_id = ? AND shot_id = ? AND type = ?", artifact.TaskID, artifact.ShotID, artifact.Type).First(&existing).Error; err == nil {
-				artifact = nil
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-		}
-		if artifact != nil {
-			var currentVersion int
-			if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Select("COALESCE(MAX(version), 0)").Scan(&currentVersion).Error; err != nil {
-				return err
-			}
-			artifact.Version = currentVersion + 1
-			if artifact.Selected {
-				if err := tx.Model(&model.ShotArtifact{}).Where("shot_id = ? AND type = ?", artifact.ShotID, artifact.Type).Updates(map[string]any{"selected": false, "updated_at": artifact.UpdatedAt}).Error; err != nil {
-					return err
-				}
-			}
-			if err := tx.Create(artifact).Error; err != nil {
+			if _, _, err := createOrGetShotArtifactTx(tx, artifact, ArtifactIdempotencyKey{
+				Kind:   ArtifactIdemByTask,
+				TaskID: artifact.TaskID,
+			}); err != nil {
 				return err
 			}
 		}
@@ -2402,6 +2590,25 @@ func (r *Repository) RegisterWorkflowTaskOutput(step *model.WorkflowStepInstance
 		}
 		if projectResult.RowsAffected != 1 {
 			return gorm.ErrInvalidData
+		}
+		return nil
+	})
+}
+
+// SaveShotArtifactForTask（D-055 乙案）：无工作流步骤语境的镜头产物登记。
+// 只做 shot_artifacts 单表幂等写入——复用统一入口 createOrGetShotArtifactTx
+// （按 (task_id, shot_id, type) 去重、版本分配、旧版本 selected 清零），
+// 不触碰 workflow 步骤/实例、ProductionTaskLink、资产库与项目 revision。
+func (r *Repository) SaveShotArtifactForTask(artifact *model.ShotArtifact) error {
+	if artifact == nil {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if _, _, err := createOrGetShotArtifactTx(tx, artifact, ArtifactIdempotencyKey{
+			Kind:   ArtifactIdemByTask,
+			TaskID: artifact.TaskID,
+		}); err != nil {
+			return err
 		}
 		return nil
 	})

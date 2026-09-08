@@ -386,6 +386,19 @@ export function getAuthSession() {
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
         })
+        // 401 / "请先登录" 业务码视为未登录；这对 hydrate 链路至关重要：
+        // 若不在此处吞掉，未捕获的 Promise reject 会进 React 任务队列之后冒到 console 并打断 UI 恢复，
+        // 表现就是 FullScreenLoader 永远不消。
+        .catch((error: unknown) => {
+            const status = (error as { status?: number; response?: { status?: number } } | null)?.status
+                ?? (error as { response?: { status?: number } } | null)?.response?.status;
+            if (status === 401 || status === 403) {
+                const payload: AuthSessionPayload = { user: null };
+                authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
+                return payload;
+            }
+            throw error;
+        })
         .finally(() => {
             authSessionRequest = null;
         });

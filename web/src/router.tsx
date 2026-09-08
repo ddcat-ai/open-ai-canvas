@@ -48,6 +48,7 @@ const TasksPage = lazy(() => import("@/pages/tasks"));
 const WalletPage = lazy(loadWalletPage);
 const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(loadProjectDetailPage);
+const BrewHubPage = lazy(() => import("@/pages/brew"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
@@ -141,6 +142,14 @@ export const router = createBrowserRouter([
                 element: (
                     <RequireAuth>
                         <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/brew",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<BrewHubPage />)}</RequireFeature>
                     </RequireAuth>
                 ),
             },

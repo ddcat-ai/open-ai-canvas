@@ -52,6 +52,12 @@ export const toolNames = [
     "project_link_asset",
     "project_upsert_asset_version",
     "project_register_task_output",
+    "project_get_shot",
+    "project_retry_shot",
+    "project_regenerate_shot",
+    "project_select_artifact",
+    "project_review_shot",
+    "project_generate_shot",
 ] as const;
 export type ToolName = (typeof toolNames)[number];
 
@@ -163,6 +169,12 @@ export const toolInputSchemas = {
     project_link_asset: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), category: assetCategorySchema }),
     project_upsert_asset_version: z.object({ projectId: projectIdSchema, assetId: z.string().min(1), prompt: z.string().optional(), definitionJson: z.string().optional(), note: z.string().optional() }),
     project_register_task_output: z.object({ projectId: projectIdSchema, stepId: z.string().min(1), taskId: z.string().min(1), assetVersionId: z.string().optional(), resourceId: z.string().optional(), mediaType: z.string().optional(), role: z.enum(["reference", "start_frame", "end_frame", "keyframe", "storyboard", "output"]).optional(), metadataJson: z.string().optional(), outputJson: z.string().optional() }),
+    project_get_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
+    project_retry_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), taskId: z.string().min(1).optional() }),
+    project_regenerate_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1) }),
+    project_select_artifact: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), artifactId: z.string().min(1) }),
+    project_review_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), action: z.enum(["approve", "reject"]), reason: z.string().max(2000).optional() }),
+    project_generate_shot: z.object({ projectId: projectIdSchema, shotId: z.string().min(1), videoSeconds: z.number().int().min(1).max(15).optional(), resolution: z.string().max(20).optional(), referenceImageUrls: z.array(z.string().url()).max(4).optional(), workflowStepId: z.string().min(1).optional() }),
 } satisfies Record<ToolName, z.AnyZodObject>;
 
 export const toolDescriptions: Record<ToolName, string> = {
@@ -206,4 +218,10 @@ export const toolDescriptions: Record<ToolName, string> = {
     project_link_asset: "将个人资产引用到当前短剧项目，不复制媒体文件。",
     project_upsert_asset_version: "为项目资产创建新的设定和提示词版本，保留历史版本。",
     project_register_task_output: "将成功生成任务挂到流程步骤，并登记到具体资产版本和资源表示。",
+    project_get_shot: "读取单个镜头的完整生产上下文：镜头本体、当前版本（Revision）、产物版本列表和最新生成任务摘要。先取镜头 id 再用本工具看细节。",
+    project_retry_shot: "对镜头的既有生成任务做重试：同一 GenerationTask 新增一次执行尝试（attempt），不新建任务。不传 taskId 时自动定位该镜头最新的生成任务；任务不存在时报错。",
+    project_regenerate_shot: "对镜头做重新生成：创建新的 GenerationTask（旧任务保持原样），成功后产生新版本产物并更新 Timeline 时长。与 retryShot 的语义区别：regenerate 是新任务，retry 是同任务新尝试。",
+    project_select_artifact: "把镜头的某个产物版本设为「当前采用的版本」（版本指针切换）。只改变下载、成片与时间线时长取哪一版，不新增版本、不改状态、不重新生成。多用于同一镜头多个版本里挑一条更好的。",
+    project_review_shot: "对镜头给出审核结论：approve（通过，镜头进 completed）/ reject（打回，镜头退回 draft）。只改镜头的审核状态，不动产物、不改版本、不触发任何重新生成——打回后要重做得另行调 regenerateShot。reason 是给人看的审核理由，不会存进数据库。",
+    project_generate_shot: "对镜头从零发起视频生成（新建 GenerationTask，区别于 retry=同任务新尝试 / regenerate=按上次配置重建）。提示词取自镜头当前修订版的 videoPrompt，由用户创作，Agent 不改写不拼装；镜头还没有 videoPrompt 时会明确报错。可选：videoSeconds（1-15，默认取镜头计划时长）、resolution（如 768p横/480p横，默认 768p横）、referenceImageUrls（公网可访问的图片 URL，最多 4 张；传了即走图生视频，必须是公网 URL，本地地址无法被上游拉取）、workflowStepId（镜头所属工作流的 video 步骤 id；传了产物才会自动挂到镜头产物列表，不传只建任务不落产物——这是已知 G1 边界）。模型自动使用系统渠道里的 MiniMax H3。返回任务信息后由项目工作区轮询进度，不要手动轮询上游。",
 };

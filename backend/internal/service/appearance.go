@@ -40,6 +40,9 @@ const (
 const (
 	defaultAppearanceBrandName = "影策"
 	defaultAppearanceBrandSlug = "open-ai-canvas"
+	// 上游 v1.2.6 皮肤体系已重构为 SkinThemes（数据驱动、管理后台可自定义主题），
+	// 默认皮肤固定为 classic（校验器强制 classic 为默认且不可改删）。
+	// 本地化备注：原 niangxiao（navy/gold/teal）与 neon 皮肤待在新体系里以自定义主题重建（D-053 待办）。
 	defaultAppearanceSkinID    = "classic"
 	defaultAppearanceLogoURL   = "/logo.svg"
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"

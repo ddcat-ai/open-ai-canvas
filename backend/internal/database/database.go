@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +29,7 @@ func Open(config Config) (*gorm.DB, error) {
 			if err := os.MkdirAll(config.DataDir, 0o755); err != nil {
 				return nil, err
 			}
-			dsn = config.DataDir + "/open_ai_canvas.db?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on&_synchronous=NORMAL"
+			dsn = config.DataDir + "/open_ai_canvas.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
 		}
 		return gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	case "postgres", "postgresql":

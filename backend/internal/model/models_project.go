@@ -258,8 +258,22 @@ type Shot struct {
 	Position          int       `json:"position" gorm:"index:idx_shots_project_unit_position,priority:3"`
 	DurationMs        int64     `json:"durationMs"`
 	Status            string    `json:"status" gorm:"index;size:24"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+
+	// W1-01（D-026 并轨）：Canvas 节点绑定与生成侧最新指针。
+	// CanvasNodeID 是后端 canonical 字段（D-025）——一个 Canvas 节点最多绑定一个 Shot，
+	// 叙事内容（prompt/duration/role）仍以 CanvasNode 为唯一事实源，这里只存定位。
+	// 注意：不要用 gorm uniqueIndex 标签——历史行 canvas_node_id 为空串会撞唯一约束。
+	// 幂等索引在迁移里建成“部分唯一索引”（WHERE canvas_node_id <> ''），见 migrateSchemaV7。
+	CanvasNodeID string `json:"canvasNodeId,omitempty" gorm:"index:idx_shots_canvas_node;size:80"`
+	// SemanticType 语义类型（如 dialogue/action/transition），用于 Timeline 分组；可空。
+	SemanticType string `json:"semanticType,omitempty" gorm:"index;size:32"`
+	// 以下三个指针是查询加速用的冗余，权威关系仍在 ProductionTaskLink / ShotArtifact。
+	LatestTaskID     string `json:"latestTaskId,omitempty" gorm:"size:36"`
+	LatestJobID      string `json:"latestJobId,omitempty" gorm:"size:64"`
+	LatestArtifactID string `json:"latestArtifactId,omitempty" gorm:"size:36"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // ShotRevision 保存可复现的分镜脚本版本；Shot 只保留稳定身份、排序和当前版本指针。
@@ -283,6 +297,53 @@ type ShotRevision struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
+// ShotArtifact 状态常量（D-034）。
+//
+// 历史遗留：这些值此前散落在代码里当裸字符串用，且 `failed` 只出现在
+// `status NOT IN ('failed','stale')` 排除列表里、无任何写入点（死值）。
+// 从 W1-01 起**一律使用常量**，禁止再写裸字符串。
+//
+// 语义：Status 描述的不是文件处理 pipeline，而是「这个 Artifact 目前在生产域中是否可用」，
+// 因此不引入 created / processing 这类中间态。
+//
+// ─────────────────────────────────────────────────────────────────────────
+// ★ Status 与 Selected 是两个正交维度（W1-01 纠偏后定死，勿再混用）
+// ─────────────────────────────────────────────────────────────────────────
+//   Status   = 「这个产物能不能用？」——生命周期可用性
+//   Selected = 「这个产物是不是当前被采用的那个版本？」——版本指针（pointer）
+//
+// 二者组合出的合法状态：
+//   1) ready + selected        → 当前采用版本，可用（最常见）
+//   2) ready + !selected       → 历史可用版本，被更新的版本顶替，但仍可回放/切回
+//   3) pending_resource + sel. → 已生成成功、Resource 未登记；W3-01 之前这是常态
+//   4) stale                   → 被新 Revision / 参数变更淘汰，**不再可用**，只作历史留档
+//
+// 关键区分（此前混淆导致 Bug）：
+//   · 「曾经是 selected，现在不是了」≠ stale。那只是版本更替（组合 2），产物依然可用。
+//   · stale 是不可逆淘汰：分镜/资产引用改了，旧产物对新输入不再成立，即便文件还在。
+//   · 因此置 stale 时**必须同时清 selected**（见 repository.go 的 markArtifactStale），
+//     避免出现「已淘汰但仍被当作当前版本」的自相矛盾状态。
+//
+// ⚠️ selected=true 只是「当前候选版本」，**不等于 Timeline 最终使用的产物**。
+//   完整取值链必须走完四层：
+//       Shot → Active Revision → Selected Artifact → 实际媒体
+//   少了 Revision 这一层，就会出现「产物被选中、但分镜版本已经切换」的语义冲突
+//   ——即 selected 指向的 Artifact 并不属于当前 Active Revision。
+//   （W1-02 / W1-03 会在读取侧补齐这一层，此处先立规矩，避免后来者误解。）
+//
+const (
+	// ShotArtifactStatusReady 表示 Resource 已登记，产物可正常使用。
+	ShotArtifactStatusReady = "ready"
+	// ShotArtifactStatusPendingResource 表示生成成功，但尚未注册 Resource
+	// （D-029 拆段：真实下载归 W3-01，故 W3-01 之前这是常态，不是错误）。
+	ShotArtifactStatusPendingResource = "pending_resource"
+	// ShotArtifactStatusResourceFailed 表示已尝试注册 Resource 但失败。
+	// 注意：视频已生成成功，只是资产登记失败——Task 仍应视为成功，可重试登记（W3-02 提供 UI）。
+	ShotArtifactStatusResourceFailed = "resource_failed"
+	// ShotArtifactStatusStale 表示被新 Revision / 新版本淘汰（历史保留，不删除）。
+	ShotArtifactStatusStale = "stale"
+)
+
 // ShotArtifact 是镜头的版本化生产产物。修改分镜或资产引用时只标记 stale，不删除历史。
 type ShotArtifact struct {
 	ID           string    `json:"id" gorm:"primaryKey;size:36"`
@@ -294,11 +355,30 @@ type ShotArtifact struct {
 	Type         string    `json:"type" gorm:"index;size:40;uniqueIndex:idx_shot_artifacts_version,priority:2"`
 	Version      int       `json:"version" gorm:"uniqueIndex:idx_shot_artifacts_version,priority:3"`
 	ResourceID   string    `json:"resourceId,omitempty" gorm:"index;size:36"`
-	Status       string    `json:"status" gorm:"index;size:24"`
-	Selected     bool      `json:"selected" gorm:"index"`
-	MetadataJSON string    `json:"metadataJson" gorm:"type:text"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	// Status：生命周期可用性，取值见上方 D-034 常量，禁止裸字符串。
+	Status string `json:"status" gorm:"index;size:24"`
+	// Selected：版本指针，标记「当前采用的版本」。与 Status 正交，不是状态。
+	// 同一 (ShotID, Type) 下最多一行 selected=true；置 stale 时必须同时置 false。
+	Selected     bool   `json:"selected" gorm:"index"`
+	MetadataJSON string `json:"metadataJson" gorm:"type:text"`
+
+	// W1-01（D-026 并轨）：生成侧溯源字段，原拟新建 output_assets 表，改为挂在既有产物表上。
+	// RequestID 指向 comfy_bridge_requests（即 ComfyJob，D-020）；
+	// AssetIndex 与 RequestID 组成幂等键，Bridge 重复回调不会重复落产物。
+	// 注意：不要用 gorm uniqueIndex 标签——历史行 request_id 为空串会撞唯一约束。
+	// 幂等索引在迁移里建成“部分唯一索引”（WHERE request_id <> ''），见 migrateSchemaV7。
+	RequestID  string `json:"requestId,omitempty" gorm:"index:idx_shot_artifacts_request;size:64"`
+	AssetIndex int    `json:"assetIndex"`
+	Checksum  string `json:"checksum,omitempty" gorm:"size:128"`
+	FileSize  int64  `json:"fileSize"`
+	Provider  string `json:"provider,omitempty" gorm:"size:64"`
+	// 媒体元信息：供 Timeline 投影与失败诊断直接读取，避免每次解析 MetadataJSON。
+	DurationMs float64 `json:"durationMs"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type ShotAssetReference struct {
@@ -316,7 +396,23 @@ type WorkflowTemplateVersion struct {
 	Name           string    `json:"name" gorm:"size:160"`
 	Version        int       `json:"version" gorm:"uniqueIndex:idx_workflow_template_version,priority:2"`
 	DefinitionJSON string    `json:"definitionJson" gorm:"type:text"`
-	CreatedAt      time.Time `json:"createdAt"`
+
+	// W1-01（D-026 并轨）：Bridge 执行侧元数据，原拟新建 bridge_workflows 表，
+	// 改为挂在既有模板版本上——这些字段本质是“这个版本的模板怎么被执行”。
+	// WorkflowHash 是 Comfy 工作流 JSON 的指纹，用于判断本地工作流是否已变更。
+	WorkflowHash string `json:"workflowHash,omitempty" gorm:"index;size:128"`
+	// CapabilitiesJSON 是能力声明（Capability Manifest，D-013）；
+	// MappingJSON 是结构化字段映射（D-015）——Skill 管“什么时候用”，这里只管“机器怎么填参数”。
+	CapabilitiesJSON string `json:"-" gorm:"type:text"`
+	MappingJSON      string `json:"-" gorm:"type:text"`
+	// H3 分段约束（D-021：Segment 是执行细节，不入 Shot 模型，只作为执行期上限）
+	MaxSegmentDurationSec  float64 `json:"maxSegmentDurationSec"`
+	MaxTimelineDurationSec float64 `json:"maxTimelineDurationSec"`
+	MaxFramesPerSegment    int     `json:"maxFramesPerSegment"`
+	// Enabled 控制该版本是否可被 Bridge 派发
+	Enabled bool `json:"enabled" gorm:"index;default:true"`
+
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type WorkflowInstance struct {

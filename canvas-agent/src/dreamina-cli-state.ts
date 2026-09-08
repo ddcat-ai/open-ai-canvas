@@ -572,6 +572,27 @@ function createLease(lockDirectory: string, nonce: string): StateLockLease {
     }, LOCK_REFRESH_MS);
     timer.unref();
 
+    // PATCH(agent-lock-release-win): Best-effort removal of a just-renamed lock
+    // directory. On Windows a freshly renamed directory can still be briefly
+    // held by the indexer / anti-virus, so fs.rm may fail with EBUSY or EPERM
+    // on the first attempt. Retry with a short backoff before giving up.
+    async function rmReleasedDirectory(released: string): Promise<void> {
+        const delays = [0, 40, 120, 320, 800];
+        let lastError: unknown;
+        for (const delay of delays) {
+            if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+            try {
+                await fs.rm(released, { recursive: true, force: true });
+                return;
+            }
+            catch (error) {
+                lastError = error;
+                if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+            }
+        }
+        throw lastError ?? new Error("rm released directory failed");
+    }
+
     const release = async () => {
         stopped = true;
         clearInterval(timer);
@@ -583,8 +604,14 @@ function createLease(lockDirectory: string, nonce: string): StateLockLease {
             await fs.rename(released, lockDirectory).catch(() => undefined);
             throw stateInvalid();
         }
-        try { await fs.rm(released, { recursive: true, force: true }); }
-        catch { throw stateInvalid(); }
+        try { await rmReleasedDirectory(released); }
+        catch {
+            // PATCH(agent-lock-release-win): Cleanup is best-effort, not fatal.
+            // Upstream threw stateInvalid() here, which aborted the whole Canvas
+            // Agent start with dreamina_state_invalid (503) and left port 17371
+            // dead. A leftover "*.released" directory is harmless: the next
+            // start runs scavengeTemporaries() and recovers from it.
+        }
     };
     return Object.assign(release, {
         assertOwned: async () => {

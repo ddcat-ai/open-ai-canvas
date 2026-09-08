@@ -12,6 +12,12 @@ import {
     type ShotAssetReference,
 } from "./projects";
 import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
+import { regenerateShot, reviewShot, retryShotTask, selectShotArtifact } from "./generation-task";
+import { distillShotContext, latestShotTask } from "./shot-context";
+import { generateShot } from "./shot-generate";
+
+export { distillShotContext, latestShotTask } from "./shot-context";
+export type { ShotContextSummary } from "./shot-context";
 
 export const projectAgentToolNames = [
     "project_get_context",
@@ -24,6 +30,12 @@ export const projectAgentToolNames = [
     "project_link_asset",
     "project_upsert_asset_version",
     "project_register_task_output",
+    "project_get_shot",
+    "project_retry_shot",
+    "project_regenerate_shot",
+    "project_select_artifact",
+    "project_review_shot",
+    "project_generate_shot",
 ] as const;
 
 export type ProjectAgentToolName = (typeof projectAgentToolNames)[number];
@@ -33,7 +45,7 @@ export function isProjectAgentToolName(value: string): value is ProjectAgentTool
 }
 
 export function isProjectAgentReadTool(value: string) {
-    return value === "project_get_context" || value === "project_list_units";
+    return value === "project_get_context" || value === "project_list_units" || value === "project_get_shot";
 }
 
 export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: Record<string, unknown>, fallbackProjectId?: string) {
@@ -76,6 +88,58 @@ export async function runProjectAgentTool(name: ProjectAgentToolName, rawInput: 
     }
     if (name === "project_register_task_output") {
         return registerProjectTaskOutput(projectId, String(rawInput.stepId || ""), { taskId: String(rawInput.taskId || ""), assetVersionId: String(rawInput.assetVersionId || "") || undefined, resourceId: String(rawInput.resourceId || "") || undefined, mediaType: String(rawInput.mediaType || "") || undefined, role: String(rawInput.role || "output"), metadataJson: typeof rawInput.metadataJson === "string" ? rawInput.metadataJson : undefined, outputJson: typeof rawInput.outputJson === "string" ? rawInput.outputJson : undefined });
+    }
+    /* ------------------------------------------------------------------
+     * W1-B-01 Domain Tools v0.1（D-046）：意图接口第一批。
+     * retry / regenerate 严格复用 W1-01 #53 既有 API，不新增第二套后端端点；
+     * retry = 同一 GenerationTask 新 attempt；regenerate = 新建 GenerationTask。
+     * ------------------------------------------------------------------ */
+    if (name === "project_get_shot") {
+        const detail = await getProject(projectId);
+        const shotId = String(rawInput.shotId || "").trim();
+        const summary = distillShotContext(detail, shotId);
+        if (!summary) throw new Error(`镜头不存在或不属于该项目：${shotId || "(空)"}`);
+        return summary;
+    }
+    if (name === "project_retry_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        let taskId = String(rawInput.taskId || "").trim();
+        if (!taskId) {
+            const detail = await getProject(projectId);
+            const latest = latestShotTask(detail, shotId);
+            if (!latest) throw new Error(`镜头 ${shotId} 还没有生成任务，无法重试；请先提交生成`);
+            taskId = latest.id;
+        }
+        return { task: await retryShotTask(projectId, shotId, taskId) };
+    }
+    if (name === "project_regenerate_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        return { task: await regenerateShot(projectId, shotId) };
+    }
+    if (name === "project_select_artifact") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const artifactId = String(rawInput.artifactId || "").trim();
+        return { artifact: await selectShotArtifact(projectId, shotId, artifactId) };
+    }
+    if (name === "project_review_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const action = String(rawInput.action || "").trim();
+        if (action !== "approve" && action !== "reject") {
+            throw new Error("审核结论必须是 approve（通过）或 reject（打回）");
+        }
+        const reason = String(rawInput.reason || "").trim() || undefined;
+        return { review: await reviewShot(projectId, shotId, action, reason) };
+    }
+    if (name === "project_generate_shot") {
+        const shotId = String(rawInput.shotId || "").trim();
+        const result = await generateShot(projectId, {
+            shotId,
+            ...(rawInput.videoSeconds !== undefined ? { videoSeconds: Number(rawInput.videoSeconds) } : {}),
+            ...(typeof rawInput.resolution === "string" && rawInput.resolution.trim() ? { resolution: rawInput.resolution.trim() } : {}),
+            ...(Array.isArray(rawInput.referenceImageUrls) ? { referenceImageUrls: rawInput.referenceImageUrls.map((item) => String(item)).filter(Boolean) } : {}),
+            ...(typeof rawInput.workflowStepId === "string" && rawInput.workflowStepId.trim() ? { workflowStepId: rawInput.workflowStepId.trim() } : {}),
+        });
+        return { task: result };
     }
     throw new Error(`未知项目工具：${name}`);
 }

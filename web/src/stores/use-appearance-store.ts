@@ -12,8 +12,13 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     logoUrl: "/logo.svg",
     darkLogoUrl: "/logo.svg",
     logoFrameEnabled: true,
-    authVideoUrl: "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4",
-    authVideoPosterUrl: "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg",
+    // 本地化改造：默认用 web/public/ 下的压缩副本（103MB HEVC -> 6.4MB H.264，离线可用、秒开）。
+    // 管理员可在「平台外观」设置里随时换回官方原片或任意远程地址。
+    // 合并说明：这两个资产由 .git/info/exclude 本地排除（6.4MB，刻意不入库），
+    // 因此远端 release 分支单独检出时登录视频会 404；生产工作区有实体文件，不受影响。
+    authVideoUrl: "/auth-bg.mp4",
+    authVideoPosterUrl: "/auth-poster.jpg",
+    // 吸收上游 #435：登录视频自动播放开关
     authVideoAutoplay: true,
     skinId: "classic",
     activeSkin: DEFAULT_CLASSIC_SKIN,

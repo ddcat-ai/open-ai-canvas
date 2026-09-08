@@ -23,11 +23,17 @@ type taskTerminalCoordinator struct {
 	outputs           taskOutputLifecycle
 	userFacingMessage func(error) string
 	logFailedAttempt  func(model.Task, error)
+	// chainResolver 从任务输入 metadata 自愈解析链上下文（G2：裸 API/外部创建的
+	// 任务在创建时可能没有写入 tasks.shot_id，成功收口时按 metadata 补链）。
+	// 生产装配为 Service.resolveTaskChainContext；测试可为 nil。
+	chainResolver func(taskID string) taskChainContext
 }
 
 type taskTerminalRepository interface {
 	Task(id string) (*model.Task, error)
 	UpdateTaskTerminalState(id string, owner string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error)
+	// TouchShotLatestTask 回写分镜「最近一次成功任务」指针（F-25，W1-02）。
+	TouchShotLatestTask(shotID string, taskID string, now time.Time) error
 }
 
 type taskBillingLifecycle interface {
@@ -63,6 +69,7 @@ func newTaskTerminalCoordinator(s *Service) *taskTerminalCoordinator {
 		outputs:           s,
 		userFacingMessage: s.UserFacingErrorMessage,
 		logFailedAttempt:  s.ensureFailedProviderAttemptLogged,
+		chainResolver:     s.resolveTaskChainContext,
 	}
 }
 
@@ -221,6 +228,24 @@ func (c *taskTerminalCoordinator) ensureFailedAttemptLogged(task *model.Task, er
 
 func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 	c.finalizeReplay(task, model.TaskStatusSucceeded, "文本回放窗口更新失败")
+	// F-25（W1-02）：这里是**全 Provider 统一**的任务成功收口——在此回写
+	// Shot.LatestTaskID（= 最近一次成功生成任务），Bridge / API Provider /
+	// 其他执行端从此共享同一 Shot 生命周期，Regenerate 不会再克隆过时参数。
+	// 回写失败只记账不阻断成功流程（与产物登记失败同一策略，允许幂等补写）。
+	// G2 自愈：任务行本身没带 shot_id 时（裸 API / 外部创建），从任务输入
+	// metadata 解析链上下文补链（resolveTaskChainContext 内部 SaveTaskChainContext
+	// 只补空值、不覆盖 canonical 字段），再回写最新任务指针。
+	shotID := task.ShotID
+	if shotID == "" && c.chainResolver != nil {
+		if chain := c.chainResolver(task.ID); chain.ShotID != "" {
+			shotID = chain.ShotID
+		}
+	}
+	if shotID != "" {
+		if err := c.repo.TouchShotLatestTask(shotID, task.ID, time.Now()); err != nil {
+			_ = c.logger.log(task.UserID, task.ID, "error", "任务成功但回写分镜最新任务指针失败", err.Error())
+		}
+	}
 	var completionErr error
 	completedTask, fetchErr := c.repo.Task(task.ID)
 	if fetchErr != nil {

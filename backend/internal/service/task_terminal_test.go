@@ -16,6 +16,17 @@ type taskTerminalRepositoryStub struct {
 	terminalCalls    int
 	terminalError    error
 	terminalConflict bool
+	touchShotID      string
+	touchTaskID      string
+	touchShotCalls   int
+	touchShotError   error
+}
+
+func (r *taskTerminalRepositoryStub) TouchShotLatestTask(shotID string, taskID string, _ time.Time) error {
+	r.touchShotCalls++
+	r.touchShotID = shotID
+	r.touchTaskID = taskID
+	return r.touchShotError
 }
 
 func (r *taskTerminalRepositoryStub) Task(string) (*model.Task, error) {
@@ -312,5 +323,124 @@ func TestTaskTerminalCoordinatorReturnsTaskReadErrorAfterSuccess(t *testing.T) {
 	}
 	if billing.settleCalls != 1 {
 		t.Fatalf("billing settlement calls = %d, want 1", billing.settleCalls)
+	}
+}
+
+func TestHandleSuccessTouchesShotLatestTask(t *testing.T) {
+	task := &model.Task{ID: "task-1", UserID: "user-1", ShotID: "shot-1", BillingOrderID: "order-1"}
+	repo := &taskTerminalRepositoryStub{task: task}
+	coordinator := newTaskTerminalCoordinatorForTest(
+		repo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := coordinator.handleSuccess(task); err != nil {
+		t.Fatalf("handleSuccess() error = %v", err)
+	}
+	if repo.touchShotCalls != 1 || repo.touchShotID != "shot-1" || repo.touchTaskID != "task-1" {
+		t.Fatalf("应回写分镜最新任务指针：calls=%d shot=%q task=%q", repo.touchShotCalls, repo.touchShotID, repo.touchTaskID)
+	}
+
+	// 无 Shot 关联的任务（画布自由生成）不应触发回写。
+	free := &model.Task{ID: "task-2", UserID: "user-1", BillingOrderID: "order-2"}
+	freeRepo := &taskTerminalRepositoryStub{task: free}
+	freeCoordinator := newTaskTerminalCoordinatorForTest(
+		freeRepo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := freeCoordinator.handleSuccess(free); err != nil {
+		t.Fatalf("handleSuccess(free) error = %v", err)
+	}
+	if freeRepo.touchShotCalls != 0 {
+		t.Fatalf("无 Shot 关联不应回写指针：calls=%d", freeRepo.touchShotCalls)
+	}
+
+	// 回写失败只记账，不得让成功流程报错（与产物登记失败同一策略）。
+	brokenRepo := &taskTerminalRepositoryStub{task: task, touchShotError: errors.New("shot table busy")}
+	brokenCoordinator := newTaskTerminalCoordinatorForTest(
+		brokenRepo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := brokenCoordinator.handleSuccess(task); err != nil {
+		t.Fatalf("回写失败不应阻断成功流程，实际 error = %v", err)
+	}
+}
+
+// G2 自愈：裸 API / 外部创建的任务行没带 shot_id 时，成功收口应从任务输入
+// metadata 解析链上下文（chainResolver），补链并回写分镜最新任务指针。
+func TestTaskTerminalSuccessSelfHealsShotChainFromMetadata(t *testing.T) {
+	task := &model.Task{ID: "task-g2", UserID: "user-g2", ShotID: "", BillingOrderID: "order-g2"}
+	repo := &taskTerminalRepositoryStub{task: task}
+	billing := &taskTerminalBillingStub{}
+	replay := &taskTerminalReplayStub{}
+	sessions := &taskTerminalSessionStub{}
+	logger := &taskTerminalLoggerStub{}
+	outputs := &taskTerminalOutputStub{}
+	c := newTaskTerminalCoordinatorForTest(repo, billing, replay, sessions, logger, outputs)
+	c.chainResolver = func(taskID string) taskChainContext {
+		if taskID != "task-g2" {
+			t.Fatalf("chainResolver 收到意外任务 id：%s", taskID)
+		}
+		return taskChainContext{ShotID: "shot-g2", WorkflowStepID: "step-g2"}
+	}
+
+	if err := c.handleSuccess(task); err != nil {
+		t.Fatalf("handleSuccess() error = %v", err)
+	}
+	if repo.touchShotCalls != 1 || repo.touchShotID != "shot-g2" || repo.touchTaskID != "task-g2" {
+		t.Fatalf("自愈回写未生效：calls=%d shot=%s task=%s", repo.touchShotCalls, repo.touchShotID, repo.touchTaskID)
+	}
+	if billing.settleCalls != 1 {
+		t.Fatalf("自愈路径不应影响计费结算：settleCalls=%d", billing.settleCalls)
+	}
+}
+
+// chainResolver 解析不出 shot（或未装配）时保持原行为：不回写、不报错。
+func TestTaskTerminalSuccessWithoutResolvableShotKeepsLegacyBehavior(t *testing.T) {
+	task := &model.Task{ID: "task-g2-empty", UserID: "user-g2"}
+	repo := &taskTerminalRepositoryStub{task: task}
+	c := newTaskTerminalCoordinatorForTest(
+		repo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	c.chainResolver = func(string) taskChainContext { return taskChainContext{} }
+
+	if err := c.handleSuccess(task); err != nil {
+		t.Fatalf("handleSuccess() error = %v", err)
+	}
+	if repo.touchShotCalls != 0 {
+		t.Fatalf("解析不出 shot 不应回写指针：calls=%d", repo.touchShotCalls)
+	}
+
+	// chainResolver 为 nil（旧测试构造路径）同样安全。
+	nilResolverRepo := &taskTerminalRepositoryStub{task: task}
+	nilResolver := newTaskTerminalCoordinatorForTest(
+		nilResolverRepo,
+		&taskTerminalBillingStub{},
+		&taskTerminalReplayStub{},
+		&taskTerminalSessionStub{},
+		&taskTerminalLoggerStub{},
+		&taskTerminalOutputStub{},
+	)
+	if err := nilResolver.handleSuccess(task); err != nil {
+		t.Fatalf("handleSuccess(nil resolver) error = %v", err)
+	}
+	if nilResolverRepo.touchShotCalls != 0 {
+		t.Fatalf("nil resolver 不应回写指针：calls=%d", nilResolverRepo.touchShotCalls)
 	}
 }
