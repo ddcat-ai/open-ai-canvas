@@ -7,15 +7,17 @@ import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIcon } from "@/components/model-picker";
 import { modelProtocolDefinition, modelProtocolLabel, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { deleteAdminChannelModel, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
+import { deleteAdminChannelModel, deleteAdminChannelModels, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminPageFrame } from "./admin-shell";
-import { AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
 
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [items, setItems] = useState<ChannelModel[]>([]);
+    const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+    const [deletingSelected, setDeletingSelected] = useState(false);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
@@ -48,7 +50,10 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         if (!channel) return;
         setLoading(true);
         try {
-            setItems((await listAdminChannelModels(channel.id)).models);
+            const models = (await listAdminChannelModels(channel.id)).models;
+            const availableIDs = new Set(models.map((item) => item.id));
+            setItems(models);
+            setSelectedModelIds((current) => current.filter((id) => availableIDs.has(id)));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取渠道模型失败");
         } finally {
@@ -61,6 +66,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         void loadProtocols();
         setEditing(null);
         setEditorOpen(false);
+        setSelectedModelIds([]);
         resetFetchPreview();
         setKeyword("");
         setCapability("all");
@@ -139,6 +145,32 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         }
     };
 
+    const confirmBatchRemove = () => {
+        if (!selectedModelIds.length) return;
+        const count = selectedModelIds.length;
+        modal.confirm({
+            title: `删除已选的 ${count} 个模型？`,
+            content: "删除后模型不再显示，且不能在页面恢复。只要其中任一模型仍被前台供应线路或进行中任务使用，本次就不会删除任何模型。",
+            okText: "批量删除",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                setDeletingSelected(true);
+                try {
+                    const result = await deleteAdminChannelModels(channel.id, selectedModelIds);
+                    setSelectedModelIds([]);
+                    setPage(1);
+                    await reload();
+                    await onChanged();
+                    message.success(`已删除 ${result.deleted} 个模型`);
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "批量删除模型失败");
+                } finally {
+                    setDeletingSelected(false);
+                }
+            },
+        });
+    };
     const columns: ColumnsType<ChannelModel> = [
         {
             title: "模型",
@@ -178,11 +210,11 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             width: 180,
             render: (_, item) => (
                 <Space>
-                    <Button size="small" onClick={() => startEdit(item)}>
+                    <Button size="small" disabled={deletingSelected} onClick={() => startEdit(item)}>
                         编辑
                     </Button>
                     <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
-                        <Button size="small" danger title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
+                        <Button size="small" danger disabled={deletingSelected} title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
                 </Space>
             ),
@@ -201,6 +233,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const existingFetchModelKeys = new Set(items.map((item) => normalizeFetchModelKey(item.modelKey)));
     const selectedNewFetchModels = selectedFetchModels.filter((name) => !existingFetchModelKeys.has(normalizeFetchModelKey(name)));
     const selectedExistingFetchCount = selectedFetchModels.length - selectedNewFetchModels.length;
+    const allFetchModelsSelected = fetchPreviewModels.length > 0 && fetchPreviewModels.every((name) => selectedFetchModels.includes(name));
     const fetchModelOptions = fetchPreviewModels.map((name) => {
         const alreadyExists = existingFetchModelKeys.has(normalizeFetchModelKey(name));
         return {
@@ -315,11 +348,27 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     setStatus("all");
                     setPage(1);
                 }}
+                batchActions={
+                    <AdminBatchBar count={selectedModelIds.length} onClear={() => setSelectedModelIds([])}>
+                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deletingSelected} onClick={confirmBatchRemove}>
+                            批量删除
+                        </Button>
+                    </AdminBatchBar>
+                }
                 table={{
                     className: "app-data-table",
                     rowKey: "id",
                     size: "small",
                     loading,
+                    rowSelection: {
+                        selectedRowKeys: selectedModelIds,
+                        preserveSelectedRowKeys: true,
+                        onChange: (keys) => {
+                            const next = keys.map(String);
+                            if (next.length > 100) message.warning("单次最多选择 100 个模型");
+                            setSelectedModelIds(next.slice(0, 100));
+                        },
+                    },
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
@@ -357,9 +406,28 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 ]}
             >
                 <div className="space-y-3">
-                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，请取消本次不需要拉入的模型；已存在的模型不会重复导入。</p>
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，可批量全选或取消全选；已存在的模型不会重复导入。</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/25 px-3 py-2">
+                        <span className="text-sm font-medium text-foreground/70" aria-live="polite">
+                            已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型
+                        </span>
+                        <Space size={4}>
+                            <Button size="small" disabled={importing || allFetchModelsSelected} onClick={() => setSelectedFetchModels(fetchPreviewModels)}>
+                                全选
+                            </Button>
+                            <Button size="small" disabled={importing || selectedFetchModels.length === 0} onClick={() => setSelectedFetchModels([])}>
+                                取消全选
+                            </Button>
+                        </Space>
+                    </div>
                     <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-md border border-border/70 p-3">
-                        <Checkbox.Group className="channel-model-import-picker grid w-full grid-cols-1 gap-2 sm:grid-cols-2" value={selectedFetchModels} options={fetchModelOptions} onChange={(values) => setSelectedFetchModels(values as string[])} />
+                        <Checkbox.Group
+                            className="channel-model-import-picker grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+                            value={selectedFetchModels}
+                            options={fetchModelOptions}
+                            disabled={importing}
+                            onChange={(values) => setSelectedFetchModels(values as string[])}
+                        />
                     </div>
                     <div className="text-xs text-foreground/50">
                         {selectedNewFetchModels.length > 0 ? `将导入 ${selectedNewFetchModels.length} 个新模型` : "当前勾选的模型均已存在"}

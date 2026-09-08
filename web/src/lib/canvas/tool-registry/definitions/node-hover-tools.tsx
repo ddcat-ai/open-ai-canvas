@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
@@ -136,6 +136,19 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         nodeToolbar: { group: "utility", order: 20 },
         applicable: (ctx) => hasImage(ctx) || hasVideo(ctx) || hasAudio(ctx),
         run: (ctx) => ctx.handlers.onNodeDownload(ctx.node!),
+    },
+    {
+        id: "createConversion",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "创建转换节点",
+        displayLabel: "转换",
+        icon: <WandSparkles className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 65,
+        nodeToolbar: { group: "primary", order: 15, description: "在右侧创建转换节点并自动连接" },
+        applicable: (ctx) => (hasImage(ctx) || hasVideo(ctx)) && Boolean(ctx.handlers.onNodeCreateConversion),
+        run: (ctx) => ctx.handlers.onNodeCreateConversion?.(ctx.node!),
     },
     {
         id: "edit",

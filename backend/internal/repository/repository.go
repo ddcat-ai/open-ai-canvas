@@ -1235,13 +1235,34 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 }
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
-	result := r.db.Model(&model.CanvasProject{}).
-		Where("id = ? AND user_id = ?", project.ID, project.UserID).
-		Updates(map[string]any{"project_id": project.ProjectID, "title": project.Title, "payload_json": project.PayloadJSON, "updated_at": project.UpdatedAt})
-	if result.Error != nil || result.RowsAffected > 0 {
-		return result.Error
-	}
-	return r.db.Create(project).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var previous model.CanvasProject
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "project_id").First(&previous, "id = ? AND user_id = ?", project.ID, project.UserID).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := tx.Create(project).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Model(&model.CanvasProject{}).
+			Where("id = ? AND user_id = ?", project.ID, project.UserID).
+			Updates(map[string]any{"project_id": project.ProjectID, "title": project.Title, "payload_json": project.PayloadJSON, "updated_at": project.UpdatedAt}).Error; err != nil {
+			return err
+		}
+		if previous.ProjectID == project.ProjectID {
+			return nil
+		}
+		// 归属与章节关联必须一起更新，事务失败时保留原项目关系。
+		if previous.ID != "" {
+			if err := tx.Where("canvas_id = ?", project.ID).Delete(&model.CanvasUnitLink{}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(&model.Project{}).
+			Where("user_id = ? AND id IN ? AND id <> ''", project.UserID, []string{previous.ProjectID, project.ProjectID}).
+			Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
 }
 
 func (r *Repository) DeleteCanvasProject(userID string, id string) error {

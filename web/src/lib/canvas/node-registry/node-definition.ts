@@ -43,8 +43,10 @@ export type CanvasNodeDefinition = {
     generationMode?: (node: CanvasNodeData) => CanvasGenerationMode | null;
     /** 是否显示右侧输出连接点；缺省为 true，消费型终点节点可关闭。 */
     showOutputConnection?: boolean;
-    /** 若设置，作为目标时只接受这一类上游节点。 */
-    acceptsInputKind?: CanvasNodeInputKind;
+    /** 若设置，作为目标时只接受这些上游节点类型。 */
+    acceptsInputKind?: CanvasNodeInputKind | CanvasNodeInputKind[];
+    /** 限制直接输入数量；转换节点等一进一出节点通常为 1。 */
+    maxInputCount?: number;
     /**
      * 作为上游输入被参考素材容量校验计数时的类别；
      * 不设表示不参与计数（生成配置、背板）。与 resourceKind 不同，计数不看内容。
@@ -69,6 +71,7 @@ export function canvasNodeDefinitionFromPlugin(pluginId: string, contribution: P
         showInCreateMenu: true,
         showOutputConnection: contribution.showOutputConnection,
         acceptsInputKind: contribution.acceptsInputKind,
+        maxInputCount: contribution.maxInputCount,
         plugin: { pluginId, renderer: contribution.renderer, schema: contribution.schema },
     };
 }

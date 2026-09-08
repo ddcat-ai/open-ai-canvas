@@ -428,6 +428,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     return (
         <CanvasPromptOptimizerDrawer
+            historyKey={`canvas:${node.id}`}
             open={promptOptimizerOpen}
             prompt={prompt}
             generationMode={mode === "image" || mode === "video" ? mode : "image"}

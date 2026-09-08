@@ -3,18 +3,32 @@ package database
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type Config struct {
 	Driver  string
 	DSN     string
 	DataDir string
+}
+
+// ErrRecordNotFound 在多个查询路径属于"未配置则用默认值"的正常分支，
+// 统一忽略该日志，避免空库或未配置场景下每轮轮询都刷红色错误。
+var gormConfig = &gorm.Config{
+	Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  logger.Warn,
+		IgnoreRecordNotFoundError: true,
+		Colorful:                  true,
+	}),
 }
 
 func Open(config Config) (*gorm.DB, error) {
@@ -31,13 +45,13 @@ func Open(config Config) (*gorm.DB, error) {
 			}
 			dsn = config.DataDir + "/open_ai_canvas.db?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on&_synchronous=NORMAL"
 		}
-		return gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+		return gorm.Open(sqlite.Open(dsn), gormConfig)
 	case "postgres", "postgresql":
 		dsn := strings.TrimSpace(config.DSN)
 		if dsn == "" {
 			return nil, errors.New("PostgreSQL 模式必须配置 DATABASE_URL")
 		}
-		return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		return gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		return nil, fmt.Errorf("不支持的数据库驱动：%s", driver)
 	}

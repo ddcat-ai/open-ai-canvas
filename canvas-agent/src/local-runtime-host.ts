@@ -17,6 +17,9 @@ import { LOCAL_RUNTIME_DEFAULT_SCOPES, LocalRuntimeSessionManager } from "./loca
 import { createCanvasAgentHttpModule } from "./modules/canvas-agent-http.js";
 import { createDreaminaHttpModule } from "./modules/dreamina-http.js";
 import { createPortraitClearanceHttpModule } from "./modules/portrait-clearance-http.js";
+import { createDepthEstimationHttpModule } from "./modules/depth-estimation-http.js";
+import { createLineartEstimationHttpModule } from "./modules/lineart-estimation-http.js";
+import { createPoseEstimationHttpModule } from "./modules/pose-estimation-http.js";
 
 export type StartLocalRuntimeOptions = {
     config?: LocalRuntimeConfig;
@@ -46,6 +49,9 @@ export function createDefaultLocalRuntimeModules(config: LocalRuntimeConfig): Lo
             ],
         }),
         createPortraitClearanceHttpModule({ ownerId: ensureRuntimeOwnerId(config), configDir: CONFIG_DIR }),
+        createDepthEstimationHttpModule(),
+        createLineartEstimationHttpModule(),
+        createPoseEstimationHttpModule(),
     ];
 }
 

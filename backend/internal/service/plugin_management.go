@@ -14,6 +14,7 @@ const (
 	PluginPortraitClearance   = "portrait-clearance"
 	PluginAIArtCritique       = "ai-art-critique"
 	PluginWorkbench           = "workbench"
+	PluginMediaConversion     = "media-conversion"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -82,6 +83,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginWorkbench: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
+	PluginMediaConversion: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
@@ -205,6 +210,8 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 		if !userConfigured {
 			switch {
 			case pluginID == PluginWorkbench:
+				userEnabled = true
+			case pluginID == PluginMediaConversion:
 				userEnabled = true
 			case hasRuntime && isLegacyWorkflowPlugin(pluginID):
 				userEnabled = runtimePlugin.Status == "enabled"

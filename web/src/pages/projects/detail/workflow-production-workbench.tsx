@@ -1,3 +1,5 @@
+import { ImageSizePicker } from "@/components/image-size-picker";
+import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Empty, Form, Image, Input, InputNumber, Modal, Segmented, Select, Tag } from "antd";
@@ -505,20 +507,14 @@ export default function WorkflowProductionWorkbench(props: Props) {
                                                 ? <Select options={videoDurationOptions(videoProfile).map((value) => ({ value, label: `${value} 秒` }))} />
                                                 : <InputNumber className="w-full" min={generationCapability === "video" ? videoProfile?.duration.min || 1 : 0.5} max={generationCapability === "video" ? videoProfile?.duration.max || 60 : 60} step={generationCapability === "video" ? videoProfile?.duration.step || 1 : 0.5} />}
                                         </Form.Item>
-                                        <Form.Item label={generationCapability === "video" ? "画幅" : "尺寸 / 画幅"}>
-                                            <Select
-                                                showSearch
-                                                value={aspectRatio}
-                                                onChange={setAspectRatio}
-                                                options={(generationCapability === "video" ? videoProfile?.ratios || [] : imageProfile?.size.values.filter((value) => value !== "*") || []).map((value) => ({ value, label: value }))}
-                                            />
-                                        </Form.Item>
+                                        {generationCapability === "video" ? <Form.Item label="画幅"><Select value={aspectRatio} onChange={setAspectRatio} options={(videoProfile?.ratios || []).map((value) => ({value, label:value}))} /></Form.Item> : null}
                                         {generationCapability === "video" ? (
                                             <Form.Item label="分辨率"><Select value={resolution} onChange={setResolution} options={(videoProfile?.resolutions || []).map((value) => ({ value, label: formatVideoResolutionLabel(value) }))} /></Form.Item>
-                                        ) : imageProfile?.quality.supported ? (
+                                        ) : imageProfile?.quality.supported && !imageResolutionUsesQuality(imageProfile) ? (
                                             <Form.Item label="生成画质"><Select value={imageQuality} onChange={setImageQuality} options={imageProfile.quality.values.map((value) => ({ value, label: value.toUpperCase() }))} /></Form.Item>
                                         ) : <div />}
                                     </div>
+                                    {generationCapability === "image" && imageProfile ? <ImageSizePicker profile={imageProfile} size={aspectRatio} quality={imageQuality} onChange={(size, quality) => { setAspectRatio(size); if (quality) setImageQuality(quality); }} /> : null}
                                 </div>
                                 <div className="workflow-settings-section">
                                     <div className="workflow-settings-section-title">镜头语言</div>

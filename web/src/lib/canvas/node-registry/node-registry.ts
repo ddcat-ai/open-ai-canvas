@@ -100,3 +100,13 @@ export function getNodeInputKind(type: CanvasNodeTypeId) {
 export function getNodeAcceptedInputKind(type: CanvasNodeTypeId) {
     return definitions.get(type)?.acceptsInputKind;
 }
+
+export function getNodeAcceptedInputKinds(type: CanvasNodeTypeId) {
+    const accepted = definitions.get(type)?.acceptsInputKind;
+    if (!accepted) return [];
+    return Array.isArray(accepted) ? accepted : [accepted];
+}
+
+export function getNodeMaxInputCount(type: CanvasNodeTypeId) {
+    return definitions.get(type)?.maxInputCount;
+}

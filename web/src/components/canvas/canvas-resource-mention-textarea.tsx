@@ -46,10 +46,11 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
+    onPasteImageFiles?: (files: File[]) => void | Promise<void>;
 };
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, ...props },
+    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, onPasteImageFiles, ...props },
     forwardedRef,
 ) {
     const rawTheme = useThemeStore((state) => state.theme);
@@ -222,6 +223,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const imageFilesFromTransfer = (event: DragEvent<HTMLDivElement>) => Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    const imageFilesFromClipboard = (event: ClipboardEvent<HTMLElement>) => {
+        const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+        if (files.length) return files;
+        return Array.from(event.clipboardData.items)
+            .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => Boolean(file));
+    };
 
     const mergedStyle = {
         ...(style || {}),
@@ -275,6 +284,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const images = imageFilesFromClipboard(event);
+                        if (images.length && onPasteImageFiles) {
+                            event.preventDefault();
+                            void onPasteImageFiles(images);
+                            return;
+                        }
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
@@ -443,6 +458,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         if (textarea.scrollTop !== previousTop) event.preventDefault();
                     }
                     props.onWheel?.(event);
+                }}
+                onPaste={(event) => {
+                    const images = imageFilesFromClipboard(event);
+                    if (images.length && onPasteImageFiles) {
+                        event.preventDefault();
+                        void onPasteImageFiles(images);
+                        return;
+                    }
+                    props.onPaste?.(event);
                 }}
                 onBlur={(event) => {
                     if (event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-canvas-resource-mention-menu]")) return;

@@ -235,48 +235,75 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
+    // Preserve the existing Claude fragment callback for callers that append it.
+    let previous = "";
+    return requestTextResponse(
+        config,
+        messages,
+        (text) => {
+            onDelta(requestConfig.interfaceType === "claude-api" ? text.slice(previous.length) : text);
+            previous = text;
+        },
+        options,
+    );
+}
+
+/** Plain text requests share the existing protocol adapters; callbacks are cumulative. */
+export async function requestTextResponse(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
+    const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
+    const requireText = (value: string) => {
+        options?.signal?.throwIfAborted();
+        if (!value.trim()) throw new Error("模型没有返回正文，请重试或更换文本模型");
+        return value;
+    };
     try {
         if (requestConfig.apiFormat === "gemini") {
-            const answer = (await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages), onDelta, options)).content || "没有返回内容";
-            if (answer === "没有返回内容") onDelta(answer);
-            return answer;
+            return requireText((await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages), onDelta, options)).content);
         }
         if (requestConfig.interfaceType === "claude-api") {
-            const answer = (await requestStreamingClaude(requestConfig, toClaudeBody(requestConfig, messages), onDelta, options)).content || "没有返回内容";
-            if (answer === "没有返回内容") onDelta(answer);
-            return answer;
-        }
-        if (requestConfig.interfaceType === "chat-completion" || !requestConfig.interfaceType) {
-            const answer =
+            let content = "";
+            return requireText(
                 (
-                    await requestStreamingChatCompletion(
+                    await requestStreamingClaude(
                         requestConfig,
-                        {
-                            model: requestConfig.model,
-                            messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                        toClaudeBody(requestConfig, messages),
+                        (delta) => {
+                            content += delta;
+                            onDelta(content);
                         },
-                        onDelta,
                         options,
                     )
-                ).content || "没有返回内容";
-            if (answer === "没有返回内容") onDelta(answer);
-            return answer;
+                ).content,
+            );
         }
-        const answer =
-            (
-                await requestStreamingResponse(
+        if (requestConfig.interfaceType === "chat-completion" || !requestConfig.interfaceType) {
+            const answer = (
+                await requestStreamingChatCompletion(
                     requestConfig,
                     {
                         model: requestConfig.model,
-                        input: toResponseInput(withSystemMessage(requestConfig, messages)),
+                        messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
                     },
                     onDelta,
                     options,
                 )
-            ).content || "没有返回内容";
-        if (answer === "没有返回内容") onDelta(answer);
-        return answer;
+            ).content;
+            return requireText(answer);
+        }
+        const answer = (
+            await requestStreamingResponse(
+                requestConfig,
+                {
+                    model: requestConfig.model,
+                    input: toResponseInput(withSystemMessage(requestConfig, messages)),
+                },
+                onDelta,
+                options,
+            )
+        ).content;
+        return requireText(answer);
     } catch (error) {
+        if (options?.signal?.aborted) throw error;
         throw new Error(readAxiosError(error, "请求失败"));
     }
 }

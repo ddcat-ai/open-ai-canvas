@@ -1,13 +1,12 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Bot, Check, ChevronDown, Clapperboard, CloudDownload, Coins, CopyPlus, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
+import { Bot, Check, ChevronDown, Clapperboard, CloudDownload, Coins, CopyPlus, Focus, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
-import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -40,7 +39,6 @@ type CanvasTopBarProps = {
     mediaPerformanceMode: CanvasMediaPerformanceMode;
     onMediaPerformanceModeChange: (mode: CanvasMediaPerformanceMode) => void;
     onOpenSearch: () => void;
-    projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
     onEnterFocusMode: () => void;
     shortDramaGuide?: { progress: CanvasShortDramaProgress; collapsed: boolean; onToggle: () => void };
 };
@@ -70,7 +68,6 @@ export function CanvasTopBar({
     mediaPerformanceMode,
     onMediaPerformanceModeChange,
     onOpenSearch,
-    projectContext,
     onEnterFocusMode,
     shortDramaGuide,
 }: CanvasTopBarProps) {
@@ -166,20 +163,6 @@ export function CanvasTopBar({
                                 </CanvasTopBarTooltip>
                             </div>
                         )}
-                        {projectContext && !isTitleEditing ? (
-                            <div className="canvas-topbar-project-context mt-0.5 flex w-full min-w-0 items-center gap-1.5 overflow-hidden text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
-                                <Link to={`/projects/${projectContext.projectId}/overview`} className="inline-flex min-w-0 items-center gap-1 hover:underline" title={`返回项目：${projectContext.projectName}`}>
-                                    <FolderKanban className="size-3 shrink-0" />
-                                    <span className="max-w-[120px] truncate">{projectContext.projectName}</span>
-                                </Link>
-                                <span aria-hidden>·</span>
-                                <button type="button" className="min-w-0 truncate hover:underline" onClick={onOpenSearch} title="搜索并定位章节或镜头">
-                                    {projectContext.chapterLabel || `${projectContext.nodeCount} 个节点`}
-                                    {projectContext.shotLabel ? ` · ${projectContext.shotLabel}` : ""}
-                                    {projectContext.selectedCount ? ` · 已选 ${projectContext.selectedCount}` : ""}
-                                </button>
-                            </div>
-                        ) : null}
                     </div>
                 </div>
 

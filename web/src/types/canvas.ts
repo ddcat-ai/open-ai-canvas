@@ -1,4 +1,5 @@
 import type { CanvasColorGrade } from "@/lib/canvas/canvas-color-grade";
+import type { MediaConversionNodeState } from "@/lib/media-conversion/contracts";
 import type { AssetCategory } from "@/lib/asset-category";
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
@@ -34,6 +35,7 @@ export enum CanvasNodeType {
     Compare = "compare",
     Chart = "chart",
     ColorGrade = "colorgrade",
+    MediaConversion = "media-conversion",
 }
 
 /** Runtime IDs contributed by plugins share the persisted node type field. */
@@ -359,6 +361,8 @@ export type CanvasNodeMetadata = {
     chartKind?: "bar" | "line";
     /** 调色节点的参数；缺省视为未调色。 */
     colorGrade?: CanvasColorGrade;
+    /** 本地图片/视频转换节点的参数、来源指纹和结果状态。 */
+    mediaConversion?: MediaConversionNodeState;
     /** 用户手动拉伸过尺寸；图片按真实比例自动适配时避让它。 */
     manualSize?: boolean;
     storyboard?: StoryboardData;

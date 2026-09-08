@@ -4,6 +4,8 @@
 
 ## 设计沉淀
 
+- [插件平台与市场演进调研](design/plugin-platform-and-marketplace-research.md)：插件机制代码审计、对外回应、外部 SDK 与隔离运行时、独立插件验收、受控目录到公开市场的分阶段方案（调研建议，未实施）。
+
 - [站点及外观与皮肤主题设计合同](design/site-appearance-and-skins.mdx)：品牌一致性、登录页与邮件、SEO/备案、三层皮肤令牌、无闪屏启动顺序和验收边界。
 
 - [工作区外壳设计沉淀](design/workspace-shell-design.mdx)：侧栏（260px 可折叠导航 + 分组折叠）、主区卡片、顶部栏（账户/公告/主题）的设计决策与样式约束。
@@ -17,6 +19,8 @@
 - [肖像权可识别性排查画布插件实施规格](design/portrait-clearance-canvas-plugin.mdx)：TypeScript 重写、画布节点与全屏工作台、项目模型复用、本机 ONNX/百度识图/候选去重、任务合同、报告和验收方案。
 
 - [AI 审美批改画布插件方案](design/ai-art-critique-solution.md)：云端视觉分析、并行 Reviewer、问题定位、AI 修改提示词与前端 SVG 标注的职责边界和交互设计。
+
+- [图片与视频转换节点插件方案](content/docs/plugins/reference-pack-plugin-solution.mdx)：本地运行的统一转换节点，轻量单图优先、视频分阶段验证；含开源选型、结果预览、下游连接、状态交互与 ComfyUI 扩展边界，方案未实施。
 
 - [LLM、Image、Video 主流请求协议全景与影策兼容性调查](design/model-request-protocol-landscape.md)：主流原生协议、聚合网关、图片/视频异步任务、参考素材 role、当前插件映射缺口与 MiniMax H3 专项审计。
 

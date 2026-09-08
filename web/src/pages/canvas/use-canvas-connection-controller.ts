@@ -196,7 +196,7 @@ export function useCanvasConnectionController({
         setContextMenu(null);
     }, [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
 
-    const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, pending: PendingConnectionCreate, workflowProvider?: "runninghub" | "comfyui") => {
+    const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, pending: PendingConnectionCreate, workflowProvider?: "runninghub" | "comfyui") => {
         const nodeType = type;
         if (nodeType === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
             message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
@@ -275,6 +275,12 @@ export function useCanvasConnectionController({
             setConnecting(null);
             return;
         }
+        if (batchSourceNodeIds.length && nodeType === CanvasNodeType.MediaConversion) {
+            message.error("转换节点一次只能连接一个输入，请先连接到普通节点");
+            closeConnectionCreateMenu();
+            setConnecting(null);
+            return;
+        }
         const batchPlan = batchSourceNodeIds.length
             ? planBatchConnections({ sourceNodeIds: batchSourceNodeIds, targetNodeId: newNode.id, nodes: [...nodesRef.current, newNode], connections: connectionsRef.current, config, allowCapacityOverflow: true })
             : null;
@@ -294,7 +300,7 @@ export function useCanvasConnectionController({
             setConnections(nextConnections);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+            if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio && nodeType !== CanvasNodeType.MediaConversion) setDialogNodeId(newNode.id);
             const skippedCount = batchPlan.skipped.length;
             const duplicateCount = batchPlan.duplicates.length;
             const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
@@ -360,17 +366,18 @@ export function useCanvasConnectionController({
         setSelectedNodeIds(new Set([newNode.id]));
         setSelectedConnectionId(null);
         if (nodeType === CanvasNodeType.Drawing) setDrawingNodeId(newNode.id);
-        else if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+        else if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.Script && nodeType !== CanvasNodeType.Audio && nodeType !== CanvasNodeType.MediaConversion) setDialogNodeId(newNode.id);
         closeConnectionCreateMenu();
         setConnecting(null);
     }, [closeConnectionCreateMenu, config, connectionsRef, defaultDrawingEngine, message, nodesRef, projectId, runtimeStatuses, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, tldrawLicenseKey]);
 
-    const getConnectionCreateDisabledReason = useCallback((type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, pending: PendingConnectionCreate, workflowProvider?: "runninghub" | "comfyui") => {
+    const getConnectionCreateDisabledReason = useCallback((type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, pending: PendingConnectionCreate, workflowProvider?: "runninghub" | "comfyui") => {
         const nodeType = type;
         if (nodeType === CanvasNodeType.Config) {
             if (workflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, workflowProvider)) return `${workflowProvider === "runninghub" ? "RunningHub" : "ComfyUI"} 工作流插件未启用`;
         }
         if (pending.batchSourceNodeIds?.length) {
+            if (nodeType === CanvasNodeType.MediaConversion) return "转换节点一次只能连接一个输入";
             if (nodeType === CanvasNodeType.Drawing || nodeType === CanvasNodeType.Config) return "批量连接暂不支持此节点类型";
             const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: getNodeSpec(nodeType).width, height: getNodeSpec(nodeType).height };
             const plan = planBatchConnections({ sourceNodeIds: pending.batchSourceNodeIds, targetNodeId: pendingNode.id, nodes: [...nodesRef.current, pendingNode], connections: connectionsRef.current, config, allowCapacityOverflow: true });

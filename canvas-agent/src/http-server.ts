@@ -4,7 +4,7 @@ import { CanvasSession } from "./canvas-session.js";
 import { CONFIG_DIR, type LocalRuntimeConfig } from "./config.js";
 import { createLocalRuntimeApp } from "./local-runtime.js";
 import { startLocalRuntime } from "./local-runtime-host.js";
-import { LocalRuntimeSessionManager } from "./local-runtime-session.js";
+import { LOCAL_RUNTIME_DEFAULT_SCOPES, LocalRuntimeSessionManager } from "./local-runtime-session.js";
 import {
     createCanvasAgentHttpModule,
     type CanvasAgentSession,
@@ -14,6 +14,9 @@ import {
     type DreaminaHttpModuleOptions,
 } from "./modules/dreamina-http.js";
 import { createPortraitClearanceHttpModule } from "./modules/portrait-clearance-http.js";
+import { createDepthEstimationHttpModule } from "./modules/depth-estimation-http.js";
+import { createLineartEstimationHttpModule } from "./modules/lineart-estimation-http.js";
+import { createPoseEstimationHttpModule } from "./modules/pose-estimation-http.js";
 
 export type CanvasAgentHttpDependencies = Pick<DreaminaHttpModuleOptions, "dreamina">;
 
@@ -34,21 +37,29 @@ export function createHttpApp(
     dependencies: CanvasAgentHttpDependencies = {},
 ): Express {
     const endpoint = config.url;
+    const modules = [
+        createCanvasAgentHttpModule(config, session),
+        createDreaminaHttpModule({ ownerId: config.ownerId!, ...dependencies }),
+        createPortraitClearanceHttpModule({ ownerId: config.ownerId!, configDir: CONFIG_DIR }),
+        createDepthEstimationHttpModule(),
+        createLineartEstimationHttpModule(),
+        createPoseEstimationHttpModule(),
+    ];
     const manager = new LocalRuntimeSessionManager({
         endpoint,
         trustedOrigins: config.trustedWebOrigins,
         registrations: config.browserRegistrations,
+        scopes: [...new Set([
+            ...LOCAL_RUNTIME_DEFAULT_SCOPES,
+            ...modules.flatMap((module) => module.descriptor.scopes),
+        ])],
     });
     return createLocalRuntimeApp({
         authority: new URL(endpoint).host,
         endpoint,
         version: "0.1.0",
         sessionManager: manager,
-        modules: [
-            createCanvasAgentHttpModule(config, session),
-            createDreaminaHttpModule({ ownerId: config.ownerId!, ...dependencies }),
-            createPortraitClearanceHttpModule({ ownerId: config.ownerId!, configDir: CONFIG_DIR }),
-        ],
+        modules,
         legacyMasterToken: config.token,
         legacyOrigins: config.origins ?? [],
     });

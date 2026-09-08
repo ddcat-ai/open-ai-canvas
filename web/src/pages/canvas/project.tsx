@@ -17,7 +17,6 @@ import { nanoid } from "nanoid";
 import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, writeCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
-import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { refreshCanvasCharacterReferenceNodes } from "@/lib/canvas/canvas-character-reference";
 import { shouldAutoConnectCanvasRuntime } from "@/lib/canvas/local-runtime-connection";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -33,7 +32,6 @@ import { CanvasAssistantPanel } from "@/components/canvas/canvas-assistant-panel
 import { AssistantPanelColumn, getPanelWidthBounds } from "./canvas-assistant-panel-column";
 import { CanvasActiveTaskPanel } from "@/components/canvas/canvas-active-task-panel";
 import { CanvasAssetTray } from "@/components/canvas/canvas-asset-tray";
-import { CanvasProjectSidebar } from "@/components/canvas/canvas-project-sidebar";
 import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asset-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
@@ -71,7 +69,7 @@ import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-pa
 import { useFocusMode } from "@/hooks/use-focus-mode";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { getContextResourceNodes, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
+import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay, type PendingConnectionCreate } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
 import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
@@ -496,7 +494,6 @@ function InfiniteCanvasPage() {
         if (!projectLoaded || !linkedProjectQuery.data) return;
         setNodes((current) => refreshCanvasCharacterReferenceNodes(current, linkedProjectQuery.data.assets));
     }, [linkedProjectQuery.data, projectLoaded, setNodes]);
-    const canvasContext = useMemo(() => summarizeCanvasContext(nodes, selectedNodeIds, linkedProjectQuery.data?.units), [linkedProjectQuery.data?.units, nodes, selectedNodeIds]);
     // 扩展节点（对比/图表/调色）要读自己的上游才能渲染，经 Context 下发；
     // 取上游复用 canvas-resource-references 的实现，别在这里另写一份。必须 memo——
     // 每帧新对象会让所有节点跟着重渲染，错题本里多条崩溃都出在画布高频更新。
@@ -1012,6 +1009,20 @@ function InfiniteCanvasPage() {
         setDrawingNodeId,
     });
 
+    const createConversionFromSource = useCallback((source: CanvasNodeData) => {
+        if (source.type !== CanvasNodeType.Image && source.type !== CanvasNodeType.Video) return;
+        const spec = getNodeSpec(CanvasNodeType.MediaConversion);
+        const pending: PendingConnectionCreate = {
+            connection: { nodeId: source.id, handleType: "source", anchorRatio: 0.5 },
+            position: {
+                x: source.position.x + source.width + 96 + spec.width / 2,
+                y: source.position.y + source.height / 2,
+            },
+            quick: true,
+        };
+        void createConnectedNode(CanvasNodeType.MediaConversion, pending);
+    }, [createConnectedNode]);
+
     const batchSourceNodeIds = useMemo(() => nodes
         .filter((node) => selectedNodeIds.has(node.id) && !batchSourceRestriction(node))
         .map((node) => node.id), [nodes, selectedNodeIds]);
@@ -1044,6 +1055,8 @@ function InfiniteCanvasPage() {
         } else if (node.type === ART_CRITIQUE_NODE_TYPE) {
             setDialogNodeId(null);
             setArtCritiqueNodeId(node.id);
+        } else if (node.type === CanvasNodeType.MediaConversion) {
+            setDialogNodeId(null);
         } else {
             // 选择参考媒体时保留当前工作流配置面板，避免点击图片后配置“返回/消失”。
             // 没有工作流配置面板时，媒体节点仍按原逻辑打开自己的面板。
@@ -1061,7 +1074,7 @@ function InfiniteCanvasPage() {
 
     const handleNodeDragEnd = useCallback((nodeId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
-        if (!node || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === PORTRAIT_CLEARANCE_NODE_TYPE || node.type === ART_CRITIQUE_NODE_TYPE) {
+        if (!node || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === CanvasNodeType.MediaConversion || node.type === PORTRAIT_CLEARANCE_NODE_TYPE || node.type === ART_CRITIQUE_NODE_TYPE) {
             setDialogNodeId(null);
             return;
         }
@@ -1882,7 +1895,7 @@ function InfiniteCanvasPage() {
 
     const renderCanvasNodePanel = useCallback(
         (panelNode: CanvasNodeData) => {
-            if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
+            if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing || panelNode.type === CanvasNodeType.MediaConversion) return null;
             return panelNode.type === CanvasNodeType.Config ? (
                 <CanvasConfigComposer
                     value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
@@ -2077,14 +2090,6 @@ function InfiniteCanvasPage() {
     const openCanvasNodeVersions = useCallback((node: CanvasNodeData) => setVersionCompareRootId(node.metadata?.versionOfNodeId || node.id), []);
     const viewCanvasNodeImage = useCallback((node: CanvasNodeData) => setPreviewNodeId(node.id), []);
     const editCanvasDirector = useCallback((node: CanvasNodeData) => openDirectorWorkbench(node.id), [openDirectorWorkbench]);
-    const locateProjectStyleNode = useCallback(() => {
-        const styleNode = nodesRef.current.find((node) => node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "styleboard");
-        if (!styleNode) {
-            message.info("项目画风节点正在同步，请稍后再试");
-            return;
-        }
-        focusCanvasNode(styleNode.id);
-    }, [focusCanvasNode, message, nodesRef]);
     const freeformCreateCommands = useCanvasCreateCommands({
         workspaceMode,
         isProjectLinked: Boolean(shortDramaEnabled && currentProject?.projectId),
@@ -2151,9 +2156,6 @@ function InfiniteCanvasPage() {
                 跳转到画布主内容
             </a>
             <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: resolvedCanvasAppearance.background, color: theme.node.text }}>
-                {!focusMode && shortDramaEnabled && currentProject?.projectId ? (
-                    <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} />
-                ) : null}
                 <CanvasOverlayLayerProvider>
                     <section className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden">
                     {!focusMode ? (
@@ -2182,15 +2184,6 @@ function InfiniteCanvasPage() {
                             mediaPerformanceMode={mediaPerformanceMode}
                             onMediaPerformanceModeChange={setMediaPerformanceMode}
                             onOpenSearch={() => setNodeSearchOpen(true)}
-                            projectContext={
-                                shortDramaEnabled && currentProject?.projectId
-                                    ? {
-                                          ...canvasContext,
-                                          projectId: currentProject.projectId,
-                                          projectName: linkedProjectQuery.data?.project.name || currentProject.title,
-                                      }
-                                    : undefined
-                            }
                             onEnterFocusMode={enterFocusMode}
                             shortDramaGuide={shortDramaGuide}
                         />
@@ -2558,6 +2551,7 @@ function InfiniteCanvasPage() {
                         onUpload={(node) => handleUploadRequest(node.id)}
                         onDownload={downloadNodeImage}
                         onSaveAsset={(node) => void saveNodeAsset(node)}
+                        onCreateConversion={createConversionFromSource}
                         onAnnotate={(node) => setAnnotationNodeId(node.id)}
                         onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                         onEmotion={(node) => {

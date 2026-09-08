@@ -18,12 +18,23 @@ description: 在宿主机启动影策前后端开发服务
 - 使用 `.local/project-workbench-debug` 作为后端 SQLite 开发数据目录；
 - 创建 `.local/cache/go-build` 和 `.local/cache/go-mod` 缓存目录；
 - 首次启动时，如果 `web/node_modules` 不存在，执行 `bun install --frozen-lockfile`；
-- 打开两个 PowerShell 窗口，分别运行后端和前端；
+- 首次启动时，如果 `canvas-agent/dist/index.js` 不存在，自动安装并构建 Canvas Agent；
+- 在当前终端运行前端、后端和本地模型运行时，并在 `.local/yingce-local-processes.json` 记录子进程，仅供关闭脚本识别；
 - 将前端 `/api` 请求代理到 `http://127.0.0.1:8080`。
 
-启动后访问 <http://localhost:3000>。后端健康检查地址是 <http://127.0.0.1:8080/api/health>。
+前端、后端和本地模型运行时就绪后自动用默认浏览器打开 <http://localhost:3000>，最多等待五分钟（首次 Go 编译或 Agent 构建可能较慢）。使用 `-SkipBrowser` 可跳过自动打开。后端健康检查地址是 <http://127.0.0.1:8080/api/health>，本地运行时地址是 <http://127.0.0.1:17371/runtime/info>。
 
-脚本使用固定的本地开发端口：前端 `3000`，后端 `8080`。如果端口被占用，脚本会先退出，不会关闭已有进程。请分别在两个开发窗口中按 `Ctrl+C` 停止服务。
+脚本使用固定的本地开发端口：前端 `3000`，后端 `8080`。如果端口被占用，脚本会先退出，不会关闭已有进程。推荐在仓库根目录执行以下命令关闭脚本启动的前后端：
+
+```powershell
+.\scripts\stop-local.ps1
+```
+
+也可以直接双击根目录的 `start-yingce-local.cmd` 启动。启动后该终端会保持打开；关闭终端会结束前端、后端和本地模型运行时。另一个终端可双击 `stop-yingce-local.cmd` 或执行上面的关闭命令。
+
+运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-local-shortcut.ps1`，会在当前用户的开始菜单安装带图标的“影策”入口。可在开始菜单搜索“影策”，右键选择“固定到开始”。快捷方式无需 Docker，项目移动后需重新安装。
+
+点击入口会打开一个终端，前后端日志显示在其中。本机启动将服务绑定到回环地址，前端严格使用 3000 端口。启动脚本使用 Windows Job Object 管理本次进程树，即使直接关闭终端窗口，Go 编译器、后端和 Vite 子进程也会一起结束。直接关窗属于强制停止，进行中的生成可能被打断；浏览器窗口保持打开，服务停止后页面不能继续请求。强制关窗遗留的进程记录会在下次启动时检查并清理。
 
 如果 PowerShell 的执行策略阻止脚本运行，可以只对当前进程临时放行：
 
@@ -54,7 +65,7 @@ bun install
 bun run dev
 ```
 
-前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
+前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。深度转换由同一启动脚本拉起的本地运行时负责，不需要在浏览器中单独配置 Canvas Agent。手工启动时，除前端和后端外还需要在 `canvas-agent` 目录执行 `node dist/index.js`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
 
 ## 时间线字幕转写（whisper.cpp）
 

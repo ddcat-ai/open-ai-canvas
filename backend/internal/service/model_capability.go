@@ -50,10 +50,19 @@ type ImageReferenceConfig struct {
 }
 
 type ImageSizeConfig struct {
-	Parameter   string   `json:"parameter"`
-	Values      []string `json:"values"`
-	Default     string   `json:"default"`
-	AllowCustom bool     `json:"allowCustom"`
+	Parameter   string            `json:"parameter"`
+	Values      []string          `json:"values"`
+	Default     string            `json:"default"`
+	AllowCustom bool              `json:"allowCustom"`
+	Presets     []ImageSizePreset `json:"presets,omitempty"`
+}
+
+type ImageSizePreset struct {
+	Tier   string `json:"tier"`
+	Ratio  string `json:"ratio"`
+	Size   string `json:"size"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 type ImageQualityConfig struct {
@@ -494,6 +503,7 @@ func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
 	switch value.Size.Parameter {
 	case "none":
 		value.Size.Values = []string{}
+		value.Size.Presets = nil
 		value.Size.Default = "auto"
 		value.Size.AllowCustom = false
 	case "size", "aspect_ratio":
@@ -506,6 +516,48 @@ func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
 	default:
 		return BadAuthRequest("尺寸参数仅支持不发送、size 或 aspect_ratio")
 	}
+	seenPresets := make(map[string]bool)
+	for _, preset := range value.Size.Presets {
+		if preset.Tier != "1k" && preset.Tier != "2k" && preset.Tier != "4k" {
+			return BadAuthRequest("图片分辨率档位仅支持 1K、2K、4K")
+		}
+		parts := strings.Split(preset.Ratio, ":")
+		if len(parts) != 2 {
+			return BadAuthRequest("图片预设比例格式无效")
+		}
+		w, ew := strconv.Atoi(parts[0])
+		h, eh := strconv.Atoi(parts[1])
+		if ew != nil || eh != nil || w <= 0 || h <= 0 || w > 100000 || h > 100000 || max(w, h) > min(w, h)*3 {
+			return BadAuthRequest("图片预设比例无效")
+		}
+		if preset.Width <= 0 || preset.Height <= 0 || max(preset.Width, preset.Height) > 3840 || max(preset.Width, preset.Height) > min(preset.Width, preset.Height)*3 || preset.Width*preset.Height < 655360 || preset.Width*preset.Height > 8294400 || preset.Size != fmt.Sprintf("%dx%d", preset.Width, preset.Height) {
+			return BadAuthRequest("图片预设像素尺寸无效")
+		}
+		// 容许像素取整误差，但不能将横屏尺寸标记成竖屏或其他比例。
+		difference := preset.Width*h - preset.Height*w
+		if difference < 0 {
+			difference = -difference
+		}
+		if difference*1000 > preset.Height*w*25 {
+			return BadAuthRequest("图片预设像素尺寸与宽高比不一致")
+		}
+		a, b := w, h
+		for b != 0 {
+			a, b = b, a%b
+		}
+		key := fmt.Sprintf("%s:%d:%d", preset.Tier, w/a, h/a)
+		if seenPresets[key] {
+			return BadAuthRequest("图片尺寸预设重复")
+		}
+		seenPresets[key] = true
+		requestValue := preset.Size
+		if value.Size.Parameter == "aspect_ratio" {
+			requestValue = preset.Ratio
+		}
+		if !containsCapabilityString(value.Size.Values, requestValue) {
+			return BadAuthRequest("图片预设必须包含在尺寸支持值中")
+		}
+	}
 	if value.Quality.Supported {
 		if len(value.Quality.Values) == 0 || strings.TrimSpace(value.Quality.Default) == "" || !containsCapabilityString(value.Quality.Values, value.Quality.Default) {
 			return BadAuthRequest("请配置图片质量支持值和默认值")
@@ -513,6 +565,9 @@ func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
 	} else {
 		value.Quality.Values = []string{}
 		value.Quality.Default = "auto"
+	}
+	if err := validateImagePresetSelection(value, value.Quality.Default, value.Size.Default); err != nil {
+		return BadAuthRequest("默认图片分辨率与宽高比不在已配置的组合中")
 	}
 	if !value.TransparentBackground.Supported {
 		value.TransparentBackground.Default = false
@@ -770,11 +825,43 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 	if profile.Quality.Supported && strings.TrimSpace(input.Config.Quality) != "" && !containsCapabilityString(profile.Quality.Values, input.Config.Quality) {
 		return BadAuthRequest("图片质量不在当前模型支持范围内")
 	}
+	if err := validateImagePresetSelection(profile, firstNonEmpty(input.Config.Quality, profile.Quality.Default), firstNonEmpty(input.Config.Size, profile.Size.Default)); err != nil {
+		return err
+	}
 	count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count))
 	if err == nil && count > profile.MaxOutputs {
 		return BadAuthRequest(fmt.Sprintf("当前图片模型单次最多生成 %d 张", profile.MaxOutputs))
 	}
 	return nil
+}
+
+func validateImagePresetSelection(profile *ImageCapabilityConfig, quality, ratio string) error {
+	if profile.Size.Parameter != "aspect_ratio" || profile.Size.AllowCustom || len(profile.Size.Presets) == 0 || ratio == "auto" {
+		return nil
+	}
+	tier := imageResolutionTier(quality)
+	if tier == "" {
+		return nil
+	}
+	for _, preset := range profile.Size.Presets {
+		if preset.Tier == tier && preset.Ratio == ratio {
+			return nil
+		}
+	}
+	return BadAuthRequest("当前分辨率不支持所选图片宽高比")
+}
+
+func imageResolutionTier(quality string) string {
+	switch strings.ToLower(strings.TrimSpace(quality)) {
+	case "1k", "low":
+		return "1k"
+	case "2k", "medium":
+		return "2k"
+	case "4k", "high":
+		return "4k"
+	default:
+		return ""
+	}
 }
 
 func validateWorkflowProviderPromptLength(input canvasGenerationInput) error {

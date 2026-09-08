@@ -103,8 +103,10 @@ export type PluginCanvasNodeContribution = {
     defaultSize: { width: number; height: number };
     schema: Record<string, unknown>;
     renderer: "declarative" | "sandbox";
-    /** Optional input contract for nodes that consume one media kind. */
-    acceptsInputKind?: "image" | "video" | "audio" | "text";
+    /** Optional input contract for nodes that consume one or more media kinds. */
+    acceptsInputKind?: "image" | "video" | "audio" | "text" | Array<"image" | "video" | "audio" | "text">;
+    /** Optional maximum number of direct inputs. */
+    maxInputCount?: number;
     /** Analysis/sink nodes can hide the right-side output connection. */
     showOutputConnection?: boolean;
 };
@@ -221,6 +223,8 @@ export type PluginTextRequest = {
 };
 
 export type PluginAiTextService = {
+    /** onDelta receives the complete text accumulated so far, not a token fragment. */
+    requestText: (request: Omit<PluginTextRequest, "tools" | "toolChoice">) => Promise<string>;
     requestToolResponse: (request: PluginTextRequest) => Promise<PluginTextResponse>;
 };
 
@@ -248,6 +252,8 @@ export type PromptOptimizationMode = "expand" | "refine" | "style" | "model-adap
 
 export type PromptOptimizationInput = {
     prompt: string;
+    action?: "draft" | "revise" | "variant";
+    currentPrompt?: string;
     mode: PromptOptimizationMode;
     generationMode: "image" | "video";
     targetModel?: string;
@@ -259,17 +265,8 @@ export type PromptOptimizationInput = {
     };
 };
 
-export type PromptOptimizationVariant = {
-    label: string;
-    prompt: string;
-};
-
 export type PromptOptimizationResult = {
     optimizedPrompt: string;
-    negativePrompt: string;
-    changes: string[];
-    assumptions: string[];
-    variants: PromptOptimizationVariant[];
     modelProfile?: { id: string; label: string };
 };
 

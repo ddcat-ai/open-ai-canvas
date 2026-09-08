@@ -3,12 +3,14 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -46,6 +48,52 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	if len(adminAppearance.SkinThemes) != 4 || !adminAppearance.SkinThemes[0].Locked {
 		t.Fatalf("AdminAppearance() skin library = %#v", adminAppearance.SkinThemes)
 	}
+}
+
+func TestBuiltInAppearanceSkinTooltipPairsMeetContrast(t *testing.T) {
+	for _, skin := range defaultAppearanceSkinThemes() {
+		modes := []struct {
+			name   string
+			tokens AppearanceSkinModeTokens
+		}{
+			{name: "light", tokens: skin.Tokens.Light},
+			{name: "dark", tokens: skin.Tokens.Dark},
+		}
+		for _, mode := range modes {
+			ratio := appearanceColorContrastRatio(t, mode.tokens.Overlay, mode.tokens.Text)
+			if ratio < 4.5 {
+				t.Errorf("skin %s %s tooltip contrast = %.2f, want at least 4.5", skin.ID, mode.name, ratio)
+			}
+		}
+	}
+}
+
+func appearanceColorContrastRatio(t *testing.T, foreground, background string) float64 {
+	t.Helper()
+	contrastLuminance := func(color string) float64 {
+		if len(color) != 7 || color[0] != '#' {
+			t.Fatalf("unsupported test color %q", color)
+		}
+		channels := make([]float64, 3)
+		for index := range channels {
+			value, err := strconv.ParseUint(color[1+index*2:3+index*2], 16, 8)
+			if err != nil {
+				t.Fatalf("parse test color %q: %v", color, err)
+			}
+			srgb := float64(value) / 255
+			if srgb <= 0.04045 {
+				channels[index] = srgb / 12.92
+			} else {
+				channels[index] = math.Pow((srgb+0.055)/1.055, 2.4)
+			}
+		}
+		return 0.2126*channels[0] + 0.7152*channels[1] + 0.0722*channels[2]
+	}
+	foregroundLuminance := contrastLuminance(foreground)
+	backgroundLuminance := contrastLuminance(background)
+	lighter := math.Max(foregroundLuminance, backgroundLuminance)
+	darker := math.Min(foregroundLuminance, backgroundLuminance)
+	return (lighter + 0.05) / (darker + 0.05)
 }
 
 func TestAppearanceBackfillsVersionSixFieldsForExistingSetting(t *testing.T) {

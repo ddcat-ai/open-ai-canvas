@@ -1663,8 +1663,7 @@
     }
 
     .canvas-topbar-title-block,
-    .canvas-topbar-title-row,
-    .canvas-topbar-project-context {
+    .canvas-topbar-title-row {
         max-width: 100%;
     }
 
@@ -1675,10 +1674,6 @@
     @media (max-width: 720px) {
         .canvas-topbar-project-cluster {
             max-width: min(260px, calc(100vw - 132px));
-        }
-
-        .canvas-topbar-project-context {
-            display: none;
         }
     }
 
@@ -8155,6 +8150,15 @@
         min-width: 0;
     }
 
+    .canvas-prompt-optimizer-chat .ant-bubble-start .ant-bubble-body {
+        flex: 1;
+        max-width: 100%;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-start .ant-bubble-content {
+        width: 100%;
+    }
+
     .canvas-prompt-optimizer-user-content {
         display: flex;
         min-width: 0;
@@ -11325,10 +11329,10 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 .creation-user-message-attachments button > .cached-resource-image-shell { display: block; width: 100%; height: 100%; }
 .creation-user-message-attachments button > .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .creation-user-message-attachments button:focus-visible { outline: 2px solid var(--creation-text); outline-offset: 2px; }
-.creation-user-message-attachments button > span { position: absolute; right: 3px; bottom: 3px; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: rgba(0, 0, 0, .68); color: #fff; opacity: 0; transition: opacity 140ms ease; }
-.creation-user-message-attachments button:hover > span,
-.creation-user-message-attachments button:focus-visible > span { opacity: 1; }
-.creation-user-message-attachments button > span svg { width: 10px; height: 10px; }
+.creation-user-message-attachments button > span:not(.cached-resource-image-shell) { position: absolute; right: 3px; bottom: 3px; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: rgba(0, 0, 0, .68); color: #fff; opacity: 0; transition: opacity 140ms ease; }
+.creation-user-message-attachments button:hover > span:not(.cached-resource-image-shell),
+.creation-user-message-attachments button:focus-visible > span:not(.cached-resource-image-shell) { opacity: 1; }
+.creation-user-message-attachments button > span:not(.cached-resource-image-shell) svg { width: 10px; height: 10px; }
 
 .creation-assistant-message { max-width: 900px; margin: 0 0 48px; }
 .creation-message-heading { gap: 7px; color: var(--creation-faint); font-size: 11px; }
@@ -13020,6 +13024,18 @@ html:not(.dark) .creation-history-drawer-root {
     background-image: none !important;
     box-shadow: var(--shadow-lg) !important;
     backdrop-filter: none !important;
+}
+
+/* Tooltip 必须使用同一套浮层背景/前景语义色。Ant Design 会让它继承
+   colorTextLightSolid（实心按钮文字色），深色主题下会形成深底深字。 */
+:where(.ant-tooltip) {
+    --ant-tooltip-arrow-background-color: var(--popover) !important;
+    --ant-tooltip-overlay-color: var(--popover-foreground) !important;
+}
+
+:where(.ant-tooltip-container, .ant-tooltip-inner) {
+    background: var(--popover) !important;
+    color: var(--popover-foreground) !important;
 }
 
 :where(.ant-select-item-option, .ant-dropdown-menu-item, .ant-dropdown-menu-submenu-title, .ant-cascader-menu-item, .ant-mentions-dropdown-menu-item) {

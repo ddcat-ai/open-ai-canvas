@@ -153,13 +153,13 @@ function resolveNodePanelWidth(node: CanvasNodeData, viewport: ViewportTransform
     return clamp(Math.round(node.width * viewport.k * 1.5), 680, 920);
 }
 
-export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, provider?: "runninghub" | "comfyui") => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, provider?: "runninghub" | "comfyui") => void; onClose: () => void }) {
+export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, provider?: "runninghub" | "comfyui") => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, provider?: "runninghub" | "comfyui") => void; onClose: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const menuRef = useRef<HTMLDivElement>(null);
     const { bringToFront, zIndex } = useCanvasOverlayLayer("connection-create-menu", "var(--z-modal-overlay)");
-    const menuWidth = 248;
-    const menuHeight = canCreateDrawing ? 456 : 412;
+    const menuWidth = Math.min(288, viewportSize.width - 24);
+    const menuHeight = canCreateDrawing ? 500 : 456;
     const gap = 12;
     const initialPosition = getConnectionMenuPosition(pending.position, viewport, viewportSize, menuWidth, menuHeight, gap);
 
@@ -188,10 +188,10 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97, rotateX: 2 }}
             animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel absolute w-[248px] origin-top-left overflow-hidden rounded-[var(--r-2xl)] border p-2 backdrop-blur-2xl"
+            className="aceternity-floating-panel absolute origin-top-left overflow-x-hidden overflow-y-auto rounded-[var(--r-2xl)] border p-2 backdrop-blur-2xl"
             data-canvas-no-zoom
             data-connection-create-menu
-            style={{ left: initialPosition.left, top: initialPosition.top, zIndex, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+            style={{ width: menuWidth, maxHeight: Math.max(120, viewportSize.height - 84), left: initialPosition.left, top: initialPosition.top, zIndex, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDownCapture={bringToFront}
             onFocusCapture={bringToFront}
@@ -205,10 +205,11 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
                 </span>
                 <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onClose} aria-label="关闭连线创建菜单"><X className="size-3" /></button>
             </div>
-            <div className="grid gap-1">
+            <div className="grid min-w-0 grid-cols-1 gap-1">
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<List className="size-4" />} title="文本生成" disabledReason={getDisabledReason(CanvasNodeType.Text)} onClick={() => onCreate(CanvasNodeType.Text)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Clapperboard className="size-4" />} title="分镜脚本" disabledReason={getDisabledReason(CanvasNodeType.Script)} onClick={() => onCreate(CanvasNodeType.Script)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title="图片生成" disabledReason={getDisabledReason(CanvasNodeType.Image)} onClick={() => onCreate(CanvasNodeType.Image)} />
+                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<WandSparkles className="size-4" />} title="转换" description="本地处理图片或视频" disabledReason={getDisabledReason(CanvasNodeType.MediaConversion)} onClick={() => onCreate(CanvasNodeType.MediaConversion)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<WorkflowIcon className="size-4" />} title="生成配置" description="选择模型，或使用已启用的工作流插件" disabledReason={getDisabledReason(CanvasNodeType.Config)} onClick={() => onCreate(CanvasNodeType.Config)} />
                 {canCreateDrawing ? <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title="绘图" disabledReason={getDisabledReason(CanvasNodeType.Drawing)} onClick={() => onCreate(CanvasNodeType.Drawing)} /> : null}
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title="视频生成" disabledReason={getDisabledReason(CanvasNodeType.Video)} onClick={() => onCreate(CanvasNodeType.Video)} />
@@ -225,7 +226,7 @@ function ConnectionCreateOption({ motionEnabled, icon, title, description, disab
             <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
             <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-[var(--fs-tiny)] font-semibold leading-4">{title}</span>
-                {disabledReason || description ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{disabledReason || description}</span> : null}
+                {disabledReason || description ? <span className="mt-0.5 block whitespace-normal break-words text-[var(--fs-micro)] leading-relaxed" style={{ color: theme.node.muted }}>{disabledReason || description}</span> : null}
             </span>
             <ChevronRight className="size-3.5 shrink-0 opacity-35 transition-transform group-hover:translate-x-0.5" />
         </motion.button>

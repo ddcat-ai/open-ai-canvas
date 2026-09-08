@@ -1,5 +1,5 @@
 import { App, Dropdown, Input } from "antd";
-import { Download, LoaderCircle, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Download, FolderInput, LoaderCircle, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import { ProjectPreview } from "@/components/canvas/canvas-project-card";
@@ -16,10 +16,11 @@ type CanvasFolderCardProps = {
     onClick: () => void;
     onPrefetch?: () => void;
     opening?: boolean;
+    onMove?: () => void;
 };
 
 /** 画布库中的文件夹封面：单一卡片表面承载预览和信息，避免相邻卡片互相侵入。 */
-export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, opening = false }: CanvasFolderCardProps) {
+export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, opening = false, onMove }: CanvasFolderCardProps) {
     const { message } = App.useApp();
     const renameProject = useCanvasStore((state) => state.renameProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
@@ -127,6 +128,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     menu={{
                         onClick: ({ domEvent }) => domEvent.stopPropagation(),
                         items: [
+                            ...(onMove ? [{ key: "move", icon: <FolderInput className="size-3.5" />, label: "移入项目文件夹", onClick: onMove }] : []),
                             { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportProject() },
                             { type: "divider" },
                             { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => setDeleteIds([project.id]) },

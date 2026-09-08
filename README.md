@@ -134,7 +134,13 @@ Windows PowerShell 用户也可以在仓库根目录执行一键启动脚本：
 .\scripts\start-local.ps1
 ```
 
-脚本会使用 `.local/project-workbench-debug` 作为后端开发数据目录，并分别打开前后端窗口。缺少 `web/node_modules` 时会自动执行 `bun install --frozen-lockfile`。详细说明见 [`本地开发`](docs/content/docs/backend/local-development.mdx)。
+脚本会使用 `.local/project-workbench-debug` 作为后端开发数据目录，并在当前终端运行前端、后端和本地模型运行时；子进程 PID 会记录在 `.local/yingce-local-processes.json`，便于安全关闭。缺少 `web/node_modules` 时会自动执行 `bun install --frozen-lockfile`，缺少 Canvas Agent 构建产物时会自动安装依赖并构建。关闭时执行：
+
+```powershell
+.\scripts\stop-local.ps1
+```
+
+Windows 也可以双击根目录的 `start-yingce-local.cmd` 启动；该终端保持打开，关闭终端会结束前端、后端和本地模型运行时。停止时双击 `stop-yingce-local.cmd`。详细说明见 [`本地开发`](docs/content/docs/backend/local-development.mdx)。
 
 打开 <http://localhost:3000>，注册第一个管理员账号，再在设置中配置模型渠道。前端的 Vite 配置会把 `/api` 代理到本机 `8080`。
 

@@ -224,6 +224,15 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 		return UserDataSummary{}, existingErr
 	}
+	if project.ProjectID != "" {
+		target, err := s.repo.ProjectForUser(userID, project.ProjectID)
+		if err != nil {
+			return UserDataSummary{}, err
+		}
+		if target.Status == model.ProjectStatusArchived && (existing == nil || existing.ProjectID != project.ProjectID) {
+			return UserDataSummary{}, BadAuthRequest("项目已归档，请恢复后再添加画布")
+		}
+	}
 	existingBytes := int64(0)
 	if existing != nil {
 		existingBytes = int64(len([]byte(existing.PayloadJSON)))

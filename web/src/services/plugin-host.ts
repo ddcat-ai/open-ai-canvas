@@ -1,4 +1,4 @@
-import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice } from "@/services/api/image";
+import { requestTextResponse, requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice } from "@/services/api/image";
 import { pluginStorageFor } from "@/lib/plugins/plugin-storage";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { PluginHostContext, PluginInstallation, PluginTextRequest, RegisteredPlugin } from "@/lib/plugins/plugin-types";
@@ -13,6 +13,10 @@ export function createPluginHostContext(plugin: RegisteredPlugin, installation: 
         services: {
             ai: {
                 text: {
+                    requestText: async (request) => {
+                        if (!permissions.has("ai.text")) throw new Error("插件没有调用文本模型的权限");
+                        return requestTextResponse({ ...aiConfig, model: request.model?.trim() || aiConfig.textModel }, request.messages, request.onDelta || (() => {}), { signal: request.signal });
+                    },
                     requestToolResponse: async (request: PluginTextRequest) => {
                         if (!permissions.has("ai.text")) throw new Error("插件没有调用文本模型的权限");
                         const response = await requestToolResponse(

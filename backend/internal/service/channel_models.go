@@ -35,6 +35,8 @@ type ChannelModelRequest struct {
 	PriceTiers                   []ChannelModelPriceTierRequest `json:"priceTiers"`
 }
 
+const maxAdminChannelModelBatchDeleteCount = 100
+
 // ChannelModelPriceTierRequest 是系统渠道内某个规格的上游 SKU 与结算价格。
 // Resolution="*"、VideoSeconds=0 分别表示任意分辨率和任意时长。
 type ChannelModelPriceTierRequest struct {
@@ -826,47 +828,76 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 }
 
 func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, id string) error {
+	_, err := s.DeleteAdminChannelModels(actor, channelID, []string{id})
+	return err
+}
+
+// DeleteAdminChannelModels validates the complete selection before asking the
+// repository to remove it atomically. This deliberately rejects partial success:
+// administrators can safely correct an in-use model and retry the same selection.
+func (s *Service) DeleteAdminChannelModels(actor *model.User, channelID string, ids []string) (int64, error) {
 	if err := s.RequireAdmin(actor); err != nil {
-		return err
+		return 0, err
 	}
 	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return BadAuthRequest("系统渠道不存在或已删除")
+			return 0, BadAuthRequest("系统渠道不存在或已删除")
 		}
-		return err
+		return 0, err
 	}
-	if _, err := s.repo.ChannelModelByID(channelID, id); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return BadAuthRequest("渠道模型不存在或已删除")
-		}
-		return err
-	}
-	items, err := s.repo.ChannelModels(channelID, false)
+	modelIDs, err := normalizeAdminChannelModelDeleteIDs(ids)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	names := make([]string, 0, len(items))
+	items, err := s.repo.ChannelModels(channelID, true)
+	if err != nil {
+		return 0, err
+	}
+	selected := make(map[string]bool, len(modelIDs))
+	for _, id := range modelIDs {
+		selected[id] = true
+	}
+	found := 0
 	for _, item := range items {
-		if item.ID != id {
-			names = append(names, item.ModelKey)
+		if selected[item.ID] {
+			found++
 		}
 	}
-	encoded, err := json.Marshal(names)
-	if err != nil {
-		return err
+	if found != len(modelIDs) {
+		return 0, BadAuthRequest("所选渠道模型中存在已删除或不属于当前渠道的记录，请刷新后重试")
 	}
 	// 删除模型与渠道的兼容模型清单必须同事务提交，避免接口报错但列表已部分变化。
-	err = s.repo.DeleteChannelModel(channelID, id, string(encoded), time.Now())
+	deleted, err := s.repo.DeleteChannelModels(channelID, modelIDs, time.Now())
 	if errors.Is(err, repository.ErrChannelModelInUse) {
-		return BadAuthRequest("渠道模型仍被前台模型供应线路或进行中任务使用，请先移除线路并等待任务结束")
+		return 0, BadAuthRequest("所选渠道模型中有模型仍被前台模型供应线路或进行中任务使用，本次未删除任何模型")
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return BadAuthRequest("渠道模型不存在或已删除")
+		return 0, BadAuthRequest("所选渠道模型中存在已删除或不属于当前渠道的记录，请刷新后重试")
 	}
 	if err == nil {
 		s.invalidateRouteCatalog()
 	}
-	return err
+	return deleted, err
+}
+
+func normalizeAdminChannelModelDeleteIDs(values []string) ([]string, error) {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		id := strings.TrimSpace(value)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		result = append(result, id)
+	}
+	if len(result) == 0 {
+		return nil, BadAuthRequest("请至少选择一个要删除的渠道模型")
+	}
+	if len(result) > maxAdminChannelModelBatchDeleteCount {
+		return nil, BadAuthRequest("单次最多删除 100 个渠道模型")
+	}
+	return result, nil
 }
 
 func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []string) error {
@@ -945,20 +976,7 @@ func (s *Service) ensureChannelModels(channelID string, includeDisabled bool) ([
 }
 
 func (s *Service) syncChannelModelNames(channel *model.ModelChannel) error {
-	items, err := s.repo.ChannelModels(channel.ID, false)
-	if err != nil {
-		return err
-	}
-	names := make([]string, 0, len(items))
-	for _, item := range items {
-		names = append(names, item.ModelKey)
-	}
-	encoded, err := json.Marshal(names)
-	if err != nil {
-		return err
-	}
-	channel.ModelsJSON = string(encoded)
-	return s.repo.Save(channel)
+	return s.repo.SyncChannelModelNames(channel.ID, time.Now())
 }
 
 func (s *Service) capabilityForProtocol(protocol model.ChannelInterfaceType) string {

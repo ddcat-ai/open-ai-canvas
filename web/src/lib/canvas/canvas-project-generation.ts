@@ -11,6 +11,7 @@ import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasSt
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
+import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { isCanvasWorkflowProvider, resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasImageGenerationType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
@@ -231,7 +232,7 @@ export function buildImageGenerationMetadata(type: CanvasImageGenerationType, co
 }
 
 export function nodeReferenceImage(node: CanvasNodeData): ReferenceImage | null {
-    if (node.type !== CanvasNodeType.Image || (!node.metadata?.content && !node.metadata?.storageKey)) return null;
+    if (getNodeResourceKind(node) !== "image" || (!node.metadata?.content && !node.metadata?.storageKey)) return null;
     return {
         id: node.id,
         name: `reference-${node.id}.png`,

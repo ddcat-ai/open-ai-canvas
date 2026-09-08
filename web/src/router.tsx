@@ -29,6 +29,7 @@ const ArkPrivateAssetsSettingsPage = lazy(() => import("@/pages/admin/settings/a
 const ResponseInterceptionSettingsPage = lazy(() => import("@/pages/admin/settings/response-interception-settings-page"));
 const ThirdPartySettingsPage = lazy(() => import("@/pages/admin/settings/libtv-settings-page"));
 const SystemUpdatePage = lazy(() => import("@/pages/admin/settings/system-update-page"));
+const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
 const AssetsPage = lazy(loadAssetsPage);
@@ -207,6 +208,7 @@ export const router = createBrowserRouter([
                     { path: "settings/response-interception", element: <ResponseInterceptionSettingsPage /> },
                     { path: "settings/third-party", element: <ThirdPartySettingsPage /> },
                     { path: "settings/system-update", element: <SystemUpdatePage /> },
+                    { path: "settings/system-performance", element: <SystemPerformancePage /> },
                     { path: "settings/libtv", element: <Navigate to="/admin/settings/third-party" replace /> },
                 ],
             },

@@ -26,6 +26,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Compare]: { width: 520, height: 320, title: "对比" },
     [CanvasNodeType.Chart]: { width: 480, height: 320, title: "图表" },
     [CanvasNodeType.ColorGrade]: { width: 420, height: 360, title: "调色" },
+    [CanvasNodeType.MediaConversion]: { width: 380, height: 440, title: "转换" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {
@@ -99,6 +100,10 @@ export const NODE_SPECS = {
     },
     [CanvasNodeType.ColorGrade]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.ColorGrade],
+        metadata: { status: "idle" },
+    },
+    [CanvasNodeType.MediaConversion]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.MediaConversion],
         metadata: { status: "idle" },
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;

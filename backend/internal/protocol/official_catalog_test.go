@@ -377,6 +377,55 @@ func TestOfficialRollDekWanVideoUsesVideosLifecycle(t *testing.T) {
 	}
 }
 
+func TestNewAPIVideoGenerationsParsesNestedTaskIDs(t *testing.T) {
+	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.yingce-plugin", "newapi-channel-2")
+	tests := []struct {
+		name    string
+		payload string
+		wantID  string
+	}{
+		{name: "snake case", payload: `{"data":{"task_id":"task-snake","status":"queued"}}`, wantID: "task-snake"},
+		{name: "camel case", payload: `{"data":{"taskId":"task-camel","status":"queued"}}`, wantID: "task-camel"},
+		{name: "nested upstream id wins over wrapper id", payload: `{"id":"49137","data":{"task_id":"task-upstream","status":"queued"}}`, wantID: "task-upstream"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			created, err := adapter.ParseCreate(context.Background(), []byte(test.payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if created.TaskID != test.wantID || created.Status != StatusPending {
+				t.Fatalf("created = %#v, want task ID %q and pending status", created, test.wantID)
+			}
+		})
+	}
+}
+
+func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
+	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.yingce-plugin", "newapi-channel-2")
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{name: "channel result URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","result_url":"https://cdn.example/channel-result.mp4"}}`},
+		{name: "provider nested video URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","data":{"status":"completed","video_url":"https://cdn.example/provider-result.mp4"}}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-upstream"}, []byte(test.payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Videos) != 1 {
+				t.Fatalf("state = %#v, want one completed video", state)
+			}
+			if state.Result.Videos[0].URL == "" {
+				t.Fatalf("video = %#v, want a result URL", state.Result.Videos[0])
+			}
+		})
+	}
+}
+
 func TestOfficialOpenAIVideosDeclaresAuthenticatedResultDownload(t *testing.T) {
 	adapter := officialPackageAdapter(t, "openai-videos.yingce-plugin", "newapi")
 	capability, ok := adapter.(ResultCapability)

@@ -1,5 +1,6 @@
 import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
+import { imageSizePresets } from "@/lib/image-size-presets";
 import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
@@ -229,7 +230,8 @@ export function mergedImageCapabilityConfig(config: AiConfig, selected: string):
     const allowCustom = profiles.some((profile) => profile.size.allowCustom || profile.size.values.includes("*"));
     const values = concreteValues.length ? concreteValues : allowCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
     const base = selectedProfile || profiles[0];
-    return { ...base, size: { ...base.size, values, allowCustom } };
+    const presets = profiles.some((profile) => profile.size.presets) ? [...new Map(profiles.flatMap((profile) => imageSizePresets(profile)).map((preset) => [`${preset.tier}:${preset.ratio}:${preset.size}`, preset])).values()] : undefined;
+    return { ...base, size: { ...base.size, values, allowCustom, presets } };
 }
 
 // 切换模型后初始化图片参数为该模型能力默认值，避免旧参数在目标模型族不兼容导致无法切换。

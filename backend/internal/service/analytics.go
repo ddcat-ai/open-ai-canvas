@@ -1000,7 +1000,11 @@ func (s *Service) enrichAPICallLogFailureSummary(log *model.ApiCallLog, response
 }
 
 func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[string]any) {
+	nestedTaskID := ""
 	if data, ok := payload["data"].(map[string]any); ok {
+		if log.Capability == "video" && strings.Contains(log.Path, "/v1/video/generations") {
+			nestedTaskID = firstNonEmpty(stringField(data, "task_id"), stringField(data, "taskId"))
+		}
 		for key, value := range data {
 			if _, exists := payload[key]; !exists {
 				payload[key] = value
@@ -1064,7 +1068,7 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		}
 		log.CachedTokens = firstInt64(usageMetadata, "cachedContentTokenCount")
 	}
-	log.ProviderRequestID = firstNonEmpty(stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
+	log.ProviderRequestID = firstNonEmpty(nestedTaskID, stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
 	log.ProviderStatus = strings.ToLower(firstNonEmpty(stringField(payload, "status"), log.ProviderStatus))
 	if log.ProviderStatus == "failed" || log.ProviderStatus == "cancelled" || log.ProviderStatus == "expired" {
 		log.Status = model.ApiCallStatusFailed

@@ -1,4 +1,4 @@
-import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video } from "lucide-react";
+import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video, WandSparkles } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
@@ -25,7 +25,7 @@ const BUILTIN_NODE_TRAITS = {
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: (node: CanvasNodeData) => !node.metadata?.freeResize,
         showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "image" : null),
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content || node.metadata?.storageKey ? "image" : null),
         generationMode: () => "image",
         inputKind: "image",
     },
@@ -82,7 +82,7 @@ const BUILTIN_NODE_TRAITS = {
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: () => true,
         showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "video" : null),
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content || node.metadata?.storageKey ? "video" : null),
         generationMode: () => "video",
         inputKind: "video",
     },
@@ -163,6 +163,20 @@ const BUILTIN_NODE_TRAITS = {
         // 会让它永远不被当成素材、从而进不了生成输入。没有上游时由
         // readReferenceImage 返回 null 跳过，不需要在这里提前判空。
         resourceKind: () => "image",
+        inputKind: "image",
+    },
+    [CanvasNodeType.MediaConversion]: {
+        label: "转换",
+        icon: <WandSparkles />,
+        minSize: { width: 320, height: 360 },
+        showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => {
+            const conversion = node.metadata?.mediaConversion;
+            if (conversion?.status !== "completed" || !conversion.resultStorageKey) return null;
+            return conversion.outputKind === "video" ? "video" : "image";
+        },
+        acceptsInputKind: ["image", "video"],
+        maxInputCount: 1,
         inputKind: "image",
     },
 } satisfies Record<string, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;

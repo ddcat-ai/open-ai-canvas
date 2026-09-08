@@ -374,6 +374,7 @@ function nodeTypeLabel(node?: CanvasNodeData | null) {
     if (node.type === CanvasNodeType.Video) return "视频节点";
     if (node.type === CanvasNodeType.Audio) return "音频节点";
     if (node.type === CanvasNodeType.Drawing) return "绘图节点";
+    if (node.type === CanvasNodeType.MediaConversion) return "转换节点";
     if (node.type === CanvasNodeType.Frame) return isCanvasFolderNode(node) ? "文件夹" : "背板";
     return "生成配置节点";
 }

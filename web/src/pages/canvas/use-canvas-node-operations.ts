@@ -152,7 +152,7 @@ export function useCanvasNodeOperations({
         if (workflowTitle) node.title = workflowTitle;
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
-        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing && type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(node.id);
+        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing && type !== CanvasNodeType.MediaConversion && type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(node.id);
     }, [commitNodes, defaultDrawingEngine, effectiveConfig.comfyBridge.enabled, effectiveConfig.comfyBridge.workflows.length, effectiveConfig.runningHub.enabled, effectiveConfig.runningHub.workflows.length, getCanvasCenter, message, nodesRef, runtimeStatuses, selectNodes, setDialogNodeId, tldrawLicenseKey]);
 
     const createFolder = useCallback((position?: Position, linked?: { id: string; projectId: string; title: string; style: CanvasFolderStyle; theme: CanvasFolderTheme; createdAt: string }) => {
@@ -391,7 +391,7 @@ export function useCanvasNodeOperations({
             const sourceNode = sourceByTargetId.get(targetNode.id);
             if (sourceNode) cloneDrawingForNode(sourceNode, targetNode, "绘图副本保存失败，请重新复制");
         });
-        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing && source.type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(id);
+        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing && source.type !== CanvasNodeType.MediaConversion && source.type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(id);
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, nodesRef, selectNodes, setDialogNodeId]);
 
     const setPrimaryVersion = useCallback((nodeId: string) => {
