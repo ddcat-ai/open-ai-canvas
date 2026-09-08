@@ -6,6 +6,7 @@
 - [ ] `canvas-agent` Hermes 客户端与协议类型
 - [ ] 验证 CLI 登录授权后由 Codex/Claude 通过 stdio MCP 操作远程画布
 - [ ] Canvas Tool Adapter 与三个最小画布工具
+- [x] 剧本拆场景计划、审批与远程 MCP 执行链路（宿主提供结构化场景结果）
 - [ ] 剧本拆场景并创建文本节点的浏览器闭环
 
 ## 检查点 1
@@ -14,8 +15,8 @@
 
 ## 阶段 2：影视创作能力
 
-- [ ] `/script-to-scenes` 等 Skills 合同与路由
-- [ ] Skill 输入输出、版本和画布工具权限声明
+- [x] `/script-to-scenes` 等 Skills 合同与路由
+- [x] Skill 输入输出、版本和画布工具权限声明
 - [ ] 复杂请求 Plan 生成、预览和修改
 - [ ] Task 状态、依赖、暂停、重试、取消和恢复
 - [ ] 询问模式/自动模式与 Task 授权策略
