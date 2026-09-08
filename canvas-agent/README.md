@@ -79,32 +79,7 @@ codex mcp add kraftreel -- node /absolute/path/to/open-ai-canvas/canvas-agent/di
 
 ## Skill 与计划编排
 
-远程 MCP 宿主（例如 Codex、Claude 或 Hermes）负责理解用户意图和生成结构化结果；CLI 不运行通用外部工具，也不替宿主调用模型。画布专用 Skill 通过以下只读工具发现：
-
-```text
-canvas_list_skills
-canvas_get_skill { "name": "script-to-scenes" }
-```
-
-复杂创作请求使用“先计划、后执行”的链路。以剧本拆场景为例，宿主先读取真实剧本节点并根据 Skill 合同生成场景数组，然后调用：
-
-```text
-canvas_prepare_scene_plan {
-  "scriptNodeId": "script-1",
-  "scenes": [
-    { "title": "大学宿舍深夜", "content": "沈舟在宿舍熬夜写作业。" },
-    { "title": "长安城外清晨", "content": "两人在草垛旁醒来。" }
-  ],
-  "expectedRevision": 12,
-  "expectedStateHash": "..."
-}
-```
-
-该工具只读取画布、校验操作并返回 `planId`、操作预览和 `approvalDigest`，不会写入画布。宿主展示计划并获得用户批准后，使用原样的 `planId` 和 `approvalDigest` 调用 `canvas_apply_scene_plan`。批准期间如果画布 revision 或 state hash 变化，必须重新读取并重新规划，不能给旧操作替换新的版本号。
-
-`canvas_get_scene_plan` 可查询计划状态。计划执行超时或连接异常时，状态可能为 `unknown`；此时先读取画布和计划确认是否已应用，禁止直接重放。计划只保存在当前 MCP 进程内，默认 30 分钟过期，进程重启后需要重新规划。
-
-简单的单节点读取或改名可以直接使用基础画布工具，不必创建用户可见的 Plan。询问模式要求有影响的操作经过批准；自动模式只自动执行符合策略的计划，删除、覆盖、费用超限、冲突和未知结果仍会暂停。
+远程 MCP 宿主（例如 Codex、Claude 或 Hermes）负责理解用户意图、加载自己的 Skill、生成 Plan/Task 和处理审批；CLI 不运行通用外部工具，也不替宿主调用模型。远程 MCP 只提供画布上下文读取、版本校验和画布操作，不暴露 Skill、Plan、Task 或 `ask/auto` 编排接口。外部 Agent 应先读取画布，再把自己的计划转换为基础画布操作并携带 `expectedRevision` 与 `expectedStateHash`。
 
 ## 能力边界
 

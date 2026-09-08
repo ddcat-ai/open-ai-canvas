@@ -6,7 +6,6 @@ import { planTool } from "./tool-planner.js";
 import { toolDescriptions, toolInputSchemas, toolNames, type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode } from "./tools.js";
 import type { CanvasSnapshot } from "./types.js";
-import { registerScenePlanTools } from "./scene-plan-mcp.js";
 
 export const REMOTE_AGENT_PROMPT = "你是影策在线画布 Agent。所有画布读取和写入都通过远程 HTTPS MCP 接口完成。写入前先读取上下文并携带 expectedRevision 与 expectedStateHash；409/428/422 必须如实报告并重新读取，不得猜测节点 id。删除、覆盖、移动、改边和生成由 MCP 宿主审批。";
 
@@ -18,7 +17,6 @@ export async function startMcpServer(options: { client?: RemoteMcpClient } = {})
 
 export function registerMcpTools(server: McpServer, client: RemoteMcpClient) {
     for (const name of toolNames) registerRemoteTool(server, client, name);
-    registerScenePlanTools(server, client);
 }
 
 function registerRemoteTool(server: McpServer, client: RemoteMcpClient, name: ToolName) {

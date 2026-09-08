@@ -11,7 +11,7 @@
 - **运行时桥接优先**：保留 Hermes Python 核心，通过受控 Bridge 与现有 Node/TypeScript `canvas-agent` 通信；不复制 Hermes 源码，也不先重写成 TypeScript。
 - **画布工具独立适配**：复用现有 Canvas MCP 工具合同，将画布读写封装为 Hermes 可调用的工具 Provider。
 - **写入继续失败关闭**：所有写操作继续携带 `expectedRevision` 与 `expectedStateHash`，经过校验、审批和服务端权限检查；Hermes 不直接修改 React 状态或数据库。
-- **能力边界固定**：保留“CLI 登录授权 + stdio MCP + HTTPS 远程画布”的画布专用远程 MCP；不接入 Terminal、Browser、任意文件写入、外部网站操作或与画布无关的通用外部 MCP。
+- **能力边界固定**：保留“CLI 登录授权 + stdio MCP + HTTPS 远程画布”的画布专用远程 MCP；远程 MCP 只提供画布读取、校验和操作，不暴露 Canvas Agent 的 Skill、Plan、Task 或 `ask/auto` 编排能力。Agent 客户端负责意图理解、Skill 加载、计划生成和审批；不接入 Terminal、Browser、任意文件写入、外部网站操作或与画布无关的通用外部 MCP。
 - **会话上下文结构化传递**：每轮传递项目、选中节点、相关节点摘要、资源、连接和并发版本；不把完整画布 JSON 无限制放进系统提示词。
 
 ## Skill、Plan、Task 与执行模式
