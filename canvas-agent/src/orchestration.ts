@@ -95,3 +95,23 @@ export function buildSceneCanvasOps(planId: string, scenes: PlannedScene[]): Arr
     ops.push({ type: "select_nodes", ids });
     return ops;
 }
+
+export async function executeCanvasOpsPlan(input: {
+    client: { getProject(id: string): Promise<Record<string, unknown>>; validate(id: string, body: unknown): Promise<Record<string, unknown>>; apply(id: string, body: unknown): Promise<Record<string, unknown>> };
+    projectId: string;
+    plan: CanvasPlan;
+    ops: Array<Record<string, unknown>>;
+    mode: CanvasExecutionMode;
+    approved?: boolean;
+}): Promise<{ status: "waiting_approval" | "applied"; plan: CanvasPlan; result?: Record<string, unknown> }> {
+    const project = await input.client.getProject(input.projectId);
+    const raw = (project.project && typeof project.project === "object" ? project.project : project) as Record<string, unknown>;
+    const revision = typeof project.revision === "number" ? project.revision : Number(raw.revision || 0);
+    const stateHash = typeof project.stateHash === "string" ? project.stateHash : String(raw.stateHash || "");
+    if (!stateHash) throw new Error("远程画布未返回 stateHash，拒绝执行计划");
+    const body = { ops: input.ops, expectedRevision: revision, expectedStateHash: stateHash };
+    await input.client.validate(input.projectId, body);
+    if (input.mode === "ask" && input.approved !== true) return { status: "waiting_approval", plan: { ...input.plan, status: "waiting_approval" } };
+    const result = await input.client.apply(input.projectId, body);
+    return { status: "applied", plan: { ...input.plan, status: "succeeded" }, result };
+}

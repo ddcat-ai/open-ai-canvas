@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, nextRunnableTasks, planRequiresApproval, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
+import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
 
 test("canvas skills reject non-canvas tools", () => {
     assert.throws(() => assertCanvasSkill({ name: "x", version: "1", description: "", allowedTools: ["terminal"], risk: "read" }), /canvas_/);
@@ -54,4 +54,20 @@ test("scene results become stable canvas operations", () => {
 test("scene operation planning rejects empty or duplicate results", () => {
     assert.throws(() => buildSceneCanvasOps("p1", [{ title: "", content: "x" }]), /不能为空/);
     assert.throws(() => buildSceneCanvasOps("p1", [{ title: "场景一", content: "x" }, { title: "场景一", content: "y" }]), /重复/);
+});
+
+test("execution validates against the latest remote revision before applying", async () => {
+    const calls: string[] = [];
+    const client = {
+        async getProject() { calls.push("get"); return { revision: 7, stateHash: "hash-7" }; },
+        async validate(_id: string, body: any) { calls.push(`validate:${body.expectedRevision}:${body.expectedStateHash}`); return {}; },
+        async apply(_id: string, body: any) { calls.push(`apply:${body.expectedRevision}:${body.expectedStateHash}`); return { ok: true }; },
+    };
+    const plan = buildScriptToScenesPlan({ planId: "p1", scriptNodeId: "script-1", sceneCount: 1 });
+    const pending = await executeCanvasOpsPlan({ client, projectId: "c1", plan, ops: [], mode: "ask" });
+    assert.equal(pending.status, "waiting_approval");
+    assert.deepEqual(calls, ["get", "validate:7:hash-7"]);
+    const applied = await executeCanvasOpsPlan({ client, projectId: "c1", plan, ops: [], mode: "ask", approved: true });
+    assert.equal(applied.status, "applied");
+    assert.deepEqual(calls.slice(2), ["get", "validate:7:hash-7", "apply:7:hash-7"]);
 });
