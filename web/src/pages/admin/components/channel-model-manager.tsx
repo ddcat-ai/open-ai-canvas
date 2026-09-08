@@ -12,6 +12,7 @@ import type { ModelChannel } from "@/stores/use-config-store";
 import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminPageFrame } from "./admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
+import { ChannelOrderDialog } from "./channel-order-dialog";
 
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
@@ -252,9 +253,17 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     return (
         <AdminPageFrame
             title={`${channel.name} / 模型管理`}
+            description="模型按用户端展示顺序排列，点击“设置排序”即可调整。"
             back={{ label: "返回系统渠道", onClick: onClose }}
             actions={
                 <Space wrap>
+                    <ChannelOrderDialog
+                        channelId={channel.id}
+                        onSaved={async () => {
+                            await reload();
+                            await onChanged();
+                        }}
+                    />
                     <Button loading={fetching} icon={<RefreshCw className="size-4" />} onClick={() => void fetchModels()}>
                         拉取模型
                     </Button>
@@ -372,7 +381,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
-                    scroll: { x: 990 },
+                    scroll: { x: 1150 },
                 }}
                 footer={
                     <PaginationBar

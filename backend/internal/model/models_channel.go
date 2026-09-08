@@ -1,8 +1,10 @@
 package model
 
 import (
-	"gorm.io/gorm"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type ModelChannel struct {
@@ -11,6 +13,8 @@ type ModelChannel struct {
 	Scope             ChannelScope `json:"scope" gorm:"index;size:24"`
 	Enabled           bool         `json:"enabled" gorm:"index"`
 	Name              string       `json:"name" gorm:"size:80"`
+	PublicAlias       string       `json:"publicAlias" gorm:"size:80;not null;default:''"`
+	SortOrder         int          `json:"sortOrder" gorm:"not null;default:0"`
 	BaseURL           string       `json:"baseUrl"`
 	AllowLocalChannel bool         `json:"allowLocalChannel" gorm:"default:false"`
 	APIKey            string       `json:"-"`
@@ -26,12 +30,20 @@ type ModelChannel struct {
 	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
+func (channel ModelChannel) PublicName() string {
+	if alias := strings.TrimSpace(channel.PublicAlias); alias != "" {
+		return alias
+	}
+	return channel.Name
+}
+
 type ChannelModel struct {
 	ID                           string               `json:"id" gorm:"primaryKey;size:36"`
 	ChannelID                    string               `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
 	ModelKey                     string               `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
 	ProviderModelKey             string               `json:"providerModelKey" gorm:"size:120"`
 	DisplayName                  string               `json:"displayName" gorm:"size:160"`
+	SortOrder                    int                  `json:"sortOrder" gorm:"not null;default:0"`
 	Icon                         string               `json:"icon" gorm:"size:80"`
 	Capability                   string               `json:"capability" gorm:"size:32;index"`
 	Protocol                     ChannelInterfaceType `json:"protocol" gorm:"size:32;index"`

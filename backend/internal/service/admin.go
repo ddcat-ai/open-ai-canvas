@@ -86,6 +86,8 @@ type AdminReferenceData struct {
 
 type ChannelRequest struct {
 	Name                 string           `json:"name"`
+	PublicAlias          *string          `json:"publicAlias"`
+	SortOrder            *int             `json:"sortOrder"`
 	BaseURL              string           `json:"baseUrl"`
 	AllowLocalChannel    *bool            `json:"allowLocalChannel"`
 	APIKey               string           `json:"apiKey"`
@@ -103,6 +105,8 @@ type PublicModelChannel struct {
 	Scope             model.ChannelScope        `json:"scope"`
 	Enabled           bool                      `json:"enabled"`
 	Name              string                    `json:"name"`
+	PublicAlias       string                    `json:"publicAlias,omitempty"`
+	SortOrder         int                       `json:"sortOrder"`
 	BaseURL           string                    `json:"baseUrl"`
 	AllowLocalChannel bool                      `json:"allowLocalChannel,omitempty"`
 	APIKey            string                    `json:"apiKey"`
@@ -539,6 +543,10 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if req.presentationOnly() {
+		return s.updateChannelPresentation(id, req)
+	}
+	updateModels := req.Models != nil
 	channel, err := s.repo.AdminSystemChannel(id)
 	if err != nil {
 		return nil, err
@@ -567,8 +575,10 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err := s.repo.Save(&next); err != nil {
 		return nil, err
 	}
-	if err := s.syncInitialChannelModels(&next, req.Models); err != nil {
-		return nil, err
+	if updateModels {
+		if err := s.syncInitialChannelModels(&next, req.Models); err != nil {
+			return nil, err
+		}
 	}
 	s.invalidateRouteCatalog()
 	items, err := s.repo.ChannelModels(next.ID, true)
@@ -779,6 +789,19 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 		return channel, err
 	}
 	channel.Name = name
+	if req.PublicAlias != nil {
+		alias := strings.TrimSpace(*req.PublicAlias)
+		if len([]rune(alias)) > 80 {
+			return channel, BadAuthRequest("前台显示别名不能超过 80 个字符")
+		}
+		channel.PublicAlias = alias
+	}
+	if req.SortOrder != nil {
+		if err := validateChannelSortOrder(*req.SortOrder); err != nil {
+			return channel, err
+		}
+		channel.SortOrder = *req.SortOrder
+	}
 	channel.BaseURL = strings.TrimRight(baseURL, "/")
 	channel.AllowLocalChannel = requestedAllowLocal
 	if req.APIKey != "" {
@@ -862,12 +885,18 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 	} else if admin {
 		apiKey = channel.APIKey
 	}
+	name, alias := channel.PublicName(), ""
+	if admin {
+		name, alias = channel.Name, channel.PublicAlias
+	}
 	return PublicModelChannel{
 		ID:                channel.ID,
 		UserID:            channel.UserID,
 		Scope:             channel.Scope,
 		Enabled:           channel.Enabled,
-		Name:              channel.Name,
+		Name:              name,
+		PublicAlias:       alias,
+		SortOrder:         channel.SortOrder,
 		BaseURL:           baseURL,
 		AllowLocalChannel: admin && channel.AllowLocalChannel,
 		APIKey:            apiKey,
