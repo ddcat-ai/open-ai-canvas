@@ -133,7 +133,11 @@ function removeCanvasMentionToken(value: string, token: string) {
 function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
     if (!token) return value;
     const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return value.replace(new RegExp(`${escapedToken}(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`, "gu"), replacement);
+    // Numbered media mentions can touch Chinese prose or another mention, but not a longer number.
+    const boundary = /^@(图片|视频|音频|文本)\d+$/.test(token)
+        ? "(?![0-9])"
+        : token.startsWith("@[node:") ? "" : `(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`;
+    return value.replace(new RegExp(`${escapedToken}${boundary}`, "gu"), replacement);
 }
 
 function compactRemovedCanvasMentionPrompt(value: string) {

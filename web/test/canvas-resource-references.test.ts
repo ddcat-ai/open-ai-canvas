@@ -207,6 +207,19 @@ describe("canvas resource mention slots", () => {
 });
 
 describe("remove canvas resource mention tokens", () => {
+    test("断开首图时同步紧邻中文、连续引用及两位数编号", () => {
+        const images = Array.from({ length: 10 }, (_, index) => imageNode(`image-${index}`));
+        const target = {
+            ...videoNode("target"),
+            metadata: { composerContent: "@图片1@图片2的人物参考@图片10，@[node:image-1]保持一致" },
+        };
+        const nodes = [...images, target];
+        const connections = images.map((image) => connection(image.id, target.id));
+        const result = applyCanvasConnectionPromptSync(nodes, connections, nodes, connections.slice(1));
+        expect(result.find((node) => node.id === target.id)?.metadata?.composerContent)
+            .toBe("@图片1的人物参考@图片9，@图片1保持一致");
+    });
+
     test("取消引用后会清掉对应的 @图片N", () => {
         const image = imageNode("image-a");
         const target = {
