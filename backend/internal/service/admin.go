@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdlog "log"
 	"strings"
 	"time"
 
@@ -652,7 +653,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	s.estimateCallCost(&log)
 	if log.BillingOrderID != "" && log.ProviderRequestID != "" {
 		if err := s.repo.UpdateBillingProviderRequestID(log.BillingOrderID, log.ProviderRequestID); err != nil {
-			return err
+			// 账单关联是请求日志的辅助状态，不能因为关联更新失败而丢失
+			// 已经发生的上游调用记录。后续由任务/账单对账流程补偿关联。
+			stdlog.Printf("provider billing request id update failed: billing_order_id=%s provider_request_id=%s error=%v", log.BillingOrderID, log.ProviderRequestID, err)
 		}
 	}
 	if log.TaskID != "" {
@@ -667,7 +670,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			nextPollAt = &next
 		}
 		if err := s.repo.UpdateTaskProviderState(log.TaskID, log.ProviderRequestID, stage, nextPollAt); err != nil {
-			return err
+			// 请求日志本身仍需保留；任务状态可由后续任务收尾或恢复流程
+			// 重建，不能让一次状态写失败掩盖真实的上游调用。
+			stdlog.Printf("provider task state update failed: task_id=%s provider_request_id=%s error=%v", log.TaskID, log.ProviderRequestID, err)
 		}
 	}
 	if merged, err := s.mergeVideoAPICallLog(log); err != nil {
