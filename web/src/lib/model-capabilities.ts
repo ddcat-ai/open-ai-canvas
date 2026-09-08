@@ -1,5 +1,12 @@
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import type { ImageResolutionOption } from "@/lib/image-resolution-tiers";
+import heyrouteDefaults from "./heyroute-capabilities.json";
+
+function heyrouteCapabilityConfig(protocol: string | undefined, model: string): ModelCapabilityConfig | undefined {
+    const values = heyrouteDefaults as unknown as Record<string, Record<string, ModelCapabilityConfig>>;
+    const value = protocol ? values[protocol]?.[model] : undefined;
+    return value ? structuredClone(value) : undefined;
+}
 
 export type ModelCapabilityConfig = {
     version: number;
@@ -178,6 +185,8 @@ const defaultImageSizes = [
 ];
 
 export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
+    const heyroute = heyrouteCapabilityConfig(protocol, model);
+    if (heyroute?.image) return heyroute.image;
     const image: ImageCapabilityConfig = {
         references: { promptMaxChars: 32000, maxImages: 16, maxImageBytes: 30 * 1024 * 1024, maskSupported: true },
         size: { parameter: "size", values: [...defaultImageSizes], default: "1:1", allowCustom: true },
@@ -250,6 +259,8 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 }
 
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
+    const heyroute = heyrouteCapabilityConfig(protocol, model);
+    if (heyroute) return { ...defaultModelCapabilityConfig(), ...heyroute };
     const text: TextCapabilityConfig = {
         // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。
         references: { promptMaxChars: 32000, maxImages: 0, maxImageBytes: 0, maxVideos: 0, maxVideoBytes: 0 },

@@ -2435,6 +2435,11 @@ var defaultProtocolPollTiming = protocolPollTiming{
 }
 
 func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter) (map[string]interface{}, error) {
+	if input.Config.InterfaceType == "heyroute-video" || input.Config.InterfaceType == "heyroute-video-sequential" {
+		timing := defaultProtocolPollTiming
+		timing.InitialDelay, timing.PollInterval = 15*time.Second, 15*time.Second
+		return runProtocolAdapterTaskWithTiming(ctx, input, adapter, timing)
+	}
 	return runProtocolAdapterTaskWithTiming(ctx, input, adapter, defaultProtocolPollTiming)
 }
 
@@ -2711,6 +2716,9 @@ func executeProtocolRequest(ctx context.Context, config providerConfig, spec pro
 func executeProtocolBinaryRequest(ctx context.Context, config providerConfig, spec protocol.RequestSpec) ([]byte, string, error) {
 	if err := spec.Validate(); err != nil {
 		return nil, "", err
+	}
+	if spec.ResponseMode == "sse-json" {
+		ctx = context.WithValue(ctx, providerSSEJSONKey{}, true)
 	}
 	method := strings.ToUpper(strings.TrimSpace(spec.Method))
 	body, contentType, err := protocolRequestBody(ctx, config, spec)
@@ -5244,6 +5252,16 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		return nil, "", err
 	}
 	mimeType := resp.Header.Get("Content-Type")
+	if consume, _ := req.Context().Value(providerSSEJSONKey{}).(bool); consume && strings.HasPrefix(strings.ToLower(mimeType), "text/event-stream") && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		data, streamErr := readProviderSSEJSON(resp.Body, responseLimit)
+		// Record only the terminal JSON, never the raw image stream. Existing
+		// analytics extract usage/status without persisting image payloads.
+		recordProviderRequest(req, startedAt, resp.StatusCode, data, streamErr)
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, streamErr != nil && !errors.Is(streamErr, context.Canceled))
+		}
+		return data, "application/json", streamErr
+	}
 	var buffered bytes.Buffer
 	reader := io.LimitReader(resp.Body, responseLimit+1)
 	chunk := make([]byte, 32<<10)

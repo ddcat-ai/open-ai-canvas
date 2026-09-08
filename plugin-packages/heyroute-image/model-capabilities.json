@@ -1,0 +1,323 @@
+{
+  "models": [
+    {
+      "model": "gpt-image-2",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "size",
+            "values": [
+              "auto",
+              "1024x1024",
+              "1536x1024",
+              "1024x1536",
+              "1536x864",
+              "864x1536",
+              "2048x2048"
+            ],
+            "default": "1024x1024",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": true,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    },
+    {
+      "model": "grok-imagine-image",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "none",
+            "values": [
+              "auto"
+            ],
+            "default": "auto",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 10
+        }
+      }
+    },
+    {
+      "model": "flux-klein-2",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "size",
+            "values": [
+              "1024x1024",
+              "1536x1024",
+              "1024x1536",
+              "1536x864",
+              "864x1536",
+              "2048x2048"
+            ],
+            "default": "1024x1024",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    },
+    {
+      "model": "gemini-3-pro-image",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "none",
+            "values": [
+              "auto"
+            ],
+            "default": "auto",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    },
+    {
+      "model": "gemini-3.1-flash-image",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "none",
+            "values": [
+              "auto"
+            ],
+            "default": "auto",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    },
+    {
+      "model": "nano-banana-pro",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "none",
+            "values": [
+              "auto"
+            ],
+            "default": "auto",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    },
+    {
+      "model": "nano-banana-2",
+      "protocol": "heyroute-image",
+      "capabilityConfig": {
+        "version": 1,
+        "image": {
+          "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": true
+          },
+          "size": {
+            "parameter": "none",
+            "values": [
+              "auto"
+            ],
+            "default": "auto",
+            "allowCustom": false
+          },
+          "quality": {
+            "supported": false,
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "auto"
+          },
+          "transparentBackground": {
+            "supported": false,
+            "default": false
+          },
+          "responseFormat": {
+            "supported": true
+          },
+          "outputFormat": {
+            "supported": false
+          },
+          "maxOutputs": 1
+        }
+      }
+    }
+  ]
+}

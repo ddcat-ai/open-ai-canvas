@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
+	generationprotocol "infinite-canvas/backend/internal/protocol"
 )
 
 // ModelCapabilityConfig 是模型能力声明，不包含供应商字段名；协议适配器负责把统一参数映射到上游请求。
@@ -125,6 +126,12 @@ func videoDurationSupported(value *VideoCapabilityConfig) bool {
 }
 
 func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapabilityConfig {
+	if raw := generationprotocol.HeyrouteCapabilityDefaults(protocol, modelName); len(raw) > 0 {
+		var config ModelCapabilityConfig
+		if json.Unmarshal(raw, &config) == nil && config.Image != nil {
+			return config.Image
+		}
+	}
 	image := &ImageCapabilityConfig{
 		References:            ImageReferenceConfig{PromptMaxChars: 32000, MaxImages: 16, MaxImageBytes: 30 * 1024 * 1024, MaskSupported: true},
 		Size:                  ImageSizeConfig{Parameter: "size", Values: defaultImageSizeValues(), Default: "1:1", AllowCustom: true},
@@ -199,6 +206,12 @@ func legacyImageSizeValues() []string {
 }
 
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
+	if raw := generationprotocol.HeyrouteCapabilityDefaults(protocol, modelName); len(raw) > 0 {
+		var config ModelCapabilityConfig
+		if json.Unmarshal(raw, &config) == nil {
+			return &config
+		}
+	}
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	text := &TextCapabilityConfig{References: TextReferenceConfig{PromptMaxChars: 32000}}
 	video := &VideoCapabilityConfig{
