@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, runScriptToScenes, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
+import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, prepareSceneCanvasPlan, runScriptToScenes, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
 
 test("canvas skills reject non-canvas tools", () => {
     assert.throws(() => assertCanvasSkill({ name: "x", version: "1", description: "", allowedTools: ["terminal"], risk: "read" }), /canvas_/);
@@ -52,35 +52,37 @@ test("scene results become stable canvas operations", () => {
 });
 
 test("scene operation planning rejects empty or duplicate results", () => {
-    assert.throws(() => buildSceneCanvasOps("p1", [{ title: "", content: "x" }]), /不能为空/);
+    assert.throws(() => buildSceneCanvasOps("p1", [{ title: "", content: "x" }]), /String|不能为空/);
     assert.throws(() => buildSceneCanvasOps("p1", [{ title: "场景一", content: "x" }, { title: "场景一", content: "y" }]), /重复/);
 });
 
 test("execution validates against the latest remote revision before applying", async () => {
     const calls: string[] = [];
+    const project = { revision: 7, stateHash: "hash-7", project: { nodes: [{ id: "script-1", type: "script", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { content: "剧本" } }] } };
+    const prepared = prepareSceneCanvasPlan({ planId: "p1", projectId: "c1", scriptNodeId: "script-1", project, scenes: [{ title: "一", content: "内容" }] });
     const client = {
-        async getProject() { calls.push("get"); return { revision: 7, stateHash: "hash-7" }; },
-        async validate(_id: string, body: any) { calls.push(`validate:${body.expectedRevision}:${body.expectedStateHash}`); return {}; },
+        async getProject() { calls.push("get"); return project; },
+        async validate(_id: string, body: any) { calls.push(`validate:${body.expectedRevision}:${body.expectedStateHash}`); return { ok: true, currentStateHash: "hash-7" }; },
         async apply(_id: string, body: any) { calls.push(`apply:${body.expectedRevision}:${body.expectedStateHash}`); return { ok: true }; },
     };
-    const plan = buildScriptToScenesPlan({ planId: "p1", scriptNodeId: "script-1", sceneCount: 1 });
-    const pending = await executeCanvasOpsPlan({ client, projectId: "c1", plan, ops: [], mode: "ask" });
+    const pending = await executeCanvasOpsPlan({ client, prepared, mode: "ask" });
     assert.equal(pending.status, "waiting_approval");
     assert.deepEqual(calls, ["get", "validate:7:hash-7"]);
-    const applied = await executeCanvasOpsPlan({ client, projectId: "c1", plan, ops: [], mode: "ask", approved: true });
+    const applied = await executeCanvasOpsPlan({ client, prepared, mode: "ask", approvedDigest: prepared.approvalDigest });
     assert.equal(applied.status, "applied");
     assert.deepEqual(calls.slice(2), ["get", "validate:7:hash-7", "apply:7:hash-7"]);
 });
 
 test("script-to-scenes use case composes analysis, operations, validation, and approval", async () => {
     const calls: string[] = [];
+    const project = { revision: 3, stateHash: "hash-3", project: { nodes: [{ id: "script-1", type: "script", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { content: "剧本" } }] } };
     const client = {
-        async getProject() { calls.push("get"); return { revision: 3, stateHash: "hash-3" }; },
-        async validate() { calls.push("validate"); return {}; },
+        async getProject() { calls.push("get"); return project; },
+        async validate() { calls.push("validate"); return { ok: true, currentStateHash: "hash-3" }; },
         async apply() { calls.push("apply"); return { created: 2 }; },
     };
     const result = await runScriptToScenes({ planId: "p2", projectId: "c1", scriptNodeId: "script-1", mode: "auto", analyze: async () => [{ title: "一", content: "内容一" }, { title: "二", content: "内容二" }], client });
     assert.equal(result.status, "applied");
-    assert.deepEqual(calls, ["get", "validate", "apply"]);
+    assert.deepEqual(calls, ["get", "get", "validate", "apply"]);
     assert.equal(result.result?.created, 2);
 });
