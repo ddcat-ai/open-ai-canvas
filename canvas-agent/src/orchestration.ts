@@ -58,3 +58,18 @@ export function nextRunnableTasks(plan: CanvasPlan, mode: CanvasExecutionMode): 
 export function planRequiresApproval(plan: CanvasPlan, mode: CanvasExecutionMode): boolean {
     return plan.tasks.some((task) => task.status === "pending" && taskNeedsApproval(task, mode));
 }
+
+export function buildScriptToScenesPlan(input: { planId: string; scriptNodeId: string; sceneCount?: number }): CanvasPlan {
+    const count = input.sceneCount ?? 0;
+    if (!input.planId.trim() || !input.scriptNodeId.trim()) throw new Error("拆场景计划必须包含 planId 和剧本节点 id");
+    if (!Number.isInteger(count) || count < 0 || count > 100) throw new Error("场景数量必须是 0 到 100 的整数");
+    const tasks: CanvasTask[] = [
+        { id: `${input.planId}:read`, kind: "analyze", title: "读取剧本", dependsOn: [], inputNodeIds: [input.scriptNodeId], status: "pending", requiresApproval: false },
+        { id: `${input.planId}:extract`, kind: "analyze", title: "提取场景", dependsOn: [`${input.planId}:read`], inputNodeIds: [input.scriptNodeId], status: "pending", requiresApproval: false },
+    ];
+    if (count > 0) {
+        tasks.push({ id: `${input.planId}:create`, kind: "canvas_ops", title: `创建 ${count} 个场景节点`, dependsOn: [`${input.planId}:extract`], status: "pending", requiresApproval: false });
+        tasks.push({ id: `${input.planId}:connect`, kind: "canvas_ops", title: "连接场景节点", dependsOn: [`${input.planId}:create`], status: "pending", requiresApproval: false });
+    }
+    return { id: input.planId, title: "根据剧本拆分场景", skill: { name: "script-to-scenes", version: "1" }, tasks, status: "planning" };
+}

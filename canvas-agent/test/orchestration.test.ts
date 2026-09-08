@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertCanvasSkill, nextRunnableTasks, planRequiresApproval, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
+import { assertCanvasSkill, buildScriptToScenesPlan, nextRunnableTasks, planRequiresApproval, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
 
 test("canvas skills reject non-canvas tools", () => {
     assert.throws(() => assertCanvasSkill({ name: "x", version: "1", description: "", allowedTools: ["terminal"], risk: "read" }), /canvas_/);
@@ -27,4 +27,18 @@ test("only tasks with completed dependencies are runnable", () => {
     };
     assert.deepEqual(nextRunnableTasks(plan, "auto").map((task) => task.id), ["create"]);
     assert.equal(planRequiresApproval(plan, "ask"), true);
+});
+
+test("script-to-scenes plan has ordered analysis and canvas tasks", () => {
+    const plan = buildScriptToScenesPlan({ planId: "p1", scriptNodeId: "script-1", sceneCount: 3 });
+    assert.deepEqual(plan.tasks.map((task) => [task.id, task.dependsOn]), [
+        ["p1:read", []], ["p1:extract", ["p1:read"]], ["p1:create", ["p1:extract"]], ["p1:connect", ["p1:create"]],
+    ]);
+    assert.equal(plan.tasks[2].requiresApproval, false);
+    assert.equal(plan.status, "planning");
+});
+
+test("script-to-scenes plan rejects invalid scene counts", () => {
+    assert.throws(() => buildScriptToScenesPlan({ planId: "p1", scriptNodeId: "script-1", sceneCount: 1.5 }), /整数/);
+    assert.throws(() => buildScriptToScenesPlan({ planId: "p1", scriptNodeId: "script-1", sceneCount: 101 }), /0 到 100/);
 });
