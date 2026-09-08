@@ -115,3 +115,18 @@ export async function executeCanvasOpsPlan(input: {
     const result = await input.client.apply(input.projectId, body);
     return { status: "applied", plan: { ...input.plan, status: "succeeded" }, result };
 }
+
+export async function runScriptToScenes(input: {
+    planId: string;
+    projectId: string;
+    scriptNodeId: string;
+    mode: CanvasExecutionMode;
+    approved?: boolean;
+    analyze: (scriptNodeId: string) => Promise<PlannedScene[]>;
+    client: Parameters<typeof executeCanvasOpsPlan>[0]["client"];
+}): Promise<Awaited<ReturnType<typeof executeCanvasOpsPlan>>> {
+    const plan = buildScriptToScenesPlan({ planId: input.planId, scriptNodeId: input.scriptNodeId });
+    const scenes = await input.analyze(input.scriptNodeId);
+    const ops = buildSceneCanvasOps(input.planId, scenes);
+    return executeCanvasOpsPlan({ client: input.client, projectId: input.projectId, plan, ops, mode: input.mode, approved: input.approved });
+}

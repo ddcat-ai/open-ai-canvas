@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
+import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, runScriptToScenes, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
 
 test("canvas skills reject non-canvas tools", () => {
     assert.throws(() => assertCanvasSkill({ name: "x", version: "1", description: "", allowedTools: ["terminal"], risk: "read" }), /canvas_/);
@@ -70,4 +70,17 @@ test("execution validates against the latest remote revision before applying", a
     const applied = await executeCanvasOpsPlan({ client, projectId: "c1", plan, ops: [], mode: "ask", approved: true });
     assert.equal(applied.status, "applied");
     assert.deepEqual(calls.slice(2), ["get", "validate:7:hash-7", "apply:7:hash-7"]);
+});
+
+test("script-to-scenes use case composes analysis, operations, validation, and approval", async () => {
+    const calls: string[] = [];
+    const client = {
+        async getProject() { calls.push("get"); return { revision: 3, stateHash: "hash-3" }; },
+        async validate() { calls.push("validate"); return {}; },
+        async apply() { calls.push("apply"); return { created: 2 }; },
+    };
+    const result = await runScriptToScenes({ planId: "p2", projectId: "c1", scriptNodeId: "script-1", mode: "auto", analyze: async () => [{ title: "一", content: "内容一" }, { title: "二", content: "内容二" }], client });
+    assert.equal(result.status, "applied");
+    assert.deepEqual(calls, ["get", "validate", "apply"]);
+    assert.equal(result.result?.created, 2);
 });
