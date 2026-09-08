@@ -81,6 +81,18 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/services/plugin-host.ts`：将插件文本请求接入宿主现有模型渠道。
 - `web/src/pages/create/index.tsx`、`web/src/components/canvas/canvas-node-prompt-panel.tsx`：两个入口的接入。
 
+## 首页图片预览与画布同款查看器
+
+创作页 `/create` 的生成结果、参考图片和故事板图片，打开后使用与画布图片节点相同的全屏图片查看器。首页不再维护独立的图片缩放和拖拽实现，避免两个入口的交互行为逐渐分叉。
+
+图片查看器支持移动、缩放和关闭，缩放范围为 `0.5` 到 `12`，步进为 `0.25`；视频仍使用创作页原有的视频播放弹窗。该能力只统一图片预览交互，不改变缩略图、媒体资源地址或生成流程。
+
+### 相关实现
+
+- `web/src/components/canvas/canvas-image-preview.tsx`：画布与创作页共用的图片预览组件。
+- `web/src/pages/canvas/canvas-project-status-dialogs.tsx`：画布图片节点预览入口。
+- `web/src/pages/create/index.tsx`：生成结果、参考图片和故事板图片预览入口。
+
 ## 可自定义工作台导航
 
 内置工作台插件将常用创作入口统一交给宿主渲染。用户可以在设置页的“自定义区域”（`/settings?section=workbench`）预览侧边栏，分别控制入口显示状态，并通过拖拽或上下按钮调整同一分组内的顺序；“恢复默认”可以还原初始布局。

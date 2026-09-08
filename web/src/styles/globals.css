@@ -11369,11 +11369,6 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 
 .creation-media-preview-modal .ant-modal-container { overflow: hidden; border: 0; border-radius: 12px; background: #111215; padding: 0; }
 .creation-media-preview-modal .ant-modal-close { color: #fff; }
-.creation-media-preview-viewport { position: relative; display: flex; width: 100%; max-height: 82vh; align-items: center; justify-content: center; overflow: hidden; overscroll-behavior: contain; touch-action: none; user-select: none; }
-.creation-media-preview-image { display: block; max-width: 100%; max-height: 82vh; margin: 0 auto; object-fit: contain; transform-origin: center center; user-select: none; will-change: transform; }
-.creation-media-preview-viewport.is-zoomed .creation-media-preview-image { cursor: grab; }
-.creation-media-preview-viewport.is-dragging .creation-media-preview-image { cursor: grabbing; }
-.creation-media-preview-hint { position: absolute; right: 12px; bottom: 10px; pointer-events: none; border-radius: 999px; background: rgb(0 0 0 / 52%); color: rgb(255 255 255 / 78%); font-size: 11px; line-height: 1; padding: 7px 9px; }
 .creation-media-preview-video { display: block; width: 100%; max-height: 82vh; margin: 0 auto; object-fit: contain; }
 .creation-media-preview-video { width: 100%; background: #050505; }
 
