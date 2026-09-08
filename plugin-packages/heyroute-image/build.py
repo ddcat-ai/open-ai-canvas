@@ -69,7 +69,7 @@ def main():
         ["node", str(prettier), "--stdin-filepath", str(web_target)],
         input=serialized, text=True, capture_output=True, check=True, cwd=web_root,
     ).stdout
-    (ROOT.parents[1] / "backend/internal/protocol/heyroute-capabilities.json").write_text(serialized)
+    (ROOT.parents[1] / "backend/internal/protocol/heyroute-capabilities.json").write_text(formatted)
     web_target.write_text(formatted)
 
 
