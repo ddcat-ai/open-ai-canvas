@@ -13,6 +13,7 @@ import { WorkingDots, WorkingGlow } from "@/components/ai/working-indicator";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelPicker } from "@/components/model-picker";
@@ -1284,82 +1285,12 @@ function CreationMessageReferences({ references }: { references: CreationReferen
     })}</div>;
 }
 
-type CreationImagePreviewView = { scale: number; offsetX: number; offsetY: number };
-
-const initialCreationImagePreviewView: CreationImagePreviewView = { scale: 1, offsetX: 0, offsetY: 0 };
-
-function CreationImagePreview({ url }: { url: string }) {
-    const viewportRef = useRef<HTMLDivElement>(null);
-    const imageRef = useRef<HTMLImageElement>(null);
-    const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
-    const [view, setView] = useState<CreationImagePreviewView>(initialCreationImagePreviewView);
-    const [dragging, setDragging] = useState(false);
-
-    useEffect(() => {
-        setView(initialCreationImagePreviewView);
-        dragRef.current = null;
-        setDragging(false);
-    }, [url]);
-
-    const clampOffset = (offsetX: number, offsetY: number, scale: number) => {
-        const viewport = viewportRef.current;
-        const image = imageRef.current;
-        if (!viewport || !image) return { offsetX, offsetY };
-        const maxOffsetX = Math.max(0, (image.offsetWidth * scale - viewport.clientWidth) / 2);
-        const maxOffsetY = Math.max(0, (image.offsetHeight * scale - viewport.clientHeight) / 2);
-        return {
-            offsetX: Math.max(-maxOffsetX, Math.min(maxOffsetX, offsetX)),
-            offsetY: Math.max(-maxOffsetY, Math.min(maxOffsetY, offsetY)),
-        };
-    };
-
-    const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const viewport = event.currentTarget;
-        const rect = viewport.getBoundingClientRect();
-        const pointerX = event.clientX - (rect.left + rect.width / 2);
-        const pointerY = event.clientY - (rect.top + rect.height / 2);
-        setView((current) => {
-            const nextScale = Math.max(1, Math.min(5, current.scale * Math.exp(-event.deltaY * 0.0015)));
-            if (nextScale === current.scale) return current;
-            if (nextScale === 1) return initialCreationImagePreviewView;
-            const scaleRatio = nextScale / current.scale;
-            const nextOffset = clampOffset(pointerX + (current.offsetX - pointerX) * scaleRatio, pointerY + (current.offsetY - pointerY) * scaleRatio, nextScale);
-            return { scale: nextScale, ...nextOffset };
-        });
-    };
-
-    const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-        if (view.scale <= 1 || event.button !== 0) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startOffsetX: view.offsetX, startOffsetY: view.offsetY };
-        setDragging(true);
-    };
-
-    const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-        const drag = dragRef.current;
-        if (!drag || drag.pointerId !== event.pointerId) return;
-        event.preventDefault();
-        const nextOffset = clampOffset(drag.startOffsetX + event.clientX - drag.startX, drag.startOffsetY + event.clientY - drag.startY, view.scale);
-        setView((current) => ({ ...current, ...nextOffset }));
-    };
-
-    const endDrag = (event: PointerEvent<HTMLDivElement>) => {
-        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
-        dragRef.current = null;
-        setDragging(false);
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    };
-
-    return <div ref={viewportRef} className={`creation-media-preview-viewport${view.scale > 1 ? " is-zoomed" : ""}${dragging ? " is-dragging" : ""}`} onWheel={handleWheel} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
-        <img ref={imageRef} className="creation-media-preview-image" src={url} alt="媒体预览" draggable={false} style={{ transform: `translate3d(${view.offsetX}px, ${view.offsetY}px, 0) scale(${view.scale})` }} />
-        <span className="creation-media-preview-hint" aria-hidden="true">滚轮缩放 · 放大后拖动</span>
-    </div>;
-}
-
 function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
-    return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <CreationImagePreview url={url} /> : null}</Modal>;
+    if (type === "image") return <CanvasImagePreview src={url} alt="媒体预览" onClose={onClose} />;
+
+    return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width="min(1160px, calc(100vw - 32px))" onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>
+        {url ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : null}
+    </Modal>;
 }
 
 function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
