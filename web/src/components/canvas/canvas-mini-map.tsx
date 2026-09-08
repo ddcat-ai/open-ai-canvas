@@ -164,6 +164,9 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                     return (
                         <div
                             key={node.id}
+                            role="img"
+                            title={nodeLabel}
+                            aria-label={nodeLabel}
                             className="absolute rounded-[1px]"
                             style={{
                                 left: pos.x,
@@ -189,14 +192,6 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                                     />
                                 ) : null}
                             </div>
-                            <span
-                                title={nodeLabel}
-                                aria-label={nodeLabel}
-                                className="pointer-events-none absolute left-0 top-0 z-[1] max-w-[7.5rem] -translate-y-1/2 truncate whitespace-nowrap rounded-[2px] border px-1 py-px text-[9px] font-medium leading-[1.15] shadow-sm"
-                                style={{ color: theme.node.text, background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
-                            >
-                                {nodeLabel}
-                            </span>
                         </div>
                     );
                 })}
