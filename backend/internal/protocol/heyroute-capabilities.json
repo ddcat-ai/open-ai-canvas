@@ -1,0 +1,761 @@
+{
+    "heyroute-video": {
+        "grok-imagine-video": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 0,
+                    "maxVideoDurationSeconds": 0,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 0,
+                    "maxAudioDurationSeconds": 0
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 1,
+                    "max": 15,
+                    "step": 1,
+                    "default": 8
+                },
+                "ratios": ["auto", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": true
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "grok-imagine-video-1.5": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 0,
+                    "maxVideoDurationSeconds": 0,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 0,
+                    "maxAudioDurationSeconds": 0
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 1,
+                    "max": 15,
+                    "step": 1,
+                    "default": 8
+                },
+                "ratios": ["auto", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p", "1080p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": true
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "grok-video": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 0,
+                    "maxImageBytes": 0,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 0,
+                    "maxVideoDurationSeconds": 0,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 0,
+                    "maxAudioDurationSeconds": 0
+                },
+                "duration": {
+                    "selection": "enum",
+                    "values": [6, 10, 15],
+                    "default": 6
+                },
+                "ratios": ["16:9"],
+                "defaultRatio": "16:9",
+                "resolutions": ["720x405"],
+                "defaultResolution": "720x405",
+                "generateAudio": {
+                    "supported": false,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "minimax-h3-quantized-768p": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 0,
+                    "maxVideoDurationSeconds": 0,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 0,
+                    "maxAudioDurationSeconds": 0
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 10,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "16:9"],
+                "defaultRatio": "auto",
+                "resolutions": ["768p"],
+                "defaultResolution": "768p",
+                "generateAudio": {
+                    "supported": false,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "minimax-h3-original-768p": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 1,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 1,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 15,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "16:9"],
+                "defaultRatio": "auto",
+                "resolutions": ["768p"],
+                "defaultResolution": "768p",
+                "generateAudio": {
+                    "supported": false,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "minimax-h3-original-1080p": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 1,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 1,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 15,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "16:9"],
+                "defaultRatio": "auto",
+                "resolutions": ["1080p"],
+                "defaultResolution": "1080p",
+                "generateAudio": {
+                    "supported": false,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "minimax-h3-original-cf-2k": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 1,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 1,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 1,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 15,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["2k"],
+                "defaultResolution": "2k",
+                "generateAudio": {
+                    "supported": false,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "MiniMax-H3": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 9,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 3,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 3,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 15,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "seedance-2.5": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 30,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 10,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 10,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 30,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["720p", "480p", "1080p"],
+                "defaultResolution": "720p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": true
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "seedance-2.0": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 15,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 15,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 15,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "enum",
+                    "values": [15],
+                    "default": 15
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        },
+        "seedance-2.0-fast": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 0,
+                    "maxImages": 15,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 15,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 15,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "enum",
+                    "values": [15],
+                    "default": 15
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["text_to_video", "image_to_video"],
+                "defaultOperation": "text_to_video"
+            }
+        }
+    },
+    "heyroute-video-sequential": {
+        "seedance-2.5": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 1,
+                    "maxImages": 30,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "range",
+                    "min": 4,
+                    "max": 30,
+                    "step": 1,
+                    "default": 4
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["720p", "480p", "1080p"],
+                "defaultResolution": "720p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": true
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["image_to_video"],
+                "defaultOperation": "image_to_video"
+            }
+        },
+        "seedance-2.0": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 1,
+                    "maxImages": 15,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "enum",
+                    "values": [15],
+                    "default": 15
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["image_to_video"],
+                "defaultOperation": "image_to_video"
+            }
+        },
+        "seedance-2.0-fast": {
+            "version": 1,
+            "video": {
+                "references": {
+                    "promptMaxChars": 1000,
+                    "minImages": 1,
+                    "maxImages": 15,
+                    "maxImageBytes": 31457280,
+                    "maxVideos": 0,
+                    "maxVideoBytes": 52428800,
+                    "maxVideoDurationSeconds": 30,
+                    "maxAudios": 0,
+                    "maxAudioBytes": 20971520,
+                    "maxAudioDurationSeconds": 30
+                },
+                "duration": {
+                    "selection": "enum",
+                    "values": [15],
+                    "default": 15
+                },
+                "ratios": ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+                "defaultRatio": "auto",
+                "resolutions": ["480p", "720p"],
+                "defaultResolution": "480p",
+                "generateAudio": {
+                    "supported": true,
+                    "default": false
+                },
+                "watermark": {
+                    "supported": false,
+                    "default": false
+                },
+                "operations": ["image_to_video"],
+                "defaultOperation": "image_to_video"
+            }
+        }
+    },
+    "heyroute-image": {
+        "gpt-image-2": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "size",
+                    "values": ["auto", "1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536", "2048x2048"],
+                    "default": "1024x1024",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": true,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        },
+        "grok-imagine-image": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "none",
+                    "values": ["auto"],
+                    "default": "auto",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 10
+            }
+        },
+        "flux-klein-2": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "size",
+                    "values": ["1024x1024", "1536x1024", "1024x1536", "1536x864", "864x1536", "2048x2048"],
+                    "default": "1024x1024",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        },
+        "gemini-3-pro-image": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "none",
+                    "values": ["auto"],
+                    "default": "auto",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        },
+        "gemini-3.1-flash-image": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "none",
+                    "values": ["auto"],
+                    "default": "auto",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        },
+        "nano-banana-pro": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "none",
+                    "values": ["auto"],
+                    "default": "auto",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        },
+        "nano-banana-2": {
+            "version": 1,
+            "image": {
+                "references": {
+                    "promptMaxChars": 32000,
+                    "maxImages": 16,
+                    "maxImageBytes": 31457280,
+                    "maskSupported": true
+                },
+                "size": {
+                    "parameter": "none",
+                    "values": ["auto"],
+                    "default": "auto",
+                    "allowCustom": false
+                },
+                "quality": {
+                    "supported": false,
+                    "values": ["auto", "low", "medium", "high"],
+                    "default": "auto"
+                },
+                "transparentBackground": {
+                    "supported": false,
+                    "default": false
+                },
+                "responseFormat": {
+                    "supported": true
+                },
+                "outputFormat": {
+                    "supported": false
+                },
+                "maxOutputs": 1
+            }
+        }
+    }
+}

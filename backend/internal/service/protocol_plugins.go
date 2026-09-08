@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -284,7 +285,11 @@ func (c *pluginRuntime) reload() error {
 	}
 	plugins := make(map[string]pluginRecord)
 	for _, storedRecord := range stored {
-		data := storedRecord.Raw
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, storedRecord.Raw); err != nil {
+			return fmt.Errorf("decode plugin %s: %w", storedRecord.ID, err)
+		}
+		data := compact.Bytes()
 		if len(data) > protocolPluginMaxBytes {
 			return fmt.Errorf("plugin %s exceeds %d bytes", storedRecord.ID, protocolPluginMaxBytes)
 		}
@@ -739,7 +744,7 @@ func (c *pluginRuntime) readRegistry() ([]pluginRegistryRecord, error) {
 }
 
 func (c *pluginRuntime) writeRegistry(records []pluginRegistryRecord) error {
-	data, err := json.MarshalIndent(records, "", "  ")
+	data, err := json.Marshal(records)
 	if err != nil {
 		return err
 	}

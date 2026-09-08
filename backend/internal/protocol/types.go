@@ -112,15 +112,16 @@ type PollContext struct {
 }
 
 type RequestSpec struct {
-	Method      string              `json:"method"`
-	Path        string              `json:"path"`
-	OriginPath  bool                `json:"originPath,omitempty"`
-	ContentType string              `json:"contentType"`
-	Headers     map[string]string   `json:"headers,omitempty"`
-	Query       map[string][]string `json:"query,omitempty"`
-	Body        any                 `json:"body,omitempty"`
-	Files       []RequestFilePart   `json:"files,omitempty"`
-	Auth        ManifestAuth        `json:"auth,omitempty"`
+	ResponseMode string              `json:"responseMode,omitempty"`
+	Method       string              `json:"method"`
+	Path         string              `json:"path"`
+	OriginPath   bool                `json:"originPath,omitempty"`
+	ContentType  string              `json:"contentType"`
+	Headers      map[string]string   `json:"headers,omitempty"`
+	Query        map[string][]string `json:"query,omitempty"`
+	Body         any                 `json:"body,omitempty"`
+	Files        []RequestFilePart   `json:"files,omitempty"`
+	Auth         ManifestAuth        `json:"auth,omitempty"`
 }
 
 type RequestFilePart struct {
@@ -390,6 +391,9 @@ type ManifestCommand struct {
 }
 
 func (r RequestSpec) Validate() error {
+	if r.ResponseMode != "" && r.ResponseMode != "json" && r.ResponseMode != "sse-json" {
+		return fmt.Errorf("unsupported protocol response mode %q", r.ResponseMode)
+	}
 	if r.Method == "" || r.Path == "" {
 		return fmt.Errorf("protocol request spec is incomplete")
 	}

@@ -13,6 +13,7 @@ import (
 )
 
 type ManifestOperation struct {
+	ResponseMode        string             `json:"responseMode,omitempty"`
 	Method              string             `json:"method"`
 	Path                string             `json:"path"`
 	PathTemplate        any                `json:"pathTemplate,omitempty"`
@@ -415,6 +416,9 @@ func operationSummaryPtr(operation *ManifestOperation) string {
 }
 
 func validateManifestOperation(operation ManifestOperation) error {
+	if operation.ResponseMode != "" && operation.ResponseMode != "json" && operation.ResponseMode != "sse-json" {
+		return fmt.Errorf("unsupported response mode %q", operation.ResponseMode)
+	}
 	method := strings.ToUpper(strings.TrimSpace(operation.Method))
 	if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete && method != http.MethodPut {
 		return fmt.Errorf("unsupported HTTP method %q", operation.Method)
@@ -799,7 +803,7 @@ func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, requ
 		return RequestSpec{}, fmt.Errorf("evaluate request content type: %w", err)
 	}
 	contentType := defaultValue(manifestString(evaluatedContentType), "application/json")
-	return RequestSpec{Method: strings.ToUpper(operation.Method), Path: path, OriginPath: operation.OriginPath, ContentType: contentType, Headers: headers, Query: query, Body: body, Files: files, Auth: auth}, nil
+	return RequestSpec{ResponseMode: operation.ResponseMode, Method: strings.ToUpper(operation.Method), Path: path, OriginPath: operation.OriginPath, ContentType: contentType, Headers: headers, Query: query, Body: body, Files: files, Auth: auth}, nil
 }
 
 func evaluateManifestStringMap(values map[string]any, env map[string]any) (map[string]string, error) {
@@ -1003,6 +1007,7 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 	output.GenerateAudio = output.GenerateAudio || request.GenerateAudio
 	output.Watermark = output.Watermark || request.Watermark
 	outputValue, _ := requestAsManifestValue(output)
+	providerOptions, _ := requestAsManifestValue(request.ProviderOptions)
 
 	return map[string]any{
 		"capability":      request.Capability,
@@ -1023,7 +1028,7 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 		"watermark":       request.Watermark,
 		"operation":       request.Operation,
 		"output":          outputValue,
-		"providerOptions": request.ProviderOptions,
+		"providerOptions": providerOptions,
 		"extra":           request.Extra,
 	}
 }

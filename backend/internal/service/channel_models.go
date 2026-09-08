@@ -689,6 +689,11 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		}
 		videoProfile = profile.Video
 		videoRatio, videoResolution = videoTestDefaults(videoProfile)
+		if strings.HasPrefix(string(protocol), "heyroute-video") {
+			// Fixed-duration models such as Seedance 2.0 reject the generic six-second probe.
+			videoSecondsValue = videoProfile.Duration.Default
+			videoSeconds = strconv.Itoa(videoSecondsValue)
+		}
 	}
 	input := canvasGenerationInput{
 		Mode:   capability,
