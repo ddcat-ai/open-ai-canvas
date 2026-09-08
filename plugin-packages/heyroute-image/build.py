@@ -4,6 +4,7 @@ import copy
 import json
 from pathlib import Path
 import runpy
+import subprocess
 
 ROOT = Path(__file__).resolve().parent
 helpers = runpy.run_path(str(ROOT.parent / "heyroute-video/build.py"))
@@ -58,8 +59,18 @@ def main():
             defaults["heyroute-video-sequential"][entry["model"]] = config
     for entry in image_capabilities()["models"]:
         defaults["heyroute-image"][entry["model"]] = entry["capabilityConfig"]
-    for target in [ROOT.parents[1]/"backend/internal/protocol/heyroute-capabilities.json", ROOT.parents[1]/"web/src/lib/heyroute-capabilities.json"]:
-        target.write_text(json.dumps(defaults, ensure_ascii=False, indent=2) + "\n")
+    serialized = json.dumps(defaults, ensure_ascii=False, indent=2) + "\n"
+    web_root = ROOT.parents[1] / "web"
+    web_target = web_root / "src/lib/heyroute-capabilities.json"
+    prettier = web_root / "node_modules/prettier/bin/prettier.cjs"
+    if not prettier.is_file():
+        raise SystemExit("Run bun install --frozen-lockfile in web before generating capability defaults.")
+    formatted = subprocess.run(
+        ["node", str(prettier), "--stdin-filepath", str(web_target)],
+        input=serialized, text=True, capture_output=True, check=True, cwd=web_root,
+    ).stdout
+    (ROOT.parents[1] / "backend/internal/protocol/heyroute-capabilities.json").write_text(serialized)
+    web_target.write_text(formatted)
 
 
 if __name__ == "__main__": main()
