@@ -29,7 +29,7 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || appearance.SkinID != defaultAppearanceSkinID || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
+	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || !appearance.AuthVideoAutoplay || appearance.SkinID != defaultAppearanceSkinID || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
 		t.Fatalf("Appearance() = %#v", appearance)
 	}
 	if appearance.LogoConfigured || appearance.DarkLogoConfigured || appearance.AuthVideoConfigured || appearance.AuthVideoPosterConfigured || appearance.Revision != "builtin" {
@@ -96,7 +96,7 @@ func appearanceColorContrastRatio(t *testing.T, foreground, background string) f
 	return (lighter + 0.05) / (darker + 0.05)
 }
 
-func TestAppearanceBackfillsVersionSixFieldsForExistingSetting(t *testing.T) {
+func TestAppearanceBackfillsVersionSevenFieldsForExistingSetting(t *testing.T) {
 	svc, db, _, _ := newAppearanceTestService(t)
 	legacy := model.SystemSetting{Key: appearanceSettingKey, ValueJSON: `{"schemaVersion":1,"brandName":"旧品牌","skinId":"classic"}`}
 	if err := db.Create(&legacy).Error; err != nil {
@@ -107,13 +107,13 @@ func TestAppearanceBackfillsVersionSixFieldsForExistingSetting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != "旧品牌" || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.SEOTitle != "旧品牌" || !strings.Contains(appearance.SEODescription, "旧品牌") || !strings.Contains(appearance.FooterCopyright, "旧品牌") || appearance.ActiveSkin.ID != "classic" {
+	if appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != "旧品牌" || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || !appearance.AuthVideoAutoplay || appearance.SEOTitle != "旧品牌" || !strings.Contains(appearance.SEODescription, "旧品牌") || !strings.Contains(appearance.FooterCopyright, "旧品牌") || appearance.ActiveSkin.ID != "classic" {
 		t.Fatalf("legacy appearance = %#v", appearance)
 	}
 }
 
 func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T) {
-	svc, db, _, admin := newAppearanceTestService(t)
+	svc, db, dataDir, admin := newAppearanceTestService(t)
 	resources := []model.Resource{
 		{ID: "brand-logo", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/logo.png", MimeType: "image/png"},
 		{ID: "brand-logo-dark", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/logo-dark.png", MimeType: "image/png"},
@@ -123,6 +123,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 	if err := db.Create(&resources).Error; err != nil {
 		t.Fatal(err)
 	}
+	writeAppearanceResourceFixtures(t, dataDir, resources)
 
 	updated, err := svc.UpdateAppearance(admin, AppearanceSetting{
 		BrandName:                 "HIMA Studio",
@@ -134,6 +135,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 		LogoFrameEnabled:          false,
 		AuthVideoResourceID:       "brand-video",
 		AuthVideoPosterResourceID: "brand-poster",
+		AuthVideoAutoplay:         false,
 		SkinID:                    "studio-indigo",
 		SEOTitle:                  "HIMA Studio - AI 影视工作台",
 		SEODescription:            "面向 Agent、图片、视频、画布与短剧生产的一体化 AI 创作工作台。",
@@ -145,7 +147,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !updated.Configured || updated.BrandName != "HIMA Studio" || updated.BrandSlug != "hima-studio" || updated.Public.BrandSlug != "hima-studio" || updated.AuthHeroTitle != "把灵感，\n变成可见的故事。" || updated.Public.AuthHeroDescription != "从画布开始，持续推进你的创作。" || !updated.Public.LogoConfigured || !updated.Public.DarkLogoConfigured || updated.Public.LogoFrameEnabled || !updated.Public.AuthVideoConfigured || !updated.Public.AuthVideoPosterConfigured || updated.Public.SkinID != "studio-indigo" || updated.Public.SEOTitle != "HIMA Studio - AI 影视工作台" || updated.Public.SEOKeywords != "AI 影视,短剧,画布" || !updated.Public.ICPFilingEnabled || updated.Public.ICPFilingNumber != "蜀ICP备2026000000号-1" {
+	if !updated.Configured || updated.BrandName != "HIMA Studio" || updated.BrandSlug != "hima-studio" || updated.Public.BrandSlug != "hima-studio" || updated.AuthHeroTitle != "把灵感，\n变成可见的故事。" || updated.Public.AuthHeroDescription != "从画布开始，持续推进你的创作。" || !updated.Public.LogoConfigured || !updated.Public.DarkLogoConfigured || updated.Public.LogoFrameEnabled || !updated.Public.AuthVideoConfigured || !updated.Public.AuthVideoPosterConfigured || updated.Public.AuthVideoAutoplay || updated.Public.SkinID != "studio-indigo" || updated.Public.SEOTitle != "HIMA Studio - AI 影视工作台" || updated.Public.SEOKeywords != "AI 影视,短剧,画布" || !updated.Public.ICPFilingEnabled || updated.Public.ICPFilingNumber != "蜀ICP备2026000000号-1" {
 		t.Fatalf("UpdateAppearance() = %#v", updated)
 	}
 	for _, assetURL := range []string{updated.Public.LogoURL, updated.Public.DarkLogoURL, updated.Public.AuthVideoURL, updated.Public.AuthVideoPosterURL} {
@@ -173,7 +175,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 }
 
 func TestAppearanceReusesSingleLogoAcrossThemes(t *testing.T) {
-	svc, db, _, admin := newAppearanceTestService(t)
+	svc, db, dataDir, admin := newAppearanceTestService(t)
 	resources := []model.Resource{
 		{ID: "only-light", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/light.png", MimeType: "image/png"},
 		{ID: "only-dark", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/dark.png", MimeType: "image/png"},
@@ -181,6 +183,7 @@ func TestAppearanceReusesSingleLogoAcrossThemes(t *testing.T) {
 	if err := db.Create(&resources).Error; err != nil {
 		t.Fatal(err)
 	}
+	writeAppearanceResourceFixtures(t, dataDir, resources)
 
 	lightOnly, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, LogoResourceID: "only-light", LogoFrameEnabled: true, SkinID: defaultAppearanceSkinID})
 	if err != nil {
@@ -278,6 +281,89 @@ func TestOpenAppearanceAssetOnlyServesConfiguredSlot(t *testing.T) {
 	}
 	if _, err := svc.OpenAppearanceAsset(AppearanceAssetVideo, ""); err == nil {
 		t.Fatal("unconfigured video slot unexpectedly served a resource")
+	}
+}
+
+func TestAppearanceFallsBackWhenConfiguredLogoResourceIsMissing(t *testing.T) {
+	svc, db, _, admin := newAppearanceTestService(t)
+	value := defaultAppearanceSetting()
+	value.BrandName = "HIMA Studio"
+	value.BrandSlug = "hima-studio"
+	value.LogoResourceID = "missing-logo"
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(encoded)}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	appearance, err := svc.Appearance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appearance.LogoConfigured || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL {
+		t.Fatalf("missing logo public appearance = %#v", appearance)
+	}
+	adminAppearance, err := svc.AdminAppearance(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adminAppearance.LogoResourceID != "" || adminAppearance.Public.LogoConfigured {
+		t.Fatalf("missing logo admin appearance = %#v", adminAppearance)
+	}
+}
+
+func TestAppearanceFallsBackWhenLocalLogoFileIsMissing(t *testing.T) {
+	svc, db, _, _ := newAppearanceTestService(t)
+	resource := model.Resource{ID: "missing-local-logo", UserID: "appearance-admin", Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/missing.png", MimeType: "image/png"}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	value := defaultAppearanceSetting()
+	value.LogoResourceID = resource.ID
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(encoded)}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	appearance, err := svc.Appearance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appearance.LogoConfigured || appearance.LogoURL != defaultAppearanceLogoURL {
+		t.Fatalf("missing local logo public appearance = %#v", appearance)
+	}
+}
+
+func TestUploadAppearanceLogoAlwaysUsesServerLocalStorage(t *testing.T) {
+	svc, db, dataDir, admin := newAppearanceTestService(t)
+	requests := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests <- struct{}{}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	seedOSSEnabled(t, db, admin.ID, server.URL)
+	pngBytes := append([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, bytes.Repeat([]byte{0}, 32)...)
+
+	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo} {
+		resource, err := svc.UploadAppearanceAsset(admin, slot, multipartFileHeader(t, slot+".png", "image/png", pngBytes))
+		if err != nil {
+			t.Fatalf("UploadAppearanceAsset(%s): %v", slot, err)
+		}
+		if resource.Provider != "local" || resource.Endpoint != "" || resource.Bucket != "" || resource.StorageSettingID != "" {
+			t.Fatalf("UploadAppearanceAsset(%s) storage = %#v", slot, resource)
+		}
+		if _, err := os.Stat(filepath.Join(dataDir, "resources", filepath.FromSlash(resource.ObjectKey))); err != nil {
+			t.Fatalf("UploadAppearanceAsset(%s) local file: %v", slot, err)
+		}
+	}
+	if len(requests) != 0 {
+		t.Fatalf("logo upload unexpectedly contacted object storage %d time(s)", len(requests))
 	}
 }
 
@@ -413,6 +499,22 @@ func multipartFileHeader(t *testing.T, name string, contentType string, data []b
 		t.Fatal(err)
 	}
 	return req.MultipartForm.File["file"][0]
+}
+
+func writeAppearanceResourceFixtures(t *testing.T, dataDir string, resources []model.Resource) {
+	t.Helper()
+	for _, resource := range resources {
+		if resource.Provider != "local" {
+			continue
+		}
+		filePath := filepath.Join(dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filePath, []byte(resource.ID), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func newAppearanceTestService(t *testing.T) (*Service, *gorm.DB, string, *model.User) {

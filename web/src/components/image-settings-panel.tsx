@@ -1,7 +1,8 @@
 import { ImageSizePicker } from "./image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { type ReactNode } from "react";
-import { ConfigProvider, Switch } from "antd";
+import { ConfigProvider } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize } from "@/lib/image-resolution-tiers";
@@ -93,7 +94,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                     <span title="是否支持透明背景由当前模型接口决定" onMouseDown={(event) => event.stopPropagation()}>
                         <Switch
-                            size="small"
+                            size="sm"
                             checked={transparentBackground}
                             onChange={(checked) => onConfigChange("transparentBackground", checked ? "true" : "false")}
                         />

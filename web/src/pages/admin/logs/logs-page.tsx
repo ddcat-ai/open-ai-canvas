@@ -1,4 +1,5 @@
 import { App, Button, Input, Modal, Select } from "antd";
+import { IconButton } from "@/components/ui/base/buttons";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Play, Search } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -294,7 +295,7 @@ function MediaResult({ log, onPreview }: { log: ApiCallLog; onPreview: (url: str
                 ) : null}
                 {!previewUnavailable && log.mediaCount > 1 ? <span className="absolute bottom-0.5 right-0.5 rounded-sm bg-black/65 px-1 text-[var(--fs-micro)] leading-4 text-white">{log.mediaCount}</span> : null}
             </button>
-            <Button type="text" size="small" className="!size-7 !min-w-7 !p-0" icon={<Download className="size-3.5" />} onClick={() => downloadMedia(url, kind)} title="下载原文件" aria-label="下载原文件" />
+            <IconButton size="sm" variant="ghost" icon={Download} onClick={() => downloadMedia(url, kind)} title="下载原文件" aria-label="下载原文件" />
         </div>
     );
 }

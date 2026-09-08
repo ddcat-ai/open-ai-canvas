@@ -1,5 +1,7 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
-import { Alert, App, Button, DatePicker, Drawer, Form, Input, InputNumber, Select, Switch, Tabs } from "antd";
+import { Callout } from "@/components/ui/product/callout";
+import { App, Button, DatePicker, Drawer, Form, Input, InputNumber, Select, Tabs } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
@@ -497,7 +499,9 @@ export default function AdminPaymentsPage() {
             }
             scroll
         >
-            <Alert className="my-4" type="info" showIcon message="平台不提供支付退款" description="管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。" />
+            <Callout className="my-4" tone="info" title="平台不提供支付退款">
+                管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。
+            </Callout>
             <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -610,11 +614,10 @@ export default function AdminPaymentsPage() {
             >
                 {providerDrawer ? (
                     <Form form={providerForm} layout="vertical" requiredMark="optional">
-                        <Alert
+                        <Callout
                             className="mb-4"
-                            type={providerDrawer.pluginEnabled ? "info" : "warning"}
-                            showIcon
-                            message={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该宿主插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"}
+                            tone={providerDrawer.pluginEnabled ? "info" : "warning"}
+                            title={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该宿主插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"}
                         />
                         <Form.Item name="enabled" label="渠道配置启用" valuePropName="checked">
                             <Switch />
@@ -703,7 +706,11 @@ export default function AdminPaymentsPage() {
                     setDetailItems([]);
                 }}
             >
-                {detailRun?.error ? <Alert className="mb-4" type="error" showIcon message="对账执行失败" description={detailRun.error} /> : null}
+                {detailRun?.error ? (
+                    <Callout className="mb-4" tone="error" title="对账执行失败">
+                        {detailRun.error}
+                    </Callout>
+                ) : null}
                 <AdminDataTable
                     toolbar={
                         <Select

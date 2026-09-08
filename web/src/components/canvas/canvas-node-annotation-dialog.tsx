@@ -1,5 +1,7 @@
+import { Button, Modal, Slider } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Button, Modal, Slider, Tooltip } from "antd";
+
 import { Brush, Eraser, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
 
 import { imageToDataUrl } from "@/services/image-storage";

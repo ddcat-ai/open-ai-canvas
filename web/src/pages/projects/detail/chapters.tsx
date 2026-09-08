@@ -1,7 +1,10 @@
+import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Popconfirm } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Alert, App, Button, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Tooltip } from "antd";
+
+import { Callout } from "@/components/ui/product/callout";
 import CharacterCount from "@tiptap/extension-character-count";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
@@ -630,7 +633,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                         <div className="mt-1 truncate text-sm font-medium text-foreground/85">{selectedUnit?.title}</div>
                         <div className="mt-1 text-[var(--fs-tiny)] text-foreground/38">正文将作为分镜依据，生成结果会直接写入“分镜制作”。</div>
                     </div>
-                    {storyboardImpact.shotCount ? <Alert type="warning" showIcon message={`本章已有 ${storyboardImpact.shotCount} 个分镜`} description="继续后会先生成新分镜；生成成功后，再按确认内容整体替换旧镜头及其关联数据。" /> : null}
+                    {storyboardImpact.shotCount ? <Callout tone="warning" title={`本章已有 ${storyboardImpact.shotCount} 个分镜`}>继续后会先生成新分镜；生成成功后，再按确认内容整体替换旧镜头及其关联数据。</Callout> : null}
                     <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-foreground/68">文本模型</span>
                         <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} fullWidth placeholder="选择用于生成分镜的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />

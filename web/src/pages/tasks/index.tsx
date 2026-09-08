@@ -1,4 +1,6 @@
-import { App, Button, Drawer, Form, Input, Modal, Select, Switch, Tooltip, Typography } from "antd";
+import { App, Button, Drawer, Form, Input, Modal, Select, Typography } from "antd";
+import { Switch } from "@/components/ui/base/switch";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -436,17 +438,21 @@ export default function TasksPage() {
                             <div className="flex flex-wrap items-center gap-2.5">
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
-                                        <Switch size="small" checked={groupEnabled} onChange={changeGroupEnabled} />
+                                        <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
                                         <span>按画布分组</span>
                                     </label>
                                 ) : null}
-                                <div className="task-view-switch" role="group" aria-label="任务视图">
-                                    <Tooltip title="列表视图">
-                                        <Button type={viewMode === "list" ? "primary" : "text"} size="small" aria-label="列表视图" aria-pressed={viewMode === "list"} icon={<List className="size-3.5" />} onClick={() => changeViewMode("list")} />
-                                    </Tooltip>
-                                    <Tooltip title="网格视图">
-                                        <Button type={viewMode === "grid" ? "primary" : "text"} size="small" aria-label="网格视图" aria-pressed={viewMode === "grid"} icon={<LayoutGrid className="size-3.5" />} onClick={() => changeViewMode("grid")} />
-                                    </Tooltip>
+                                <div className="task-view-switch">
+                                    <SegmentedControl<TaskViewMode>
+                                        ariaLabel="任务视图"
+                                        size="sm"
+                                        value={viewMode}
+                                        options={[
+                                            { value: "list", icon: <List className="size-3.5" />, title: "列表视图" },
+                                            { value: "grid", icon: <LayoutGrid className="size-3.5" />, title: "网格视图" },
+                                        ]}
+                                        onChange={changeViewMode}
+                                    />
                                 </div>
                             </div>
                         )}

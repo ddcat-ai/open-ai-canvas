@@ -1,4 +1,6 @@
-import { App, Button, Dropdown, Input, Select, Tooltip } from "antd";
+import { App, Button, Dropdown, Input, Select } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
+
 import { Boxes, Check, Clapperboard, Heart, Library, LoaderCircle, Megaphone, MoreHorizontal, Palette, Plus, Puzzle, Search, ShoppingBag, Sparkles, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";

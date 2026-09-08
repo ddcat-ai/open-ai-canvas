@@ -4,7 +4,7 @@ import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -14,6 +14,7 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     logoFrameEnabled: true,
     authVideoUrl: "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4",
     authVideoPosterUrl: "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg",
+    authVideoAutoplay: true,
     skinId: "classic",
     activeSkin: DEFAULT_CLASSIC_SKIN,
     seoTitle: "影策",
@@ -59,7 +60,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
-        schemaVersion: 6,
+        schemaVersion: 7,
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -69,6 +70,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         logoFrameEnabled: value?.logoFrameEnabled !== false,
         authVideoUrl: safeAppearanceURL(value?.authVideoUrl, DEFAULT_PUBLIC_APPEARANCE.authVideoUrl),
         authVideoPosterUrl: safeAppearanceURL(value?.authVideoPosterUrl, customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl),
+        authVideoAutoplay: value?.authVideoAutoplay !== false,
         skinId: normalizeSkinDefinition(value?.activeSkin).id,
         activeSkin: normalizeSkinDefinition(value?.activeSkin),
         seoTitle,
