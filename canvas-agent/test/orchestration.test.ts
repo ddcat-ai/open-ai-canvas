@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { canvasSkills } from "../src/canvas-skills.js";
 import { assertCanvasSkill, buildSceneCanvasOps, buildScriptToScenesPlan, executeCanvasOpsPlan, nextRunnableTasks, planRequiresApproval, prepareSceneCanvasPlan, runScriptToScenes, taskNeedsApproval, type CanvasPlan } from "../src/orchestration.js";
 
 test("canvas skills reject non-canvas tools", () => {
     assert.throws(() => assertCanvasSkill({ name: "x", version: "1", description: "", allowedTools: ["terminal"], risk: "read" }), /canvas_/);
+});
+
+test("built-in canvas skills stay within the canvas tool boundary", () => {
+    assert.ok(canvasSkills.length >= 3);
+    assert.ok(canvasSkills.every((skill) => skill.allowedTools.every((tool) => tool.startsWith("canvas_"))));
 });
 
 test("generation skills must declare a generation tool", () => {

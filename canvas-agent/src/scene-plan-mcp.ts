@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { assertCanvasVersion, executeCanvasOpsPlan, plannedScenesSchema, prepareSceneCanvasPlan, validatePreparedPlan, type CanvasPlanClient, type PreparedCanvasPlan } from "./orchestration.js";
+import { canvasSkills, getCanvasSkill, serializeCanvasSkill } from "./canvas-skills.js";
 
 type PlanClient = CanvasPlanClient & { requireSelection(): { projectId: string }; readonly serverUrl: string };
 type Entry = { prepared: PreparedCanvasPlan; serverUrl: string; expiresAt: number; status: "waiting_approval" | "running" | "applied" | "unknown"; result?: unknown };
@@ -20,6 +21,13 @@ export function registerScenePlanTools(server: McpServer, client: PlanClient) {
         try { return { content: [{ type: "text" as const, text: JSON.stringify(await run()) }] }; }
         catch (error) { return { isError: true, content: [{ type: "text" as const, text: error instanceof Error ? error.message : "场景计划操作失败" }] }; }
     };
+
+    server.registerTool("canvas_list_skills", { description: "列出当前画布 Agent 支持的画布专用 Skill；不会返回通用外部工具。", inputSchema: {}, annotations: { readOnlyHint: true, openWorldHint: false } }, async () => respond(async () => canvasSkills.map(serializeCanvasSkill)));
+    server.registerTool("canvas_get_skill", { description: "读取一个画布专用 Skill 的输入、输出和工具权限合同。", inputSchema: { name: z.string().trim().min(1) }, annotations: { readOnlyHint: true, openWorldHint: false } }, async ({ name }) => respond(async () => {
+        const skill = getCanvasSkill(name);
+        if (!skill) throw new Error(`未找到画布 Skill：${name}`);
+        return serializeCanvasSkill(skill);
+    }));
 
     server.registerTool("canvas_prepare_scene_plan", {
         description: "将宿主分析出的场景列表保存为执行计划，仅校验和预览，不写画布。先读取真实剧本正文；必须携带分析所依据的 revision/stateHash。预览包含完整操作，申请宿主批准后使用 canvas_apply_scene_plan；不重新分析已批准内容。",

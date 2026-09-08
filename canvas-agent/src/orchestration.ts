@@ -40,12 +40,12 @@ export type CanvasPlan = {
     status: "planning" | "waiting_approval" | "running" | "succeeded" | "failed" | "cancelled";
 };
 
-const canvasTools = new Set<string>(toolNames.filter((name) => name.startsWith("canvas_")));
+const canvasTools = new Set<string>([...toolNames.filter((name) => name.startsWith("canvas_")), "canvas_prepare_scene_plan", "canvas_apply_scene_plan"]);
 
 export function assertCanvasSkill(skill: CanvasSkillDefinition): void {
     if (!skill.name.trim() || !skill.version.trim()) throw new Error("画布 Skill 必须包含 name 和 version");
     if (skill.allowedTools.some((tool) => !canvasTools.has(tool))) throw new Error("画布 Skill 只能使用已注册的 canvas_ 工具");
-    if (skill.allowGeneration && !skill.allowedTools.some((tool) => tool.startsWith("canvas_generate_") || tool === "canvas_run_generation")) {
+    if (skill.allowGeneration && !skill.allowedTools.some((tool) => tool.startsWith("canvas_generate_") || tool === "canvas_run_generation" || tool === "canvas_create_image_prompt_flow" || tool === "canvas_create_generation_flow")) {
         throw new Error("允许媒体生成的 Skill 必须声明生成工具");
     }
 }
