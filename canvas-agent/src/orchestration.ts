@@ -73,3 +73,25 @@ export function buildScriptToScenesPlan(input: { planId: string; scriptNodeId: s
     }
     return { id: input.planId, title: "根据剧本拆分场景", skill: { name: "script-to-scenes", version: "1" }, tasks, status: "planning" };
 }
+
+export type PlannedScene = { title: string; content: string; x?: number; y?: number };
+
+export function buildSceneCanvasOps(planId: string, scenes: PlannedScene[]): Array<Record<string, unknown>> {
+    if (!planId.trim()) throw new Error("场景操作计划必须包含 planId");
+    if (!scenes.length || scenes.length > 100) throw new Error("场景数量必须是 1 到 100");
+    const seen = new Set<string>();
+    const ops: Array<Record<string, unknown>> = [];
+    const ids: string[] = [];
+    scenes.forEach((scene, index) => {
+        const title = scene.title.trim(), content = scene.content.trim();
+        if (!title || !content) throw new Error("场景标题和内容不能为空");
+        if (seen.has(title)) throw new Error(`场景标题重复：${title}`);
+        seen.add(title);
+        const id = `${planId}:scene:${index + 1}`;
+        ids.push(id);
+        ops.push({ type: "add_node", id, nodeType: "text", title, position: { x: scene.x ?? index * 460, y: scene.y ?? 0 }, metadata: { content, status: "success", agentPlanId: planId } });
+    });
+    for (let index = 1; index < ids.length; index += 1) ops.push({ type: "connect_nodes", fromNodeId: ids[index - 1], toNodeId: ids[index] });
+    ops.push({ type: "select_nodes", ids });
+    return ops;
+}
