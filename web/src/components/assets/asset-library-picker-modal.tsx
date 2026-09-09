@@ -12,12 +12,20 @@ import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { deleteAssetWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 
+export type AssetPickerMediaKind = "image" | "video" | "audio" | "text";
+
+export const ASSET_PICKER_MEDIA_KIND_LABELS: Record<AssetPickerMediaKind, string> = { image: "图片", video: "视频", audio: "音频", text: "文本" };
+
+const DEFAULT_MEDIA_KINDS: AssetPickerMediaKind[] = ["image", "video", "audio"];
+
 export type AssetLibraryPickerItem = {
     id: string;
     title: string;
     category: string;
     archived?: boolean;
     kindLabel: string;
+    /** 媒体类型筛选依据；缺省时按本地素材或插件素材的 kind 推断。 */
+    mediaKind?: AssetPickerMediaKind;
     asset?: Asset;
     imageUrl?: string;
     imageStorageKey?: string;
@@ -97,6 +105,7 @@ export function AssetLibraryPickerModal({
 }: Props) {
     const { message } = App.useApp();
     const [category, setCategory] = useState(initialCategory);
+    const [mediaKind, setMediaKind] = useState<AssetPickerMediaKind | "all">("all");
     const [folderId, setFolderId] = useState(initialFolderId);
     const [source, setSource] = useState<"local" | "plugin">("local");
     const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
@@ -121,6 +130,7 @@ export function AssetLibraryPickerModal({
     const sourceItems = source === "plugin" ? pluginItems : localItems;
     const activeSourceItems = useMemo(() => sourceItems.filter((item) => !item.archived), [sourceItems]);
     const archivedItems = useMemo(() => sourceItems.filter((item) => item.archived), [sourceItems]);
+    const mediaKindOptions = useMemo(() => (remoteKind ? [] : Array.from(new Set(mediaKinds))), [mediaKinds, remoteKind]);
     const sourceFolders = source === "plugin" ? folders : [];
     const showCategories = source === "local" || !sourceFolders.length;
     const normalCategories = useMemo(() => ["all", ...Array.from(new Set(activeSourceItems.map((item) => item.category || "other"))).filter((value) => value !== "all")], [activeSourceItems]);
@@ -154,6 +164,7 @@ export function AssetLibraryPickerModal({
 
         setFolderId(initialFolderId);
         setCategory(initialCategory);
+        setMediaKind("all");
         setSource("local");
         setKeyword("");
         setUploadedItems([]);
@@ -173,6 +184,11 @@ export function AssetLibraryPickerModal({
         if (hasPluginSource || source === "local") return;
         setSource("local");
     }, [hasPluginSource, source]);
+
+    useEffect(() => {
+        if (mediaKind === "all" || mediaKindOptions.includes(mediaKind)) return;
+        setMediaKind("all");
+    }, [mediaKind, mediaKindOptions]);
 
     const selectSource = (nextSource: "local" | "plugin") => {
         if (nextSource === "plugin" && !hasPluginSource) return;
@@ -326,6 +342,7 @@ export function AssetLibraryPickerModal({
 
     return (
         <Modal
+            centered
             open={open}
             footer={null}
             title={null}
@@ -375,6 +392,16 @@ export function AssetLibraryPickerModal({
                 </header>
                 <div className="asset-picker-body">
                     <nav className="asset-picker-categories" aria-label="素材分类">
+                        {mediaKindOptions.length > 1 && !isRecycleBin ? (
+                            <>
+                                <span className="asset-picker-nav-label">媒体类型</span>
+                                {(["all", ...mediaKindOptions] as const).map((value) => (
+                                    <button key={value} type="button" className={cn("assets-filter-item", mediaKind === value && "is-active")} aria-pressed={mediaKind === value} onClick={() => setMediaKind(value)}>
+                                        <span className="assets-filter-item-label">{value === "all" ? "全部类型" : ASSET_PICKER_MEDIA_KIND_LABELS[value]}</span>
+                                    </button>
+                                ))}
+                            </>
+                        ) : null}
                         {sourceFolders.length ? (
                             <>
                                 <span className="asset-picker-nav-label">文件夹</span>
@@ -496,6 +523,13 @@ export function AssetLibraryPickerModal({
             </div>
         </Modal>
     );
+}
+
+// 角色卡、3D 模型等非媒体条目没有媒体类型，媒体筛选生效时不参与匹配。
+export function pickerItemMediaKind(item: AssetLibraryPickerItem): AssetPickerMediaKind | undefined {
+    if (item.mediaKind) return item.mediaKind;
+    const kind = item.external?.item.kind || item.asset?.kind;
+    return kind === "image" || kind === "video" || kind === "audio" || kind === "text" ? kind : undefined;
 }
 
 function PickerCard({ item, selected, onToggle }: { item: AssetLibraryPickerItem; selected: boolean; onToggle: () => void }) {

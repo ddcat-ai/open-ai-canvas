@@ -103,11 +103,12 @@ type AnalyticsFailureRow struct {
 
 type APICallLogQuery struct {
 	AnalyticsQuery
-	Keyword string
-	Status  string
-	IDs     []string
-	Page    int
-	Limit   int
+	RecordType string
+	Keyword    string
+	Status     string
+	IDs        []string
+	Page       int
+	Limit      int
 }
 
 type APICallLogPage struct {
@@ -189,8 +190,11 @@ func (s *Service) AdminAPICallLogs(actor *model.User, query APICallLogQuery) (*A
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if query.RecordType != "" && query.RecordType != "request" && query.RecordType != "download" && query.RecordType != "all" {
+		return nil, BadAuthRequest("请求明细类型无效")
+	}
 	filter := normalizeAnalyticsFilter(query.AnalyticsQuery)
-	logs, total, err := s.repo.QueryAPICallLogs(repository.APICallLogFilter{AnalyticsFilter: filter, Keyword: query.Keyword, Status: query.Status, Page: query.Page, Limit: query.Limit})
+	logs, total, err := s.repo.QueryAPICallLogs(repository.APICallLogFilter{AnalyticsFilter: filter, RecordType: query.RecordType, Keyword: query.Keyword, Status: query.Status, Page: query.Page, Limit: query.Limit})
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +382,9 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if query.RecordType != "" && query.RecordType != "request" && query.RecordType != "download" && query.RecordType != "all" {
+		return nil, BadAuthRequest("请求明细类型无效")
+	}
 	filter := normalizeAnalyticsFilter(query.AnalyticsQuery)
 	ids := uniqueNonEmpty(query.IDs)
 	if len(query.IDs) > 0 && len(ids) == 0 {
@@ -386,7 +393,7 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	if len(ids) > 200 {
 		return nil, BadAuthRequest("单次最多导出 200 条已选请求明细")
 	}
-	logs, err := s.repo.ExportAPICallLogs(repository.APICallLogFilter{AnalyticsFilter: filter, Keyword: query.Keyword, Status: query.Status, IDs: ids}, 10_000)
+	logs, err := s.repo.ExportAPICallLogs(repository.APICallLogFilter{AnalyticsFilter: filter, RecordType: query.RecordType, Keyword: query.Keyword, Status: query.Status, IDs: ids}, 10_000)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,7 +1007,11 @@ func (s *Service) enrichAPICallLogFailureSummary(log *model.ApiCallLog, response
 }
 
 func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[string]any) {
+	nestedTaskID := ""
 	if data, ok := payload["data"].(map[string]any); ok {
+		if log.Capability == "video" && strings.Contains(log.Path, "/v1/video/generations") {
+			nestedTaskID = firstNonEmpty(stringField(data, "task_id"), stringField(data, "taskId"))
+		}
 		for key, value := range data {
 			if _, exists := payload[key]; !exists {
 				payload[key] = value
@@ -1064,7 +1075,7 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		}
 		log.CachedTokens = firstInt64(usageMetadata, "cachedContentTokenCount")
 	}
-	log.ProviderRequestID = firstNonEmpty(stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
+	log.ProviderRequestID = firstNonEmpty(nestedTaskID, stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
 	log.ProviderStatus = strings.ToLower(firstNonEmpty(stringField(payload, "status"), log.ProviderStatus))
 	if log.ProviderStatus == "failed" || log.ProviderStatus == "cancelled" || log.ProviderStatus == "expired" {
 		log.Status = model.ApiCallStatusFailed

@@ -65,6 +65,41 @@ func TestMatchCapabilityTreatsVideoResolutionSuffixAsEquivalent(t *testing.T) {
 	}
 }
 
+func TestVideoResolutionAliasesAcrossProductAndPricedRoutes(t *testing.T) {
+	product := CapabilitySpec{
+		Version: 1, Capability: "video",
+		Options: map[string]OptionConstraint{"vquality": {Values: []any{"768P", "2K"}}},
+	}
+	route := capabilitySpecWithPriceTiers(product, model.ChannelModel{
+		PriceTiers: []model.ChannelModelPriceTier{
+			{Resolution: "768P", Enabled: true, PriceConfigured: true},
+			{Resolution: "2K", Enabled: true, PriceConfigured: true},
+		},
+	})
+	if err := validateProductSpecWithinRoutes(product, []CapabilitySpec{route}); err != nil {
+		t.Fatalf("2K product rejected against priced route: %v", err)
+	}
+	for _, resolution := range []string{"2K", "2k", "1440P", "1440"} {
+		intent := ModelRequestIntent{Capability: "video", Options: map[string]any{
+			"vquality": normalizeModelRequestOption("vquality", resolution),
+		}}
+		for name, spec := range map[string]CapabilitySpec{"product": product, "route": route} {
+			if match := MatchCapability(spec, intent); !match.Matched {
+				t.Errorf("%s rejected %s: %#v", name, resolution, match)
+			}
+		}
+	}
+	unsupported := CapabilitySpec{Version: 1, Capability: "video", Options: map[string]OptionConstraint{
+		"vquality": {Values: []any{"4K"}},
+	}}
+	if err := validateProductSpecWithinRoutes(unsupported, []CapabilitySpec{route}); err == nil {
+		t.Fatal("2K route accepted unsupported 4K product")
+	}
+	if capabilityOptionValuesEqual("quality", "2K", "1440p") {
+		t.Fatal("video aliases must not affect image quality")
+	}
+}
+
 func TestValidateProductSpecWithinRoutesRejectsUnsupportedCapabilityValue(t *testing.T) {
 	routes := []CapabilitySpec{
 		{

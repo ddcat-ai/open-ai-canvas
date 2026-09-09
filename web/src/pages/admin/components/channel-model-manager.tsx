@@ -1,39 +1,24 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space, Switch, type FormInstance } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { FlaskConical, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
-import { ModelIconPicker } from "@/components/model-logo";
 import { ModelIcon } from "@/components/model-picker";
-import { ModelCapabilityEditor } from "@/components/model-capability-editor";
-import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } from "@/components/model-protocol-picker";
-import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
-import { modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
+import { modelProtocolDefinition, modelProtocolLabel, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
+import { deleteAdminChannelModel, deleteAdminChannelModels, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
-import { defaultPriceTier, legacyPriceTierToForm, priceTierResolutionFromForm, priceTierToForm, priceTierVideoSecondsFromForm, skuSelectorFromForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
+import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminPageFrame } from "./admin-shell";
-import { AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
-
-type EditableCapability = ModelCapabilityChoice;
-
-type FormValues = {
-    modelKey: string;
-    providerModelKey?: string;
-    displayName?: string;
-    icon?: string;
-    capability: EditableCapability;
-    protocol?: ModelProtocol;
-    priceTiers: PriceTierFormValues[];
-    enabled: boolean;
-    capabilityConfig?: ModelCapabilityConfig;
-};
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
+import { ChannelOrderDialog } from "./channel-order-dialog";
 
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [items, setItems] = useState<ChannelModel[]>([]);
+    const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+    const [deletingSelected, setDeletingSelected] = useState(false);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
@@ -41,8 +26,6 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [fetchPreviewModels, setFetchPreviewModels] = useState<string[]>([]);
     const [selectedFetchModels, setSelectedFetchModels] = useState<string[]>([]);
     const [importing, setImporting] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [testing, setTesting] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
     const [capability, setCapability] = useState<ChannelModel["capability"] | "all">("all");
@@ -50,21 +33,28 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [availableProtocols, setAvailableProtocols] = useState<import("@/lib/model-protocols").ModelProtocolDefinition[]>([]);
-    const [form] = Form.useForm<FormValues>();
-    const modelCapability = Form.useWatch("capability", form);
-    const modelProtocol = Form.useWatch("protocol", form);
-    const modelKey = Form.useWatch("modelKey", form) || "";
-    const providerModelKey = Form.useWatch("providerModelKey", form) || "";
-    const capabilityConfig = Form.useWatch("capabilityConfig", form);
-    const modelEnabled = Form.useWatch("enabled", form) !== false;
-    const priceTiers = Form.useWatch("priceTiers", form) || [];
-    const hasDefaultPriceTier = priceTiers.some((tier) => tier.matchMode === "default");
-
+    const [protocolLoading, setProtocolLoading] = useState(true);
+    const [protocolError, setProtocolError] = useState("");
+    const loadProtocols = async () => {
+        setProtocolLoading(true);
+        setProtocolError("");
+        try {
+            setAvailableProtocols(await fetchPluginProviderCatalog("admin.system-channel"));
+        } catch (error) {
+            setAvailableProtocols([]);
+            setProtocolError(error instanceof Error ? error.message : "无法读取协议目录");
+        } finally {
+            setProtocolLoading(false);
+        }
+    };
     const reload = async () => {
         if (!channel) return;
         setLoading(true);
         try {
-            setItems((await listAdminChannelModels(channel.id)).models);
+            const models = (await listAdminChannelModels(channel.id)).models;
+            const availableIDs = new Set(models.map((item) => item.id));
+            setItems(models);
+            setSelectedModelIds((current) => current.filter((id) => availableIDs.has(id)));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取渠道模型失败");
         } finally {
@@ -74,11 +64,10 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     useEffect(() => {
         void reload();
-        void fetchPluginProviderCatalog("admin.system-channel")
-            .then(setAvailableProtocols)
-            .catch(() => setAvailableProtocols([]));
+        void loadProtocols();
         setEditing(null);
         setEditorOpen(false);
+        setSelectedModelIds([]);
         resetFetchPreview();
         setKeyword("");
         setCapability("all");
@@ -139,103 +128,11 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const startCreate = () => {
         setEditing(null);
-        form.setFieldsValue({
-            modelKey: "",
-            providerModelKey: "",
-            displayName: "",
-            icon: "",
-            capability: "text",
-            protocol: availableProtocols.find((item) => item.capability === "text")?.value,
-            priceTiers: [defaultPriceTier()],
-            enabled: true,
-            capabilityConfig: defaultModelCapabilityConfig(availableProtocols.find((item) => item.capability === "text")?.value, ""),
-        });
         setEditorOpen(true);
     };
-
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
-        form.setFieldsValue({
-            modelKey: item.modelKey,
-            providerModelKey: item.providerModelKey || item.modelKey,
-            displayName: item.displayName,
-            icon: item.icon,
-            capability: item.capability || undefined,
-            protocol: item.protocol,
-            priceTiers: item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)],
-            enabled: item.enabled,
-            capabilityConfig:
-                item.capability === "text" || item.capability === "image" || item.capability === "video"
-                    ? normalizeModelCapabilityConfig(item.capabilityConfig || defaultModelCapabilityConfig(item.protocol, item.providerModelKey || item.modelKey))
-                    : undefined,
-        });
         setEditorOpen(true);
-    };
-
-    const save = async () => {
-        const values = await form.validateFields();
-        const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
-        const capabilityConfig =
-            values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
-        setSaving(true);
-        try {
-            const payload = {
-                modelKey: values.modelKey.trim(),
-                providerModelKey: upstreamModel,
-                displayName: values.displayName?.trim() || values.modelKey.trim(),
-                icon: values.icon?.trim() || "",
-                capability: values.capability,
-                protocol: values.protocol,
-                priceTiers: values.priceTiers.map((tier) => ({
-                    selector: skuSelectorFromForm(values.capability, tier),
-                    resolution: priceTierResolutionFromForm(values.capability, tier),
-                    videoSeconds: priceTierVideoSecondsFromForm(values.capability, tier),
-                    providerModelKey: tier.providerModelKey?.trim() || upstreamModel,
-                    billingMode: tier.billingMode,
-                    unitPriceMicrocredits: Math.round((tier.unitPrice || 0) * 1_000_000),
-                    inputTokenPriceMicrocredits: Math.round((tier.inputTokenPrice || 0) * 1_000_000),
-                    outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
-                    cachedTokenPriceMicrocredits: Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
-                    priceConfigured: tier.priceConfigured !== false,
-                    enabled: tier.enabled !== false,
-                })),
-                enabled: values.enabled !== false,
-                capabilityConfig,
-            };
-            if (editing) await updateAdminChannelModel(channel.id, editing.id, payload);
-            else await createAdminChannelModel(channel.id, payload);
-            await reload();
-            await onChanged();
-            setEditorOpen(false);
-            setEditing(null);
-            message.success(editing ? "模型配置已更新" : "模型已添加");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存模型失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const testModel = async () => {
-        const values = await form.validateFields(["modelKey", "providerModelKey", "capability", "protocol", ...(modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? ["capabilityConfig"] : [])]);
-        const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
-        const capabilityConfig =
-            values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
-        setTesting(true);
-        try {
-            const result = await testAdminChannelModel(channel.id, {
-                modelKey: values.modelKey.trim(),
-                providerModelKey: upstreamModel,
-                capability: values.capability,
-                protocol: values.protocol,
-                capabilityConfig,
-            });
-            message.success(`模型测试通过，耗时 ${(result.durationMs / 1000).toFixed(2)} 秒`);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "模型测试失败");
-        } finally {
-            setTesting(false);
-        }
     };
 
     const remove = async (item: ChannelModel) => {
@@ -249,30 +146,32 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         }
     };
 
-    const handleFormValuesChange = (changed: Partial<FormValues>) => {
-        if (changed.protocol && (modelCapability === "image" || modelCapability === "video")) {
-            form.setFieldValue("capabilityConfig", defaultModelCapabilityConfig(changed.protocol, form.getFieldValue("modelKey")));
-        }
-        if (!changed.capability) return;
-        const current = form.getFieldValue("protocol") as ModelProtocol | undefined;
-        if (modelProtocolCapability(current, availableProtocols) !== changed.capability) {
-            const nextProtocol = availableProtocols.find((item) => item.capability === changed.capability)?.value;
-            form.setFieldValue("protocol", nextProtocol);
-            form.setFieldValue("capabilityConfig", changed.capability === "text" || changed.capability === "image" || changed.capability === "video" ? defaultModelCapabilityConfig(nextProtocol, form.getFieldValue("modelKey")) : undefined);
-        }
-        const nextTiers = (form.getFieldValue("priceTiers") || []).map((tier: PriceTierFormValues) => ({
-            ...tier,
-            operation: tier.operation || "*",
-            quality: changed.capability === "image" ? tier.quality || "*" : "*",
-            size: changed.capability === "image" ? tier.size || "*" : "*",
-            resolution: changed.capability === "video" ? tier.resolution || "*" : "*",
-            videoSeconds: changed.capability === "video" ? tier.videoSeconds || 0 : 0,
-            imageCount: changed.capability === "video" ? tier.imageCount || 0 : 0,
-            billingMode: tier.billingMode === "per_second" && changed.capability !== "video" ? "fixed_request" : tier.billingMode,
-        }));
-        form.setFieldValue("priceTiers", nextTiers);
+    const confirmBatchRemove = () => {
+        if (!selectedModelIds.length) return;
+        const count = selectedModelIds.length;
+        modal.confirm({
+            title: `删除已选的 ${count} 个模型？`,
+            content: "删除后模型不再显示，且不能在页面恢复。只要其中任一模型仍被前台供应线路或进行中任务使用，本次就不会删除任何模型。",
+            okText: "批量删除",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                setDeletingSelected(true);
+                try {
+                    const result = await deleteAdminChannelModels(channel.id, selectedModelIds);
+                    setSelectedModelIds([]);
+                    setPage(1);
+                    await reload();
+                    await onChanged();
+                    message.success(`已删除 ${result.deleted} 个模型`);
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "批量删除模型失败");
+                } finally {
+                    setDeletingSelected(false);
+                }
+            },
+        });
     };
-
     const columns: ColumnsType<ChannelModel> = [
         {
             title: "模型",
@@ -312,11 +211,11 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             width: 180,
             render: (_, item) => (
                 <Space>
-                    <Button size="small" onClick={() => startEdit(item)}>
+                    <Button size="small" disabled={deletingSelected} onClick={() => startEdit(item)}>
                         编辑
                     </Button>
                     <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
-                        <Button size="small" danger title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
+                        <Button size="small" danger disabled={deletingSelected} title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
                 </Space>
             ),
@@ -335,6 +234,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const existingFetchModelKeys = new Set(items.map((item) => normalizeFetchModelKey(item.modelKey)));
     const selectedNewFetchModels = selectedFetchModels.filter((name) => !existingFetchModelKeys.has(normalizeFetchModelKey(name)));
     const selectedExistingFetchCount = selectedFetchModels.length - selectedNewFetchModels.length;
+    const allFetchModelsSelected = fetchPreviewModels.length > 0 && fetchPreviewModels.every((name) => selectedFetchModels.includes(name));
     const fetchModelOptions = fetchPreviewModels.map((name) => {
         const alreadyExists = existingFetchModelKeys.has(normalizeFetchModelKey(name));
         return {
@@ -353,9 +253,17 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     return (
         <AdminPageFrame
             title={`${channel.name} / 模型管理`}
+            description="模型按用户端展示顺序排列，点击“设置排序”即可调整。"
             back={{ label: "返回系统渠道", onClick: onClose }}
             actions={
                 <Space wrap>
+                    <ChannelOrderDialog
+                        channelId={channel.id}
+                        onSaved={async () => {
+                            await reload();
+                            await onChanged();
+                        }}
+                    />
                     <Button loading={fetching} icon={<RefreshCw className="size-4" />} onClick={() => void fetchModels()}>
                         拉取模型
                     </Button>
@@ -449,15 +357,31 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     setStatus("all");
                     setPage(1);
                 }}
+                batchActions={
+                    <AdminBatchBar count={selectedModelIds.length} onClear={() => setSelectedModelIds([])}>
+                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deletingSelected} onClick={confirmBatchRemove}>
+                            批量删除
+                        </Button>
+                    </AdminBatchBar>
+                }
                 table={{
                     className: "app-data-table",
                     rowKey: "id",
                     size: "small",
                     loading,
+                    rowSelection: {
+                        selectedRowKeys: selectedModelIds,
+                        preserveSelectedRowKeys: true,
+                        onChange: (keys) => {
+                            const next = keys.map(String);
+                            if (next.length > 100) message.warning("单次最多选择 100 个模型");
+                            setSelectedModelIds(next.slice(0, 100));
+                        },
+                    },
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
-                    scroll: { x: 990 },
+                    scroll: { x: 1150 },
                 }}
                 footer={
                     <PaginationBar
@@ -491,12 +415,26 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 ]}
             >
                 <div className="space-y-3">
-                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，请取消本次不需要拉入的模型；已存在的模型不会重复导入。</p>
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，可批量全选或取消全选；已存在的模型不会重复导入。</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/25 px-3 py-2">
+                        <span className="text-sm font-medium text-foreground/70" aria-live="polite">
+                            已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型
+                        </span>
+                        <Space size={4}>
+                            <Button size="small" disabled={importing || allFetchModelsSelected} onClick={() => setSelectedFetchModels(fetchPreviewModels)}>
+                                全选
+                            </Button>
+                            <Button size="small" disabled={importing || selectedFetchModels.length === 0} onClick={() => setSelectedFetchModels([])}>
+                                取消全选
+                            </Button>
+                        </Space>
+                    </div>
                     <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-md border border-border/70 p-3">
                         <Checkbox.Group
                             className="channel-model-import-picker grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
                             value={selectedFetchModels}
                             options={fetchModelOptions}
+                            disabled={importing}
                             onChange={(values) => setSelectedFetchModels(values as string[])}
                         />
                     </div>
@@ -671,189 +609,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     );
 }
 
-function SectionHeading({ title, description }: { title: string; description: string }) {
-    return (
-        <header className="admin-model-editor-section-heading">
-            <h2>{title}</h2>
-            <p>{description}</p>
-        </header>
-    );
-}
-
-function CapabilityConfigField(_: { value?: ModelCapabilityConfig; onChange?: (value: ModelCapabilityConfig) => void }) {
-    return null;
-}
-
-function EnabledConfigField(_: { value?: boolean; onChange?: (value: boolean) => void }) {
-    return null;
-}
-
 function capabilityLabel(value: ChannelModel["capability"]) {
     return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value];
-}
-
-function PriceTierFields({
-    index,
-    ordinal,
-    form,
-    capability,
-    protocol,
-    capabilityConfig,
-    onRemove,
-}: {
-    index: number;
-    ordinal: number;
-    form: FormInstance<FormValues>;
-    capability: EditableCapability | undefined;
-    protocol: ModelProtocol | undefined;
-    capabilityConfig?: ModelCapabilityConfig;
-    onRemove: () => void;
-}) {
-    const billingMode = Form.useWatch(["priceTiers", index, "billingMode"], form) || "fixed_request";
-    const matchMode = Form.useWatch(["priceTiers", index, "matchMode"], form) || "default";
-    const priceConfigured = Form.useWatch(["priceTiers", index, "priceConfigured"], form) !== false;
-    const tierEnabled = Form.useWatch(["priceTiers", index, "enabled"], form) !== false;
-    const video = capabilityConfig?.video;
-    const resolutionOptions = video?.resolutions || [];
-    const durationOptions = video?.duration.selection === "enum" ? video.duration.values || [] : [];
-    const tokenEnabled = Boolean(capability && protocol && modelProtocolSupportsTokenBilling(capability, protocol));
-    const isVideo = capability === "video";
-    const isImage = capability === "image";
-    return (
-        <div className="admin-price-tier-card">
-            <div className="admin-price-tier-card-header">
-                <div>
-                    <div className="text-sm font-medium">{matchMode === "default" ? "默认价格" : `规格价格 ${ordinal}`}</div>
-                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/45">{matchMode === "default" ? "匹配所有生成请求，保存后即可供用户使用。" : "精确条件优先于默认价格。"}</div>
-                </div>
-                <Button type="text" danger aria-label={`删除价格档 ${ordinal}`} icon={<Trash2 className="size-3.5" />} onClick={onRemove}>
-                    删除
-                </Button>
-            </div>
-            <div className="admin-price-tier-card-body">
-                <div className="admin-price-tier-block admin-price-tier-match-block">
-                    <div className="admin-price-tier-block-title">
-                        <span>01</span> 价格适用范围
-                    </div>
-                    <Form.Item className="mb-3" name={[index, "matchMode"]} label="定价方式" rules={[{ required: true }]}>
-                        <Segmented
-                            block
-                            options={[
-                                { label: "所有规格统一价格", value: "default" },
-                                { label: "按规格定价", value: "advanced" },
-                            ]}
-                        />
-                    </Form.Item>
-                    {matchMode === "default" ? (
-                        <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2.5 text-xs leading-5 text-foreground/60">用户选择任意生成方式、质量和尺寸时，都使用这档价格。新增规格价格后，精确规则优先，默认价格负责兜底。</div>
-                    ) : (
-                        <div className="admin-price-tier-match-grid">
-                            <Form.Item className="mb-0" name={[index, "operation"]} label="生成方式" rules={[{ required: true, message: "请选择生成方式" }]}>
-                                <Select options={operationOptions(capability)} />
-                            </Form.Item>
-                            {isVideo ? (
-                                <Form.Item className="mb-0" name={[index, "resolution"]} label="分辨率" rules={[{ required: true, message: "请选择分辨率" }]}>
-                                    <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
-                                </Form.Item>
-                            ) : null}
-                            {isVideo ? (
-                                <Form.Item className="mb-0" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
-                                    {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} />}
-                                </Form.Item>
-                            ) : null}
-                            {isVideo ? (
-                                <Form.Item className="mb-0" name={[index, "imageCount"]} label="参考图数量" rules={[{ required: true, message: "请输入参考图数量" }]}>
-                                    <InputNumber className="w-full" min={0} max={9} precision={0} placeholder="0 表示任意数量" />
-                                </Form.Item>
-                            ) : null}
-                            {isImage ? (
-                                <Form.Item className="mb-0" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
-                                    <Select
-                                        options={[
-                                            { label: "任意质量", value: "*" },
-                                            { label: "1K", value: "1k" },
-                                            { label: "2K", value: "2k" },
-                                            { label: "4K", value: "4k" },
-                                        ]}
-                                    />
-                                </Form.Item>
-                            ) : null}
-                            {isImage ? (
-                                <Form.Item className="mb-0" name={[index, "size"]} label="画幅/尺寸">
-                                    <Input placeholder="任意，或 1:1、16:9、1024x1024" />
-                                </Form.Item>
-                            ) : null}
-                            <Form.Item className="admin-price-tier-upstream mb-0" name={[index, "providerModelKey"]} label="命中后使用的上游模型 ID">
-                                <Input placeholder="留空则使用模型默认上游 ID" />
-                            </Form.Item>
-                        </div>
-                    )}
-                </div>
-                <div className="admin-price-tier-block admin-price-tier-billing-block">
-                    <div className="admin-price-tier-block-title">
-                        <span>02</span> 计费与状态
-                    </div>
-                    <div className="admin-price-tier-billing-grid">
-                        <Form.Item className="admin-price-tier-billing-mode mb-0" name={[index, "billingMode"]} label="计费方式" rules={[{ required: true }]}>
-                            <Segmented
-                                className="w-full"
-                                options={[
-                                    { label: "按次", value: "fixed_request" },
-                                    { label: "按秒", value: "per_second", disabled: !isVideo },
-                                    { label: "Token", value: "token", disabled: !tokenEnabled },
-                                ]}
-                            />
-                        </Form.Item>
-                        {billingMode === "token" ? (
-                            isVideo ? (
-                                <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "outputTokenPrice"]} label="视频 / 百万 Token" rules={[{ required: true, message: "请输入视频 Token 价格" }]}>
-                                    <InputNumber className="w-full" min={0.000001} max={1_000_000} precision={6} step={0.1} />
-                                </Form.Item>
-                            ) : (
-                                <div className="admin-price-tier-token-grid">
-                                    <Form.Item className="mb-0" name={[index, "inputTokenPrice"]} label="输入 / 百万 Token" rules={[{ required: true, message: "请输入输入价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
-                                    </Form.Item>
-                                    <Form.Item className="mb-0" name={[index, "outputTokenPrice"]} label="输出 / 百万 Token" rules={[{ required: true, message: "请输入输出价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
-                                    </Form.Item>
-                                    <Form.Item className="mb-0" name={[index, "cachedTokenPrice"]} label="缓存 / 百万 Token" rules={[{ required: true, message: "请输入缓存价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
-                                    </Form.Item>
-                                </div>
-                            )
-                        ) : (
-                            <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "unitPrice"]} label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
-                                <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
-                            </Form.Item>
-                        )}
-                        <div className="admin-price-tier-controls">
-                            <Form.Item name={[index, "priceConfigured"]} hidden valuePropName="checked">
-                                <Switch />
-                            </Form.Item>
-                            <Form.Item name={[index, "enabled"]} hidden valuePropName="checked">
-                                <Switch />
-                            </Form.Item>
-                            <div className="admin-price-tier-toggle">
-                                <div>
-                                    <strong>可供用户使用</strong>
-                                    <span>开启后参与用户请求匹配；关闭后仅保留配置，不参与计费匹配</span>
-                                </div>
-                                <Switch
-                                    aria-label="可供用户使用"
-                                    checked={priceConfigured && tierEnabled}
-                                    onChange={(checked) => {
-                                        form.setFieldValue(["priceTiers", index, "priceConfigured"], checked);
-                                        form.setFieldValue(["priceTiers", index, "enabled"], checked);
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
 }
 
 function billingSummary(item: ChannelModel) {
@@ -884,14 +641,6 @@ function priceTierLabel(tier: ChannelModelPriceTier) {
     return `${spec} · ${formatCredits(tier.unitPriceMicrocredits)} 积分 / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
 }
 
-function operationOptions(capability: EditableCapability | undefined) {
-    const options = [{ label: "任意生成方式", value: "*" }];
-    if (capability === "image") return [...options, { label: "文生图", value: "text_to_image" }, { label: "图生图", value: "image_to_image" }];
-    if (capability === "video") return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }];
-    if (capability === "text") return [...options, { label: "文本生成", value: "text_generation" }];
-    return options;
-}
-
 function operationLabel(operation: string) {
     return ({ text_to_image: "文生图", image_to_image: "图生图", text_to_video: "文生视频", image_to_video: "图生视频", video_to_video: "视频生视频", text_generation: "文本生成" } as Record<string, string>)[operation] || operation;
 }
@@ -901,5 +650,8 @@ function formatCredits(value: number) {
 }
 
 function normalizeFetchModelKey(value: string) {
-    return value.trim().replace(/^models\//, "").toLowerCase();
+    return value
+        .trim()
+        .replace(/^models\//, "")
+        .toLowerCase();
 }

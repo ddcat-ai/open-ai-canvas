@@ -9,6 +9,7 @@ import { canvasRichTextText } from "@/lib/canvas/canvas-rich-text";
 import { fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
@@ -27,6 +28,8 @@ import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 import { ArtCritiqueNodeContent } from "./nodes/ai-art-critique-node";
+import { MediaConversionNodeContent } from "./nodes/media-conversion-node";
+import { MEDIA_CONVERSION_NODE_TYPE } from "@/lib/media-conversion/contracts";
 
 export type CanvasNodeContentProps = {
     node: CanvasNodeData;
@@ -35,6 +38,7 @@ export type CanvasNodeContentProps = {
     textareaRef: RefObject<HTMLTextAreaElement | null>;
     isBatchRoot: boolean;
     batchCount: number;
+    batchPreviewNodes?: CanvasNodeData[];
     batchExpanded: boolean;
     batchOpening: boolean;
     batchRecovering: boolean;
@@ -102,6 +106,7 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
         (props.node.metadata?.workflowKind === "styleboard" && !props.node.metadata.content);
     if (hasCustomContent && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.node.type === ART_CRITIQUE_NODE_TYPE) return <ArtCritiqueNodeContent node={props.node} />;
+    if (props.node.type === MEDIA_CONVERSION_NODE_TYPE) return <MediaConversionNodeContent node={props.node} theme={props.theme} />;
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onOpenTaskDetails={props.onOpenTaskDetails} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onReloadResource={props.onReloadResource} />;
@@ -707,6 +712,14 @@ function InactiveVideoPreview({
     const [hydrating, setHydrating] = useState(() => !previewUrl && hasSource);
 
     useEffect(() => {
+        const element = previewRef.current;
+        if (!element) return;
+        const content = node.metadata?.content || "";
+        const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(content) : content;
+        return bindCanvasVideoHoverPreview(element, () => resolveMediaUrl(node.metadata?.storageKey, fallback));
+    }, [node.metadata?.content, node.metadata?.storageKey, node.metadata?.importSource?.provider]);
+
+    useEffect(() => {
         updateMetadataRef.current = updateMetadata;
     }, [updateMetadata]);
 
@@ -914,7 +927,7 @@ function ImageContent({
     };
 
     return (
-        <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
+        <BatchFrame batchPreviewNodes={batchPreviewNodes} batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
             <div ref={imageContainerRef} className="h-full w-full overflow-hidden rounded-[var(--node-radius)]">
                 {url ? (
                     <img
@@ -1062,7 +1075,7 @@ function BatchFrame({
                     {Array.from({ length: Math.min(batchCount - 1, 5) }).map((_, index) => (
                         <div
                             key={index}
-                            className="absolute rounded-[inherit] transition-all duration-300 group-hover/batch:translate-x-2"
+                            className="absolute rounded-[var(--r-lg)] transition-all duration-300 group-hover/batch:translate-x-2"
                             style={{
                                 inset: 0,
                                 background: theme.node.panel,
@@ -1072,7 +1085,9 @@ function BatchFrame({
                                     batchOpening || batchRecovering ? `translate(${54 + index * 22}px, ${20 + index * 12}px) rotate(${8 + index * 5}deg) scale(.98)` : `translate(${34 + index * 18}px, ${14 + index * 10}px) rotate(${6 + index * 4}deg)`,
                                 zIndex: -index - 1,
                             }}
-                        />
+                        >
+                            {batchPreviewNodes?.[index] ? <BatchPreviewImage node={batchPreviewNodes[index]} /> : null}
+                        </div>
                     ))}
                 </div>
             ) : null}

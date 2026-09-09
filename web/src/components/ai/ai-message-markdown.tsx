@@ -1,4 +1,5 @@
 import { Streamdown, type Components } from "streamdown";
+import { AiMessageCodeBlock } from "./ai-message-code-block";
 
 import "streamdown/styles.css";
 import { createLimitedCodePlugin } from "./limited-code-plugin";
@@ -91,7 +92,9 @@ const components: Components = {
         </td>
     ),
     input: ({ ...props }) => <input {...props} className="ai-message-markdown-task" disabled />,
-};
+    };
+}
+
 
 export function AIMessageMarkdown({ children, isStreaming = false, className = "" }: AIMessageMarkdownProps) {
     if (!children.trim()) return null;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { canvasLayoutLane, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodesByMediaType } from "@/lib/canvas/canvas-layout";
+import { canvasLayoutLane, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodesByMediaType, spreadCanvasNodes } from "@/lib/canvas/canvas-layout";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 function node(id: string, type: CanvasNodeType, width = 320, height = 180, locked = false): CanvasNodeData {
@@ -61,5 +61,31 @@ describe("canvas media-aware layout", () => {
         expect(canvasLayoutLane(node("drawing", CanvasNodeType.Drawing))).toBe("image");
         expect(canvasLayoutLane(node("video", CanvasNodeType.Video))).toBe("video");
         expect(canvasLayoutLane(node("audio", CanvasNodeType.Audio))).toBe("audio");
+    });
+});
+
+describe("canvas relative-layout spread", () => {
+    test("keeps relative occupancy and increases the gap between neighbors", () => {
+        const left: CanvasNodeData = { ...node("left", CanvasNodeType.Image, 100, 80), position: { x: 0, y: 0 } };
+        const right: CanvasNodeData = { ...node("right", CanvasNodeType.Image, 100, 80), position: { x: 120, y: 10 } };
+        const positions = spreadCanvasNodes([left, right], { scale: 1.5, minGap: 40 });
+
+        expect(positions.get("left")!.x).toBe(0);
+        expect(positions.get("right")!.x).toBeGreaterThan(120);
+        expect(positions.get("right")!.x).toBeGreaterThan(positions.get("left")!.x);
+        expect(positions.get("right")!.x - (positions.get("left")!.x + left.width)).toBeGreaterThanOrEqual(40);
+    });
+
+    test("keeps a left node left of a right node after resolving overlap", () => {
+        const first: CanvasNodeData = { ...node("first", CanvasNodeType.Image, 120, 90), position: { x: 40, y: 20 } };
+        const second: CanvasNodeData = { ...node("second", CanvasNodeType.Image, 120, 90), position: { x: 80, y: 30 } };
+        const positions = spreadCanvasNodes([first, second], { scale: 1, minGap: 48 });
+
+        expect(positions.get("first")!.x).toBeLessThan(positions.get("second")!.x);
+        expect(positions.get("second")!.x - (positions.get("first")!.x + first.width)).toBeGreaterThanOrEqual(48);
+    });
+
+    test("returns no moves for a single node", () => {
+        expect(spreadCanvasNodes([node("only", CanvasNodeType.Text)]).size).toBe(0);
     });
 });

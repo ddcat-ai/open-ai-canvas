@@ -51,6 +51,7 @@ export function CanvasToolbar({
     onShowImageInfoChange,
 }: CanvasToolbarProps) {
     const rootRef = useRef<HTMLDivElement>(null);
+    const { bringToFront, zIndex } = useCanvasOverlayLayer("main-toolbar", "var(--z-toolbar)");
     const dockRef = useRef<HTMLDivElement>(null);
     const reducedMotion = useReducedMotion();
     const colorTheme = useThemeStore((state) => state.theme);

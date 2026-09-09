@@ -50,6 +50,7 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
                 category: normalizeAssetCategory(asset.category),
                 archived: asset.status === "archived",
                 kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本",
+                mediaKind: asset.kind,
                 asset,
                 searchText: (asset.tags || []).join(" "),
             })),
@@ -62,6 +63,7 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
         <AssetLibraryPickerModal
             remoteLibrary
             open={open}
+            mediaKinds={["image", "video", "audio", "text"]}
             items={items}
             categoryLabels={{ ...categoryLabels, ...externalAssetSources.categoryLabels }}
             folders={externalAssetSources.folders}

@@ -830,12 +830,6 @@
 .workflow-timeline-meta { display: block; overflow: hidden; margin-top: 4px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
 .workflow-timeline-status { position: absolute; right: 10px; bottom: 8px; left: 10px; display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 6px; }
 .workflow-timeline-status > span:first-child { min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--foreground) 45%, transparent); font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
-.artifact-status-tag.ant-tag { display: inline-flex; min-height: 20px; flex: 0 0 auto; align-items: center; border-radius: var(--r-full); padding-inline: 7px; font-size: var(--fs-micro); font-weight: 600; line-height: 18px; white-space: nowrap; }
-.artifact-status-tag.is-pending.ant-tag { border-color: color-mix(in srgb, var(--foreground) 18%, transparent) !important; background: color-mix(in srgb, var(--foreground) 7%, transparent) !important; color: color-mix(in srgb, var(--foreground) 62%, transparent) !important; }
-.artifact-status-tag.is-running.ant-tag { border-color: color-mix(in srgb, var(--palette-status-loading) 45%, transparent) !important; background: color-mix(in srgb, var(--palette-status-loading) 13%, transparent) !important; color: color-mix(in srgb, var(--palette-status-loading) 82%, var(--foreground)) !important; }
-.artifact-status-tag.is-ready.ant-tag { border-color: color-mix(in srgb, var(--palette-status-success) 45%, transparent) !important; background: color-mix(in srgb, var(--palette-status-success) 13%, transparent) !important; color: color-mix(in srgb, var(--palette-status-success) 82%, var(--foreground)) !important; }
-.artifact-status-tag.is-failed.ant-tag { border-color: color-mix(in srgb, var(--palette-status-error) 45%, transparent) !important; background: color-mix(in srgb, var(--palette-status-error) 13%, transparent) !important; color: color-mix(in srgb, var(--palette-status-error) 82%, var(--foreground)) !important; }
-.artifact-status-tag.is-stale.ant-tag { border-color: color-mix(in srgb, var(--palette-status-warning) 42%, transparent) !important; background: color-mix(in srgb, var(--palette-status-warning) 12%, transparent) !important; color: color-mix(in srgb, var(--palette-status-warning) 80%, var(--foreground)) !important; }
 
 .workflow-add-shot-card {
     display: grid;

@@ -188,8 +188,38 @@ func TestPasswordResetDeliveryFailureRemovesUnusableCode(t *testing.T) {
 	}
 }
 
-func TestCustomAppearanceBrandsRegistrationAndPasswordResetEmails(t *testing.T) {
+func TestSenderNameBrandsRegistrationAndPasswordResetEmails(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fromName string
+		wantName string
+	}{
+		{name: "default inherits appearance", fromName: defaultAppearanceBrandName, wantName: "HIMA Studio"},
+		{name: "empty inherits appearance", fromName: "", wantName: "HIMA Studio"},
+		{name: "custom sender overrides appearance", fromName: "Custom Canvas", wantName: "Custom Canvas"},
+		{name: "custom sender is trimmed", fromName: "  自定义工作台  ", wantName: "自定义工作台"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRegistrationAndPasswordResetEmailBrand(t, tc.fromName, tc.wantName)
+		})
+	}
+}
+
+func assertRegistrationAndPasswordResetEmailBrand(t *testing.T, fromName, wantName string) {
+	t.Helper()
 	svc, db := newPasswordResetTestService(t)
+	_, emailSetting, err := svc.readEmailSetting()
+	if err != nil {
+		t.Fatal(err)
+	}
+	emailSetting.FromName = fromName
+	settingJSON, err := json.Marshal(emailSetting)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.SystemSetting{}).Where("key = ?", emailSettingKey).Update("value_json", string(settingJSON)).Error; err != nil {
+		t.Fatal(err)
+	}
 	appearanceJSON, err := json.Marshal(AppearanceSetting{
 		SchemaVersion:    appearanceSchemaVersion,
 		BrandName:        "HIMA Studio",
@@ -238,12 +268,15 @@ func TestCustomAppearanceBrandsRegistrationAndPasswordResetEmails(t *testing.T) 
 		t.Fatalf("deliveries = %d, want 2", len(deliveries))
 	}
 	for _, delivered := range deliveries {
-		if delivered.fromName != "HIMA Studio" || !strings.Contains(delivered.subject, "HIMA Studio") || !strings.Contains(delivered.body, "HIMA Studio") || strings.Contains(delivered.subject, defaultAppearanceBrandName) || strings.Contains(delivered.body, defaultAppearanceBrandName) {
-			t.Fatalf("email did not inherit custom appearance: %#v", delivered)
+		if delivered.fromName != wantName || !strings.Contains(delivered.subject, wantName) || !strings.Contains(delivered.body, wantName) || strings.Contains(delivered.subject, defaultAppearanceBrandName) || strings.Contains(delivered.body, defaultAppearanceBrandName) {
+			t.Fatalf("email did not use resolved sender name %q: %#v", wantName, delivered)
 		}
 	}
-	if deliveries[0].subject != "HIMA Studio注册验证码" || deliveries[1].subject != "HIMA Studio密码重置验证码" {
+	if deliveries[0].subject != wantName+"注册验证码" || deliveries[1].subject != wantName+"密码重置验证码" {
 		t.Fatalf("unexpected branded subjects: %#v", deliveries)
+	}
+	if !strings.Contains(deliveries[0].body, "你正在注册"+wantName+"。") {
+		t.Fatalf("registration body did not use resolved sender name: %q", deliveries[0].body)
 	}
 }
 

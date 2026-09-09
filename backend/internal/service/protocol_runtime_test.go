@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/protocol"
 )
@@ -340,6 +343,191 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	if result["mode"] != "video" {
 		t.Fatalf("result = %#v", result)
 	}
+}
+
+func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T) {
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-idempotency-key-runtime","version":"1.0.0","name":"Test Idempotency Key","author":"Test","documentation":"# Test Idempotency Key",
+		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-idempotency-key-runtime.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	var keys []string
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			key := r.Header.Get("Idempotency-Key")
+			if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(key) {
+				t.Errorf("Idempotency-Key = %q, want UUID", key)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			if _, ok := body["idempotencyKey"]; ok {
+				t.Error("host idempotency key leaked into provider JSON body")
+			}
+			keys = append(keys, key)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"task-1","status":"pending"}`))
+		case "/v1/tasks/task-1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"task-1","status":"succeeded","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-idempotency-key-runtime", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	ctx = withProtocolRegistry(ctx, center.registrySnapshot())
+	for i := 0; i < 2; i++ {
+		result, err := runDeclarativeProtocolTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result["mode"] != "video" {
+			t.Fatalf("result = %#v", result)
+		}
+	}
+	if len(keys) != 2 || keys[0] == keys[1] {
+		t.Fatalf("create idempotency keys = %#v, want two different UUIDs", keys)
+	}
+}
+
+func TestDeclarativeNewAPIChannel2TaskNotExistRetry(t *testing.T) {
+	adapter := newDeclarativeNewAPIChannel2TestAdapter(t)
+	createCalls := 0
+	pollCalls := 0
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/video/generations":
+			createCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"pending"}`))
+		case "/v1/video/generations/provider-task-1":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if pollCalls <= 2 {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"code":"task_not_exist","data":null,"message":"task_not_exist"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"succeeded","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "newapi-channel-2", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	result, err := runProtocolAdapterTaskWithTiming(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, protocolPollTiming{
+		InitialDelay:            time.Millisecond,
+		PollInterval:            time.Millisecond,
+		TaskNotExistWindow:      time.Second,
+		TaskNotExistRetryDelays: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["mode"] != "video" || createCalls != 1 || pollCalls != 3 {
+		t.Fatalf("result = %#v, create calls = %d, poll calls = %d", result, createCalls, pollCalls)
+	}
+}
+
+func TestDeclarativeNewAPIChannel2TaskNotExistExhaustion(t *testing.T) {
+	adapter := newDeclarativeNewAPIChannel2TestAdapter(t)
+	createCalls := 0
+	pollCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/video/generations":
+			createCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"pending"}`))
+		case "/v1/video/generations/provider-task-1":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"code":"task_not_exist","message":"task_not_exist"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "newapi-channel-2", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	_, err := runProtocolAdapterTaskWithTiming(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, protocolPollTiming{
+		InitialDelay:            time.Millisecond,
+		PollInterval:            time.Millisecond,
+		TaskNotExistWindow:      time.Second,
+		TaskNotExistRetryDelays: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond},
+	})
+	var pendingErr providerStatePendingError
+	var httpErr providerHTTPError
+	if !errors.As(err, &pendingErr) || pendingErr.TaskID != "provider-task-1" || !errors.As(err, &httpErr) {
+		t.Fatalf("error = %#v, want typed provider pending error wrapping HTTP error", err)
+	}
+	if createCalls != 1 || pollCalls != 5 {
+		t.Fatalf("create calls = %d, poll calls = %d, want 1 and 5", createCalls, pollCalls)
+	}
+}
+
+func TestDeclarativeNewAPIChannel2TaskNotExistStrictClassification(t *testing.T) {
+	tests := []struct {
+		name          string
+		interfaceType string
+		taskID        string
+		err           error
+		want          bool
+	}{
+		{name: "error code", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}, want: true},
+		{name: "error message", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"message":"task_not_exist"}`}, want: true},
+		{name: "other interface", interfaceType: "newapi-channel-1", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}},
+		{name: "missing task id", interfaceType: "newapi-channel-2", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}},
+		{name: "other status", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 404, Body: `{"code":"task_not_exist"}`}},
+		{name: "unstructured body", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: "task_not_exist"}},
+		{name: "partial match", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist_later"}`}},
+		{name: "other provider error", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"invalid_parameter"}`}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isNewAPIChannel2TaskNotReady(test.interfaceType, test.taskID, test.err); got != test.want {
+				t.Fatalf("isNewAPIChannel2TaskNotReady() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func newDeclarativeNewAPIChannel2TestAdapter(t *testing.T) protocol.Adapter {
+	t.Helper()
+	adapter, err := protocol.LoadManifest([]byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"newapi-channel-2","version":"1.0.0","name":"NewAPI Channel 2","author":"Test","documentation":"# Test",
+		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return adapter
 }
 
 func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testing.T) {

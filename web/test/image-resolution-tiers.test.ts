@@ -9,6 +9,7 @@ import {
     supportsImageResolutionPresets,
 } from "../src/lib/image-resolution-tiers";
 import { defaultImageCapabilityConfig } from "../src/lib/model-capabilities";
+import { resolveImageRequestSize } from "../src/services/api/image-validation";
 
 const sizes = [
     "1024x1024", "1360x1024", "1024x1360", "1536x1024", "1024x1536", "1024x1280", "1280x1024", "2048x878", "1824x1024", "1024x1824",
@@ -17,6 +18,17 @@ const sizes = [
 ];
 
 describe("image resolution tiers", () => {
+    test("精确像素预设保持请求原值，比例协议发送比例", () => {
+        const profile = defaultImageCapabilityConfig("openai-image", "test");
+        profile.size = { parameter: "size", values: ["1920x1080", "3840x2160", "2160x3840", "1824x1024"], default: "1920x1080", allowCustom: false };
+        expect(imageResolutionChoices(profile.size.values)).toEqual(["1k", "2k", "4k"]);
+        expect(imageSizeForResolution(buildImageResolutionOptions(profile.size.values), "1k", "16:9")).toBe("1824x1024");
+        expect(resolveImageRequestSize(profile, undefined, "1920x1080")).toEqual({ parameter: "size", value: "1920x1080" });
+        profile.size = { parameter: "aspect_ratio", values: ["16:9"], default: "16:9", allowCustom: false };
+        expect(resolveImageRequestSize(profile, undefined, "16:9")).toEqual({ parameter: "aspect_ratio", value: "16:9" });
+        profile.size = { parameter: "size", values: [], default: "auto", allowCustom: true };
+        expect(() => resolveImageRequestSize(profile, undefined, "1920x1080")).toThrow("16 的倍数");
+    });
     test("将 Xiaobaishu 的精确尺寸整理为 1K、2K、4K 各十种比例", () => {
         const options = buildImageResolutionOptions(sizes);
 

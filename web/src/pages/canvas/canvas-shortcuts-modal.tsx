@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Command, Search } from "lucide-react";
+import { Kbd } from "@/components/ui/base/kbd";
 import { Modal } from "antd";
 
 import {
@@ -105,7 +106,7 @@ export function CanvasShortcutsModal({ open, onClose }: { open: boolean; onClose
 
                 <footer className="canvas-shortcuts-footer">
                     <span>共 {results.length} 个快捷键</span>
-                    <span className="canvas-shortcuts-close-hint"><kbd>Esc</kbd> 关闭</span>
+                    <span className="canvas-shortcuts-close-hint"><Kbd>Esc</Kbd> 关闭</span>
                 </footer>
             </div>
         </Modal>
@@ -140,7 +141,7 @@ function ShortcutRow({ shortcut, showCategory }: { shortcut: CanvasShortcutItem;
                         {combination.map((key, keyIndex) => (
                             <span key={`${key}-${keyIndex}`} className="canvas-shortcuts-key-part">
                                 {keyIndex ? <i>+</i> : null}
-                                <kbd>{key}</kbd>
+                                <Kbd>{key}</Kbd>
                             </span>
                         ))}
                     </span>

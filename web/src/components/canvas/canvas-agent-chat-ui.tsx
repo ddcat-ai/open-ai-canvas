@@ -7,6 +7,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
 import type { LocalUser } from "@/stores/use-user-store";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
+import { WorkingDots, WorkingGlow } from "@/components/ai/working-indicator";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
@@ -154,7 +155,6 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                             <span>{isPlan ? "执行计划 · 确认工具调用" : "确认工具调用"}</span>
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
                         </div>
-                        <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
                     </div>
                 </div>
                 {impact?.operationCount ? (
@@ -187,7 +187,16 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
 }
 
 function ImpactMetric({ label, value, attention = false, theme }: { label: string; value: number; attention?: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    return <div className="px-1 py-1"><div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
+    return (
+        <div className="px-1 py-1">
+            <div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                {label}
+            </div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>
+                {value}
+            </div>
+        </div>
+    );
 }
 
 function agentImpactFromDetail(detail: unknown) {
@@ -219,7 +228,11 @@ export function AgentToolCard({ title, text, detail, theme, onRetryPlan, onCance
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: state.color, background: state.softBg }}>
                                 {state.label}
                             </span>
-                            {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
+                            {detail ? (
+                                <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>
+                                    详情
+                                </span>
+                            ) : null}
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: state.isError ? state.color : theme.node.muted }}>
                             {text}
@@ -237,20 +250,12 @@ export function AgentToolCard({ title, text, detail, theme, onRetryPlan, onCance
     );
 }
 
-export function AgentWorkingMessage({ theme }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    const [length, setLength] = useState(1);
-    useEffect(() => {
-        const timer = window.setInterval(() => setLength((value) => (value >= WORKING_TEXT.length + 4 ? 1 : value + 1)), 120);
-        return () => window.clearInterval(timer);
-    }, [setLength]);
+export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; label?: string }) {
     return (
-        <div className="flex items-start gap-2.5">
-            <AgentAvatar theme={theme} />
-            <div className="min-w-0 max-w-[82%]">
-                <div className="font-mono text-sm" style={{ color: theme.node.muted }} aria-label={WORKING_TEXT}>
-                    <span className="inline-block w-[96px]">{WORKING_TEXT.slice(0, Math.min(length, WORKING_TEXT.length))}</span>
-                </div>
-            </div>
+        <div role="status" aria-live="polite" className="flex items-center gap-2.5" style={{ color: theme.node.muted }}>
+            <WorkingDots />
+            <span className="text-sm leading-5">{label}</span>
+            <AgentWorkingElapsed />
         </div>
     );
 }
@@ -303,7 +308,10 @@ export function AgentChatComposer({
     const [addMenuOpen, setAddMenuOpen] = useState(false);
     const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
+    const [previewAttachment, setPreviewAttachment] = useState<CanvasAgentChatAttachment | null>(null);
     const availableSlashSkills = slashSkills ?? [];
+    const attachmentReferences = useMemo(() => agentAttachmentReferences(attachments), [attachments]);
+    const composerReferences = useMemo(() => [...references, ...attachmentReferences], [attachmentReferences, references]);
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
     const visibleSlashSkills = slash ? availableSlashSkills.filter((skill) => `${skill.skill_name} ${skill.description || ""}`.toLowerCase().includes(slash.query.toLowerCase())) : availableSlashSkills;
@@ -397,16 +405,43 @@ export function AgentChatComposer({
                     color: theme.node.text,
                 }}
             >
+                {sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
-                        {attachments.map((item) => (
-                            <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-md" title={item.name}>
-                                <img src={item.url} alt={item.name} className="size-full object-cover" />
-                                {onRemoveAttachment ? (
-                                    <button type="button" className="absolute right-1 top-1 grid size-5 place-items-center rounded-full opacity-0 shadow-sm transition group-hover:opacity-100" style={{ background: theme.toolbar.panel, color: theme.node.text }} onClick={() => onRemoveAttachment(item.id)} aria-label="移除图片">
-                                        <X className="size-3" />
+                        {attachments.map((item, index) => (
+                            <div key={item.id} className="group relative w-20 shrink-0">
+                                <button
+                                    type="button"
+                                    className="relative block size-20 overflow-hidden rounded-lg"
+                                    title="点击放大预览"
+                                    aria-label={`预览 ${item.name || `图片${index + 1}`}`}
+                                    onClick={() => setPreviewAttachment(item)}
+                                    onDoubleClick={() => setPreviewAttachment(item)}
+                                >
+                                    <img src={item.url} alt={item.name} className="size-full object-cover" />
+                                </button>
+                                <div className="mt-1 flex min-w-0 items-center justify-between gap-1">
+                                    <button
+                                        type="button"
+                                        className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100"
+                                        title={`插入 @图片${index + 1}`}
+                                        onClick={() => insertAttachmentMention(item)}
+                                    >
+                                        <AtSign className="size-2.5 shrink-0" />
+                                        <span className="truncate">图片{index + 1}</span>
                                     </button>
-                                ) : null}
+                                    {onRemoveAttachment ? (
+                                        <button
+                                            type="button"
+                                            className="grid size-4 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
+                                            style={{ background: theme.toolbar.panel, color: theme.node.text }}
+                                            onClick={() => onRemoveAttachment(item.id)}
+                                            aria-label="移除图片"
+                                        >
+                                            <X className="size-3" />
+                                        </button>
+                                    ) : null}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -416,7 +451,7 @@ export function AgentChatComposer({
                         <CanvasResourceMentionTextarea
                             ref={mentionInputRef}
                             value={prompt}
-                            references={references}
+                            references={composerReferences}
                             includeAssetLibrary={includeAssetLibrary}
                             sendOnEnter
                             disabled={disabled || sending}
@@ -527,6 +562,7 @@ export function AgentChatComposer({
                     </div>
                 </div>
             </div>
+            {previewAttachment ? <AgentImagePreview attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} /> : null}
         </div>
     );
 }
@@ -641,7 +677,15 @@ export function AgentPanelTabs<T extends string>({ value, items, theme, right, o
             <div className="flex min-h-8 items-center justify-between gap-2 rounded-lg px-0.5 py-0.5" style={{ background: "transparent" }}>
                 <nav className="grid min-w-0 flex-1 grid-flow-col auto-cols-fr items-center gap-0.5 text-[var(--fs-label)]" role="tablist" aria-label="Agent 面板">
                     {items.map((item) => (
-                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`} style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item.value)}>
+                        <button
+                            key={item.value}
+                            type="button"
+                            role="tab"
+                            aria-selected={value === item.value}
+                            className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`}
+                            style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }}
+                            onClick={() => onChange(item.value)}
+                        >
                             <span className="shrink-0">{item.icon}</span>
                             <span className="min-w-0 truncate">{item.label}</span>
                             {item.count ? <span className="shrink-0 tabular-nums opacity-60">{item.count}</span> : null}
@@ -680,13 +724,43 @@ function AgentUserAvatar({ user, theme }: { user: LocalUser | null; theme: (type
 }
 
 function AgentMessageAttachments({ attachments }: { attachments: CanvasAgentChatAttachment[] }) {
+    const [preview, setPreview] = useState<CanvasAgentChatAttachment | null>(null);
     return (
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-            {attachments.map((item) => (
-                <img key={item.id} src={item.url} alt={item.name} className="aspect-square w-full rounded-lg object-cover" />
-            ))}
+        <>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {attachments.map((item) => (
+                    <button key={item.id} type="button" className="group relative overflow-hidden rounded-lg" onClick={() => setPreview(item)} onDoubleClick={() => setPreview(item)} aria-label={`查看图片 ${item.name}`}>
+                        <img src={item.url} alt={item.name} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
+                    </button>
+                ))}
+            </div>
+            {preview ? <AgentImagePreview attachment={preview} onClose={() => setPreview(null)} /> : null}
+        </>
+    );
+}
+
+export function AgentImagePreview({ attachment, onClose }: { attachment: CanvasAgentChatAttachment; onClose: () => void }) {
+    return (
+        <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={attachment.name} onClick={onClose}>
+            <img src={attachment.url} alt={attachment.name} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            <button type="button" className="absolute right-5 top-5 rounded-full bg-black/60 p-2 text-white" onClick={onClose} aria-label="关闭图片预览">
+                <X className="size-5" />
+            </button>
         </div>
     );
+}
+
+function agentAttachmentReferences(attachments: CanvasAgentChatAttachment[]): CanvasResourceReference[] {
+    return attachments.map((item, index) => ({
+        id: `attachment:${item.id}`,
+        nodeId: "",
+        kind: "image",
+        label: `图片${index + 1}`,
+        title: item.name || `图片${index + 1}`,
+        previewUrl: item.url,
+        active: true,
+        mentionToken: `@[attachment:${item.id}]`,
+    }));
 }
 
 function toolCardState(title: string, text: string, detail?: unknown) {
@@ -696,7 +770,8 @@ function toolCardState(title: string, text: string, detail?: unknown) {
     if (objectField(detail, "status") === "noop" || /未生效|无需|没有找到|没有.*可|已存在/.test(raw)) return { label: "未生效", color: "#d97706", softBg: "rgba(217,119,6,.04)", icon: <CircleAlert className="size-4" />, isError: false };
     if (/拒绝|取消/.test(raw) || lower.includes("rejected")) return { label: "拒绝执行", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
     if (/失败|错误/.test(raw) || lower.includes("failed") || lower.includes("error")) return { label: "执行失败", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
-    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded")) return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
+    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded"))
+        return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
     return { label: "工具调用", color: "#2563eb", softBg: "rgba(37,99,235,.04)", icon: <Wrench className="size-4" />, isError: false };
 }
 

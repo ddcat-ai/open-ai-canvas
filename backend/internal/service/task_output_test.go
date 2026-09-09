@@ -61,6 +61,37 @@ func TestTaskClientContextRequiresCreatePageMetadata(t *testing.T) {
 	}
 }
 
+func TestTaskClientContextPreservesCanvasNodeID(t *testing.T) {
+	context := taskClientContext(`{"mode":"image","metadata":{"nodeId":"canvas-node-1","source":"canvas"}}`)
+	if context == nil || context.NodeID != "canvas-node-1" {
+		t.Fatalf("canvas node context was not preserved: %+v", context)
+	}
+}
+
+func TestTaskSummaryPreservesCanvasNodeWithoutExposingInput(t *testing.T) {
+	summary := taskSummaryForOutput(model.Task{
+		ID: "task-1", ProjectID: "project-1", Type: "canvas_image",
+		InputJSON: `{"metadata":{"nodeId":"node-1"},"config":{"apiKey":"private-test-value"}}`,
+	})
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output map[string]any
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatal(err)
+	}
+	context, ok := output["clientContext"].(map[string]any)
+	if !ok || context["nodeId"] != "node-1" || len(context) != 1 {
+		t.Fatalf("summary lost safe canvas association: %#v", output)
+	}
+	for _, key := range []string{"inputJson", "config", "apiKey"} {
+		if _, exists := output[key]; exists {
+			t.Fatalf("summary leaked %s", key)
+		}
+	}
+}
+
 func TestTaskClientContextProjectsChapterOperations(t *testing.T) {
 	characters := taskClientContext(`{"metadata":{"domainProjectId":"project-1","chapterId":"chapter-1","operation":"chapter_character_breakdown"}}`)
 	if characters == nil || characters.DomainProjectID != "project-1" || characters.ChapterID != "chapter-1" || characters.ChapterOperation != "characters" {

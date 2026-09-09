@@ -139,9 +139,15 @@ func (c *boundedReadCache[K, V]) remove(e *readCacheEntry[K, V]) {
 }
 
 func (c *boundedReadCache[K, V]) clear() {
+	c.clearAndCount()
+}
+
+func (c *boundedReadCache[K, V]) clearAndCount() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	count := len(c.entries)
 	c.entries = make(map[K]*readCacheEntry[K, V])
 	c.lru.Init()
 	c.bytes = 0
+	return count
 }

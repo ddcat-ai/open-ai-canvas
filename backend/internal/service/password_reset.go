@@ -74,9 +74,8 @@ func (s *Service) SendPasswordResetEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	brandName := s.appearanceBrandName()
-	setting = resolveEmailSender(setting, brandName)
-	if err := s.deliverEmail(setting, email, brandName+"密码重置验证码", passwordResetEmailBody(brandName, code)); err != nil {
+	setting = resolveEmailSender(setting, s.appearanceBrandName())
+	if err := s.deliverEmail(setting, email, setting.FromName+"密码重置验证码", passwordResetEmailBody(setting.FromName, code)); err != nil {
 		if cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID); cleanupErr != nil {
 			log.Printf("password reset email cleanup failed: recipient=%s error=%v", maskedEmail(email), cleanupErr)
 		}

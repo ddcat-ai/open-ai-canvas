@@ -112,7 +112,9 @@ add({
   id: "openai-responses", providerId: "openai-response", name: "OpenAI Responses", vendor: "OpenAI", capability: "text",
   baseUrl: "https://api.openai.com", auth: bearer, params: textParams,
   create: jsonCreate("/responses", {
-    model: ref("request.model"), input: ref("request.messages"), instructions: omit(ref("request.instructions")),
+    model: ref("request.model"),
+    input: filter(ref("request.messages"), "message", ne(ref("message.role"), "system")),
+    instructions: omit(ref("request.instructions")),
     temperature: omit(ref("request.providerOptions.openai-response.temperature")),
     top_p: omit(ref("request.providerOptions.openai-response.top_p")),
     max_output_tokens: omit(coalesce(ref("request.extra.max_output_tokens"), ref("request.providerOptions.openai-response.max_output_tokens"))),
@@ -156,7 +158,7 @@ add({
   id: "google-gemini-generate-content", providerId: "gemini-generate-content", name: "Google Gemini generateContent", vendor: "Google", capability: "text",
   baseUrl: "https://generativelanguage.googleapis.com", auth: { type: "google-api-key", field: "apiKey" }, params: textParams,
   create: jsonCreate("/v1beta/models/{{model}}:generateContent", {
-    contents: map(ref("request.messages"), "message", {
+    contents: map(filter(ref("request.messages"), "message", ne(ref("message.role"), "system")), "message", {
       role: conditional(eq(ref("message.role"), "assistant"), "model", "user"),
       parts: [{ text: ref("message.content") }]
     }),
@@ -212,6 +214,7 @@ for (const [id, name, vendor, baseUrl] of [
   ["fireworks-chat", "Fireworks Chat", "Fireworks AI", "https://api.fireworks.ai/inference"],
   ["nvidia-nim-chat", "NVIDIA NIM Chat", "NVIDIA", "https://integrate.api.nvidia.com"],
   ["openrouter-chat", "OpenRouter Chat", "OpenRouter", "https://openrouter.ai/api"],
+  ["atlascloud-chat", "Atlas Cloud Chat", "Atlas Cloud", "https://api.atlascloud.ai"],
   ["litellm-proxy-chat", "LiteLLM Proxy Chat", "LiteLLM", "http://127.0.0.1:4000"],
   ["newapi-chat", "NewAPI Chat", "NewAPI", "http://127.0.0.1:3000"],
   ["vllm-chat", "vLLM OpenAI-Compatible", "vLLM", "http://127.0.0.1:8000"],
@@ -357,7 +360,15 @@ add({
     video_urls: omit(map({ $sortByOrder: ref("request.videos") }, "media", ref("media.value"))),
     audio_urls: omit(map({ $sortByOrder: ref("request.audios") }, "media", ref("media.value")))
   }),
-  poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" }, response: asyncResponse("video")
+  poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" },
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.data.task_id"), ref("response.data.taskId"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("response.id"), ref("taskId")),
+    videos: coalesce(
+      ref("response.data.result_url"), ref("response.data.video_url"), ref("response.data.output_url"), ref("response.data.url"), ref("response.data.metadata.url"),
+      ref("response.data.data.video_url"), ref("response.data.data.output_url"), ref("response.data.data.result_url"), ref("response.data.data.url"), ref("response.data.data.metadata.url"),
+      ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.output_url"), ref("response.url"), ref("response.metadata.url"), ref("response.output.url")
+    )
+  })
 });
 
 add({

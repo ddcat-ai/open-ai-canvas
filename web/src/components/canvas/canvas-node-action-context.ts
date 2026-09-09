@@ -6,6 +6,7 @@ import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 // 但画布节点经 CanvasProjectWorldLayers 渲染、不便逐个透传 handler，
 // 通过 Context 注入，避免改动 world-layers。无 Provider 时静默降级为 no-op。
 export type CanvasNodeActionContextValue = {
+    upload?: (node: CanvasNodeData) => void;
     download?: (node: CanvasNodeData) => void;
     duplicate?: (node: CanvasNodeData) => void;
     deleteNode?: (node: CanvasNodeData) => void;

@@ -1,9 +1,14 @@
+import { Button, Collapse, Input, InputNumber, Select, Tag } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useMemo, useState } from "react";
-import { Button, Collapse, Empty, Input, InputNumber, Select, Switch, Tag, Tooltip } from "antd";
+
+import { Switch } from "@/components/ui/base/switch";
+import { ToolButton } from "@/components/ui/base/buttons";
 import { ListFilter, ListPlus, Power, PowerOff } from "lucide-react";
 
 import type { WorkflowFieldMapping } from "@/stores/use-config-store";
 import { workflowFieldChoiceValues, workflowFieldConfigurationError, workflowFieldNumberBounds, workflowFieldPresetOptions } from "@/lib/model-capabilities";
+import { EmptyState } from "@/components/ui/product/empty-state";
 
 const sourceOptions = [
     { label: "保留工作流默认值", value: "" },
@@ -61,7 +66,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
     };
 
     if (!fields.length) {
-        return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未发现可配置字段，请先拉取工作流参数" />;
+        return <EmptyState size="compact" description="尚未发现可配置字段，请先拉取工作流参数" />;
     }
 
     return (
@@ -77,9 +82,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                     <Button type="text" size="small" danger icon={<PowerOff className="size-3.5" />} disabled={disabled || enabledControllableCount === 0} onClick={() => updateAllFields(false)}>
                         关闭全部
                     </Button>
-                    <Button type={showOnlyEnabled ? "default" : "text"} size="small" icon={<ListFilter className="size-3.5" />} aria-pressed={showOnlyEnabled} onClick={() => setShowOnlyEnabled((current) => !current)}>
-                        {showOnlyEnabled ? "显示全部" : "仅显示已开启"}
-                    </Button>
+                    <ToolButton size="sm" icon={<ListFilter />} active={showOnlyEnabled} label={showOnlyEnabled ? "显示全部" : "仅显示已开启"} onClick={() => setShowOnlyEnabled((current) => !current)} />
                 </div>
             </div>
             <Collapse
@@ -114,7 +117,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                         ),
                         extra: (
                             <span onClick={(event) => event.stopPropagation()}>
-                                <Switch size="small" checked={enabled} disabled={disabled || !safeToOverride} aria-label={`启用字段 ${field.label || field.fieldName}`} onChange={(checked) => updateField(index, { enabled: checked })} />
+                                <Switch size="sm" checked={enabled} disabled={disabled || !safeToOverride} aria-label={`启用字段 ${field.label || field.fieldName}`} onChange={(checked) => updateField(index, { enabled: checked })} />
                             </span>
                         ),
                         children: (
@@ -207,7 +210,7 @@ export function WorkflowFieldMappingEditor({ fields, onChange, disabled = false 
                     };
                 })}
             />
-            {showOnlyEnabled && !visibleFields.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已开启字段" /> : null}
+            {showOnlyEnabled && !visibleFields.length ? <EmptyState size="compact" description="暂无已开启字段" /> : null}
         </div>
     );
 }

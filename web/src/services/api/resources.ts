@@ -229,7 +229,12 @@ export async function uploadResourceFile(
     if (meta?.height) formData.append("height", String(Math.round(meta.height)));
     if (meta?.durationMs) formData.append("durationMs", String(Math.round(meta.durationMs)));
     try {
-        const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData, uploadRequestConfig(meta?.idempotencyKey)));
+        const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData, {
+            ...uploadRequestConfig(meta?.idempotencyKey),
+            onUploadProgress: onProgress ? ({ loaded, total }) => {
+                if (total && total > 0) onProgress(Math.min(file.size, file.size * loaded / total), file.size);
+            } : undefined,
+        }));
         resourceCache.set(resourceCacheKey(data.resource.id), data.resource);
         return data.resource;
     } catch (error) {

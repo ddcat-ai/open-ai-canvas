@@ -114,6 +114,58 @@ Hermes Bridge、`RestrictedAIAgentFactory`、Python Canvas Tool Adapter 和 Herm
 
 ComfyUI Bridge 保留，但它是站点提供的独立原生程序，由“设置 -> ComfyUI Bridge”生成启动命令。它不属于 Canvas Agent 的 Local Runtime，也不会恢复 `17371` 端口或网页本机 Agent 连接。
 
+## Depth Anything V2 本机深度模块
+
+画布“转换 → 深度图”使用 `depth-estimation` Local Runtime 模块。模块只接受签名的本机请求，Node Runtime 启动一个常驻 Python worker；模型首次调用时加载，后续转换复用同一进程。worker 以离线模式读取本地 Hugging Face 缓存，不会把图片发送到云端。
+
+使用仓库根目录的 `start-yingce-local.cmd` 时，Canvas Agent 会和前端、后端一起自动启动，转换节点不需要用户另外打开 Agent 窗口或手工填写地址。只有手工分别启动前端和后端时，才需要在本目录执行 `node dist/index.js`。
+
+当前仓库开发环境默认查找：
+
+```text
+.local/depth-anything-v2/venv/Scripts/python.exe   # Windows
+.local/depth-anything-v2/venv/bin/python           # Linux/macOS
+.local/cache/huggingface/                          # 模型缓存
+```
+
+发布包会携带 `python/depth_anything_runtime.py`，但不会携带 Python、依赖或模型权重。自定义安装位置时设置 `CANVAS_DEPTH_PYTHON`、`CANVAS_DEPTH_HF_HOME`；需要指定工作区时设置 `CANVAS_PROJECT_ROOT`。模型缺失、Python 环境缺失或 worker 退出时，转换节点显示具体失败状态并保留输入，不会把失败标记为完成。
+
+## ControlNet Aux 本机 AI 线稿模块
+
+画布“转换 → AI 线稿”使用 `lineart-estimation` Local Runtime 模块。它只运行 ControlNet Aux 的 `LineartDetector` 预处理器，把图片转换为线稿控制图；不会加载 Stable Diffusion、ControlNet 生图管线，也不会把图片上传到云端。Node Runtime 会复用同一个常驻 Python worker，首次转换加载模型，后续请求复用已加载模型。
+
+该模块与深度模块共用 `.local/depth-anything-v2/venv` Python 环境和 `.local/cache/huggingface` 模型缓存。首次设置或缺少依赖时，在仓库根目录执行：
+
+```powershell
+$python = ".local/depth-anything-v2/venv/Scripts/python.exe"
+& $python -m pip install -r canvas-agent/python/requirements-lineart.txt
+```
+
+然后用下面的命令把线稿预处理器权重缓存到本地；下载完成后，正常转换会强制离线运行：
+
+```powershell
+$env:HF_HOME = (Resolve-Path ".local/cache/huggingface").Path
+$env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
+& $python -c "from controlnet_aux import LineartDetector; LineartDetector.from_pretrained('lllyasviel/Annotators')"
+```
+
+自定义安装位置时设置 `CANVAS_DEPTH_PYTHON`、`CANVAS_LINEART_HF_HOME` 和 `CANVAS_LINEART_MODEL_ID`；未找到 Python、依赖或模型时，节点显示“本地不可用”并保留输入，不会伪造已完成结果。
+
+## ControlNet Aux 本机姿态骨架模块
+
+画布“转换 → 姿态骨架”使用 `pose-estimation` Local Runtime 模块。当前笔记本方案采用 ControlNet Aux 的 **OpenPose body-only** 预处理器：只提取人体 18 点骨架并输出彩色姿态图，不加载 Stable Diffusion，也不上传图片。Node Runtime 会复用常驻 Python worker；未检测到人物时返回 `pose_no_person`，转换节点显示“已跳过”，不会保存伪造结果。
+
+该模块与深度、线稿共用 `.local/depth-anything-v2/venv` Python 环境和 `.local/cache/huggingface` 缓存。安装 `requirements-lineart.txt` 后缓存人体权重：
+
+```powershell
+$python = ".local/depth-anything-v2/venv/Scripts/python.exe"
+$env:HF_HOME = (Resolve-Path ".local/cache/huggingface").Path
+$env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
+& $python -c "from huggingface_hub import hf_hub_download; hf_hub_download('lllyasviel/Annotators', 'body_pose_model.pth', cache_dir='$env:HF_HUB_CACHE')"
+```
+
+自定义安装位置时设置 `CANVAS_POSE_PYTHON`、`CANVAS_POSE_HF_HOME` 和 `CANVAS_POSE_MODEL_ID`。DWPose（包含手部、脸部和更完整关键点）仍可在后续按需替换，但它需要额外的 MMDetection/MMPose 依赖；当前实现优先保证普通 CPU 笔记本可运行。
+
 ## 发布
 
 包名为 `kraftreel-cli`，版本由 `canvas-agent/package.json` 独立管理。全局安装后使用 `kraftreel` 命令。发布前运行：

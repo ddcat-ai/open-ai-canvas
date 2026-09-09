@@ -1,3 +1,5 @@
+import { Button, Modal, Segmented, Select } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import copyToClipboard from "copy-to-clipboard";
 import { ArrowDown, Copy, Cpu, Settings2, Trash2, X } from "lucide-react";
@@ -498,8 +500,27 @@ export function CanvasAssistantPanel({
     }, [view]);
 
     useEffect(() => {
-        setRemovedReferenceIds(new Set());
-    }, [selectedNodeKey]);
+        setAttachedReferenceIds((current) => {
+            const nodeById = new Map(nodes.map((node) => [node.id, node]));
+            const next = new Set(current);
+            let changed = false;
+            selectedNodeIds.forEach((id) => {
+                const node = nodeById.get(id);
+                if (!node || !nodeToReference(node) || next.has(id)) return;
+                next.add(id);
+                changed = true;
+            });
+            return changed ? next : current;
+        });
+    }, [nodes, selectedNodeIds]);
+
+    useEffect(() => {
+        setAttachedReferenceIds((current) => {
+            const nodeIds = new Set(nodes.map((node) => node.id));
+            const next = new Set(Array.from(current).filter((id) => nodeIds.has(id)));
+            return next.size === current.size ? current : next;
+        });
+    }, [nodes]);
 
     const updateSession = (sessionId: string, updater: (session: CanvasAssistantSession) => CanvasAssistantSession) => {
         const next = localSessionsRef.current.map((session) => (session.id === sessionId ? updater(session) : session));
@@ -1243,15 +1264,25 @@ export function CanvasAssistantPanel({
             {view === "chat" ? (
                 <>
                     {selectedReferences.length ? (
-                        <div className="thin-scrollbar flex max-w-full gap-1.5 overflow-x-auto px-3 pb-1">
+                        <div className="thin-scrollbar flex max-w-full items-center gap-1.5 overflow-x-auto px-3 py-1.5">
+                            <span className="shrink-0 text-[var(--fs-micro)] font-medium opacity-55">参考 · {selectedReferences.length}</span>
                             {selectedReferences.map((item, index) => (
                                 <AssistantReferenceChip
                                     key={item.id}
                                     item={item}
                                     label={assistantImageReferenceLabel(selectedReferences, index)}
+                                    previewUrl={resolvedPreviewById.get(item.id) || item.dataUrl}
                                     onRemove={() => {
-                                        setRemovedReferenceIds((prev) => new Set(prev).add(item.id));
+                                        setAttachedReferenceIds((prev) => {
+                                            const next = new Set(prev);
+                                            next.delete(item.id);
+                                            return next;
+                                        });
                                         if (selectedNodeIds.has(item.id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== item.id)));
+                                    }}
+                                    onInsertMention={(label) => {
+                                        const token = `@${label} `;
+                                        setPrompt((prev) => (promptAlreadyHasMention(prev, label) ? prev : prev.trim() ? `${prev.replace(/\s+$/u, "")} ${token}` : token));
                                     }}
                                 />
                             ))}
@@ -1490,39 +1521,121 @@ function MessageReferences({ message }: { message: CanvasAssistantMessage }) {
     );
 }
 
-function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssistantReference; label?: string; onRemove?: () => void }) {
+function promptAlreadyHasMention(prompt: string, label: string) {
+    const token = `@${label}`;
+    let from = 0;
+    while (from <= prompt.length) {
+        const index = prompt.indexOf(token, from);
+        if (index < 0) return false;
+        const next = prompt[index + token.length];
+        if (!next || /\s|[,.!?;:，。！？；：、)\]}】）]/.test(next)) return true;
+        from = index + 1;
+    }
+    return false;
+}
+
+function AssistantReferenceChip({ item, label, previewUrl, onRemove, onInsertMention }: { item: CanvasAssistantReference; label?: string; previewUrl?: string; onRemove?: () => void; onInsertMention?: (label: string) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const mentionReference = useMemo(() => assistantReferencesToMentionReferences([item]), [item]);
+    const resolvedReference = useResolvedCanvasResourceReferences(mentionReference)[0];
     const text = (item.text || item.title).replace(/\s+/g, " ").trim().slice(0, 1) || "文";
+    const imageUrl = previewUrl || resolvedReference?.previewUrl || item.dataUrl;
+    const hasImage = Boolean(imageUrl || item.storageKey);
+    const chipStyle = { background: theme.spatial.surface, color: theme.node.text };
+    const actionStyle = { background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text };
+
+    if (hasImage) {
+        return (
+            <>
+                <span className="group/chip relative inline-flex h-12 shrink-0 items-center overflow-visible rounded-md" style={chipStyle}>
+                    <button
+                        type="button"
+                        className="grid size-12 shrink-0 overflow-hidden rounded-l-md border-0 p-0"
+                        style={{ background: theme.toolbar.itemHover }}
+                        title="点击放大预览"
+                        aria-label={`预览 ${label || item.title}`}
+                        disabled={!imageUrl}
+                        onClick={() => imageUrl && setPreviewOpen(true)}
+                        onDoubleClick={() => imageUrl && setPreviewOpen(true)}
+                    >
+                        {imageUrl ? (
+                            <img src={imageUrl} alt="" className="size-full object-cover" />
+                        ) : (
+                            <span className="text-[var(--fs-micro)] opacity-50">…</span>
+                        )}
+                    </button>
+                    {label && onInsertMention ? (
+                        <button
+                            type="button"
+                            className="inline-flex h-12 max-w-[112px] min-w-0 items-center gap-1 border-0 bg-transparent px-2.5 text-[var(--fs-tiny)] opacity-80 hover:opacity-100"
+                            title={`插入 @${label}`}
+                            onClick={() => onInsertMention(label)}
+                        >
+                            <AtSign className="size-2.5 shrink-0" />
+                            <span className="truncate">{label}</span>
+                        </button>
+                    ) : label ? (
+                        <span className="inline-flex h-12 max-w-[112px] min-w-0 items-center gap-1 px-2.5 text-[var(--fs-tiny)] opacity-80">
+                            <AtSign className="size-2.5 shrink-0" />
+                            <span className="truncate">{label}</span>
+                        </span>
+                    ) : null}
+                    {onRemove ? (
+                        <button
+                            type="button"
+                            className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover/chip:opacity-100 group-focus-within/chip:opacity-100"
+                            style={actionStyle}
+                            onClick={onRemove}
+                            aria-label="移除引用"
+                        >
+                            <X className="size-3" />
+                        </button>
+                    ) : null}
+                </span>
+                {previewOpen && imageUrl ? <AgentImagePreview attachment={{ id: item.id, url: imageUrl, name: item.title || label || "图片" }} onClose={() => setPreviewOpen(false)} /> : null}
+            </>
+        );
+    }
+
     return (
-        <div className="group/chip relative inline-flex h-8 max-w-[150px] shrink-0 items-center gap-1.5 rounded-lg text-sm" style={{ color: theme.node.text }}>
-            {item.dataUrl ? (
-                <span className="relative block size-8 shrink-0">
-                    <img src={item.dataUrl} alt="" className="size-8 rounded-lg object-cover" />
-                    {label ? <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 py-0.5 text-[var(--fs-micro)] font-medium leading-none text-white">{label}</span> : null}
-                </span>
-            ) : (
-                <span className="grid size-8 place-items-center rounded-md text-sm font-medium" style={{ background: theme.spatial.surface }}>
-                    {text}
-                </span>
-            )}
+        <span className="group/chip relative inline-flex h-12 max-w-[168px] shrink-0 items-center gap-2 overflow-hidden rounded-md px-2.5 text-sm" style={chipStyle}>
+            <span className="grid size-8 shrink-0 place-items-center rounded-md text-sm font-medium" style={{ background: theme.toolbar.itemHover }}>
+                {text}
+            </span>
+            <span className="min-w-0 truncate text-[var(--fs-tiny)] opacity-80">{item.title}</span>
             {onRemove ? (
                 <button
                     type="button"
                     className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover/chip:opacity-100"
-                    style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}
+                    style={actionStyle}
                     onClick={onRemove}
                     aria-label="移除引用"
                 >
                     <X className="size-3" />
                 </button>
             ) : null}
-        </div>
+        </span>
     );
 }
 
+function assistantReferencesToMentionReferences(references: CanvasAssistantReference[]): CanvasResourceReference[] {
+    return references.flatMap((item, index): CanvasResourceReference[] => {
+        if (item.dataUrl || item.storageKey) {
+            const label = assistantImageReferenceLabel(references, index) || item.title;
+            return [{ id: item.id, nodeId: item.id, kind: "image", label, title: item.title, previewUrl: item.dataUrl, storageKey: item.storageKey, active: true }];
+        }
+        if (item.text) {
+            const label = item.type === CanvasNodeType.Skill ? `技能${index + 1}` : `文本${index + 1}`;
+            return [{ id: item.id, nodeId: item.id, kind: item.type === CanvasNodeType.Skill ? "skill" : "text", label, title: item.title, text: item.text, active: true }];
+        }
+        return [];
+    });
+}
+
 function assistantImageReferenceLabel(references: CanvasAssistantReference[], index: number) {
-    if (!references[index]?.dataUrl) return undefined;
-    const imageIndex = references.slice(0, index + 1).filter((item) => item.dataUrl).length - 1;
+    if (!references[index]?.dataUrl && !references[index]?.storageKey) return undefined;
+    const imageIndex = references.slice(0, index + 1).filter((item) => item.dataUrl || item.storageKey).length - 1;
     return imageIndex >= 0 ? imageReferenceLabel(imageIndex) : undefined;
 }
 

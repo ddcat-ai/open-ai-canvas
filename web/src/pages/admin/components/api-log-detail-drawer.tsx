@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Drawer, Empty, Skeleton, Tabs, Typography } from "antd";
+import { App, Button, Descriptions, Drawer, Skeleton, Tabs, Typography } from "antd";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
@@ -49,7 +50,7 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
 
     return (
         <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden rootClassName="admin-drawer">
-            {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <Empty description="没有请求详情" />}
+            {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <EmptyState size="compact" title="没有请求详情" />}
         </Drawer>
     );
 }
@@ -125,7 +126,7 @@ function requestKindText(value: ApiCallLog["requestKind"]) {
 }
 
 function PayloadPanel({ value, empty }: { value?: string; empty: string }) {
-    if (!value) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} />;
+    if (!value) return <EmptyState size="compact" title={empty} />;
     return (
         <div className="relative">
             <div className="absolute right-3 top-2 z-10">

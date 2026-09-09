@@ -42,6 +42,7 @@ type TaskSummary struct {
 }
 
 type TaskClientContext struct {
+	NodeID           string `json:"nodeId,omitempty"`
 	ConversationID   string `json:"conversationId,omitempty"`
 	MessageID        string `json:"messageId,omitempty"`
 	BatchIndex       int    `json:"batchIndex,omitempty"`
@@ -136,6 +137,7 @@ func taskClientContext(raw string) *TaskClientContext {
 	var input struct {
 		Metadata struct {
 			Source          string `json:"source"`
+			NodeID          string `json:"nodeId"`
 			ConversationID  string `json:"conversationId"`
 			MessageID       string `json:"messageId"`
 			BatchIndex      int    `json:"batchIndex"`
@@ -152,16 +154,20 @@ func taskClientContext(raw string) *TaskClientContext {
 		return nil
 	}
 	metadata := input.Metadata
+	context := &TaskClientContext{NodeID: metadata.NodeID}
 	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
-		return &TaskClientContext{
-			ConversationID: metadata.ConversationID,
-			MessageID:      metadata.MessageID,
-			BatchIndex:     metadata.BatchIndex,
-			BatchCount:     metadata.BatchCount,
-		}
+		context.ConversationID = metadata.ConversationID
+		context.MessageID = metadata.MessageID
+		context.BatchIndex = metadata.BatchIndex
+		context.BatchCount = metadata.BatchCount
+		return context
 	}
 	if metadata.ShotID != "" && metadata.WorkflowStepID != "" {
-		return &TaskClientContext{DomainProjectID: metadata.DomainProjectID, ShotID: metadata.ShotID, WorkflowStepID: metadata.WorkflowStepID, ArtifactType: metadata.ArtifactType}
+		context.DomainProjectID = metadata.DomainProjectID
+		context.ShotID = metadata.ShotID
+		context.WorkflowStepID = metadata.WorkflowStepID
+		context.ArtifactType = metadata.ArtifactType
+		return context
 	}
 	chapterOperation := ""
 	if metadata.Operation == "chapter_character_breakdown" {
@@ -170,13 +176,15 @@ func taskClientContext(raw string) *TaskClientContext {
 		chapterOperation = "storyboard"
 	}
 	if chapterOperation == "" || metadata.DomainProjectID == "" || metadata.ChapterID == "" {
-		return nil
+		if context.NodeID == "" {
+			return nil
+		}
+		return context
 	}
-	return &TaskClientContext{
-		DomainProjectID:  metadata.DomainProjectID,
-		ChapterID:        metadata.ChapterID,
-		ChapterOperation: chapterOperation,
-	}
+	context.DomainProjectID = metadata.DomainProjectID
+	context.ChapterID = metadata.ChapterID
+	context.ChapterOperation = chapterOperation
+	return context
 }
 
 // 列表只暴露首个可访问媒体地址，避免把完整生成结果和内嵌数据带回前端。

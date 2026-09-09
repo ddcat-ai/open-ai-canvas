@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { App, Button, Form, Input, Modal, Select, Switch } from "antd";
+import { App, Button, Form, Input, Modal, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PencilLine, Pin, Plus, RefreshCw, Search, Send, Upload, X } from "lucide-react";

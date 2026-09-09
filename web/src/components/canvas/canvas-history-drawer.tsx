@@ -1,11 +1,16 @@
+import { Drawer, Button, Input, Popconfirm } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useMemo, useState } from "react";
-import { Drawer, Tag, Button, Input, Popconfirm, Empty, Tooltip } from "antd";
+
 import { Clock, Clock3, ExternalLink, History, Search, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router";
+
+import { StatusBadge } from "@/components/ui/base/badges";
 
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/product/empty-state";
 
 type TimelineItem = {
     id: string;
@@ -140,9 +145,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
 
                 {/* 时间线列表 */}
                 {filteredItems.length === 0 ? (
-                    <div className="py-12">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无匹配的历史记录" />
-                    </div>
+                    <EmptyState description="暂无匹配的历史记录" />
                 ) : (
                     <div className="relative border-l-2 border-stone-200 dark:border-stone-800 pl-4 space-y-4 pt-1">
                         {filteredItems.map((item) => {
@@ -177,15 +180,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                                                             {item.title}
                                                         </button>
                                                     )}
-                                                    {isDeleted ? (
-                                                        <Tag color="error" className="m-0 text-[11px] leading-tight px-1.5 py-0.5 font-medium">
-                                                            已删除
-                                                        </Tag>
-                                                    ) : (
-                                                        <Tag color="success" className="m-0 text-[11px] leading-tight px-1.5 py-0.5 font-medium">
-                                                            活跃中
-                                                        </Tag>
-                                                    )}
+                                                    {isDeleted ? <StatusBadge tone="error" size="sm" label="已删除" className="m-0" /> : <StatusBadge tone="success" size="sm" label="活跃中" className="m-0" />}
                                                 </div>
 
                                                 <div className="space-y-1 text-xs text-stone-600 dark:text-stone-300">

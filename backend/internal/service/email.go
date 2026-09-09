@@ -178,7 +178,8 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	s.emailCodeMu.Lock()
 	defer s.emailCodeMu.Unlock()
 	if latest, err := s.repo.LatestEmailVerificationCode(email, registrationEmailPurpose); err == nil && time.Since(latest.CreatedAt) < time.Minute {
-		return BadAuthRequest("验证码发送过于频繁，请稍后再试")
+		seconds := max(1, int((time.Until(latest.CreatedAt.Add(time.Minute))+time.Second-1)/time.Second))
+		return &EmailCodeCooldownError{Seconds: seconds}
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
@@ -195,9 +196,8 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	brandName := s.appearanceBrandName()
-	setting = resolveEmailSender(setting, brandName)
-	if err := s.deliverEmail(setting, email, brandName+"注册验证码", registrationEmailBody(brandName, code)); err != nil {
+	setting = resolveEmailSender(setting, s.appearanceBrandName())
+	if err := s.deliverEmail(setting, email, setting.FromName+"注册验证码", registrationEmailBody(setting.FromName, code)); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
 			return errors.Join(

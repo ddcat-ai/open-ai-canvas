@@ -77,9 +77,9 @@ export function parseImageDimensions(value: string) {
     return { width: Number(match[1]), height: Number(match[2]) };
 }
 
-export function validateImageSize(width: number, height: number) {
+export function validateImageSize(width: number, height: number, requireStepAlignment = true) {
     if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) throw new Error("图像尺寸必须是正整数，例如 1024x1024");
-    if (width % IMAGE_SIZE_STEP !== 0 || height % IMAGE_SIZE_STEP !== 0) throw new Error("图像尺寸的宽高必须是 16 的倍数，请调整尺寸");
+    if (requireStepAlignment && (width % IMAGE_SIZE_STEP !== 0 || height % IMAGE_SIZE_STEP !== 0)) throw new Error("图像尺寸的宽高必须是 16 的倍数，请调整尺寸");
     if (Math.max(width, height) > IMAGE_MAX_EDGE) throw new Error("图像尺寸最长边不能超过 3840px，请调整尺寸");
     if (Math.max(width, height) / Math.min(width, height) > IMAGE_MAX_RATIO) throw new Error("图像宽高比不能超过 3:1，请调整尺寸");
     const pixels = width * height;
@@ -115,6 +115,19 @@ function dimensionGCD(left: number, right: number) {
 export function resolveImageRequestSize(profile: ImageCapabilityConfig, quality: string | undefined, size: string) {
     const request = imageSizeRequest(profile, size);
     if (!request) return undefined;
+    if (request.parameter === "aspect_ratio" && !profile.size.allowCustom && profile.size.presets?.length) {
+        const normalized = normalizeQuality(quality || profile.quality.default);
+        const tier = normalized === "low" ? "1k" : normalized === "medium" ? "2k" : normalized === "high" ? "4k" : undefined;
+        if (tier && !profile.size.presets.some((preset) => preset.tier === tier && preset.ratio === request.value)) {
+            throw new Error("当前分辨率不支持所选图片宽高比");
+        }
+    }
+    const dimensions = parseImageDimensions(request.value);
+    // 模型声明的精确预设（如 1920x1080）不应被自定义尺寸的 16 像素对齐规则拒绝。
+    if (request.parameter === "size" && dimensions && profile.size.values.includes(request.value)) {
+        validateImageSize(dimensions.width, dimensions.height, false);
+        return request;
+    }
     const value = request.parameter === "size" ? resolveRequestSize(quality, request.value) : resolveAspectRatio(request.value);
     return value ? { parameter: request.parameter, value } : undefined;
 }

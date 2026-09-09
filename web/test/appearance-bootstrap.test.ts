@@ -28,6 +28,12 @@ test("a custom login video never falls back to the built-in poster", () => {
     expect(appearance.authHeroTitle).toBe("把灵感，\n变成可见的故事。");
     expect(appearance.authHeroDescription).toBe("从同一个创作空间持续推进。");
     expect(appearance.authVideoPosterUrl).toBe("");
+    expect(appearance.authVideoAutoplay).toBe(true);
+});
+
+test("login video autoplay defaults on and can be disabled explicitly", () => {
+    expect(normalizePublicAppearance({}).authVideoAutoplay).toBe(true);
+    expect(normalizePublicAppearance({ authVideoAutoplay: false }).authVideoAutoplay).toBe(false);
 });
 
 test("appearance URLs reject executable and insecure remote schemes", () => {
@@ -64,6 +70,7 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
     const source = await Bun.file(new URL("../src/pages/auth/auth-scene.tsx", import.meta.url)).text();
 
     expect(source).toContain("appearance.authVideoUrl");
+    expect(source).toContain("appearance.authVideoAutoplay");
     expect(source).toContain("appearance.authVideoPosterUrl || undefined");
     expect(source).toContain("appearance.brandName");
     expect(source).toContain("appearance.authHeroTitle");
@@ -91,8 +98,14 @@ test("appearance management exposes light and dark logo uploads plus the frame s
     expect(pageSource).toContain("setLogoFrameEnabled(!checked)");
     expect(pageSource).not.toContain("<Checkbox");
     expect(pageSource).toContain("深浅模式 Logo 预览");
+    expect(pageSource).toContain("登录页视频自动播放");
+    expect(pageSource).toContain("authVideoAutoplay");
     expect(brandSource).toContain("useThemeStore");
     expect(brandSource).toContain("data-logo-frame-enabled");
+    expect(brandSource).toContain("failedSource === source");
+    expect(brandSource).toContain('aria-hidden="true"');
+    expect(brandSource).toContain('style.visibility = "hidden"');
+    expect(brandSource).toContain("setFailedSource(source)");
     expect(adminStyles).toContain(".admin-appearance-logo-preview-mark.is-unframed img");
     expect(globalStyles).toContain('.brand-logo-frame[data-logo-frame-enabled="false"] > :is(img, svg)');
 });

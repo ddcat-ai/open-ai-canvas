@@ -163,12 +163,13 @@ function managedModelChannels(models: PublicLogicalModel[]) {
 }
 
 // 系统渠道模型转换为前端配置格式
-function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChannel[] {
+export function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChannel[] {
     return channels.map((channel) => {
         const availableModels = channel.models.filter((m) => m.available);
         return {
             id: channel.id,
             name: channel.displayName,
+            sortOrder: channel.sortOrder,
             // 系统渠道必须走带渠道 ID 的站内代理；/api 只是业务 API 根路径，
             // 不能作为模型请求的运行时 Base URL 传给 channelRequest。
             baseUrl: `/api/${channel.id}`,

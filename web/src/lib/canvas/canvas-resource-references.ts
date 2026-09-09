@@ -52,6 +52,104 @@ export function normalizeCanvasNodeMentionTokens(prompt: string, references: Can
     }, prompt);
 }
 
+const CANVAS_RESOURCE_MENTION_BOUNDARY = /(?:$|\s|[,.!?;:，。！？；：、)\]}】）])/;
+
+function canvasResourceReferenceMentionTokens(reference: CanvasResourceReference) {
+    const tokens = [canvasResourceMentionToken(reference), `@${reference.label}`];
+    if (reference.nodeId && !reference.assetId && reference.kind !== "skill") tokens.push(canvasNodeMentionToken(reference.nodeId));
+    return [...new Set(tokens.filter(Boolean))];
+}
+
+function removeCanvasResourceReferenceTokens(prompt: string, references: CanvasResourceReference[]) {
+    return compactRemovedCanvasMentionPrompt(references.reduce((value, reference) => {
+        let next = value;
+        for (const token of canvasResourceReferenceMentionTokens(reference)) {
+            next = removeCanvasMentionToken(next, token);
+        }
+        return next;
+    }, prompt));
+}
+
+function rewriteCanvasPromptAfterReferenceChange(prompt: string, previousReferences: CanvasResourceReference[], nextReferences: CanvasResourceReference[]) {
+    const previousCanvasReferences = canvasNodeBoundReferences(previousReferences);
+    const nextCanvasReferences = canvasNodeBoundReferences(nextReferences);
+    if (!previousCanvasReferences.length || !canvasReferenceIdentityChanged(previousCanvasReferences, nextCanvasReferences)) return prompt;
+
+    const nextByNodeId = new Map(nextCanvasReferences.map((reference) => [reference.nodeId, reference]));
+    let value = prompt;
+    previousCanvasReferences.forEach((reference) => {
+        const nodeToken = canvasNodeMentionToken(reference.nodeId);
+        canvasResourceReferenceMentionTokens(reference).forEach((token) => {
+            if (token !== nodeToken) value = replaceCanvasMentionToken(value, token, nodeToken);
+        });
+    });
+    previousCanvasReferences.filter((reference) => !nextByNodeId.has(reference.nodeId)).forEach((reference) => {
+        value = removeCanvasMentionToken(value, canvasNodeMentionToken(reference.nodeId));
+    });
+    value = normalizeCanvasNodeMentionTokens(value, nextCanvasReferences);
+    return value === prompt ? prompt : compactRemovedCanvasMentionPrompt(value);
+}
+
+export function applyCanvasConnectionPromptSync(previousNodes: CanvasNodeData[], previousConnections: CanvasConnection[], nextNodes: CanvasNodeData[], nextConnections: CanvasConnection[]) {
+    const previousMap = buildCanvasNodeMentionReferenceMap(previousNodes, previousConnections, nextNodes);
+    const nextMap = buildCanvasNodeMentionReferenceMap(nextNodes, nextConnections, nextNodes);
+    let changed = false;
+    const mapped = nextNodes.map((node) => {
+        const previousPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
+        const nextPrompt = rewriteCanvasPromptAfterReferenceChange(previousPrompt, previousMap.get(node.id) || [], nextMap.get(node.id) || []);
+        if (nextPrompt === previousPrompt) return node;
+        changed = true;
+        return writeCanvasNodePrompt(node, nextPrompt);
+    });
+    return changed ? mapped : nextNodes;
+}
+
+function canvasNodeBoundReferences(references: CanvasResourceReference[]) {
+    return references.filter((reference) => reference.nodeId && !reference.assetId && reference.kind !== "skill");
+}
+
+function canvasReferenceIdentityChanged(previousReferences: CanvasResourceReference[], nextReferences: CanvasResourceReference[]) {
+    if (previousReferences.length !== nextReferences.length) return true;
+    const nextLabelByNodeId = new Map(nextReferences.map((reference) => [reference.nodeId, reference.label]));
+    return previousReferences.some((reference) => nextLabelByNodeId.get(reference.nodeId) !== reference.label);
+}
+
+function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string) {
+    const hasExistingContent = (node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim())) || (node.type === CanvasNodeType.Image && Boolean(node.metadata?.content));
+    const promptTemplateMetadata = node.metadata?.promptTemplateOperation
+        ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
+        : {};
+    return {
+        ...node,
+        metadata: hasExistingContent
+            ? { ...node.metadata, ...promptTemplateMetadata, composerContent: prompt }
+            : { ...node.metadata, ...promptTemplateMetadata, prompt, composerContent: prompt },
+    };
+}
+
+function removeCanvasMentionToken(value: string, token: string) {
+    return replaceCanvasMentionToken(value, token, "");
+}
+
+function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
+    if (!token) return value;
+    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Numbered media mentions can touch Chinese prose or another mention, but not a longer number.
+    const boundary = /^@(图片|视频|音频|文本)\d+$/.test(token)
+        ? "(?![0-9])"
+        : token.startsWith("@[node:") ? "" : `(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`;
+    return value.replace(new RegExp(`${escapedToken}${boundary}`, "gu"), replacement);
+}
+
+function compactRemovedCanvasMentionPrompt(value: string) {
+    return value
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/^[ \t]+|[ \t]+$/g, "")
+        .replace(/^\n+|\n+$/g, "");
+}
+
 export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceReference[] {
     return assets.flatMap((asset): CanvasResourceReference[] => {
         if (asset.kind === "model") return [];
@@ -119,7 +217,7 @@ export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], conn
         const configTargetId = configTargetBySourceId.get(node.id);
         const configInputs = configTargetId ? (resourceInputsByTargetId.get(configTargetId) || []).filter((input) => input.id !== node.id) : [];
         const ownInputs = resourceInputsByTargetId.get(node.id) || [];
-        const inputs = configInputs.length ? configInputs : ownInputs.length ? ownInputs : isResourceNode(node) ? [node] : [];
+        const inputs = configInputs.length ? configInputs : ownInputs.filter((input) => input.id !== node.id);
         referencesByNodeId.set(node.id, labelResourceNodes(inputs, true));
     }
     return referencesByNodeId;
@@ -129,13 +227,20 @@ export function buildOrderedCanvasResourceReferences(nodes: CanvasNodeData[], ac
     return labelResourceNodes(nodes.filter(isResourceNode), active);
 }
 
+export function imageGenerationReferenceConnections(sourceNodeId: string, targetNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], createId: () => string): CanvasConnection[] {
+    if (!sourceNodeId || sourceNodeId === targetNodeId) return [];
+    const existing = new Set(connections.filter((connection) => connection.toNodeId === targetNodeId).map((connection) => connection.fromNodeId));
+    return getMentionResourceNodes(sourceNodeId, nodes, connections)
+        .filter((node) => node.id !== sourceNodeId && node.id !== targetNodeId && !existing.has(node.id))
+        .map((node) => ({ id: createId(), fromNodeId: node.id, toNodeId: targetNodeId }));
+}
+
 export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const configInputs = getConnectedConfigResourceNodes(nodeId, nodes, connections);
     if (configInputs.length) return configInputs;
     const ownInputs = getContextResourceNodes(nodeId, nodes, connections);
     if (ownInputs.length) return ownInputs;
-    const node = nodes.find((item) => item.id === nodeId);
-    return node && isResourceNode(node) ? [node] : [];
+    return [];
 }
 
 export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

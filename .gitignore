@@ -18,6 +18,7 @@ docs/content/docs/plugins/*
 !docs/content/docs/backend/
 docs/content/docs/backend/*
 !docs/content/docs/backend/task-runtime-stability.mdx
+!docs/content/docs/backend/newapi-channel-2.mdx
 .env*
 !.env.example
 data/

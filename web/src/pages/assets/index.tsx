@@ -555,7 +555,7 @@ export default function AssetsPage() {
                                         </>
                                     ) : (
                                         <>
-                                            <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>
+                                            <Button icon={<Plus className="size-3.5" />} onClick={openCreate}>
                                                 新增素材
                                             </Button>
                                             <Button icon={<Images className="size-3.5" />} onClick={() => setBatchUploadOpen(true)}>
@@ -564,7 +564,7 @@ export default function AssetsPage() {
                                             <Button icon={<FolderOpen className="size-3.5" />} onClick={() => navigate("/plugins/eagle")}>
                                                 Eagle 素材库
                                             </Button>
-                                            <Button title="导出全部素材" aria-label="导出全部素材" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()} />
+                                            <Button aria-label="导出全部素材" title="导出全部素材" icon={<Download className="size-3.5" />} onClick={() => void exportAllAssets()} />
                                             <Dropdown
                                                 trigger={["click"]}
                                                 menu={{
@@ -574,7 +574,7 @@ export default function AssetsPage() {
                                                     ],
                                                 }}
                                             >
-                                                <Button title="导入素材" aria-label="导入素材" icon={<FileUp className="size-4" />} />
+                                                <Button aria-label="导入素材" title="导入素材" icon={<FileUp className="size-3.5" />} />
                                             </Dropdown>
                                         </>
                                     )}

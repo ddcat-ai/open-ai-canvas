@@ -377,7 +377,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             const needsDiscovery = recoveryNodes.some((node) => !node.metadata?.taskId && !node.metadata?.agentGenerationContinuation?.taskId);
             const projectTasks = needsDiscovery
                 ? (
-                      await listGenerationTasks(30, { projectId: startedProjectId }, undefined, signal).catch((error) => {
+                      await listGenerationTasks(100, { projectId: startedProjectId }, undefined, signal).catch((error) => {
                           if (!isCurrentProject()) throw error;
                           return [];
                       })
