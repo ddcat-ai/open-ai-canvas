@@ -10,12 +10,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// CurrentSchemaVersion = 10：影策 fork 与上游迁移编号在此分叉（D-053）。
+// CurrentSchemaVersion = 11：影策 fork 与上游迁移编号在此分叉（D-053）。
 // 本地生产库已应用 6=asset_library_folders、7=shot_task_chain（W1-01），
 // 上游 main 在 v1.2.5 后将 6 改派 resource_playback_variant 并把 folders 挪到 7。
 // 为免生产库记录作废，fork 保留自有编号，上游两个新迁移顺延为 8/9，
 // fork 自有 10=agent_tokens（D-057A Agent Service Token 基础设施）。
-const CurrentSchemaVersion int64 = 10
+//
+// 11=channel_presentation 来自上游 v1.2.8.rc1：上游登记为 9 号，但 fork 的 9 已被
+// logical_model_active_code 占用，故顺延为 11。它必须作为正式迁移注册，
+// 不能指望 AutoMigrate 兜底——schema.go 的 AutoMigrate(Models()...) 位于
+// migrateSchemaV1 函数体内，存量库 1 号迁移已登记，MigrateSchema 会直接 continue，
+// 永远不会重跑 V1，新增列因此不会落地（会导致 SystemChannels 等路径报 no such column）。
+const CurrentSchemaVersion int64 = 11
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -27,6 +33,10 @@ const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const shotTaskChainChecksum = "sha256:shot-task-chain-v7-20260904"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const agentTokensChecksum = "sha256:agent-tokens-v10-20260907"
+// channelPresentationChecksum：上游同名迁移登记为 9 号、checksum 为
+// "sha256:channel-presentation-v9-20260908"。fork 顺延为 11 号，故使用独立 checksum，
+// 避免与上游编号混淆；存量库不存在 11 号记录，不会触发 validateMigrationRecord 冲突。
+const channelPresentationChecksum = "sha256:channel-presentation-v11-yingce"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -63,15 +73,15 @@ var schemaMigrations = []migration{
 	{version: 8, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaResourcePlaybackVariant},
 	{version: 9, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaLogicalModelActiveCode},
 	{version: 10, name: "agent_tokens", checksum: agentTokensChecksum, apply: migrateSchemaAgentTokens},
+	{version: 11, name: "channel_presentation", checksum: channelPresentationChecksum, apply: migrateChannelPresentation},
 }
 
-// migrateChannelPresentation：上游 v1.2.8.rc1 新增，形式为独立函数而非编号迁移，
-// 用于给既有 model_channels / channel_models 补 PublicAlias、SortOrder 列。
+// migrateChannelPresentation：上游 v1.2.8.rc1 新增，给既有 model_channels /
+// channel_models 补 PublicAlias、SortOrder 列（上游登记为 9 号，fork 顺延为 11 号）。
 //
-// 影策 fork 暂不将其注册进 schemaMigrations：fork 的 9 已占用 logical_model_active_code，
-// 若登记为 11 会把 CurrentSchemaVersion 抬到 11，使生产库（当前 10）被判为版本过旧而拒绝启动。
-// 且新增列已由启动时 schema.go 的 AutoMigrate(Models()...) 自动补齐，功能上无缺口。
-// 待主理人确认后，可作为 11 号迁移正式接入。
+// 必须作为正式迁移注册，理由见 CurrentSchemaVersion 的注释：schema.go 的
+// AutoMigrate(Models()...) 只在 migrateSchemaV1 里执行，对存量库不生效。
+// 幂等：先 HasColumn 判断再 AddColumn，重复执行安全（上游同名测试即验证此点）。
 func migrateChannelPresentation(tx *gorm.DB) error {
 	for _, column := range []struct {
 		model any
