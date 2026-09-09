@@ -452,6 +452,7 @@ export default function AssetsPage() {
     const archiveAsset = async (asset: LibraryAsset) => {
         updateAsset(asset.id, { status: "archived" });
         await flushAssetStorePersistence();
+        await invalidateAssetLibrary();
         try {
             await saveRemoteUserDataNow();
             message.success(`已将「${asset.title}」移入回收站`);
@@ -468,6 +469,7 @@ export default function AssetsPage() {
         const count = selectedIds.length;
         setSelectedIds([]);
         await flushAssetStorePersistence();
+        await invalidateAssetLibrary();
         try {
             await saveRemoteUserDataNow();
             message.success(`已将 ${count} 个素材移入回收站`);
