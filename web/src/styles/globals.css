@@ -4280,6 +4280,11 @@
     .app-canvas-project-card:hover .canvas-project-actions, .app-canvas-project-card:focus-within .canvas-project-actions, .canvas-project-actions:has(:focus-visible) { opacity: 1; transform: translateY(0); }
     .canvas-project-actions button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: color-mix(in srgb, var(--foreground) 42%, transparent); }
     .canvas-project-actions button:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
+    .app-canvas-project-card:has(.canvas-project-actions:hover, .canvas-project-select:hover, .canvas-project-actions:active, .canvas-project-select:active) { transform: none; transition: none; }
+    .app-canvas-project-card:has(.canvas-project-actions:hover, .canvas-project-select:hover, .canvas-project-actions:active, .canvas-project-select:active) .app-canvas-project-preview,
+    .app-canvas-project-card:has(.canvas-project-actions:hover, .canvas-project-select:hover, .canvas-project-actions:active, .canvas-project-select:active) .canvas-project-media img,
+    .app-canvas-project-card:has(.canvas-project-actions:hover, .canvas-project-select:hover, .canvas-project-actions:active, .canvas-project-select:active) .canvas-project-preview-canvas { transform: none; transition: none; }
+    .app-canvas-project-card:has(.canvas-project-actions:hover, .canvas-project-select:hover, .canvas-project-actions:active, .canvas-project-select:active) .canvas-project-media img { filter: saturate(.88) contrast(1.02); }
     .canvas-project-stats { display: flex; align-items: center; gap: 7px; margin-top: 6px; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-caption); }
     .canvas-project-stats span:nth-child(2) { color: color-mix(in srgb, var(--foreground) 24%, transparent); }
     .canvas-project-stats time { color: color-mix(in srgb, var(--foreground) 34%, transparent); }
@@ -4432,6 +4437,12 @@
     }
 
     .canvas-folder-card:hover .canvas-folder-actions, .canvas-folder-card:focus-within .canvas-folder-actions { opacity: 1; transform: translateY(0); }
+
+    .canvas-folder-card:has(.canvas-folder-actions:hover, .canvas-folder-select:hover, .canvas-folder-actions:active, .canvas-folder-select:active) { transform: none; transition: none; }
+    .canvas-folder-card:has(.canvas-folder-actions:hover, .canvas-folder-select:hover, .canvas-folder-actions:active, .canvas-folder-select:active) .canvas-folder-open,
+    .canvas-folder-card:has(.canvas-folder-actions:hover, .canvas-folder-select:hover, .canvas-folder-actions:active, .canvas-folder-select:active) .canvas-folder-preview .canvas-project-media img,
+    .canvas-folder-card:has(.canvas-folder-actions:hover, .canvas-folder-select:hover, .canvas-folder-actions:active, .canvas-folder-select:active) .canvas-folder-preview .canvas-project-preview-canvas { transform: none; transition: none; }
+    .canvas-folder-card:has(.canvas-folder-actions:hover, .canvas-folder-select:hover, .canvas-folder-actions:active, .canvas-folder-select:active) .canvas-folder-preview .canvas-project-media img { filter: saturate(.94) contrast(1.02); }
 
     .canvas-folder-rename, .canvas-folder-more {
         display: grid;
