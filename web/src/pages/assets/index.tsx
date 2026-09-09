@@ -486,6 +486,7 @@ export default function AssetsPage() {
                 await deleteAssetWithRemoteSync(asset.id);
             }
             setSelectedIds([]);
+            await invalidateAssetLibrary();
             message.success(`已彻底清空回收站 ${count} 个素材`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "清空回收站失败");
@@ -496,6 +497,7 @@ export default function AssetsPage() {
         if (!deletingAsset) return;
         try {
             await deleteAssetWithRemoteSync(deletingAsset.id);
+            await invalidateAssetLibrary();
             message.success("素材已彻底删除");
             setDeletingAsset(null);
         } catch (error) {
@@ -512,6 +514,7 @@ export default function AssetsPage() {
         if (!selectedAssets.length) return;
         try {
             for (const asset of selectedAssets) await deleteAssetWithRemoteSync(asset.id);
+            await invalidateAssetLibrary();
             message.success(`已彻底删除 ${selectedAssets.length} 个素材`);
             setSelectedIds([]);
             setBatchDeleteOpen(false);
