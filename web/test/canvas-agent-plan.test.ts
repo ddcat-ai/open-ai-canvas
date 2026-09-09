@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { completeCanvasAgentPlanTasks, createCanvasAgentPlan, retryCanvasAgentPlanTask, transitionCanvasAgentPlan } from "../src/lib/canvas/canvas-agent-plan";
+import { cancelCanvasAgentPlan, completeCanvasAgentPlanTasks, createCanvasAgentPlan, retryCanvasAgentPlanTask, transitionCanvasAgentPlan } from "../src/lib/canvas/canvas-agent-plan";
 
 describe("canvas Agent plan contract", () => {
     test("turns tool calls into ordered approval tasks", () => {
@@ -38,5 +38,14 @@ describe("canvas Agent plan contract", () => {
         expect(retried.status).toBe("running");
         expect(retried.tasks.map((task) => task.status)).toEqual(["succeeded", "pending", "pending"]);
         expect(retried.tasks[1].retryCount).toBe(1);
+    });
+
+    test("cancels unfinished tasks while preserving completed work", () => {
+        const plan = createCanvasAgentPlan([{ id: "a", function: { name: "canvas_apply_ops" } }, { id: "b", function: { name: "canvas_generate_image" } }]);
+        const running = transitionCanvasAgentPlan(transitionCanvasAgentPlan(plan, "succeeded", "a"), "running");
+        const cancelled = cancelCanvasAgentPlan(running);
+        expect(cancelled.status).toBe("cancelled");
+        expect(cancelled.tasks.map((task) => task.status)).toEqual(["succeeded", "cancelled"]);
+        expect(cancelCanvasAgentPlan(cancelled)).toBe(cancelled);
     });
 });

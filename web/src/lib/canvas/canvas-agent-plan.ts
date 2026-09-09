@@ -63,3 +63,8 @@ export function retryCanvasAgentPlanTask(plan: CanvasAgentPlan, taskId: string):
     const tasks = plan.tasks.map((task) => retryable.has(task.id) ? { ...task, status: "pending" as const, retryCount: task.retryCount + (task.id === taskId ? 1 : 0) } : task);
     return { ...plan, status: "running", tasks };
 }
+
+export function cancelCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
+    if (plan.status === "succeeded" || plan.status === "cancelled") return plan;
+    return { ...plan, status: "cancelled", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "cancelled" as const }) };
+}
