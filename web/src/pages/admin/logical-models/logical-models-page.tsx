@@ -8,6 +8,7 @@ import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
 import { ChoiceBrowser } from "@/components/choice-browser";
 import { ModelEditorModal } from "@/components/model-editor-modal";
+const CompatibleModelEditorModal = ModelEditorModal as any;
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
@@ -354,7 +355,7 @@ export default function LogicalModelsPage() {
                 }
             />
 
-            <ModelEditorModal
+            <CompatibleModelEditorModal
                 admin
                 open={editingModel !== undefined}
                 size="min(1120px, 100vw)"
@@ -487,7 +488,7 @@ export default function LogicalModelsPage() {
                         {tabs}
                     </Form>
                 )}
-            </ModelEditorModal>
+            </CompatibleModelEditorModal>
 
             <Modal
                 title={simulatingModel ? `供应线路匹配模拟 - ${simulatingModel.name}` : "供应线路匹配模拟"}

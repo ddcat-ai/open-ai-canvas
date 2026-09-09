@@ -174,6 +174,7 @@ export type CanvasSkillSnapshot = {
 
 export type CanvasNodeMetadata = {
     fileUpload?: string;
+    fileUploadProgress?: number;
     /** Namespaced extension ownership for nodes contributed by a unified plugin. */
     pluginId?: string;
     pluginNodeId?: string;
