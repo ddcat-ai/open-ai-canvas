@@ -22,6 +22,7 @@ import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
 import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 
 type TaskKindFilter = "all" | "text" | "image" | "video";
 type TaskViewMode = "list" | "grid";
@@ -409,14 +410,14 @@ export default function TasksPage() {
                             <div className="flex flex-wrap items-center gap-2.5">
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
-                                        <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
+                                        <Switch checked={groupEnabled} onChange={changeGroupEnabled} />
                                         <span>按画布分组</span>
                                     </label>
                                 ) : null}
                                 <div className="task-view-switch">
                                     <SegmentedControl<TaskViewMode>
                                         ariaLabel="任务视图"
-                                        size="sm"
+                                        size="md"
                                         value={viewMode}
                                         options={[
                                             { value: "list", icon: <List className="size-3.5" />, title: "列表视图" },
