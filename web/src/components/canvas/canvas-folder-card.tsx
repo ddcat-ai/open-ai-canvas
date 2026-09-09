@@ -72,6 +72,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                                 className="canvas-folder-title-input"
                                 value={editingTitle}
                                 onChange={(event) => setEditingTitle(event.target.value)}
+                                onPointerDown={(event) => event.stopPropagation()}
                                 onClick={(event) => event.stopPropagation()}
                                 onBlur={saveTitle}
                                 onKeyDown={(event) => {
@@ -96,7 +97,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                 </div>
             </div>
 
-            <span className={cn("canvas-folder-select", selected && "is-visible")} onClick={(event) => event.stopPropagation()}>
+            <span className={cn("canvas-folder-select", selected && "is-visible")} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                 <input
                     type="checkbox"
                     checked={selected}
@@ -105,7 +106,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                 />
             </span>
 
-            <div className="canvas-folder-actions" onClick={(event) => event.stopPropagation()}>
+            <div className="canvas-folder-actions" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                 {!editing ? (
                     <button
                         type="button"

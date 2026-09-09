@@ -63,7 +63,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
                     <ProjectPreview project={project} />
                 </button>
                 {!compact && !readOnly ? (
-                    <span className={`canvas-project-select ${selected ? "is-visible" : ""}`} onClick={(event) => event.stopPropagation()}>
+                    <span className={`canvas-project-select ${selected ? "is-visible" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                         <input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox" aria-label={`选择 ${project.title}`} />
                     </span>
                 ) : null}
@@ -96,7 +96,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
                         </button>
                     )}
                     {editing && !readOnly ? (
-                        <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
+                        <div className="canvas-project-actions" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                             <button type="button" onClick={saveTitle} aria-label="保存名称">
                                 <Check className="size-3.5" />
                             </button>
@@ -105,7 +105,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
                             </button>
                         </div>
                     ) : !readOnly ? (
-                        <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
+                        <div className="canvas-project-actions" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                             <button type="button" onClick={() => startEditing(project.id, project.title)} aria-label={`重命名 ${project.title}`} title="重命名">
                                 <Pencil className="size-3.5" />
                             </button>
