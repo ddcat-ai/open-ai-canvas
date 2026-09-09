@@ -8,6 +8,7 @@ import { getGenerationResourceNodes, getContextResourceNodes, getMentionResource
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { isNeutralColorGrade, resolveCanvasColorGradeReference } from "@/lib/canvas/canvas-color-grade";
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
+import { mediaConversionSourceFingerprint } from "@/lib/media-conversion/contracts";
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
@@ -64,6 +65,12 @@ export type NodeGenerationInput = {
 };
 
 export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, assets: Asset[], promptOnly = false): NodeGenerationContext {
+    const pendingConversion = findPendingMediaConversionInput(nodeId, nodes, connections);
+    if (pendingConversion) {
+        const status = pendingConversion.metadata?.mediaConversion?.status;
+        const reason = status === "stale" ? "输入或方式已变化" : status === "processing" ? "仍在处理中" : "尚未完成本地转换";
+        throw new Error(`转换节点「${pendingConversion.title || pendingConversion.id}」${reason}，完成后才能执行下游生成`);
+    }
     const connectedInputs = buildNodeGenerationInputs(nodeId, nodes, connections);
     const sourceNode = nodes.find((node) => node.id === nodeId);
     const portraitTextureInput = sourceNode?.type === CanvasNodeType.Image && sourceNode.metadata?.content && sourceNode.metadata?.portraitTexture
@@ -118,6 +125,40 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         videoCount: referenceVideos.length,
         audioCount: referenceAudios.length,
     };
+}
+
+/**
+ * 转换节点允许提前连到下游，但只有已物化的结果才能进入生成请求。
+ * 沿上游链路检查也覆盖“生成节点 -> 配置节点 -> 转换节点”的常见接法。
+ */
+export function findPendingMediaConversionInput(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const queue = connections.filter((connection) => connection.toNodeId === nodeId).map((connection) => connection.fromNodeId);
+    const visited = new Set<string>();
+    while (queue.length) {
+        const sourceId = queue.shift()!;
+        if (visited.has(sourceId)) continue;
+        visited.add(sourceId);
+        const source = nodesById.get(sourceId);
+        if (!source) continue;
+        if (source.type === CanvasNodeType.MediaConversion) {
+            const state = source.metadata?.mediaConversion;
+            const sourceInputs = connections
+                .filter((connection) => connection.toNodeId === source.id)
+                .map((connection) => nodesById.get(connection.fromNodeId))
+                .filter((input): input is CanvasNodeData => Boolean(input && (input.type === CanvasNodeType.Image || input.type === CanvasNodeType.Video)));
+            const sourceInput = sourceInputs[0];
+            const ready = state?.status === "completed"
+                && Boolean(state.resultStorageKey)
+                && sourceInputs.length === 1
+                && Boolean(sourceInput)
+                && state.sourceNodeId === sourceInput?.id
+                && state.sourceFingerprint === mediaConversionSourceFingerprint(sourceInput!);
+            if (!ready) return source;
+        }
+        connections.filter((connection) => connection.toNodeId === sourceId).forEach((connection) => queue.push(connection.fromNodeId));
+    }
+    return null;
 }
 
 function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]) {

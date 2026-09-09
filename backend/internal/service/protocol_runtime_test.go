@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -341,6 +342,68 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	}
 	if result["mode"] != "video" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T) {
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-idempotency-key-runtime","version":"1.0.0","name":"Test Idempotency Key","author":"Test","documentation":"# Test Idempotency Key",
+		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-idempotency-key-runtime.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	var keys []string
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			key := r.Header.Get("Idempotency-Key")
+			if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(key) {
+				t.Errorf("Idempotency-Key = %q, want UUID", key)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			if _, ok := body["idempotencyKey"]; ok {
+				t.Error("host idempotency key leaked into provider JSON body")
+			}
+			keys = append(keys, key)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"task-1","status":"pending"}`))
+		case "/v1/tasks/task-1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"task-1","status":"succeeded","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-idempotency-key-runtime", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	ctx = withProtocolRegistry(ctx, center.registrySnapshot())
+	for i := 0; i < 2; i++ {
+		result, err := runDeclarativeProtocolTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result["mode"] != "video" {
+			t.Fatalf("result = %#v", result)
+		}
+	}
+	if len(keys) != 2 || keys[0] == keys[1] {
+		t.Fatalf("create idempotency keys = %#v, want two different UUIDs", keys)
 	}
 }
 

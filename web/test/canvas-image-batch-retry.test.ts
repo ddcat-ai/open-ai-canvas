@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "../src/lib/canvas/canvas-image-batch-retry";
+import { cancelIncompleteImageBatch, failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild, retireImageBatchChildren } from "../src/lib/canvas/canvas-image-batch-retry";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeStatus } from "../src/types/canvas";
 
 function imageNode(id: string, status: CanvasNodeStatus, metadata: Partial<NonNullable<CanvasNodeData["metadata"]>> = {}): CanvasNodeData {
@@ -84,5 +84,28 @@ describe("canvas image batch retry", () => {
 
         expect(restoreUnsubmittedImageBatchChild(loading, original).metadata).toMatchObject({ status: "error", errorDetails: "原始失败" });
         expect(restoreUnsubmittedImageBatchChild(imageNode("failed", "success", { content: "image:success" }), original).metadata?.status).toBe("success");
+    });
+
+    test("重新生成时清掉未完成子图，并把已有结果从折叠组里拆出去", () => {
+        const root = imageNode("root", "loading", { isBatchRoot: true, batchChildIds: ["done", "pending"], imageBatchExpanded: false });
+        const done = imageNode("done", "success", { batchRootId: root.id, content: "image:done" });
+        const pending = imageNode("pending", "loading", { batchRootId: root.id });
+        const retired = retireImageBatchChildren(root, [root, done, pending], [{ id: "c1", fromNodeId: root.id, toNodeId: done.id }, { id: "c2", fromNodeId: root.id, toNodeId: pending.id }]);
+        expect(retired.removedIds).toEqual(["pending"]);
+        expect(retired.nodes.map((node) => node.id)).toEqual(["root", "done"]);
+        expect(retired.nodes.find((node) => node.id === "done")?.metadata?.batchRootId).toBeUndefined();
+        expect(retired.nodes.find((node) => node.id === "root")?.metadata).toMatchObject({ imageBatchExpanded: true, status: "idle" });
+        expect(retired.connections.map((item) => item.id)).toEqual(["c1"]);
+    });
+
+    test("取消生成时删除没有结果的子图并展开剩余批次", () => {
+        const root = imageNode("root", "loading", { isBatchRoot: true, batchChildIds: ["done", "pending"] });
+        const done = imageNode("done", "success", { batchRootId: root.id, content: "image:done" });
+        const pending = imageNode("pending", "loading", { batchRootId: root.id });
+        const cancelled = cancelIncompleteImageBatch(root.id, ["done", "pending"], [root, done, pending], [{ id: "c2", fromNodeId: root.id, toNodeId: pending.id }]);
+        expect(cancelled.removedIds).toEqual(["pending"]);
+        expect(cancelled.nodes.map((node) => node.id)).toEqual(["root", "done"]);
+        expect(cancelled.nodes.find((node) => node.id === "root")?.metadata?.batchChildIds).toBeUndefined();
+        expect(cancelled.nodes.find((node) => node.id === "done")?.metadata?.batchRootId).toBeUndefined();
     });
 });

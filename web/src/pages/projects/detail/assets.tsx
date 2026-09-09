@@ -442,6 +442,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             <AssetLibraryPickerModal
                 open={addOpen}
                 remoteLibrary
+                mediaKinds={["image", "video", "audio", "text"]}
                 items={availablePickerItems}
                 categoryLabels={{ ...pickerCategoryLabels, ...externalAssetSources.categoryLabels }}
                 folders={externalAssetSources.folders}

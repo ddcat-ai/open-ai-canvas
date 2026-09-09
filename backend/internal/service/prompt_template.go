@@ -382,12 +382,39 @@ func validatePromptTemplateResult(operation string, result map[string]interface{
 	extractor := extractJSONText
 	// 角色卡契约要求顶层对象，模型正文里若先出现数组（例如先列一遍角色名）会让通用提取命中错误片段，
 	// 因此这里优先挑出带 characters 键的对象候选。
-	if operation == promptOperationCharacterExtract {
+	if operation == promptOperationCharacterExtract || operation == promptOperationChapterAssetsExtract {
 		extractor = func(raw string) (string, error) { return extractPreferredJSONText(raw, "characters") }
 	}
 	jsonText, err := extractor(text)
 	if err != nil {
 		return fmt.Errorf("%s 返回内容不符合受保护 JSON 契约：%w", definition.Label, err)
+	}
+	if operation == promptOperationChapterAssetsExtract {
+		var assets struct {
+			Characters *[]map[string]interface{} `json:"characters"`
+			Scenes     *[]map[string]interface{} `json:"scenes"`
+			Props      *[]map[string]interface{} `json:"props"`
+		}
+		if err := json.Unmarshal([]byte(jsonText), &assets); err != nil {
+			return fmt.Errorf("章节资产提取 JSON 无法解析：%w", err)
+		}
+		if assets.Characters == nil || assets.Scenes == nil || assets.Props == nil {
+			return errors.New("章节资产提取结果必须包含 characters、scenes 和 props 数组")
+		}
+		for _, group := range [][]map[string]interface{}{*assets.Scenes, *assets.Props} {
+			for _, asset := range group {
+				for _, field := range []string{"name", "description", "prompt"} {
+					value, ok := asset[field].(string)
+					if !ok || strings.TrimSpace(value) == "" {
+						return fmt.Errorf("章节场景或道具缺少有效的 %s", field)
+					}
+				}
+			}
+		}
+		if len(*assets.Characters) > 0 {
+			return validatePromptTemplateResult(promptOperationCharacterExtract, map[string]interface{}{"text": jsonText})
+		}
+		return nil
 	}
 	if operation != promptOperationCharacterExtract {
 		return nil

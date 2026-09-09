@@ -1,7 +1,7 @@
 import { Button, Image as AntImage, InputNumber, Modal } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowUp, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -48,7 +48,7 @@ type CanvasNodePromptPanelProps = {
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
-const PROMPT_REFERENCE_SHELF_HEIGHT = 36;
+const PROMPT_REFERENCE_SHELF_HEIGHT = 58;
 const PROMPT_EDITOR_MIN_HEIGHT = 44;
 const PROMPT_EDITOR_EXPANDED_MIN_HEIGHT = 76;
 const PROMPT_EDITOR_LINE_HEIGHT = 20;
@@ -244,13 +244,17 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             }}
         >
             {isPortraitTexture ? (
-                <CanvasPortraitTexturePopover value={node.metadata?.portraitTexture} placement={expanded ? "topRight" : "topLeft"} onChange={(portraitTexture) => onConfigChange(node.id, { portraitTexture })} />
+                <>
+                    <CanvasPortraitTexturePopover value={node.metadata?.portraitTexture} placement={expanded ? "topRight" : "topLeft"} onChange={(portraitTexture) => onConfigChange(node.id, { portraitTexture })} />
+                    {activeReferenceCount > 0 ? <span className="canvas-node-composer-reference-heading">{referenceShelfHeading(activeReferences)}</span> : null}
+                </>
             ) : (
                 <div className="canvas-node-composer-mode">
                     <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
                     <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}生成</span>
+                    {activeReferenceCount > 0 ? <span className="canvas-node-composer-reference-heading">{referenceShelfHeading(activeReferences)}</span> : null}
                 </div>
             )}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
@@ -525,6 +529,11 @@ function modeDisplayName(mode: CanvasNodeGenerationMode) {
     return "文本";
 }
 
+function referenceShelfHeading(references: CanvasResourceReference[]) {
+    const label = references.every((reference) => reference.kind === "image" || reference.kind === "character") ? "参考图" : "参考素材";
+    return `${label} · ${references.length}`;
+}
+
 function ConnectedReferenceShelf({ references, theme, onInsert, onRemove }: { references: CanvasResourceReference[]; theme: CanvasTheme; onInsert: (reference: CanvasResourceReference) => void; onRemove?: (reference: CanvasResourceReference) => void }) {
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill");
     const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
@@ -532,47 +541,51 @@ function ConnectedReferenceShelf({ references, theme, onInsert, onRemove }: { re
 
     return (
         <>
-            <div className="canvas-node-composer-references thin-scrollbar" role="group" aria-label="已连接素材">
-                <span className="canvas-node-composer-reference-heading">
-                    {activeReferences.every((reference) => reference.kind === "image" || reference.kind === "character") ? "参考图" : "参考素材"} · {activeReferences.length}
-                </span>
-                {activeReferences.map((reference) => {
-                    const canPreview = (reference.kind === "image" || reference.kind === "character") && Boolean(reference.previewUrl);
-                    return (
-                        <span key={reference.id} className="canvas-node-reference-chip">
-                            <button
-                                type="button"
-                                className="canvas-node-reference-preview"
-                                style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
-                                title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
-                                aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
-                                onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
-                            >
-                                <ReferenceThumbnail reference={reference} />
-                            </button>
-                            <button type="button" className="canvas-node-reference-label" title={`插入 @${reference.label}`} onClick={() => onInsert(reference)}>
-                                <AtSign className="size-2.5" />
-                                <span>{reference.label}</span>
-                            </button>
-                            {onRemove ? (
+            <div className="canvas-node-composer-references" role="group" aria-label="已连接素材">
+                <div className="canvas-node-composer-references-track thin-scrollbar">
+                    {activeReferences.map((reference) => {
+                        const canPreview = Boolean(reference.previewUrl) && (reference.kind === "image" || reference.kind === "character" || reference.kind === "video");
+                        return (
+                            <span key={reference.id} className="canvas-node-reference-chip">
                                 <button
                                     type="button"
-                                    className="canvas-node-reference-remove"
-                                    style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
-                                    title="移除参考并删除连接"
-                                    aria-label={`移除参考 ${reference.label}`}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        onRemove(reference);
-                                    }}
-                                    onPointerDown={(event) => event.stopPropagation()}
+                                    className="canvas-node-reference-preview"
+                                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
+                                    title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
+                                    aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
+                                    onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
                                 >
-                                    <X className="size-3" />
+                                    <ReferenceThumbnail reference={reference} />
+                                    {canPreview ? (
+                                        <span className="canvas-node-reference-preview-hint" aria-hidden="true">
+                                            <Maximize2 className="size-3" />
+                                        </span>
+                                    ) : null}
                                 </button>
-                            ) : null}
-                        </span>
-                    );
-                })}
+                                <button type="button" className="canvas-node-reference-label" title={`插入 @${reference.label}`} onClick={() => onInsert(reference)}>
+                                    <span className="opacity-55">@</span>
+                                    <span className="truncate">{reference.label}</span>
+                                </button>
+                                {onRemove ? (
+                                    <button
+                                        type="button"
+                                        className="canvas-node-reference-remove"
+                                        style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
+                                        title="移除参考并删除连接"
+                                        aria-label={`移除参考 ${reference.label}`}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onRemove(reference);
+                                        }}
+                                        onPointerDown={(event) => event.stopPropagation()}
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                ) : null}
+                            </span>
+                        );
+                    })}
+                </div>
             </div>
             {imagePreview?.previewUrl ? (
                 <AntImage

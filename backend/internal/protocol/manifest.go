@@ -963,7 +963,13 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 			userContent = append(userContent, map[string]any{"type": "audio_url", "audio_url": map[string]any{"url": val}})
 		}
 	}
-	messages := make([]any, 0, len(request.Messages)+1)
+	messages := make([]any, 0, len(request.Messages)+2)
+	// instructions 是统一的系统指令字段，但多数 OpenAI 系协议只映射 request.messages。
+	// 系统指令必须进入消息数组，否则会被静默丢弃；带独立 system 字段的协议（Claude、
+	// Gemini、Responses）在各自模板里过滤 system 角色，不会重复发送。
+	if instructions := strings.TrimSpace(request.Instructions); instructions != "" && !hasSystemMessage(request.Messages) {
+		messages = append(messages, map[string]any{"role": "system", "content": instructions})
+	}
 	for _, message := range request.Messages {
 		if strings.TrimSpace(message.Role) == "" || message.Content == nil {
 			continue
@@ -1026,6 +1032,15 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 		"providerOptions": request.ProviderOptions,
 		"extra":           request.Extra,
 	}
+}
+
+func hasSystemMessage(messages []Message) bool {
+	for _, message := range messages {
+		if strings.EqualFold(strings.TrimSpace(message.Role), "system") {
+			return true
+		}
+	}
+	return false
 }
 
 func requestAsManifestValue(value any) (any, error) {

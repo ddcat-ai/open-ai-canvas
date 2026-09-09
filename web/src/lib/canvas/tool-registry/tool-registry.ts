@@ -58,10 +58,13 @@ function getPluginNodeMenuCommands(): AddNodeMenuCommand[] {
         });
 }
 
-/** 默认偏好：全部工具按 defaultOrder 排列，全部可见 */
+/** 默认偏好：全部工具按 defaultOrder 排列；defaultVisible 为 false 的进入 hidden */
 export function defaultToolbarPrefs(toolbar: ToolbarId): ToolbarPrefs {
     const tools = getToolbarTools(toolbar);
-    return { order: tools.map((tool) => tool.id), hidden: [] };
+    return {
+        order: tools.map((tool) => tool.id),
+        hidden: tools.filter((tool) => !tool.defaultVisible).map((tool) => tool.id),
+    };
 }
 
 /**
@@ -127,6 +130,16 @@ function buildEntriesWithSeparators(tools: ToolDefinition[], ctx: ToolContext): 
 }
 
 function toolToEntry(tool: ToolDefinition, ctx: ToolContext): FloatingDockEntry {
+    if (tool.switchGroup) {
+        return {
+            kind: "switch",
+            id: tool.id,
+            label: resolveText(tool.label, ctx),
+            value: tool.switchGroup.value(ctx),
+            options: tool.switchGroup.options,
+            onChange: (value) => tool.switchGroup?.onChange(ctx, value),
+        };
+    }
     return {
         kind: "command",
         id: tool.id,

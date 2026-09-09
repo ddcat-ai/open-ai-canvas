@@ -6,6 +6,7 @@ import type { Material } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
 import { resolveDirectorBoneRotation } from "@/lib/canvas/director/director-animation-semantics";
+import { applyClaySceneMaterials } from "@/lib/canvas/director/director-clay-materials";
 import { createDirectorTransaction, installDirectorTerminalListeners } from "@/lib/canvas/director/director-gesture-transaction";
 import { emptyDirectorPlacementIntent, finiteDirectorGroundPoint, type DirectorGroundPoint, type DirectorPlacementIntent } from "@/lib/canvas/director/director-placement";
 import { directorDiagnosticObjectKind } from "@/lib/canvas/director/director-diagnostics";
@@ -1135,16 +1136,30 @@ async function recordCanvas(context: CaptureContext | null, duration: number, fp
     const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     const chunks: Blob[] = [];
+    // captureStream 依赖渲染循环持续产出新帧；循环里任何未捕获异常都会让剩余录制变成空帧，
+    // 与其 5 秒后静默产出残缺视频回写画布，不如捕获到首个错误就立刻中止并报错。
+    let renderError: Error | null = null;
+    const onRenderError = () => {
+        renderError ??= new Error("白膜视频录制期间发生渲染错误，请重试");
+        if (recorder.state !== "inactive") recorder.stop();
+    };
+    window.addEventListener("error", onRenderError);
     const result = new Promise<Blob>((resolve, reject) => {
         recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
         recorder.onerror = () => reject(new Error("白膜视频录制失败"));
         recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" }));
     });
-    recorder.start();
-    window.setTimeout(() => recorder.stop(), Math.max(250, duration * 1000 + 120));
+    recorder.start(250);
+    const stopTimer = window.setTimeout(() => { if (recorder.state !== "inactive") recorder.stop(); }, Math.max(250, duration * 1000 + 120));
     try {
-        return await result;
+        const blob = await result;
+        if (renderError) throw renderError;
+        const recorded = await probeRecordedDuration(blob);
+        if (!Number.isFinite(recorded) || recorded < Math.max(0.25, duration * 0.5)) throw new Error("白膜视频时长异常，录制可能不完整，请重试");
+        return blob;
     } finally {
+        window.clearTimeout(stopTimer);
+        window.removeEventListener("error", onRenderError);
         stream.getTracks().forEach((track) => track.stop());
         restoreClayMaterials();
         context.scene.overrideMaterial = previousMaterial;
@@ -1153,19 +1168,30 @@ async function recordCanvas(context: CaptureContext | null, duration: number, fp
     }
 }
 
-function applyClaySceneMaterials(scene: Scene) {
-    const clayMaterial = new MeshStandardMaterial({ color: "#d6d9dd", roughness: 0.88, metalness: 0 });
-    const originals: Array<{ mesh: Mesh; material: Material | Material[] }> = [];
-    scene.traverse((child) => {
-        const mesh = child as Mesh;
-        if (!mesh.isMesh || mesh.userData.directorActor) return;
-        originals.push({ mesh, material: mesh.material });
-        mesh.material = clayMaterial;
-    });
-    return () => {
-        originals.forEach(({ mesh, material }) => { mesh.material = material; });
-        clayMaterial.dispose();
-    };
+async function probeRecordedDuration(blob: Blob) {
+    // Chrome MediaRecorder 产出的 webm 不带时长头，loaded metadata 时 duration 是 Infinity，
+    // 只有 seek 到末尾触发收尾后 duration 才是真实值；这是校验录制完整性的唯一途径。
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+    try {
+        video.src = url;
+        await new Promise<void>((resolve, reject) => {
+            video.onloadedmetadata = () => resolve();
+            video.onerror = () => reject(new Error("白膜视频无法解析"));
+        });
+        if (video.duration !== Infinity) return video.duration;
+        await new Promise<void>((resolve) => {
+            const finish = () => { video.removeEventListener("seeked", finish); resolve(); };
+            video.addEventListener("seeked", finish);
+            video.currentTime = 1e6;
+            window.setTimeout(finish, 1000);
+        });
+        return video.duration;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement) {

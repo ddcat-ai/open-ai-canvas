@@ -133,7 +133,11 @@ function removeCanvasMentionToken(value: string, token: string) {
 function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
     if (!token) return value;
     const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return value.replace(new RegExp(`${escapedToken}(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`, "gu"), replacement);
+    // Numbered media mentions can touch Chinese prose or another mention, but not a longer number.
+    const boundary = /^@(图片|视频|音频|文本)\d+$/.test(token)
+        ? "(?![0-9])"
+        : token.startsWith("@[node:") ? "" : `(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`;
+    return value.replace(new RegExp(`${escapedToken}${boundary}`, "gu"), replacement);
 }
 
 function compactRemovedCanvasMentionPrompt(value: string) {
@@ -212,7 +216,7 @@ export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], conn
         const configTargetId = configTargetBySourceId.get(node.id);
         const configInputs = configTargetId ? (resourceInputsByTargetId.get(configTargetId) || []).filter((input) => input.id !== node.id) : [];
         const ownInputs = resourceInputsByTargetId.get(node.id) || [];
-        const inputs = configInputs.length ? configInputs : ownInputs.length ? ownInputs : isResourceNode(node) ? [node] : [];
+        const inputs = configInputs.length ? configInputs : ownInputs.filter((input) => input.id !== node.id);
         referencesByNodeId.set(node.id, labelResourceNodes(inputs, true));
     }
     return referencesByNodeId;
@@ -222,13 +226,20 @@ export function buildOrderedCanvasResourceReferences(nodes: CanvasNodeData[], ac
     return labelResourceNodes(nodes.filter(isResourceNode), active);
 }
 
+export function imageGenerationReferenceConnections(sourceNodeId: string, targetNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], createId: () => string): CanvasConnection[] {
+    if (!sourceNodeId || sourceNodeId === targetNodeId) return [];
+    const existing = new Set(connections.filter((connection) => connection.toNodeId === targetNodeId).map((connection) => connection.fromNodeId));
+    return getMentionResourceNodes(sourceNodeId, nodes, connections)
+        .filter((node) => node.id !== sourceNodeId && node.id !== targetNodeId && !existing.has(node.id))
+        .map((node) => ({ id: createId(), fromNodeId: node.id, toNodeId: targetNodeId }));
+}
+
 export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const configInputs = getConnectedConfigResourceNodes(nodeId, nodes, connections);
     if (configInputs.length) return configInputs;
     const ownInputs = getContextResourceNodes(nodeId, nodes, connections);
     if (ownInputs.length) return ownInputs;
-    const node = nodes.find((item) => item.id === nodeId);
-    return node && isResourceNode(node) ? [node] : [];
+    return [];
 }
 
 export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

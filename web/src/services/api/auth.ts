@@ -567,7 +567,9 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return request<{ setting: CanvasDrawingEngineSetting }>(api.patch("/admin/settings/drawing-engine", input));
 }
 
-export function listAdminApiLogs(params: AdminListParams = {}) {
+export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all" };
+
+export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return request<{ logs: ApiCallLog[]; total: number; page: number; limit: number }>(api.get("/admin/api-logs", { params }));
 }
 
@@ -579,7 +581,7 @@ export function queryAdminApiLogTask(id: string) {
     return request<AdminProviderTaskQueryResult>(api.post(`/admin/api-logs/${encodeURIComponent(id)}/query-task`));
 }
 
-export async function exportAdminApiLogs(params: AdminListParams & { ids?: string[] } = {}) {
+export async function exportAdminApiLogs(params: AdminApiLogParams & { ids?: string[] } = {}) {
     const response = await api.get<Blob>("/admin/api-logs-export.csv", { params: { ...params, ids: params.ids?.join(",") }, responseType: "blob" });
     return response.data;
 }

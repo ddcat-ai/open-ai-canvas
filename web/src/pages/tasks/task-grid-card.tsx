@@ -8,6 +8,7 @@ import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/g
 import { statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
+import { TaskVideoThumbnail } from "./task-video-thumbnail";
 
 export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void }) {
     const isActive = task.status === "queued" || task.status === "running";
@@ -22,7 +23,7 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
                 {thumbnailUrl ? (
                     <MediaPreview src={thumbnailUrl} kind="image" loading="lazy" className="h-full w-full object-cover" />
                 ) : isVideo && task.previewUrl ? (
-                    <span className="task-video-poster-placeholder"><Video /><small>视频预览</small></span>
+                    <TaskVideoThumbnail src={task.previewUrl} />
                 ) : (
                     <Icon />
                 )}

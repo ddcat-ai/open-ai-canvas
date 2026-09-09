@@ -81,6 +81,8 @@ export type ToolbarHandlers = {
     onNodeUpload: (node: CanvasNodeData) => void;
     onNodeDownload: (node: CanvasNodeData) => void;
     onNodeSaveAsset: (node: CanvasNodeData) => void;
+    /** 从已有图片或视频创建并自动连接一个转换节点。 */
+    onNodeCreateConversion?: (node: CanvasNodeData) => void;
     onNodeMaskEdit: (node: CanvasNodeData) => void;
     onNodeEmotion: (node: CanvasNodeData) => void;
     onNodePortraitTexture: (node: CanvasNodeData) => void;
@@ -180,6 +182,12 @@ export type ToolDefinition = {
     danger?: boolean;
     /** 面板展开型工具——使用 aria-expanded 而非 aria-pressed */
     expands?: boolean;
+    /** 互斥开关：在 dock 中渲染为分段切换，而不是两个独立按钮 */
+    switchGroup?: {
+        value: (ctx: ToolContext) => string;
+        options: Array<{ id: string; label: string; icon: ReactNode; value: string }>;
+        onChange: (ctx: ToolContext, value: string) => void;
+    };
     /** 上下文可见性谓词——返回 false 时工具不渲染（不受 prefs 控制） */
     applicable?: (ctx: ToolContext) => boolean;
     /** 执行动作。event 来自 Dock 按钮点击 */

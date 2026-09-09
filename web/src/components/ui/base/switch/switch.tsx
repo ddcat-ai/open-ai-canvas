@@ -115,7 +115,8 @@ export function Switch({ size = "md", checked: checkedProp, defaultChecked = fal
             ) : (
                 <span
                     aria-hidden="true"
-                    className={cn("sc-switch-thumb absolute left-0.5 top-1/2 -translate-y-1/2 rounded-full bg-surface-strong border border-border/80 transition-transform duration-200 ease-out motion-reduce:transition-none", thumbClass)}
+                    data-state={checked ? "on" : "off"}
+                    className={cn("sc-switch-thumb absolute left-0.5 top-1/2 -translate-y-1/2 rounded-full border border-border/80 bg-surface-strong transition-transform duration-200 ease-out motion-reduce:transition-none", thumbClass)}
                 />
             )}
         </button>

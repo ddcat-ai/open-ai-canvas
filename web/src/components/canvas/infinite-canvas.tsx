@@ -397,6 +397,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
     return (
         <div
             ref={containerRef}
+            data-canvas-viewport
             data-canvas-pan-state={isPanning ? "grabbing" : isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
             className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
             style={{

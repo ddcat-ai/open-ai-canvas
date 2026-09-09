@@ -27,6 +27,7 @@ type PublicChannelCatalog struct {
 	ID          string               `json:"id"`
 	Name        string               `json:"name"`
 	DisplayName string               `json:"displayName"`
+	SortOrder   int                  `json:"sortOrder"`
 	Models      []PublicChannelModel `json:"models"`
 }
 
@@ -35,6 +36,7 @@ type PublicChannelModel struct {
 	ID               string                        `json:"id"`
 	ModelKey         string                        `json:"modelKey"`
 	DisplayName      string                        `json:"displayName"`
+	SortOrder        int                           `json:"sortOrder"`
 	Icon             string                        `json:"icon"`
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
@@ -127,8 +129,9 @@ func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]Publ
 		if len(publicModels) > 0 {
 			result = append(result, PublicChannelCatalog{
 				ID:          channel.ID,
-				Name:        channel.Name,
-				DisplayName: channel.Name,
+				Name:        channel.PublicName(),
+				DisplayName: channel.PublicName(),
+				SortOrder:   channel.SortOrder,
 				Models:      publicModels,
 			})
 		}
@@ -181,6 +184,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) PublicChannelMode
 		ID:               cm.ID,
 		ModelKey:         cm.ModelKey,
 		DisplayName:      cm.DisplayName,
+		SortOrder:        cm.SortOrder,
 		Icon:             cm.Icon,
 		Capability:       cm.Capability,
 		Protocol:         cm.Protocol,

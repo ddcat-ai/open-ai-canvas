@@ -1,8 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { ChevronRight, Clapperboard, Image as ImageIcon, List, Music2, Pencil, Video, WandSparkles, Workflow as WorkflowIcon, X } from "lucide-react";
+import { Clapperboard, Image as ImageIcon, List, Music2, Pencil, Video, WandSparkles, Workflow as WorkflowIcon } from "lucide-react";
 
-import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -153,13 +152,15 @@ function resolveNodePanelWidth(node: CanvasNodeData, viewport: ViewportTransform
     return clamp(Math.round(node.width * viewport.k * 1.5), 680, 920);
 }
 
-export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, provider?: "runninghub" | "comfyui") => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config, provider?: "runninghub" | "comfyui") => void; onClose: () => void }) {
+export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, provider?: "runninghub" | "comfyui") => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, provider?: "runninghub" | "comfyui") => void; onClose: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const menuRef = useRef<HTMLDivElement>(null);
+    const [activeOption, setActiveOption] = useState<string | null>(null);
+    const lastPointerRef = useRef<Position | null>(null);
     const { bringToFront, zIndex } = useCanvasOverlayLayer("connection-create-menu", "var(--z-modal-overlay)");
     const menuWidth = Math.min(288, viewportSize.width - 24);
-    const menuHeight = canCreateDrawing ? 456 : 412;
+    const menuHeight = canCreateDrawing ? 404 : 360;
     const gap = 12;
     const initialPosition = getConnectionMenuPosition(pending.position, viewport, viewportSize, menuWidth, menuHeight, gap);
 
@@ -182,53 +183,70 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
     }, [containerRef, pending.position, viewport, viewportSize.height, viewportSize.width]);
 
     return (
-        <SpotlightSurface
-            spotlightColor={theme.toolbar.itemHover}
+        <motion.div
             ref={menuRef}
-            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97, rotateX: 2 }}
-            animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel absolute origin-top-left overflow-x-hidden overflow-y-auto rounded-[var(--r-2xl)] border p-2 backdrop-blur-2xl"
+            className="thin-scrollbar absolute origin-top-left overflow-x-hidden overflow-y-auto rounded-[var(--r-2xl)] border p-2"
             data-canvas-no-zoom
             data-connection-create-menu
+            aria-label="创建下一步"
+            onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                    event.stopPropagation();
+                    onClose();
+                }
+            }}
             style={{ width: menuWidth, maxHeight: Math.max(120, viewportSize.height - 84), left: initialPosition.left, top: initialPosition.top, zIndex, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDownCapture={bringToFront}
-            onFocusCapture={bringToFront}
+            onFocusCapture={(event) => {
+                bringToFront();
+                if (event.target.matches(":focus-visible")) setActiveOption(event.target.closest<HTMLElement>("[data-create-option]")?.dataset.createOption || null);
+            }}
+            onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setActiveOption(null);
+            }}
+            onPointerMove={(event) => {
+                if (event.pointerType === "touch") return;
+                const previous = lastPointerRef.current;
+                // Layout changes can retarget a stationary pointer; only real movement selects a new row.
+                if (previous?.x === event.clientX && previous.y === event.clientY) return;
+                lastPointerRef.current = { x: event.clientX, y: event.clientY };
+                const option = (event.target as Element).closest<HTMLElement>("[data-create-option]")?.dataset.createOption;
+                if (option) setActiveOption(option);
+            }}
+            onPointerLeave={() => {
+                lastPointerRef.current = null;
+                setActiveOption(null);
+            }}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />
-            <div className="mb-1.5 flex items-center justify-between gap-2 px-1 py-0.5">
-                <span className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}><WandSparkles className="size-3.5" /></span>
-                    <span className="min-w-0"><span className="block truncate text-[var(--fs-label)] font-semibold">创建下一步</span><span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{pending.batchSourceNodeIds?.length ? `引用已选 ${pending.batchSourceNodeIds.length} 个节点` : "引用当前节点"}</span></span>
-                </span>
-                <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onClose} aria-label="关闭连线创建菜单"><X className="size-3" /></button>
-            </div>
             <div className="grid min-w-0 grid-cols-1 gap-1">
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<List className="size-4" />} title="文本生成" disabledReason={getDisabledReason(CanvasNodeType.Text)} onClick={() => onCreate(CanvasNodeType.Text)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Clapperboard className="size-4" />} title="分镜脚本" disabledReason={getDisabledReason(CanvasNodeType.Script)} onClick={() => onCreate(CanvasNodeType.Script)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title="图片生成" disabledReason={getDisabledReason(CanvasNodeType.Image)} onClick={() => onCreate(CanvasNodeType.Image)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<WorkflowIcon className="size-4" />} title="生成配置" description="选择模型，或使用已启用的工作流插件" disabledReason={getDisabledReason(CanvasNodeType.Config)} onClick={() => onCreate(CanvasNodeType.Config)} />
-                {canCreateDrawing ? <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title="绘图" disabledReason={getDisabledReason(CanvasNodeType.Drawing)} onClick={() => onCreate(CanvasNodeType.Drawing)} /> : null}
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title="视频生成" disabledReason={getDisabledReason(CanvasNodeType.Video)} onClick={() => onCreate(CanvasNodeType.Video)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Music2 className="size-4" />} title="音频参考" disabledReason={getDisabledReason(CanvasNodeType.Audio)} onClick={() => onCreate(CanvasNodeType.Audio)} />
+                <ConnectionCreateOption expanded={activeOption === "文本生成"} motionEnabled={!reducedMotion} icon={<List className="size-4" />} title="文本生成" description="引用当前内容，生成或改写文本" disabledReason={getDisabledReason(CanvasNodeType.Text)} onClick={() => onCreate(CanvasNodeType.Text)} />
+                <ConnectionCreateOption expanded={activeOption === "分镜脚本"} motionEnabled={!reducedMotion} icon={<Clapperboard className="size-4" />} title="分镜脚本" description="根据剧情拆解镜头，编排分镜脚本" disabledReason={getDisabledReason(CanvasNodeType.Script)} onClick={() => onCreate(CanvasNodeType.Script)} />
+                <ConnectionCreateOption expanded={activeOption === "图片生成"} motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title="图片生成" description="结合提示词和参考图，生成新的画面" disabledReason={getDisabledReason(CanvasNodeType.Image)} onClick={() => onCreate(CanvasNodeType.Image)} />
+                <ConnectionCreateOption expanded={activeOption === "生成配置"} motionEnabled={!reducedMotion} icon={<WorkflowIcon className="size-4" />} title="生成配置" description="选择模型，或使用已启用的工作流插件" disabledReason={getDisabledReason(CanvasNodeType.Config)} onClick={() => onCreate(CanvasNodeType.Config)} />
+                {canCreateDrawing ? <ConnectionCreateOption expanded={activeOption === "绘图"} motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title="绘图" description="以参考图片为底图，自由绘制和标注" disabledReason={getDisabledReason(CanvasNodeType.Drawing)} onClick={() => onCreate(CanvasNodeType.Drawing)} /> : null}
+                <ConnectionCreateOption expanded={activeOption === "视频生成"} motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title="视频生成" description="结合提示词与参考素材，生成动态视频" disabledReason={getDisabledReason(CanvasNodeType.Video)} onClick={() => onCreate(CanvasNodeType.Video)} />
+                <ConnectionCreateOption expanded={activeOption === "音频参考"} motionEnabled={!reducedMotion} icon={<Music2 className="size-4" />} title="音频参考" description="连接文本或角色卡，创建音频生成节点" disabledReason={getDisabledReason(CanvasNodeType.Audio)} onClick={() => onCreate(CanvasNodeType.Audio)} />
+                <ConnectionCreateOption expanded={activeOption === "转换"} motionEnabled={!reducedMotion} icon={<WandSparkles className="size-4" />} title="转换" description="本地处理图片或视频" disabledReason={getDisabledReason(CanvasNodeType.MediaConversion)} onClick={() => onCreate(CanvasNodeType.MediaConversion)} />
             </div>
-        </SpotlightSurface>
+        </motion.div>
     );
 }
 
-function ConnectionCreateOption({ motionEnabled, icon, title, description, disabledReason, onClick }: { motionEnabled: boolean; icon: ReactNode; title: string; description?: string; disabledReason?: string; onClick: () => void }) {
+function ConnectionCreateOption({ expanded, motionEnabled, icon, title, description, disabledReason, onClick }: { expanded: boolean; motionEnabled: boolean; icon: ReactNode; title: string; description: string; disabledReason?: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <motion.button type="button" disabled={Boolean(disabledReason)} title={disabledReason} whileHover={motionEnabled && !disabledReason ? { x: 2 } : undefined} whileTap={motionEnabled && !disabledReason ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-[var(--dock-item-radius)] border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
+        <button type="button" aria-disabled={Boolean(disabledReason)} aria-label={title} aria-description={disabledReason || description} data-create-option={title} data-expanded={expanded} data-motion={motionEnabled ? "enabled" : "reduced"} className="canvas-connection-create-option group flex min-h-10 w-full cursor-pointer items-start gap-2 rounded-[var(--dock-item-radius)] px-2 py-1.5 text-left outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-40" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted, background: expanded ? theme.toolbar.itemHover : undefined } as CSSProperties} onClick={() => { if (!disabledReason) onClick(); }}>
             <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0 flex-1 pt-1.5">
                 <span className="flex items-center gap-2 text-[var(--fs-tiny)] font-semibold leading-4">{title}</span>
-                {disabledReason || description ? <span className="mt-0.5 block whitespace-normal break-words text-[var(--fs-micro)] leading-relaxed" style={{ color: theme.node.muted }}>{disabledReason || description}</span> : null}
+                <span aria-hidden="true" className="canvas-connection-create-description" style={{ color: theme.node.muted }}><span className="min-h-0 overflow-hidden"><span className="block pt-1 whitespace-normal break-words text-[var(--fs-micro)] leading-relaxed">{disabledReason || description}</span></span></span>
             </span>
-            <ChevronRight className="size-3.5 shrink-0 opacity-35 transition-transform group-hover:translate-x-0.5" />
-        </motion.button>
+        </button>
     );
 }
 
