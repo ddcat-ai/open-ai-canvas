@@ -12,6 +12,7 @@ const AnnouncementTimelineModal = lazy(() => import("@/components/ui/aceternity/
 const ANNOUNCEMENT_REFRESH_INTERVAL_MS = 5 * 60_000;
 const ANNOUNCEMENT_CACHE_TTL_MS = 60_000;
 const ANNOUNCEMENT_DISMISS_TODAY_PREFIX = "yingce.announcements.dismiss-today";
+const ANNOUNCEMENT_DISMISS_SESSION_PREFIX = "yingce.announcements.dismiss-session";
 
 type AnnouncementFeed = Awaited<ReturnType<typeof getAnnouncementFeed>>;
 
@@ -46,9 +47,9 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
     const error = feedQuery.error instanceof Error ? feedQuery.error.message : feedQuery.error ? "读取公告失败" : "";
 
     useEffect(() => {
-        if (!autoOpen || open || !feedQuery.isSuccess || unreadCount <= 0 || announcements.length === 0) return;
+        if (!autoOpen || open || !feedQuery.isSuccess || announcements.length === 0) return;
         const fingerprint = announcementFeedFingerprint(announcements);
-        if (!fingerprint || fingerprint === dismissedFingerprint || announcementAutoPromptSuppressed(userId)) return;
+        if (!fingerprint || fingerprint === dismissedFingerprint || announcementAutoPromptSuppressed(userId, fingerprint)) return;
         setAutomaticPrompt(true);
         setOpen(true);
     }, [announcements, autoOpen, dismissedFingerprint, feedQuery.isSuccess, open, unreadCount, userId]);
@@ -71,7 +72,8 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
     const dismissAutomaticPrompt = (duration: "once" | "today") => {
         const fingerprint = announcementFeedFingerprint(announcements);
         if (fingerprint) setDismissedFingerprint(fingerprint);
-        if (duration === "today") rememberAnnouncementDismissalToday(userId);
+        if (fingerprint) rememberAnnouncementDismissalSession(userId, fingerprint);
+        if (duration === "today") rememberAnnouncementDismissalToday(userId, fingerprint);
         setAutomaticPrompt(false);
         setOpen(false);
     };
@@ -138,17 +140,36 @@ function announcementFeedFingerprint(announcements: AnnouncementFeed["announceme
         .join("|");
 }
 
-function announcementAutoPromptSuppressed(userId: string) {
+function announcementAutoPromptSuppressed(userId: string, fingerprint: string) {
+    if (hasAnnouncementDismissalSession(userId, fingerprint)) return true;
     try {
-        return localStorage.getItem(`${ANNOUNCEMENT_DISMISS_TODAY_PREFIX}.${userId}`) === localDateKey();
+        const value = localStorage.getItem(`${ANNOUNCEMENT_DISMISS_TODAY_PREFIX}.${userId}`);
+        const parsed = value ? JSON.parse(value) as { date?: string; fingerprint?: string } : null;
+        return parsed?.date === localDateKey() && parsed.fingerprint === fingerprint;
     } catch {
         return false;
     }
 }
 
-function rememberAnnouncementDismissalToday(userId: string) {
+function hasAnnouncementDismissalSession(userId: string, fingerprint: string) {
     try {
-        localStorage.setItem(`${ANNOUNCEMENT_DISMISS_TODAY_PREFIX}.${userId}`, localDateKey());
+        return sessionStorage.getItem(`${ANNOUNCEMENT_DISMISS_SESSION_PREFIX}.${userId}`) === fingerprint;
+    } catch {
+        return false;
+    }
+}
+
+function rememberAnnouncementDismissalSession(userId: string, fingerprint: string) {
+    try {
+        sessionStorage.setItem(`${ANNOUNCEMENT_DISMISS_SESSION_PREFIX}.${userId}`, fingerprint);
+    } catch {
+        // sessionStorage 不可用时保留页内 dismissedFingerprint 作为降级。
+    }
+}
+
+function rememberAnnouncementDismissalToday(userId: string, fingerprint: string) {
+    try {
+        localStorage.setItem(`${ANNOUNCEMENT_DISMISS_TODAY_PREFIX}.${userId}`, JSON.stringify({ date: localDateKey(), fingerprint }));
     } catch {
         // 浏览器禁用存储时仍允许关闭弹窗，本次组件生命周期内不会重复打开。
     }
