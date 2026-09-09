@@ -75,6 +75,13 @@ func RegisterMCPCanvasRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		req.RequestID = RequestID(c)
 		req.TokenFamilyID = principal.Token.TokenFamilyID
+		// Batch generation must enforce the same scope as the dedicated endpoint.
+		for _, op := range req.Ops {
+			if op.Type == "run_generation" && !principal.Scopes["canvas:generate"] {
+				failService(c, service.NewAppError(http.StatusForbidden, "MCP token 缺少所需权限"))
+				return
+			}
+		}
 		result, err := svc.ApplyMCPCanvasOps(principal.UserID, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)

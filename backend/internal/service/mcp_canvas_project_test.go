@@ -80,7 +80,9 @@ func TestMCPTaskIdempotencyIsScopedToOwnerAndCanvas(t *testing.T) {
 	}
 }
 
-func TestApplyCanvasMCPAtomicAllowsOnlyOneConcurrentWriter(t *testing.T) {
+// Sequential submissions from the same snapshot cover stale-write rejection,
+// not simultaneous database transactions.
+func TestApplyCanvasMCPAtomicRejectsSecondWriteFromSameVersion(t *testing.T) {
 	svc, repo, _ := newMCPProjectTestService(t, "atomic-race-"+strings.ReplaceAll(time.Now().Format("150405.000000000"), ".", "-"))
 	raw := json.RawMessage(`{"id":"canvas-race","title":"初稿","nodes":[],"connections":[]}`)
 	base, err := svc.SaveCanvasProjectWithPrecondition("user-a", raw, nil)

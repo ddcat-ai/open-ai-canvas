@@ -73,6 +73,7 @@ codex mcp add kraftreel -- node /absolute/path/to/open-ai-canvas/canvas-agent/di
 - 已发送的写请求遇到 401 或 429 时不会自动重放，避免重复创建、移动、删除或生成。
 - 删除、覆盖、移动、改边和生成由 MCP 宿主审批。画布网页不会为外部 MCP 再弹出确认框。
 - 后端仍会执行登录态、scope、资源归属、参数、并发和审计校验；宿主批准不代表服务端跳过权限。
+- 生成要求同时具备 `canvas:write` 和 `canvas:generate`；批量 `apply` 中的 `run_generation` 也遵守此规则。缺少权限时整批返回 `403`，普通编辑也不会落库。
 - MCP 输出递归移除媒体 URL、Cookie、Token、API Key 等敏感字段，审计记录不保存 prompt、原始 payload 或凭据。
 
 推荐先调用 `canvas_get_context`，再按真实节点 ID 读取或修改。复杂写操作先使用 `canvas_validate_ops`；生成任务只报告已提交或任务状态，不能把节点创建等同于媒体已经生成完成。
