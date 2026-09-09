@@ -4,7 +4,6 @@ import { Link2 } from "lucide-react";
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
-import type { CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -25,7 +24,6 @@ type CanvasProjectWorldLayersProps = {
     connectingParams: ConnectionHandle | null;
     mouseWorld: Position;
     connectionTargetNodeId: string | null;
-    connectionApproach: CanvasConnectionApproach;
     nodeById: Map<string, CanvasNodeData>;
     visibleNodes: CanvasNodeData[];
     nodeStackOrder: CanvasNodeStackOrder;
@@ -120,13 +118,6 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
         ...props.visibleNodes.filter(isFrameNode),
         ...sortCanvasNodesByStackOrder(props.visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
     ], [props.nodeStackOrder, props.visibleNodes]);
-    const batchPreviews = useMemo(() => new Map(props.visibleNodes.filter((node) => node.metadata?.isBatchRoot).map((node) => [
-        node.id,
-        (node.metadata?.batchChildIds || []).filter((id) => id !== node.metadata?.primaryImageId)
-            .map((id) => props.nodeById.get(id))
-            .filter((child): child is CanvasNodeData => Boolean(child && child.metadata?.batchRootId === node.id))
-            .slice(0, 5),
-    ])), [props.visibleNodes, props.nodeById]);
     const framePreviewNodes = (node: CanvasNodeData) => {
         const assetFolderId = node.metadata?.folder?.assetFolderId;
         if (assetFolderId) return props.linkedFolderPreviewNodesById.get(assetFolderId) || EMPTY_CANVAS_NODES;
@@ -194,13 +185,11 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}
-                        connectionApproach={props.connectionApproach?.nodeId === node.id ? props.connectionApproach.point : undefined}
                         forceInputVisible={Boolean(props.batchConnectionPreview)}
                         batchCount={props.batchChildCountById.get(node.id) || 0}
                         batchExpanded={Boolean(node.metadata?.imageBatchExpanded)}
-                        batchPreviewNodes={batchPreviews.get(node.id)}
                         batchClosing={Boolean(node.metadata?.batchRootId && props.collapsingBatchIds.has(node.metadata.batchRootId))}
-                        batchOpening={props.openingBatchIds.has(node.metadata?.batchRootId || node.id)}
+                        batchOpening={props.openingBatchIds.has(node.id)}
                         batchRecovering={props.collapsingBatchIds.has(node.id)}
                         batchPrimary={Boolean(node.metadata?.batchRootId && props.nodeById.get(node.metadata.batchRootId)?.metadata?.primaryImageId === node.id)}
                         batchMotion={props.batchMotionById.get(node.id)}

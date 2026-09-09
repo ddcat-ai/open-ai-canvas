@@ -11,7 +11,6 @@ type CanvasProjectContextMenuProps = {
     canUndo: boolean;
     canRedo: boolean;
     canPaste: boolean;
-    selectedCount: number;
     screenToCanvas: (clientX: number, clientY: number) => Position;
     onClose: () => void;
     onAddNode: (type: CanvasNodeTypeId, position: Position) => void;
@@ -39,9 +38,6 @@ type CanvasProjectContextMenuProps = {
     onUploadToArkPrivateAsset: (node: CanvasNodeData) => void;
     onSetAssetCategory: (nodeId: string, category: CanvasAssetCategory) => void;
     onToggleFrame: (node: CanvasNodeData) => void;
-    onSpreadSelection: () => void;
-    onCopySelection: () => void;
-    onDeleteSelection: () => void;
 };
 
 export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
@@ -56,7 +52,6 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             canUndo={props.canUndo}
             canRedo={props.canRedo}
             canPaste={props.canPaste}
-            selectedCount={props.selectedCount}
             onClose={props.onClose}
             onAddNode={(type) => {
                 if (menu.type === "canvas") props.onAddNode(type, menu.position);
@@ -111,9 +106,6 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             onToggleFrame={() => {
                 if (node?.type === CanvasNodeType.Frame) props.onToggleFrame(node);
             }}
-            onSpreadSelection={props.onSpreadSelection}
-            onCopySelection={props.onCopySelection}
-            onDeleteSelection={props.onDeleteSelection}
         />
     );
 }
