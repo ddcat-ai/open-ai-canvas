@@ -42,7 +42,7 @@
 #   以下任一处出现「豁免标记 + 英文冒号 + 非空理由」即放行（打印警告并 exit 0），
 #   留痕可追溯：
 #     a) 比对范围内的 diff 文本
-#     b) 比对范围内的提交信息（git log --format=%B <base>...HEAD）
+#     b) 本次引入的提交信息（git log --format=%B <base>..HEAD，两点）
 #     c) 环境变量 NO_MIGRATION_NEEDED
 #
 #   两条硬约束（都被真实事故验证过，勿删，详见文件末尾「豁免扫描」处的注释）：
@@ -255,7 +255,11 @@ WAIVER_SCAN_DIFF=$(printf '%s\n' "$DIFF" | awk -v self="$SELF" '
 ')
 WAIVER=$(printf '%s\n' "$WAIVER_SCAN_DIFF" | grep -E "^[+][[:space:]]*(//|#)?[[:space:]]*${WAIVER_TOKEN}:[[:space:]]*[^[:space:]]+" | head -n 1)
 if [ -z "$WAIVER" ]; then
-	LOGTEXT=$(git log --format=%B "$BASE"...HEAD 2>/dev/null)
+	# 两点而非三点：只看本次引入的提交（HEAD 有、base 没有）。
+	# 三点是对称差，会把只存在于 base 侧的提交也扫进来 —— 那意味着
+	# 别的分支遗留的一条行首豁免能让本分支无条件放行，且锚定拦不住
+	# （它是合法行首豁免，只是来源错误）。
+	LOGTEXT=$(git log --format=%B "$BASE"..HEAD 2>/dev/null)
 	if [ -n "$LOGTEXT" ]; then
 		WAIVER=$(printf '%s\n' "$LOGTEXT" | grep -E "^[[:space:]]*(//|#)?[[:space:]]*${WAIVER_TOKEN}:[[:space:]]*[^[:space:]]+" | head -n 1)
 	fi
