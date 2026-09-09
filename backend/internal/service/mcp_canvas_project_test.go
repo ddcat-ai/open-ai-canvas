@@ -20,11 +20,40 @@ func newMCPProjectTestService(t *testing.T, name string) (*Service, *repository.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.CanvasShare{}, &model.CanvasUnitLink{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.UserDailyActivity{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.CanvasShare{}, &model.CanvasUnitLink{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.UserDailyActivity{}, &model.MCPAuditEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := repository.New(db)
 	return New(repo, t.TempDir()), repo, db
+}
+
+func TestApplyCanvasMCPAtomicIsScopedToOwner(t *testing.T) {
+	svc, repo, db := newMCPProjectTestService(t, "atomic-owner")
+	raw := json.RawMessage(`{"id":"canvas-1","title":"用户 A","nodes":[],"connections":[]}`)
+	project, err := svc.SaveCanvasProjectWithPrecondition("user-a", raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := &model.CanvasProject{ID: project.ID, UserID: "user-b", ProjectID: project.ProjectID, Title: "越权写入", PayloadJSON: string(raw), Revision: project.Revision + 1, StateHash: project.StateHash}
+	audit := &model.MCPAuditEvent{ID: "audit-cross-user", UserID: "user-b", CanvasID: project.ID, Tool: "canvas_apply_ops"}
+	_, ok, err := repo.ApplyCanvasMCPAtomic("user-b", project.ID, project.Revision, project.StateHash, updated, audit)
+	if err == nil || ok {
+		t.Fatalf("cross-user atomic write = ok:%v err:%v, want rejection", ok, err)
+	}
+	stored, err := svc.GetMCPProject("user-a", project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Revision != project.Revision || string(stored.Payload) != string(raw) {
+		t.Fatalf("owner canvas changed after cross-user write: %#v", stored)
+	}
+	var count int64
+	if err := db.Model(&model.MCPAuditEvent{}).Where("id = ?", audit.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("cross-user audit unexpectedly persisted: %d", count)
+	}
 }
 
 func paddedCanvasPayload(id string, title string, pad int) json.RawMessage {
