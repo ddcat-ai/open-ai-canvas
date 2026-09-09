@@ -39,11 +39,17 @@
 #   注意：本脚本依赖 base 与 HEAD 的完整历史，CI 里 checkout 需 fetch-depth: 0。
 #
 # 豁免
-#   以下任一处出现「NO_MIGRATION_NEEDED:<非空理由>」即放行（打印警告并 exit 0），
+#   以下任一处出现「豁免标记 + 英文冒号 + 非空理由」即放行（打印警告并 exit 0），
 #   留痕可追溯：
 #     a) 比对范围内的 diff 文本
 #     b) 比对范围内的提交信息（git log --format=%B <base>...HEAD）
 #     c) 环境变量 NO_MIGRATION_NEEDED
+#
+#   两条硬约束（都被真实事故验证过，勿删，详见文件末尾「豁免扫描」处的注释）：
+#     1) 豁免必须独占一行，行首出现标记才识别；行内提及标记不算豁免。
+#     2) 本脚本内不得出现「豁免标记紧跟英文冒号」的字面量（注释与说明文字同样
+#        禁止），扫描时也会剔除本脚本自身。否则卡口会自我豁免、永久失效。
+#        说明文字请写成「豁免标记（后接英文冒号与理由）」这种拆开的形式。
 #
 # 退出码
 #   0 = 通过或已豁免   1 = 违规（有新字段/新表但无新迁移）   2 = 用法或环境错误
@@ -53,6 +59,7 @@ set -u
 BASE="${1:-origin/main}"
 MODEL_DIR="backend/internal/model"
 MIGRATIONS_FILE="backend/internal/database/migrations.go"
+SELF="scripts/check-schema-migration.sh"
 WAIVER_TOKEN="NO_MIGRATION_NEEDED"
 
 die_usage() {
@@ -229,16 +236,33 @@ echo "新增结构体(表): $TYPE_COUNT"
 echo "新增迁移注册:   $MIG_COUNT"
 echo "重排(已忽略):   $REORDER_COUNT"
 
-# 豁免：diff 文本、比对范围内的提交信息、或环境变量中出现 NO_MIGRATION_NEEDED:<非空理由>
-WAIVER=$(printf '%s\n' "$DIFF" | grep -E "${WAIVER_TOKEN}:[ \t]*[^ \t]+" | head -n 1)
+# 豁免扫描：diff 文本、比对范围内的提交信息、或环境变量中出现「豁免标记后接
+# 英文冒号与非空理由」即放行。
+#
+# 约束 1：豁免必须独占一行——行首出现标记才识别（diff 行允许前置 '+'，两边都允许
+#   前置空白或 // # 注释符）。行内提及标记不算豁免。
+#   事故来源：曾有提交信息用条目形式描述本卡口的豁免机制，行内带出了标记字面量，
+#   被宽松正则命中 ⇒ 卡口自我豁免、彻底失效（对整段历史永久放行）。
+#   严格锚定后，这类"文档性提及"不再触发，且方向是 fail-safe：漏识别会拦下，
+#   不会静默放行。
+# 约束 2：扫描前剔除本脚本自身。卡口源码永远不该成为豁免来源——将来谁又在注释里
+#   写一遍标记字面量，也不至于再次自爆。
+WAIVER_SCAN_DIFF=$(printf '%s\n' "$DIFF" | awk -v self="$SELF" '
+	/^diff --git / { skip = 0; next }
+	/^\+\+\+ / { f = substr($0, 5); sub(/^b\//, "", f); skip = (f == self); next }
+	skip { next }
+	{ print }
+')
+WAIVER=$(printf '%s\n' "$WAIVER_SCAN_DIFF" | grep -E "^[+][[:space:]]*(//|#)?[[:space:]]*${WAIVER_TOKEN}:[[:space:]]*[^[:space:]]+" | head -n 1)
 if [ -z "$WAIVER" ]; then
 	LOGTEXT=$(git log --format=%B "$BASE"...HEAD 2>/dev/null)
 	if [ -n "$LOGTEXT" ]; then
-		WAIVER=$(printf '%s\n' "$LOGTEXT" | grep -E "${WAIVER_TOKEN}:[ \t]*[^ \t]+" | head -n 1)
+		WAIVER=$(printf '%s\n' "$LOGTEXT" | grep -E "^[[:space:]]*(//|#)?[[:space:]]*${WAIVER_TOKEN}:[[:space:]]*[^[:space:]]+" | head -n 1)
 	fi
 fi
-if [ -z "$WAIVER" ] && [ -n "${NO_MIGRATION_NEEDED:-}" ]; then
-	WAIVER="env: ${NO_MIGRATION_NEEDED}"
+WAIVER_ENV="${NO_MIGRATION_NEEDED-}"
+if [ -z "$WAIVER" ] && [ -n "$WAIVER_ENV" ]; then
+	WAIVER="env: $WAIVER_ENV"
 fi
 
 if [ -n "$WAIVER" ]; then
