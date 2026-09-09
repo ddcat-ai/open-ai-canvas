@@ -5,7 +5,6 @@ import { AlertCircle, BookOpenCheck, CheckCircle2, Clapperboard, Copy, Download,
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { canvasConnectionTilt } from "@/lib/canvas/canvas-connection-tilt";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { isEmptyMediaNode, isLocalReadOnlyAssetNode, shouldShowInlineNodeStatus } from "@/lib/canvas/canvas-node-ui-policy";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -28,7 +27,6 @@ type CanvasNodeProps = {
     isRelated: boolean;
     isFocusRelated: boolean;
     isConnectionTarget: boolean;
-    connectionApproach?: Position;
     forceInputVisible?: boolean;
     showImageInfo: boolean;
     reduceMediaEffects?: boolean;
@@ -37,7 +35,6 @@ type CanvasNodeProps = {
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     drawingProjectId?: string;
     batchCount?: number;
-    batchPreviewNodes?: CanvasNodeData[];
     batchExpanded?: boolean;
     batchClosing?: boolean;
     batchOpening?: boolean;
@@ -79,7 +76,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     isRelated,
     isFocusRelated,
     isConnectionTarget,
-    connectionApproach,
     forceInputVisible = false,
     showImageInfo,
     reduceMediaEffects = false,
@@ -88,7 +84,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     renderNodeContent,
     drawingProjectId,
     batchCount = 0,
-    batchPreviewNodes,
     batchExpanded = false,
     batchClosing = false,
     batchOpening = false,
@@ -331,7 +326,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                 data-node-card={!isComposerNode ? "true" : undefined}
                 data-node-selected={isSelected ? "true" : "false"}
                 data-node-state={nodeState}
-                data-connection-tilt={connectionTilt ? "true" : undefined}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: isComposerNode ? theme.node.fill : hasImageContent || hasVideoContent ? "transparent" : theme.node.cardFill,
@@ -380,8 +374,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                             "--batch-from-x": `${batchMotion?.x || 0}px`,
                             "--batch-from-y": `${batchMotion?.y || 0}px`,
                             "--batch-from-rotate": `${6 + (batchMotion?.index || 0) * 4}deg`,
-                            animation: isBatchChild && (batchClosing || batchOpening) ? (batchClosing ? `canvas-batch-child-out var(--motion-dur-base-calc) var(--motion-ease-in-out) both` : `canvas-batch-child-in var(--motion-dur-slow-calc) var(--motion-ease-out) both`) : undefined,
-                            animationDelay: isBatchChild && (batchClosing || batchOpening) ? `${batchClosing ? 0 : 45 + (batchMotion?.index || 0) * 24}ms` : undefined,
+                            animation: data.metadata?.batchRootId ? (batchClosing ? `canvas-batch-child-out var(--motion-dur-base-calc) var(--motion-ease-in-out) both` : `canvas-batch-child-in var(--motion-dur-slow-calc) var(--motion-ease-out) both`) : undefined,
+                            animationDelay: data.metadata?.batchRootId ? `${batchClosing ? 0 : 45 + (batchMotion?.index || 0) * 24}ms` : undefined,
                         } as React.CSSProperties
                     }
                 >
@@ -396,7 +390,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                         textareaRef={textareaRef}
                         isBatchRoot={isBatchRoot}
                         batchCount={batchCount}
-                        batchPreviewNodes={batchPreviewNodes}
                         batchExpanded={batchExpanded}
                         batchOpening={batchOpening}
                         batchRecovering={batchRecovering}
@@ -496,8 +489,6 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.isRelated === next.isRelated &&
         previous.isFocusRelated === next.isFocusRelated &&
         previous.isConnectionTarget === next.isConnectionTarget &&
-        previous.connectionApproach?.x === next.connectionApproach?.x &&
-        previous.connectionApproach?.y === next.connectionApproach?.y &&
         previous.forceInputVisible === next.forceInputVisible &&
         previous.showImageInfo === next.showImageInfo &&
         previous.reduceMediaEffects === next.reduceMediaEffects &&
@@ -506,7 +497,6 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.renderNodeContent === next.renderNodeContent &&
         previous.drawingProjectId === next.drawingProjectId &&
         previous.batchCount === next.batchCount &&
-        previous.batchPreviewNodes === next.batchPreviewNodes &&
         previous.batchExpanded === next.batchExpanded &&
         previous.batchClosing === next.batchClosing &&
         previous.batchOpening === next.batchOpening &&
@@ -667,7 +657,6 @@ function nodeTypeIcon(type: CanvasNodeTypeId) {
     if (type === CanvasNodeType.Drawing) return Pencil;
     if (type === CanvasNodeType.Script) return Clapperboard;
     if (type === CanvasNodeType.Config) return Settings2;
-    if (type === CanvasNodeType.MediaConversion) return WandSparkles;
     if (type === CanvasNodeType.Skill) return BookOpenCheck;
     if (type === ART_CRITIQUE_NODE_TYPE) return ScanSearch;
     return Type;
