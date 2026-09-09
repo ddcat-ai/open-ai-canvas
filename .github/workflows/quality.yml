@@ -17,7 +17,10 @@ jobs:
       run:
         working-directory: backend
     steps:
+      # fetch-depth: 0 —— 迁移覆盖卡口需要 base 与 HEAD 的完整历史才能做三方比较。
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
@@ -26,6 +29,18 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - name: Run Go tests
         run: go test ./...
+      # 迁移覆盖卡口：模型层新增持久化字段/新表但没配迁移时直接失败，
+      # 避免存量生产库缺列。显式豁免请写 NO_MIGRATION_NEEDED:<理由>。
+      - name: Check schema migration coverage
+        working-directory: .
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "${BASE_SHA:-}" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "无法判定基线（新建分支/首次推送），跳过迁移覆盖卡口。"
+            exit 0
+          fi
+          sh scripts/check-schema-migration.sh "$BASE_SHA"
 
   payment-plugins:
     name: Payment plugin artifacts
