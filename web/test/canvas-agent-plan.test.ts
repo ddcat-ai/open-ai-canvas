@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cancelCanvasAgentPlan, completeCanvasAgentPlanTasks, createCanvasAgentPlan, retryCanvasAgentPlanTask, transitionCanvasAgentPlan } from "../src/lib/canvas/canvas-agent-plan";
+import { cancelCanvasAgentPlan, completeCanvasAgentPlanTasks, createCanvasAgentPlan, pauseCanvasAgentPlan, retryCanvasAgentPlanTask, resumeCanvasAgentPlan, transitionCanvasAgentPlan } from "../src/lib/canvas/canvas-agent-plan";
 
 describe("canvas Agent plan contract", () => {
     test("turns tool calls into ordered approval tasks", () => {
@@ -47,5 +47,15 @@ describe("canvas Agent plan contract", () => {
         expect(cancelled.status).toBe("cancelled");
         expect(cancelled.tasks.map((task) => task.status)).toEqual(["succeeded", "cancelled"]);
         expect(cancelCanvasAgentPlan(cancelled)).toBe(cancelled);
+    });
+
+    test("pauses and resumes unfinished tasks without rerunning completed work", () => {
+        const plan = createCanvasAgentPlan([{ id: "a", function: { name: "canvas_apply_ops" } }, { id: "b", function: { name: "canvas_generate_image" } }]);
+        const running = transitionCanvasAgentPlan(plan, "succeeded", "a");
+        const paused = pauseCanvasAgentPlan(running);
+        expect(paused.status).toBe("blocked");
+        expect(paused.tasks.map((task) => task.status)).toEqual(["succeeded", "blocked"]);
+        expect(resumeCanvasAgentPlan(paused).tasks.map((task) => task.status)).toEqual(["succeeded", "pending"]);
+        expect(resumeCanvasAgentPlan(paused).status).toBe("running");
     });
 });

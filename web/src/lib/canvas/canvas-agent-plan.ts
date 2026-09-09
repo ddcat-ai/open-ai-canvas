@@ -68,3 +68,13 @@ export function cancelCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
     if (plan.status === "succeeded" || plan.status === "cancelled") return plan;
     return { ...plan, status: "cancelled", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "cancelled" as const }) };
 }
+
+export function pauseCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
+    if (plan.status !== "running" && plan.status !== "waiting_approval") return plan;
+    return { ...plan, status: "blocked", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "blocked" as const }) };
+}
+
+export function resumeCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
+    if (plan.status !== "blocked") return plan;
+    return { ...plan, status: "running", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "pending" as const }) };
+}
