@@ -165,20 +165,6 @@ const BUILTIN_NODE_TRAITS = {
         resourceKind: () => "image",
         inputKind: "image",
     },
-    [CanvasNodeType.MediaConversion]: {
-        label: "转换",
-        icon: <WandSparkles />,
-        minSize: { width: 400, height: 360 },
-        showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => {
-            const conversion = node.metadata?.mediaConversion;
-            if (conversion?.status !== "completed" || !conversion.resultStorageKey) return null;
-            return conversion.outputKind === "video" ? "video" : "image";
-        },
-        acceptsInputKind: ["image", "video"],
-        maxInputCount: 1,
-        inputKind: "image",
-    },
 } satisfies Record<string, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
 
 export const BUILTIN_NODE_DEFINITIONS: CanvasNodeDefinition[] = (Object.keys(BUILTIN_NODE_TRAITS) as CanvasNodeType[]).map((type) => {

@@ -1,8 +1,4 @@
-import { App, Button, Input, Skeleton, Tabs } from "antd";
-import { Select } from "@/components/ui/base/select";
-import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import { StatusBadge } from "@/components/ui/base/badges";
-import { Callout } from "@/components/ui/product/callout";
+import { Alert, App, Button, Input, Segmented, Select, Skeleton, Tabs, Tag } from "antd";
 import { RotateCcw, Save, ShieldCheck, Undo2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
@@ -161,7 +157,7 @@ export function PromptPreferencesPane() {
                             提示词模板
                         </label>
                         <Select
-                             ariaLabel="提示词模板"
+                            id="prompt-template-select"
                             className="w-full max-w-md"
                             value={selectedOperation}
                             onChange={selectOperation}
@@ -198,11 +194,11 @@ export function PromptPreferencesPane() {
                         </div>
                         <p className="mt-1 text-xs leading-5 text-foreground/55">{selected.definition.description}</p>
                     </div>
-<SegmentedControl value={mode} options={modeOptions} onChange={(value) => setMode(value as CustomizationMode)} />
+                    <Segmented value={mode} options={modeOptions} onChange={(value) => setMode(value as CustomizationMode)} />
                 </div>
             </header>
 
-            {selected.outdated ? <Callout className="mt-4" tone="warning" title="平台模板已更新">当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。</Callout> : null}
+            {selected.outdated ? <Alert className="mt-4" type="warning" showIcon title="平台模板已更新" description="当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。" /> : null}
 
             <div className="grid min-h-0 flex-1 gap-4 pt-4 lg:grid-cols-3">
                 <section className="flex min-h-0 flex-col lg:col-span-2">

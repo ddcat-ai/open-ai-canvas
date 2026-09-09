@@ -46,6 +46,7 @@ export type AssetLibraryPickerFolder = {
 type Props = {
     remoteLibrary?: boolean;
     remoteKind?: "image" | "audio" | "video";
+    mediaKinds?: AssetPickerMediaKind[];
     open: boolean;
     items: AssetLibraryPickerItem[];
     categoryLabels: Record<string, string>;
@@ -81,6 +82,8 @@ type Props = {
 
 export function AssetLibraryPickerModal({
     open,
+    remoteKind,
+    mediaKinds = DEFAULT_MEDIA_KINDS,
     items,
     categoryLabels,
     initialCategory = "all",
@@ -350,7 +353,6 @@ export function AssetLibraryPickerModal({
             closable={!working}
             mask={{ closable: !working }}
             keyboard={!working}
-            centered
             onCancel={() => {
                 if (!working) onClose();
             }}

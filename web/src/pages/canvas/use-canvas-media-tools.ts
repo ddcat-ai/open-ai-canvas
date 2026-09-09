@@ -13,9 +13,6 @@ import type { CanvasVideoSegmentParams } from "@/components/canvas/canvas-video-
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "@/lib/canvas/canvas-image-data";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { findAvailableGenerationGroupPosition, imageGenerationChildPosition, imageGenerationGroupSize } from "@/lib/canvas/canvas-generation-layout";
-import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
-import { cancelIncompleteImageBatch } from "@/lib/canvas/canvas-image-batch-retry";
 import { buildAngleLabel, buildAnglePrompt, createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { validateVideoSegmentBatch } from "@/lib/canvas/canvas-video-regeneration";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
@@ -29,7 +26,6 @@ import {
 import { fitImageNodeSize, fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
-import { createPortraitTextureNode } from "@/lib/canvas/canvas-image-source";
 import { captureVideoFrames } from "@/lib/canvas/canvas-video-frame";
 import { buildVideoFrameNodes } from "@/lib/canvas/canvas-video-frame-nodes";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
@@ -70,7 +66,6 @@ type UseCanvasMediaToolsOptions = {
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
-const NODE_STATUS_IDLE = "idle" as const;
 const IMAGE_PROMPT_REVERSE_PRESET = `请根据参考图片反推一段适合用于 AI 生图的提示词。
 
 要求：
@@ -187,16 +182,14 @@ export function useCanvasMediaTools({
             return;
         }
         const portraitTextureSettings = { ...DEFAULT_PORTRAIT_TEXTURE_SETTINGS, ...node.metadata?.portraitTexture };
-        const child = createPortraitTextureNode(node, nanoid());
-        child.metadata = { ...child.metadata, portraitTexture: portraitTextureSettings };
+        const composerContent = node.metadata?.composerContent?.trim() || node.metadata?.prompt?.trim() || "@图片1";
         setHoveredNodeId(null);
         setToolbarNodeId(null);
-        setNodes((current) => [...current, child]);
-        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: child.id }]);
-        setSelectedNodeIds(new Set([child.id]));
+        setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, prompt: composerContent, composerContent, portraitTexture: portraitTextureSettings } } : item));
+        setSelectedNodeIds(new Set([node.id]));
         setSelectedConnectionId(null);
-        setDialogNodeId(child.id);
-    }, [message, setConnections, setDialogNodeId, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
+        setDialogNodeId(node.id);
+    }, [message, setDialogNodeId, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
 
     const cropImageNode = useCallback(async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
         if (!node.metadata?.content) return;
@@ -575,79 +568,28 @@ export function useCanvasMediaTools({
 
     const maskEditImageNode = useCallback(async (node: CanvasNodeData, payload: CanvasImageMaskEditPayload) => {
         if (!node.metadata?.content) return;
-        const baseGenerationConfig = buildGenerationConfig(effectiveConfig, node, "image");
-        const generationConfig = {
-            ...baseGenerationConfig,
-            ...payload.generationConfig,
-            model: payload.generationConfig?.model || payload.generationConfig?.imageModel || baseGenerationConfig.model,
-            imageModel: payload.generationConfig?.imageModel || payload.generationConfig?.model || effectiveConfig.imageModel,
-            count: String(payload.generationConfig?.count || 1),
-            size: payload.generationConfig?.size || node.metadata?.size || "auto",
-        };
+        const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1", size: node.metadata?.size || "auto" };
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
             navigateToSettings({ continueCreation: true });
             return;
         }
         const userPrompt = payload.prompt.trim();
         const prompt = `只修改蒙版透明区域，其他区域保持不变。${userPrompt}`;
+        const childId = nanoid();
         const source = nodeReferenceImage(node);
         if (!source) return;
         const styleExecution = resolveImageEditStyle(node, prompt, generationConfig);
         if (!styleExecution) return;
         const { prompt: effectivePrompt, metadata: styleMetadata } = styleExecution;
-        const requestedCount = Math.max(1, Number(generationConfig.count) || 1);
-        const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, requestedCount, [source]);
+        const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [source]);
         setMaskEditNodeId(null);
-        const rootId = nanoid();
-        const childIds = requestedCount > 1 ? Array.from({ length: requestedCount }, () => nanoid()) : [];
-        const targetIds = requestedCount > 1 ? childIds : [rootId];
-        const imageSize = { width: node.width, height: node.height };
-        const preferredPosition = { x: node.position.x + node.width + 96, y: node.position.y };
-        const rootPosition = findAvailableGenerationGroupPosition(nodesRef.current, preferredPosition, imageGenerationGroupSize(imageSize, imageSize, childIds.length));
-        const rootNode: CanvasNodeData = {
-            id: rootId,
-            type: CanvasNodeType.Image,
-            title: userPrompt.slice(0, 32) || "局部编辑结果",
-            position: rootPosition,
-            width: node.width,
-            height: node.height,
-            metadata: {
-                ...canvasGenerationPromptMetadata(userPrompt, effectivePrompt),
-                status: NODE_STATUS_LOADING,
-                isBatchRoot: requestedCount > 1,
-                batchChildIds: requestedCount > 1 ? childIds : undefined,
-                batchFailedCount: requestedCount > 1 ? 0 : undefined,
-                imageBatchExpanded: requestedCount > 1 ? true : undefined,
-                ...generationMetadata,
-                ...styleMetadata,
-            },
-        };
-        const childNodes: CanvasNodeData[] = childIds.map((id, index) => ({
-            id,
-            type: CanvasNodeType.Image,
-            title: `${userPrompt.slice(0, 28) || "局部编辑结果"} · ${index + 1}`,
-            position: imageGenerationChildPosition(rootNode.position, rootNode.width, imageSize, index),
-            width: node.width,
-            height: node.height,
-            metadata: {
-                ...canvasGenerationPromptMetadata(userPrompt, effectivePrompt),
-                status: NODE_STATUS_LOADING,
-                batchRootId: rootId,
-                ...generationMetadata,
-                ...styleMetadata,
-            },
-        }));
-        setRunningNodeId(rootId);
-        setNodes((current) => [...current, rootNode, ...childNodes]);
-        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: rootId }, ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))]);
-        setSelectedNodeIds(new Set([rootId, ...childIds]));
+        setRunningNodeId(childId);
+        setNodes((current) => [...current, { id: childId, type: CanvasNodeType.Image, title: userPrompt.slice(0, 32) || "局部编辑结果", position: { x: node.position.x + node.width + 96, y: node.position.y }, width: node.width, height: node.height, metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, ...generationMetadata, ...styleMetadata } }]);
+        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
+        setSelectedNodeIds(new Set([childId]));
         setSelectedConnectionId(null);
-        setDialogNodeId(rootId);
-        const controller = startGenerationRequest(rootId, node.id, rootId);
-        targetIds.forEach((targetId) => startGenerationRequest(targetId, node.id, rootId, controller));
-        let hasSuccess = false;
-        let failureCount = 0;
-        let representativeError: string | undefined;
+        setDialogNodeId(childId);
+        const controller = startGenerationRequest(childId, node.id, childId);
         try {
             const result = await runBackendCanvasGenerationTask({ projectId, nodeId: childId, mode: "image", prompt: effectivePrompt, config: generationConfig, referenceImages: [source], mask: { id: `${node.id}-mask`, name: "mask.png", type: "image/png", dataUrl: payload.maskDataUrl }, signal: controller.signal, metadata: { sourceNodeId: node.id, edit: "mask", ...styleMetadata }, onTaskCreated: (task) => bindGenerationTask(childId, task) });
             const image = result.images?.[0];
@@ -665,7 +607,7 @@ export function useCanvasMediaTools({
             message.error(details);
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
         } finally {
-            if (requestedCount > 1) finishGenerationRequest(rootId, controller);
+            finishGenerationRequest(childId, controller);
             setRunningNodeId(null);
         }
     }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, persistMediaNodes, projectId, resolveImageEditStyle, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest]);
