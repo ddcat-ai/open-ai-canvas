@@ -15929,6 +15929,7 @@ html .assets-library-page .app-page-header .assets-header-action-buttons .ant-bt
 .asset-archive-subtitle { margin-top: 4px; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-label); }
 .asset-archive-preview { overflow: hidden; border-radius: var(--r-xl); background: #050505; box-shadow: var(--elevation-hairline); }
 .asset-archive-preview-media { display: block; width: 100%; max-height: 400px; object-fit: contain; background: #050505; }
+.asset-zoom-shell { position: relative; min-height: 420px; background: #050505; }
 .asset-zoom-viewer { position: relative; display: flex; min-height: 420px; align-items: center; justify-content: center; overflow: hidden; background: #050505; touch-action: none; }
 .asset-zoom-image { max-height: 70vh; transform-origin: center; transition: transform 120ms ease-out; user-select: none; }
 .asset-zoom-controls { position: absolute; right: 12px; bottom: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid rgba(255,255,255,.16); border-radius: var(--r-md); background: rgba(15,15,15,.76); backdrop-filter: blur(8px); }
