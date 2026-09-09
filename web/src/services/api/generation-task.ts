@@ -538,7 +538,7 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
     if (workflow) return workflowProviderConfig(config, requestConfig, workflow);
     const generationOptions = {
         size: config.size,
-        quality: config.quality,
+        quality: omittedImageQuality(config.quality),
         transparentBackground: config.transparentBackground,
         count: config.count,
         videoSeconds: config.videoSeconds,
@@ -623,13 +623,28 @@ function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode)
     const channel = resolveModelChannel(config, config.model);
     const spec = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalCapabilitySpec;
     const candidates: Record<string, unknown> = mode === "image"
-        ? { size: config.size, quality: config.quality, transparentBackground: config.transparentBackground === "true", count: Number(config.count) }
+        ? { size: config.size, quality: omittedImageQuality(config.quality), transparentBackground: config.transparentBackground === "true", count: Number(config.count) }
         : mode === "video"
             ? { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
             : mode === "audio"
                 ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) }
                 : {};
-    return Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
+    const filtered = Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
+    // 图片质量和画幅同时参与按规格计费匹配。即使逻辑模型能力声明只把其中一项
+    // 暴露给供应线路，报价仍需要看到客户端最终选择，避免局部重绘等编辑请求落到
+    // “未配置所选规格”的错误分支。
+    if (mode === "image") {
+        for (const key of ["quality", "size"] as const) {
+            const value = candidates[key];
+            if (value !== undefined && value !== null && String(value).trim() !== "") filtered[key] = value;
+        }
+    }
+    return filtered;
+}
+
+function omittedImageQuality(value: string | undefined) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized === "auto" || normalized === "any" ? undefined : value;
 }
 
 export function parseBackendGenerationResult(task: GenerationTask): BackendGenerationResult {

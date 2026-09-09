@@ -896,7 +896,14 @@ function matchWorkflowValue(value: string, options: string[]) {
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
     const size = normalizeImageSizeSetting(profile, value.size);
-    const quality = profile.quality.supported ? (value.quality && profile.quality.values.includes(value.quality) ? value.quality : profile.quality.default || "auto") : profile.quality.default || "auto";
+    const requestedQuality = String(value.quality || "").trim().toLowerCase();
+    const quality = profile.quality.supported
+        ? requestedQuality === "auto" || requestedQuality === "any"
+            ? "auto"
+            : value.quality && profile.quality.values.includes(value.quality)
+                ? value.quality
+                : profile.quality.default || "auto"
+        : profile.quality.default || "auto";
     const count = String(Math.max(1, Math.min(profile.maxOutputs, Math.floor(Math.abs(Number(value.count)) || 1))));
     const transparentBackground = profile.transparentBackground.supported && value.transparentBackground === "true" ? "true" : "false";
     return { size, quality, count, transparentBackground };

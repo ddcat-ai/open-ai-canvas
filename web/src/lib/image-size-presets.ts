@@ -2,7 +2,7 @@ import { buildImageResolutionOptions, type ImageResolutionOption, type ImageReso
 import type { ImageCapabilityConfig } from "./model-capabilities";
 
 export const IMAGE_RESOLUTIONS: ImageResolutionTier[] = ["1k", "2k", "4k"];
-export const IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"];
+export const IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"];
 const standardSizes: Record<string, string[]> = {
     "1:1": ["1024x1024", "2048x2048", "2880x2880"],
     "16:9": ["1824x1024", "2752x1536", "3840x2160"],
@@ -11,6 +11,8 @@ const standardSizes: Record<string, string[]> = {
     "3:4": ["1024x1360", "1728x2304", "2448x3264"],
     "3:2": ["1536x1024", "2496x1664", "3504x2336"],
     "2:3": ["1024x1536", "1664x2496", "2336x3504"],
+    "4:5": ["1024x1280", "1792x2240", "2560x3200"],
+    "5:4": ["1280x1024", "2240x1792", "3200x2560"],
     "21:9": ["2048x878", "3136x1344", "3808x1632"],
 };
 

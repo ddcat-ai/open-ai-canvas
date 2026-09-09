@@ -49,16 +49,16 @@ export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandl
 
     return (
         <Excalidraw
-            initialData={initialData}
-            langCode="zh-CN"
-            theme={colorScheme}
-            autoFocus
-            excalidrawAPI={(api) => {
-                apiRef.current = api;
-                api.setActiveTool({ type: "freedraw" });
-                onReady();
-            }}
-            UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
+                initialData={initialData}
+                langCode="zh-CN"
+                theme={colorScheme}
+                autoFocus
+                excalidrawAPI={(api) => {
+                    apiRef.current = api;
+                    api.setActiveTool({ type: "freedraw" });
+                    onReady();
+                }}
+                UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
         />
     );
 });

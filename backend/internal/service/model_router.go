@@ -65,6 +65,13 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 		explicitOptions = true
 		for key, value := range options {
 			name := canonicalCapabilityOptionName(key)
+			// auto/any 表示调用方不指定质量；不能把它当作模型必须声明的
+			// 枚举值，否则未列出 auto 的模型会被错误判定为参数不支持。
+			if name == "quality" {
+				if normalized, ok := value.(string); ok && (strings.EqualFold(strings.TrimSpace(normalized), "auto") || strings.EqualFold(strings.TrimSpace(normalized), "any")) {
+					continue
+				}
+			}
 			intent.Options[name] = normalizeModelRequestOption(name, value)
 		}
 	}

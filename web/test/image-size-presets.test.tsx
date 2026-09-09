@@ -42,6 +42,17 @@ describe("统一图片分辨率与宽高比", () => {
         }
     });
 
+    test("固定比例编辑器包含 4:5 和 5:4 三档尺寸", () => {
+        expect(IMAGE_RATIOS).toContain("4:5");
+        expect(IMAGE_RATIOS).toContain("5:4");
+        expect(imagePresetForRatio("1k", "4:5").size).toBe("1024x1280");
+        expect(imagePresetForRatio("2k", "4:5").size).toBe("1792x2240");
+        expect(imagePresetForRatio("4k", "4:5").size).toBe("2560x3200");
+        expect(imagePresetForRatio("1k", "5:4").size).toBe("1280x1024");
+        expect(imagePresetForRatio("2k", "5:4").size).toBe("2240x1792");
+        expect(imagePresetForRatio("4k", "5:4").size).toBe("3200x2560");
+    });
+
     test("管理员设置同步支持值、默认值，并保持精确尺寸", () => {
         const profile = defaultImageCapabilityConfig();
         profile.size = { parameter: "size", values: ["1920x1080"], default: "1920x1080", allowCustom: false };
@@ -139,8 +150,11 @@ describe("统一图片分辨率与宽高比", () => {
             expect(editor).toContain(`aria-label="${tier} 16:9"`);
         }
         expect(editor).toContain('aria-label="默认输出"');
-        expect(editor).toContain("全不选");
-        expect(editor).toContain("全选");
+        expect(editor).not.toContain("全不选");
+        expect(editor).not.toContain("全选");
+        expect(editor).toContain('aria-label="启用 1K 规格"');
+        expect(editor).toContain('aria-label="启用 2K 规格"');
+        expect(editor).toContain('aria-label="启用 4K 规格"');
         const readOnly = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} disabled onChange={() => {}} />);
         const buttons = [...readOnly.matchAll(/<button\b[^>]*>/g)];
         expect(buttons.length).toBeGreaterThan(24);

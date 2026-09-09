@@ -41,10 +41,10 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
         setBrushSize(defaultBrushSize);
         setMode("paint");
         setError("");
-        setAdvancedOpen(false);
+        setAdvancedOpen(true);
         setGenerationConfig(config);
         void readImageMeta(dataUrl).then(setImage);
-    }, [config, dataUrl, open]);
+    }, [dataUrl, open]);
 
     useEffect(() => {
         clearCanvas(maskCanvasRef.current);
@@ -115,7 +115,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
             <div className="grid gap-5 lg:grid-cols-[minmax(360px,1fr)_340px]">
                 <div className="flex min-h-[360px] items-center justify-center rounded-lg bg-surface-active p-0">
                     <div className="relative inline-block max-w-full overflow-hidden rounded-lg bg-transparent select-none">
-                        <img src={dataUrl} alt="" className="block max-h-[68vh] max-w-full bg-transparent" draggable={false} />
+                        <img src={dataUrl} alt="" className="relative z-0 block max-h-[68vh] max-w-full bg-transparent" draggable={false} />
                         {image ? (
                             <>
                                 <canvas ref={maskCanvasRef} width={image.width} height={image.height} className="hidden" />
@@ -123,7 +123,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                                     ref={previewCanvasRef}
                                     width={image.width}
                                     height={image.height}
-                                    className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
+                                    className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
                                     onPointerDown={startDraw}
                                     onPointerMove={moveDraw}
                                     onPointerUp={stopDraw}
@@ -173,17 +173,6 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                             {error ? <div className="text-xs font-medium text-destructive">{error}</div> : null}
                         </div>
 
-                        <ImageSettingsPanel
-                            config={generationConfig}
-                            showTitle={false}
-                            showQuality={false}
-                            showTransparent={false}
-                            showSize={false}
-                            className="space-y-2"
-                            theme={theme}
-                            onConfigChange={(key, value) => setGenerationConfig((current) => ({ ...current, [key]: value }))}
-                        />
-
                         <div className="rounded-xl border border-border/60">
                             <button
                                 type="button"
@@ -211,6 +200,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                                         config={generationConfig}
                                         showTitle={false}
                                         showCount={false}
+                                        bypassPriceGuard
                                         className="space-y-3"
                                         theme={theme}
                                         onConfigChange={(key, value) => setGenerationConfig((current) => ({ ...current, [key]: value }))}

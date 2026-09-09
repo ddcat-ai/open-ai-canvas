@@ -822,10 +822,11 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 			return BadAuthRequest(err.Error())
 		}
 	}
-	if profile.Quality.Supported && strings.TrimSpace(input.Config.Quality) != "" && !containsCapabilityString(profile.Quality.Values, input.Config.Quality) {
+	quality := strings.TrimSpace(input.Config.Quality)
+	if profile.Quality.Supported && quality != "" && !strings.EqualFold(quality, "auto") && !strings.EqualFold(quality, "any") && !containsCapabilityString(profile.Quality.Values, quality) {
 		return BadAuthRequest("图片质量不在当前模型支持范围内")
 	}
-	if err := validateImagePresetSelection(profile, firstNonEmpty(input.Config.Quality, profile.Quality.Default), firstNonEmpty(input.Config.Size, profile.Size.Default)); err != nil {
+	if err := validateImagePresetSelection(profile, qualityForImageValidation(quality, profile.Quality.Default), firstNonEmpty(input.Config.Size, profile.Size.Default)); err != nil {
 		return err
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count))
@@ -833,6 +834,13 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 		return BadAuthRequest(fmt.Sprintf("当前图片模型单次最多生成 %d 张", profile.MaxOutputs))
 	}
 	return nil
+}
+
+func qualityForImageValidation(quality string, fallback string) string {
+	if strings.EqualFold(quality, "auto") || strings.EqualFold(quality, "any") {
+		return fallback
+	}
+	return firstNonEmpty(quality, fallback)
 }
 
 func validateImagePresetSelection(profile *ImageCapabilityConfig, quality, ratio string) error {

@@ -38,6 +38,19 @@ func TestImagePriceTiersMatchResolutionAndActualReferences(t *testing.T) {
 	}
 }
 
+func TestAutoQualityIsOmittedFromCapabilityIntent(t *testing.T) {
+	intent := ModelRequestIntentFromTaskInput(map[string]any{
+		"mode":              "image",
+		"capabilityOptions": map[string]any{"quality": "auto", "size": "2048x878"},
+	}, "canvas_image", "image")
+	if _, exists := intent.Options["quality"]; exists {
+		t.Fatalf("quality option = %#v, want omitted for auto", intent.Options["quality"])
+	}
+	if intent.Options["size"] != "2048x878" {
+		t.Fatalf("size option = %#v, want preserved", intent.Options["size"])
+	}
+}
+
 func TestModelRequestIntentNormalizesVideoResolution(t *testing.T) {
 	input := map[string]any{
 		"mode":   "video",
