@@ -527,3 +527,10 @@ export const useCanvasStore = create<CanvasStore>()(
         },
     ),
 );
+
+// A failed or indefinitely pending IndexedDB rehydrate must not leave the canvas
+// library behind its permanent loading shell. Remote projects can still load
+// independently after this bounded fallback.
+setTimeout(() => {
+    if (!useCanvasStore.getState().hydrated) useCanvasStore.setState({ hydrated: true });
+}, 4000);
