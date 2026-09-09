@@ -130,16 +130,6 @@ function buildEntriesWithSeparators(tools: ToolDefinition[], ctx: ToolContext): 
 }
 
 function toolToEntry(tool: ToolDefinition, ctx: ToolContext): FloatingDockEntry {
-    if (tool.switchGroup) {
-        return {
-            kind: "switch",
-            id: tool.id,
-            label: resolveText(tool.label, ctx),
-            value: tool.switchGroup.value(ctx),
-            options: tool.switchGroup.options,
-            onChange: (value) => tool.switchGroup?.onChange(ctx, value),
-        };
-    }
     return {
         kind: "command",
         id: tool.id,

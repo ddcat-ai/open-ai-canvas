@@ -214,7 +214,6 @@ function InfiniteCanvasPage() {
     const localAgentEnabled = useCanvasAgentStore((state) => state.enabled);
     const containerRef = useRef<HTMLDivElement>(null);
     const didInitialCenterRef = useRef(false);
-    const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const assetHandoffRef = useRef("");
 
     const config = useConfigStore((state) => state.config);
@@ -261,7 +260,7 @@ function InfiniteCanvasPage() {
     const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(DEFAULT_CANVAS_BACKGROUND_MODE);
     const [showImageInfo, setShowImageInfo] = useState(false);
-    const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("box-select");
+    const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("move");
     const [mediaPerformanceMode, setMediaPerformanceMode] = useState<CanvasMediaPerformanceMode>(readCanvasMediaPerformanceMode);
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [workspaceMode, setWorkspaceMode] = useState<CanvasWorkspaceMode>(readCanvasWorkspaceMode);
@@ -1045,6 +1044,7 @@ function InfiniteCanvasPage() {
         // Selection is transient, but the LibTV-style paint order survives
         // deselection so a clicked lower node stays above its neighbours.
         if (node.type !== CanvasNodeType.Frame) bringNodeToFront(node.id);
+        setToolbarNodeId(node.id);
         if (node.type === CanvasNodeType.Drawing) {
             setDialogNodeId(null);
             setDrawingNodeId(node.id);
@@ -1077,17 +1077,12 @@ function InfiniteCanvasPage() {
         if (node && node.type !== CanvasNodeType.Frame) bringNodeToFront(nodeId);
     }, [bringNodeToFront, nodesRef]);
 
-    const handleNodeDragEnd = useCallback((nodeId: string) => {
-        const node = nodesRef.current.find((item) => item.id === nodeId);
-        if (!node || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Drawing || node.type === CanvasNodeType.MediaConversion || node.type === PORTRAIT_CLEARANCE_NODE_TYPE || node.type === ART_CRITIQUE_NODE_TYPE) {
-            setDialogNodeId(null);
-            return;
-        }
-        // A drag selects a new node even though it is not a click. Keep the
-        // generation editor bound to the node most recently moved so a stale
-        // panel from the previous node cannot reappear after mouse-up.
-        setDialogNodeId(node.id);
-    }, [nodesRef]);
+    const handleNodeDragEnd = useCallback(() => {
+        // Dragging a node and clicking a node are different intents. The
+        // click path opens the editor; releasing a drag must not do so.
+        setDialogNodeId(null);
+        setToolbarNodeId(null);
+    }, []);
 
     const handleCanvasDeselect = useCallback(() => {
         setContextMenu(null);
@@ -1120,22 +1115,10 @@ function InfiniteCanvasPage() {
     const keepNodeToolbar = useCallback(
         (nodeId: string) => {
             if (nodeDraggingRef.current || nodeImageSettingsOpen) return;
-            if (toolbarHideTimerRef.current) {
-                clearTimeout(toolbarHideTimerRef.current);
-                toolbarHideTimerRef.current = null;
-            }
             setToolbarNodeId(nodeId);
         },
         [nodeImageSettingsOpen],
     );
-
-    const hideNodeToolbar = useCallback(() => {
-        if (toolbarHideTimerRef.current) clearTimeout(toolbarHideTimerRef.current);
-        toolbarHideTimerRef.current = setTimeout(() => {
-            setToolbarNodeId(null);
-            toolbarHideTimerRef.current = null;
-        }, 120);
-    }, []);
 
     const {
         collapsingBatchIds,
@@ -1301,7 +1284,6 @@ function InfiniteCanvasPage() {
         skillMentionReferences,
         splitNode,
         superResolveNode,
-        toolbarNode,
         upscaleNode,
         versionCompareNodes,
         visibleNodes,
@@ -1334,6 +1316,8 @@ function InfiniteCanvasPage() {
         scriptEditorNodeId,
         dialogNodeId,
     });
+    const toolbarCandidate = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
+    const toolbarNode = toolbarCandidate?.type === CanvasNodeType.Frame ? null : toolbarCandidate;
     useEffect(() => {
         setNodes((current) => {
             let changed = false;
@@ -2058,16 +2042,14 @@ function InfiniteCanvasPage() {
         (nodeId: string) => {
             if (nodeDraggingRef.current) return;
             setHoveredNodeId(nodeId);
-            keepNodeToolbar(nodeId);
         },
-        [keepNodeToolbar],
+        [],
     );
     const handleCanvasNodeHoverEnd = useCallback(
         (nodeId: string) => {
             setHoveredNodeId((current) => (current === nodeId ? null : current));
-            hideNodeToolbar();
         },
-        [hideNodeToolbar],
+        [],
     );
     const retryCanvasNode = useCallback(
         (node: CanvasNodeData) => {
@@ -2559,7 +2541,7 @@ function InfiniteCanvasPage() {
                         viewport={viewport}
                         containerRef={containerRef}
                         onKeep={keepNodeToolbar}
-                        onLeave={hideNodeToolbar}
+                        dismissOnPointerLeave={false}
                         onInfo={(node) => (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId ? openTextNodeEditor(node) : setInfoNodeId(node.id))}
                         onEditText={openTextNodeEditor}
                         onDecreaseFont={(node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2))}

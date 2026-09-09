@@ -77,14 +77,14 @@ describe("canvas selection semantics", () => {
         expect(cache.get([...nodes])).not.toBe(first);
     });
 
-    test("uses region selection as the page default and commits selection outside pointer-move", async () => {
+    test("uses the grab tool as the page default and commits selection outside pointer-move", async () => {
         const projectSource = await Bun.file(new URL("../src/pages/canvas/project.tsx", import.meta.url)).text();
         const controllerSource = await Bun.file(new URL("../src/pages/canvas/use-canvas-selection-controller.ts", import.meta.url)).text();
         const canvasSource = await Bun.file(new URL("../src/components/canvas/infinite-canvas.tsx", import.meta.url)).text();
         const graphicsSource = await Bun.file(new URL("../src/components/canvas/canvas-leafer-graphics-layer.tsx", import.meta.url)).text();
         const globalStyles = await Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text();
 
-        expect(projectSource).toContain('useState<CanvasToolMode>("box-select")');
+        expect(projectSource).toContain('useState<CanvasToolMode>("move")');
         const pointerMoveBody = controllerSource.slice(controllerSource.indexOf("const handlePointerMove"), controllerSource.indexOf("const finishSelection"));
         expect(pointerMoveBody).not.toContain("setSelectedNodeIds(");
         expect(controllerSource).toContain("updateSelectionPreview(screenToCanvas(clientX, clientY), true)");

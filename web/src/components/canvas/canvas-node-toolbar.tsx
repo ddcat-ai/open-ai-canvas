@@ -21,7 +21,8 @@ type CanvasNodeToolbarProps = {
     viewport: ViewportTransform;
     containerRef: RefObject<HTMLDivElement | null>;
     onKeep: (nodeId: string) => void;
-    onLeave: () => void;
+    onLeave?: () => void;
+    dismissOnPointerLeave?: boolean;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onDecreaseFont: (node: CanvasNodeData) => void;
@@ -82,6 +83,7 @@ export function CanvasNodeToolbar({
     containerRef,
     onKeep,
     onLeave,
+    dismissOnPointerLeave = true,
     onInfo,
     onEditText,
     onDecreaseFont,
@@ -286,7 +288,7 @@ export function CanvasNodeToolbar({
     const handleMenuOpenChange = (menuId: string, open: boolean) => {
         setOpenMenuId((current) => open ? menuId : current === menuId ? null : current);
         if (open) onKeep(node.id);
-        else if (!toolbarRef.current?.contains(document.activeElement)) onLeave();
+        else if (dismissOnPointerLeave && !toolbarRef.current?.contains(document.activeElement)) onLeave?.();
     };
     const dockStyle = canvasDockStyle(theme, theme.node.text);
 
@@ -296,13 +298,13 @@ export function CanvasNodeToolbar({
             className="canvas-node-toolbar absolute z-[var(--z-node-toolbar)] -translate-x-1/2 -translate-y-full"
             style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: "calc(100% - 20px)", color: theme.node.text }}
             onMouseEnter={() => onKeep(node.id)}
-            onMouseLeave={() => { if (!openMenuId) onLeave(); }}
+            onMouseLeave={() => { if (dismissOnPointerLeave && !openMenuId) onLeave?.(); }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             data-canvas-no-zoom
             onKeyDown={(event) => event.stopPropagation()}
             onFocus={() => onKeep(node.id)}
-            onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && !openMenuId) onLeave(); }}
+            onBlur={(event) => { if (dismissOnPointerLeave && !event.currentTarget.contains(event.relatedTarget) && !openMenuId) onLeave?.(); }}
         >
             <div
                 role="toolbar"
