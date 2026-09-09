@@ -6,6 +6,10 @@
 
 目标交互形态是“画布内嵌、上下文感知、可执行创作协同 Agent”，而不是单独的聊天窗口或静态工具栏。
 
+## 当前实现边界
+
+本项目同时存在两条路径：网页内置 Agent 和外部 Agent 的远程 MCP。外部 Agent（Codex、Claude 等）自行加载 Skill、生成 Plan/Task 并处理审批，`canvas-agent` 仅提供画布专用 stdio MCP；网页内置 Agent 才是 Hermes Bridge、Skill、Plan、Task 和询问/自动模式的接入目标。远程 MCP 不公开这些编排接口。
+
 ## 架构决策
 
 - **运行时桥接优先**：保留 Hermes Python 核心，通过受控 Bridge 与现有 Node/TypeScript `canvas-agent` 通信；不复制 Hermes 源码，也不先重写成 TypeScript。
