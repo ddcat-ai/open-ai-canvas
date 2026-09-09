@@ -33,6 +33,7 @@ const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const shotTaskChainChecksum = "sha256:shot-task-chain-v7-20260904"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const agentTokensChecksum = "sha256:agent-tokens-v10-20260907"
+
 // channelPresentationChecksum：上游同名迁移登记为 9 号、checksum 为
 // "sha256:channel-presentation-v9-20260908"。fork 顺延为 11 号，故使用独立 checksum，
 // 避免与上游编号混淆；存量库不存在 11 号记录，不会触发 validateMigrationRecord 冲突。
