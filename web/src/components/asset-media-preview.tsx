@@ -13,7 +13,10 @@ type AssetMediaPreviewProps = {
 export function AssetMediaPreview({ asset, alt, className = "", fallback = null }: AssetMediaPreviewProps) {
     if (!asset) return fallback;
 
-    if (asset.kind === "video" && asset.data.url) {
+    if ((asset.kind === "video" || asset.kind === "audio") && asset.data.url) {
+        if (asset.kind === "audio") {
+            return <audio src={asset.data.url} aria-label={alt} controls preload="metadata" className={className} />;
+        }
         const poster = asset.coverUrl && asset.coverUrl !== asset.data.url ? asset.coverUrl : undefined;
         return (
             <video
@@ -21,6 +24,7 @@ export function AssetMediaPreview({ asset, alt, className = "", fallback = null 
                 poster={poster}
                 aria-label={alt}
                 muted
+                controls
                 playsInline
                 preload="metadata"
                 className={className}
