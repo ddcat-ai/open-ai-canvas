@@ -81,6 +81,8 @@ codex mcp add kraftreel -- node /absolute/path/to/open-ai-canvas/canvas-agent/di
 
 远程 MCP 宿主（例如 Codex、Claude 或 Hermes）负责理解用户意图、加载自己的 Skill、生成 Plan/Task 和处理审批；CLI 不运行通用外部工具，也不替宿主调用模型。远程 MCP 只提供画布上下文读取、版本校验和画布操作，不暴露 Skill、Plan、Task 或 `ask/auto` 编排接口。外部 Agent 应先读取画布，再把自己的计划转换为基础画布操作并携带 `expectedRevision` 与 `expectedStateHash`。
 
+Skill 的启用与调用分开：用户启用 Skill 只代表允许手动使用；外部 Agent 不应在普通对话中自动选择已启用 Skill。用户需要通过 `/skill-name` 或客户端 Skill 选择器明确调用，调用后由客户端自行加载 Skill 合同并组合本 MCP 的基础画布工具。
+
 ### 对话直接生成图片
 
 完成 CLI 登录并执行 `project use <画布ID>` 后，用户可以直接说“操作 XX 画布，在沈舟角色卡右侧生成一张校园夜景图”。外部 Agent 应按以下顺序调用基础 MCP：

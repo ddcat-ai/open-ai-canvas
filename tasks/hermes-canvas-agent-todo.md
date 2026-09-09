@@ -21,6 +21,7 @@
 
 - [ ] 网页 Agent 的 `/script-to-scenes` 等 Skills 合同与路由
 - [ ] 网页 Agent Skill 输入输出、版本和画布工具权限声明
+- [ ] Skill 手动调用：启用只进入列表，`/skill-name` 或选择器调用后才注入当前回合
 - [ ] 复杂请求 Plan 生成、预览和修改
 - [ ] Task 状态、依赖、暂停、重试、取消和恢复
 - [ ] 询问模式/自动模式与 Task 授权策略

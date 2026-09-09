@@ -24,7 +24,9 @@
 
 画布 Skill 是带有输入、输出、版本和权限边界的创作能力包，不是可以任意调用工具的提示词。Skill 只允许使用画布专用工具，并输出文本结果、画布操作计划或媒体生成计划。第一批 Skill 包括 `/script-to-scenes`、`/script-to-characters`、`/character-three-view`、`/storyboard`、`/image-prompt` 和 `/video-prompt`。
 
-每个 Skill 需要声明支持的节点类型、是否要求选中节点、是否允许 `@` 引用、是否允许媒体生成、是否允许自动执行，以及 Skill 版本。Skill 不直接修改 React 状态或数据库。
+Skill 必须由用户手动调用。用户启用 Skill 只表示它出现在可用列表中，不授权 Agent 在普通对话中自动选择或执行。调用入口使用 `/skill-name` 命令或 Skill 选择器；只有调用发生后，当前回合才加载该 Skill 的完整合同。未明确调用 Skill 时，Agent 只能使用普通对话能力和已允许的基础画布工具。
+
+每个 Skill 需要声明支持的节点类型、是否要求选中节点、是否允许 `@` 引用、是否允许媒体生成、是否允许自动执行，以及 Skill 版本。Skill 不直接修改 React 状态或数据库。启用、调用和执行是三个独立状态，调用后仍须经过输入校验、画布版本校验和宿主审批。
 
 ### Plan
 
