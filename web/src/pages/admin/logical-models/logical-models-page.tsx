@@ -470,7 +470,7 @@ export default function LogicalModelsPage() {
                     },
                 ]}
             >
-                {(tabs) => (
+                {(tabs: any) => (
                     <Form
                         form={modelForm}
                         layout="vertical"
