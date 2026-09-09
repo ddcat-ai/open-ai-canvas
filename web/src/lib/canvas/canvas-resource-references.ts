@@ -41,6 +41,7 @@ export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.mentionToken) return reference.mentionToken;
     if (reference.kind === "skill" && reference.skill?.skill_id) return canvasSkillMentionToken(reference.skill.skill_id);
     if (reference.assetId) return `@[asset:${reference.assetId}]`;
+    if (reference.nodeId) return canvasNodeMentionToken(reference.nodeId);
     return `@${reference.label}`;
 }
 
@@ -186,13 +187,15 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
         if (!kind) return [];
         const index = node.type === CanvasNodeType.Drawing ? drawingCount++ : counts[kind]++;
         const label = node.type === CanvasNodeType.Drawing ? `绘图${index + 1}` : labelForKind(kind, index);
+        // Uploads store their file name in the node title; identity stays in the stable token.
+        const displayLabel = node.title?.trim() || label;
         return [
             {
                 id: node.id,
                 nodeId: node.id,
                 kind,
-                label,
-                title: node.title || label,
+                label: displayLabel,
+                title: node.title || displayLabel,
                 previewUrl: node.metadata?.workflowKind === "character"
                     ? node.metadata.characterCoverUrl
                     : node.type === CanvasNodeType.Drawing

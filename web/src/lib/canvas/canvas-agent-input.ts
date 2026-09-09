@@ -48,7 +48,7 @@ export function agentSlashQuery(value: string) {
     return match ? { start: match.index + match[1].length, query: match[2] } : null;
 }
 
-export function insertAgentSkill(value: string, slash: { start: number; query: string } | null, skillId: string) {
-    const token = `@[skill:${skillId}] `;
+export function insertAgentSkill(value: string, slash: { start: number; query: string } | null, skillId: string, skillName?: string) {
+    const token = skillName ? `/${skillName} ` : `@[skill:${skillId}] `;
     return slash ? `${value.slice(0, slash.start)}${token}${value.slice(slash.start + slash.query.length + 1).replace(/^\s+/u, "")}` : `${value.trimEnd()}${value.trim() ? " " : ""}${token}`;
 }

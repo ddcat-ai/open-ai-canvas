@@ -2,11 +2,10 @@ import type { ReactNode } from "react";
 import type { MouseEvent } from "react";
 
 import type { CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
-import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
+import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasWorkspaceMode } from "@/types/canvas";
 
 /** 工具栏标识——每个工具栏有独立的注册表与偏好 */
-export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
+export type ToolbarId = "selection" | "node-hover" | "add-node-menu";
 export type NodeToolbarGroup = "primary" | "portrait" | "viewpoint" | "process" | "workspace" | "utility" | "more";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
@@ -24,13 +23,7 @@ export type ToolCategory =
 
 /** 所有工具栏回调的聚合类型。工具定义通过 ctx.handlers.onXxx 访问 */
 export type ToolbarHandlers = {
-    // 主工具栏——画布操作
-    onToolChange: (tool: CanvasToolMode) => void;
-    onDeselect: () => void;
-    onUndo: () => void;
-    onRedo: () => void;
-    onClear: () => void;
-    // 主工具栏——创建节点
+    // 添加节点菜单
     onAddText: () => void;
     onAddImage: () => void;
     onAddVideo: () => void;
@@ -48,19 +41,9 @@ export type ToolbarHandlers = {
     onAddExtensionNode: (type: CanvasNodeTypeId) => void;
     onChooseStyle: () => void;
     onOpenDirector: () => void;
-    // 主工具栏——资源
     onUpload: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
-    // 主工具栏——外观
-    onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
-    onShowImageInfoChange: (show: boolean) => void;
-    // 主工具栏——面板开关（组件内部状态，由组件实现）
-    onToggleAddPanel: (event: MouseEvent<HTMLElement>) => void;
-    onToggleAppearancePanel: (event: MouseEvent<HTMLElement>) => void;
-    onToggleSettingsPanel: () => void;
-    // 主工具栏——删除选中
-    onDeleteSelected: () => void;
     // 多选工具栏
     onAlign: (mode: CanvasAlignmentMode) => void;
     onArrange: (mode: "row" | "column" | "grid" | "flow") => void;
@@ -106,11 +89,8 @@ export type ToolContext = {
     selectedCount: number;
     selectedNodeTypes: Set<CanvasNodeTypeId>;
     selectedVideoCount: number;
-    canvasTool: CanvasToolMode;
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;
-    canUndo: boolean;
-    canRedo: boolean;
     /** 节点悬停工具栏专用——当前悬停/选中的节点 */
     node?: CanvasNodeData;
     /** 便捷访问 node.metadata（node 为空时为 undefined） */
@@ -122,10 +102,6 @@ export type ToolContext = {
     trimmingVideo: boolean;
     /** 合并视频中（多选工具栏用） */
     mergingVideos: boolean;
-    /** 主工具栏面板开关状态（仅主工具栏使用） */
-    addPanelOpen: boolean;
-    appearancePanelOpen: boolean;
-    settingsPanelOpen: boolean;
     handlers: ToolbarHandlers;
 };
 

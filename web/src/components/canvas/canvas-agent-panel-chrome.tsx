@@ -1,106 +1,139 @@
-import { Button, Input, Switch, Tooltip } from "antd";
+import { Button, Dropdown, Input, Tooltip } from "antd";
 import { useState } from "react";
-import { BookOpenCheck, BookOpenText, Bot, Clapperboard, Focus, History, LayoutTemplate, MessageCircle, PanelRightClose, PanelsTopLeft, Plus, RotateCcw, Workflow } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Bot, Check, Clapperboard, History, LayoutTemplate, PanelRightClose, PanelsTopLeft, Pencil, Plus, RotateCcw, Trash2, Workflow } from "lucide-react";
 
-import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasTheme } from "@/lib/canvas-theme";
+import type { CanvasAssistantSession } from "@/types/canvas";
 import { useUserStore } from "@/stores/use-user-store";
+
+const MAX_AGENT_TITLE_LENGTH = 32;
 
 export function AgentPanelChrome({
     theme,
-    context,
-    referenceCount,
-    confirmTools,
     canUndo,
     undoCount,
-    onConfirmToolsChange,
     onUndo,
     onCollapse,
     historyCount = 0,
-    historyActive = false,
-    onOpenHistory,
+    sessions = [],
+    activeSessionId,
+    onOpenSession,
+    onRenameSession,
+    onDeleteSession,
     onNewChat,
     newChatDisabled = false,
     conversationTitle = "AI 助手对话",
     onRenameConversation,
+    floating = false,
+    onToggleFloating,
 }: {
     theme: CanvasTheme;
-    context: CanvasContextSummary;
-    referenceCount: number;
-    confirmTools: boolean;
     canUndo: boolean;
     undoCount: number;
-    onConfirmToolsChange: (confirm: boolean) => void;
     onUndo: () => void;
     onCollapse: () => void;
     historyCount?: number;
-    historyActive?: boolean;
-    onOpenHistory?: () => void;
+    sessions?: CanvasAssistantSession[];
+    activeSessionId?: string | null;
+    onOpenSession?: (id: string) => void;
+    onRenameSession?: (id: string, title: string) => void;
+    onDeleteSession?: (id: string) => void;
     onNewChat?: () => void;
     newChatDisabled?: boolean;
     conversationTitle?: string;
     onRenameConversation?: (title: string) => void;
+    floating?: boolean;
+    onToggleFloating?: () => void;
 }) {
-    const navigate = useNavigate();
     const [editingTitle, setEditingTitle] = useState(false);
     const [draftTitle, setDraftTitle] = useState(conversationTitle);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+    const [editingSessionTitle, setEditingSessionTitle] = useState("");
     const commitTitle = () => {
-        const next = draftTitle.trim();
+        const next = draftTitle.trim().slice(0, MAX_AGENT_TITLE_LENGTH);
         if (next) onRenameConversation?.(next);
         setEditingTitle(false);
     };
+    const beginSessionRename = (session: CanvasAssistantSession) => {
+        setEditingSessionId(session.id);
+        setEditingSessionTitle(session.title.slice(0, MAX_AGENT_TITLE_LENGTH));
+    };
+    const commitSessionRename = () => {
+        if (!editingSessionId) return;
+        const title = editingSessionTitle.trim().slice(0, MAX_AGENT_TITLE_LENGTH);
+        if (title) onRenameSession?.(editingSessionId, title);
+        setEditingSessionId(null);
+    };
+    const sortedSessions = [...sessions].sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
 
     return (
-        <header className="shrink-0 px-3 pb-1.5 pt-2.5">
+        <header className="canvas-agent-header shrink-0 px-3 py-2.5" data-agent-drag-handle>
             <div className="flex min-w-0 items-center gap-2">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
-                    <Bot className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-baseline gap-1.5">
-                        {editingTitle ? <Input autoFocus size="small" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} onPressEnter={commitTitle} onBlur={commitTitle} onKeyDown={(event) => { if (event.key === "Escape") setEditingTitle(false); }} className="!w-36 !px-1 !text-sm !font-semibold" aria-label="编辑对话名" /> : <button type="button" className="truncate text-left text-sm font-semibold leading-5 hover:underline" onClick={() => { setDraftTitle(conversationTitle); setEditingTitle(true); }} aria-label="编辑对话名">{conversationTitle}</button>}
-                        <span className="truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>Agent · 画布协作</span>
-                    </div>
+                <div className="canvas-agent-conversation-title-slot">
+                    {editingTitle ? (
+                        <Input autoFocus size="small" maxLength={MAX_AGENT_TITLE_LENGTH} value={draftTitle} onChange={(event) => setDraftTitle(event.target.value.slice(0, MAX_AGENT_TITLE_LENGTH))} onPressEnter={commitTitle} onBlur={commitTitle} onKeyDown={(event) => { if (event.key === "Escape") setEditingTitle(false); }} className="!w-40 !px-1 !text-sm !font-semibold" aria-label="编辑对话名" />
+                    ) : (
+                        <button type="button" className="canvas-agent-conversation-title block min-w-0 max-w-full truncate text-left text-sm font-semibold leading-7 hover:underline" onClick={() => { setDraftTitle(conversationTitle.slice(0, MAX_AGENT_TITLE_LENGTH)); setEditingTitle(true); }} aria-label="编辑对话名">{conversationTitle}</button>
+                    )}
                 </div>
-                <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                    <Tooltip title="编辑当前对话名">
-                        <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<MessageCircle className="size-3.5" />} onClick={() => { setDraftTitle(conversationTitle); setEditingTitle(true); }} aria-label="当前对话" />
-                    </Tooltip>
-                    <Tooltip title="技能库">
-                        <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<BookOpenCheck className="size-3.5" />} onClick={() => navigate("/skills")} aria-label="打开技能库" />
-                    </Tooltip>
-                    {onOpenHistory ? (
-                        <Tooltip title={historyCount ? `历史会话 · ${historyCount}` : "历史会话"}>
-                            <Button type="text" className={`!h-7 !min-w-7 !px-1.5 ${historyActive ? "font-medium" : ""}`} style={{ color: historyActive ? theme.node.text : theme.node.muted, background: historyActive ? theme.spatial.surface : "transparent" }} icon={<History className="size-3.5" />} onClick={onOpenHistory} aria-label="打开历史会话">
-                                {historyCount ? <span className="text-[var(--fs-tiny)] tabular-nums">{historyCount}</span> : null}
-                            </Button>
-                        </Tooltip>
-                    ) : null}
+                <div className="canvas-agent-header-actions ml-auto flex shrink-0 items-center gap-0.5">
                     {onNewChat ? (
-                        <Tooltip title="新对话">
-                            <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" disabled={newChatDisabled} style={{ color: theme.node.muted }} icon={<Plus className="size-3.5" />} onClick={onNewChat} aria-label="新建对话" />
+                        <span className="canvas-agent-collapse-tooltip-trigger" data-tooltip="新建对话">
+                            <Button type="text" className="canvas-agent-header-icon-action !h-7 !w-7 !min-w-7" shape="circle" disabled={newChatDisabled} style={{ color: theme.node.muted }} icon={<Plus className="size-3.5" />} onClick={onNewChat} aria-label="新建对话" />
+                        </span>
+                    ) : null}
+                    {onOpenSession ? (
+                        <Dropdown
+                            trigger={["click"]}
+                            open={historyOpen}
+                            onOpenChange={setHistoryOpen}
+                            placement="bottomRight"
+                            popupRender={() => (
+                                <div className="canvas-agent-history-dropdown" role="menu" aria-label="历史会话" style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}>
+                                    <div className="canvas-agent-history-dropdown-heading">
+                                        <span>历史会话</span>
+                                        <span className="canvas-agent-history-dropdown-count">{sortedSessions.length}</span>
+                                    </div>
+                                    <div className="canvas-agent-history-dropdown-list">
+                                        {sortedSessions.length ? sortedSessions.map((session) => {
+                                            const active = session.id === activeSessionId;
+                                            const editing = session.id === editingSessionId;
+                                            return (
+                                                <div key={session.id} className={`canvas-agent-history-row${active ? " is-active" : ""}`} role="menuitem" onClick={() => { if (!editing) { onOpenSession?.(session.id); setHistoryOpen(false); } }}>
+                                                    <div className="canvas-agent-history-row-main">
+                                                        {editing ? (
+                                                            <Input autoFocus size="small" maxLength={MAX_AGENT_TITLE_LENGTH} value={editingSessionTitle} onChange={(event) => setEditingSessionTitle(event.target.value.slice(0, MAX_AGENT_TITLE_LENGTH))} onPressEnter={commitSessionRename} onBlur={commitSessionRename} onKeyDown={(event) => { if (event.key === "Escape") setEditingSessionId(null); }} aria-label="编辑会话名" />
+                                                        ) : (
+                                                            <div className="canvas-agent-history-row-title">{session.title || "新对话"}</div>
+                                                        )}
+                                                        <div className="canvas-agent-history-row-meta">{session.messages.at(-1)?.text?.replace(/\s+/g, " ").slice(0, 34) || "暂无消息"}</div>
+                                                    </div>
+                                                    <div className="canvas-agent-history-row-actions">
+                                                        {active ? <Check className="size-3.5" aria-hidden="true" /> : null}
+                                                        <button type="button" className="canvas-agent-history-row-action" onClick={(event) => { event.stopPropagation(); beginSessionRename(session); }} aria-label={`重命名${session.title}`} title="重命名"><Pencil className="size-3.5" /></button>
+                                                        <button type="button" className="canvas-agent-history-row-action is-danger" onClick={(event) => { event.stopPropagation(); onDeleteSession?.(session.id); }} aria-label={`删除${session.title}`} title="删除"><Trash2 className="size-3.5" /></button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : <div className="canvas-agent-history-dropdown-empty">暂无历史会话</div>}
+                                    </div>
+                                </div>
+                            )}
+                        >
+                            <span className="canvas-agent-collapse-tooltip-trigger" data-tooltip={historyCount ? `历史会话 · ${historyCount}` : "历史会话"}>
+                                <Button type="text" className={`canvas-agent-header-icon-action !h-7 !w-7 !min-w-7 ${historyOpen ? "is-active" : ""}`} shape="circle" style={{ color: historyOpen ? theme.node.text : theme.node.muted }} icon={<History className="size-3.5" />} aria-label="打开历史会话" aria-haspopup="menu" aria-expanded={historyOpen} />
+                            </span>
+                        </Dropdown>
+                    ) : null}
+                    {canUndo ? (
+                        <Tooltip title={`撤销最近一批 Agent 写回，可撤销 ${undoCount} 批`} classNames={{ root: "canvas-agent-tooltip" }}>
+                            <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<RotateCcw className="size-3.5" />} onClick={onUndo} aria-label="撤销最近一批 Agent 写回" />
                         </Tooltip>
                     ) : null}
-                    <Tooltip title="收起 Agent">
-                        <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<PanelRightClose className="size-3.5" />} onClick={onCollapse} aria-label="收起 Agent" />
-                    </Tooltip>
-                </div>
-            </div>
-
-            <div className="mt-1 flex min-h-7 flex-wrap items-center gap-x-2 gap-y-0.5 px-0.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                <span className="font-medium" style={{ color: theme.node.text }}>{context.nodeCount} 个节点</span>
-                {context.selectedCount ? <span className="inline-flex items-center gap-1"><Focus className="size-3" />选中 {context.selectedCount}</span> : <span>未选择节点</span>}
-                {context.chapterLabel ? <span className="inline-flex min-w-0 items-center gap-1"><BookOpenText className="size-3 shrink-0" /><span className="max-w-32 truncate">{context.chapterLabel}{context.shotLabel ? ` · ${context.shotLabel}` : ""}</span></span> : null}
-                {referenceCount ? <span>{referenceCount} 个参考</span> : null}
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <Tooltip title={undoCount ? `撤销最近一批 Agent 写回，可撤销 ${undoCount} 批` : "没有可撤销的 Agent 写回"}>
-                        <Button type="text" shape="circle" className="!h-6 !w-6 !min-w-6" disabled={!canUndo} style={{ color: theme.node.muted }} icon={<RotateCcw className="size-3" />} onClick={onUndo} aria-label="撤销最近一批 Agent 写回" />
-                    </Tooltip>
-                    <label className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-1" style={{ color: theme.node.muted }}>
-                        <Switch size="small" checked={confirmTools} onChange={onConfirmToolsChange} />
-                        <span className="whitespace-nowrap">确认</span>
-                    </label>
+                    <span className="canvas-agent-collapse-tooltip-trigger" data-tooltip="收起 Agent">
+                        <Button type="text" shape="circle" className="canvas-agent-header-icon-action !h-7 !w-7 !min-w-7" style={{ color: theme.node.muted }} icon={<PanelRightClose className="size-3.5" />} onClick={onCollapse} aria-label="收起 Agent" />
+                    </span>
                 </div>
             </div>
         </header>

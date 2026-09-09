@@ -9,7 +9,7 @@ description: 操作影策当前网页画布，读取节点、选区、创建文�
 
 ## 工作流
 
-- 如果用户还没有打开或连接网页画布，使用 `open-canvas` 技能打开影策，不要要求用户手动复制 URL 或 token。
+- 如果用户明确需要网页 UI 且尚未打开或连接网页画布，使用 `open-canvas` 技能；仅使用已连接 MCP 时无需打开网页。
 - 操作前先用 `canvas_get_context` 读取语义化画布和资源状态；如果用户明确提到选中内容、当前节点或“这个”，再用 `canvas_get_selection`。
 - 不知道真实节点 id 时使用 `canvas_find_nodes`；涉及媒体参考时使用 `canvas_get_resources`。
 - 复杂批量操作先用 `canvas_validate_ops`，再用 `canvas_apply_ops`。
@@ -18,7 +18,7 @@ description: 操作影策当前网页画布，读取节点、选区、创建文�
 - 需要把提示词、参考素材和生成目标节点串成流程时，使用 `canvas_create_generation_flow` 或项目已有的流程工具。
 - 需要批量增删改、移动、连接节点或设置视口时，使用 `canvas_apply_ops`。
 - 不要模拟鼠标点击，不要要求用户手动复制 JSON。
-- 写入画布的操作会由网页侧边栏做二次确认，按当前工具结果继续推进即可。
+- 写入画布的操作由 MCP 宿主审批，服务端继续执行权限、归属和 revision 校验；按工具结果继续推进。
 
 更具体的资源感知生成和可靠编辑流程分别见 `asset-aware-generation`、`canvas-editing`。
 

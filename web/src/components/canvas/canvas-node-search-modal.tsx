@@ -74,7 +74,7 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
                     <Input
                         autoFocus
                         allowClear
-                        bordered={false}
+                        variant="borderless"
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         onKeyDown={handleInputKeyDown}

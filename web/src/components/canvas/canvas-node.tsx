@@ -330,8 +330,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 style={{
                     background: isComposerNode ? theme.node.fill : hasImageContent || hasVideoContent ? "transparent" : theme.node.cardFill,
                     // 固定占位但不绘制描边，避免聚焦切换时边框宽度变化造成白边跳动。
-                    border: isComposerNode ? "0" : "1px solid transparent",
-                    boxShadow: "none",
+                    border: isComposerNode ? "0" : `1px solid ${theme.node.stroke}`,
+                    boxShadow: isComposerNode ? "none" : hovered ? theme.node.hoverShadow : theme.node.shadow,
                     ["--canvas-node-selection-stroke" as string]: theme.node.selectionStroke,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}

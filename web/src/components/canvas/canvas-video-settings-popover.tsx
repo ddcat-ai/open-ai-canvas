@@ -96,15 +96,15 @@ function VideoSettingsPortal({
     const placeAbove = topPlacement ? topSpace >= estimatedHeight || topSpace >= bottomSpace : bottomSpace < estimatedHeight && topSpace > bottomSpace;
     const style = {
         position: "fixed",
-        zIndex: "var(--z-dialog-popover)",
+        zIndex: "var(--z-canvas-generation-settings)",
         width,
         left: Math.max(margin, Math.min(window.innerWidth - width - margin, left)),
         ...(placeAbove ? { bottom: window.innerHeight - buttonRect.top + gap, maxHeight: Math.max(260, topSpace) } : { top: buttonRect.bottom + gap, maxHeight: Math.max(260, bottomSpace) }),
         background: theme.canvas.background,
         border: `1px solid ${theme.toolbar.border}`,
-        borderRadius: 10,
+        borderRadius: 12,
         boxShadow: `0 24px 72px ${theme.spatial.shadow}`,
-        padding: 12,
+        padding: 14,
         overflowY: "auto",
         color: theme.node.text,
     } as const;
@@ -112,13 +112,13 @@ function VideoSettingsPortal({
     return createPortal(
         <div
             ref={panelRef}
-            className="canvas-image-settings-popover aceternity-floating-panel backdrop-blur-2xl"
+            className="canvas-image-settings-popover canvas-video-settings-popover aceternity-floating-panel backdrop-blur-2xl"
             style={style}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
         >
-            <VideoSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="space-y-3" />
+            <VideoSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="canvas-video-settings-panel space-y-3" />
         </div>,
         document.body,
     );

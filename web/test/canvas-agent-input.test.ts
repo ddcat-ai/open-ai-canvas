@@ -12,13 +12,14 @@ describe("canvas agent input protocol", () => {
         const slash = agentSlashQuery(value.slice(0, 7));
         expect(slash).toEqual({ start: 4, query: "剧本" });
         expect(insertAgentSkill(value, slash, "skill-1")).toBe("请整理 @[skill:skill-1] 里的内容");
+        expect(insertAgentSkill("/叙事", { start: 0, query: "叙事" }, "skill-1", "叙事短片导演分镜")).toBe("/叙事短片导演分镜 ");
     });
 
     test("mentions use stable node tokens and do not match a longer label", () => {
         const nodes = [textNode("n1", "图片1"), textNode("n2", "图片10")];
         const references = buildCanvasResourceReferences(nodes, [], null);
         expect(collectAgentMentionReferences("请看 @[node:n1]", references, nodes, [])).toHaveLength(1);
-        expect(collectAgentMentionReferences("请看 @文本1 之后", references, nodes, [])).toHaveLength(1);
+        expect(collectAgentMentionReferences("请看 @图片1 之后", references, nodes, [])).toHaveLength(1);
         expect(collectAgentMentionReferences("请看 @文本10", references, nodes, [])).toHaveLength(0);
     });
 });

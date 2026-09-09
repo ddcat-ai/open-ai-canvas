@@ -333,6 +333,7 @@ export function AssetLibraryPickerModal({
             closable={!working}
             mask={{ closable: !working }}
             keyboard={!working}
+            centered
             onCancel={() => {
                 if (!working) onClose();
             }}

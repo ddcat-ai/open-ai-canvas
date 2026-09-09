@@ -1,6 +1,6 @@
 ---
 name: canvas-context
-description: 理解影策当前画布的语义结构、选区、连接关系和媒体资源状态；适用于任何需要基于已有画布继续工作的请求。
+description: 需要基于已有影策画布事实继续工作时使用；纯概念说明或不涉及现有画布的请求不触发。
 ---
 
 # 画布上下文协议
@@ -19,7 +19,7 @@ description: 理解影策当前画布的语义结构、选区、连接关系和�
 
 ## 工作流与流水线
 
-用户提出“流水线、工作流、节点图、管线、连线”时，优先使用 `canvas_create_workflow`，不要用 `canvas_create_text_nodes` 伪造流程。将阶段拆成真实语义节点：
+用户明确要求创建新的流水线、工作流或节点图时，优先使用 `canvas_create_workflow`，不要用 `canvas_create_text_nodes` 伪造流程。将阶段拆成真实语义节点：
 
 - `character_cards`：角色拆分图片卡片，实际类型为 `image`
 - `character_three_view`：角色三视图，实际类型为 `image`

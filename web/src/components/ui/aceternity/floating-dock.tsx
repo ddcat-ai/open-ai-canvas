@@ -26,10 +26,13 @@ type FloatingDockProps = {
     items: FloatingDockEntry[];
     size?: "default" | "compact";
     embedded?: boolean;
+    /** Render a deterministic, non-animated row for controls that must keep a fixed geometry. */
+    staticLayout?: boolean;
     className?: string;
     style?: CSSProperties;
     ariaLabel?: string;
     showLabels?: boolean;
+    magnify?: boolean;
 };
 
 type DockMetrics = {
@@ -52,7 +55,7 @@ const TOUCH_DOCK_METRICS: Record<NonNullable<FloatingDockProps["size"]>, DockMet
     compact: { base: 36, magnified: 36, icon: 16, iconMagnified: 16, distance: 0 },
 };
 
-export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = "画布工具", showLabels = false }, forwardedRef) {
+export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, staticLayout = false, className, style, ariaLabel = "画布工具", showLabels = false, magnify = true }, forwardedRef) {
     const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
     const reducedMotion = useReducedMotion();
     const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
@@ -75,44 +78,53 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
 
     // scrollable 场景（触屏或窄屏）禁用放大并允许横向滚动，保证按钮始终可达
     const scrollable = coarsePointer || narrow;
-    const motionEnabled = !reducedMotion && !scrollable;
+    const motionEnabled = magnify && !reducedMotion && !scrollable;
     const metrics = coarsePointer ? TOUCH_DOCK_METRICS[size] : DOCK_METRICS[size];
+    const dockClassName = cn(
+        "aceternity-floating-dock flex",
+        scrollable ? "overflow-x-auto" : "overflow-visible",
+        showLabels ? "items-center" : "items-end",
+        embedded ? "shadow-none" : "border backdrop-blur-2xl",
+        showLabels
+            ? embedded
+                ? size === "compact"
+                    ? "h-9 gap-0.5 px-0.5"
+                    : "h-10 gap-0.5 px-0.5"
+                : size === "compact"
+                  ? "h-10 gap-0.5 rounded-[var(--dock-radius-compact)] px-1.5"
+                  : "h-11 gap-0.5 rounded-[var(--dock-radius-tight)] px-2"
+            : coarsePointer
+              ? embedded
+                  ? size === "compact"
+                      ? "h-10 gap-1 px-0.5"
+                      : "h-11 gap-1 px-0.5"
+                  : size === "compact"
+                    ? "h-11 gap-1 rounded-[var(--dock-radius-tight)] px-1.5 pb-1"
+                    : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
+              : embedded
+                ? size === "compact"
+                    ? "h-8 gap-0.5 px-0.5 pb-0.5"
+                    : "h-9 gap-0.5 px-0.5 pb-0.5"
+                : size === "compact"
+                  ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1"
+                  : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
+        className,
+    );
+
+    if (staticLayout) {
+        return (
+            <div ref={forwardedRef} role="toolbar" aria-label={ariaLabel} className={dockClassName} style={style}>
+                {renderStaticDockItems(items)}
+            </div>
+        );
+    }
 
     return (
         <motion.div
             ref={forwardedRef}
             role="toolbar"
             aria-label={ariaLabel}
-            className={cn(
-                "aceternity-floating-dock flex",
-                scrollable ? "overflow-x-auto" : "overflow-visible",
-                showLabels ? "items-center" : "items-end",
-                embedded ? "shadow-none" : "border backdrop-blur-2xl",
-                showLabels
-                    ? embedded
-                        ? size === "compact"
-                            ? "h-9 gap-0.5 px-0.5"
-                            : "h-10 gap-0.5 px-0.5"
-                        : size === "compact"
-                          ? "h-10 gap-0.5 rounded-[var(--dock-radius-compact)] px-1.5"
-                          : "h-11 gap-0.5 rounded-[var(--dock-radius-tight)] px-2"
-                    : coarsePointer
-                      ? embedded
-                          ? size === "compact"
-                              ? "h-10 gap-1 px-0.5"
-                              : "h-11 gap-1 px-0.5"
-                          : size === "compact"
-                            ? "h-11 gap-1 rounded-[var(--dock-radius-tight)] px-1.5 pb-1"
-                            : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
-                      : embedded
-                        ? size === "compact"
-                            ? "h-8 gap-0.5 px-0.5 pb-0.5"
-                            : "h-9 gap-0.5 px-0.5 pb-0.5"
-                        : size === "compact"
-                          ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1"
-                          : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
-                className,
-            )}
+            className={dockClassName}
             style={style}
             onPointerMove={(event) => {
                 if (motionEnabled) mouseX.set(event.clientX);
@@ -171,6 +183,30 @@ function renderDockItems(items: FloatingDockEntry[], props: DockItemRenderProps)
     }
     flushDangerGroup();
     return result;
+}
+
+function renderStaticDockItems(items: FloatingDockEntry[]) {
+    return items.map((item) => {
+        if (item.kind === "separator") {
+            return <span key={item.id} aria-hidden className="canvas-static-dock-separator" />;
+        }
+
+        return (
+            <button
+                key={item.id}
+                type="button"
+                aria-label={item.label}
+                title={item.label}
+                aria-expanded={item.expands ? item.active || undefined : undefined}
+                aria-pressed={item.expands ? undefined : item.active || undefined}
+                disabled={item.disabled}
+                className={cn("aceternity-dock-command canvas-static-command", item.wide && "is-wide", item.quiet && "is-quiet", item.active && "is-active", item.danger && "is-danger")}
+                onClick={item.onClick}
+            >
+                <span className="canvas-static-command-icon">{item.icon}</span>
+            </button>
+        );
+    });
 }
 
 function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, showLabel }: { command: FloatingDockCommand; mouseX: MotionValue<number>; metrics: DockMetrics; motionEnabled: boolean; compact: boolean; showLabel: boolean }) {

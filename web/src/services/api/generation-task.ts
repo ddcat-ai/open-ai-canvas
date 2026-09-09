@@ -138,6 +138,11 @@ export async function runBackendToolGenerationTask(options: {
             prompt: options.prompt,
             config: backendProviderConfig(options.config),
             agentRequests: buildBackendToolRequests(options.messages, options.tools, options.toolChoice, options.config),
+            // Canvas Agent replies must be delivered as text deltas so the chat
+            // panel can render the answer while it is being generated.
+            // Keep model reasoning enabled for response quality, while the
+            // canvas chat only consumes the visible text delta stream.
+            textOptions: { stream: true, thinking: true },
             metadata: { source: "canvas-online-agent" },
         },
     });

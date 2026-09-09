@@ -20,7 +20,7 @@
 
 ## 2. 开始工作前
 
-1. 先读取任务涉及的入口、调用方、配置、锁文件和相邻测试；先理解现状，再决定是否抽象或重构。
+1. 先读取与任务直接相关的入口、调用方、配置和测试；依赖或构建变更时再读取锁文件。
 2. 使用 `rg` / `rg --files` 搜索，优先并行读取相关文件。不要为了“统一风格”改动无关模块、依赖、格式或用户已有修改。
 3. 先形成目标边界：页面负责什么、service 负责什么、handler/service/repository 如何分层、数据和错误如何流动。新增 helper 必须消除真实重复或隔离明确协议，不能只透传参数。
 4. 检查 `git status --short`。不覆盖、不回滚、不清理非本次产生的变更；不使用 `git reset --hard`、`git checkout --` 或宽范围删除。
@@ -75,7 +75,7 @@
 - 文本、图片、视频、音频模型请求统一经过 `web/src/services/api/custom-channel-relay.ts` 的 `channelRequest` 及其协议函数。
 - 自定义渠道必须由登录态后端 `/api/ai/custom` 中转；重建 headers 时清除 `x-goog-api-key` 和旧的 `X-Canvas-Upstream-Headers`，不得把第三方密钥放入浏览器 URL。
 - Provider 特有 payload、响应解包和状态机留在对应 `image.ts`、`video.ts`、`audio.ts`；不要塞进通用 `request.ts`。
-- 原始 `fetch` 仅用于媒体 blob/data URL、资源、Worker/本地 Agent 或 SSE；必须检查 `response.ok`，传递正确的 `credentials` 和 `signal`。
+- 优先使用现有 API 客户端；使用原始 `fetch` 时必须检查 `response.ok`，传递正确的 `credentials` 和 `signal`。
 - 文本任务 SSE 是 `GET /api/tasks/:id/text-events`，游标是递增事件 `id`；断线使用 `Last-Event-ID` 或 `?after=`，不能把任务 ID 当游标。
 - 代理只对文本任务和明确的系统模型事件流路径关闭缓冲/缓存/gzip；不要给所有 `/api/` 请求复制长超时和 `proxy_buffering off`。
 
@@ -100,7 +100,7 @@
 
 - 画布组件、状态、算法分别放在 `web/src/components/canvas/`、`web/src/stores/canvas/`、`web/src/lib/canvas/`。事件忽略选择器必须覆盖 modal、popover、dropdown 等浮层。
 - 画布拖拽、连接、缩放和快捷键要考虑 pointer capture、滚轮冒泡、焦点以及 `data-canvas-no-zoom` / `data-canvas-wheel-scroll` 边界。
-- 节点和对象名称要有可发现的铅笔入口并支持单击编辑；双击或右键不能是唯一入口。图片节点保持原始比例，面板不能长期遮挡主要画布空间。
+- 修改画布节点或对象 UI 时，名称要有可发现的铅笔入口并支持单击编辑；双击或右键不能是唯一入口。图片节点保持原始比例，面板不能长期遮挡主要画布空间。
 - Ant Design 共性主题和控件状态集中在 `web/src/lib/app-theme.ts` / `AppProviders`。Modal 当前内容外壳是 `.ant-modal-container`，优先使用 `styles.container`、`styles.body` 和组件 class。
 - 第三方覆盖限定在具体组件，不新增全局 `.ant-modal-*`、`.dark .ant-switch-*`、`.ant-checkbox-*` 或 Segmented 状态补丁。新增 CSS 前先搜索同名选择器，回到唯一源规则修改。
 - 遵循 `docs/ui-design-system.md` 及项目三层 token：Primitive → Semantic → Component。inline style 优先引用 `var(--token-name)`，不要散落颜色、圆角、阴影和层级字面值。
@@ -112,7 +112,7 @@
 - 本地缓存放 `.local/cache`；不要提交数据库、上传文件、`.env`、真实密钥、构建产物或编辑器配置。
 - 宿主机开发：`backend/` 运行 `CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server`，`web/` 使用 Bun 和 Vite。Docker 热更新使用 `docker-compose.dev.yml`；本地构建运行使用 `docker-compose.local.yml`。
 - 生产 Compose 使用 `docker-compose.deploy.yml`（PostgreSQL、Redis、backend、web），源码构建可叠加 `docker-compose.build.yml`。公网只暴露 web 的 `3000`，backend `8080` 留在 Compose 网络内。
-- 默认不启动 dev server；只有用户明确要求浏览器预览或联调时才启动，并先确认端口、数据目录和现有进程。
+- 默认不启动 dev server；需要浏览器预览或联调时才启动，并先确认端口、数据目录和现有进程。
 - 健康检查只能证明入口可用，不能替代登录、SSE、任务生成和资源访问验证。
 
 ## 8. 验证纪律
@@ -125,7 +125,7 @@
 - 文档站：`cd docs && bun run types:check` 或 `bun run build`。
 - UI 变更能浏览器验证时，检查关键路由、明暗主题、滚动、弹窗、空态和核心交互；不能验证时说明替代依据，不把静态阅读或 `git diff` 写成运行验证。
 
-同类失败连续三次时停止盲试，记录现象、已排除项和新假设，再切换路径或请求用户决策。
+同类失败连续三次时停止重复同一路径，记录现象、已排除项和新假设并切换诊断或替代方案；只有替代方案会改变范围、数据或权限时才请求用户决策。
 
 ## 9. 文档与交付
 
@@ -135,4 +135,4 @@
 - 文档默认中文，不写过期日期，不公开密码、Token、Cookie、真实账号或机器敏感路径。命令、端口、环境变量必须以当前脚本和 Compose 为准。
 - Git 提交说明使用 `<type>(<scope>): <业务模块> - <变更摘要>`，`type` 为 `feat|fix|refactor|perf|docs|test|build|ci|chore|revert`。
 
-交付前至少检查：改动是否聚焦、调用方和类型是否同步、错误/权限/数据归属是否完整、必要文档是否同步、验证是否如实说明、是否留下密钥或本地数据。
+代码或配置变更交付前按适用项检查：改动是否聚焦、调用方和类型是否同步、错误/权限/数据归属是否完整、必要文档是否同步、验证是否如实说明、是否留下密钥或本地数据。

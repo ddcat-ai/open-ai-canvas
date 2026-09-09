@@ -4,11 +4,17 @@ export type CanvasBackgroundMode = "dots" | "lines" | "blank";
 export const canvasThemes = {
     light: {
         canvas: {
-            background: "#f0f0f0",
-            dot: "rgba(0,0,0,.80)",
-            line: "rgba(0,0,0,.80)",
+            background: "#f1f1f1",
+            dot: "rgba(20,20,20,.24)",
+            line: "rgba(20,20,20,.16)",
             selectionFill: "rgba(17,17,17,.10)",
             selectionStroke: "rgba(17,17,17,.38)",
+        },
+        surface: {
+            panel: "rgba(255,255,255,.96)",
+            elevated: "rgba(248,248,248,.98)",
+            inset: "rgba(20,20,20,.045)",
+            border: "rgba(20,20,20,.14)",
         },
         node: {
             label: "#4b5563",
@@ -19,8 +25,8 @@ export const canvasThemes = {
             edge: "rgba(15,23,42,.16)",
             shadow: "0 6px 18px rgba(15,23,42,.08)",
             hoverShadow: "0 10px 24px rgba(15,23,42,.12)",
-            activeStroke: "#111827",
-            selectionStroke: "#6b7280",
+            activeStroke: "#171717",
+            selectionStroke: "#171717",
             placeholder: "#9ca3af",
             text: "#111827",
             muted: "#6b7280",
@@ -66,18 +72,26 @@ export const canvasThemes = {
         },
         accent: {
             primary: "#171717",
-            primarySoft: "rgba(17,17,17,.10)",
+            primarySoft: "rgba(23,23,23,.12)",
             onPrimary: "#ffffff",
             danger: "#f87171",
+            status: "#2f8f83",
+            warning: "#c47b2c",
         },
     },
     dark: {
         canvas: {
-            background: "#000000",
-            dot: "rgba(175,175,175,.80)",
-            line: "rgba(175,175,175,.80)",
+            background: "#050505",
+            dot: "rgba(190,190,190,.32)",
+            line: "rgba(190,190,190,.22)",
             selectionFill: "rgba(255,255,255,.12)",
             selectionStroke: "rgba(255,255,255,.38)",
+        },
+        surface: {
+            panel: "rgba(20,20,20,.97)",
+            elevated: "rgba(28,28,28,.985)",
+            inset: "rgba(255,255,255,.045)",
+            border: "rgba(255,255,255,.14)",
         },
         node: {
             label: "#a3a3a3",
@@ -88,8 +102,8 @@ export const canvasThemes = {
             edge: "rgba(255,255,255,.18)",
             shadow: "0 8px 24px rgba(0,0,0,.34)",
             hoverShadow: "0 12px 30px rgba(0,0,0,.46)",
-            activeStroke: "#f1f1f1",
-            selectionStroke: "#7a7a7a",
+            activeStroke: "#f5f5f5",
+            selectionStroke: "#f5f5f5",
             placeholder: "#737373",
             text: "#ededed",
             muted: "#a3a3a3",
@@ -134,9 +148,11 @@ export const canvasThemes = {
         },
         accent: {
             primary: "#f5f5f5",
-            primarySoft: "rgba(255,255,255,.11)",
-            onPrimary: "#131313",
+            primarySoft: "rgba(255,255,255,.12)",
+            onPrimary: "#111111",
             danger: "#fb7185",
+            status: "#61b9a8",
+            warning: "#e1a353",
         },
     },
 } as const;

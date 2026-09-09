@@ -464,7 +464,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     connections: [],
                     chatSessions: [],
                     activeChatId: null,
-                    appearance: appearanceDefault?.appearance,
+                    appearance: undefined,
                     backgroundMode: appearanceDefault?.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE,
                     showImageInfo: false,
                     viewport: initialViewport,
@@ -501,7 +501,7 @@ export const useCanvasStore = create<CanvasStore>()(
             },
             renameProject: (id, title) =>
                 set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, title: title.trim() || project.title, updatedAt: new Date().toISOString() } : project)),
+                    projects: state.projects.map((project) => (project.id === id ? { ...project, title: title.trim().slice(0, 32) || project.title, updatedAt: new Date().toISOString() } : project)),
                 })),
             deleteProjects: (ids) =>
                 set((state) => {

@@ -1,6 +1,6 @@
 ---
 name: kraftreel-cli
-description: 安装和初始化 KraftReel 远程画布 Skill、MCP 与网页登录；用户提到 KraftReel CLI、Skill、MCP 安装或连接时使用。
+description: 用户明确要求安装、初始化或登录 KraftReel 远程画布 CLI/MCP 时使用；仅询问用法或状态不触发安装流程。
 ---
 
 # KraftReel CLI Skill

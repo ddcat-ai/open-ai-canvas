@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { buildCanvasWorkflowOps, looksLikeWorkflowRequest } from "@/lib/canvas/canvas-agent-workflow";
 import { applyCanvasAgentOps, canvasAgentPostconditionMessage, verifyCanvasAgentOps, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { extractCanvasAgentQuickActions } from "@/components/canvas/canvas-agent-chat-ui";
+import { looksLikeCanvasAgentRequest } from "@/components/canvas/canvas-assistant-panel";
 import { CanvasNodeType } from "@/types/canvas";
 
 const config = { imageModel: "image-model", videoModel: "video-model", audioModel: "audio-model" } as never;
@@ -41,9 +42,22 @@ describe("canvas agent workflow builder", () => {
         expect(extractCanvasAgentQuickActions("```json\n1. not an action\n```")).toEqual([]);
     });
 
+    it("turns bracketed skill choices into clickable prompts", () => {
+        expect(extractCanvasAgentQuickActions("请选择创作入口：[从零创作剧情短片] · [根据已有图片设计分镜] · [整理为九列分镜表]")).toEqual([
+            { label: "从零创作剧情短片", prompt: "从零创作剧情短片" },
+            { label: "根据已有图片设计分镜", prompt: "根据已有图片设计分镜" },
+            { label: "整理为九列分镜表", prompt: "整理为九列分镜表" },
+        ]);
+    });
+
     it("rejects workflow-shaped text batches", () => {
         expect(looksLikeWorkflowRequest("创建一个工作流并连线")).toBe(true);
         expect(looksLikeWorkflowRequest("写一段角色介绍")).toBe(false);
+    });
+
+    it("does not route pure writing requests into canvas tools", () => {
+        expect(looksLikeCanvasAgentRequest("帮我写一个小故事")).toBe(false);
+        expect(looksLikeCanvasAgentRequest("创建一个故事节点并写回画布")).toBe(true);
     });
 
     it("infers useful prompts for semantic media stages when the model omits them", () => {

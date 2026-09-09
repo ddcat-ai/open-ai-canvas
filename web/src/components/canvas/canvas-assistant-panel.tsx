@@ -23,25 +23,30 @@ import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessi
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { buildAssetMentionReferences, buildOrderedCanvasResourceReferences, canvasNodeMentionToken, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { canvasNodeToAssistantReference as nodeToReference, collectAgentMentionReferences } from "@/lib/canvas/canvas-agent-input";
-import { AgentChatComposer, AgentChatMessage, AgentWorkingMessage, type CanvasAgentChatMessage } from "./canvas-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentExecutionRegion, AgentWorkingMessage, type CanvasAgentChatMessage } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelLogo } from "@/components/model-logo";
 import { AgentChatEmptyState, AgentPanelChrome } from "./canvas-agent-panel-chrome";
+import { CanvasAgentResultsView } from "./canvas-agent-results-view";
+import type { GenerationTask } from "@/services/api/task-center";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendingBackendSession, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { canvasAgentPostconditionMessage, previewCanvasAgentOps, summarizeCanvasAgentOps, verifyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentOperationImpact, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
+import { cancelCanvasAgentPlan, completeCanvasAgentPlanTasks, createCanvasAgentPlan, pauseCanvasAgentPlan, transitionCanvasAgentPlan, type CanvasAgentPlan } from "@/lib/canvas/canvas-agent-plan";
+import { CanvasAgentPlanRunner } from "@/lib/canvas/canvas-agent-plan-runner";
+import { recoverCanvasAgentSessions } from "@/lib/canvas/canvas-agent-session-recovery";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { buildCanvasWorkflowOps, looksLikeWorkflowRequest, type CanvasWorkflowInput } from "@/lib/canvas/canvas-agent-workflow";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { buildSkillMentionReferences, SKILL_RUNTIME_AGENT_GUIDANCE, skillRuntime } from "@/services/skill-runtime";
+import { buildSkillMentionReferences, skillRuntime } from "@/services/skill-runtime";
 
 export const CANVAS_AGENT_PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = CANVAS_AGENT_PANEL_MOTION_MS / 1000;
 const ONLINE_AGENT_MAX_STEPS = 8;
 const ONLINE_AGENT_PROMPT =
-    `你是当前创作工作台内置的在线画布助手。首轮必须先调用 canvas_get_context；涉及已有节点时用 canvas_find_nodes 获取真实 id，涉及媒体参考时用 canvas_get_resources。流水线、工作流、管线、节点图或用户要求连线时，必须使用 canvas_create_workflow：把需求拆成有语义的节点类型、真实内容/提示词、边和布局，禁止把业务阶段退化成几个空文本卡片；工具会自动分配 id、布局并建立连线。复杂写操作先 canvas_validate_ops，再执行 canvas_apply_ops。任何写入后都必须检查工具返回的真实节点类型、connectionCount、overlapWarnings 和 verification；没有真实连线时绝不能说已连线，没有生成资源时绝不能说已完成。不要输出 JSON ops、不要猜 id、不要把未就绪资源当作可用素材、不要编造执行结果。需要用户选择时，给出可点击的短选项，不要只让用户输入 1、2、3。${SKILL_RUNTIME_AGENT_GUIDANCE}`;
+    `你是当前创作工作台内置的在线画布助手。首次进入会话、用户要求写入画布、项目/画布刚切换、页面刚恢复，或上下文的 revision/stateHash 不确定时，先调用 canvas_get_context；如果当前会话已有最近一次成功的上下文且期间没有画布写入或外部变化，普通只读问题可以复用该上下文，不要每轮重复读取。涉及已有节点时用 canvas_find_nodes 获取真实 id，涉及媒体参考时用 canvas_get_resources。流水线、工作流、管线、节点图或用户要求连线时，必须使用 canvas_create_workflow：把需求拆成有语义的节点类型、真实内容/提示词、边和布局，禁止把业务阶段退化成几个空文本卡片；工具会自动分配 id、布局并建立连线。复杂写操作先 canvas_validate_ops，再执行 canvas_apply_ops。任何写入后都必须检查工具返回的真实节点类型、connectionCount、overlapWarnings 和 verification，并更新当前会话上下文；没有真实连线时绝不能说已连线，没有生成资源时绝不能说已完成。不要输出 JSON ops、不要猜 id、不要把未就绪资源当作可用素材、不要编造执行结果。Skill 只有在用户通过 / 命令或 Skill 选择器明确调用后才能使用，不能因 Skill 已启用或普通文字提及而自动加载。需要用户选择时，给出可点击的短选项，不要只让用户输入 1、2、3，也不要输出 (#)、（#）等占位符。`;
 const JSON_RECORD_SCHEMA = { type: "object", additionalProperties: true };
 const POSITION_SCHEMA = { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"], additionalProperties: false };
 const VIEWPORT_SCHEMA = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, k: { type: "number" } }, required: ["x", "y", "k"], additionalProperties: false };
@@ -90,7 +95,7 @@ const CANVAS_OP_SCHEMA = {
     required: ["type"],
     additionalProperties: false,
 };
-const ONLINE_READ_TOOLS = new Set([...skillRuntime.agentToolNames("onlineAgent"), "canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_node", "canvas_get_connection", "canvas_get_generation_tasks", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"]);
+const ONLINE_READ_TOOLS = new Set(["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_node", "canvas_get_connection", "canvas_get_generation_tasks", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"]);
 
 function toolDefinition(name: string, description: string, properties: Record<string, unknown>, required: string[] = [], strict = false): ResponseFunctionTool {
     return { type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false }, strict } };
@@ -115,7 +120,6 @@ function generationToolDefinition(name: string, description: string, mode?: "tex
 }
 
 const ONLINE_AGENT_TOOLS: ResponseFunctionTool[] = [
-    ...skillRuntime.agentTools("onlineAgent"),
     toolDefinition("canvas_get_state", "读取当前网页画布的节点、连线、选区和视口。", {}),
     toolDefinition("canvas_get_context", "读取语义化画布上下文、真实节点 id、连接关系、资源就绪状态和状态哈希。", {}),
     toolDefinition("canvas_find_nodes", "按标题、内容、提示词、类型、状态或资产检索真实节点。", { query: { type: "string" }, ids: { type: "array", items: { type: "string" } }, types: { type: "array", items: { type: "string" } }, statuses: { type: "array", items: { type: "string" } }, resourceOnly: { type: "boolean" }, limit: { type: "number" } }),
@@ -235,7 +239,7 @@ const ONLINE_AGENT_TOOLS: ResponseFunctionTool[] = [
     toolDefinition("canvas_set_viewport", "调整画布视口。", { viewport: VIEWPORT_SCHEMA }, ["viewport"]),
     toolDefinition("canvas_run_generation", "触发指定节点生成；对已有生成任务明确重试时传 retry=true。", { nodeId: { type: "string" }, mode: GENERATION_MODE_SCHEMA, prompt: { type: "string" }, retry: { type: "boolean" } }, ["nodeId"]),
 ];
-type OnlineAgentTab = "chat" | "history";
+type OnlineAgentTab = "chat" | "results";
 type OnlineAgentLog = { id: string; time: string; title: string; data?: unknown };
 type OnlineAgentLogContext = { model: string; running: boolean; confirmTools: boolean; messages: number; nodes: number; connections: number };
 type OnlineLoopContext = { step: number };
@@ -259,9 +263,12 @@ type CanvasAssistantPanelProps = {
     onPasteImage: (file: File) => void;
     closing: boolean;
     onCollapse: () => void;
+    floating?: boolean;
+    onToggleFloating?: () => void;
     cinematicEntry?: boolean;
     onCinematicEntryConsumed?: () => void;
     resizing?: boolean;
+    generationTasks?: GenerationTask[];
 };
 
 export type CinematicContinuationFailureDisposition = "abort" | "durable-ack" | "provider-failed";
@@ -347,9 +354,12 @@ export function CanvasAssistantPanel({
     onPasteImage,
     closing,
     onCollapse,
+    floating = false,
+    onToggleFloating,
     cinematicEntry = false,
     onCinematicEntryConsumed,
     resizing = false,
+    generationTasks = [],
 }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
@@ -371,7 +381,7 @@ export function CanvasAssistantPanel({
     const [onlineLogs, setOnlineLogs] = useState<OnlineAgentLog[]>([]);
     const [composerSkills, setComposerSkills] = useState<Skill[]>([]);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
-    const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
+    const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? recoverCanvasAgentSessions(sessions) : [createSession()]));
     const localSessionsRef = useRef(localSessions);
     const [localActiveSessionId, setLocalActiveSessionIdState] = useState<string | null>(activeSessionId);
     const localActiveSessionIdRef = useRef(localActiveSessionId);
@@ -387,6 +397,8 @@ export function CanvasAssistantPanel({
     const pendingToolContextRef = useRef(new Map<string, PendingOnlineToolContext>());
     const cinematicSessionControllersRef = useRef(new Map<string, AbortController>());
     const generationConsumerControllerRef = useRef(new AbortController());
+    const planRunnersRef = useRef(new Map<string, CanvasAgentPlanRunner>());
+    const contextPrimedSessionsRef = useRef(new Set<string>());
 
     useEffect(() => {
         let cancelled = false;
@@ -406,8 +418,9 @@ export function CanvasAssistantPanel({
         if (!sessions.length) return;
         if (sessions === localSessions && activeSessionId === localActiveSessionId) return;
         applyingExternalSessionsRef.current = true;
-        localSessionsRef.current = sessions;
-        setLocalSessions(sessions);
+        const recoveredSessions = recoverCanvasAgentSessions(sessions);
+        localSessionsRef.current = recoveredSessions;
+        setLocalSessions(recoveredSessions);
         setLocalActiveSessionId(activeSessionId);
     }, [activeSessionId, sessions]);
 
@@ -416,12 +429,19 @@ export function CanvasAssistantPanel({
     }, [snapshot]);
 
     useEffect(() => {
+        // A project switch invalidates every session's cached canvas context.
+        contextPrimedSessionsRef.current.clear();
+    }, [projectId]);
+
+    useEffect(() => {
         generationConsumerControllerRef.current = activeGenerationConsumerController(generationConsumerControllerRef.current);
         return () => {
             // 收起面板或刷新页面时只停止前端查询，后台任务由下次挂载根据持久化 ID 继续接管。
             cinematicSessionControllersRef.current.forEach((controller) => controller.abort());
             cinematicSessionControllersRef.current.clear();
             generationConsumerControllerRef.current.abort();
+            planRunnersRef.current.forEach((runner) => runner.stop("cancelled"));
+            planRunnersRef.current.clear();
         };
     }, []);
 
@@ -453,7 +473,6 @@ export function CanvasAssistantPanel({
     }, [composerSkills, nodes]);
     const assetMentionReferences = useMemo(() => buildAssetMentionReferences(assets), [assets]);
     const contextSummary = useMemo(() => summarizeCanvasContext(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
-    const iconButtonStyle = { color: theme.node.muted };
 
     useEffect(() => {
         if (view !== "chat") return;
@@ -642,7 +661,9 @@ export function CanvasAssistantPanel({
             return;
         }
         const session = createSession();
-        setLocalSessions((prev) => [session, ...prev]);
+        const next = [session, ...localSessionsRef.current];
+        localSessionsRef.current = next;
+        setLocalSessions(next);
         setLocalActiveSessionId(session.id);
     };
 
@@ -650,17 +671,21 @@ export function CanvasAssistantPanel({
         const next = safeSessions.filter((session) => !ids.includes(session.id));
         if (!next.length) {
             const session = createSession();
+            localSessionsRef.current = [session];
             setLocalSessions([session]);
             setLocalActiveSessionId(session.id);
         } else {
+            localSessionsRef.current = next;
             setLocalSessions(next);
-            setLocalActiveSessionId(localActiveSessionId && ids.includes(localActiveSessionId) ? next[0].id : localActiveSessionId);
+            const nextActiveId = localActiveSessionIdRef.current && ids.includes(localActiveSessionIdRef.current) ? next[0].id : localActiveSessionIdRef.current;
+            setLocalActiveSessionId(nextActiveId);
         }
         void cleanupImages({ sessions: next });
     };
 
     const clearSessions = () => {
         const session = createSession();
+        localSessionsRef.current = [session];
         setLocalSessions([session]);
         setLocalActiveSessionId(session.id);
         void cleanupImages({ sessions: [session] });
@@ -673,8 +698,9 @@ export function CanvasAssistantPanel({
             return;
         }
 
-        const session = activeSession || createSession();
-        if (!activeSession) {
+        const session = localSessionsRef.current.find((candidate) => candidate.id === localActiveSessionIdRef.current) || localSessionsRef.current[0] || createSession();
+        if (!localSessionsRef.current.some((candidate) => candidate.id === session.id)) {
+            localSessionsRef.current = [session];
             setLocalSessions([session]);
             setLocalActiveSessionId(session.id);
         }
@@ -690,7 +716,8 @@ export function CanvasAssistantPanel({
         followOutputRef.current = true;
         setShowScrollToBottom(false);
         setIsRunning(true);
-        void runOnlineAgentStep(session.id, assistantId, history, userMessage, { step: 1 });
+        const currentHistory = session.messages.filter((message) => message.id !== userMessage.id);
+        void runOnlineAgentStep(session.id, assistantId, currentHistory, userMessage, { step: 1 });
     };
 
     const runOnlineAgentStep = async (sessionId: string, assistantId: string, history: CanvasAssistantMessage[], userMessage: CanvasAssistantMessage, loop: OnlineLoopContext) => {
@@ -698,13 +725,14 @@ export function CanvasAssistantPanel({
         try {
             setIsRunning(true);
             setStreamingMessageId(assistantId);
-            const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage, composerSkills);
+            const canvasIntent = looksLikeCanvasAgentRequest(userMessage.text);
+            const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage, composerSkills, canvasIntent);
             addOnlineLog(`Agent Tool Loop ${loop.step} 开始`, { toolChoice: "required" });
             let streamed = "";
-            const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, messages, "required", userMessage.text, (text) => {
+            const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: canvasIntent ? "" : "你是创作写作助手。当前请求是纯文本创作，不要调用画布工具，不要读取或描述画布上下文。对于‘写个故事’这类信息不足的请求，先用简短问题确认题材、风格、篇幅、受众或关键冲突，最多询问 1 至 3 个最必要的问题，并提供可点击的短选项；用户补充或确认后再开始写正文。信息足够时直接生成可见正文。正文必须通过文本增量流式输出；模型可以使用内部思考，但不要把思考过程、推理草稿或隐藏分析输出给用户。" }, messages, canvasIntent ? "required" : "auto", userMessage.text, (text) => {
                 streamed = text;
                 if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            });
+            }, canvasIntent ? (contextPrimedSessionsRef.current.has(sessionId) ? ONLINE_AGENT_TOOLS.filter((tool) => tool.function.name !== "canvas_get_context") : ONLINE_AGENT_TOOLS) : []);
             addOnlineLog("模型工具回复", result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
@@ -717,7 +745,7 @@ export function CanvasAssistantPanel({
                         role: "tool",
                         title: "确认工具调用",
                         text: summarizeToolCalls(result.toolCalls),
-                        detail: { status: "pending", step: loop.step, toolCalls: result.toolCalls, impact: previewOnlineToolCalls(result.toolCalls, snapshotRef.current, effectiveConfig) },
+                        detail: { status: "pending", step: loop.step, toolCalls: result.toolCalls, plan: createCanvasAgentPlan(result.toolCalls, userMessage.text), impact: previewOnlineToolCalls(result.toolCalls, snapshotRef.current, effectiveConfig) },
                     };
                     appendMessage(sessionId, toolMessage);
                     addOnlineLog("等待用户确认", result.toolCalls);
@@ -740,15 +768,27 @@ export function CanvasAssistantPanel({
     };
 
     const continueOnlineToolLoop = async (sessionId: string, assistantId: string, messages: ResponseInputMessage[], result: { content: string; toolCalls: ResponseToolCall[] }, step: number) => {
-        const toolResults = await executeOnlineToolCalls(sessionId, result.toolCalls);
+        const plan = createCanvasAgentPlan(result.toolCalls);
+        const planMessageId = nanoid();
+        const runner = new CanvasAgentPlanRunner(plan, (next) => {
+            upsertMessage(sessionId, { id: planMessageId, role: "tool", title: "工具自动执行中", text: summarizeToolCalls(result.toolCalls), detail: { status: next.status === "succeeded" ? "completed" : "running", step, toolCalls: result.toolCalls, plan: next } });
+        });
+        planRunnersRef.current.set(plan.id, runner);
+        appendMessage(sessionId, { id: planMessageId, role: "tool", title: "工具自动执行中", text: summarizeToolCalls(result.toolCalls), detail: { status: "running", step, toolCalls: result.toolCalls, plan } });
+        const toolResults = await executeOnlineToolCalls(sessionId, result.toolCalls, runner);
         addOnlineLog("工具执行结果", toolResults);
-        appendMessage(sessionId, {
-            id: nanoid(),
+        upsertMessage(sessionId, {
+            id: planMessageId,
             role: "tool",
             title: "工具自动执行完成",
             text: toolResults.map((item) => toolResultText(item.result)).join("\n"),
-            detail: { status: "completed", step, toolCalls: result.toolCalls, results: toolResults },
+            detail: { status: "completed", step, toolCalls: result.toolCalls, results: toolResults, plan: completeCanvasAgentPlanTasks(runner.plan, toolResults.map((item) => ({ ok: item.result.ok }))) },
         });
+        if (runner.plan.status === "succeeded" || runner.plan.status === "blocked") planRunnersRef.current.delete(plan.id);
+        if (toolResults.some((item) => !item.result.ok)) {
+            upsertMessage(sessionId, { id: assistantId, role: "assistant", text: "部分画布操作未成功，后续步骤已停止。请检查失败原因后选择重试或重新规划。" });
+            return;
+        }
         await continueOnlineToolLoopAfterResults(sessionId, assistantId, messages, result.toolCalls, toolResults, step);
     };
 
@@ -764,7 +804,7 @@ export function CanvasAssistantPanel({
         const next = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, nextMessages, "auto", "继续处理画布工具结果", (text) => {
             streamed = text;
             if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-        });
+        }, contextPrimedSessionsRef.current.has(sessionId) ? ONLINE_AGENT_TOOLS.filter((tool) => tool.function.name !== "canvas_get_context") : ONLINE_AGENT_TOOLS);
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
@@ -777,7 +817,7 @@ export function CanvasAssistantPanel({
                     role: "tool",
                     title: "确认工具调用",
                     text: summarizeToolCalls(next.toolCalls),
-                    detail: { status: "pending", step: step + 1, toolCalls: next.toolCalls, impact: previewOnlineToolCalls(next.toolCalls, snapshotRef.current, effectiveConfig) },
+                    detail: { status: "pending", step: step + 1, toolCalls: next.toolCalls, plan: createCanvasAgentPlan(next.toolCalls), impact: previewOnlineToolCalls(next.toolCalls, snapshotRef.current, effectiveConfig) },
                 });
                 addOnlineLog("等待用户确认", next.toolCalls);
                 return;
@@ -802,7 +842,8 @@ export function CanvasAssistantPanel({
         return { ...verification, verification, snapshot: next, ops, noopReason, before: JSON.parse(before), after: JSON.parse(snapshotSignature(next)) };
     };
 
-    const executeOnlineTool = async (sessionId: string, name: string, args: Record<string, unknown>, messageId?: string): Promise<OnlineToolResult> => {
+    const executeOnlineTool = async (sessionId: string, name: string, args: Record<string, unknown>, messageId?: string, signal?: AbortSignal): Promise<OnlineToolResult> => {
+            signal?.throwIfAborted();
             const current = snapshotRef.current;
             try {
             const expectedRevision = typeof args.expectedRevision === "number" ? args.expectedRevision : undefined;
@@ -810,9 +851,13 @@ export function CanvasAssistantPanel({
             const expectedStateHash = typeof args.expectedStateHash === "string" ? args.expectedStateHash : "";
             if (expectedStateHash && expectedStateHash !== buildCanvasAgentContext(current).stateHash) return { ok: false, message: "画布状态已变化，请重新读取 canvas_get_context 后再执行写操作。" };
             const skillToolResult = await skillRuntime.executeAgentTool("onlineAgent", name, args, composerSkills);
+            signal?.throwIfAborted();
             if (skillToolResult) return skillToolResult;
             if (name === "canvas_get_state") return { ok: true, message: describeCanvasSnapshot(current), data: compactSnapshot(current) };
-            if (name === "canvas_get_context") return { ok: true, message: "已读取语义化画布上下文。", data: buildCanvasAgentContext(current) };
+            if (name === "canvas_get_context") {
+                contextPrimedSessionsRef.current.add(sessionId);
+                return { ok: true, message: "已读取语义化画布上下文。", data: buildCanvasAgentContext(current) };
+            }
             if (name === "canvas_find_nodes") return { ok: true, message: "已按条件检索真实节点。", data: findCanvasAgentNodes(current, args as Parameters<typeof findCanvasAgentNodes>[1]) };
             if (name === "canvas_get_node") {
                 const data = getCanvasAgentNode(current, { id: requireString(args.id, "id") });
@@ -862,16 +907,18 @@ export function CanvasAssistantPanel({
 			const ops = onlineToolToOps(name, args, current, effectiveConfig);
 			const result = await executeOps(ops, { source: "online", conversationId: sessionId, messageId: messageId || sessionId });
 			const { snapshot: _snapshot, before: _before, after: _after, ...cleanData } = result;
-			return { ok: result.ok, message: result.changed ? canvasAgentPostconditionMessage(result) : result.noopReason, data: cleanData };
+            if (result.ok && result.changed) contextPrimedSessionsRef.current.delete(sessionId);
+            return { ok: result.ok, message: result.changed ? canvasAgentPostconditionMessage(result) : result.noopReason, data: cleanData };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
             return { ok: false, message: error instanceof Error ? error.message : "工具执行失败" };
         }
     };
 
-    const executeOnlineToolCall = async (sessionId: string, toolCall: ResponseToolCall): Promise<OnlineExecutedToolCall> => {
+    const executeOnlineToolCall = async (sessionId: string, toolCall: ResponseToolCall, signal?: AbortSignal): Promise<OnlineExecutedToolCall> => {
+        signal?.throwIfAborted();
         try {
-            const result = await executeOnlineTool(sessionId, toolCall.function.name, parseToolArguments(toolCall.function.arguments), toolCall.id);
+            const result = await executeOnlineTool(sessionId, toolCall.function.name, parseToolArguments(toolCall.function.arguments), toolCall.id, signal);
             return { toolCallId: toolCall.id, name: toolCall.function.name, result };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
@@ -879,7 +926,14 @@ export function CanvasAssistantPanel({
         }
     };
 
-    const executeOnlineToolCalls = async (sessionId: string, toolCalls: ResponseToolCall[]) => {
+    const executeOnlineToolCalls = async (sessionId: string, toolCalls: ResponseToolCall[], runner?: CanvasAgentPlanRunner) => {
+        if (runner) {
+            const results = await runner.run(async (index, signal) => {
+                const result = await executeOnlineToolCall(sessionId, toolCalls[index], signal);
+                return { ...result, ok: result.result.ok };
+            });
+            return results.map(({ toolCallId, name, result }) => ({ toolCallId, name, result }));
+        }
         const results: OnlineExecutedToolCall[] = [];
         let stopped = false;
         for (const toolCall of toolCalls) {
@@ -910,10 +964,20 @@ export function CanvasAssistantPanel({
         }
         try {
             setIsRunning(true);
-            const results = await executeOnlineToolCalls(session.id, toolCalls);
+            if (detail.plan) {
+                upsertMessage(session.id, { id: messageId, role: "tool", title: "执行计划进行中", text: summarizeToolCalls(toolCalls), detail: { ...detail, status: "running", plan: transitionCanvasAgentPlan(detail.plan as CanvasAgentPlan, "running") } });
+            }
+            const planForRun = detail.plan as CanvasAgentPlan | undefined;
+            const runner = planForRun ? (planRunnersRef.current.get(planForRun.id) || new CanvasAgentPlanRunner(planForRun, (next) => {
+                upsertMessage(session.id, { id: messageId, role: "tool", title: "执行计划进行中", text: summarizeToolCalls(toolCalls), detail: { ...detail, status: next.status === "succeeded" ? "completed" : "running", plan: next } });
+            })) : undefined;
+            if (planForRun && runner && !planRunnersRef.current.has(planForRun.id)) planRunnersRef.current.set(planForRun.id, runner);
+            const results = await executeOnlineToolCalls(session.id, toolCalls, runner);
             addOnlineLog("工具执行结果", results);
-            upsertMessage(session.id, { id: messageId, role: "tool", title: "工具执行完成", text: results.map((item) => toolResultText(item.result)).join("\n"), detail: { ...detail, results, status: "completed" } });
+            upsertMessage(session.id, { id: messageId, role: "tool", title: "工具执行完成", text: results.map((item) => toolResultText(item.result)).join("\n"), detail: { ...detail, results, status: "completed", plan: detail.plan ? completeCanvasAgentPlanTasks(detail.plan as CanvasAgentPlan, results.map((item) => ({ ok: item.result.ok }))) : undefined } });
+            if (planForRun && (runner?.plan.status === "succeeded" || runner?.plan.status === "blocked")) planRunnersRef.current.delete(planForRun.id);
             pendingToolContextRef.current.delete(messageId);
+            if (results.some((item) => !item.result.ok)) return;
             await continueOnlineToolLoopAfterResults(session.id, assistantId, previousMessages, toolCalls, results, pendingContext?.step || Number(detail.step) || 1);
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) return;
@@ -928,7 +992,43 @@ export function CanvasAssistantPanel({
         const session = safeSessions.find((session) => session.messages.some((item) => item.id === messageId));
         addOnlineLog("拒绝工具", { messageId });
         pendingToolContextRef.current.delete(messageId);
-        if (session) upsertMessage(session.id, { id: messageId, role: "tool", title: "已拒绝执行", text: "工具调用已取消", detail: { ...objectDetail(session.messages.find((item) => item.id === messageId)?.detail), status: "rejected" } });
+        if (session) {
+            const detail = objectDetail(session.messages.find((item) => item.id === messageId)?.detail);
+            upsertMessage(session.id, { id: messageId, role: "tool", title: "已拒绝执行", text: "工具调用已取消", detail: { ...detail, status: "rejected", plan: detail.plan ? transitionCanvasAgentPlan(detail.plan as CanvasAgentPlan, "cancelled") : undefined } });
+        }
+    };
+
+    const cancelOnlinePlan = (planId: string) => {
+        for (const session of safeSessions) {
+            const message = session.messages.find((item) => {
+                const detail = objectDetail(item.detail);
+                return item.role === "tool" && (detail.plan as { id?: string } | undefined)?.id === planId;
+            });
+            if (!message) continue;
+            const detail = objectDetail(message.detail);
+            const plan = detail.plan as CanvasAgentPlan | undefined;
+            if (!plan) return;
+            pendingToolContextRef.current.delete(message.id);
+            planRunnersRef.current.get(plan.id)?.stop("cancelled");
+            upsertMessage(session.id, { id: message.id, role: "tool", title: "计划已取消", text: "未完成的画布操作已取消；已提交的后端任务仍以服务端状态为准。", detail: { ...detail, status: "cancelled", plan: cancelCanvasAgentPlan(plan) } });
+            setIsRunning(false);
+            return;
+        }
+    };
+
+    const pauseOnlinePlan = (planId: string) => {
+        for (const session of safeSessions) {
+            const message = session.messages.find((item) => (objectDetail(item.detail).plan as { id?: string } | undefined)?.id === planId);
+            if (!message) continue;
+            const detail = objectDetail(message.detail);
+            const plan = detail.plan as CanvasAgentPlan | undefined;
+            if (!plan) return;
+            pendingToolContextRef.current.delete(message.id);
+            planRunnersRef.current.get(plan.id)?.stop("paused");
+            setIsRunning(false);
+            upsertMessage(session.id, { id: message.id, role: "tool", title: "计划已暂停", text: "未完成步骤已暂停；继续时会重新读取当前画布。", detail: { ...detail, status: "blocked", plan: pauseCanvasAgentPlan(plan) } });
+            return;
+        }
     };
 
     const undoLastOnlineBatch = () => {
@@ -947,6 +1047,11 @@ export function CanvasAssistantPanel({
     const submitQuickAction = (text: string) => {
         if (!text.trim() || agentBusy) return;
         void sendMessage(text.trim(), messages);
+    };
+
+    const resumeRecoveredPlan = (goal: string) => {
+        const prompt = `请先重新读取当前画布上下文、真实节点、资源以及 revision/stateHash，再重新规划并安全完成这个目标：${goal}`;
+        submitQuickAction(prompt);
     };
 
     useEffect(() => {
@@ -1088,35 +1193,25 @@ export function CanvasAssistantPanel({
 
     const onlineContent = (
         <>
-            {view === "history" ? (
-                <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                        <div className="text-xs font-medium" style={{ color: theme.node.muted }}>历史会话</div>
-                        <Tooltip title="清空历史">
-                            <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" style={iconButtonStyle} icon={<X className="size-3.5" />} disabled={!historySessions.length} onClick={() => setDeleteChatIds(historySessions.map((session) => session.id))} aria-label="清空历史会话" />
-                        </Tooltip>
-                    </div>
-                    <AssistantHistory
-                        sessions={historySessions}
-                        activeSession={activeSession}
-                        onOpen={(id) => {
-                            setLocalActiveSessionId(id);
-                            setView("chat");
-                        }}
-                        onDelete={(id) => setDeleteChatIds([id])}
-                    />
-                </div>
+            {view === "results" ? (
+                <CanvasAgentResultsView nodes={nodes} tasks={generationTasks} theme={theme} onSelectNode={(nodeId) => { onSelectNodeIds(new Set([nodeId])); setView("chat"); }} />
             ) : (
-                <div ref={chatListRef} className="relative thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4" onScroll={(event) => {
+                <div ref={chatListRef} className="canvas-agent-chat-list relative thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4" onScroll={(event) => {
                     const element = event.currentTarget;
                     const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 32;
                     followOutputRef.current = atBottom;
                     setShowScrollToBottom(!atBottom);
                 }}>
-                    <div ref={chatContentRef} className="space-y-4">
+                    <div ref={chatContentRef} className="canvas-agent-chat-content space-y-4">
                     {messages.length ? (
                         <>
-                            {messages.map((message, index) => (
+                            {messages.map((message, index) => {
+                                const isExecution = (candidate: CanvasAssistantMessage | undefined) => candidate?.role === "tool" && (candidate.detail as { status?: string } | undefined)?.status !== "pending";
+                                if (isExecution(message) && isExecution(messages[index - 1])) return null;
+                                const group = [message];
+                                if (isExecution(message)) for (let next = index + 1; isExecution(messages[next]); next++) group.push(messages[next]);
+                                const renderMessage = (item: CanvasAssistantMessage) => <AgentChatMessage key={item.id} item={assistantMessageToChatMessage(item)} theme={theme} user={user} isStreaming={item.id === streamingMessageId && item.role === "assistant"} quickActionsDisabled={agentBusy} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} onQuickAction={submitQuickAction} onRetryPlan={submitQuickAction} onCancelPlan={cancelOnlinePlan} onPausePlan={pauseOnlinePlan} onResumePlan={resumeRecoveredPlan} />;
+                                return (
                                 <motion.div
                                     key={message.id}
                                     className="space-y-2"
@@ -1124,11 +1219,11 @@ export function CanvasAssistantPanel({
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.24, delay: Math.min(index * 0.018, 0.12), ease: [0.22, 1, 0.36, 1] }}
                                 >
-                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} isStreaming={message.id === streamingMessageId && message.role === "assistant"} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} onQuickAction={submitQuickAction} />
+                                    {isExecution(message) ? <AgentExecutionRegion items={group.map(assistantMessageToChatMessage)} theme={theme}>{group.map(renderMessage)}</AgentExecutionRegion> : renderMessage(message)}
                                     {message.references?.length ? <MessageReferences message={message} /> : null}
                                 </motion.div>
-                            ))}
-                            {agentBusy ? <AgentWorkingMessage theme={theme} /> : null}
+                            ); })}
+                            {agentBusy && !messages.some((message) => message.id === streamingMessageId && message.text.trim()) ? <AgentWorkingMessage theme={theme} /> : null}
                         </>
                     ) : (
                         <AgentChatEmptyState
@@ -1165,23 +1260,25 @@ export function CanvasAssistantPanel({
                     <AgentChatComposer
                         prompt={prompt}
                         sending={agentBusy}
-                        placeholder={cinematicEntryActive ? "一句话描述题材、角色和核心冲突" : "描述你想让 Agent 如何操作画布"}
+                        placeholder={cinematicEntryActive ? "一句话描述题材、角色和核心冲突" : "描述创意或需求，/ 使用技能，@ 引用画布内容"}
                         theme={theme}
                         references={composerReferences}
                         slashSkills={composerSkills}
                         includeAssetLibrary
+                        confirmTools={confirmTools}
+                        onConfirmToolsChange={(confirm) => setAgentState({ confirmTools: confirm })}
                         onPromptChange={setPrompt}
                         onSubmit={cinematicEntryActive ? () => submitCinematicProject(prompt) : submit}
                         onAddFiles={addImagesToCanvas}
-                        left={
+                        left={cinematicEntryActive ? (
+                            <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>
+                                影视项目
+                            </span>
+                        ) : null}
+                        right={
                             <>
-                                <VoiceRecordingButton disabled={agentBusy} onTranscribed={(text) => setPrompt((prev) => (prev.trim() ? `${prev} ${text}` : text))} />
                                 <AgentTextModelPicker config={effectiveConfig} value={effectiveConfig.textModel} onChange={(model) => updateConfig("textModel", model)} />
-                                {cinematicEntryActive ? (
-                                    <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>
-                                        影视项目
-                                    </span>
-                                ) : null}
+                                <VoiceRecordingButton placement="popover" disabled={agentBusy} onTranscribed={(text) => setPrompt((prev) => (prev.trim() ? `${prev} ${text}` : text))} />
                             </>
                         }
                     />
@@ -1217,29 +1314,32 @@ export function CanvasAssistantPanel({
     return (
         <motion.aside
             className="pointer-events-auto relative flex h-full w-full flex-col overflow-hidden rounded-[var(--panel-radius)]"
-            initial={{ x: 48, opacity: 0 }}
-            animate={{ x: closing ? 28 : 0, opacity: closing ? 0 : 1 }}
+            aria-label="AI 创作助手"
+            data-canvas-no-zoom
+            data-canvas-wheel-scroll
+            initial={reducedMotion ? false : { x: 24, scale: 0.98, opacity: 0 }}
+            animate={{ x: closing && !reducedMotion ? 24 : 0, scale: closing && !reducedMotion ? 0.98 : 1, opacity: closing ? 0 : 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: resizing || reducedMotion ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
             style={{
-                background: theme.spatial.elevated,
+                background: theme.node.panel,
                 color: theme.node.text,
                 boxShadow: `-18px 0 48px ${theme.spatial.shadow}, 0 24px 72px ${theme.spatial.shadow}`,
             }}
         >
             <AgentPanelChrome
                 theme={theme}
-                context={contextSummary}
-                referenceCount={selectedReferences.length}
-                confirmTools={confirmTools}
                 canUndo={canUndoOps}
                 undoCount={undoOpsCount}
-                onConfirmToolsChange={(confirmTools) => setAgentState({ confirmTools })}
                 onUndo={undoLastOnlineBatch}
                 onCollapse={collapse}
-                historyCount={historySessions.length}
-                historyActive={view === "history"}
-                onOpenHistory={() => setView((current) => current === "history" ? "chat" : "history")}
+                floating={floating}
+                onToggleFloating={onToggleFloating}
+                sessions={historySessions}
+                activeSessionId={localActiveSessionId}
+                onOpenSession={(id) => { setLocalActiveSessionId(id); setView("chat"); }}
+                onRenameSession={(id, title) => updateSession(id, (session) => ({ ...session, title, updatedAt: new Date().toISOString() }))}
+                onDeleteSession={(id) => setDeleteChatIds([id])}
                 onNewChat={() => { startChatSession(); setView("chat"); }}
                 newChatDisabled={false}
                 conversationTitle={activeSession?.title || "AI 助手对话"}
@@ -1254,7 +1354,7 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
     const options = useMemo(() => Array.from(new Set([value, ...selectableModelsByCapability(config, "text")].filter(Boolean))), [config, value]);
     const current = value || "";
     return (
-        <div className="min-w-0 max-w-[240px]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="min-w-0 max-w-[170px]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <Select<string>
                 size="small"
                 variant="borderless"
@@ -1301,49 +1401,6 @@ function agentModelLabel(config: AiConfig, model: string) {
 function AgentModelIcon({ config, model }: { config: AiConfig; model: string }) {
     const icon = modelIcon(config, model);
     return icon ? <span className="inline-flex size-4 shrink-0 items-center justify-center"><ModelLogo icon={icon} size={16} /></span> : <Cpu className="size-4 shrink-0 opacity-70" />;
-}
-
-function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessions: CanvasAssistantSession[]; activeSession: CanvasAssistantSession | null; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-
-    return (
-        <div className="space-y-3">
-            <div className="text-sm" style={{ color: theme.node.muted }}>
-                {sessions.length ? `${sessions.length} 条历史` : "暂无历史"}
-            </div>
-            {sessions.map((session) => (
-                <div key={session.id} className="rounded-md px-2.5 py-2 transition-colors" style={{ background: session.id === activeSession?.id ? theme.accent.primarySoft : "transparent", color: theme.node.text }}>
-                    <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 items-center gap-1.5">
-                                {session.id === activeSession?.id ? (
-                                    <span className="shrink-0 text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.text }}>
-                                        当前
-                                    </span>
-                                ) : null}
-                                <div className="truncate text-sm font-medium leading-5">{session.title}</div>
-                            </div>
-                            <div className="truncate text-[var(--fs-label)] leading-4 opacity-65">{sessionPreview(session)}</div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-[var(--fs-tiny)] opacity-55">{formatSessionTime(session.updatedAt || session.createdAt)}</span>
-                            <Button size="small" className="!h-6 !px-2" onClick={() => onOpen(session.id)}>
-                                进入
-                            </Button>
-                            <Tooltip title="删除记录">
-                                <Button size="small" danger type="text" className="!h-6 !w-6 !min-w-6" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(session.id)} />
-                            </Tooltip>
-                        </div>
-                    </div>
-                </div>
-            ))}
-            {!sessions.length ? (
-                <div className="px-3 py-8 text-center text-sm" style={{ color: theme.node.muted }}>
-                    网站 Agent 的对话记录会显示在这里
-                </div>
-            ) : null}
-        </div>
-    );
 }
 
 function OnlineAgentSetupView({ theme, activeModel, onOpenConfig }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; activeModel: string; onOpenConfig: () => void }) {
@@ -1471,14 +1528,6 @@ function assistantImageReferenceLabel(references: CanvasAssistantReference[], in
 
 function assistantMessageToChatMessage(message: CanvasAssistantMessage): CanvasAgentChatMessage {
     return { id: message.id, role: message.role, title: message.title, text: message.text, meta: message.meta, detail: message.detail };
-}
-
-function formatSessionTime(value?: string) {
-    return value ? new Date(value).toLocaleString() : "";
-}
-
-function sessionPreview(session: CanvasAssistantSession) {
-    return session.messages.at(-1)?.text || `${session.messages.length} 条消息`;
 }
 
 function objectDetail(value: unknown) {
@@ -1696,8 +1745,12 @@ function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
     return { type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments, ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}) };
 }
 
-async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void) {
-    return runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice, onDelta });
+export function looksLikeCanvasAgentRequest(text: string) {
+    return /(画布|节点|连线|素材|参考图|参考视频|参考音频|生成图片|生成视频|生成音频|写回|工作流|分镜图|分镜视频|删除节点|修改节点|移动节点|创建节点|整理画布|当前画布|canvas|node|workflow)/iu.test(text);
+}
+
+async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void, tools = ONLINE_AGENT_TOOLS) {
+    return runBackendToolGenerationTask({ prompt, config, messages, tools, toolChoice, onDelta });
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {
@@ -1927,14 +1980,14 @@ function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<
         .filter((item): item is CanvasAssistantReference => Boolean(item));
 }
 
-async function buildToolAgentMessages(snapshot: CanvasAgentSnapshot, history: CanvasAssistantMessage[], userMessage: CanvasAssistantMessage, skills: Skill[] = []): Promise<ResponseInputMessage[]> {
+async function buildToolAgentMessages(snapshot: CanvasAgentSnapshot, history: CanvasAssistantMessage[], userMessage: CanvasAssistantMessage, skills: Skill[] = [], canvasIntent = true): Promise<ResponseInputMessage[]> {
     const refs = userMessage.references || [];
     const skillCatalog = skills
         .filter((skill) => skill.is_added)
         .slice(0, 40)
         .map((skill) => `- ${skill.skill_name}（${skill.skill_id}，v${skill.version || "1"}，${skill.file_count || 1} 文件）：${skill.description}`)
         .join("\n");
-    const systemContent = [ONLINE_AGENT_PROMPT, skillCatalog ? `当前可按需加载的技能（仅元数据）：\n${skillCatalog}` : ""].filter(Boolean).join("\n\n");
+    const systemContent = [canvasIntent ? ONLINE_AGENT_PROMPT : "你是创作写作助手。当前请求是纯文本创作，只输出面向用户的可见回答，不调用画布工具，不描述或读取画布上下文。对于信息不足的创作请求，先用简短问题确认题材、风格、篇幅、受众或关键冲突，最多询问 1 至 3 个最必要的问题，并提供可点击的短选项；用户补充或确认后再开始写正文。信息足够时直接生成可见正文，并通过文本增量流式输出；不要输出隐藏推理过程。", skillCatalog ? `当前可按需加载的技能（仅元数据）：\n${skillCatalog}` : ""].filter(Boolean).join("\n\n");
     return [
         { role: "system", content: systemContent },
         ...history
@@ -1945,7 +1998,7 @@ async function buildToolAgentMessages(snapshot: CanvasAgentSnapshot, history: Ca
             role: "user",
             content: [
                 ...refs.flatMap((item) => (item.text ? [{ type: "text" as const, text: `选中节点 ${item.title}：${item.text}` }] : [])),
-                { type: "text", text: `当前画布：${JSON.stringify(compactSnapshot(snapshot))}\n\n用户需求：${userMessage.text}` },
+                { type: "text", text: `${canvasIntent ? `当前画布：${JSON.stringify(compactSnapshot(snapshot))}\n\n` : ""}用户需求：${userMessage.text}` },
                 ...(await Promise.all(refs.filter((item) => item.dataUrl).map(async (item) => ({ type: "image_url" as const, image_url: { url: await imageToDataUrl(item) } })))),
             ],
         },

@@ -212,8 +212,8 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
 
 function SettingGroup({ title, color, children }: { title: string; color: string; children: ReactNode }) {
     return (
-        <div className="space-y-1.5">
-            <div className="text-[var(--fs-tiny)] font-semibold" style={{ color }}>
+        <div className="video-settings-group space-y-1.5">
+            <div className="video-settings-group-title text-[var(--fs-tiny)] font-semibold" style={{ color }}>
                 {title}
             </div>
             {children}

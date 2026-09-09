@@ -87,9 +87,9 @@ describe("canvas resource mention slots", () => {
         expect(canvasNodeSource).not.toContain("resourceLabel");
         expect(worldLayersSource).not.toContain("resourceReferenceByNodeId");
         expect(renderModelSource).not.toContain("resourceReferenceByNodeId");
-        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([imageNode("image-1")])[0]!)).toBe("@图片1");
-        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([videoNode("video-1")])[0]!)).toBe("@视频1");
-        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([audioNode("audio-1")])[0]!)).toBe("@音频1");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([imageNode("image-1")])[0]!)).toBe("@[node:image-1]");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([videoNode("video-1")])[0]!)).toBe("@[node:video-1]");
+        expect(canvasResourceMentionToken(buildOrderedCanvasResourceReferences([audioNode("audio-1")])[0]!)).toBe("@[node:audio-1]");
     });
 
     test("素材库视频优先使用封面，没有封面时保留首帧视频回退源", () => {
@@ -180,9 +180,9 @@ describe("canvas resource mention slots", () => {
         const image = imageNode("image-a");
         const [reference] = buildNodeMentionReferences(target, [image, target], [connection(image.id, target.id)]);
 
-        expect(reference.label).toBe("图片1");
-        expect(canvasResourceMentionToken(reference)).toBe("@图片1");
-        expect(canvasResourceMentionToken(reference)).not.toContain(image.id);
+        expect(reference.label).toBe("image-a");
+        expect(canvasResourceMentionToken(reference)).toBe("@[node:image-a]");
+        expect(canvasResourceMentionToken(reference)).toContain(image.id);
     });
 
     test("图片、音频和文本分别按各自类型顺序编号", () => {
@@ -190,7 +190,7 @@ describe("canvas resource mention slots", () => {
         const nodes = [imageNode("image-a"), audioNode("audio-a"), imageNode("image-b"), textNode("text-a"), target];
         const connections = nodes.slice(0, -1).map((node) => connection(node.id, target.id));
 
-        expect(buildNodeMentionReferences(target, nodes, connections).map((reference) => reference.label)).toEqual(["图片1", "音频1", "图片2", "文本1"]);
+        expect(buildNodeMentionReferences(target, nodes, connections).map((reference) => reference.label)).toEqual(["image-a", "audio-a", "image-b", "text-a"]);
     });
 
     test("批量索引保持直接引用和配置节点引用语义", () => {

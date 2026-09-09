@@ -19,11 +19,12 @@ type CanvasZoomControlsProps = {
     onMiniMapHoverChange?: (hovered: boolean) => void;
     onOpenShortcuts: () => void;
     containerRef?: RefObject<HTMLDivElement | null>;
+    compact?: boolean;
 };
 
 const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 
-export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, isMiniMapOpen, onToggleMiniMap, onMiniMapHoverChange, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
+export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, isMiniMapOpen, onToggleMiniMap, onMiniMapHoverChange, onOpenShortcuts, containerRef, compact = false }: CanvasZoomControlsProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
@@ -89,6 +90,8 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
         { kind: "separator", id: "help-separator" },
         { id: "zoom-shortcuts", label: "画布快捷键", icon: <HelpCircle />, onClick: onOpenShortcuts },
     ];
+    const compactIds = ["zoom-out", "zoom-precision", "zoom-in"];
+    const visibleItems = compact ? compactIds.flatMap((id) => items.filter((item) => item.id === id)) : items;
 
     return (
         <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseEnter={() => onMiniMapHoverChange?.(true)} onMouseLeave={() => onMiniMapHoverChange?.(false)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
@@ -144,7 +147,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
                 ) : null}
             </AnimatePresence>
 
-            <FloatingDock items={items} className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="画布视图控制" />
+            <FloatingDock items={visibleItems} magnify={!compact} embedded={compact} staticLayout={compact} className={compact ? "canvas-production-static-dock" : "canvas-floating-dock"} style={canvasDockStyle(theme)} ariaLabel="画布视图控制" />
         </div>
     );
 }

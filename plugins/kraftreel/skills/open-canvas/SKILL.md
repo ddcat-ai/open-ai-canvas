@@ -1,6 +1,6 @@
 ---
 name: open-canvas
-description: 打开影策网页画布并使用在线 Agent。用户要求打开、启动、进入、使用影策或画布时使用。
+description: 用户明确要求打开或使用影策/KraftReel 网页画布时使用；仅有 MCP 读取或编辑请求时不触发。
 ---
 
 # 打开影策画布
@@ -23,7 +23,7 @@ description: 打开影策网页画布并使用在线 Agent。用户要求打开�
 4. 如果没有当前仓库的服务，启动本地画布开发服务，默认在 `web/` 下运行 `bun run dev`；若默认端口被其他项目占用，使用 `bun run dev -- --port <空闲端口>`。不要执行构建或测试。
 5. 直接构造并打开最终 URL：`<真实画布地址>/canvas?mode=new`（或按用户意图使用 `mode=recent` / `mode=handoff`）。
 6. 画布网页会自动创建或选择具体画布，并使用在线 Agent；不要再添加 `agentUrl`、`agentToken`，也不要尝试连接本机 Agent。
-7. 打开后检查画布页面和在线 Agent 面板是否正常显示；不要启动 Canvas Agent HTTP Runtime。MCP 工具调用属于独立的远程 HTTPS 能力，不作为网页连接状态判断依据。
+7. 打开后检查画布页面和在线 Agent 面板是否正常显示；不要启动 Canvas Agent HTTP Runtime。
 
 ## 用户只安装插件时
 

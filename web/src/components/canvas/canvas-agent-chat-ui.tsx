@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { Button, Tooltip } from "antd";
+import { Button, Dropdown, Input, Tooltip } from "antd";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, AtSign, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Slash, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
+import { ArrowUp, Check, CheckCircle2, CircleAlert, ChevronDown, Hand, MousePointer2, Paperclip, Puzzle, RotateCw, LoaderCircle, Plus, RotateCcw, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
@@ -11,6 +11,9 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
 import { agentSlashQuery, insertAgentSkill } from "@/lib/canvas/canvas-agent-input";
+import { composeCanvasAgentAnswers, parseCanvasAgentReply } from "@/lib/canvas/canvas-agent-reply";
+export { extractCanvasAgentQuickActions, type CanvasAgentQuickAction } from "@/lib/canvas/canvas-agent-reply";
+import { cancelCanvasAgentPlan, pauseCanvasAgentPlan, resumeCanvasAgentPlan, type CanvasAgentPlan, type CanvasAgentPlanStatus } from "@/lib/canvas/canvas-agent-plan";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
 export type CanvasAgentChatMessage = {
@@ -23,36 +26,51 @@ export type CanvasAgentChatMessage = {
     attachments?: CanvasAgentChatAttachment[];
 };
 
-export type CanvasAgentQuickAction = { label: string; prompt: string };
-
-/**
- * Turn the short numbered choices the Agent already emits into real UI actions.
- * This deliberately stays conservative: only assistant messages with 1–4
- * numbered lines are eligible, and code blocks are ignored.
- */
-export function extractCanvasAgentQuickActions(text: string): CanvasAgentQuickAction[] {
-    if (!text.trim() || text.includes("```")) return [];
-    const actions: CanvasAgentQuickAction[] = [];
-    const seen = new Set<string>();
-    for (const line of text.split(/\r?\n/u)) {
-        const match = /^\s*(?:[-*]\s*)?(\d{1,2})[.)、]\s*(.+?)\s*$/u.exec(line);
-        if (!match) continue;
-        const label = match[2].replace(/^[*_\s]+|[*_\s]+$/gu, "").trim();
-        if (!label || label.length > 96 || seen.has(label)) continue;
-        seen.add(label);
-        actions.push({ label, prompt: label });
-        if (actions.length >= 4) break;
-    }
-    return actions;
-}
-
 const WORKING_TEXT = "正在推演...";
 
-export function AgentChatMessage({ item, theme, user, isStreaming = false, retrying = false, onRejectTool, onApproveTool, onQuickAction, onRetry }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; retrying?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void; onRetry?: () => void }) {
+export function AgentExecutionRegion({ items, theme, children }: { items: CanvasAgentChatMessage[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; children: ReactNode }) {
+    const plans = items.map((item) => planFromDetail(item.detail)).filter((plan): plan is CanvasAgentPlan => Boolean(plan));
+    const tasks = plans.flatMap((plan) => plan.tasks);
+    const running = plans.some((plan) => plan.status === "running");
+    const failed = tasks.filter((task) => task.status === "failed").length;
+    const completed = tasks.filter((task) => task.status === "succeeded").length;
+    const stopped = plans.some((plan) => ["blocked", "cancelled", "failed"].includes(plan.status));
+    const [open, setOpen] = useState(false);
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        if (!running) { setOpen(false); return; }
+        const start = Date.now();
+        setElapsed(0);
+        const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+        return () => window.clearInterval(timer);
+    }, [running]);
+    const activeItem = items.find((item) => planFromDetail(item.detail)?.status === "running");
+    const label = running ? `正在执行：${activeItem?.text || "画布操作"}` : failed ? `${completed} 个完成，${failed} 个失败` : stopped ? `执行已停止 · 已完成 ${completed} 个操作` : tasks.length ? `已完成 ${completed} 个操作` : items.at(-1)?.title || "执行记录";
+    return <div className="canvas-agent-execution-region text-xs" style={{ color: theme.node.muted }}>
+        <button type="button" className="flex w-full items-center gap-2 py-1 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            {running ? <LoaderCircle className="size-3.5 shrink-0 motion-safe:animate-spin" /> : stopped ? <CircleAlert className="size-3.5 shrink-0" /> : <Check className="size-3.5 shrink-0" />}
+            <span className="min-w-0 truncate">{label}</span>
+            {running ? <span className="shrink-0 tabular-nums">{elapsed} 秒</span> : null}
+            <ChevronDown className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open ? <div className="mt-2 space-y-2 border-l border-current/15 pl-3">{children}</div> : null}
+    </div>;
+}
+
+export function AgentChatMessage({ item, theme, user, isStreaming = false, retrying = false, quickActionsDisabled = false, onRejectTool, onApproveTool, onQuickAction, onRetry, onRetryPlan, onCancelPlan, onPausePlan, onResumePlan }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; retrying?: boolean; quickActionsDisabled?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void; onRetry?: () => void; onRetryPlan?: (goal: string) => void; onCancelPlan?: (planId: string) => void; onPausePlan?: (planId: string) => void; onResumePlan?: (goal: string) => void }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
-    const quickActions = item.role === "assistant" && !isStreaming ? extractCanvasAgentQuickActions(item.text) : [];
+    const replyBlocks = item.role === "assistant" && !isStreaming && onQuickAction ? parseCanvasAgentReply(item.text) : [{ kind: "text" as const, text: item.text }];
+    const [selections, setSelections] = useState<Record<number, string>>({});
+    const [customValues, setCustomValues] = useState<Record<number, string>>({});
+    const [submitted, setSubmitted] = useState(false);
+    const submittedRef = useRef(false);
+    useEffect(() => { setSelections({}); setCustomValues({}); setSubmitted(false); submittedRef.current = false; }, [item.id, item.text]);
+    const groupCount = replyBlocks.filter((block) => block.kind === "choices").length;
+    const collectAnswers = groupCount > 1 || replyBlocks.some((block) => block.kind === "choices" && block.actions.some((action) => /自定义/u.test(action.label)));
+    const completedGroups = Object.entries(selections).filter(([index, label]) => !/自定义/u.test(label) || Boolean(customValues[Number(index)]?.trim())).length;
+    const answer = collectAnswers ? composeCanvasAgentAnswers(replyBlocks, selections, customValues) : null;
     if (isSystem) {
         return (
             <div className="flex justify-center text-xs">
@@ -68,35 +86,49 @@ export function AgentChatMessage({ item, theme, user, isStreaming = false, retry
         return (
             <div className="flex items-start gap-2.5">
                 <AgentAvatar theme={theme} />
-                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} />
+                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} onRetryPlan={onRetryPlan} onCancelPlan={onCancelPlan} onPausePlan={onPausePlan} onResumePlan={onResumePlan} />
             </div>
         );
     }
     return (
-        <div className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
+        <div className={`canvas-agent-message flex items-start gap-2.5 ${isUser ? "canvas-agent-message-user justify-end" : "canvas-agent-message-assistant justify-start"}`}>
             {!isUser ? <AgentAvatar theme={theme} /> : null}
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
-                {item.role === "assistant" ? <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>{item.text}</AIMessageMarkdown> : <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>}
+                {item.role !== "assistant" ? <div className="whitespace-pre-wrap break-words text-left">{item.text}</div> : replyBlocks.map((block, index) => block.kind === "text" ? (
+                    <AIMessageMarkdown key={index} className="text-left" isStreaming={isStreaming}>{block.text}</AIMessageMarkdown>
+                ) : (
+                    <div key={index} className="my-3 flex flex-wrap gap-1.5" role="group" aria-label="快捷选项">
+                        {block.actions.map((action) => (
+                            <motion.button key={action.label} type="button"
+                                aria-pressed={collectAnswers ? selections[index] === action.label : undefined}
+                                disabled={quickActionsDisabled || submitted}
+                                className="rounded-full px-3 py-1.5 text-left text-xs font-medium outline-none transition-[background-color,transform,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-current/30 hover:-translate-y-px"
+                                style={{ background: collectAnswers && selections[index] === action.label ? theme.accent.primarySoft : theme.spatial.surface, color: theme.node.text, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
+                                whileTap={{ scale: 0.97 }} onClick={() => {
+                                    if (quickActionsDisabled || submittedRef.current) return;
+                                    if (collectAnswers) setSelections((previous) => ({ ...previous, [index]: action.label }));
+                                    else onQuickAction?.(action.prompt);
+                                }}>
+                                {collectAnswers && selections[index] === action.label ? <Check className="mr-1 inline size-3" aria-hidden="true" /> : null}
+                                {action.label}
+                            </motion.button>
+                        ))}
+                        {(() => { const selected = selections[index]; return selected && /自定义/u.test(selected) ? <Input size="small" className="mt-2 w-full" placeholder="请输入自定义内容" value={customValues[index] || ""} onChange={(event) => setCustomValues((previous) => ({ ...previous, [index]: event.target.value }))} aria-label={`${selected}内容`} disabled={quickActionsDisabled || submitted} /> : null; })()}
+                    </div>
+                ))}
+                {collectAnswers ? <div className="my-3 flex items-center gap-3">
+                    <Button size="small" type="primary" disabled={!answer || quickActionsDisabled || submitted} onClick={() => {
+                        if (!answer || quickActionsDisabled || submittedRef.current || !onQuickAction) return;
+                        submittedRef.current = true;
+                        setSubmitted(true);
+                        onQuickAction(answer);
+                    }}>{submitted ? "已提交" : "确认并继续"}</Button>
+                    <span className="text-xs" role="status" style={{ color: theme.node.muted }}>{submitted ? "已发送全部选择" : `已完成 ${completedGroups}/${groupCount} 项`}</span>
+                </div> : null}
                 {item.role === "error" && onRetry ? (
                     <Button size="small" className="mt-2 !h-7" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
                         {retrying ? "重试中" : "重试本轮"}
                     </Button>
-                ) : null}
-                {quickActions.length && onQuickAction ? (
-                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="快捷选项">
-                        {quickActions.map((action) => (
-                            <motion.button
-                                key={action.label}
-                                type="button"
-                                className="rounded-full px-3 py-1.5 text-left text-xs font-medium outline-none transition-[background-color,transform,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-current/30 hover:-translate-y-px"
-                                style={{ background: theme.spatial.surface, color: theme.node.text, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => onQuickAction(action.prompt)}
-                            >
-                                {action.label}
-                            </motion.button>
-                        ))}
-                    </div>
                 ) : null}
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
@@ -108,6 +140,7 @@ export function AgentChatMessage({ item, theme, user, isStreaming = false, retry
 
 export function AgentPendingToolCard({ summary, detail, theme, onReject, onApprove }: { summary: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onReject?: () => void; onApprove?: () => void }) {
     const impact = agentImpactFromDetail(detail);
+    const isPlan = Boolean(impact && impact.operationCount > 1);
     return (
         <div className="flex items-start gap-2.5">
             <AgentAvatar theme={theme} />
@@ -118,7 +151,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
-                            <span>确认工具调用</span>
+                            <span>{isPlan ? "执行计划 · 确认工具调用" : "确认工具调用"}</span>
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
@@ -132,10 +165,11 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                             <ImpactMetric label="删除" value={impact.destructiveCount} attention={impact.destructiveCount > 0} theme={theme} />
                             <ImpactMetric label="生成" value={impact.generationCount} attention={impact.generationCount > 0} theme={theme} />
                         </div>
-                        {impact.items.length ? <div className="mt-3 space-y-1.5">{impact.items.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}><span className="mt-2 size-1 shrink-0 rounded-full bg-current" /><span>{item}</span></div>)}</div> : null}
+                        {impact.items.length ? <div className="mt-3 space-y-1.5" aria-label={isPlan ? "执行计划步骤" : "操作影响"}>{impact.items.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}><span className="mt-2 size-1 shrink-0 rounded-full bg-current" /><span>{isPlan ? `${index + 1}. ${item}` : item}</span></div>)}</div> : null}
                         {impact.warning ? <div className="mt-3 rounded-md bg-amber-500/[.08] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
                     </div>
                 ) : null}
+                {planFromDetail(detail) ? <AgentPlanSummary plan={planFromDetail(detail)!} theme={theme} /> : null}
                 {detail ? <details className="mt-3 pt-1"><summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>技术详情</summary><AgentDetailBlock detail={detail} theme={theme} /></details> : null}
                 {onReject || onApprove ? (
                     <div className="mt-4 grid grid-cols-2 gap-2">
@@ -170,7 +204,7 @@ function agentImpactFromDetail(detail: unknown) {
     } satisfies CanvasAgentOperationImpact;
 }
 
-export function AgentToolCard({ title, text, detail, theme }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+export function AgentToolCard({ title, text, detail, theme, onRetryPlan, onCancelPlan, onPausePlan, onResumePlan }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onRetryPlan?: (goal: string) => void; onCancelPlan?: (planId: string) => void; onPausePlan?: (planId: string) => void; onResumePlan?: (goal: string) => void }) {
     const state = toolCardState(title, text, detail);
     return (
         <details className="min-w-0 flex-1 rounded-md px-3 py-3 text-left" style={{ background: theme.spatial.surface, color: theme.node.text }}>
@@ -193,6 +227,11 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
                     </div>
                 </div>
             </summary>
+            {planFromDetail(detail) ? <AgentPlanSummary plan={planFromDetail(detail)!} theme={theme} /> : null}
+            {(() => { const plan = planFromDetail(detail); return plan?.status === "blocked" && plan.stopReason === "failed" && onRetryPlan ? <Button size="small" className="mt-3" icon={<RotateCcw className="size-3.5" />} onClick={() => onRetryPlan(plan.goal)}>重新规划并重试</Button> : null; })()}
+            {(() => { const plan = planFromDetail(detail); return plan && (plan.status === "running" || plan.status === "waiting_approval") && onCancelPlan ? <Button danger size="small" className="mt-3" icon={<XCircle className="size-3.5" />} onClick={() => onCancelPlan(plan.id)}>取消计划</Button> : null; })()}
+            {(() => { const plan = planFromDetail(detail); return plan?.status === "running" && onPausePlan ? <Button size="small" className="mt-3 ml-2" icon={<CircleAlert className="size-3.5" />} onClick={() => onPausePlan(plan.id)}>暂停计划</Button> : null; })()}
+            {(() => { const plan = planFromDetail(detail); return plan?.status === "blocked" && plan.stopReason !== "failed" && onResumePlan ? <Button size="small" className="mt-3" icon={<RotateCcw className="size-3.5" />} onClick={() => onResumePlan(plan.goal)}>{plan.stopReason === "paused" ? "恢复执行" : "重新读取并继续"}</Button> : null; })()}
             {detail ? <AgentDetailBlock detail={detail} theme={theme} /> : null}
         </details>
     );
@@ -228,9 +267,12 @@ export function AgentChatComposer({
     onAddFiles,
     onRemoveAttachment,
     left,
+    right,
     references = [],
     slashSkills,
     includeAssetLibrary,
+    confirmTools,
+    onConfirmToolsChange,
 }: {
     prompt: string;
     attachments?: CanvasAgentChatAttachment[];
@@ -243,15 +285,22 @@ export function AgentChatComposer({
     onAddFiles?: (files: FileList | File[] | null) => void | Promise<void>;
     onRemoveAttachment?: (id: string) => void;
     left?: ReactNode;
+    right?: ReactNode;
     /** 供「@」插入的画布节点/素材/技能引用候选（可选，默认空，缺省时退化为普通输入框） */
     references?: CanvasResourceReference[];
     /** 供「/」弹出的技能候选（可选） */
     slashSkills?: Skill[];
     /** 是否在「@」候选里包含素材库资源 */
     includeAssetLibrary?: boolean;
+    /** Agent 工具执行确认模式：询问或自动 */
+    confirmTools?: boolean;
+    onConfirmToolsChange?: (confirmTools: boolean) => void;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const mentionInputRef = useRef<HTMLTextAreaElement>(null);
+    const composerRef = useRef<HTMLDivElement>(null);
+    const [contentHeight, setContentHeight] = useState(60);
+    const [addMenuOpen, setAddMenuOpen] = useState(false);
     const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
     const availableSlashSkills = slashSkills ?? [];
@@ -259,8 +308,22 @@ export function AgentChatComposer({
     const reducedMotion = useReducedMotion();
     const visibleSlashSkills = slash ? availableSlashSkills.filter((skill) => `${skill.skill_name} ${skill.description || ""}`.toLowerCase().includes(slash.query.toLowerCase())) : availableSlashSkills;
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(visibleSlashSkills.length - 1, 0));
+    const focusInput = () => requestAnimationFrame(() => mentionInputRef.current?.focus());
 
-    // 在输入值末尾检测「/关键词」打开技能候选；选择后替换为 @[skill:xxx] 引用 token（保持在 prompt 文本里）。
+    useEffect(() => {
+        if (!slash) return;
+        const onOutside = (event: PointerEvent) => {
+            if (event.target instanceof Node && !composerRef.current?.contains(event.target)) setSlash(null);
+        };
+        document.addEventListener("pointerdown", onOutside, true);
+        return () => document.removeEventListener("pointerdown", onOutside, true);
+    }, [slash]);
+
+    useEffect(() => {
+        composerRef.current?.querySelector('[data-agent-slash-menu] [aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+    }, [activeSlashIndex]);
+
+    // 在输入值末尾检测「/关键词」打开技能候选；选择后显示可读的 /技能名，运行时仍按技能名解析。
     const handlePromptChange = (value: string) => {
         onPromptChange(value);
         const next = agentSlashQuery(value);
@@ -273,32 +336,33 @@ export function AgentChatComposer({
     };
 
     const applySlashSkill = (skill: Skill) => {
-        const next = insertAgentSkill(prompt, slash, skill.skill_id);
+        const next = insertAgentSkill(prompt, slash, skill.skill_id, skill.skill_name);
         setSlash(null);
         setSlashIndex(0);
         onPromptChange(next);
+        focusInput();
     };
 
     // slash 菜单的键盘控制在 capture 阶段拦截（contentEditable/textarea 内部先消费 Enter，外层冒泡拿不到）
     const handleSlashKeyCapture = (event: ReactKeyboardEvent) => {
-        if (!slash || !visibleSlashSkills.length) return;
+        if (!slash) return;
         if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-        if (event.key === "ArrowDown") {
-            event.preventDefault();
-            event.stopPropagation();
-            setSlashIndex((index) => Math.min(index + 1, visibleSlashSkills.length - 1));
-        } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            event.stopPropagation();
-            setSlashIndex((index) => Math.max(index - 1, 0));
-        } else if (event.key === "Enter" || event.key === "Tab") {
-            event.preventDefault();
-            event.stopPropagation();
-            applySlashSkill(visibleSlashSkills[activeSlashIndex]);
-        } else if (event.key === "Escape") {
+        if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
             setSlash(null);
+        } else if (event.key === "ArrowDown" && visibleSlashSkills.length) {
+            event.preventDefault();
+            event.stopPropagation();
+            setSlashIndex((index) => Math.min(index + 1, visibleSlashSkills.length - 1));
+        } else if (event.key === "ArrowUp" && visibleSlashSkills.length) {
+            event.preventDefault();
+            event.stopPropagation();
+            setSlashIndex((index) => Math.max(index - 1, 0));
+        } else if (visibleSlashSkills.length && (event.key === "Enter" || event.key === "Tab")) {
+            event.preventDefault();
+            event.stopPropagation();
+            applySlashSkill(visibleSlashSkills[activeSlashIndex]);
         }
     };
 
@@ -312,14 +376,25 @@ export function AgentChatComposer({
         void onAddFiles(images);
     };
 
+    const insertPromptToken = (token: "@" | "/") => {
+        const next = `${prompt}${prompt && !prompt.endsWith(" ") ? " " : ""}${token}`;
+        handlePromptChange(next);
+        focusInput();
+    };
+
+    const addContentMenuItems = [
+        { key: "reference", icon: <MousePointer2 className="size-4" />, label: "从画布添加" },
+        ...(onAddFiles ? [{ key: "upload", icon: <Paperclip className="size-4" />, label: "上传附件", title: "上传图片附件" }] : []),
+        { type: "divider" as const },
+        { key: "skill", icon: <Puzzle className="size-4" />, label: "技能" },
+    ];
+
     return (
-        <div className="px-3 pb-3 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
+        <div ref={composerRef} className="canvas-agent-composer" onWheelCapture={(event) => event.stopPropagation()}>
             <div
-                className="group/composer rounded-[22px] px-3 pb-2.5 pt-3 transition-[background-color,box-shadow,transform] duration-200 focus-within:-translate-y-px"
+                className="canvas-agent-composer-surface"
                 style={{
-                    background: theme.node.fill,
-                    color: theme.accent.primary,
-                    boxShadow: `0 16px 40px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,0.045)`,
+                    color: theme.node.text,
                 }}
             >
                 {attachments.length ? (
@@ -337,18 +412,19 @@ export function AgentChatComposer({
                     </div>
                 ) : null}
                 <div className="relative" onKeyDownCapture={handleSlashKeyCapture} onPasteCapture={handlePasteCapture}>
-                    <div className="thin-scrollbar max-h-40 min-h-[60px] overflow-y-auto">
+                    <div className="canvas-agent-composer-input thin-scrollbar" style={{ height: Math.min(200, Math.max(60, contentHeight)) }}>
                         <CanvasResourceMentionTextarea
                             ref={mentionInputRef}
                             value={prompt}
                             references={references}
                             includeAssetLibrary={includeAssetLibrary}
-                            sendOnEnter={false}
-                            disabled={disabled}
+                            sendOnEnter
+                            disabled={disabled || sending}
+                            onContentSizeChange={setContentHeight}
                             onChange={handlePromptChange}
-                            onSubmit={onSubmit}
+                            onSubmit={() => { if (canSubmit) onSubmit(); }}
                             className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
-                            containerClassName="min-h-[60px]"
+                            containerClassName="h-full"
                             style={{ color: theme.node.text }}
                             placeholder={placeholder}
                             aria-label="Agent 输入"
@@ -357,7 +433,9 @@ export function AgentChatComposer({
                     {slash ? (
                         <div
                             data-agent-slash-menu
-                            className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
+                            role="listbox"
+                            aria-label="选择技能"
+                            className="canvas-agent-slash-menu absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs rounded-2xl p-1.5 shadow-2xl"
                             style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
                             onMouseDown={(event) => event.preventDefault()}
                         >
@@ -365,6 +443,8 @@ export function AgentChatComposer({
                                 <button
                                     key={skill.skill_id}
                                     type="button"
+                                    role="option"
+                                    aria-selected={index === activeSlashIndex}
                                     className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
                                     style={{ background: index === activeSlashIndex ? theme.toolbar.itemHover : "transparent", color: theme.node.text }}
                                     onMouseEnter={() => setSlashIndex(index)}
@@ -377,47 +457,61 @@ export function AgentChatComposer({
                             )) : (
                                 <div className="flex items-center gap-2 px-2.5 py-2 text-xs" style={{ color: theme.node.muted }}>
                                     <Sparkles className="size-3.5 shrink-0 opacity-70" />
-                                    <span>暂无已加入技能，请先在技能库安装</span>
+                                    <span>{availableSlashSkills.length ? "未找到匹配的技能" : "暂无已加入技能，请先在技能库安装"}</span>
                                 </div>
                             )}
                         </div>
                     ) : null}
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1">
-                        {onAddFiles ? (
+                <div className="canvas-agent-composer-toolbar mt-2 flex items-center justify-between gap-2">
+                    <div className="canvas-agent-composer-leading flex min-w-0 items-center gap-1.5">
+                        {(
                             <>
                                 <input ref={fileInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
-                                    void onAddFiles(event.target.files);
+                                    void onAddFiles?.(event.target.files);
                                     event.target.value = "";
                                 }} />
-                                <Tooltip title="上传图片">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
-                                </Tooltip>
+                                <Dropdown
+                                    trigger={["click"]}
+                                    placement="topLeft"
+                                    open={addMenuOpen}
+                                    onOpenChange={setAddMenuOpen}
+                                    classNames={{ root: "canvas-agent-add-menu" }}
+                                    menu={{
+                                        items: addContentMenuItems,
+                                        onClick: ({ key }) => {
+                                            setAddMenuOpen(false);
+                                            if (key === "upload") fileInputRef.current?.click();
+                                            if (key === "reference") insertPromptToken("@");
+                                            if (key === "skill") insertPromptToken("/");
+                                        },
+                                    }}
+                                >
+                                    <Tooltip arrow={false} title={addMenuOpen ? null : "添加内容"} classNames={{ root: "canvas-agent-tooltip" }}>
+                                        <Button type="text" shape="circle" className="canvas-agent-add-content" disabled={disabled || sending} style={{ color: theme.node.muted }} icon={<Plus className="size-4" />} aria-label="添加内容" aria-haspopup="menu" aria-expanded={addMenuOpen} />
+                                    </Tooltip>
+                                </Dropdown>
                             </>
+                        )}
+                        {typeof confirmTools === "boolean" && onConfirmToolsChange ? (
+                            <AgentConfirmModePicker confirmTools={confirmTools} onChange={onConfirmToolsChange} theme={theme} onSelected={focusInput} />
                         ) : null}
-                        <Tooltip title="引用画布素材 (@)">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<AtSign className="size-4" />} aria-label="引用画布素材" onClick={() => { const next = `${prompt}${prompt && !prompt.endsWith(" ") ? " " : ""}@`; onPromptChange(next); mentionInputRef.current?.focus(); }} />
-                        </Tooltip>
-                        <Tooltip title="调用技能 (/)">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<Slash className="size-4" />} aria-label="调用技能" onClick={() => { const next = `${prompt}${prompt && !prompt.endsWith(" ") ? " " : ""}/`; onPromptChange(next); mentionInputRef.current?.focus(); }} />
-                        </Tooltip>
                         {left}
                     </div>
+                    <div className="canvas-agent-composer-trailing flex shrink-0 items-center gap-1">
+                        {right}
                     <motion.button
                         type="button"
                         disabled={!canSubmit}
                         aria-label={sending ? "发送中" : "发送"}
                         onClick={() => void onSubmit()}
-                        whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
-                        whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
-                        animate={sending && !reducedMotion ? { scale: [1, 0.94, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
+                        whileTap={canSubmit && !reducedMotion ? { scale: 0.96 } : undefined}
+                        animate={{ scale: 1 }}
                         transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
-                        className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                        className="canvas-agent-send grid size-8 shrink-0 place-items-center rounded-full p-0 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
                         style={{
-                            background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
-                            color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
-                            boxShadow: canSubmit || sending ? `0 8px 20px ${theme.accent.primary}45` : "none",
+                            background: theme.accent.primary,
+                            color: theme.accent.onPrimary,
                         }}
                     >
                         <motion.span
@@ -430,10 +524,115 @@ export function AgentChatComposer({
                             {sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                         </motion.span>
                     </motion.button>
+                    </div>
                 </div>
             </div>
         </div>
     );
+}
+
+function AgentPlanSummary({ plan, theme }: { plan: CanvasAgentPlan; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return <div className="mt-3 rounded-lg px-2.5 py-2" aria-label="执行计划任务" style={{ background: theme.node.fill }}>
+        <div className="flex items-center justify-between gap-2 text-xs font-medium"><span className="truncate">{plan.goal}</span><span className="shrink-0" style={{ color: planStatusColor(plan.status, theme) }}>{planStatusLabel(plan.status, plan.stopReason)}</span></div>
+        <div className="mt-2 space-y-1.5">{plan.tasks.map((task, index) => <div key={task.id} className="flex items-center gap-2 text-xs" style={{ color: theme.node.muted }}><span className="grid size-4 shrink-0 place-items-center rounded-full text-[10px]" style={{ background: theme.spatial.surface, color: planStatusColor(task.status, theme) }}>{index + 1}</span><span className="min-w-0 flex-1 truncate">{task.type}</span><span className="shrink-0">{task.resultUnknown ? "结果待核对" : planStatusLabel(task.status)}</span></div>)}</div>
+    </div>;
+}
+
+function planFromDetail(detail: unknown): CanvasAgentPlan | null {
+    const plan = objectField(detail, "plan");
+    if (!plan || typeof plan !== "object" || !Array.isArray((plan as CanvasAgentPlan).tasks)) return null;
+    return plan as CanvasAgentPlan;
+}
+
+function planStatusLabel(status: CanvasAgentPlanStatus, stopReason?: CanvasAgentPlan["stopReason"]) {
+    if (status === "blocked") {
+        if (stopReason === "recovered") return "刷新后待处理";
+        if (stopReason === "failed") return "失败后阻塞";
+        return "已暂停";
+    }
+    return { pending: "待执行", running: "执行中", waiting_approval: "待确认", succeeded: "已完成", failed: "失败", cancelled: "已取消" }[status];
+}
+
+function planStatusColor(status: CanvasAgentPlanStatus, theme: (typeof canvasThemes)[keyof typeof canvasThemes]) {
+    if (status === "succeeded") return "#16a34a";
+    if (status === "failed" || status === "blocked") return "#dc2626";
+    if (status === "cancelled") return theme.node.muted;
+    if (status === "waiting_approval") return "#d97706";
+    return theme.accent.primary;
+}
+
+function AgentConfirmModePicker({ confirmTools, onChange, theme, onSelected }: { confirmTools: boolean; onChange: (confirmTools: boolean) => void; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onSelected: () => void }) {
+    const [open, setOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (open) menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    }, [open]);
+    const current = confirmTools ? {
+        label: "询问模式",
+        description: "Agent 在执行生成前会寻求你的确认",
+        icon: <Hand className="size-3.5" aria-hidden="true" />,
+    } : {
+        label: "自动模式",
+        description: "Agent 会自主规划并自动执行",
+        icon: <RotateCw className="size-4" aria-hidden="true" />,
+    };
+
+    const selectMode = (next: boolean) => {
+        onChange(next);
+        setOpen(false);
+        onSelected();
+    };
+
+    return (
+        <Dropdown
+            open={open}
+            onOpenChange={setOpen}
+            trigger={["click"]}
+            placement="topLeft"
+            classNames={{ root: "canvas-agent-confirm-dropdown" }}
+            popupRender={() => (
+                <div ref={menuRef} className="canvas-agent-confirm-menu" role="menu" aria-label="Agent 执行模式" style={{ color: theme.node.text }} onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                        event.preventDefault(); event.stopPropagation(); setOpen(false); triggerRef.current?.focus();
+                    } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                        event.preventDefault(); event.stopPropagation();
+                        const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
+                        const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+                        const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (currentIndex + (event.key === "ArrowUp" ? -1 : 1) + options.length) % options.length;
+                        options[nextIndex]?.focus();
+                    } else if (event.key === "Tab") setOpen(false);
+                }}>
+                    <button type="button" role="menuitemradio" aria-checked={confirmTools} className={`canvas-agent-confirm-option${confirmTools ? " is-selected" : ""}`} onClick={() => selectMode(true)}>
+                        <span className="canvas-agent-confirm-option-icon">{currentModeIcon(true)}</span>
+                        <span className="canvas-agent-confirm-option-copy">
+                            <span className="canvas-agent-confirm-option-label">询问模式</span>
+                            <span className="canvas-agent-confirm-option-description">Agent 在执行生成前会寻求你的确认</span>
+                        </span>
+                        {confirmTools ? <Check className="canvas-agent-confirm-option-check size-4" aria-hidden="true" /> : null}
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked={!confirmTools} className={`canvas-agent-confirm-option${!confirmTools ? " is-selected" : ""}`} onClick={() => selectMode(false)}>
+                        <span className="canvas-agent-confirm-option-icon">{currentModeIcon(false)}</span>
+                        <span className="canvas-agent-confirm-option-copy">
+                            <span className="canvas-agent-confirm-option-label">自动模式</span>
+                            <span className="canvas-agent-confirm-option-description">Agent 会自主规划并自动执行</span>
+                        </span>
+                        {!confirmTools ? <Check className="canvas-agent-confirm-option-check size-4" aria-hidden="true" /> : null}
+                    </button>
+                </div>
+            )}
+        >
+            <button ref={triggerRef} type="button" className="canvas-agent-confirm-mode" aria-haspopup="menu" aria-expanded={open} aria-pressed={confirmTools} aria-label={`当前为${current.label}`} title={`当前为${current.label}`} style={{ color: theme.node.text }}>
+                {current.icon}
+                <span>{current.label}</span>
+                <ChevronDown className="size-3" aria-hidden="true" />
+            </button>
+        </Dropdown>
+    );
+}
+
+function currentModeIcon(confirmTools: boolean) {
+    return confirmTools ? <Hand className="size-3.5" aria-hidden="true" /> : <RotateCw className="size-4" aria-hidden="true" />;
 }
 
 export function AgentPanelTabs<T extends string>({ value, items, theme, right, onChange }: { value: T; items: { value: T; label: string; icon?: ReactNode; count?: number }[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; right?: ReactNode; onChange: (value: T) => void }) {

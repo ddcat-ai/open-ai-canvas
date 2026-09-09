@@ -164,7 +164,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     }, [canvasContainerRef, updateViewportRect]);
 
     return (
-        <div data-canvas-no-zoom aria-label="小地图" className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-3))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm [isolation:isolate] lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel, border: `1px solid ${theme.toolbar.border}`, boxSizing: "border-box", transform: "translateZ(0)" }}>
+        <div data-canvas-no-zoom aria-label="小地图" className="canvas-mini-map absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-3))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm [isolation:isolate] lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel, border: `1px solid ${theme.toolbar.border}`, boxSizing: "border-box", transform: "translateZ(0)" }}>
             <div
                 ref={containerRef}
                 className={`relative h-full w-full touch-none select-none overflow-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}

@@ -9,6 +9,7 @@ export type CanvasAgentTask = {
     inputNodeIds: string[];
     outputNodeIds: string[];
     retryCount: number;
+    resultUnknown?: boolean;
 };
 
 export type CanvasAgentPlan = {
@@ -17,6 +18,7 @@ export type CanvasAgentPlan = {
     status: CanvasAgentPlanStatus;
     tasks: CanvasAgentTask[];
     createdAt: string;
+    stopReason?: "paused" | "cancelled" | "failed" | "recovered";
 };
 
 export type CanvasAgentPlanToolCall = { id?: string; function?: { name?: string; arguments?: string } };
@@ -66,15 +68,30 @@ export function retryCanvasAgentPlanTask(plan: CanvasAgentPlan, taskId: string):
 
 export function cancelCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
     if (plan.status === "succeeded" || plan.status === "cancelled") return plan;
-    return { ...plan, status: "cancelled", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "cancelled" as const }) };
+    return { ...plan, status: "cancelled", stopReason: "cancelled", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "cancelled" as const }) };
 }
 
 export function pauseCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
     if (plan.status !== "running" && plan.status !== "waiting_approval") return plan;
-    return { ...plan, status: "blocked", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "blocked" as const }) };
+    return { ...plan, status: "blocked", stopReason: "paused", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "blocked" as const }) };
 }
 
 export function resumeCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
     if (plan.status !== "blocked") return plan;
     return { ...plan, status: "running", tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : { ...task, status: "pending" as const }) };
+}
+
+/** Converts plans persisted before a page unload into an explicit, non-replayable state. */
+export function recoverCanvasAgentPlan(plan: CanvasAgentPlan): CanvasAgentPlan {
+    if (plan.status !== "running" && plan.status !== "pending" && plan.status !== "waiting_approval") return plan;
+    return {
+        ...plan,
+        status: "blocked",
+        stopReason: "recovered",
+        tasks: plan.tasks.map((task) => task.status === "succeeded" ? task : {
+            ...task,
+            status: "blocked" as const,
+            ...(task.status === "running" ? { resultUnknown: true } : {}),
+        }),
+    };
 }

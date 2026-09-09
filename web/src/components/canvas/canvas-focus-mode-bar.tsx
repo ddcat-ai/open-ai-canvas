@@ -56,7 +56,7 @@ export function CanvasFocusModeBar({ dockRevealed, agentOpen, zoomPercent, onTog
                         <PanelBottom className="size-4" />
                     </button>
                 </Tooltip>
-                <Tooltip title={agentOpen ? "收起智能体" : "智能体"}>
+                <Tooltip title={agentOpen ? "收起智能体" : "智能体"} classNames={{ root: "canvas-agent-tooltip" }}>
                     <button
                         type="button"
                         onClick={onToggleAgent}

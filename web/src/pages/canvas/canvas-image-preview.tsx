@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Clipboard, Download, X } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
@@ -67,9 +68,9 @@ export function CanvasImagePreview({ open, node, theme, onClose, onDownload }: C
         }).catch(() => undefined);
     };
 
-    return (
+    return createPortal((
         <div
-            className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/80 p-3 sm:p-6"
+            className="canvas-image-preview-backdrop fixed inset-0 z-[var(--z-canvas-image-preview)] flex items-center justify-center p-3 sm:p-6"
             role="presentation"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) onClose();
@@ -79,11 +80,11 @@ export function CanvasImagePreview({ open, node, theme, onClose, onDownload }: C
                 role="dialog"
                 aria-modal="true"
                 aria-label={`${currentNode.title || "图片"}预览`}
-                className="flex h-[min(900px,calc(100vh-24px))] w-full max-w-[1400px] overflow-hidden rounded-2xl border shadow-2xl sm:h-[min(900px,calc(100vh-48px))]"
+                className="canvas-image-preview-shell flex h-[min(900px,calc(100vh-24px))] w-full max-w-[1400px] overflow-hidden rounded-2xl border shadow-2xl sm:h-[min(900px,calc(100vh-48px))]"
                 style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
                 onMouseDown={(event) => event.stopPropagation()}
             >
-                <section className="relative flex min-w-0 flex-1 items-center justify-center bg-black/20">
+                <section className="canvas-image-preview-stage relative flex min-w-0 flex-1 items-center justify-center">
                     <div className="canvas-image-preview-main relative flex h-full min-h-0 w-full items-center justify-center overflow-hidden px-8 py-8 sm:px-14">
                         <CachedResourceImage
                             storageKey={currentNode.metadata?.storageKey}
@@ -99,10 +100,10 @@ export function CanvasImagePreview({ open, node, theme, onClose, onDownload }: C
                     </div>
                 </section>
 
-                <aside className="flex w-[min(340px,34vw)] shrink-0 flex-col border-l" style={{ borderColor: theme.node.stroke }}>
+                <aside className="canvas-image-preview-sidebar flex w-[min(340px,34vw)] shrink-0 flex-col border-l" style={{ borderColor: theme.node.stroke }}>
                     <div className="flex h-14 shrink-0 items-center justify-between border-b px-5" style={{ borderColor: theme.node.stroke }}>
                         <div className="min-w-0 text-sm font-medium">生成信息</div>
-                        <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-white/10" aria-label="关闭图片预览" onClick={onClose}>
+                        <button type="button" className="canvas-image-preview-close grid size-8 shrink-0 place-items-center rounded-md transition" aria-label="关闭图片预览" onClick={onClose}>
                             <X className="size-4" />
                         </button>
                     </div>
@@ -135,7 +136,7 @@ export function CanvasImagePreview({ open, node, theme, onClose, onDownload }: C
                     </div>
 
                     <div className="shrink-0 border-t p-5" style={{ borderColor: theme.node.stroke }}>
-                        <button type="button" className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-medium transition hover:bg-white/85" style={{ color: "var(--color-neutral-950)" }} onClick={() => onDownload(currentNode)}>
+                        <button type="button" className="canvas-image-preview-download flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition" onClick={() => onDownload(currentNode)}>
                             <Download className="size-4" />
                             下载图片
                         </button>
@@ -143,7 +144,7 @@ export function CanvasImagePreview({ open, node, theme, onClose, onDownload }: C
                 </aside>
             </div>
         </div>
-    );
+    ), document.body);
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

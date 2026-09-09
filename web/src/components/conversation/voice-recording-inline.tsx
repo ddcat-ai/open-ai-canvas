@@ -123,6 +123,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                                 size="small"
                                 icon={<Mic className="size-3.5" />}
                                 onClick={handleRetry}
+                                aria-label="重试语音识别"
                                 style={{ color: theme.node.muted }}
                             />
                         </Tooltip>
@@ -133,6 +134,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                             size="small"
                             icon={<X className="size-3.5" />}
                             onClick={onCancel}
+                            aria-label="取消语音输入"
                             style={{ color: theme.node.muted }}
                         />
                     </Tooltip>
@@ -171,6 +173,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                                 cancelSpeech();
                                 onCancel();
                             }}
+                            aria-label="取消语音输入"
                             style={{ color: theme.node.muted }}
                         />
                     </Tooltip>
@@ -180,6 +183,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                             size="small"
                             icon={<Square className="size-3.5" />}
                             onClick={handleStop}
+                            aria-label="停止并转写"
                             disabled={state !== "recording" || transcribeState !== "idle"}
                             style={{ color: theme.accent.primary }}
                         />

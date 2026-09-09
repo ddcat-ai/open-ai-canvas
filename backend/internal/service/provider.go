@@ -460,6 +460,9 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 		body = claudeAgentBody(body)
 	}
 	body["model"] = input.Config.Model
+	if input.TextOptions.Thinking {
+		applyTextThinking(body, input, protocol)
+	}
 	result, err := postStreamingAgent(ctx, input.Config, path, body, protocol, input.OnTextDelta)
 	if protocol == "chat-completion" && isAgentToolChoiceCompatibilityError(err) {
 		if !isAutoAgentToolChoice(body["tool_choice"]) {
@@ -493,7 +496,50 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	if err != nil {
 		return nil, err
 	}
-	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	// Standard text endpoints share the host's incremental parser; retain the
+	// plugin request URL, authentication and headers when enabling SSE.
+	streamProtocol := ""
+	switch strings.TrimRight(spec.Path, "/") {
+	case "/chat/completions", "/v1/chat/completions":
+		streamProtocol = "chat-completion"
+	case "/responses", "/v1/responses":
+		streamProtocol = "responses"
+	case "/messages", "/v1/messages":
+		streamProtocol = "claude-api"
+	}
+	var body []byte
+	if streamProtocol != "" {
+		payload, ok := spec.Body.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("Agent 流式请求正文必须是 JSON 对象")
+		}
+		payload = cloneStringAnyMap(payload)
+		payload["stream"] = true
+		if input.TextOptions.Thinking {
+			applyTextThinking(payload, input, streamProtocol)
+		}
+		if streamProtocol == "chat-completion" {
+			metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+			if metadata.BillingMode == "token" {
+				if err := ensureChatCompletionStreamUsage(payload); err != nil {
+					return nil, err
+				}
+			}
+		}
+		spec.Body = payload
+		parser := newStreamingAgentParser(streamProtocol, input.OnTextDelta)
+		var mimeType string
+		body, mimeType, err = executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
+		if err != nil {
+			return nil, err
+		}
+		if strings.Contains(strings.ToLower(mimeType), "event-stream") {
+			parser.flush()
+			return parser.result()
+		}
+	} else {
+		body, err = executeProtocolRequest(ctx, input.Config, spec)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2575,6 +2621,10 @@ func executeProtocolRequest(ctx context.Context, config providerConfig, spec pro
 }
 
 func executeProtocolBinaryRequest(ctx context.Context, config providerConfig, spec protocol.RequestSpec) ([]byte, string, error) {
+	return executeProtocolBinaryRequestWithConsumer(ctx, config, spec, nil)
+}
+
+func executeProtocolBinaryRequestWithConsumer(ctx context.Context, config providerConfig, spec protocol.RequestSpec, onChunk func(string, []byte)) ([]byte, string, error) {
 	if err := spec.Validate(); err != nil {
 		return nil, "", err
 	}
@@ -2601,7 +2651,10 @@ func executeProtocolBinaryRequest(ctx context.Context, config providerConfig, sp
 	if err := applyProtocolAuth(req, config, spec.Auth); err != nil {
 		return nil, "", err
 	}
-	return doBinary(req)
+	if onChunk != nil {
+		req.Header.Set("Accept", "text/event-stream")
+	}
+	return doBinaryWithConsumer(req, onChunk)
 }
 
 func protocolRequestBody(ctx context.Context, config providerConfig, spec protocol.RequestSpec) (io.Reader, string, error) {
