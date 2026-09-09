@@ -1436,7 +1436,7 @@ function AssetImageZoom({ asset }: { asset: LibraryAsset & { kind: "image" } }) 
         if (!viewer) return;
         const onWheel = (event: WheelEvent) => {
             const target = event.target as Element | null;
-            if (target?.closest(".asset-zoom-controls") || !target?.closest(".asset-zoom-image")) return;
+            if (target?.closest(".asset-zoom-controls")) return;
             event.preventDefault();
             setScale((value) => Math.min(4, Math.max(0.25, value * (event.deltaY < 0 ? 1.12 : 0.89))));
         };
