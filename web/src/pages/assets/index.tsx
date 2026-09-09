@@ -166,8 +166,11 @@ export default function AssetsPage() {
         return filteredAssets.slice(start, start + pageSize);
     }, [filteredAssets, page, pageSize]);
     const visibleAssets = useMemo(
-        () => (assetPageQuery.data?.assets || localVisibleAssets).map(normalizeAssetRecord).filter((asset): asset is LibraryAsset => asset.kind !== "entity"),
-        [assetPageQuery.data?.assets, localVisibleAssets],
+        () => (assetPageQuery.data?.assets || localVisibleAssets)
+            .map(normalizeAssetRecord)
+            .filter((asset): asset is LibraryAsset => asset.kind !== "entity")
+            .filter((asset) => (viewMode === "trash" ? asset.status === "archived" : asset.status !== "archived")),
+        [assetPageQuery.data?.assets, localVisibleAssets, viewMode],
     );
     const visibleAssetIds = useMemo(() => visibleAssets.map((asset) => asset.id), [visibleAssets]);
     const allFilteredSelected = visibleAssetIds.length > 0 && visibleAssetIds.every((id) => selectedIds.includes(id));
