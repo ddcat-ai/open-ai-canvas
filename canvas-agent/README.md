@@ -81,6 +81,19 @@ codex mcp add kraftreel -- node /absolute/path/to/open-ai-canvas/canvas-agent/di
 
 远程 MCP 宿主（例如 Codex、Claude 或 Hermes）负责理解用户意图、加载自己的 Skill、生成 Plan/Task 和处理审批；CLI 不运行通用外部工具，也不替宿主调用模型。远程 MCP 只提供画布上下文读取、版本校验和画布操作，不暴露 Skill、Plan、Task 或 `ask/auto` 编排接口。外部 Agent 应先读取画布，再把自己的计划转换为基础画布操作并携带 `expectedRevision` 与 `expectedStateHash`。
 
+### 对话直接生成图片
+
+完成 CLI 登录并执行 `project use <画布ID>` 后，用户可以直接说“操作 XX 画布，在沈舟角色卡右侧生成一张校园夜景图”。外部 Agent 应按以下顺序调用基础 MCP：
+
+1. `canvas_get_context`，确认当前绑定画布、真实版本号和 `stateHash`。
+2. `canvas_find_nodes` 或 `canvas_get_selection`，找到用户提到的真实参考节点。
+3. 生成带 `prompt`、尺寸和 `referenceNodeIds` 的图片操作；位置应避开现有节点。
+4. `canvas_validate_ops`，携带读取到的 `revision` 和 `stateHash`。
+5. 通过宿主审批后调用 `canvas_apply_ops` 或 `canvas_generate_image`。
+6. 使用 `canvas_get_generation_tasks` 回读提交状态，只能把真实终态报告为“生成完成”。
+
+如果画布在确认期间发生变化，服务端返回 409；Agent 必须重新读取上下文并重新生成操作，不能给旧操作替换新的版本号。创建图片节点、提交生成任务和媒体实际完成是三个不同状态。
+
 ## 能力边界
 
 Canvas Agent 仅包含远程 CLI、stdio MCP、工具规划和 HTTPS 客户端。以下能力已完全移除：
