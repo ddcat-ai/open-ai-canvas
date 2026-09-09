@@ -86,6 +86,41 @@ func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T
 	}
 }
 
+func TestOfficialAtlasCloudChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "atlascloud-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "atlascloud-chat" || provider.BaseURL != "https://api.atlascloud.ai" || provider.Auth.Type != "bearer" {
+		t.Fatalf("Atlas Cloud provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "atlascloud-chat.yingce-plugin", "atlascloud-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "openai/gpt-5.6-luna",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "openai/gpt-5.6-luna" {
+		t.Fatalf("Atlas Cloud request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"atlas ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "atlas ok" {
+		t.Fatalf("Atlas Cloud response = %#v", result)
+	}
+}
+
 func assertManifestContractMatchesPackage(t *testing.T, packageName string, manifestRaw []byte, interfaceDocs string) {
 	t.Helper()
 	start := strings.Index(interfaceDocs, manifestContractStart)
@@ -442,6 +477,55 @@ func TestOfficialOpenAIVideosDeclaresAuthenticatedResultDownload(t *testing.T) {
 	}
 	if spec.Method != "GET" || spec.Path != "/v1/videos/video-1/content" || spec.Headers["Accept"] != "video/mp4" || spec.Auth.Type != "bearer" {
 		t.Fatalf("result request = %#v", spec)
+	}
+}
+
+// 系统指令必须真正到达上游：只映射 messages 的协议要收到 system 消息，
+// 有独立 system 字段的协议要用该字段且不能在消息数组里重复发送。
+func TestOfficialTextProtocolsDeliverInstructions(t *testing.T) {
+	tests := []struct {
+		name, packageName, providerID, messagesField, instructionField string
+	}{
+		{name: "openai-chat", packageName: "openai-chat-completions.yingce-plugin", providerID: "chat-completion", messagesField: "messages"},
+		{name: "deepseek", packageName: "deepseek-chat.yingce-plugin", providerID: "deepseek-chat", messagesField: "messages"},
+		{name: "atlascloud", packageName: "atlascloud-chat.yingce-plugin", providerID: "atlascloud-chat", messagesField: "messages"},
+		{name: "openai-responses", packageName: "openai-responses.yingce-plugin", providerID: "openai-response", messagesField: "input", instructionField: "instructions"},
+		{name: "anthropic", packageName: "anthropic-messages.yingce-plugin", providerID: "claude-api", messagesField: "messages", instructionField: "system"},
+		{name: "gemini", packageName: "google-gemini-generate-content.yingce-plugin", providerID: "gemini-generate-content", messagesField: "contents", instructionField: "systemInstruction"},
+	}
+	const instructions = "只输出一个 JSON 对象"
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			adapter := officialPackageAdapter(t, test.packageName, test.providerID)
+			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Capability: CapabilityText, Model: "model-test", Prompt: "一句话故事", Instructions: instructions,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := manifestTestBody(t, spec)
+			encodedMessages, err := json.Marshal(body[test.messagesField])
+			if err != nil {
+				t.Fatal(err)
+			}
+			carriesInstructions := strings.Contains(string(encodedMessages), instructions)
+			if test.instructionField == "" {
+				if !carriesInstructions {
+					t.Fatalf("%s dropped the system instruction: %s", test.providerID, encodedMessages)
+				}
+				return
+			}
+			if carriesInstructions {
+				t.Fatalf("%s duplicated the system instruction into %s: %s", test.providerID, test.messagesField, encodedMessages)
+			}
+			encodedInstruction, err := json.Marshal(body[test.instructionField])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(encodedInstruction), instructions) {
+				t.Fatalf("%s did not map the system instruction to %s: %s", test.providerID, test.instructionField, encodedInstruction)
+			}
+		})
 	}
 }
 

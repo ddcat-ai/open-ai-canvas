@@ -1,6 +1,7 @@
-import { Button, Image, Modal } from "antd";
+import { Button, Modal } from "antd";
 import { XCircle } from "lucide-react";
 
+import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { TaskDetailItem } from "./canvas-project-feedback";
 import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import { formatTaskLog, type GenerationTask, type TaskLog } from "@/services/api/task-center";
@@ -88,18 +89,10 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
             </Modal>
 
             {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? (
-                <Image
+                <CanvasImagePreview
                     src={previewNode.metadata.content}
                     alt={previewNode.title || "图片"}
-                    style={{ display: "none" }}
-                    preview={{
-                        open: true,
-                        movable: true,
-                        minScale: 0.5,
-                        maxScale: 12,
-                        scaleStep: 0.25,
-                        onOpenChange: (open) => !open && onClosePreview(),
-                    }}
+                    onClose={onClosePreview}
                 />
             ) : null}
 

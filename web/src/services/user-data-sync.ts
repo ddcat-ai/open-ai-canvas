@@ -4,6 +4,7 @@ import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteAsset, getRemote
 import { appQueryClient } from "@/lib/query-client";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
+import { normalizeAssetRecord } from "@/lib/asset-storage-revision";
 import type { Asset } from "@/stores/use-asset-store";
 import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
@@ -71,7 +72,11 @@ export async function loadAssetLibraryPage(options: Parameters<typeof listRemote
     return result;
 }
 
-function acceptRemoteAssets(assets: Asset[]) {
+function acceptRemoteAssets(remoteAssets: Asset[]) {
+    // 服务端素材是历史遗留形状不定的 payload：早期记录可能没有 tags、图片尺寸等字段。
+    // 归一化必须发生在进入 store 之前，否则页面会拿到不符合 Asset 类型的记录；
+    // acknowledged 基线也要用同一份对象，避免归一化差异把素材永久标记为待上传。
+    const assets = remoteAssets.map(normalizeAssetRecord);
     const current = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
     for (const asset of assets) {
         const local = current.get(asset.id);
@@ -131,13 +136,14 @@ export async function syncRemoteUserData(userId?: string | null) {
             const snapshot = await getRemoteUserDataSnapshot();
             // 登录时服务端是实体真相。浏览器 IndexedDB 只作为首屏缓存，不能把服务端已删除的记录补回去。
             // 这里只替换结构化记录，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
+            const snapshotAssets = snapshot.assets.map(normalizeAssetRecord);
             useCanvasStore.getState().replaceProjects(snapshot.projects);
-            useAssetStore.getState().replaceAssets(snapshot.assets);
+            useAssetStore.getState().replaceAssets(snapshotAssets);
             const repair = repairMissingCanvasAssets();
             repairedCanvasAssets = repair.createdAssets > 0 || repair.updatedProjects > 0;
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
             acknowledgedProjects = new Map(snapshot.projects.map((project) => [project.id, project]));
-            acknowledgedAssets = new Map(snapshot.assets.map((asset) => [asset.id, asset]));
+            acknowledgedAssets = new Map(snapshotAssets.map((asset) => [asset.id, asset]));
             remoteUserDataPhase = "ready";
         } catch (error) {
             remoteUserDataPhase = "failed";

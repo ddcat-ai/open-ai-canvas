@@ -13,6 +13,7 @@ const (
 	PluginPromptOptimizer     = "prompt-optimizer"
 	PluginPortraitClearance   = "portrait-clearance"
 	PluginAIArtCritique       = "ai-art-critique"
+	PluginMediaConversion     = "media-conversion"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -77,6 +78,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginAIArtCritique: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
+	PluginMediaConversion: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
@@ -196,8 +201,12 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 		// Preserve the old globally-enabled workflow behavior until each user
 		// explicitly saves a personal choice. Other official applications were
 		// already controlled by each user's local installation state.
-		if !userConfigured && hasRuntime && isLegacyWorkflowPlugin(pluginID) {
-			userEnabled = runtimePlugin.Status == "enabled"
+		if !userConfigured {
+			if pluginID == PluginMediaConversion {
+				userEnabled = true
+			} else if hasRuntime && isLegacyWorkflowPlugin(pluginID) {
+				userEnabled = runtimePlugin.Status == "enabled"
+			}
 		}
 	}
 	effective := platformAvailable

@@ -29,6 +29,7 @@ import (
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 
+	"github.com/google/uuid"
 	"github.com/volcengine/volc-sdk-golang/base"
 	"gorm.io/gorm"
 )
@@ -2445,6 +2446,10 @@ func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGeneratio
 	createdProviderTask := false
 	syncWindowStartedAt := time.Now()
 	if taskID == "" {
+		// The upstream create request may require an idempotency key. Keep it in
+		// the host-only request metadata so declarative plugins can map it to a
+		// header without exposing it in the provider JSON body.
+		request.Extra["idempotencyKey"] = uuid.NewString()
 		spec, err := adapter.BuildCreate(ctx, protocol.RequestContext{BaseURL: input.Config.BaseURL, Request: request})
 		if err != nil {
 			return nil, err

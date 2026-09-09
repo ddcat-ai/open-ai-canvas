@@ -7,6 +7,18 @@ function source(path: string) {
 }
 
 describe("canvas resource mention editor", () => {
+    test("refreshes async reference previews even when prompt text has not changed", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const unchangedTextBranch = component.match(/if \(currentValue === value && lastRenderedValueRef.current === value\) \{([^}]+)\}/)?.[1] || "";
+        expect(unchangedTextBranch).toContain("syncInlineMentionPreviews(editor, activeReferences)");
+        const sync = component.slice(component.indexOf("function syncInlineMentionPreviews("), component.indexOf("function MentionMenu("));
+        expect(sync).toContain('byId.get(chip.dataset.mentionReferenceId || "")');
+        expect(sync).toContain('preview.getAttribute("src") !== src');
+        expect(sync).toContain("preview.replaceWith(createInlinePreview(reference))");
+        expect(sync).not.toContain("replaceChildren");
+        expect(sync).not.toContain("onChange(");
+    });
+
     test("uses stable component classes for inline media references", () => {
         const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
 
@@ -62,6 +74,9 @@ describe("canvas resource mention editor", () => {
         const generationExecutor = source("../src/pages/canvas/use-canvas-generation-executor.ts");
 
         expect(imageExecutor.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBeGreaterThanOrEqual(3);
+        expect(imageExecutor).toContain("imageBatchExpanded: count > 1 ? true : undefined");
+        expect(imageExecutor).toContain("imageGenerationReferenceConnections");
+        expect(imageExecutor).toContain("retireImageBatchChildren");
         expect(mediaExecutors.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBe(2);
         expect(textExecutor.match(/canvasGenerationPromptMetadata\(prompt, effectivePrompt\)/g)?.length).toBe(2);
         expect(generationExecutor).toContain("composerContent: prompt");
@@ -88,5 +103,15 @@ describe("canvas resource mention editor", () => {
         expect(component).toContain("<Workflow aria-hidden />");
         expect(css).toContain(".canvas-resource-mention-item.is-skill");
         expect(css).toContain(".canvas-resource-mention-meta");
+    });
+
+    test("agent composer attachments stay large, previewable, and mentionable", () => {
+        const component = source("../src/components/canvas/canvas-agent-chat-ui.tsx");
+        expect(component).toContain("w-20 shrink-0");
+        expect(component).toContain("insertAttachmentMention");
+        expect(component).toContain("@[attachment:");
+        expect(component).toContain("AgentImagePreview");
+        expect(component).toContain("composerReferences");
+        expect(component).toContain("点击放大预览");
     });
 });

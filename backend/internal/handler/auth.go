@@ -21,6 +21,7 @@ import (
 )
 
 func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerChannelOrderRoutes(r, svc)
 	r.GET("/auth/settings", func(c *gin.Context) {
 		settings, err := svc.PublicAuthSettings()
 		if err != nil {
@@ -59,6 +60,9 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		policy, available := loadRuntimePolicy(c, svc)
 		if !available || !enforceRateLimit(c, "email-code:"+c.ClientIP(), policy.Request.EmailCodePerHour, time.Hour) {
+			return
+		}
+		if !enforceRateLimit(c, "registration-email-account:"+passwordResetRateLimitSubject(req.Email), 10, time.Hour) {
 			return
 		}
 		if err := svc.SendRegistrationEmailCode(req.Email); err != nil {
@@ -683,7 +687,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		logs, err := svc.AdminAPICallLogs(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
+		logs, err := svc.AdminAPICallLogs(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), RecordType: c.Query("recordType"), Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -776,7 +780,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if value := strings.TrimSpace(c.Query("ids")); value != "" {
 			selectedIDs = strings.Split(value, ",")
 		}
-		data, err := svc.AdminAPICallLogsCSV(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), Keyword: c.Query("keyword"), Status: c.Query("status"), IDs: selectedIDs})
+		data, err := svc.AdminAPICallLogsCSV(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), RecordType: c.Query("recordType"), Keyword: c.Query("keyword"), Status: c.Query("status"), IDs: selectedIDs})
 		if err != nil {
 			failService(c, err)
 			return

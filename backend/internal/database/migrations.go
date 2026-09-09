@@ -65,6 +65,27 @@ var schemaMigrations = []migration{
 	{version: 10, name: "agent_tokens", checksum: agentTokensChecksum, apply: migrateSchemaAgentTokens},
 }
 
+// migrateChannelPresentation：上游 v1.2.8.rc1 新增，形式为独立函数而非编号迁移，
+// 用于给既有 model_channels / channel_models 补 PublicAlias、SortOrder 列。
+//
+// 影策 fork 暂不将其注册进 schemaMigrations：fork 的 9 已占用 logical_model_active_code，
+// 若登记为 11 会把 CurrentSchemaVersion 抬到 11，使生产库（当前 10）被判为版本过旧而拒绝启动。
+// 且新增列已由启动时 schema.go 的 AutoMigrate(Models()...) 自动补齐，功能上无缺口。
+// 待主理人确认后，可作为 11 号迁移正式接入。
+func migrateChannelPresentation(tx *gorm.DB) error {
+	for _, column := range []struct {
+		model any
+		field string
+	}{{&model.ModelChannel{}, "PublicAlias"}, {&model.ModelChannel{}, "SortOrder"}, {&model.ChannelModel{}, "SortOrder"}} {
+		if !tx.Migrator().HasColumn(column.model, column.field) {
+			if err := tx.Migrator().AddColumn(column.model, column.field); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func migrateSchemaV2(tx *gorm.DB) error {
 	return tx.Exec("CREATE INDEX IF NOT EXISTS idx_schema_migrations_applied_at ON schema_migrations (applied_at)").Error
 }

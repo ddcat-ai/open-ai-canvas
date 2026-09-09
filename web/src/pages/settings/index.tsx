@@ -2,7 +2,7 @@ import { App, Button, Input, InputNumber } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { SettingsRow } from "@/components/ui/product/settings-row";
 import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, MonitorUp, RadioTower, SlidersHorizontal, SquareTerminal, Workflow } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
@@ -64,6 +64,11 @@ export default function SettingsPage() {
         .filter((section) => section.key !== "comfyui" || comfyUIPluginEnabled), [comfyUIPluginEnabled, customChannelsEnabled, runningHubPluginEnabled]);
 
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
+
+    useLayoutEffect(() => {
+        document.body.classList.add("app-user-overlays");
+        return () => document.body.classList.remove("app-user-overlays");
+    }, []);
 
     useEffect(() => {
         if (isVisibleConfigSection(requestedSection)) {
@@ -212,7 +217,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <main className="settings-page app-workspace-page flex h-full min-h-0 flex-col text-foreground">
+        <main className="settings-page app-workspace-page app-user-workspace flex h-full min-h-0 flex-col text-foreground">
             <header className="settings-topbar shrink-0">
                 <div className="flex min-w-0 items-center gap-2.5">
                     {shouldPromptContinue ? (

@@ -185,7 +185,7 @@ function validateModules(modules: readonly LocalRuntimeModule[]) {
     const ids = new Set<LocalRuntimeModuleId>();
     const routes = new Set<string>();
     for (const module of modules) {
-        if (module.descriptor.id !== "canvas-agent" && module.descriptor.id !== "dreamina" && module.descriptor.id !== "portrait-clearance") {
+        if (module.descriptor.id !== "canvas-agent" && module.descriptor.id !== "dreamina" && module.descriptor.id !== "portrait-clearance" && module.descriptor.id !== "depth-estimation" && module.descriptor.id !== "lineart-estimation" && module.descriptor.id !== "pose-estimation") {
             throw new Error(`Unsupported Local Runtime module id: ${module.descriptor.id}`);
         }
         if (ids.has(module.descriptor.id)) throw new Error(`Duplicate Local Runtime module id: ${module.descriptor.id}`);

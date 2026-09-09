@@ -178,7 +178,8 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	s.emailCodeMu.Lock()
 	defer s.emailCodeMu.Unlock()
 	if latest, err := s.repo.LatestEmailVerificationCode(email, registrationEmailPurpose); err == nil && time.Since(latest.CreatedAt) < time.Minute {
-		return BadAuthRequest("验证码发送过于频繁，请稍后再试")
+		seconds := max(1, int((time.Until(latest.CreatedAt.Add(time.Minute))+time.Second-1)/time.Second))
+		return &EmailCodeCooldownError{Seconds: seconds}
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}

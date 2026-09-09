@@ -1,7 +1,7 @@
 import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
-import { getNodeAcceptedInputKind, getNodeGenerationMode, getNodeInputKind } from "@/lib/canvas/node-registry";
+import { getNodeAcceptedInputKinds, getNodeGenerationMode, getNodeInputKind, getNodeMaxInputCount } from "@/lib/canvas/node-registry";
 import type { AiConfig } from "@/stores/use-config-store";
-import { type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 type ConnectionCandidate = Pick<CanvasConnection, "fromNodeId" | "toNodeId">;
 type CanvasConnectionPolicyOptions = {
@@ -12,11 +12,27 @@ type CanvasConnectionPolicyOptions = {
 export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[], connections: CanvasConnection[], candidate: ConnectionCandidate, options: CanvasConnectionPolicyOptions = {}) {
     const target = nodes.find((node) => node.id === candidate.toNodeId);
     if (!target) return "找不到连线目标节点";
-    const acceptedInputKind = getNodeAcceptedInputKind(target.type);
-    if (acceptedInputKind) {
+    const acceptedInputKinds = getNodeAcceptedInputKinds(target.type);
+    if (acceptedInputKinds.length) {
         const source = nodes.find((node) => node.id === candidate.fromNodeId);
         const sourceKind = source ? getNodeInputKind(source.type) : undefined;
-        if (sourceKind !== acceptedInputKind) return `${acceptedInputKindLabel(acceptedInputKind)}节点只接受${acceptedInputKindLabel(acceptedInputKind)}输入`;
+        const isMediaConversion = target.type === CanvasNodeType.MediaConversion;
+        const hasAcceptedSource = isMediaConversion
+            ? source?.type === CanvasNodeType.Image || source?.type === CanvasNodeType.Video
+            : Boolean(sourceKind && acceptedInputKinds.includes(sourceKind));
+        if (!sourceKind || !hasAcceptedSource) {
+            const labels = acceptedInputKinds.map(acceptedInputKindLabel).join("或");
+            return `${isMediaConversion ? "转换" : labels}节点只接受${labels}输入`;
+        }
+        const maxInputCount = getNodeMaxInputCount(target.type);
+        if (maxInputCount) {
+            const inputCount = new Set(
+                [...connections, { id: "candidate", ...candidate }]
+                    .filter((connection) => connection.toNodeId === target.id)
+                    .map((connection) => connection.fromNodeId),
+            ).size;
+            if (inputCount > maxInputCount) return `${isMediaConversion ? "转换" : "当前"}节点最多连接 ${maxInputCount} 个输入`;
+        }
     }
     const mode = getNodeGenerationMode(target);
     if (!mode) return "";

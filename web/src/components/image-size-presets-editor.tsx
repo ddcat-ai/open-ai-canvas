@@ -50,8 +50,14 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                 return (
                     <section key={tier} className="image-size-preset-group" aria-labelledby={`${id}-${tier}-title`}>
                         <header className="image-size-preset-heading">
-                            <strong id={`${id}-${tier}-title`}>{tier.toUpperCase()}</strong>
-                            <span>{items.length ? `${items.length} 个比例` : "未启用"}</span>
+                            <div>
+                                <strong id={`${id}-${tier}-title`}>{tier.toUpperCase()}</strong>
+                                <span>{items.length ? `${items.length} 个比例` : "未启用"}</span>
+                            </div>
+                            <div className="image-size-preset-bulk-actions">
+                                <Button type="link" size="small" disabled={disabled || !items.length} onClick={() => update(tier, [])}>全不选</Button>
+                                <Button type="link" size="small" disabled={disabled || items.length === ratios.length} onClick={() => update(tier, ratios)}>全选</Button>
+                            </div>
                         </header>
                         <div className="image-size-preset-body">
                             {!imageTierAvailable(profile, tier) ? <p className="image-size-hint">需先配置此档位对应的质量值，用户端才会开放。</p> : null}

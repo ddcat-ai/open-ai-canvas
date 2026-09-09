@@ -251,7 +251,6 @@ export default function TasksPage() {
                 const [detail, logs] = await Promise.all([queryGenerationTask(task.id), listTaskLogs(task.id)]);
                 setDetailTask(detail);
                 setTaskLogs(logs);
-                if (await syncGenerationTaskToCanvasStore(detail)) message.success("已同步到画布");
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "任务详情加载失败");
             } finally {

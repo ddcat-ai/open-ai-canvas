@@ -64,6 +64,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const [mention, setMention] = useState<MentionState | null>(null);
     const [activeIndex, setActiveIndex] = useState(-1);
     const [nativeDropReferenceId, setNativeDropReferenceId] = useState<string | null>(null);
+    const [previewReference, setPreviewReference] = useState<CanvasResourceReference | null>(null);
     const canvasReferences = useResolvedCanvasResourceReferences(references);
     const rawAssetReferences = useMemo(() => includeAssetLibrary ? buildAssetMentionReferences(assets) : [], [assets, includeAssetLibrary]);
     const assetReferences = useResolvedCanvasResourceReferences(rawAssetReferences);
@@ -102,6 +103,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         const isFocused = document.activeElement === editor;
         const currentValue = serializeEditableValue(editor);
         if (currentValue === value && lastRenderedValueRef.current === value) {
+            syncInlineMentionPreviews(editor, activeReferences);
             pendingSelectionRef.current = null;
             return;
         }
@@ -349,6 +351,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     }}
                     onMouseDown={(event) => props.onMouseDown?.(event as unknown as React.MouseEvent<HTMLTextAreaElement>)}
                     onPointerDown={(event) => props.onPointerDown?.(event as unknown as React.PointerEvent<HTMLTextAreaElement>)}
+                    onDoubleClick={(event) => {
+                        const chip = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-mention-reference-id]") : null;
+                        const reference = chip ? availableReferences.find((item) => item.id === chip.dataset.mentionReferenceId) : undefined;
+                        if (!reference || !referencePreviewUrl(reference)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setPreviewReference(reference);
+                    }}
                     onPointerUp={(event) => {
                         syncEditableMentionFromSelection();
                         props.onPointerUp?.(event as unknown as React.PointerEvent<HTMLTextAreaElement>);
@@ -371,6 +381,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 >
                 </div>
                 {menu}
+                {previewReference ? <InlineReferencePreview reference={previewReference} onClose={() => setPreviewReference(null)} /> : null}
             </div>
         );
     }
@@ -464,6 +475,7 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     chip.dataset.mentionToken = token;
     chip.dataset.mentionReferenceId = reference.id;
     chip.className = "canvas-resource-inline-mention";
+    chip.title = "双击放大预览";
 
     const at = document.createElement("span");
     at.className = "canvas-resource-inline-at";
@@ -478,6 +490,24 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     chip.appendChild(label);
 
     return chip;
+}
+
+function referencePreviewUrl(reference: CanvasResourceReference) {
+    return reference.previewUrl || (reference.kind === "video" ? reference.mediaUrl : "") || "";
+}
+
+function InlineReferencePreview({ reference, onClose }: { reference: CanvasResourceReference; onClose: () => void }) {
+    const url = referencePreviewUrl(reference);
+    if (!url) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={`预览${reference.label}`} onClick={onClose}>
+            <div className="relative max-h-[92vh] max-w-[92vw]" onClick={(event) => event.stopPropagation()}>
+                <img src={url} alt={reference.label} className="max-h-[88vh] max-w-[88vw] rounded-xl object-contain shadow-2xl" />
+                <button type="button" className="absolute -right-3 -top-3 rounded-full bg-black/75 p-2 text-white shadow-lg" onClick={onClose} aria-label="关闭图片预览">×</button>
+            </div>
+        </div>,
+        document.body,
+    );
 }
 
 function createInlinePreview(reference: CanvasResourceReference) {
@@ -503,6 +533,26 @@ function createInlinePreview(reference: CanvasResourceReference) {
     fallback.className = "canvas-resource-inline-preview is-fallback";
     fallback.textContent = reference.sourceType === CanvasNodeType.Drawing ? "✎" : reference.kind === "audio" ? "♪" : reference.kind === "video" ? "▶" : reference.kind === "image" ? "□" : reference.kind === "skill" ? "✦" : "";
     return fallback;
+}
+
+/** Resource URLs resolve independently of prompt text; keep chips fresh without replacing the editable selection. */
+function syncInlineMentionPreviews(editor: HTMLElement, references: CanvasResourceReference[]) {
+    const byId = new Map(references.map((reference) => [reference.id, reference]));
+    editor.querySelectorAll<HTMLElement>("[data-mention-reference-id]").forEach((chip) => {
+        const reference = byId.get(chip.dataset.mentionReferenceId || "");
+        if (!reference) return;
+        const preview = chip.querySelector(".canvas-resource-inline-preview");
+        const hasImage = ["image", "video", "character"].includes(reference.kind) && Boolean(reference.previewUrl);
+        const hasVideo = !hasImage && reference.kind === "video" && Boolean(reference.mediaUrl);
+        const tag = hasImage ? "IMG" : hasVideo ? "VIDEO" : "SPAN";
+        const className = `canvas-resource-inline-preview is-${hasImage || hasVideo ? reference.kind : "fallback"}`;
+        const src = hasImage ? reference.previewUrl : hasVideo ? reference.mediaUrl : null;
+        if (preview && (preview.tagName !== tag || preview.className !== className || preview.getAttribute("src") !== src)) {
+            preview.replaceWith(createInlinePreview(reference));
+        }
+        const label = chip.querySelector(".canvas-resource-inline-label");
+        if (label && label.textContent !== reference.label) label.textContent = reference.label;
+    });
 }
 
 function MentionMenu({ anchor, connectedReferences, assetReferences, filteredReferences, query, cursorOffset, activeReferenceId, preferredWidth, onQueryChange, onClose, onSelect }: {

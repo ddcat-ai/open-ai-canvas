@@ -351,6 +351,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const files = state.attachments;
             addMessage({ role: "user", text: payload.text || "发送了图片", attachments: files });
             addEventLog("用户发送", { text: payload.text, attachments: files.map(({ name, type, size }) => ({ name, type, size })) });
+            // 保留附件的 data URL 供已发送消息持续显示和放大预览；仅释放 composer 的临时 object URL。
             files.forEach((item) => {
                 URL.revokeObjectURL(item.url);
                 attachmentUrlsRef.current.delete(item.url);

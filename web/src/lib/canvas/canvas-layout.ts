@@ -141,6 +141,66 @@ export function layoutCanvasAuto(nodes: CanvasNodeData[], connections: CanvasCon
     return hasConnections ? layoutCanvasFlow(candidates, connections) : layoutCanvasNodesByMediaType(candidates);
 }
 
+export const CANVAS_SPREAD_SCALE = 1.4;
+export const CANVAS_SPREAD_MIN_GAP = 56;
+
+/**
+ * 保持选区里节点的相对占位，只把彼此间距拉开。
+ * 先按选区左上角等比展开，再把仍然过近的盒子沿原有主方向推开，最后把整组钉回原来的左上角。
+ */
+export function spreadCanvasNodes(nodes: CanvasNodeData[], options?: { scale?: number; minGap?: number }) {
+    const result = new Map<string, Position>();
+    if (nodes.length < 2) return result;
+
+    const scale = options?.scale ?? CANVAS_SPREAD_SCALE;
+    const minGap = options?.minGap ?? CANVAS_SPREAD_MIN_GAP;
+    const originX = Math.min(...nodes.map((node) => node.position.x));
+    const originY = Math.min(...nodes.map((node) => node.position.y));
+    const items = nodes.map((node) => ({
+        id: node.id,
+        width: node.width,
+        height: node.height,
+        x: originX + (node.position.x - originX) * scale,
+        y: originY + (node.position.y - originY) * scale,
+    }));
+
+    for (let pass = 0; pass < 12; pass++) {
+        let moved = false;
+        for (let i = 0; i < items.length; i++) {
+            for (let j = i + 1; j < items.length; j++) {
+                const first = items[i]!;
+                const second = items[j]!;
+                const overlapX = Math.min(first.x + first.width + minGap, second.x + second.width + minGap) - Math.max(first.x, second.x);
+                const overlapY = Math.min(first.y + first.height + minGap, second.y + second.height + minGap) - Math.max(first.y, second.y);
+                if (overlapX <= 0 || overlapY <= 0) continue;
+
+                const centerDx = first.x + first.width / 2 - (second.x + second.width / 2);
+                const centerDy = first.y + first.height / 2 - (second.y + second.height / 2);
+                if (Math.abs(centerDx) >= Math.abs(centerDy)) {
+                    const direction = centerDx === 0 ? (first.id < second.id ? 1 : -1) : centerDx > 0 ? 1 : -1;
+                    const push = overlapX / 2;
+                    first.x += direction * push;
+                    second.x -= direction * push;
+                } else {
+                    const direction = centerDy === 0 ? (first.id < second.id ? 1 : -1) : centerDy > 0 ? 1 : -1;
+                    const push = overlapY / 2;
+                    first.y += direction * push;
+                    second.y -= direction * push;
+                }
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+
+    const nextOriginX = Math.min(...items.map((item) => item.x));
+    const nextOriginY = Math.min(...items.map((item) => item.y));
+    const deltaX = originX - nextOriginX;
+    const deltaY = originY - nextOriginY;
+    items.forEach((item) => result.set(item.id, { x: item.x + deltaX, y: item.y + deltaY }));
+    return result;
+}
+
 export function canvasLayoutLane(node: CanvasNodeData): CanvasLayoutLane {
     if (node.type === CanvasNodeType.Video) return "video";
     if (node.type === CanvasNodeType.Audio) return "audio";

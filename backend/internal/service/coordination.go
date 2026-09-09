@@ -67,6 +67,8 @@ type runtimeCoordinator struct {
 }
 
 var fixedWindowScript = redis.NewScript(`
+local existing = tonumber(redis.call('GET', KEYS[1]) or '0')
+if existing >= tonumber(ARGV[2]) then return existing + 1 end
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
 return count
@@ -108,7 +110,7 @@ func newRuntimeCoordinator(dialect string) (*runtimeCoordinator, error) {
 
 func (c *runtimeCoordinator) allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	if c.redis != nil {
-		count, err := fixedWindowScript.Run(ctx, c.redis, []string{"canvas:rate:" + key}, window.Milliseconds()).Int64()
+		count, err := fixedWindowScript.Run(ctx, c.redis, []string{"canvas:rate:" + key}, window.Milliseconds(), limit).Int64()
 		return count <= int64(limit), err
 	}
 	c.localMu.Lock()
@@ -420,6 +422,26 @@ func (s *Service) AllowRequest(ctx context.Context, key string, limit int, windo
 		return false, errors.New("运行时协调器未初始化")
 	}
 	return s.coordinator.allow(ctx, key, limit, window)
+}
+
+func (s *Service) RequestRetryAfter(ctx context.Context, key string, window time.Duration) time.Duration {
+	c := s.coordinator
+	if c == nil {
+		return window
+	}
+	if c.redis != nil {
+		ttl, err := c.redis.PTTL(ctx, "canvas:rate:"+key).Result()
+		if err == nil && ttl > 0 {
+			return ttl
+		}
+		return window
+	}
+	c.localMu.Lock()
+	defer c.localMu.Unlock()
+	if entry, ok := c.localRate[key]; ok {
+		return max(time.Second, time.Until(entry.started.Add(window)))
+	}
+	return time.Second
 }
 
 func (s *Service) AcquireCustomRelaySlot(ctx context.Context, userID string, limit int, ttl time.Duration) (func(), bool, error) {

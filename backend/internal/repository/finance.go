@@ -70,7 +70,7 @@ type AdminRedeemCodeRow struct {
 
 func (r *Repository) ChannelModels(channelID string, includeDisabled bool) ([]model.ChannelModel, error) {
 	var items []model.ChannelModel
-	query := r.db.Where("channel_id = ?", channelID).Order("created_at asc")
+	query := r.db.Where("channel_id = ?", channelID).Order("sort_order asc, created_at asc, id asc")
 	if !includeDisabled {
 		query = query.Where("enabled = ?", true)
 	}
@@ -329,7 +329,7 @@ func refreshChannelModelNames(tx *gorm.DB, channelID string, now time.Time) erro
 	var names []string
 	if err := tx.Model(&model.ChannelModel{}).
 		Where("channel_id = ? AND enabled = ?", channelID, true).
-		Order("created_at asc").
+		Order("sort_order asc, created_at asc, id asc").
 		Pluck("model_key", &names).Error; err != nil {
 		return err
 	}

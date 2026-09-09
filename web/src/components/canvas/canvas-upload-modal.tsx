@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { App, Button, Modal, Upload, type UploadFile } from "antd";
-import { FileImage, Film, Music2, UploadCloud, X } from "lucide-react";
+import { FileImage, FileText, Film, Music2, UploadCloud, X } from "lucide-react";
 
 import { isAudioFile } from "@/lib/canvas/canvas-project-generation";
 
-const CANVAS_UPLOAD_ACCEPT = "image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav";
+import { CANVAS_UPLOAD_ACCEPT, isTextUploadFile, uploadNodeType } from "@/lib/canvas/canvas-file-upload";
 
 type CanvasUploadModalProps = {
     open: boolean;
@@ -29,7 +29,9 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
         if (!files.length) return;
         setUploading(true);
         try {
-            if (await onUpload(files)) onClose();
+            const pendingUpload = onUpload(files);
+            onClose();
+            await pendingUpload;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "文件上传失败，请稍后重试");
         } finally {
@@ -54,7 +56,7 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                 <header className="flex h-14 shrink-0 items-center justify-between border-b border-border py-0 pl-5 pr-12">
                     <div className="min-w-0">
                         <div role="heading" aria-level={2} className="text-sm font-semibold leading-5">上传文件</div>
-                        <div className="mt-0.5 text-[var(--fs-label)] leading-4 text-foreground/45">批量导入图片、视频和音频到当前画布</div>
+                        <div className="mt-0.5 text-[var(--fs-label)] leading-4 text-foreground/45">批量导入图片、视频、音频和文本到当前画布</div>
                     </div>
                     <span className="shrink-0 text-[var(--fs-label)] text-foreground/45">已选 {fileList.length} 项</span>
                 </header>
@@ -67,7 +69,7 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                         fileList={fileList}
                         beforeUpload={(file) => {
                             if (isCanvasUploadFile(file)) return false;
-                            message.warning(`“${file.name}”不是支持的图片、视频或音频文件`);
+                            message.warning(`“${file.name}”不是支持的图片、视频、音频或 TXT / Markdown 文件`);
                             return Upload.LIST_IGNORE;
                         }}
                         onChange={({ fileList: nextFileList }) => setFileList(nextFileList)}
@@ -86,7 +88,8 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                             <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[var(--fs-label)] text-foreground/45" aria-label="支持的文件类型">
                                 <span className="inline-flex items-center gap-1"><FileImage className="size-3.5" aria-hidden="true" />图片</span>
                                 <span className="inline-flex items-center gap-1"><Film className="size-3.5" aria-hidden="true" />视频</span>
-                                <span className="inline-flex items-center gap-1"><Music2 className="size-3.5" aria-hidden="true" />MP3 / WAV</span>
+                                <span className="inline-flex items-center gap-1"><Music2 className="size-3.5" aria-hidden="true" />音频</span>
+                                <span className="inline-flex items-center gap-1"><FileText className="size-3.5" aria-hidden="true" />TXT / Markdown</span>
                             </div>
                         </div>
                     </Upload.Dragger>
@@ -148,11 +151,11 @@ function CanvasUploadFilePreview({ file }: { file: UploadFile }) {
     }
     return (
         <div className="grid size-full place-items-center text-foreground/45">
-            {source && isAudioFile(source) ? <Music2 className="size-7" aria-hidden="true" /> : <FileImage className="size-7" aria-hidden="true" />}
+            {source && isTextUploadFile(source) ? <FileText className="size-7" aria-hidden="true" /> : source && (source.type.startsWith("audio/") || isAudioFile(source)) ? <Music2 className="size-7" aria-hidden="true" /> : <FileImage className="size-7" aria-hidden="true" />}
         </div>
     );
 }
 
 function isCanvasUploadFile(file: File) {
-    return file.type.startsWith("image/") || file.type.startsWith("video/") || isAudioFile(file);
+    return Boolean(uploadNodeType(file));
 }

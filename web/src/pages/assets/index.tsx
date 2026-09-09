@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Drawer, Dropdown, Form, Input, Modal, Popconfirm, Progress, Select, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
-import { IconButton } from "@/components/ui/base/buttons";
 import { useNavigate } from "react-router";
 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
@@ -551,7 +550,7 @@ export default function AssetsPage() {
                                         </>
                                     ) : (
                                         <>
-                                            <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>
+                                            <Button icon={<Plus className="size-3.5" />} onClick={openCreate}>
                                                 新增素材
                                             </Button>
                                             <Button icon={<Images className="size-3.5" />} onClick={() => setBatchUploadOpen(true)}>
@@ -560,7 +559,7 @@ export default function AssetsPage() {
                                             <Button icon={<FolderOpen className="size-3.5" />} onClick={() => navigate("/plugins/eagle")}>
                                                 Eagle 素材库
                                             </Button>
-                                            <IconButton variant="solid" icon={Download} aria-label="导出全部素材" title="导出全部素材" onClick={() => void exportAllAssets()} />
+                                            <Button aria-label="导出全部素材" title="导出全部素材" icon={<Download className="size-3.5" />} onClick={() => void exportAllAssets()} />
                                             <Dropdown
                                                 trigger={["click"]}
                                                 menu={{
@@ -570,7 +569,7 @@ export default function AssetsPage() {
                                                     ],
                                                 }}
                                             >
-                                                <IconButton variant="solid" icon={FileUp} aria-label="导入素材" title="导入素材" />
+                                                <Button aria-label="导入素材" title="导入素材" icon={<FileUp className="size-3.5" />} />
                                             </Dropdown>
                                         </>
                                     )}

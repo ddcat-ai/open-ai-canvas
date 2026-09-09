@@ -11,7 +11,14 @@ import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 import { onlineToolToOps } from "../src/components/canvas/canvas-assistant-panel";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "../src/lib/generation-task-display";
 import { generationErrorMessage } from "../src/lib/generation-error";
-import { generationTaskNodeId } from "../src/lib/canvas/canvas-generation-task-sync";
+import { generationTaskNodeId, syncGenerationTaskToCanvasStore } from "../src/lib/canvas/canvas-generation-task-sync";
+
+test("业务项目任务和无节点任务不会读取画布项目", async () => {
+    const task = { id: "chapter-task", type: "canvas_text", status: "succeeded", projectId: "domain-project", clientContext: { domainProjectId: "domain-project", nodeId: "chapter_character_breakdown:chapter" } } as GenerationTask;
+    expect(await syncGenerationTaskToCanvasStore(task)).toBe(false);
+    expect(await syncGenerationTaskToCanvasStore({ ...task, clientContext: undefined, inputJson: JSON.stringify({ metadata: { domainProjectId: "domain-project", nodeId: "chapter-node" } }) })).toBe(false);
+    expect(await syncGenerationTaskToCanvasStore({ ...task, clientContext: undefined })).toBe(false);
+});
 
 test("canvas recovery reads node identity from task summaries without full task input", () => {
     const task: GenerationTask = { id: "task-summary", type: "canvas_image", status: "running", prompt: "", attempts: 1, createdAt: "", updatedAt: "", clientContext: { nodeId: "node-summary" } };

@@ -152,8 +152,10 @@ func enforceRateLimit(c *gin.Context, key string, limit int, window time.Duratio
 	if allowed {
 		return true
 	}
-	c.Header("Retry-After", "60")
-	fail(c, http.StatusTooManyRequests, errors.New("请求过于频繁，请稍后再试"))
+	wait := runtimeService.RequestRetryAfter(c.Request.Context(), key, window)
+	seconds := max(1, int((wait+time.Second-1)/time.Second))
+	c.Header("Retry-After", strconv.Itoa(seconds))
+	fail(c, http.StatusTooManyRequests, fmt.Errorf("请求次数已达上限，请在 %d 秒后重试", seconds))
 	return false
 }
 

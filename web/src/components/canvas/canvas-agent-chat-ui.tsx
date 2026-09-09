@@ -1,9 +1,9 @@
 import { Button } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
+import { ArrowUp, AtSign, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, RotateCcw, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
@@ -318,7 +318,10 @@ export function AgentChatComposer({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
+    const [previewAttachment, setPreviewAttachment] = useState<CanvasAgentChatAttachment | null>(null);
     const availableSlashSkills = slashSkills ?? [];
+    const attachmentReferences = useMemo(() => agentAttachmentReferences(attachments), [attachments]);
+    const composerReferences = useMemo(() => [...references, ...attachmentReferences], [attachmentReferences, references]);
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(availableSlashSkills.length - 1, 0));
@@ -377,6 +380,12 @@ export function AgentChatComposer({
         void onAddFiles(images);
     };
 
+    const insertAttachmentMention = (item: CanvasAgentChatAttachment) => {
+        const token = `@[attachment:${item.id}] `;
+        if (prompt.includes(`@[attachment:${item.id}]`)) return;
+        onPromptChange(prompt ? `${prompt.replace(/\s+$/u, "")} ${token}` : token);
+    };
+
     return (
         <div className="px-3 pb-3 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
             <div
@@ -390,20 +399,40 @@ export function AgentChatComposer({
                 {sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
-                        {attachments.map((item) => (
-                            <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-md" title={item.name}>
-                                <img src={item.url} alt={item.name} className="size-full object-cover" />
-                                {onRemoveAttachment ? (
+                        {attachments.map((item, index) => (
+                            <div key={item.id} className="group relative w-20 shrink-0">
+                                <button
+                                    type="button"
+                                    className="relative block size-20 overflow-hidden rounded-lg"
+                                    title="点击放大预览"
+                                    aria-label={`预览 ${item.name || `图片${index + 1}`}`}
+                                    onClick={() => setPreviewAttachment(item)}
+                                    onDoubleClick={() => setPreviewAttachment(item)}
+                                >
+                                    <img src={item.url} alt={item.name} className="size-full object-cover" />
+                                </button>
+                                <div className="mt-1 flex min-w-0 items-center justify-between gap-1">
                                     <button
                                         type="button"
-                                        className="absolute right-1 top-1 grid size-5 place-items-center rounded-full opacity-0 shadow-sm transition group-hover:opacity-100"
-                                        style={{ background: theme.toolbar.panel, color: theme.node.text }}
-                                        onClick={() => onRemoveAttachment(item.id)}
-                                        aria-label="移除图片"
+                                        className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100"
+                                        title={`插入 @图片${index + 1}`}
+                                        onClick={() => insertAttachmentMention(item)}
                                     >
-                                        <X className="size-3" />
+                                        <AtSign className="size-2.5 shrink-0" />
+                                        <span className="truncate">图片{index + 1}</span>
                                     </button>
-                                ) : null}
+                                    {onRemoveAttachment ? (
+                                        <button
+                                            type="button"
+                                            className="grid size-4 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
+                                            style={{ background: theme.toolbar.panel, color: theme.node.text }}
+                                            onClick={() => onRemoveAttachment(item.id)}
+                                            aria-label="移除图片"
+                                        >
+                                            <X className="size-3" />
+                                        </button>
+                                    ) : null}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -412,7 +441,7 @@ export function AgentChatComposer({
                     <div className="thin-scrollbar max-h-40 min-h-[60px] overflow-y-auto">
                         <CanvasResourceMentionTextarea
                             value={prompt}
-                            references={references}
+                            references={composerReferences}
                             includeAssetLibrary={includeAssetLibrary}
                             sendOnEnter={false}
                             disabled={disabled}
@@ -507,6 +536,7 @@ export function AgentChatComposer({
                     </motion.button>
                 </div>
             </div>
+            {previewAttachment ? <AgentImagePreview attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} /> : null}
         </div>
     );
 }
@@ -576,13 +606,43 @@ function AgentUserAvatar({ user, theme }: { user: LocalUser | null; theme: (type
 }
 
 function AgentMessageAttachments({ attachments }: { attachments: CanvasAgentChatAttachment[] }) {
+    const [preview, setPreview] = useState<CanvasAgentChatAttachment | null>(null);
     return (
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-            {attachments.map((item) => (
-                <img key={item.id} src={item.url} alt={item.name} className="aspect-square w-full rounded-lg object-cover" />
-            ))}
+        <>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {attachments.map((item) => (
+                    <button key={item.id} type="button" className="group relative overflow-hidden rounded-lg" onClick={() => setPreview(item)} onDoubleClick={() => setPreview(item)} aria-label={`查看图片 ${item.name}`}>
+                        <img src={item.url} alt={item.name} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
+                    </button>
+                ))}
+            </div>
+            {preview ? <AgentImagePreview attachment={preview} onClose={() => setPreview(null)} /> : null}
+        </>
+    );
+}
+
+export function AgentImagePreview({ attachment, onClose }: { attachment: CanvasAgentChatAttachment; onClose: () => void }) {
+    return (
+        <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={attachment.name} onClick={onClose}>
+            <img src={attachment.url} alt={attachment.name} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            <button type="button" className="absolute right-5 top-5 rounded-full bg-black/60 p-2 text-white" onClick={onClose} aria-label="关闭图片预览">
+                <X className="size-5" />
+            </button>
         </div>
     );
+}
+
+function agentAttachmentReferences(attachments: CanvasAgentChatAttachment[]): CanvasResourceReference[] {
+    return attachments.map((item, index) => ({
+        id: `attachment:${item.id}`,
+        nodeId: "",
+        kind: "image",
+        label: `图片${index + 1}`,
+        title: item.name || `图片${index + 1}`,
+        previewUrl: item.url,
+        active: true,
+        mentionToken: `@[attachment:${item.id}]`,
+    }));
 }
 
 function toolCardState(title: string, text: string, detail?: unknown) {

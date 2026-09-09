@@ -20,7 +20,6 @@ export type CanvasUploadStatus = {
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploadStatus; theme: CanvasTheme }) {
-    const progress = Math.round((Math.min(status.step, status.total) / Math.max(status.total, 1)) * 100);
     const accent = status.error ? theme.accent.danger : status.done ? "#22c55e" : theme.node.activeStroke;
     return (
         <motion.div
@@ -67,7 +66,7 @@ export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploa
                     />
                 ))}
             </div>
-            <span className="sr-only">{progress}%</span>
+            <span className="sr-only">处理步骤 {status.step}/{status.total}</span>
         </motion.div>
     );
 }

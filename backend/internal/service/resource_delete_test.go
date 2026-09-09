@@ -351,6 +351,35 @@ func TestDetachedResourceCleanupRemovesOrphanAndKeepsAssetBackedResource(t *test
 	}
 }
 
+func TestDetachedResourceCleanupKeepsAppearanceAssets(t *testing.T) {
+	for _, setting := range []string{
+		`{"logoResourceId":"logo","darkLogoResourceId":"dark","authVideoResourceId":"video","authVideoPosterResourceId":"poster"}`,
+		`{invalid`,
+	} {
+		svc, db, _ := newResourceDeletionTestService(t)
+		if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: setting}).Error; err != nil {
+			t.Fatal(err)
+		}
+		var resources []model.Resource
+		for _, id := range []string{"logo", "dark", "video", "poster"} {
+			resource := model.Resource{ID: id, UserID: "admin", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: id, CreatedAt: time.Now().Add(-48 * time.Hour)}
+			if err := db.Create(&resource).Error; err != nil {
+				t.Fatal(err)
+			}
+			resources = append(resources, resource)
+		}
+		if err := svc.cleanupDetachedUserResources("admin", resources); err != nil {
+			t.Fatal(err)
+		}
+		var count, jobs int64
+		db.Model(&model.Resource{}).Count(&count)
+		db.Model(&model.ResourceDeletionJob{}).Count(&jobs)
+		if count != 4 || jobs != 0 {
+			t.Fatalf("appearance cleanup: resources=%d jobs=%d", count, jobs)
+		}
+	}
+}
+
 func TestResourceCleanupCandidatesUseStatusSpecificRetention(t *testing.T) {
 	_, db, _ := newResourceDeletionTestService(t)
 	now := time.Now()

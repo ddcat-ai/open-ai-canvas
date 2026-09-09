@@ -166,6 +166,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
             <AssetLibraryPickerModal
                 open={coverPickerOpen}
                 items={coverPickerItems}
+                mediaKinds={["image"]}
                 categoryLabels={{ all: "全部图片", image: "图片" }}
                 initialCategory="image"
                 initialSelectedIds={currentCoverItemId ? [currentCoverItemId] : []}
