@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,32 @@ func newMCPHandlerTest(t *testing.T) (*gin.Engine, *service.Service, *model.User
 	r := gin.New()
 	svc := service.New(repository.New(db), t.TempDir())
 	RegisterMCPAuthRoutes(r.Group("/api"), svc)
+	RegisterMCPCanvasRoutes(r.Group("/api"), svc)
 	return r, svc, user, session.ID + "." + raw
+}
+
+func TestMCPCanvasRoutesRejectMalformedBearer(t *testing.T) {
+	r, _, _, _ := newMCPHandlerTest(t)
+	paths := []string{
+		"/api/mcp/projects",
+		"/api/mcp/projects/canvas-1",
+		"/api/mcp/projects/canvas-1/tools/validate",
+		"/api/mcp/projects/canvas-1/tools/apply",
+		"/api/mcp/projects/canvas-1/tools/generate",
+	}
+	for _, path := range paths {
+		method := http.MethodGet
+		if strings.Contains(path, "/tools/") {
+			method = http.MethodPost
+		}
+		req := httptest.NewRequest(method, path, bytes.NewBufferString(`{}`))
+		req.Header.Set("Authorization", "Bearer malformed")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("path %s status = %d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
 }
 
 func TestMCPHandlerApprovalIsCookieBoundAndEnvelopeHasHTTPStatus(t *testing.T) {
