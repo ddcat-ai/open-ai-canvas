@@ -1,4 +1,4 @@
-import { Tag } from "antd";
+import { StatusBadge } from "@/components/ui/base/badges";
 import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectUnit } from "@/services/api/projects";
@@ -73,8 +73,8 @@ export function sourceTypeLabel(value: string) {
 }
 
 export function StatusPill({ status }: { status: string }) {
-    const color = status === "completed" || status === "confirmed" || status === "succeeded" ? "success" : status === "failed" ? "error" : status === "running" || status === "active" ? "processing" : status === "review" || status === "pending_confirmation" ? "warning" : "default";
-    return <Tag color={color} className="m-0 !rounded-full !px-2 !text-[var(--fs-label)]">{statusLabel(status)}</Tag>;
+    const tone = status === "completed" || status === "confirmed" || status === "succeeded" ? "success" : status === "failed" ? "error" : status === "running" || status === "active" ? "loading" : status === "review" || status === "pending_confirmation" ? "warning" : "neutral";
+    return <StatusBadge tone={tone} label={statusLabel(status)} className="m-0" />;
 }
 
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {

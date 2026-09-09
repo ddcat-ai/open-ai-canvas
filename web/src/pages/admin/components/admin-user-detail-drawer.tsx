@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Drawer, Empty, Progress, Skeleton, Tabs } from "antd";
+import { App, Button, Descriptions, Drawer, Progress, Skeleton, Tabs } from "antd";
+import { IconButton } from "@/components/ui/base/buttons";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
@@ -97,8 +99,8 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
             rootClassName="admin-drawer"
             extra={onNavigate ? (
                 <div className="flex items-center gap-1">
-                    <Button type="text" size="small" aria-label="上一条用户" disabled={!previousUserId} icon={<ChevronLeft className="size-4" />} onClick={() => previousUserId && onNavigate(previousUserId)} />
-                    <Button type="text" size="small" aria-label="下一条用户" disabled={!nextUserId} icon={<ChevronRight className="size-4" />} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                    <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                    <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
                 </div>
             ) : null}
         >
@@ -225,7 +227,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                     ]}
                 />
             ) : (
-                <Empty description="没有用户详情" />
+                <EmptyState size="compact" title="没有用户详情" />
             )}
         </Drawer>
     );

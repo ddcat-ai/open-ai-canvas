@@ -6,6 +6,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Request, RequestHandler, Response } from "express";
 
 import type { LocalRuntimeModule } from "../local-runtime.js";
+import { resolveEnvPath } from "./runtime-env-path.js";
 
 const DEFAULT_MODEL_ID = "lllyasviel/Annotators";
 const DEFAULT_BACKEND = "openpose-body" as const;
@@ -108,12 +109,12 @@ export function resolvePoseRuntimePaths(env: NodeJS.ProcessEnv = process.env): P
     const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
     const configuredProjectRoot = env.CANVAS_PROJECT_ROOT?.trim();
     const projectRoots = [
-        configuredProjectRoot ? path.resolve(configuredProjectRoot) : undefined,
+        configuredProjectRoot ? resolveEnvPath(configuredProjectRoot) : undefined,
         path.resolve(moduleRoot, ".."),
         path.resolve(process.cwd()),
     ].filter((value): value is string => Boolean(value));
     const projectRoot = configuredProjectRoot
-        ? path.resolve(configuredProjectRoot)
+        ? resolveEnvPath(configuredProjectRoot)
         : projectRoots.find((value) => fs.existsSync(path.join(value, ".local"))) || projectRoots[0]!;
     const scriptCandidates = [
         path.join(moduleRoot, "python", "pose_runtime.py"),
@@ -121,12 +122,12 @@ export function resolvePoseRuntimePaths(env: NodeJS.ProcessEnv = process.env): P
     ];
     const scriptPath = scriptCandidates.find((value) => fs.existsSync(value)) || scriptCandidates[0]!;
     const pythonCandidates = env.CANVAS_POSE_PYTHON?.trim()
-        ? [path.resolve(env.CANVAS_POSE_PYTHON.trim())]
+        ? [resolveEnvPath(env.CANVAS_POSE_PYTHON)]
         : process.platform === "win32"
             ? [path.join(projectRoot, ".local", "depth-anything-v2", "venv", "Scripts", "python.exe")]
             : [path.join(projectRoot, ".local", "depth-anything-v2", "venv", "bin", "python")];
     const pythonPath = pythonCandidates[0]!;
-    const hfHome = path.resolve(
+    const hfHome = resolveEnvPath(
         env.CANVAS_POSE_HF_HOME?.trim()
         || env.CANVAS_LINEART_HF_HOME?.trim()
         || env.CANVAS_DEPTH_HF_HOME?.trim()
@@ -278,7 +279,7 @@ export class PoseEstimationWorker {
                     || typeof value.modelId !== "string"
                     || value.device !== "cpu"
                     || value.backend !== DEFAULT_BACKEND
-                    || !isPositiveInteger(value.personCount)
+                    || !isNonNegativeInteger(value.personCount)
                     || typeof value.pngBase64 !== "string"
                     || !value.pngBase64) {
                     pending.reject(new PoseRuntimeError("pose_response_invalid", "本机姿态响应无效", 500));
@@ -354,4 +355,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isPositiveInteger(value: unknown): value is number {
     return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }

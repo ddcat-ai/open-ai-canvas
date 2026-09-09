@@ -20,7 +20,23 @@ export type FloatingDockCommand = {
     expands?: boolean;
 };
 
-export type FloatingDockEntry = FloatingDockCommand | { kind: "separator"; id: string };
+export type FloatingDockSwitchOption = {
+    id: string;
+    label: string;
+    icon: ReactNode;
+    value: string;
+};
+
+export type FloatingDockSwitch = {
+    kind: "switch";
+    id: string;
+    label: string;
+    value: string;
+    options: FloatingDockSwitchOption[];
+    onChange: (value: string) => void;
+};
+
+export type FloatingDockEntry = FloatingDockCommand | FloatingDockSwitch | { kind: "separator"; id: string };
 
 type FloatingDockProps = {
     items: FloatingDockEntry[];
@@ -160,6 +176,12 @@ function renderDockItems(items: FloatingDockEntry[], props: DockItemRenderProps)
             result.push(<DockSeparator key={item.id} compact={props.compact} labeled={props.showLabel} />);
             continue;
         }
+        if (item.kind === "switch") {
+            flushDangerGroup();
+            result.push(<DockSwitch key={item.id} entry={item} compact={props.compact} showLabel={props.showLabel} motionEnabled={props.motionEnabled} metrics={props.metrics} />);
+            index += 1;
+            continue;
+        }
         if (item.danger) {
             dangerGroup.push(item);
             index += 1;
@@ -261,6 +283,91 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 </AnimatePresence>
             </motion.button>
         </motion.span>
+    );
+}
+
+function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { entry: FloatingDockSwitch; compact: boolean; showLabel: boolean; motionEnabled: boolean; metrics: DockMetrics }) {
+    const reducedMotion = useReducedMotion();
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [focusedId, setFocusedId] = useState<string | null>(null);
+    const selectedIndex = Math.max(0, entry.options.findIndex((option) => option.value === entry.value));
+    const touch = metrics.base >= 40;
+    const slot = touch ? 32 : compact ? 24 : 26;
+    const gap = touch ? 10 : compact ? 8 : 10;
+    const padX = touch ? 7 : compact ? 6 : 7;
+
+    return (
+        <span
+            role="radiogroup"
+            aria-label={entry.label}
+            className="aceternity-dock-switch relative flex shrink-0 self-end items-center"
+            onKeyDown={(event) => {
+                if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                event.preventDefault();
+                const direction = event.key === "ArrowRight" ? 1 : -1;
+                const next = entry.options[(selectedIndex + direction + entry.options.length) % entry.options.length];
+                if (next) entry.onChange(next.value);
+            }}
+        >
+            <span
+                className="aceternity-dock-switch-track relative inline-flex items-center"
+                style={{ gap, padding: `${touch ? 4 : 3}px ${padX}px` }}
+            >
+                <motion.span
+                    aria-hidden
+                    className="aceternity-dock-switch-thumb pointer-events-none absolute top-1/2 rounded-full"
+                    initial={false}
+                    animate={{ x: selectedIndex * (slot + gap), y: "-50%" }}
+                    transition={reducedMotion || !motionEnabled ? { duration: 0 } : aceternityMotion.spring.dock}
+                    style={{ width: slot, height: slot, left: padX }}
+                />
+                {entry.options.map((option) => {
+                    const checked = option.value === entry.value;
+                    const showTooltip = !showLabel && (hoveredId === option.id || focusedId === option.id);
+                    return (
+                        <span key={option.id} className="relative">
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={checked}
+                                aria-label={option.label}
+                                title={!motionEnabled ? option.label : undefined}
+                                className="aceternity-dock-switch-option relative z-[1] grid place-items-center rounded-full border-0 outline-none"
+                                style={{ width: slot, height: slot }}
+                                onMouseEnter={() => setHoveredId(option.id)}
+                                onMouseLeave={() => setHoveredId((current) => current === option.id ? null : current)}
+                                onFocus={(event) => {
+                                    if (event.currentTarget.matches(":focus-visible")) setFocusedId(option.id);
+                                }}
+                                onBlur={() => setFocusedId((current) => current === option.id ? null : current)}
+                                onMouseDown={() => setFocusedId(null)}
+                                onClick={() => {
+                                    if (!checked) entry.onChange(option.value);
+                                }}
+                            >
+                                <span className={cn("grid place-items-center", touch ? "[&_svg]:size-4" : "[&_svg]:size-[15px]")}>{option.icon}</span>
+                            </button>
+                            <AnimatePresence>
+                                {showTooltip ? (
+                                    <motion.span
+                                        initial={{ opacity: 0, y: 7, scale: 0.94 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 4, scale: 0.96, transition: { duration: 0 } }}
+                                        transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
+                                        className={cn(
+                                            "aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[var(--dock-tooltip-z)] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl",
+                                            compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]",
+                                        )}
+                                    >
+                                        {option.label}
+                                    </motion.span>
+                                ) : null}
+                            </AnimatePresence>
+                        </span>
+                    );
+                })}
+            </span>
+        </span>
     );
 }
 

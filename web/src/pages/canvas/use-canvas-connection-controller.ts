@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
+import { latchCanvasConnectionApproach, type CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 
 import type { PendingConnectionCreate } from "@/components/canvas/canvas-workspace-overlays";
 import { getNodeSpec } from "@/constant/canvas";
@@ -86,6 +87,7 @@ export function useCanvasConnectionController({
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
+    const [connectionApproach, setConnectionApproach] = useState<CanvasConnectionApproach>(null);
     const [connectionTargetAnchorRatio, setConnectionTargetAnchorRatio] = useState<number | undefined>();
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
     const [batchConnectionPreview, setBatchConnectionPreview] = useState<CanvasBatchConnectionPreview | null>(null);
@@ -108,6 +110,7 @@ export function useCanvasConnectionController({
     const updateBatchConnectionPreview = useCallback((next: CanvasBatchConnectionPreview | null) => {
         batchConnectionPreviewRef.current = next;
         setBatchConnectionPreview(next);
+        setConnectionApproach((previous) => latchCanvasConnectionApproach(previous, next && next.status !== "invalid" ? next.targetNodeId : null, next?.mouseWorld || { x: 0, y: 0 }));
     }, []);
 
     const clearBatchConnection = useCallback(() => {
@@ -120,6 +123,7 @@ export function useCanvasConnectionController({
         connectingParamsRef.current = next;
         setConnectingParams(next);
         if (!next) {
+            setConnectionApproach(null);
             connectingPointerIdRef.current = null;
             connectingPointerStartRef.current = null;
             setConnectionTargetNodeId(null);
@@ -603,9 +607,11 @@ export function useCanvasConnectionController({
             const current = connectingParamsRef.current;
             if (!current || connectingPointerIdRef.current !== event.pointerId || pendingConnectionCreateRef.current) return;
             const dropTarget = getConnectionDropTarget(event.clientX, event.clientY, current);
+            const point = screenToCanvas(event.clientX, event.clientY);
+            setConnectionApproach((previous) => latchCanvasConnectionApproach(previous, dropTarget.nodeId, point));
             setConnectionTargetNodeId(dropTarget.nodeId);
             setConnectionTargetAnchorRatio(dropTarget.anchorRatio);
-            setMouseWorld(screenToCanvas(event.clientX, event.clientY));
+            setMouseWorld(point);
         };
         const handlePointerMove = (event: PointerEvent) => {
             // Pointer events can arrive faster than the canvas can paint. Keep
@@ -684,6 +690,7 @@ export function useCanvasConnectionController({
         cancelPendingConnectionCreate,
         closeConnectionCreateMenu,
         connectionTargetNodeId,
+        connectionApproach,
         connectionTargetAnchorRatio,
         connectingParams,
         createConnectedNode,

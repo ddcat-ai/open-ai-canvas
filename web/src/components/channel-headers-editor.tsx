@@ -1,4 +1,6 @@
-import { Button, Input, Tooltip } from "antd";
+import { Button, Input } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
+
 import { Plus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 

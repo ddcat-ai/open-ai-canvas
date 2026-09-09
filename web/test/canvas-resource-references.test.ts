@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes } from "../src/lib/canvas/canvas-resource-references";
+import { applyCanvasConnectionPromptSync, buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes, imageGenerationReferenceConnections } from "../src/lib/canvas/canvas-resource-references";
 import { canvasNodeToAsset } from "../src/lib/canvas/canvas-node-asset";
 import { buildNodeGenerationInputs } from "../src/components/canvas/canvas-node-generation";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
@@ -190,7 +190,8 @@ describe("canvas resource mention slots", () => {
 
         expect(references.get(target.id)?.map((reference) => reference.nodeId)).toEqual([audio.id]);
         expect(references.get(config.id)?.map((reference) => reference.nodeId)).toEqual([target.id, audio.id]);
-        expect(references.get(image.id)?.map((reference) => reference.nodeId)).toEqual([image.id]);
+        expect(references.get(image.id)?.map((reference) => reference.nodeId)).toEqual([]);
+        expect(buildNodeMentionReferences(image, nodes, connections)).toEqual([]);
     });
 
     test("素材库身份 token 保持稳定", () => {
@@ -203,5 +204,72 @@ describe("canvas resource mention slots", () => {
             title: "场景图",
             active: false,
         })).toBe("@[asset:asset-a]");
+    });
+});
+
+describe("remove canvas resource mention tokens", () => {
+    test("断开首图时同步紧邻中文、连续引用及两位数编号", () => {
+        const images = Array.from({ length: 10 }, (_, index) => imageNode(`image-${index}`));
+        const target = {
+            ...videoNode("target"),
+            metadata: { composerContent: "@图片1@图片2的人物参考@图片10，@[node:image-1]保持一致" },
+        };
+        const nodes = [...images, target];
+        const connections = images.map((image) => connection(image.id, target.id));
+        const result = applyCanvasConnectionPromptSync(nodes, connections, nodes, connections.slice(1));
+        expect(result.find((node) => node.id === target.id)?.metadata?.composerContent)
+            .toBe("@图片1的人物参考@图片9，@图片1保持一致");
+    });
+
+    test("取消引用后会清掉对应的 @图片N", () => {
+        const image = imageNode("image-a");
+        const target = {
+            ...videoNode("target"),
+            metadata: { composerContent: "@图片1 生成角色设定图：保持同一角色身份。" },
+        };
+        const previousConnections = [connection(image.id, target.id)];
+        const [nextTarget] = applyCanvasConnectionPromptSync([image, target], previousConnections, [image, target], []).filter((node) => node.id === target.id);
+
+        expect(nextTarget.metadata?.composerContent).toBe("生成角色设定图：保持同一角色身份。");
+        expect(nextTarget.metadata?.composerContent).not.toContain("@图片1");
+    });
+
+    test("同时存在节点 token 时一并清掉", () => {
+        const image = imageNode("image-a");
+        const target = {
+            ...videoNode("target"),
+            metadata: { composerContent: "让 @图片1 和 @[node:image-a] 一起进入画面" },
+        };
+        const [nextTarget] = applyCanvasConnectionPromptSync([image, target], [connection(image.id, target.id)], [image, target], []).filter((node) => node.id === target.id);
+        expect(nextTarget.metadata?.composerContent).toBe("让 和 一起进入画面");
+        expect(nextTarget.metadata?.composerContent).not.toContain("@图片1");
+        expect(nextTarget.metadata?.composerContent).not.toContain("@[node:image-a]");
+    });
+
+    test("多图时只清被移除的那张，并把剩余引用重新编号", () => {
+        const imageA = imageNode("image-a");
+        const imageB = imageNode("image-b");
+        const target = {
+            ...videoNode("target"),
+            metadata: { composerContent: "比较 @图片1 和 @图片2" },
+        };
+        const previousConnections = [connection(imageA.id, target.id), connection(imageB.id, target.id)];
+        const nextConnections = [connection(imageB.id, target.id)];
+        const [nextTarget] = applyCanvasConnectionPromptSync([imageA, imageB, target], previousConnections, [imageA, imageB, target], nextConnections).filter((node) => node.id === target.id);
+
+        expect(nextTarget.metadata?.composerContent).toBe("比较 和 @图片1");
+    });
+});
+
+describe("image generation reference connections", () => {
+    test("把源节点的参考图连线复制到新结果，避免提示词图片丢失", () => {
+        const imageA = imageNode("image-a");
+        const imageB = imageNode("image-b");
+        const source = textNode("prompt");
+        const nodes = [imageA, imageB, source];
+        const connections = [connection(imageA.id, source.id), connection(imageB.id, source.id)];
+        const copied = imageGenerationReferenceConnections(source.id, "result", nodes, connections, () => "new-id");
+        expect(copied.map((item) => item.fromNodeId)).toEqual(["image-a", "image-b"]);
+        expect(copied.every((item) => item.toNodeId === "result")).toBe(true);
     });
 });

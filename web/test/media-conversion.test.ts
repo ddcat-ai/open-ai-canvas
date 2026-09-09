@@ -57,6 +57,28 @@ describe("本地转换节点注册", () => {
         conversion.metadata.mediaConversion.sourceFingerprint = mediaConversionSourceFingerprint(input);
         expect(findPendingMediaConversionInput(target.id, [input, conversion, target], connections)).toBeNull();
     });
+
+
+    test("完成后的转换结果可作为生成参考图", async () => {
+        const { nodeReferenceImage } = await import("../src/lib/canvas/canvas-project-generation");
+        expect(nodeReferenceImage(node(CanvasNodeType.MediaConversion, "conversion", {
+            storageKey: "image:scope:result",
+            mimeType: "image/png",
+            mediaConversion: {
+                schemaVersion: 1,
+                operation: "grayscale",
+                status: "completed",
+                resultStorageKey: "image:scope:result",
+            },
+        }))).toMatchObject({
+            id: "conversion",
+            storageKey: "image:scope:result",
+            type: "image/png",
+        });
+        expect(nodeReferenceImage(node(CanvasNodeType.MediaConversion, "conversion", {
+            mediaConversion: { schemaVersion: 1, operation: "grayscale", status: "processing" },
+        }))).toBeNull();
+    });
 });
 
 describe("图片本地转换算法", () => {

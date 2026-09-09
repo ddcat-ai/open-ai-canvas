@@ -1,5 +1,7 @@
+import { App, Button, Segmented } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { App, Button, Segmented, Tooltip } from "antd";
+
 import copyToClipboard from "copy-to-clipboard";
 import { CheckCircle2, Copy, ExternalLink, FolderOpen, History, LoaderCircle, PlugZap, Plus, RefreshCw, Terminal, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
@@ -349,6 +351,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const files = state.attachments;
             addMessage({ role: "user", text: payload.text || "发送了图片", attachments: files });
             addEventLog("用户发送", { text: payload.text, attachments: files.map(({ name, type, size }) => ({ name, type, size })) });
+            // 保留附件的 data URL 供已发送消息持续显示和放大预览；仅释放 composer 的临时 object URL。
             files.forEach((item) => {
                 URL.revokeObjectURL(item.url);
                 attachmentUrlsRef.current.delete(item.url);

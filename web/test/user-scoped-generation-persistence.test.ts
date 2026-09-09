@@ -4441,6 +4441,56 @@ test("incremental sessions leave cached entities untouched and fetch only the op
     }
 });
 
+test("a remote asset page normalizes legacy records before they reach the store", async () => {
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousAssets = useAssetStore.getState().assets;
+    const legacy = {
+        id: "legacy-remote-image",
+        kind: "image",
+        title: "镜头01 · 图片",
+        category: "image",
+        coverUrl: "opaque://legacy",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        data: { dataUrl: "opaque://legacy", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
+    };
+    apiClient.defaults.adapter = async (config) => ({
+        data: { code: 0, data: { assets: [legacy], page: 1, pageSize: 40, total: 1, hasMore: false }, msg: "" },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+    });
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const localStorageValues = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: {
+                getItem: (key: string) => localStorageValues.get(key) ?? null,
+                setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                removeItem: (key: string) => localStorageValues.delete(key),
+            },
+        },
+    });
+    try {
+        useAssetStore.setState({ assets: [] });
+        await initializeRemoteUserDataSession("account-legacy");
+        await loadAssetLibraryPage({ page: 1, pageSize: 40 });
+        const stored = useAssetStore.getState().assets.find((asset) => asset.id === legacy.id);
+        expect(stored?.tags).toEqual([]);
+        expect(() => stored?.tags.join(" ")).not.toThrow();
+    } finally {
+        resetRemoteUserDataSync();
+        apiClient.defaults.adapter = previousAdapter;
+        useAssetStore.setState({ assets: previousAssets });
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
 test("an asset page arriving after account switch cannot populate the new account", async () => {
     const previousAdapter = apiClient.defaults.adapter;
     const previousAssets = useAssetStore.getState().assets;

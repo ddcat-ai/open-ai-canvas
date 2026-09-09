@@ -144,7 +144,7 @@ async function boundedText(response: Response, limit: number) {
 }
 
 function parseResult(value: Record<string, unknown>): LocalPoseResult {
-    if (value.mimeType !== "image/png" || !isPositiveInteger(value.width) || !isPositiveInteger(value.height) || typeof value.modelId !== "string" || value.device !== "cpu" || value.backend !== "openpose-body" || !isPositiveInteger(value.personCount) || typeof value.pngBase64 !== "string") {
+    if (value.mimeType !== "image/png" || !isPositiveInteger(value.width) || !isPositiveInteger(value.height) || typeof value.modelId !== "string" || value.device !== "cpu" || value.backend !== "openpose-body" || !isNonNegativeInteger(value.personCount) || typeof value.pngBase64 !== "string") {
         throw new LocalRuntimeClientError("runtime_response_invalid", "本机姿态结果无效");
     }
     const bytes = bytesFromBase64(value.pngBase64, "runtime_response_invalid", "本机姿态结果无效");
@@ -206,4 +206,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isPositiveInteger(value: unknown): value is number {
     return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }

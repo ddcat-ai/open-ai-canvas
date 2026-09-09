@@ -1,4 +1,6 @@
-import { App, Button, Empty, Input, InputNumber, Progress, Select, Switch } from "antd";
+import { App, Button, Input, InputNumber, Progress, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import { FileAudio, FileImage, Film, Grip, Play, RotateCcw, Square, Upload, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
@@ -256,7 +258,7 @@ export function WorkflowTestWorkbench({ provider, workflowId, workflowKind = "wo
                         position={positions.output}
                         onMove={(point) => setPositions((current) => ({ ...current, output: point }))}
                     >
-                        <div className="workflow-test-output">{resultUrls.length ? <ResultPreview capability={capability} urls={resultUrls} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error || stage} />}</div>
+                        <div className="workflow-test-output">{resultUrls.length ? <ResultPreview capability={capability} urls={resultUrls} /> : <EmptyState size="compact" title={error || stage} />}</div>
                         <Progress percent={progress} size="small" status={error ? "exception" : running ? "active" : undefined} showInfo={running || progress > 0} />
                     </WorkflowNode>
                 </div>

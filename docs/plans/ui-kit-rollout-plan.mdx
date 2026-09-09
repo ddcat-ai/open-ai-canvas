@@ -1,0 +1,230 @@
+# Celadon UI 自研组件层实施计划（唯一方案）
+
+状态：已接受（2026-09-05）。关联：决策记录 [ADR-0008](../adr/0008-ui-component-layer-antd-replacement.md)；组件编写规范 [ui-design-system](./ui-design-system.mdx)。
+
+**视觉数值权威源（AI 消费入口）**：`/Users/zhugeyue/Desktop/project/bigdate/github-source-code/composio-brand-package/`（与 open-ai-canvas 同级的兄弟仓库目录，下称「规范包」）。改造本项目配色/字体/间距时，**数值一律以该规范包为唯一权威源**，消费规则见 §2.4，禁止凭记忆或截图自拟色值/字号/间距。
+
+本方案是本次 UI 治理的**唯一实施计划**，统管两件事：① 把 `web/src/components/ui` 重建为自研组件层（代号 Celadon UI）；② 按功能对等批次替换 AntD，最终脱离 `antd` 依赖。参考对象：**composio-brand-package**（唯一视觉数值权威源，直接采用其配色/字体/间距/圆角体系）+ **dbx**（组织与契约纪律，优秀项保留）+ **BoardUI**（设计深度：语义 token 状态矩阵、复合排版工具、react-aria 无障碍原语、动效纪律、agentic 应用层，弥补 dbx 短板）。
+
+## 1. 目标与非目标
+
+目标：
+- 一套**可继承进项目日常开发**的自研组件层：目录规范、token 义务、变体契约、无障碍与动效纪律齐备，页面只消费 `@/components/ui/*`。
+- AntD 依赖按批次归零；过程中任何时刻不出现"同一控件两套观感并存"。
+- 组件观感以规范包（composio 视觉：近黑底 + 电蓝主色 + Inter/等宽字体）为唯一数值基准，迁移期内与 AntD 皮肤同源过渡（同一套三层 token），无裸值。
+
+非目标：
+- 不照搬 dbx/BoardUI 参考代码（dbx 是 Vue，BoardUI 是独立设计系统）；只吸收“形态与规范”。规范包**只取其数值与视觉体系，不取代码**（其为独立 CSS 变量集，落地时翻译进本项目三层 token）。
+- 本轮（B1 周期）不启动 Table/DatePicker/Tree/Upload 等重型自研；它们进入 B5 专项评审。
+- 不引入 Radix、不重建样式基座、不新增全局 barrel、不为旧组件加兼容层。
+
+## 2. 参考吸收对照（决策依据）
+
+### 2.1 dbx（`apps/desktop/src/components/ui`，shadcn-vue/reka-nova 风格）——优秀项保留
+
+| dbx 特征 | 处置 |
+| --- | --- |
+| 目录即组件族 + `index.ts` barrel 集中导出 variants | ✅ 保留（见 §5 目录规范） |
+| cva variants 作为公共 API 契约（props 即变体） | ✅ 保留（本项目已用 cva ^0.7） |
+| 紧凑桌面密度档位（h-6…h-9、icon-xs/sm/lg） | ✅ 保留，映射到既有 `--space-*`/`--r-*` token |
+| 复合模式件下沉（ErrorBanner/LightTooltip 等思路） | ✅ 保留为"模式件"职责（Callout/TextTooltip 等） |
+| 语义状态色扩展 + 自定义 radius 命名 | ✅ 保留，本项目 globals.css 已有等价 `--palette-status-*`/`--r-*` |
+
+### 2.2 dbx 不足处 —— 用 BoardUI 丰富
+
+| dbx 短板 | BoardUI 做法 | 采纳 |
+| --- | --- | --- |
+| 目录处于半迁移状态（19 个组件目录旁仍散落 8 个顶层扁平 `.vue`/`.ts` 遗留件） | 顶层三分类 `base / application / foundations`，全组件进分类 | ✅ 本方案 §4 采用"base 原语 / product 模式件 / application 产品块"分层 |
+| token 粒度粗：单角色色值，交互态（hover/active/disabled）分散在组件里 | 语义 token 状态矩阵：`foreground/text/background/border × default/hover/active/disabled`，明暗只翻 token 不翻 class | ✅ §6.1 语义状态矩阵扩展 |
+| 无统一排版梯度，组件内散落 `text-[13px]` 式裸字号 | `typography.css` 把整套 Figma 字号梯度注册为复合工具类 `text-body-medium`、`text-title-1-semibold`…（经 tailwind-merge 扩展识别） | ✅ §6.2 复合排版工具类 |
+| 无系统级换肤 | `@theme` 声明 accent ramp，运行时整体 re-tint；chart/status 各自 hue-lock | ✅ §6.3 accent/chart/status 分组 |
+| Vue + reka-ui，无 AntD 语境 | React Aria（`react-aria-components`）作表单/浮层原语，键盘/焦点/ARIA 开箱即得 | ✅ §7 原语策略：复杂控件替换以 RAC 为地基 |
+| 图标由调用方传任意尺寸 class | Icon 以**组件引用**传入，尺寸/颜色由宿主组件用 token 决定（`@remixicon/react`） | ✅ §8 图标契约（本项目沿用 lucide-react） |
+| 动效无统一纪律 | `button-press-motion` 等工具类 + `::before` 渐变悬停交叉淡化 + `prefers-reduced-motion` | ✅ §9 动效纪律（本项目已有 motion v12） |
+| 组件注释缺溯源 | 每个组件头注释标注 Figma 源节点、尺寸表、明暗差异 | ✅ §10 注释规范（引用 token 组 + 对标对象） |
+| 无"agentic 界面"沉淀 | `application/agent-chat`（composer/history/message）、`agent-thinking`、`app-shell`、`data-table` 等产品块（~~notification-center~~ 🚫已禁用，不实施） | ✅ §12 backlog 的 P3 application 层（对齐影策 AI 工作台） |
+
+### 2.3 BoardUI 事实基线（2026-09-05 勘察）
+
+- 分层目录：`components/{base,application,foundations}`；base 下每"族"一目录（`buttons/`、`badges/`、`kbd/`、`segmented-control/`、`date-picker/`…），族内平铺多个文件（`button.tsx`/`icon-button.tsx`/`close-button.tsx`/`button-group.tsx`），无全局 barrel，深路径导入。
+- 每组件：`interface XxxProps`（含 `ref`）+ 具名函数 + `cx` 合并 + 头部注释（Figma 源节点/尺寸/明暗差异）。变体用本地 style map（`sortCx`），不用 cva——**本项目沿用 cva**（既有习惯 + variants 类型导出更贴合 dbx barrel 形态）。
+- 语义 token 命名如 `bg-kbd-background`、`text-kbd-foreground`、`text-caption-1-semibold`、`bg-status-dot-green-halo`；radius 语义名 `radius/md`、`radius/2lg`；暗色仅调 halo 透明度等细节。
+- 依赖：`react-aria-components ^1.17`、`@remixicon/react ^4.9`、`@tanstack/react-table`、`recharts`、`@internationalized/date`、`motion ^12`、`tailwind-merge ^3`。
+- 形态定位："agentic interfaces"（chat/thinking/agent log/composer/sidebar）——与影策 AI 影视短剧工作台高度同构。
+
+### 2.4 规范包（composio-brand-package）——唯一视觉数值权威源（AI 消费规则）
+
+> 用户决策（2026-09-05）：**直接采用 composio 视觉**（近黑底 + 电蓝主色 + 无衬线/等宽字体），数值全部以该包为准。
+
+**消费顺序（AI 每次改造配色/字体/间距前必读，由浅入深）**：
+1. `preview.html`——浏览器打开，先看整体视觉基调（近黑 #0f0f0f 底、电蓝 #0007cd 主色、hairline 分隔、终端质感）；
+2. `DESIGN.md`——人类可读规范：语义角色 token 表、排版梯度、组件配方、Do/Don'ts（禁止引入色板外颜色等纪律条款）；
+3. `tokens.json`——W3C DTCG 机器可读格式，数值唯一权威（颜色/字号/间距/圆角的 $value 一律以这里为准）；
+4. `variables.css` / `theme.css`——CSS 变量落地 + Tailwind v4 @theme 映射，作为翻译进本项目三层 token 的对照样本。
+
+**采用边界**：
+- 采用：语义角色命名（ink/body/muted/canvas/surface-*/hairline/on-*/primary/accent-*）、完整状态位（-default/-hover/-active/-disabled）、字号梯度、间距/圆角尺度、深色底 + 电蓝 accent 的整体视觉方向；
+- 不采用：其品牌名/Logo/营销文案、abcDiatype 字体（无授权，替换为 Inter + 系统栈；代码用 JetBrains Mono/Fira Code 等开源等宽，本项目已有的 lucide/icon 不变）；
+- 落地规则：数值翻译进本项目 globals.css 三层 token（Primitive→Semantic→Component），组件继续只消费 `var(--*)`/工具类，**不允许在页面/组件里直接写规范包裸值**；
+- 明暗：规范包为深色单主题，本项目 light/dark 双主题照旧——light 由同一 Semantic 角色推导（组件不读皮肤 ID，明暗只翻 token 层）。
+
+## 3. 现状基线（证据）
+
+- `web/src/components/ui/`：仅 `aceternity/`（特效装饰件）+ 3 个顶层单文件（`animated-theme-toggler.tsx`、`announcement-content.tsx`、`dia-text-reveal.tsx`），无 barrel、无变体契约。
+- 主题基建：`web/src/styles/globals.css`（约 892 行 CSS 变量声明）三层架构（Primitive→Semantic→Component），含 `--color-neutral-*` 色板、`--palette-node-*`、`--palette-status-*`、`--space-*`、`--fs-*`（nano→display）、`--r-*`（xs→5xl + 语义圆角）等；`@custom-variant dark`；tw-animate-css + shadcn/tailwind.css。
+- AntD 皮肤由 `web/src/lib/app-theme.ts` 统一管理（light/dark + skins）。
+- 工具链：`cn`（clsx+tailwind-merge）就绪（`web/src/lib/utils.ts`）；cva 可用；`motion ^12.42.2`、`lucide-react ^1.25`、`antd ^6.5.1`、`tailwindcss ^4.3.3`。
+- AntD 依赖面（清点脚本复核，数字随 ADR）：约 180/637 文件导入 AntD、41 个命名导入，Top 为 Button/App/Input/Modal/Select。
+- 视觉混乱面（本方案治理对象）：配色/字体/间距散落于 globals.css 既有 token 之外，组件与页面存在裸 `text-[13px]`、硬编码色、非标间距/圆角——以规范包数值对齐收敛。
+
+## 4. 目标架构（分层）
+
+```text
+web/src/
+  styles/globals.css        # 三层 token（Primitive→Semantic→Component）+ @theme 工具映射（不改基座，只扩展）
+  lib/app-theme.ts          # AntD 皮肤唯一管理点（替换完成前继续使用）
+  lib/utils.ts              # cn；按需扩展 tailwind-merge 识别复合排版工具类
+  components/ui/            # Celadon UI
+    base/                   # 原语 + 基础件：buttons/ badges/ kbd/ segmented-control/ …
+    product/                # 模式件：empty-state/ callout/ loading-state/ section-card/ property-row/ …
+    fx/                     # 特效件（现 aceternity/ 归位命名空间，引用随用随迁）
+     application/            # 产品块（P3 起）：agent-chat/ app-shell/ …（对齐 BoardUI application；~~notification-center~~ 🚫已禁用，不实施）
+```
+
+导入约定：一律深路径 `@/components/ui/{base,product,fx,application}/<family>/<file>`（或族级 barrel）；不建全局 barrel。
+
+## 5. 目录与导出规范（沿用 dbx 形态 + BoardUI 族目录）
+
+```text
+components/ui/base/buttons/
+  ├── index.ts          # 重新导出族内全部组件 + variants 类型（族级 barrel）
+  ├── button.tsx        # Button（cva variants）
+  ├── icon-button.tsx   # IconButton（本族专用，不另开目录）
+  ├── tool-button.tsx   # ToolButton（aria-pressed 工具态）
+  └── button-group.tsx  # ButtonGroup
+```
+
+- 组件族一目录，族内按文件拆分相关变体；每族 `index.ts` 汇总导出（同 dbx）；无全局 barrel。
+- 变体契约：cva 定义 `xxxVariants` 并从 `index.ts` 导出 `XxxVariants` 类型；`className` 经 `cn` 合并；forwardRef 透传；根元素 `data-slot`。
+- 命名：组件 `PascalCase`、文件 `kebab-case.tsx`、目录 `kebab-case/`。
+
+## 6. token 扩展规范（对齐 BoardUI 深度；数值以规范包为权威，在既有三层上扩展）
+
+### 6.1 语义状态矩阵（Semantic 层补齐）
+为高频角色补齐 `-default/-hover/-active/-disabled`（及可选 `-selected`）状态位，命名 `--<role>-<prop>-<state>` 风格（如 `--control-bg-hover`），消费方直接用状态位，不在组件里做色值推算。明暗只改 token 定义，组件不读皮肤 ID。
+
+### 6.2 复合排版工具类（Component 层注册 @theme）
+把既有 `--fs-*` 字号 + 行高/字重映射为 `text-body-regular|medium|semibold`、`text-caption-1-*`、`text-title-1-*` 等**复合工具类**（Tailwind v4 `@theme` 或工具类层注册），并扩展 `cn` 的 tailwind-merge 配置使其可正确合并。**组件禁止再写裸 `text-[Npx]`/`text-sm font-medium` 组合**（对齐 BoardUI typography.css 纪律）。
+
+### 6.3 分组色系（沿用既有 --palette-* 思路，扩展完整 ramp）
+- `accent`：品牌 ramp 默认取规范包主色 `#0007cd`（含 -hover/-active/-glow 等状态位，见 tokens.json）；不再沿用旧中性主色。
+- `chart`：图表系列 `--palette-chart-1..9` + `-active`（供后续图表块使用）。
+- `status`：在既有 `--palette-status-*` 上按 BoardUI 语义补齐成对 halo/dot 类 token（如 `--status-success-halo`）。
+- `node`：沿用 `--palette-node-*`（画布节点类型），NodeTypeBadge 消费。
+
+### 6.4 专用 token
+组件专用语义 token（如 `--kbd-bg/--kbd-fg`、`--segmented-track`、`--toolbar-bg`）按需在 Component 层新增并在组件头注释标注引用组。所有新 token 走 globals.css 三层流程并同步 ADR/规范文档。
+
+## 7. 原语策略（BoardUI 贡献的关键决策）
+
+- **简单件**（按钮、徽章、空态、kbd…）：原生语义元素（`button`/`kbd`/`span`）+ 自有键盘/ARIA 处理（`aria-pressed`、`:focus-visible`）。
+- **复杂控件替换（B3+：Select/Modal/Drawer/Popconfirm/日期/Combobox）**：以 **`react-aria-components`** 为无障碍地基（对齐 BoardUI segmented-control/date-picker 做法），在其上包 Celadon 观感与 token——不自研焦点陷阱/键盘导航/ARIA，也不引入 Radix 全家桶。`react-aria-components` 在 B3 启动时作为正式依赖加入。
+
+## 8. 图标契约
+
+- 统一 `lucide-react`（项目既有），**以组件引用传入**（`icon={Move}`），尺寸/颜色由宿主组件用 token 决定；禁止调用方传 icon className 改尺寸（对齐 BoardUI remixicon 引用契约）。`IconButton`/`ToolButton` 提供 `iconSize` 语义档位而非裸像素。
+
+## 9. 动效纪律（项目已有 motion v12）
+
+- 按压动效、工具切换、浮层出入：抽 `press-motion`/入场/出场工具类或小组件（对齐 BoardUI `button-press-motion` 思路），**统一尊重 `prefers-reduced-motion`**。
+- 渐变/悬停细节（如 BoardUI 的 `::before` 交叉淡化）抽成可复用类，不在页面散写。
+
+## 10. 组件头注释规范（对齐 BoardUI Figma 溯源注释）
+
+每组件文件头：用途、消费的 token 组、接管/对标对象（原 AntD 组件或 dbx/BoardUI 组件）、明暗差异要点（如有）。页面私有组件不含此注释义务。
+
+## 11. 里程碑与批次（唯一路线）
+
+### 阶段 A：地基（M0）——并入本方案的 token/契约升级
+1. `globals.css`：**按 §2.4 消费规范包**，把配色/字号/间距/圆角数值翻译进三层 token（近黑底 + 电蓝 accent + hairline 分隔），新增语义状态矩阵、复合排版工具类、chart/status 成对 token（新增项见 §6）。
+2. `utils.ts`：扩展 tailwind-merge 识别复合排版工具类。
+3. `components/ui/README.md` 规范落文字（本文 §5–§10 浓缩）。
+4. 样板组件 **Kbd**（对齐 BoardUI kbd：`bg-kbd-background`/`text-kbd-foreground` 全语义）。
+
+验证：`bun run build` 通过；新 token 与现有 AntD 皮肤明暗双态冒烟无回归；抽查页面无裸色值/裸字号残留。
+
+### 阶段 B：P0 六组件 + 试点（M1–M2，第一个可评审 PR 取 Kbd/StatusBadge/EmptyState 子集）
+| 组件 | 族目录 | 要点 | 对标 |
+| --- | --- | --- | --- |
+| IconButton | base/buttons | size 档位、colorRole、loading/dot | dbx icon-button + BoardUI 图标契约 |
+| ToolButton | base/buttons | `aria-pressed` 工具激活态 | 画布工具注册表 |
+| StatusBadge | base/badges | 语义成对 halo/dot + 文本 | BoardUI status-dot + AntD Tag 状态场景 |
+| EmptyState | product/empty-state | icon/title/description/action | AntD Empty |
+| Callout | product/callout | info/success/warning/error + action | dbx ErrorBanner + AntD Alert |
+| Kbd | base/kbd | 全语义 token | BoardUI kbd |
+
+试点热区（M2）：画布工具条/工具注册表、节点状态徽章、画布空态与提示；替换即删除私有实现。
+
+### 阶段 C：P1 模式件 + 页面铺开（M3–M4）
+NodeTypeBadge、TextTooltip、LoadingState、SectionCard、PropertyRow、IconGroup（接管工具 Segmented）→ 资源/任务/项目库页接线，重复模式清零。
+
+### 阶段 D：AntD 替换批次（B1–B5；B1 = 阶段 B/C 自研件顺带承接 Tag/Empty/Alert/Segmented/高密度按钮职能）
+| 批次 | 内容 | 门禁（对应 antd 导入 → 0 或专项豁免；无双实现并存超一个周期；明暗无回归） |
+| --- | --- | --- |
+| B2 | Button/Input/InputNumber/Typography 等高频简单件 | Button/Input 计数归零 |
+| B3 | Select/Modal/Drawer/Popconfirm/Switch/Tooltip/Dropdown/Tabs——**以 RAC 为地基** | Select/Modal 计数归零；键盘/焦点/ESC/遮罩逐项过 |
+| B4 | Form 字段原语与布局、App（useApp 宿主语义）、ConfigProvider 收敛 | App/Form 归零 |
+| B5 | 专项评审：Table/DatePicker/Tree/Upload/ColorPicker（受控子集 vs 对等实现） | antd 总导入归零 |
+
+每批完成重跑依赖清点，把“依赖下降”数字写进批记录。批内按页面热区拆小 PR。
+
+**执行状态（2026-09-05）**：
+
+- M1（阶段 B）：P0 六组件全部入库——Kbd / StatusBadge / EmptyState / IconButton / ToolButton / Callout（含 action、onClose）；完整 `bun run build` 通过。
+- M2 试点接线：EmptyState → `ai-art-critique-modal`、`workflow-test-workbench`、admin drawer、workflow 三页等；Kbd → 侧边栏/快捷键弹窗/命令面板；StatusBadge → OSS 设置表单；Callout/IconButton → `ai-art-critique-modal`。
+- B1 周期实际推进：AntD Empty 全量归零（12 处）；Alert → Callout 全量归零（18 处，唯一保留 `detail.tsx` 归档 banner 横幅）；被替换文件同步剔除对应 antd import。
+- **第二轮收尾（同日）**：StatusBadge 增加 `variant="filled"`（tone 色块纯文本胶囊，对标 AntD filled Tag；outline 保持现状零回归）；状态徽章 Tag → StatusBadge 全部清零（累计 22 处：首轮 14 + ArtifactStatus / logical-models×2 / storyboard / prompt-preferences / local-cli×2 / portrait×4）；ArtifactStatus 改消费 filled、`workflow.css` 死代码块删除。全库剩余 Tag 均为分类/信息/icon/计数 chips 或定制着色，非状态语义。
+- 小件盘点：Badge 全库零使用；Spin 4 处异形；Segmented 为结构性控件——无新归并项。P1 候选（NodeTypeBadge / LoadingState / SectionCard / PropertyRow / IconGroup）盘点后证据不足或形态异质，均不立项，待真实重复自然积累。
+- UI kit 引用文件 20+；每批 `bun run typecheck` + dev server 编译（HTTP 200）验证通过。git 改动未提交，批次提交按 §ADR 约定进行。
+- **下一闸口**：composio Stage A token 迁移（globals.css 数值翻译 + antd skin 同步），改动会全局位移视觉，需用户目验确认后再动。
+
+**执行状态（2026-09-06）——ui-kit 消费审计 + P0 同角色迁移**：
+
+- 审计：出具 `docs/plans/ui-kit-consumption-audit.md`（660 文件全量扫描 + pages 146 文件逐域矩阵），核验 B1 归零声明与代码一致；剩余同角色残留集中在 Tooltip / Select / Switch / Segmented（画布工作区 vs 设置/后台）。
+- P0 实施：Tooltip 29 处 → ui `base/tooltip`（含 admin-shell、projects/detail 的 `mouseEnterDelay` 秒→`delay` ms、`rootClassName` 死类删除），antd Tooltip 全库归零；Switch 10 处 → ui `base/switch`（`size="small"→"sm"`），antd Switch 全库归零；朴素单选 Select 12 处 → ui `base/select`（`id`→`ariaLabel`、options 类型标注收窄 onChange），其中 `detail/canvases.tsx` 因 `suffixIcon`+`loading` 能力缺口保留 antd；Checkbox.Group 1 处（canvas-script-node 列选择器）→ ui `base/checkbox`，清理 globals.css 三段 antd 死选择器。
+- 保留与缺口：搜索/多选/远程 Select（约 24 处，含后台 19 处中多数）ui 单选壳不覆盖，待 ComboBox/多选能力补足后迁移（计划显式标注为已知缺口而非回退）；画布 11 处 Segmented 维持结构性决策；detail.tsx 归档 Alert banner 维持保留。
+- 验证：`tsc --noEmit` + `vite build` 通过（跳过与本次无关的 build:bridge 预构建）；浏览器目验清单见 `docs/content/docs/progress/pending-test.mdx`（UI 组件同角色迁移节）。git 改动未提交。
+
+### 阶段 E：application 产品块（P3，按需立项）
+ 对齐 BoardUI `application/`：agent-chat（composer/history/message）、agent-thinking 指示、app-shell、data-table 等，映射影策 AI 工作台场景（画布 AI 助手面板、生成/转写日志等；~~notification-center/通知中心~~ 🚫已禁用，不实施）。每块立项前先有真实页面需求与 ≥2 处重复证据。
+
+## 12. 组件 backlog（汇总）
+
+- P0（阶段 B）：IconButton、ToolButton、StatusBadge、EmptyState、Callout、Kbd。
+- P1（阶段 C）：NodeTypeBadge、TextTooltip、LoadingState、SectionCard、PropertyRow、IconGroup。
+- P2（B3+，随替换批次）：Button/Input 全量、Dialog/Modal、Drawer、Popconfirm、Tabs、Combobox/Select、Switch、Tooltip、SegmentedControl 等替代件（每个以 RAC 或原生实现按需立项）。
+- P3（阶段 E，先立证据）：application 产品块。
+- fx：现有 `aceternity/*` 归位 `components/ui/fx/` 命名空间（引用随用随迁，不重写）。
+
+## 13. 验收清单（用户可检查）
+
+- [ ] `components/ui/{base,product,fx}` 分层就位；每族有 `index.ts`、组件有 `data-slot` 与头注释
+- [ ] 试点热区换用新组件且无私有实现残留；明暗与各 skin 无回归
+- [ ] 新组件无裸 `text-[Npx]`/`rounded-[Npx]`/硬编码色；排版走复合工具类
+- [ ] 键盘 Tab/回车/空格可操作、焦点环可见、持久态 `aria-pressed` 可感知、reduced-motion 生效
+- [ ] `bun run build` 通过；每批依赖清点数字落进批记录（ADR 后果同步更新）
+- [ ] token/规范变更已同步 ADR-0008、ui-design-system.mdx 与本方案 §2.4；配色/字体/间距数值可回溯到规范包 tokens.json
+- [ ] 页面抽查无裸色值/裸字号/非标间距；light/dark 双态由同一 Semantic token 推导
+- [ ] token/规范变更已同步 ADR-0008 与 ui-design-system.mdx
+
+## 14. 风险与回退
+
+| 风险 | 缓解 | 回退 |
+| --- | --- | --- |
+| 战线过长观感分裂 | 批次门禁 + app-theme 统一皮肤 | 停靠已验收批次，未接管控件继续 AntD |
+| 范围蔓延 | 进库门槛（≥2 处重复或协议隔离） | 停在当前阶段 |
+| token 扩展影响现有皮肤 | 只增不改、双主题冒烟 | 撤销新增 token，组件引用不动 |
+| 规范包数值与既有观感冲突（视觉转向大） | 阶段 A 集中迁移 + app-theme 同步换肤，一次性过渡 | 停靠已验收批次，先回滚视觉迁移 |
+| RAC 引入学习成本 | B3 才引入；先行 1 个样板（SegmentedControl）评审 | 该批暂缓，AntD 继续 |
+| Table/DatePicker 自研失控 | B5 强制受控子集评审 | 专项豁免并记录 |
+| 图标尺寸失控 | 图标引用契约（§8）评审强制 | 单组件回退 |

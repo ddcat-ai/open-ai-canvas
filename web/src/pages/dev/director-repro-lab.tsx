@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { Button, Switch, Table, Tag } from "antd";
+import { Button, Table } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 
 import { CanvasDirectorWorkbench } from "@/components/canvas/director/canvas-director-workbench";
 import { DIRECTOR_REPRO_MATRIX, createDirectorReproScene, directorReproSceneIsOffline, injectDirectorReproModel, type DirectorReproModelVariant } from "@/lib/canvas/director/director-repro-fixture";
 import { readDirectorReproSnapshot, type DirectorReproSnapshot } from "@/lib/canvas/director/director-repro-runtime";
 import { resetDirectorDiagnosticDedupe } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { getClientDiagnosticEvents } from "@/services/diagnostics/client-diagnostics";
+import { StatusBadge } from "@/components/ui/base/badges";
 import type { DirectorScene } from "@/types/director";
 
 /**
@@ -65,9 +67,7 @@ export default function DirectorReproLab() {
         <div className="min-h-dvh overflow-y-auto p-5" style={{ background: "var(--bg)", color: "var(--fg)" }}>
             <header className="mb-4 flex flex-wrap items-center gap-3">
                 <h1 className="text-lg font-semibold">导演台 P0 复现台</h1>
-                <Tag color={directorReproSceneIsOffline(scene) ? "green" : "red"} data-testid="offline-tag">
-                    {directorReproSceneIsOffline(scene) ? "fixture 无网络资产" : "已注入模型资产"}
-                </Tag>
+                <StatusBadge tone={directorReproSceneIsOffline(scene) ? "error" : "success"} data-testid="offline-tag" label={directorReproSceneIsOffline(scene) ? "fixture 无网络资产" : "已注入模型资产"} />
                 <span className="text-[var(--fs-tiny)] opacity-70" data-testid="object-count">
                     对象数 {scene.objects.length}
                 </span>
@@ -172,7 +172,7 @@ function DiagnosticEventList({ events }: { events: DirectorEventRow[] }) {
                     scroll={{ y: 220 }}
                     columns={[
                         { title: "时间", dataIndex: "timestamp", width: 200, render: (value: string) => <span className="font-mono text-[var(--fs-tiny)]">{value}</span> },
-                        { title: "级别", dataIndex: "level", width: 88, render: (value: string) => <Tag color={value === "error" ? "red" : value === "warning" ? "orange" : "blue"}>{value}</Tag> },
+                        { title: "级别", dataIndex: "level", width: 96, render: (value: string) => <StatusBadge size="sm" tone={value === "error" ? "error" : value === "warning" ? "warning" : "neutral"} label={value} /> },
                         { title: "稳定码", dataIndex: "code", render: (value: string) => <span className="font-mono text-[var(--fs-tiny)]">{value}</span> },
                         { title: "消息", dataIndex: "message" },
                     ]}

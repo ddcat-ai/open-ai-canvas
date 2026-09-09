@@ -139,6 +139,8 @@ describe("统一图片分辨率与宽高比", () => {
             expect(editor).toContain(`aria-label="${tier} 16:9"`);
         }
         expect(editor).toContain('aria-label="默认输出"');
+        expect(editor).toContain("全不选");
+        expect(editor).toContain("全选");
         const readOnly = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} disabled onChange={() => {}} />);
         const buttons = [...readOnly.matchAll(/<button\b[^>]*>/g)];
         expect(buttons.length).toBeGreaterThan(24);

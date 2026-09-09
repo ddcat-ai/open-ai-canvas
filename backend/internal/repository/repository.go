@@ -755,7 +755,7 @@ func (r *Repository) TaskLogs(userID string, taskID string) ([]model.TaskLog, er
 
 func (r *Repository) SystemChannels(includeDisabled bool) ([]model.ModelChannel, error) {
 	var channels []model.ModelChannel
-	query := r.db.Order("created_at asc").Where("scope = ?", model.ChannelScopeSystem)
+	query := r.db.Order("sort_order asc, created_at asc, id asc").Where("scope = ?", model.ChannelScopeSystem)
 	if !includeDisabled {
 		query = query.Where("enabled = ?", true)
 	}
@@ -775,7 +775,7 @@ func (r *Repository) AdminSystemChannels(keyword string, status string, limit in
 	query := r.db.Model(&model.ModelChannel{}).Where("scope = ?", model.ChannelScopeSystem)
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(name) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern)
+		query = query.Where("lower(name) LIKE ? OR lower(public_alias) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern, pattern)
 	}
 	if status == "enabled" {
 		query = query.Where("enabled = ?", true)
@@ -785,7 +785,7 @@ func (r *Repository) AdminSystemChannels(keyword string, status string, limit in
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&channels).Error; err != nil {
+	if err := query.Order("sort_order asc, created_at asc, id asc").Limit(limit).Offset(offset).Find(&channels).Error; err != nil {
 		return nil, 0, err
 	}
 	return channels, total, nil

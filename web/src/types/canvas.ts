@@ -212,6 +212,9 @@ export type CanvasNodeMetadata = {
     promptTemplateOperation?: string;
     promptTemplateVariables?: Record<string, string>;
     status?: CanvasNodeStatus;
+    /** 浏览器文件上传，与模型生成任务状态独立。 */
+    fileUpload?: "uploading" | "error";
+    fileUploadProgress?: number;
     locked?: boolean;
     errorDetails?: string;
     generationErrorCode?: string;

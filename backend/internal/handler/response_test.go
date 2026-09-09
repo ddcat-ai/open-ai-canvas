@@ -18,6 +18,15 @@ type failureEnvelope struct {
 	Msg  string `json:"msg"`
 }
 
+func TestFailServiceRegistrationCooldown(t *testing.T) {
+	recorder, context := responseTestContext()
+	failService(context, &service.EmailCodeCooldownError{Seconds: 47})
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusTooManyRequests || response.Code != 429 || recorder.Header().Get("Retry-After") != "47" || !strings.Contains(response.Msg, "47") {
+		t.Fatalf("cooldown response: status=%d header=%s body=%#v", recorder.Code, recorder.Header().Get("Retry-After"), response)
+	}
+}
+
 func TestFailServiceProjectsAppError(t *testing.T) {
 	recorder, context := responseTestContext()
 	err := service.NewAppError(http.StatusTooManyRequests, "请求过于频繁，请稍后重试")

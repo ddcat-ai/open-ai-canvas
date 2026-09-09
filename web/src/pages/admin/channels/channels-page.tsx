@@ -17,8 +17,20 @@ import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { ChannelModelManager } from "../components/channel-model-manager";
+import { ChannelOrderDialog } from "../components/channel-order-dialog";
 
-type ChannelFormValues = { name: string; baseUrl: string; allowLocalChannel?: boolean; apiKey?: string; secretKey?: string; headers?: ChannelHeader[]; useGlobalConcurrency?: boolean; concurrencyLimit?: number; enabled?: boolean };
+type ChannelFormValues = {
+    name: string;
+    publicAlias?: string;
+    baseUrl: string;
+    allowLocalChannel?: boolean;
+    apiKey?: string;
+    secretKey?: string;
+    headers?: ChannelHeader[];
+    useGlobalConcurrency?: boolean;
+    concurrencyLimit?: number;
+    enabled?: boolean;
+};
 
 export function adminLocalChannelFormOwner(desktopLocalChannelsEnabled: boolean, hostname: string, requestedAllowLocalChannel?: boolean) {
     const state = desktopLocalChannelFormState(desktopLocalChannelsEnabled, hostname, requestedAllowLocalChannel);
@@ -37,7 +49,9 @@ export function AdminLocalChannelSwitch({ visible, checked, onChange }: { visibl
 export function AdminLocalChannelFields({ visible, checked, form }: { visible: boolean; checked: boolean; form: Pick<FormInstance<ChannelFormValues>, "setFieldValue"> }) {
     return (
         <>
-            <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}><Input placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : "填写渠道 Base URL"} /></Form.Item>
+            <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}>
+                <Input placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : "填写渠道 Base URL"} />
+            </Form.Item>
             <AdminLocalChannelSwitch visible={visible} checked={checked} onChange={(value) => form.setFieldValue("allowLocalChannel", value)} />
         </>
     );
@@ -46,6 +60,7 @@ export function AdminLocalChannelFields({ visible, checked, form }: { visible: b
 export function adminChannelSavePayload(values: ChannelFormValues, desktopLocalChannelsEnabled: boolean, hostname: string) {
     return {
         name: values.name.trim(),
+        publicAlias: values.publicAlias?.trim() || "",
         baseUrl: values.baseUrl.trim(),
         allowLocalChannel: adminLocalChannelFormOwner(desktopLocalChannelsEnabled, hostname, values.allowLocalChannel).payloadValue,
         apiKey: values.apiKey?.trim() || "",
@@ -126,8 +141,23 @@ export default function ChannelsPage() {
     const openDrawer = (channel?: ModelChannel) => {
         setEditingChannel(channel || null);
         form.resetFields();
-        form.setFieldsValue(channel ? { name: channel.name, baseUrl: channel.baseUrl, allowLocalChannel: adminLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked, apiKey: "", secretKey: "", headers: channel.headers || [], useGlobalConcurrency: !channel.concurrencyLimit, concurrencyLimit: channel.concurrencyLimit || undefined, enabled: channel.enabled !== false } : { name: "", baseUrl: "", allowLocalChannel: false, apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true });
+        form.setFieldsValue(
+            channel
+                ? {
+                      name: channel.name,
+                      baseUrl: channel.baseUrl,
+                      allowLocalChannel: adminLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked,
+                      apiKey: "",
+                      secretKey: "",
+                      headers: channel.headers || [],
+                      useGlobalConcurrency: !channel.concurrencyLimit,
+                      concurrencyLimit: channel.concurrencyLimit || undefined,
+                      enabled: channel.enabled !== false,
+                  }
+                : { name: "", baseUrl: "", allowLocalChannel: false, apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true },
+        );
         setDrawerOpen(true);
+        form.setFieldsValue({ publicAlias: channel?.publicAlias || "" });
     };
 
     const closeDrawer = () => {
@@ -189,27 +219,142 @@ export default function ChannelsPage() {
     };
 
     const columns: ColumnsType<ModelChannel> = [
-        { title: "渠道", dataIndex: "name", render: (_, channel) => <div><div className="font-medium">{channel.name}</div><div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div></div> },
+        {
+            title: "渠道",
+            dataIndex: "name",
+            render: (_, channel) => (
+                <div>
+                    <div className="font-medium">{channel.name}</div>
+                    <div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div>
+                </div>
+            ),
+        },
+        { title: "前台名称", width: 160, render: (_, channel) => <span className={channel.publicAlias ? "" : "text-foreground/45"}>{channel.publicAlias || channel.name}</span> },
         { title: "模型", dataIndex: "models", width: 100, align: "center", render: (models: string[]) => `${models?.length || 0} 个` },
-        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, align: "center", render: (value: number) => value > 0 ? value : <span className="text-foreground/45">跟随系统</span> },
+        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, align: "center", render: (value: number) => (value > 0 ? value : <span className="text-foreground/45">跟随系统</span>) },
         { title: "凭证", width: 130, align: "center", render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
         { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (enabled) => <AdminStatusBadge label={enabled !== false ? "已启用" : "已停用"} tone={enabled !== false ? "success" : "neutral"} /> },
-        { title: "操作", width: 250, align: "center", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }, { key: "delete", label: "删除渠道", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" }, onClick: () => removeChannel(channel) }]} /> },
+        {
+            title: "操作",
+            width: 250,
+            align: "center",
+            render: (_, channel) => (
+                <AdminRowActions
+                    primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }}
+                    actions={[
+                        { key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) },
+                        {
+                            key: "toggle",
+                            label: channel.enabled !== false ? "停用渠道" : "启用渠道",
+                            icon: <Power className="size-3.5" />,
+                            danger: channel.enabled !== false,
+                            confirm: {
+                                title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？",
+                                description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。",
+                                okText: channel.enabled !== false ? "确认停用" : "确认启用",
+                            },
+                            onClick: () => toggleChannel(channel),
+                        },
+                        {
+                            key: "delete",
+                            label: "删除渠道",
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" },
+                            onClick: () => removeChannel(channel),
+                        },
+                    ]}
+                />
+            ),
+        },
     ];
 
     if (managingChannel) {
-        return <ChannelModelManager channel={managingChannel} onClose={() => setManagingChannel(null)} onChanged={async () => { await syncChannels(); await reload(); }} />;
+        return (
+            <ChannelModelManager
+                channel={managingChannel}
+                onClose={() => setManagingChannel(null)}
+                onChanged={async () => {
+                    await syncChannels();
+                    await reload();
+                }}
+            />
+        );
     }
 
     return (
-        <AdminPageFrame title="系统渠道" description="渠道、模型与售价" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>}>
+        <AdminPageFrame
+            title="系统渠道"
+            description="列表顺序就是用户端展示顺序，点击“设置排序”即可调整。"
+            actions={
+                <div className="flex gap-2">
+                    <ChannelOrderDialog
+                        onSaved={async () => {
+                            await syncChannels();
+                            await reload();
+                        }}
+                    />
+                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                        新增系统渠道
+                    </Button>
+                </div>
+            }
+        >
             <AdminDataTable
-                toolbar={<Input id="admin-channel-search" aria-label="搜索系统渠道" autoComplete="off" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索渠道名称或地址" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />}
-                toolbarFilters={<Select aria-label="筛选渠道状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />}
+                toolbar={
+                    <Input
+                        id="admin-channel-search"
+                        aria-label="搜索系统渠道"
+                        autoComplete="off"
+                        allowClear
+                        className="app-list-search"
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        value={keyword}
+                        placeholder="搜索渠道名称、别名或地址"
+                        onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
+                    />
+                }
+                toolbarFilters={
+                    <Select
+                        aria-label="筛选渠道状态"
+                        className="w-32"
+                        value={status}
+                        onChange={(value) => updateUrl({ status: value, page: 1 })}
+                        options={[
+                            { label: "全部状态", value: "all" },
+                            { label: "已启用", value: "enabled" },
+                            { label: "已停用", value: "disabled" },
+                        ]}
+                    />
+                }
                 toolbarActive={hasFilters}
                 onReset={() => updateUrl({ filter: "", status: "all", page: 1 })}
-                skeletonColumns={6}
-                table={{ className: "app-data-table", size: "small", rowKey: "id", loading, columns, dataSource: channels, locale: { emptyText: <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} action={hasFilters ? undefined : <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>} /> }, pagination: false, scroll: { x: 820 } }}
+                skeletonColumns={7}
+                table={{
+                    className: "app-data-table",
+                    size: "small",
+                    rowKey: "id",
+                    loading,
+                    columns,
+                    dataSource: channels,
+                    locale: {
+                        emptyText: (
+                            <AdminTableEmpty
+                                filtered={hasFilters}
+                                title={hasFilters ? undefined : "还没有系统渠道"}
+                                action={
+                                    hasFilters ? undefined : (
+                                        <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                                            新增系统渠道
+                                        </Button>
+                                    )
+                                }
+                            />
+                        ),
+                    },
+                    pagination: false,
+                    scroll: { x: 1150 },
+                }}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
             <Modal
@@ -221,24 +366,77 @@ export default function ChannelsPage() {
                 onCancel={closeDrawer}
                 mask={{ closable: !saving }}
                 destroyOnHidden
-                footer={<div className="flex justify-end gap-2"><Button onClick={closeDrawer}>取消</Button><Button type="primary" loading={saving} onClick={() => void save()}>保存</Button></div>}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button onClick={closeDrawer}>取消</Button>
+                        <Button type="primary" loading={saving} onClick={() => void save()}>
+                            保存
+                        </Button>
+                    </div>
+                }
             >
                 <Form form={form} layout="vertical" requiredMark={false}>
-                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请填写渠道名称" }]}><Input placeholder="例如：OpenAI 官方渠道" /></Form.Item>
+                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请填写渠道名称" }]}>
+                        <Input placeholder="例如：OpenAI 官方渠道" />
+                    </Form.Item>
+                    <Form.Item name="publicAlias" label="前台显示别名" extra="留空时显示渠道名称；填写后用户端只显示此别名，后台仍保留原渠道名称。" rules={[{ max: 80, message: "别名不能超过 80 个字符" }]}>
+                        <Input maxLength={80} placeholder="可选，例如：精选图片" />
+                    </Form.Item>
                     <AdminLocalChannelFields visible={showDesktopLocalChannelControl} checked={allowLocalChannel} form={form} />
-                    <Form.Item name="apiKey" label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"} rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key 或 Access Key" }]} extra="OpenAI 兼容协议填写 API Key；即梦官方协议填写 IAM Access Key。"><Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原凭证" : "API Key 或 Access Key"} /></Form.Item>
-                    <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : "Secret Key（可选）"} extra="仅即梦官方等 AK/SK 签名协议需要；其他渠道留空。"><Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原 Secret Key" : "IAM Secret Key"} /></Form.Item>
-                    <div className="mb-6"><Form.Item name="headers" noStyle><ChannelHeadersEditor /></Form.Item></div>
-                    <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked"><Switch /></Form.Item>
-                    <Form.Item name="concurrencyLimit" label="渠道最大并发数" extra="后台任务和系统代理请求共享该渠道上限；槽位暂满时请求会等待。" rules={useGlobalConcurrency ? [] : [{ required: true, message: "请填写渠道最大并发数" }, { type: "number", min: 1, max: 999, message: "请输入 1-999 的整数" }]}><InputNumber className="w-full" min={1} max={999} precision={0} disabled={useGlobalConcurrency} placeholder={useGlobalConcurrency ? "使用系统默认值" : "1-999"} /></Form.Item>
-                    <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+                    <Form.Item
+                        name="apiKey"
+                        label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"}
+                        rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key 或 Access Key" }]}
+                        extra="OpenAI 兼容协议填写 API Key；即梦官方协议填写 IAM Access Key。"
+                    >
+                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原凭证" : "API Key 或 Access Key"} />
+                    </Form.Item>
+                    <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : "Secret Key（可选）"} extra="仅即梦官方等 AK/SK 签名协议需要；其他渠道留空。">
+                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原 Secret Key" : "IAM Secret Key"} />
+                    </Form.Item>
+                    <div className="mb-6">
+                        <Form.Item name="headers" noStyle>
+                            <ChannelHeadersEditor />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
+                    <Form.Item
+                        name="concurrencyLimit"
+                        label="渠道最大并发数"
+                        extra="后台任务和系统代理请求共享该渠道上限；槽位暂满时请求会等待。"
+                        rules={
+                            useGlobalConcurrency
+                                ? []
+                                : [
+                                      { required: true, message: "请填写渠道最大并发数" },
+                                      { type: "number", min: 1, max: 999, message: "请输入 1-999 的整数" },
+                                  ]
+                        }
+                    >
+                        <InputNumber className="w-full" min={1} max={999} precision={0} disabled={useGlobalConcurrency} placeholder={useGlobalConcurrency ? "使用系统默认值" : "1-999"} />
+                    </Form.Item>
+                    <Form.Item name="enabled" label="启用" valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
                 </Form>
             </Modal>
         </AdminPageFrame>
     );
 }
 
-function positiveInt(value: string | null, fallback: number) { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback; }
-function normalizePageSize(value: string | null) { const parsed = positiveInt(value, 20); return [20, 50, 100].includes(parsed) ? parsed : 20; }
-function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" { return value === "enabled" || value === "disabled" ? value : "all"; }
-function channelSecretText(channel: ModelChannel) { return channel.hasSecretKey ? "已配置，留空不修改" : "未配置"; }
+function positiveInt(value: string | null, fallback: number) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+function normalizePageSize(value: string | null) {
+    const parsed = positiveInt(value, 20);
+    return [20, 50, 100].includes(parsed) ? parsed : 20;
+}
+function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" {
+    return value === "enabled" || value === "disabled" ? value : "all";
+}
+function channelSecretText(channel: ModelChannel) {
+    return channel.hasSecretKey ? "已配置，留空不修改" : "未配置";
+}

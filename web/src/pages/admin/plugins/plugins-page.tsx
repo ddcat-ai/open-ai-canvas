@@ -1,4 +1,5 @@
-import { App, Button, Input, Select, Switch } from "antd";
+import { App, Button, Input, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { CloudUpload, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";

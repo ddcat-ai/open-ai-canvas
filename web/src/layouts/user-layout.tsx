@@ -11,8 +11,12 @@ export default function UserLayout({ children }: { children: ReactNode }) {
 
     useLayoutEffect(() => {
         // Ant Design 浮层挂载在 body，必须用路由级标记隔离用户工作台与画布编辑器、运营后台。
+        document.body.classList.add("app-user-overlays");
         document.body.classList.toggle("app-spatial-overlays", spatialWorkbench);
-        return () => document.body.classList.remove("app-spatial-overlays");
+        return () => {
+            document.body.classList.remove("app-user-overlays");
+            document.body.classList.remove("app-spatial-overlays");
+        };
     }, [spatialWorkbench]);
 
     return (

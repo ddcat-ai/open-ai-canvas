@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdlog "log"
 	"strings"
 	"time"
 
@@ -86,6 +87,8 @@ type AdminReferenceData struct {
 
 type ChannelRequest struct {
 	Name                 string           `json:"name"`
+	PublicAlias          *string          `json:"publicAlias"`
+	SortOrder            *int             `json:"sortOrder"`
 	BaseURL              string           `json:"baseUrl"`
 	AllowLocalChannel    *bool            `json:"allowLocalChannel"`
 	APIKey               string           `json:"apiKey"`
@@ -103,6 +106,8 @@ type PublicModelChannel struct {
 	Scope             model.ChannelScope        `json:"scope"`
 	Enabled           bool                      `json:"enabled"`
 	Name              string                    `json:"name"`
+	PublicAlias       string                    `json:"publicAlias,omitempty"`
+	SortOrder         int                       `json:"sortOrder"`
 	BaseURL           string                    `json:"baseUrl"`
 	AllowLocalChannel bool                      `json:"allowLocalChannel,omitempty"`
 	APIKey            string                    `json:"apiKey"`
@@ -539,6 +544,10 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if req.presentationOnly() {
+		return s.updateChannelPresentation(id, req)
+	}
+	updateModels := req.Models != nil
 	channel, err := s.repo.AdminSystemChannel(id)
 	if err != nil {
 		return nil, err
@@ -567,8 +576,10 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err := s.repo.Save(&next); err != nil {
 		return nil, err
 	}
-	if err := s.syncInitialChannelModels(&next, req.Models); err != nil {
-		return nil, err
+	if updateModels {
+		if err := s.syncInitialChannelModels(&next, req.Models); err != nil {
+			return nil, err
+		}
 	}
 	s.invalidateRouteCatalog()
 	items, err := s.repo.ChannelModels(next.ID, true)
@@ -642,7 +653,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	s.estimateCallCost(&log)
 	if log.BillingOrderID != "" && log.ProviderRequestID != "" {
 		if err := s.repo.UpdateBillingProviderRequestID(log.BillingOrderID, log.ProviderRequestID); err != nil {
-			return err
+			// 账单关联是请求日志的辅助状态，不能因为关联更新失败而丢失
+			// 已经发生的上游调用记录。后续由任务/账单对账流程补偿关联。
+			stdlog.Printf("provider billing request id update failed: billing_order_id=%s provider_request_id=%s error=%v", log.BillingOrderID, log.ProviderRequestID, err)
 		}
 	}
 	if log.TaskID != "" {
@@ -657,7 +670,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			nextPollAt = &next
 		}
 		if err := s.repo.UpdateTaskProviderState(log.TaskID, log.ProviderRequestID, stage, nextPollAt); err != nil {
-			return err
+			// 请求日志本身仍需保留；任务状态可由后续任务收尾或恢复流程
+			// 重建，不能让一次状态写失败掩盖真实的上游调用。
+			stdlog.Printf("provider task state update failed: task_id=%s provider_request_id=%s error=%v", log.TaskID, log.ProviderRequestID, err)
 		}
 	}
 	if merged, err := s.mergeVideoAPICallLog(log); err != nil {
@@ -779,6 +794,19 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 		return channel, err
 	}
 	channel.Name = name
+	if req.PublicAlias != nil {
+		alias := strings.TrimSpace(*req.PublicAlias)
+		if len([]rune(alias)) > 80 {
+			return channel, BadAuthRequest("前台显示别名不能超过 80 个字符")
+		}
+		channel.PublicAlias = alias
+	}
+	if req.SortOrder != nil {
+		if err := validateChannelSortOrder(*req.SortOrder); err != nil {
+			return channel, err
+		}
+		channel.SortOrder = *req.SortOrder
+	}
 	channel.BaseURL = strings.TrimRight(baseURL, "/")
 	channel.AllowLocalChannel = requestedAllowLocal
 	if req.APIKey != "" {
@@ -862,12 +890,18 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 	} else if admin {
 		apiKey = channel.APIKey
 	}
+	name, alias := channel.PublicName(), ""
+	if admin {
+		name, alias = channel.Name, channel.PublicAlias
+	}
 	return PublicModelChannel{
 		ID:                channel.ID,
 		UserID:            channel.UserID,
 		Scope:             channel.Scope,
 		Enabled:           channel.Enabled,
-		Name:              channel.Name,
+		Name:              name,
+		PublicAlias:       alias,
+		SortOrder:         channel.SortOrder,
 		BaseURL:           baseURL,
 		AllowLocalChannel: admin && channel.AllowLocalChannel,
 		APIKey:            apiKey,

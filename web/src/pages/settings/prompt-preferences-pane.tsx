@@ -1,4 +1,8 @@
-import { Alert, App, Button, Input, Segmented, Select, Skeleton, Tabs, Tag } from "antd";
+import { App, Button, Input, Skeleton, Tabs } from "antd";
+import { Select } from "@/components/ui/base/select";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
+import { StatusBadge } from "@/components/ui/base/badges";
+import { Callout } from "@/components/ui/product/callout";
 import { RotateCcw, Save, ShieldCheck, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -136,7 +140,7 @@ export function PromptPreferencesPane() {
     if (loadError && preferences.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
-                <Alert type="error" showIcon message="加载提示词偏好失败" description={loadError} />
+                <Callout tone="error" title="加载提示词偏好失败">{loadError}</Callout>
                 <Button icon={<RotateCcw className="size-4" />} onClick={() => void reload()}>重试</Button>
             </div>
         );
@@ -152,9 +156,9 @@ export function PromptPreferencesPane() {
             <header className="shrink-0 pb-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        <label className="mb-2 block text-xs font-medium text-foreground/55" htmlFor="prompt-template-select">提示词模板</label>
+                         <label className="mb-2 block text-xs font-medium text-foreground/55">提示词模板</label>
                         <Select
-                            id="prompt-template-select"
+                             ariaLabel="提示词模板"
                             className="w-full max-w-md"
                             value={selectedOperation}
                             onChange={selectOperation}
@@ -175,17 +179,17 @@ export function PromptPreferencesPane() {
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-base font-semibold">{selected.definition.label}</h2>
-                            <Tag variant="filled">平台 v{selected.template?.version || "--"}</Tag>
-                            <Tag variant="filled">{outputLabel}</Tag>
-                            {dirty ? <Tag variant="filled" color="warning">未保存</Tag> : null}
+                            <StatusBadge variant="filled" tone="neutral" label={`平台 v${selected.template?.version || "--"}`} />
+                            <StatusBadge variant="filled" tone="neutral" label={outputLabel} />
+                            {dirty ? <StatusBadge variant="filled" tone="warning" label="未保存" /> : null}
                         </div>
                         <p className="mt-1 text-xs leading-5 text-foreground/55">{selected.definition.description}</p>
                     </div>
-                    <Segmented value={mode} options={modeOptions} onChange={(value) => setMode(value as CustomizationMode)} />
+<SegmentedControl value={mode} options={modeOptions} onChange={(value) => setMode(value as CustomizationMode)} />
                 </div>
             </header>
 
-            {selected.outdated ? <Alert className="mt-4" type="warning" showIcon title="平台模板已更新" description="当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。" /> : null}
+            {selected.outdated ? <Callout className="mt-4" tone="warning" title="平台模板已更新">当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。</Callout> : null}
 
             <div className="grid min-h-0 flex-1 gap-4 pt-4 lg:grid-cols-3">
                 <section className="flex min-h-0 flex-col lg:col-span-2">

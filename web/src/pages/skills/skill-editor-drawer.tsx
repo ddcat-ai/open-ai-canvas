@@ -1,4 +1,6 @@
-import { App, Button, Drawer, Form, Input, Select, Switch } from "antd";
+import { App, Button, Drawer, Form, Input } from "antd";
+import { Select } from "@/components/ui/base/select";
+import { Switch } from "@/components/ui/base/switch";
 import { Minus, Plus, Save, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 

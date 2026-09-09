@@ -8,6 +8,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +31,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 6
+	appearanceSchemaVersion        = 7
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -56,6 +58,7 @@ type AppearanceSetting struct {
 	LogoFrameEnabled          bool                  `json:"logoFrameEnabled"`
 	AuthVideoResourceID       string                `json:"authVideoResourceId"`
 	AuthVideoPosterResourceID string                `json:"authVideoPosterResourceId"`
+	AuthVideoAutoplay         bool                  `json:"authVideoAutoplay"`
 	SkinID                    string                `json:"skinId"`
 	SkinThemes                []AppearanceSkinTheme `json:"skinThemes"`
 	SEOTitle                  string                `json:"seoTitle"`
@@ -77,6 +80,7 @@ type PublicAppearanceSetting struct {
 	LogoFrameEnabled          bool                `json:"logoFrameEnabled"`
 	AuthVideoURL              string              `json:"authVideoUrl"`
 	AuthVideoPosterURL        string              `json:"authVideoPosterUrl"`
+	AuthVideoAutoplay         bool                `json:"authVideoAutoplay"`
 	SkinID                    string              `json:"skinId"`
 	ActiveSkin                AppearanceSkinTheme `json:"activeSkin"`
 	SEOTitle                  string              `json:"seoTitle"`
@@ -105,13 +109,14 @@ type AdminAppearanceSetting struct {
 
 func defaultAppearanceSetting() AppearanceSetting {
 	return AppearanceSetting{
-		SchemaVersion:    appearanceSchemaVersion,
-		BrandName:        defaultAppearanceBrandName,
-		BrandSlug:        defaultAppearanceBrandSlug,
-		AuthHeroTitle:    defaultAppearanceHeroTitle,
-		LogoFrameEnabled: true,
-		SkinID:           defaultAppearanceSkinID,
-		SkinThemes:       defaultAppearanceSkinThemes(),
+		SchemaVersion:     appearanceSchemaVersion,
+		BrandName:         defaultAppearanceBrandName,
+		BrandSlug:         defaultAppearanceBrandSlug,
+		AuthHeroTitle:     defaultAppearanceHeroTitle,
+		AuthVideoAutoplay: true,
+		LogoFrameEnabled:  true,
+		SkinID:            defaultAppearanceSkinID,
+		SkinThemes:        defaultAppearanceSkinThemes(),
 	}
 }
 
@@ -133,6 +138,7 @@ func (s *Service) Appearance() (*PublicAppearanceSetting, error) {
 	if err != nil {
 		return nil, err
 	}
+	value = s.resolveAvailableAppearanceAssets(value)
 	return publicAppearanceSetting(setting, value), nil
 }
 
@@ -144,6 +150,7 @@ func (s *Service) AdminAppearance(actor *model.User) (*AdminAppearanceSetting, e
 	if err != nil {
 		return nil, err
 	}
+	value = s.resolveAvailableAppearanceAssets(value)
 	result := &AdminAppearanceSetting{
 		AppearanceSetting: value,
 		Public:            *publicAppearanceSetting(setting, value),
@@ -257,7 +264,15 @@ func (s *Service) UploadAppearanceAsset(actor *model.User, slot string, header *
 	if slot == AppearanceAssetVideo {
 		kind = "video"
 	}
-	resource, err := s.UploadResource(actor.ID, header, kind, 0, 0, 0)
+	var resource *model.Resource
+	// Logos are tiny, installation-owned assets. Keep them in the server's
+	// persistent resource directory so their availability and cost do not
+	// depend on the administrator's currently selected object storage.
+	if slot == AppearanceAssetLogo || slot == AppearanceAssetDarkLogo {
+		resource, err = s.uploadLocalResource(actor.ID, header, kind, 0, 0, 0)
+	} else {
+		resource, err = s.UploadResource(actor.ID, header, kind, 0, 0, 0)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -362,6 +377,42 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
 	return setting, value, nil
+}
+
+// resolveAvailableAppearanceAssets prevents stale resource references from
+// being advertised to anonymous clients or echoed back into the admin editor.
+// Remote objects are not probed on every appearance request; the frontend has
+// its own load-error fallback for objects that disappear outside the system.
+func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) AppearanceSetting {
+	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster} {
+		resourceID := appearanceResourceID(value, slot)
+		if resourceID == "" || s.appearanceAssetAvailable(slot, resourceID) {
+			continue
+		}
+		switch slot {
+		case AppearanceAssetLogo:
+			value.LogoResourceID = ""
+		case AppearanceAssetDarkLogo:
+			value.DarkLogoResourceID = ""
+		case AppearanceAssetVideo:
+			value.AuthVideoResourceID = ""
+		case AppearanceAssetPoster:
+			value.AuthVideoPosterResourceID = ""
+		}
+	}
+	return value
+}
+
+func (s *Service) appearanceAssetAvailable(slot string, resourceID string) bool {
+	resource, err := s.repo.Resource(resourceID)
+	if err != nil || validateAppearanceResourceType(slot, resource) != nil {
+		return false
+	}
+	if resource.Provider != "local" {
+		return true
+	}
+	info, err := os.Stat(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))
+	return err == nil && !info.IsDir()
 }
 
 func validateAppearanceSetting(value AppearanceSetting) error {
@@ -571,6 +622,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		LogoFrameEnabled:    value.LogoFrameEnabled,
 		AuthVideoURL:        defaultAppearanceVideoURL,
 		AuthVideoPosterURL:  defaultAppearancePosterURL,
+		AuthVideoAutoplay:   value.AuthVideoAutoplay,
 		SkinID:              value.SkinID,
 		ActiveSkin:          activeAppearanceSkin(value.SkinThemes, value.SkinID),
 		SEOTitle:            effectiveAppearanceSEOTitle(value),

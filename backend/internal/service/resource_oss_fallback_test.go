@@ -40,7 +40,7 @@ func TestStoreResourceDegradesToLocalWhenOSSUnavailable(t *testing.T) {
 
 	resource, created, err := service.storeResource(
 		"user-1", "video", "intro.mp4", "video/mp4", 1024,
-		1920, 1080, 0, bytes.NewReader([]byte("fake-mp4-bytes")), nil,
+		1920, 1080, 0, bytes.NewReader([]byte("fake-mp4-bytes")), nil, false,
 	)
 	if err != nil {
 		t.Fatalf("storeResource: %v", err)
@@ -74,7 +74,7 @@ func TestStoreResourceLocalPathUnaffectedByOSS(t *testing.T) {
 
 	resource, created, err := service.storeResource(
 		"user-2", "video", "local.mp4", "video/mp4", 512,
-		1280, 720, 0, bytes.NewReader([]byte("local-bytes")), nil,
+		1280, 720, 0, bytes.NewReader([]byte("local-bytes")), nil, false,
 	)
 	if err != nil {
 		t.Fatalf("storeResource: %v", err)

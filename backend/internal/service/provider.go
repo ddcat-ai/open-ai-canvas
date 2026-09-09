@@ -29,6 +29,7 @@ import (
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 
+	"github.com/google/uuid"
 	"github.com/volcengine/volc-sdk-golang/base"
 	"gorm.io/gorm"
 )
@@ -306,6 +307,14 @@ func providerPayloadErrorCategory(raw string) (string, bool) {
 		return "模型服务额度不足，请检查渠道余额或配额", true
 	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
 		return "模型不存在或当前渠道未获得模型权限", true
+	// 推理/思考模式模型通常禁止强制指定工具调用：DeepSeek 思考模式返回
+	// "Thinking mode does not support this tool_choice"，其他 OpenAI 兼容
+	// 供应商措辞类似。归为固定可行动原因，画布智能体据此把首步的
+	// tool_choice=required 降级为 auto 重试一次。排在通用参数类目之前，
+	// 避免这类稳定标识落回笼统的"请检查模型和参数"。
+	case (strings.Contains(normalized, "thinking") || strings.Contains(normalized, "reasoning")) && strings.Contains(normalized, "tool_choice"),
+		strings.Contains(normalized, "tool_choice") && (strings.Contains(normalized, "not support") || strings.Contains(normalized, "unsupported")):
+		return "当前模型为思考/推理模式，不支持强制工具调用（tool_choice=required），请改用自动工具选择或更换非思考模式模型", true
 	case strings.Contains(normalized, "invalid"), strings.Contains(normalized, "parameter"), strings.Contains(normalized, "argument"):
 		return "模型服务拒绝了请求，请检查模型和参数", true
 	}
@@ -371,7 +380,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		}
 		// 工作流参数由工作流字段定义校验，普通模型能力配置不能覆盖它们。
 		if resumedProviderRequestID(ctx) == "" {
-			if err := s.hydrateGenerationMedia(userID, &input, false); err != nil {
+			if err := s.hydrateGenerationMedia(userID, &input, providerMediaHydrationPolicy{}); err != nil {
 				return nil, err
 			}
 		}
@@ -408,11 +417,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		}
 	}
 	if resumedProviderRequestID(ctx) == "" {
-		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) || input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo)
-		if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
-			requirePublicURL = requirePublicURL || adapter.Metadata().RequiresPublicMediaURLs
-		}
-		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
+		mediaPolicy := providerMediaHydrationPolicyFor(ctx, input)
+		if err := s.hydrateGenerationMedia(userID, &input, mediaPolicy); err != nil {
 			return nil, err
 		}
 		if err := s.prepareArkPrivateAssetReferences(ctx, userID, &input); err != nil {
@@ -443,6 +449,51 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+type providerMediaHydrationPolicy struct {
+	requireURL bool
+	preferURL  bool
+}
+
+func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
+	policy := providerMediaHydrationPolicy{preferURL: providerPrefersMediaURLs(input.Config.InterfaceType, input)}
+	switch strings.TrimSpace(input.Config.InterfaceType) {
+	case string(model.ChannelInterfaceNewAPIVideo), string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2), string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceMiniMaxVideo):
+		policy.requireURL = true
+		policy.preferURL = true
+	}
+	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok && adapter.Metadata().RequiresPublicMediaURLs {
+		policy.requireURL = true
+		policy.preferURL = true
+	}
+	if input.Mask != nil {
+		policy.requireURL = false
+		policy.preferURL = false
+	}
+	return policy
+}
+
+// providerPrefersMediaURLs lists protocols whose media fields accept a remote
+// URL. Byte-oriented protocols deliberately remain on the existing data path.
+func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput) bool {
+	if input.Mask != nil {
+		// OpenAI image edits and similar multipart requests require file bytes.
+		return false
+	}
+	switch strings.TrimSpace(interfaceType) {
+	case string(model.ChannelInterfaceChatCompletion), string(model.ChannelInterfaceOpenAIResponse), string(model.ChannelInterfaceClaudeAPI),
+		string(model.ChannelInterfaceGrokImage), string(model.ChannelInterfaceVolcengineArkImage),
+		string(model.ChannelInterfaceXAIVideo), string(model.ChannelInterfaceNovitaVideo),
+		string(model.ChannelInterfaceMiniMaxVideo), string(model.ChannelInterfaceNewAPIVideo),
+		string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2),
+		string(model.ChannelInterfaceVolcengineArkVideo):
+		return true
+	}
+	if isGrokVideoConfig(input.Config) || isSeedanceVideoConfig(input.Config) || isArkPlanVideoConfig(input.Config) {
+		return true
+	}
+	return false
 }
 
 func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -1320,40 +1371,41 @@ func metadataStringValues(value any) map[string]string {
 	return values
 }
 
-func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, requirePublicURL bool) error {
+func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, policy providerMediaHydrationPolicy) error {
 	groups := [][]providerMedia{input.ReferenceImages, input.ReferenceVideos, input.ReferenceAudios}
 	for _, group := range groups {
 		for index := range group {
-			if err := s.hydrateProviderMedia(userID, &group[index], requirePublicURL); err != nil {
+			if err := s.hydrateProviderMedia(userID, &group[index], policy); err != nil {
 				return err
 			}
 		}
 	}
 	if input.Mask != nil {
-		return s.hydrateProviderMedia(userID, input.Mask, requirePublicURL)
+		return s.hydrateProviderMedia(userID, input.Mask, policy)
 	}
 	return nil
 }
 
-func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requirePublicURL bool) error {
+func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
-		if requirePublicURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+		if policy.requireURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
 		}
 		return nil
 	}
 	resourceID := strings.TrimPrefix(media.StorageKey, "resource:")
-	if requirePublicURL {
-		resource, err := s.repo.ResourceForUser(userID, resourceID)
-		if err != nil {
-			return fmt.Errorf("读取任务参考资源失败：%w", err)
-		}
-		if resource.Status != "ready" {
-			return errors.New("任务参考资源尚未上传完成")
-		}
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err != nil {
+		return fmt.Errorf("读取任务参考资源失败：%w", err)
+	}
+	if resource.Status != "ready" {
+		return errors.New("任务参考资源尚未上传完成")
+	}
+	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
+	if useObjectURL {
 		signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
 		if err != nil {
-			return fmt.Errorf("生成 JSON 视频协议参考素材地址失败：%w", err)
+			return fmt.Errorf("生成参考素材地址失败：%w", err)
 		}
 		media.URL = signedURL
 		media.DataURL = ""
@@ -1372,17 +1424,17 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
 	defer body.Close()
-	policy, err := s.RuntimePolicy()
+	runtimePolicy, err := s.RuntimePolicy()
 	if err != nil {
 		return err
 	}
-	resourceLimit := megabytes(policy.Resource.ResourceUploadMB)
+	resourceLimit := megabytes(runtimePolicy.Resource.ResourceUploadMB)
 	data, err := io.ReadAll(io.LimitReader(body, resourceLimit+1))
 	if err != nil {
 		return err
 	}
 	if int64(len(data)) > resourceLimit {
-		return fmt.Errorf("任务参考资源超过 %dMB", policy.Resource.ResourceUploadMB)
+		return fmt.Errorf("任务参考资源超过 %dMB", runtimePolicy.Resource.ResourceUploadMB)
 	}
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
 	media.DataURL = dataURL(mimeType, data)
@@ -1392,6 +1444,14 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 	media.Height = resource.Height
 	media.DurationMs = resource.DurationMs
 	return nil
+}
+
+func resourceUsesObjectStorage(resource *model.Resource) bool {
+	if resource == nil {
+		return false
+	}
+	provider := strings.ToLower(strings.TrimSpace(resource.Provider))
+	return provider != "" && provider != "local"
 }
 
 func normalizedMediaMimeType(declared string, data []byte) string {
@@ -2386,6 +2446,10 @@ func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGeneratio
 	createdProviderTask := false
 	syncWindowStartedAt := time.Now()
 	if taskID == "" {
+		// The upstream create request may require an idempotency key. Keep it in
+		// the host-only request metadata so declarative plugins can map it to a
+		// header without exposing it in the provider JSON body.
+		request.Extra["idempotencyKey"] = uuid.NewString()
 		spec, err := adapter.BuildCreate(ctx, protocol.RequestContext{BaseURL: input.Config.BaseURL, Request: request})
 		if err != nil {
 			return nil, err

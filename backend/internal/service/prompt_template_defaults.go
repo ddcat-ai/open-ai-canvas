@@ -11,6 +11,7 @@ const (
 	promptOperationStoryboardFirstFrame = "storyboard_first_frame"
 	promptOperationStoryboardVideo      = "storyboard_video"
 	promptOperationCharacterExtract     = "character_extract"
+	promptOperationChapterAssetsExtract = "chapter_assets_extract"
 	promptOperationCharacterTurnaround  = "character_turnaround"
 )
 
@@ -18,6 +19,12 @@ const legacyStoryboardVideoPromptPreamble = "生成单一连续镜头的视频�
 
 func defaultPromptDefinitions() []PromptOperationDefinition {
 	return []PromptOperationDefinition{
+		{
+			Operation: promptOperationChapterAssetsExtract, Label: "章节角色、场景与道具提取", Category: "角色", OutputType: "json", SchemaKey: "chapter-assets/v1",
+			Description:    "从章节正文提取角色、实际发生剧情的场景和影响剧情的道具，分别进入资产待确认列表。",
+			Variables:      []PromptTemplateVariable{{Label: "项目名称", Placeholder: "{{项目名称}}"}, {Label: "章节名称", Placeholder: "{{章节名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
+			DefaultContent: `你是短剧资产导演。按章节事实提取角色、场景和道具。同一身份的别名合并，不编造正文未出现的资产；未明确的视觉信息写“正文未明确”。角色包含剧情定位、稳定外貌服装体态、性格、一致性提示、三视图提示及语言、声音年龄、音色。场景描述空间布局、环境和光照；道具描述材质、形状及剧情用途。无对应资产时返回空数组。`,
+		},
 		{
 			Operation: promptOperationStoryboardPlan, Label: "分镜规划", Category: "分镜", OutputType: "json", SchemaKey: "storyboard-plan/v3",
 			Description:    "把剧情、项目画风和当前角色版本规划为可执行镜头。",
@@ -105,6 +112,13 @@ func protectedPromptContext(operation string, values map[string]string) string {
 		return storyboardRepairProtectedContext(values)
 	case promptOperationCharacterExtract:
 		return characterExtractProtectedContext(values)
+	case promptOperationChapterAssetsExtract:
+		return strings.Join([]string{
+			fmt.Sprintf("【任务】\n从短剧项目《%s》的章节“%s”提取角色、场景和道具。", values["项目名称"], values["章节名称"]),
+			"【项目画风】\n" + values["项目画风"],
+			"【章节正文】\n" + values["章节正文"],
+			"【受保护输出契约】\n" + promptOutputContract(operation),
+		}, "\n\n")
 	case promptOperationCharacterTurnaround:
 		return strings.Join([]string{"【角色名称】\n" + values["角色名称"], "【项目画风】\n" + values["项目画风"], "【角色设定】\n" + values["角色设定"]}, "\n\n")
 	default:
@@ -118,6 +132,8 @@ func promptOutputContract(operation string) string {
 		return "服务端固定 JSON Schema storyboard-plan/v3（不可由运营模板或用户定制覆盖）：\n" + storyboardPlanJSONSchema
 	case promptOperationCharacterExtract:
 		return "服务端固定 JSON Schema character-breakdown/v1（不可由运营模板或用户定制覆盖）：\n" + characterBreakdownJSONSchema
+	case promptOperationChapterAssetsExtract:
+		return "服务端固定 JSON Schema chapter-assets/v1（不可由运营模板或用户定制覆盖）：\n" + chapterAssetsJSONSchema
 	default:
 		return "当前操作输出普通文本提示词，没有 JSON Schema。"
 	}
@@ -179,6 +195,24 @@ const storyboardPlanJSONSchema = `{
         }
       }
     }
+  }
+}`
+
+const chapterAssetsJSONSchema = `{
+  "type": "object", "additionalProperties": false,
+  "required": ["characters", "scenes", "props"],
+  "properties": {
+    "characters": {"$ref": "#/$defs/characterBreakdown/properties/characters"},
+    "scenes": {"type": "array", "items": {"$ref": "#/$defs/asset"}},
+    "props": {"type": "array", "items": {"$ref": "#/$defs/asset"}}
+  },
+  "$defs": {
+    "asset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "description", "prompt"],
+      "properties": {"name": {"type": "string"}, "description": {"type": "string"}, "prompt": {"type": "string"}}
+    },
+    "characterBreakdown": ` + characterBreakdownJSONSchema + `
   }
 }`
 

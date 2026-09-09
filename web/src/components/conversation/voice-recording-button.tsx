@@ -1,5 +1,7 @@
+import { Button } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useState } from "react";
-import { Button, Tooltip } from "antd";
+
 import { Mic } from "lucide-react";
 
 import { VoiceRecordingInline } from "./voice-recording-inline";

@@ -45,7 +45,14 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
-        await Promise.all([useCanvasStore.persist.rehydrate(), useCanvasHistoryStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate(), usePluginStore.persist.rehydrate(), useCreationPreferencesStore.persist.rehydrate()]);
+        await Promise.all([
+            useCanvasStore.persist.rehydrate(),
+            useCanvasHistoryStore.persist.rehydrate(),
+            useAssetStore.persist.rehydrate(),
+            useConfigStore.persist.rehydrate(),
+            usePluginStore.persist.rehydrate(),
+            useCreationPreferencesStore.persist.rehydrate(),
+        ]);
         // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
         if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
         if (!persistedCanvasHistory) useCanvasHistoryStore.setState({ deletedProjects: [] });
@@ -139,12 +146,13 @@ function managedModelChannels(models: PublicLogicalModel[]) {
 }
 
 // 系统渠道模型转换为前端配置格式
-function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChannel[] {
+export function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChannel[] {
     return channels.map((channel) => {
         const availableModels = channel.models.filter((m) => m.available);
         return {
             id: channel.id,
             name: channel.displayName,
+            sortOrder: channel.sortOrder,
             // 系统渠道必须走带渠道 ID 的站内代理；/api 只是业务 API 根路径，
             // 不能作为模型请求的运行时 Base URL 传给 channelRequest。
             baseUrl: `/api/${channel.id}`,

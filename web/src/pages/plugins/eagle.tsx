@@ -1,6 +1,8 @@
 import { ArrowLeft, ChevronDown, ChevronUp, Download, FileAudio, FileBox, FileImage, FileVideo, FolderOpen, FolderPlus, RefreshCw, Search, Settings2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { App, Button, Drawer, Empty, Input, Spin, Tag, Tree, Typography } from "antd";
+import { App, Button, Drawer, Input, Spin, Tag, Tree, Typography } from "antd";
+import { IconButton } from "@/components/ui/base/buttons";
+import { EmptyState } from "@/components/ui/product/empty-state";
 import type { DataNode } from "antd/es/tree";
 import { useNavigate } from "react-router";
 
@@ -183,7 +185,7 @@ export default function EagleLibraryPage() {
                         <aside className="eagle-folder-sidebar thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-190px)] lg:overflow-y-auto lg:pr-3">
                             <div className="eagle-folder-sidebar-header">
                                 <span className="text-[var(--fs-label)] font-semibold">Eagle 文件夹</span>
-                                <Button type="text" size="small" icon={<RefreshCw className="size-3.5" />} aria-label="刷新 Eagle 文件夹" loading={loading} onClick={() => void load()} />
+                                <IconButton size="sm" variant="ghost" icon={RefreshCw} aria-label="刷新 Eagle 文件夹" loading={loading} onClick={() => void load()} />
                             </div>
                             <button type="button" className={"assets-filter-item " + (selectedFolder === "" ? "is-active" : "")} aria-pressed={selectedFolder === ""} onClick={() => handleFolderSelect("root")}>
                                 <span className="assets-filter-item-label">全部素材</span>
@@ -233,7 +235,7 @@ export default function EagleLibraryPage() {
                                     </CollectionGrid>
                                     <PaginationBar current={page} pageSize={pageSize} total={items.length} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
                                 </>
-                            ) : <div className="eagle-empty-state"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前 Eagle 文件夹没有文件" /></div>}
+                            ) : <div className="eagle-empty-state"><EmptyState size="compact" title="当前 Eagle 文件夹没有文件" /></div>}
                         </section>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
-import { App, Button, Grid, Input, Modal, QRCode, Segmented, Skeleton, Table, Tag } from "antd";
+import { App, Button, Grid, Input, Modal, QRCode, Skeleton, Table, Tag } from "antd";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ColumnsType } from "antd/es/table";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowDownLeft, ArrowUpRight, CalendarCheck, Coins, CreditCard, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, TicketCheck } from "lucide-react";
@@ -475,7 +476,7 @@ export default function WalletPage() {
                             <h2 className="text-base font-semibold">积分流水</h2>
                             <p className="mt-1 text-xs text-foreground/55">当前展示最近 {wallet?.entries.length || 0} 条记录。</p>
                         </div>
-                        <Segmented
+                        <SegmentedControl
                             block={!screens.sm}
                             value={filter}
                             options={ledgerFilterOptions}

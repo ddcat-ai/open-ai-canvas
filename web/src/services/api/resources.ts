@@ -137,7 +137,12 @@ export async function uploadResourceFile(
     if (meta?.height) formData.append("height", String(Math.round(meta.height)));
     if (meta?.durationMs) formData.append("durationMs", String(Math.round(meta.durationMs)));
     try {
-        const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData, uploadRequestConfig(meta?.idempotencyKey)));
+        const data = await request<{ resource: RemoteResource }>(api.post("/resources", formData, {
+            ...uploadRequestConfig(meta?.idempotencyKey),
+            onUploadProgress: onProgress ? ({ loaded, total }) => {
+                if (total && total > 0) onProgress(Math.min(file.size, file.size * loaded / total), file.size);
+            } : undefined,
+        }));
         resourceCache.set(resourceCacheKey(data.resource.id), data.resource);
         return data.resource;
     } catch (error) {
@@ -170,7 +175,10 @@ async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video
         const data = new FormData();
         data.append("chunk", blob);
         // raw 二进制直传，与后端按裸 body 逐片落盘对齐（勿设手动 Content-Type，让 axios 处理）。
-        await request<{ index: number }>(api.put(`/resources/uploads/${encodeURIComponent(session.uploadId)}/chunks/${index}`, blob, { headers: { "Content-Type": "application/octet-stream" } }));
+        await request<{ index: number }>(api.put(`/resources/uploads/${encodeURIComponent(session.uploadId)}/chunks/${index}`, blob, {
+            headers: { "Content-Type": "application/octet-stream" },
+            onUploadProgress: onProgress ? ({ loaded }) => onProgress(start + Math.min(loaded, blob.size), file.size) : undefined,
+        }));
         onProgress?.(Math.min(end, file.size), file.size);
     }
     const complete = await request<{ resource: RemoteResource }>(api.post(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`));

@@ -168,7 +168,7 @@ const BUILTIN_NODE_TRAITS = {
     [CanvasNodeType.MediaConversion]: {
         label: "转换",
         icon: <WandSparkles />,
-        minSize: { width: 320, height: 360 },
+        minSize: { width: 400, height: 360 },
         showInCreateMenu: true,
         resourceKind: (node: CanvasNodeData) => {
             const conversion = node.metadata?.mediaConversion;

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"infinite-canvas/backend/internal/service"
@@ -27,6 +28,12 @@ func fail(c *gin.Context, status int, err error) {
 }
 
 func failService(c *gin.Context, err error) {
+	var cooldown *service.EmailCodeCooldownError
+	if errors.As(err, &cooldown) {
+		c.Header("Retry-After", strconv.Itoa(cooldown.Seconds))
+		fail(c, http.StatusTooManyRequests, cooldown)
+		return
+	}
 	var appErr *service.AppError
 	if errors.As(err, &appErr) && validErrorStatus(appErr.Status) {
 		code := appErr.Code

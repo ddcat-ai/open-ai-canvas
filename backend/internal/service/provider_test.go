@@ -23,6 +23,34 @@ import (
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
 const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
+func TestProviderMediaHydrationPolicyPrefersObjectURLs(t *testing.T) {
+	prefer := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceGrokImage)}})
+	if prefer.requireURL || !prefer.preferURL {
+		t.Fatalf("grok image policy = %#v", prefer)
+	}
+	required := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceMiniMaxVideo)}})
+	if !required.requireURL || !required.preferURL {
+		t.Fatalf("minimax policy = %#v", required)
+	}
+	bytesOnly := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceGeminiImage)}})
+	if bytesOnly.requireURL || bytesOnly.preferURL {
+		t.Fatalf("gemini image policy = %#v", bytesOnly)
+	}
+	masked := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceOpenAIImage)}, Mask: &providerMedia{ID: "mask"}})
+	if masked.requireURL || masked.preferURL {
+		t.Fatalf("openai mask policy = %#v", masked)
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "aliyun"}) != true {
+		t.Fatal("aliyun should use object storage URLs")
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "tencent"}) != true || resourceUsesObjectStorage(&model.Resource{Provider: "qiniu"}) != true || resourceUsesObjectStorage(&model.Resource{Provider: "s3"}) != true {
+		t.Fatal("cos/kodo/s3 should use object storage URLs")
+	}
+	if resourceUsesObjectStorage(&model.Resource{Provider: "local"}) {
+		t.Fatal("local resources should fall back to protocol-compatible bytes")
+	}
+}
+
 func TestProviderRequestErrorDetails(t *testing.T) {
 	tests := []struct {
 		name string
@@ -608,6 +636,8 @@ func TestProviderPayloadErrorMessageUsesSafeActionableCategories(t *testing.T) {
 		{name: "moderation", raw: "request blocked by content policy: prompt=private", want: "安全审核"},
 		{name: "quota", raw: "insufficient quota for api-key=secret", want: "额度不足"},
 		{name: "model access", raw: "model not found for tenant secret-id", want: "模型不存在"},
+		{name: "thinking mode rejects forced tool choice", raw: `{"error":{"message":"Thinking mode does not support this tool_choice","request_id":"secret-trace"}}`, want: "不支持强制工具调用"},
+		{name: "reasoning mode rejects forced tool choice", raw: `{"error":{"message":"tool_choice=required is not supported in reasoning mode"}}`, want: "不支持强制工具调用"},
 		{name: "unknown", raw: "trace_id=private internal stack", want: "模型服务返回失败"},
 	}
 	for _, tt := range tests {
@@ -681,6 +711,12 @@ func TestProviderUserFacingErrorMessageClassifiesRejectedRequestBodies(t *testin
 			statusCode: http.StatusBadRequest,
 			body:       "",
 			want:       "请检查模型和参数",
+		},
+		{
+			name:       "thinking mode rejects forced tool choice",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"message":"Thinking mode does not support this tool_choice","request_id":"secret"}}`,
+			want:       "不支持强制工具调用",
 		},
 	}
 	for _, tt := range tests {

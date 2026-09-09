@@ -1,6 +1,8 @@
+import { App, Button, Popconfirm, Select } from "antd";
+import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { App, Button, Popconfirm, Select, Tooltip } from "antd";
+
 import { Link2, Unlink, X } from "lucide-react";
 
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";

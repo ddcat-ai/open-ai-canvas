@@ -1,6 +1,8 @@
 import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
-import { Input, InputNumber, Segmented, Select, Switch } from "antd";
+import { Input, InputNumber, Select } from "antd";
+import { Switch } from "@/components/ui/base/switch";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
@@ -112,7 +114,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         </Field>
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="02" title="输出时长" description="定义可用秒数及默认时长">
-                        <Segmented
+                        <SegmentedControl
                             block
                             disabled={disabled}
                             value={profile.duration.selection}
@@ -224,7 +226,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     </div>
                 </CapabilityBlock>
                 <CapabilityBlock title="输出时长">
-                    <Segmented
+                    <SegmentedControl
                         block
                         disabled={disabled}
                         value={profile.duration.selection}
@@ -428,7 +430,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, sec
                 <div className="admin-capability-protocol-grid admin-image-protocol-grid">
                     <ProtocolParameterCard step="01" title="尺寸参数" description="按分辨率配置可用画幅，直接点选或输入比例" className="admin-image-size-card">
                         <div className="admin-image-size-intro">
-                            <Segmented
+                            <SegmentedControl
                                 block
                                 disabled={disabled}
                                 value={profile.size.parameter}
@@ -517,7 +519,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, sec
                 </CapabilityBlock>
                 <CapabilityBlock title="尺寸参数">
                     <ImageSizeHelp />
-                    <Segmented
+                    <SegmentedControl
                         block
                         disabled={disabled}
                         value={profile.size.parameter}
@@ -658,11 +660,11 @@ function BooleanField({ label, value, disabled, onChange }: { label: string; val
             <div className="flex shrink-0 items-center gap-3">
                 <label className="grid justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                     <span>支持</span>
-                    <Switch aria-label={`${label}支持`} size="small" disabled={disabled} checked={value.supported} onChange={(supported) => onChange({ ...value, supported })} />
+                    <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={value.supported} onChange={(supported) => onChange({ ...value, supported })} />
                 </label>
                 <label className="grid justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                     <span>默认</span>
-                    <Switch aria-label={`${label}默认值`} size="small" disabled={disabled || !value.supported} checked={value.default} onChange={(defaultValue) => onChange({ ...value, default: defaultValue })} />
+                    <Switch aria-label={`${label}默认值`} size="sm" disabled={disabled || !value.supported} checked={value.default} onChange={(defaultValue) => onChange({ ...value, default: defaultValue })} />
                 </label>
             </div>
         </div>
@@ -678,7 +680,7 @@ function ParameterField({ label, description, supported, disabled, onChange }: {
             </div>
             <label className="grid shrink-0 justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                 <span>支持</span>
-                <Switch aria-label={`${label}支持`} size="small" disabled={disabled} checked={supported} onChange={onChange} />
+                <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={supported} onChange={onChange} />
             </label>
         </div>
     );

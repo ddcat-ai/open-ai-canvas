@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import { useNavigate } from "react-router";
 
 import { navigationTools } from "@/constant/navigation-tools";
+import { Kbd } from "@/components/ui/base/kbd";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -100,12 +101,9 @@ toolEntry("projects", "/projects"),
                             className="min-w-0 flex-1 bg-transparent text-[var(--fs-body)] outline-none placeholder:text-foreground/45"
                             placeholder="搜索页面或操作…"
                         />
-                        <kbd
-                            onClick={onClose}
-                            className="hidden h-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-[var(--workspace-border)] bg-background/60 px-1.5 font-mono text-[var(--fs-tiny)] font-medium text-foreground/60 transition-colors hover:bg-surface-hover hover:text-foreground sm:inline-flex"
-                        >
+                        <Kbd onClick={onClose} className="hidden shrink-0 cursor-pointer transition-colors hover:bg-surface-hover hover:text-foreground sm:inline-flex">
                             ⌘K
-                        </kbd>
+                        </Kbd>
                         <button
                             type="button"
                             onClick={onClose}

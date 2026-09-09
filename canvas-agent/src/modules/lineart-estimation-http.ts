@@ -6,6 +6,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Request, RequestHandler, Response } from "express";
 
 import type { LocalRuntimeModule } from "../local-runtime.js";
+import { resolveEnvPath } from "./runtime-env-path.js";
 
 const DEFAULT_MODEL_ID = "lllyasviel/Annotators";
 const MAX_INPUT_BYTES = 12 * 1024 * 1024;
@@ -103,12 +104,12 @@ export function resolveLineartRuntimePaths(env: NodeJS.ProcessEnv = process.env)
     const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
     const configuredProjectRoot = env.CANVAS_PROJECT_ROOT?.trim();
     const projectRoots = [
-        configuredProjectRoot ? path.resolve(configuredProjectRoot) : undefined,
+        configuredProjectRoot ? resolveEnvPath(configuredProjectRoot) : undefined,
         path.resolve(moduleRoot, ".."),
         path.resolve(process.cwd()),
     ].filter((value): value is string => Boolean(value));
     const projectRoot = configuredProjectRoot
-        ? path.resolve(configuredProjectRoot)
+        ? resolveEnvPath(configuredProjectRoot)
         : projectRoots.find((value) => fs.existsSync(path.join(value, ".local"))) || projectRoots[0]!;
     const scriptCandidates = [
         path.join(moduleRoot, "python", "lineart_runtime.py"),
@@ -116,12 +117,12 @@ export function resolveLineartRuntimePaths(env: NodeJS.ProcessEnv = process.env)
     ];
     const scriptPath = scriptCandidates.find((value) => fs.existsSync(value)) || scriptCandidates[0]!;
     const pythonCandidates = env.CANVAS_DEPTH_PYTHON?.trim()
-        ? [path.resolve(env.CANVAS_DEPTH_PYTHON.trim())]
+        ? [resolveEnvPath(env.CANVAS_DEPTH_PYTHON)]
         : process.platform === "win32"
             ? [path.join(projectRoot, ".local", "depth-anything-v2", "venv", "Scripts", "python.exe")]
             : [path.join(projectRoot, ".local", "depth-anything-v2", "venv", "bin", "python")];
     const pythonPath = pythonCandidates[0]!;
-    const hfHome = path.resolve(env.CANVAS_LINEART_HF_HOME?.trim() || env.CANVAS_DEPTH_HF_HOME?.trim() || path.join(projectRoot, ".local", "cache", "huggingface"));
+    const hfHome = resolveEnvPath(env.CANVAS_LINEART_HF_HOME?.trim() || env.CANVAS_DEPTH_HF_HOME?.trim() || path.join(projectRoot, ".local", "cache", "huggingface"));
     const modelId = env.CANVAS_LINEART_MODEL_ID?.trim() || DEFAULT_MODEL_ID;
     const modelCacheDir = path.join(hfHome, "hub", `models--${modelId.replaceAll("/", "--")}`);
     const workerExists = fs.existsSync(scriptPath);
