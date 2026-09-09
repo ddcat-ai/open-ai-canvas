@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/model"
@@ -53,6 +54,29 @@ func TestApplyCanvasMCPAtomicIsScopedToOwner(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("cross-user audit unexpectedly persisted: %d", count)
+	}
+}
+
+func TestMCPTaskIdempotencyIsScopedToOwnerAndCanvas(t *testing.T) {
+	svc, repo, db := newMCPProjectTestService(t, "task-owner")
+	_ = svc
+	now := time.Now()
+	tasks := []model.Task{
+		{ID: "task-a", UserID: "user-a", ProjectID: "canvas-a", InputJSON: `{"metadata":{"clientOperationId":"op-1","nodeId":"node-1"}}`, CreatedAt: now},
+		{ID: "task-b", UserID: "user-b", ProjectID: "canvas-b", InputJSON: `{"metadata":{"clientOperationId":"op-1","nodeId":"node-1"}}`, CreatedAt: now.Add(time.Second)},
+	}
+	if err := db.Create(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.MCPTaskByIdempotency("user-a", "canvas-a", "node-1", "op-1")
+	if err != nil || got == nil || got.ID != "task-a" {
+		t.Fatalf("owner lookup = %#v, err=%v", got, err)
+	}
+	if _, err := repo.MCPTaskByIdempotency("user-a", "canvas-b", "node-1", "op-1"); err == nil {
+		t.Fatal("cross-canvas idempotency lookup unexpectedly returned a task")
+	}
+	if _, err := repo.MCPTaskByIdempotency("user-c", "canvas-a", "node-1", "op-1"); err == nil {
+		t.Fatal("cross-user idempotency lookup unexpectedly returned a task")
 	}
 }
 
