@@ -58,4 +58,3 @@ export const useSyncProgressStore = create<SyncProgressStore>((set, get) => ({
         return list.some((item) => item.phase === "uploading" || item.phase === "saving");
     },
 }));
-
