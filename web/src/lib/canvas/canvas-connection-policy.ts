@@ -16,7 +16,7 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
     if (acceptedInputKind) {
         const source = nodes.find((node) => node.id === candidate.fromNodeId);
         const sourceKind = source ? getNodeInputKind(source.type) : undefined;
-        if (sourceKind !== acceptedInputKind) return `${acceptedInputKindLabel(acceptedInputKind)}节点只接受${acceptedInputKindLabel(acceptedInputKind)}输入`;
+        if (sourceKind !== acceptedInputKind) return `${acceptedInputKindLabel(acceptedInputKind as any)}节点只接受${acceptedInputKindLabel(acceptedInputKind as any)}输入`;
     }
     const mode = getNodeGenerationMode(target);
     if (!mode) return "";

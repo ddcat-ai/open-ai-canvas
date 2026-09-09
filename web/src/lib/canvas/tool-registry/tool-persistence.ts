@@ -46,7 +46,7 @@ function isPrefsShape(value: unknown): value is Partial<ToolbarPrefs> {
 
 /** 把旧的抓手/框选两个独立按钮偏好合并成一个开关项 */
 export function migrateToolbarPrefs(toolbar: ToolbarId, prefs: ToolbarPrefs): ToolbarPrefs {
-    if (toolbar !== "main") return prefs;
+    if ((toolbar as string) !== "main") return prefs;
     const legacyIds = new Set<string>(LEGACY_CANVAS_MODE_TOOL_IDS);
     const hasLegacy = prefs.order.some((id) => legacyIds.has(id)) || prefs.hidden.some((id) => legacyIds.has(id));
     if (!hasLegacy) return prefs;
