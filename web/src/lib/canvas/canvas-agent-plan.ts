@@ -41,3 +41,25 @@ export function transitionCanvasAgentPlan(plan: CanvasAgentPlan, status: CanvasA
     const nextStatus = tasks.some((task) => task.status === "failed" || task.status === "blocked") ? "blocked" : tasks.every((task) => task.status === "succeeded") ? "succeeded" : plan.status;
     return { ...plan, status: nextStatus, tasks };
 }
+
+export function completeCanvasAgentPlanTasks(plan: CanvasAgentPlan, results: Array<{ ok: boolean }>): CanvasAgentPlan {
+    const tasks = plan.tasks.map((task, index) => ({ ...task, status: results[index] ? (results[index].ok ? "succeeded" : "failed") : task.status }));
+    const status: CanvasAgentPlanStatus = tasks.some((task) => task.status === "failed") ? "blocked" : tasks.every((task) => task.status === "succeeded") ? "succeeded" : "running";
+    return { ...plan, status, tasks };
+}
+
+export function retryCanvasAgentPlanTask(plan: CanvasAgentPlan, taskId: string): CanvasAgentPlan {
+    const retryable = new Set([taskId]);
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const task of plan.tasks) {
+            if (task.dependsOn.some((dependency) => retryable.has(dependency)) && !retryable.has(task.id)) {
+                retryable.add(task.id);
+                changed = true;
+            }
+        }
+    }
+    const tasks = plan.tasks.map((task) => retryable.has(task.id) ? { ...task, status: "pending" as const, retryCount: task.retryCount + (task.id === taskId ? 1 : 0) } : task);
+    return { ...plan, status: "running", tasks };
+}
