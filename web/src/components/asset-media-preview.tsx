@@ -8,12 +8,16 @@ type AssetMediaPreviewProps = {
     alt: string;
     className?: string;
     fallback?: ReactNode;
+    thumbnailOnly?: boolean;
 };
 
-export function AssetMediaPreview({ asset, alt, className = "", fallback = null }: AssetMediaPreviewProps) {
+export function AssetMediaPreview({ asset, alt, className = "", fallback = null, thumbnailOnly = false }: AssetMediaPreviewProps) {
     if (!asset) return fallback;
 
     if ((asset.kind === "video" || asset.kind === "audio") && asset.data.url) {
+        if (thumbnailOnly && asset.kind === "video") {
+            return asset.coverUrl ? <CachedResourceImage src={asset.coverUrl} alt={alt} loading="lazy" decoding="async" className={className} fallback={fallback} /> : fallback;
+        }
         if (asset.kind === "audio") {
             return <audio src={asset.data.url} aria-label={alt} controls preload="metadata" className={className} />;
         }
@@ -39,6 +43,9 @@ export function AssetMediaPreview({ asset, alt, className = "", fallback = null 
 
     const storageKey = asset.kind === "image" ? asset.data.storageKey : undefined;
     const imageUrl = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
+    if (thumbnailOnly && asset.kind === "image") {
+        return asset.coverUrl ? <CachedResourceImage src={asset.coverUrl} alt={alt} loading="lazy" decoding="async" className={className} fallback={fallback} /> : fallback;
+    }
     if (!imageUrl && !storageKey) return fallback;
     return <CachedResourceImage storageKey={storageKey} src={imageUrl} alt={alt} loading="lazy" decoding="async" className={className} fallback={fallback} />;
 }

@@ -1136,6 +1136,7 @@ function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuIt
                     <AssetMediaPreview
                         asset={asset}
                         alt={asset.title}
+                        thumbnailOnly
                         className="assets-cover-media"
                         fallback={
                             <div className="assets-cover-fallback">
