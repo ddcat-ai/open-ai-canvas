@@ -10,6 +10,13 @@
 
 本项目同时存在两条路径：网页内置 Agent 和外部 Agent 的远程 MCP。外部 Agent（Codex、Claude 等）自行加载 Skill、生成 Plan/Task 并处理审批，`canvas-agent` 仅提供画布专用 stdio MCP；网页内置 Agent 才是 Hermes Bridge、Skill、Plan、Task 和询问/自动模式的接入目标。远程 MCP 不公开这些编排接口。
 
+## 用户入口决策
+
+- **网页用户**：直接在画布 Agent 窗口中对话操作画布，使用网页已有的在线 Agent、工具循环和审批能力。
+- **外部用户**：在 Codex、Claude 等客户端中通过远程 Canvas MCP 对话操作画布；客户端自行负责 Skill、Plan、Task 和审批。
+- 两条路径共享画布工具合同、服务端权限和 `revision/stateHash` 并发保护，但不互相调用对方的 Agent。
+- Hermes Bridge、`RestrictedAIAgentFactory`、Python Canvas Tool Adapter 和 Hermes 会话级工具注入暂缓，不接入当前生产路径；原型代码仅作为实验参考。
+
 ## 架构决策
 
 - **运行时桥接优先**：保留 Hermes Python 核心，通过受控 Bridge 与现有 Node/TypeScript `canvas-agent` 通信；不复制 Hermes 源码，也不先重写成 TypeScript。

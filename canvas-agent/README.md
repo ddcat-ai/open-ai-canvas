@@ -105,6 +105,12 @@ Canvas Agent 仅包含远程 CLI、stdio MCP、工具规划和 HTTPS 客户端�
 - Dreamina CLI 本机生成
 - 肖像排查本机模型与报告
 
+## 两种用户入口
+
+网页用户直接在画布 Agent 窗口中对话操作画布；外部用户在 Codex、Claude 等客户端中通过远程 Canvas MCP 对话操作画布。两条路径共享画布工具合同、服务端权限和 `revision/stateHash` 并发保护，但不互相调用对方的 Agent。
+
+Hermes Bridge、`RestrictedAIAgentFactory`、Python Canvas Tool Adapter 和 Hermes 会话级工具注入暂缓，不属于当前远程 MCP 生产路径。远程 MCP 仍只提供画布读取、校验、写入和生成任务提交。
+
 ComfyUI Bridge 保留，但它是站点提供的独立原生程序，由“设置 -> ComfyUI Bridge”生成启动命令。它不属于 Canvas Agent 的 Local Runtime，也不会恢复 `17371` 端口或网页本机 Agent 连接。
 
 ## 发布

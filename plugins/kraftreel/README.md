@@ -61,6 +61,13 @@ npx -y kraftreel-cli project use <canvas-project-id>
 
 然后新建 Codex 线程并说“打开影策”。插件可以打开网页画布，也可以通过已登录的远程 MCP 读取或修改当前选中的画布。网页内的在线 Agent 不依赖 MCP 登录。
 
+## 用户入口
+
+- 网页用户：直接在画布 Agent 窗口中对话操作画布。
+- 外部用户：在 Codex、Claude 等客户端中通过远程 Canvas MCP 对话操作画布。
+
+两条路径共享画布工具合同、权限和 `revision/stateHash` 并发保护，但不互相调用对方的 Agent。Hermes Bridge 暂缓，不影响网页已有 Agent 或外部客户端使用远程 MCP。
+
 常用提示：
 
 ```text
