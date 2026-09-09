@@ -93,7 +93,7 @@ export function Select<V extends string = string>({ value, onChange, options = [
                 setOpen(false);
                 if (key != null) onChange?.(key as V);
             }}
-            aria-label={ariaLabel}
+            aria-label={ariaLabel ?? placeholder ?? "选项"}
             className={cn("inline-flex w-full", className)}
         >
             <AriaButton
