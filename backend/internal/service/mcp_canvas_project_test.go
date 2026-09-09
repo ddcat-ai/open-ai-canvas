@@ -80,6 +80,47 @@ func TestMCPTaskIdempotencyIsScopedToOwnerAndCanvas(t *testing.T) {
 	}
 }
 
+func TestApplyCanvasMCPAtomicAllowsOnlyOneConcurrentWriter(t *testing.T) {
+	svc, repo, _ := newMCPProjectTestService(t, "atomic-race-"+strings.ReplaceAll(time.Now().Format("150405.000000000"), ".", "-"))
+	raw := json.RawMessage(`{"id":"canvas-race","title":"初稿","nodes":[],"connections":[]}`)
+	base, err := svc.SaveCanvasProjectWithPrecondition("user-a", raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeUpdate := func(title string) *model.CanvasProject {
+		payload := `{"id":"canvas-race","title":"` + title + `","nodes":[],"connections":[]}`
+		hash, hashErr := model.CanvasStateHash([]byte(payload))
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		return &model.CanvasProject{ID: base.ID, UserID: "user-a", ProjectID: base.ProjectID, Title: title, PayloadJSON: payload, Revision: base.Revision + 1, StateHash: hash}
+	}
+	updates := []*model.CanvasProject{makeUpdate("并发一"), makeUpdate("并发二")}
+	results := make([]bool, 2)
+	errors := make([]error, 2)
+	for i := range updates {
+		_, results[i], errors[i] = repo.ApplyCanvasMCPAtomic("user-a", base.ID, base.Revision, base.StateHash, updates[i], &model.MCPAuditEvent{ID: "race-audit-" + string(rune('1'+i)), UserID: "user-a", CanvasID: base.ID, Tool: "canvas_apply_ops"})
+	}
+	successes := 0
+	for i := range results {
+		if results[i] {
+			successes++
+		} else if errors[i] != nil {
+			t.Fatalf("concurrent writer %d returned unexpected error: %v", i, errors[i])
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("concurrent successes = %d, want exactly one (results=%v)", successes, results)
+	}
+	stored, err := svc.GetMCPProject("user-a", base.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Revision != base.Revision+1 {
+		t.Fatalf("revision after race = %d, want %d", stored.Revision, base.Revision+1)
+	}
+}
+
 func paddedCanvasPayload(id string, title string, pad int) json.RawMessage {
 	return json.RawMessage(`{"id":"` + id + `","title":"` + title + `","nodes":[],"connections":[],"pad":"` + strings.Repeat("x", pad) + `"}`)
 }

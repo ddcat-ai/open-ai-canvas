@@ -15,6 +15,7 @@ import (
 // appends the audit row in the same transaction.
 func (r *Repository) ApplyCanvasMCPAtomic(userID string, canvasID string, expectedRevision int64, expectedHash string, project *model.CanvasProject, audit *model.MCPAuditEvent) (*model.CanvasProject, bool, error) {
 	var current model.CanvasProject
+	applied := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ? AND user_id = ?", canvasID, userID).Error; err != nil {
 			return err
@@ -38,12 +39,13 @@ func (r *Repository) ApplyCanvasMCPAtomic(userID string, canvasID string, expect
 			}
 		}
 		current = *project
+		applied = true
 		return nil
 	})
 	if err != nil {
 		return nil, false, err
 	}
-	return &current, current.ID != "" && current.Revision == project.Revision, nil
+	return &current, applied, nil
 }
 
 // RollbackCanvasMCPAtomic restores the previous project only while the
