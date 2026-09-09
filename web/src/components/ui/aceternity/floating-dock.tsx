@@ -213,19 +213,20 @@ function renderStaticDockItems(items: FloatingDockEntry[]) {
             return <span key={item.id} aria-hidden className="canvas-static-dock-separator" />;
         }
 
+        const command = item as FloatingDockCommand;
         return (
             <button
                 key={item.id}
                 type="button"
-                aria-label={item.label}
-                title={item.label}
-                aria-expanded={item.expands ? item.active || undefined : undefined}
-                aria-pressed={item.expands ? undefined : item.active || undefined}
-                disabled={item.disabled}
-                className={cn("aceternity-dock-command canvas-static-command", item.wide && "is-wide", item.quiet && "is-quiet", item.active && "is-active", item.danger && "is-danger")}
-                onClick={item.onClick}
+                aria-label={command.label}
+                title={command.label}
+                aria-expanded={command.expands ? command.active || undefined : undefined}
+                aria-pressed={command.expands ? undefined : command.active || undefined}
+                disabled={command.disabled}
+                className={cn("aceternity-dock-command canvas-static-command", command.wide && "is-wide", command.quiet && "is-quiet", command.active && "is-active", command.danger && "is-danger")}
+                onClick={command.onClick}
             >
-                <span className="canvas-static-command-icon">{item.icon}</span>
+                <span className="canvas-static-command-icon">{command.icon}</span>
             </button>
         );
     });

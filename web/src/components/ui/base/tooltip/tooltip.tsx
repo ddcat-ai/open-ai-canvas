@@ -34,16 +34,18 @@ export interface TooltipProps {
     /** 悬停延迟 ms（默认 350，贴近 AntD mouseEnterDelay） */
     delay?: number;
     className?: string;
+    classNames?: { root?: string };
+    arrow?: boolean;
     children: ReactNode;
 }
 
-export function Tooltip({ title, placement = "top", delay = 350, className, children }: TooltipProps) {
+export function Tooltip({ title, placement = "top", delay = 350, className, classNames, children }: TooltipProps) {
     if (!title) return <>{children}</>;
 
     return (
         <TooltipTrigger delay={delay}>
             <span className="inline-flex">{children}</span>
-            <RACTooltip placement={PLACEMENT_MAP[placement]} offset={6} className={cn("z-50 max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className)}>
+            <RACTooltip placement={PLACEMENT_MAP[placement]} offset={6} className={cn("z-50 max-w-64 rounded-md border border-border bg-surface-strong px-2 py-1 text-xs leading-relaxed text-foreground shadow-md", "ra-pop-in", className, classNames?.root)}>
                 {title}
             </RACTooltip>
         </TooltipTrigger>
