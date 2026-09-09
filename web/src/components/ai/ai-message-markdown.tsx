@@ -92,8 +92,7 @@ const components: Components = {
         </td>
     ),
     input: ({ ...props }) => <input {...props} className="ai-message-markdown-task" disabled />,
-    };
-}
+};
 
 
 export function AIMessageMarkdown({ children, isStreaming = false, className = "" }: AIMessageMarkdownProps) {
