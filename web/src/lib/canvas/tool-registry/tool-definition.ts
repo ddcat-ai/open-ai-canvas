@@ -7,7 +7,7 @@ import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeTypeId, CanvasToolMo
 
 /** 工具栏标识——每个工具栏有独立的注册表与偏好 */
 export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
-export type NodeToolbarGroup = "primary" | "portrait" | "viewpoint" | "lighting" | "process" | "workspace" | "utility" | "more";
+export type NodeToolbarGroup = "primary" | "portrait" | "viewpoint" | "lighting" | "panorama" | "process" | "workspace" | "utility" | "more";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
 export type ToolCategory =

@@ -56,6 +56,7 @@ import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-
 import { CanvasDirectorTemplateModal } from "@/components/canvas/director/canvas-director-template-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
 import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
+import { CanvasPanoramaConfigModal } from "@/components/canvas/canvas-panorama-config-modal";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -800,6 +801,11 @@ function InfiniteCanvasPage() {
         frameDialogNodeId,
         generateAngleNode,
         generateLightingNode,
+        openPanoramaConfig,
+        createPanoramaViewerWithConfig,
+        addPanoramaCaptureNode,
+        panoramaConfigNodeId,
+        setPanoramaConfigNodeId,
         generateEmotionNode,
         handleSegmentConfirm,
         maskEditImageNode,
@@ -1449,7 +1455,8 @@ function InfiniteCanvasPage() {
         updateMediaNode: updateMediaNodeFromContent,
         openPortraitClearance,
         openArtCritique,
-    }), [deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, openArtCritique, openPortraitClearance, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent]);
+        addPanoramaCaptureNode,
+    }), [addPanoramaCaptureNode, deleteNodeFromContent, downloadNodeImage, duplicateNodeFromContent, openArtCritique, openPortraitClearance, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent]);
     const { agentSnapshot, agentUndoCount, applyAgentOps, canUndoAgentOps, dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasAgentOperations({
         projectId,
         domainProjectId: currentProject?.projectId,
@@ -2606,6 +2613,7 @@ function InfiniteCanvasPage() {
                             setDialogNodeId(null);
                             setLightingNodeId((current) => (current === node.id ? null : node.id));
                         }}
+                        onPanorama={openPanoramaConfig}
                         onViewImage={(node) => setPreviewNodeId(node.id)}
                         onExtractVideoFrames={openVideoFrameExtractor}
                         onExtractAudioFromVideo={(node) => void extractAudioFromVideo(node)}
@@ -2843,6 +2851,26 @@ function InfiniteCanvasPage() {
                             open={Boolean(artCritiqueNode)}
                             onClose={() => setArtCritiqueNodeId(null)}
                             onUpdateState={(nodeId, state) => handleConfigNodeChange(nodeId, { artCritique: state })}
+                        />
+
+                        <CanvasPanoramaConfigModal
+                            open={Boolean(panoramaConfigNodeId)}
+                            onCancel={() => setPanoramaConfigNodeId(null)}
+                            onConfirm={(composedPrompt, config) => {
+                                const node = nodes.find((n) => n.id === panoramaConfigNodeId);
+                                if (node) {
+                                    createPanoramaViewerWithConfig(node, composedPrompt, config);
+                                }
+                            }}
+                            onCopyPrompt={(prompt) => {
+                                void navigator.clipboard?.writeText(prompt).then(() => message.success("已复制全景提示词"));
+                            }}
+                            previewImageUrl={
+                                panoramaConfigNodeId
+                                    ? nodes.find((n) => n.id === panoramaConfigNodeId)?.metadata?.content
+                                    : undefined
+                            }
+                            nodes={nodes}
                         />
 
                     <CanvasScriptEditor

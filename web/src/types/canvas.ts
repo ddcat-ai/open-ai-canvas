@@ -432,6 +432,13 @@ export type CanvasNodeMetadata = {
     artCritique?: ArtCritiqueNodeState;
     /** 摄像机控制选项，启用后生成时自动追加摄影机/镜头/焦距/光圈提示词。 */
     cameraControl?: CameraControlOptions;
+    /** 全景节点配置：投影方式、生成方式和比例兜底开关。 */
+    panoramaConfig?: {
+        projection: "spherical" | "cylindrical";
+        sourceMode: "ai" | "image";
+        smartBase: boolean;
+        directImageUrl?: string | null;
+    };
 };
 
 export type CanvasNodeData = {

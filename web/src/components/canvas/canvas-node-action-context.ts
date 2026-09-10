@@ -22,6 +22,8 @@ export type CanvasNodeActionContextValue = {
     openPortraitClearance?: (node: CanvasNodeData) => void;
     /** 打开节点级 AI 审美批改报告。 */
     openArtCritique?: (node: CanvasNodeData) => void;
+    /** 全景节点导出截图：上传 dataUrl 并在源节点右侧创建派生图片节点。 */
+    addPanoramaCaptureNode?: (node: CanvasNodeData, dataUrl: string, title: string) => Promise<void> | void;
 };
 
 export const CanvasNodeActionContext = createContext<CanvasNodeActionContextValue>({});
