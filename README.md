@@ -58,12 +58,6 @@
 | <img src="assets/user-yuxi.jpg" alt="宇熙" width="80"> | 宇熙 | [53121904@qq.com](mailto:53121904@qq.com) | 年轻的时候不狂，老了拿什么回忆 |
 | <img src="assets/user-yingzi.png" alt="影子" width="80"> | 影子 | [305818148@qq.com](mailto:305818148@qq.com) | 年纪大佬才明白人要顺势而为。 |
 | <img src="assets/user-ray.jpg" alt="Ray" width="80"> | Ray | [cnraylee@qq.com](mailto:cnraylee@qq.com) | AI时代的全栈落地工，欢迎找我聊需求 |
-| <img src="assets/user-bjsg.jpg" alt="不见山谷" width="80"> | 不见山谷<br><sub>VV：yu170718</sub> | [1762202553@qq.com](mailto:1762202553@qq.com) | 空山不见人，但闻人语响 |
-| <img src="assets/user-yep.jpg" alt="yep" width="80"> | yep | [1239738103@qq.com](mailto:1239738103@qq.com) | 思考，坚持 |
-| <img src="assets/user-hamburger.jpg" alt="汉堡爸爸" width="80"> | 汉堡爸爸<br><sub>VV：jxs62888</sub> | [309151651@qq.com](mailto:309151651@qq.com) | 没什么大不了 |
-| <img src="assets/user-bensharp.jpg" alt="bensharp" width="80"> | bensharp<br><sub>VV：jiahezuiai</sub> | [275008147@qq.com](mailto:275008147@qq.com) | 在哪跌倒，就在哪睡一觉 |
-| <img src="assets/user-daqzia.jpg" alt="daqzia" width="80"> | daqzia<br><sub>VV：wangzhiwei-8234</sub> | [wzwzcb@gmail.com](mailto:wzwzcb@gmail.com) | NullPointerException |
-| <img src="assets/user-xingmeng.jpg" alt="醒梦" width="80"> | 醒梦<br><sub>VV：love-is-heart-is</sub> | [1948863412@qq.com](mailto:1948863412@qq.com) | Always believe that good things will happen |
 
 ## 交流与反馈
 
