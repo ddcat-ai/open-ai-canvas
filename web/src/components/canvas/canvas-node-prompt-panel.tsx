@@ -1,7 +1,7 @@
 import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -14,9 +14,8 @@ import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefa
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
+import { CanvasCameraControlPopover } from "./canvas-camera-control-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
-import { CanvasNodeCameraPanel } from "./canvas-node-camera-dialog";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -83,7 +82,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
     const [manualExpandedPromptHeight, setManualExpandedPromptHeight] = useState<number | null>(null);
     const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
-    const [cameraPanelOpen, setCameraPanelOpen] = useState(false);
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
@@ -181,7 +179,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         setExpandedPromptContentHeight(estimatePromptContentHeight(normalizedSavedPrompt, true));
         setManualPromptHeight(null);
         setManualExpandedPromptHeight(null);
-        setCameraPanelOpen(false);
     }, [node.id]);
 
     useEffect(() => {
@@ -401,12 +398,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     ) : mode === "image" ? (
                         // 图片模式下，显示相机配置与镜头配置
                         <>
-                            <CameraToolsPopover
+                            <CanvasCameraControlPopover
                                 cameraControl={node.metadata?.cameraControl}
+                                onCameraControlChange={(options) => onConfigChange(node.id, { cameraControl: options })}
                                 theme={theme}
                                 compact={!expanded}
-                                open={cameraPanelOpen}
-                                onOpenChange={setCameraPanelOpen}
                             />
                             <CanvasImageSettingsPopover
                                 config={config}
@@ -474,19 +470,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         );
     };
 
-    const renderCameraPanel = () => (
-        <div className="canvas-node-composer-camera-panel">
-            <CanvasNodeCameraPanel
-                cameraControl={node.metadata?.cameraControl}
-                onClose={() => setCameraPanelOpen(false)}
-                onConfirm={(options) => {
-                    onConfigChange(node.id, { cameraControl: options });
-                    setCameraPanelOpen(false);
-                }}
-            />
-        </div>
-    );
-
     return (
         <CanvasPromptOptimizerDrawer
             open={promptOptimizerOpen}
@@ -502,7 +485,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             onApply={(nextPrompt) => updatePrompt(nextPrompt)}
         >
             <div
-                className={`canvas-node-composer${cameraPanelOpen ? " has-camera-panel" : ""}`}
+                className="canvas-node-composer"
                 style={composerSurfaceStyle}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
@@ -511,7 +494,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             {renderComposerHeader(false)}
 
             {renderPromptEditor(false)}
-            {cameraPanelOpen ? renderCameraPanel() : null}
 
             {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
             {hasVideoPromptTools ? (
@@ -558,7 +540,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 <div className="relative flex min-h-0 flex-col gap-2.5 overflow-visible p-3" style={{ ...composerTokens, color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     {renderPromptEditor(true)}
-                    {cameraPanelOpen ? renderCameraPanel() : null}
                     {hasVideoPromptTools ? (
                         <div className="canvas-node-composer-parameters shrink-0">
                             <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
@@ -570,29 +551,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
 
             </div>
         </CanvasPromptOptimizerDrawer>
-    );
-}
-
-function CameraToolsPopover({ cameraControl, theme, compact, open, onOpenChange }: { cameraControl?: CameraControlOptions; theme: CanvasTheme; compact: boolean; open: boolean; onOpenChange: (open: boolean) => void }) {
-    const cameraEnabled = cameraControl?.enabled === true;
-    const active = open || cameraEnabled;
-    return (
-        <button
-            type="button"
-            className={`canvas-node-composer-camera-tools-trigger inline-flex shrink-0 items-center gap-1 rounded-[var(--r-md)] border px-1.5 text-[var(--fs-tiny)] transition-colors focus:outline-none focus-visible:outline-none ${compact ? "is-compact h-7" : "h-8"}`}
-            style={{
-                background: active ? `${theme.node.activeStroke}14` : theme.node.fill,
-                borderColor: active ? theme.node.activeStroke : "transparent",
-                color: active ? theme.node.activeStroke : theme.node.text,
-            }}
-            aria-pressed={active}
-            aria-label="摄像机控制"
-            title={`摄像机控制${cameraEnabled ? " · 已启用" : ""}`}
-            onClick={() => onOpenChange(!open)}
-        >
-            <Camera className="size-4.5" />
-            {!compact ? <span>摄像机</span> : null}
-        </button>
     );
 }
 
@@ -643,7 +601,7 @@ function ReferenceToolsPopover({ canAutoMention, autoLinkEnabled, onAutoMention,
                 aria-label="打开智能引用"
                 title="智能引用"
             >
-                <SlidersHorizontal className="size-4.5" />
+                <SlidersHorizontal className="size-3.5" />
                 {!compact ? <span>引用</span> : null}
             </button>
         </Popover>
