@@ -299,6 +299,30 @@ add({
 });
 
 add({
+  id: "muapi-images", providerId: "muapi-image", name: "MuAPI Images", vendor: "MuAPI", capability: "image",
+  baseUrl: "https://api.muapi.ai", auth: bearer,
+  params: [
+    ["model", "string", true, "model", "MuAPI /v1/models 返回的图片模型 ID。"],
+    ["prompt", "string", true, "prompt", "图片生成提示词。"],
+    ["imageCount", "integer", false, "n", "输出图片数量；接口按公开限制裁剪到 1–4。"],
+    ["aspectRatio", "string", false, "size", "OpenAI-compatible size；当前公开文档支持 1024x1024、1792x1024 和 1024x1792。"]
+  ],
+  validations: [
+    { assert: { $eq: [len(ref("request.images")), 0] }, message: "MuAPI 图片 profile 只支持文本生成，不支持参考图或蒙版" }
+  ],
+  notes: "该插件只实现 MuAPI 当前公开的 OpenAI-compatible 图片生成 profile：POST /v1/images/generations。公开接口接受 model、prompt、n、size 并返回图片 URL；当前不暴露 edits/mask，因此插件不猜测或转发图片编辑字段。每次生成可能消耗账户额度，鉴权由用户自己的 Bearer Key 提供，宿主的外部请求安全边界保持不变。",
+  create: jsonCreate("/v1/images/generations", {
+    model: ref("request.model"), prompt: ref("request.prompt"),
+    n: omit(ref("request.imageCount")), size: omit(ref("request.aspectRatio"))
+  }),
+  response: {
+    status: "succeeded",
+    images: map(ref("response.data"), "item", { url: ref("item.url") }),
+    errorPaths: ["error.code"], messagePaths: ["error.message"]
+  }
+});
+
+add({
   id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "Volcengine Jimeng Image", vendor: "Volcengine", capability: "image",
   baseUrl: "https://visual.volcengineapi.com", auth: { type: "volcengine-v4", field: "apiKey", secretField: "secretKey", service: "cv", region: "cn-north-1" }, params: imageParams,
   configuration: config([{ name: "secretKey", type: "secret", label: "Secret Key", required: true }]),

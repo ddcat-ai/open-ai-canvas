@@ -121,6 +121,46 @@ func TestOfficialAtlasCloudChatProfile(t *testing.T) {
 	}
 }
 
+func TestOfficialMuAPIImageProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "muapi-images.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "muapi-image" || provider.BaseURL != "https://api.muapi.ai" || provider.Auth.Type != "bearer" {
+		t.Fatalf("MuAPI provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "muapi-images.yingce-plugin", "muapi-image")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "flux-schnell", Prompt: "a still life", ImageCount: 2, AspectRatio: "1024x1024",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/images/generations" || spec.ContentType != "application/json" || body["model"] != "flux-schnell" || body["n"] != float64(2) || body["size"] != "1024x1024" {
+		t.Fatalf("MuAPI request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"created":1719411200,"data":[{"url":"https://cdn.muapi.ai/image.png"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Images) != 1 || result.Result.Images[0].URL != "https://cdn.muapi.ai/image.png" {
+		t.Fatalf("MuAPI response = %#v", result)
+	}
+	_, err = adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "flux-schnell", Prompt: "edit this", Images: []MediaReference{{URL: "https://cdn.example/input.png"}},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "只支持文本生成") {
+		t.Fatalf("MuAPI image-input validation error = %v", err)
+	}
+}
+
 func assertManifestContractMatchesPackage(t *testing.T, packageName string, manifestRaw []byte, interfaceDocs string) {
 	t.Helper()
 	start := strings.Index(interfaceDocs, manifestContractStart)
