@@ -159,7 +159,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         section: "视角",
         description: "调整光线方向、亮度与光效，生成新图片",
         icon: () => <Sun className="size-3.5" />,
-        group: "viewpoint",
+        group: "lighting",
         order: 30,
         run: (node, handlers) => handlers.onLighting(node),
     },

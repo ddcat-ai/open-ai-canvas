@@ -280,7 +280,8 @@ export function CanvasNodeToolbar({
     const primaryTools = narrow ? primary.slice(0, 1) : primary;
     const portraitTools = compact ? [] : inGroup("portrait");
     const viewpointTools = compact ? [] : inGroup("viewpoint");
-    const processTools = compact ? [...inGroup("portrait"), ...inGroup("viewpoint"), ...inGroup("process")] : inGroup("process");
+    const lightingTools = compact ? [] : inGroup("lighting");
+    const processTools = compact ? [...inGroup("portrait"), ...inGroup("viewpoint"), ...inGroup("lighting"), ...inGroup("process")] : inGroup("process");
     const workspaceTools = narrow ? [] : inGroup("workspace");
     const utilityTools = inGroup("utility");
     const moreTools = [...(narrow ? [...primary.slice(1), ...inGroup("workspace")] : []), ...inGroup("more")];
@@ -315,6 +316,7 @@ export function CanvasNodeToolbar({
                 {primaryTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
                 {portraitTools.length ? <NodeDockMenuButton menuId="portrait" label="人像调整" icon={<UserRound className="size-3.5" />} tools={portraitTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
                 {viewpointTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
+                {lightingTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
                 {processTools.length ? <NodeDockMenuButton menuId="process" label={processMenuLabel} icon={isVideo ? <Images className="size-3.5" /> : <SlidersHorizontal className="size-3.5" />} tools={processTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
                 {workspaceTools.length ? <span aria-hidden className="aceternity-dock-separator mx-1 h-5 w-px shrink-0" /> : null}
                 {workspaceTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
