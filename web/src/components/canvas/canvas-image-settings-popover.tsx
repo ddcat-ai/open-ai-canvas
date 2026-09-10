@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Camera, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { Button } from "antd";
 
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
-import { CanvasNodeCameraPanel } from "@/components/canvas/canvas-node-camera-dialog";
-import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
-import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -22,17 +19,14 @@ type CanvasImageSettingsPopoverProps = {
     placement?: "topLeft" | "top" | "topRight" | "bottomLeft" | "bottom" | "bottomRight";
     autoAdjustOverflow?: boolean;
     showCount?: boolean;
-    cameraControl?: CameraControlOptions;
-    onCameraControlChange?: (options: CameraControlOptions) => void;
 };
 
-export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChange, buttonClassName, placement = "topLeft", showCount = true, cameraControl, onCameraControlChange }: CanvasImageSettingsPopoverProps) {
+export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChange, buttonClassName, placement = "topLeft", showCount = true }: CanvasImageSettingsPopoverProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const buttonRef = useRef<HTMLSpanElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
-    const [cameraOpen, setCameraOpen] = useState(false);
     const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image!;
     const normalized = normalizeImageValue(profile, config);
     const summaryParts = [
@@ -73,48 +67,16 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
 
     const panel = open && buttonRect ? <ImageSettingsPortal buttonRect={buttonRect} panelRef={panelRef} placement={placement} theme={theme} config={config} showCount={showCount} onConfigChange={onConfigChange} /> : null;
 
-    if (!hasSettings && !onCameraControlChange) return null;
-
-    const cameraEnabled = cameraControl?.enabled === true;
+    if (!hasSettings) return null;
 
     return (
         <>
-            {onCameraControlChange && (
-                <Button
-                    size="small"
-                    type="text"
-                    className="canvas-camera-control-trigger !h-8 !rounded-full !px-2.5"
-                    style={{
-                        background: cameraEnabled ? theme.node.activeStroke : theme.node.fill,
-                        color: cameraEnabled ? theme.node.panel : theme.node.text,
-                    }}
-                    icon={<Camera className="size-3.5" />}
-                    aria-pressed={cameraEnabled}
-                    aria-label="摄像机控制"
-                    title={`摄像机控制${cameraEnabled ? " · 已启用" : ""}`}
-                    onClick={() => setCameraOpen(true)}
-                />
-            )}
-            {hasSettings && (
-                <span ref={buttonRef} className="inline-flex min-w-0">
-                    <Button size="small" type="text" className={`canvas-generation-settings-trigger ${buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"}`} style={{ background: theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5" />} aria-expanded={open} aria-label={`图像设置：${summary}`} title={`图像设置 · ${summary}`} onClick={() => updateOpen(!open)}>
-                        <span className="truncate">{summary}</span>
-                    </Button>
-                </span>
-            )}
+            <span ref={buttonRef} className="inline-flex min-w-0">
+                <Button size="small" type="text" className={`canvas-generation-settings-trigger ${buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"}`} style={{ background: theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5" />} aria-expanded={open} aria-label={`图像设置：${summary}`} title={`图像设置 · ${summary}`} onClick={() => updateOpen(!open)}>
+                    <span className="truncate">{summary}</span>
+                </Button>
+            </span>
             {panel}
-            {cameraOpen && onCameraControlChange && (
-                <AppModal title="摄像机控制" open centered footer={null} width={780} flush onCancel={() => setCameraOpen(false)}>
-                    <CanvasNodeCameraPanel
-                        cameraControl={cameraControl}
-                        onClose={() => setCameraOpen(false)}
-                        onConfirm={(options, _prompt) => {
-                            onCameraControlChange(options);
-                            setCameraOpen(false);
-                        }}
-                    />
-                </AppModal>
-            )}
         </>
     );
 }
