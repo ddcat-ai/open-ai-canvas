@@ -21,6 +21,9 @@ COPY web/package.json web/bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile --cache-dir=/root/.bun/install/cache
 COPY VERSION /app/VERSION
 COPY CHANGELOG.md /app/CHANGELOG.md
+# 首页贡献者在构建时读取根 README 和头像，保留与源码相同的相对路径。
+COPY README.md /app/README.md
+COPY assets/user-* /app/assets/
 COPY canvas-agent /app/canvas-agent
 COPY web ./
 COPY --from=comfy-bridge-build /out/OpenAICanvas-ComfyBridge.exe /app/web/public/OpenAICanvas-ComfyBridge.exe
