@@ -7,6 +7,7 @@ import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreamin
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
+import { isArkPlanBaseUrl } from "@/lib/seedance-video";
 import { resolveVideoOperation } from "@/lib/model-selection";
 import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
@@ -115,7 +116,7 @@ export async function runBackendGenerationTask(
         );
     }
     assertBackendRuntimeConfigured(config, mode);
-    const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
+    const prepared = await prepareGenerationReferences({ config, referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
     return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking, clientOperationId, retryOf, attemptGroupId }, prepared, dependencies);
 }
@@ -432,16 +433,24 @@ function assertClientPromptLimit(mode: BackendGenerationMode, prompt: string, co
 }
 
 async function prepareGenerationReferences({
+    config,
     referenceImages = [],
     referenceVideos = [],
     referenceAudios = [],
     mask,
-}: Pick<BackendGenerationTaskOptions, "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
-    const preparedImages = await Promise.all(referenceImages.map(prepareBackendImageReference));
+}: Pick<BackendGenerationTaskOptions, "config" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
+    const preferArkAssetUrl = usesArkVideoAssetReference(config);
+    const preparedImages = await Promise.all(referenceImages.map((image) => prepareBackendImageReference(image, preferArkAssetUrl)));
     const preparedVideos = await Promise.all(referenceVideos.map(prepareBackendMediaReference));
     const preparedAudios = await Promise.all(referenceAudios.map(prepareBackendMediaReference));
-    const preparedMask = mask ? await prepareBackendImageReference(mask) : undefined;
+    const preparedMask = mask ? await prepareBackendImageReference(mask, false) : undefined;
     return { referenceImages: preparedImages, referenceVideos: preparedVideos, referenceAudios: preparedAudios, mask: preparedMask };
+}
+
+// 与后端 isArkPrivateAssetVideoConfig 对齐：方舟视频渠道允许参考图直接 asset:// 引用，
+// 跳过可信素材上传同步（适合已录入方舟素材 ID 的素材，例如被授权的真人像素材）。
+function usesArkVideoAssetReference(config: AiConfig) {
+    return resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-ark-video" || isArkPlanBaseUrl(config.baseUrl || "");
 }
 
 async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
@@ -535,7 +544,8 @@ async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAud
     }
 }
 
-async function prepareBackendImageReference(image: ReferenceImage) {
+async function prepareBackendImageReference(image: ReferenceImage, preferArkAssetUrl = false) {
+    if (preferArkAssetUrl && image.arkAssetId) return backendImageReference(image, { url: `asset://${image.arkAssetId}` });
     if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
     const sourceUrl = image.url || image.dataUrl;
     if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });

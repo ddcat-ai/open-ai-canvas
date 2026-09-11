@@ -24,6 +24,8 @@ export function parseAssetRecord(value: unknown): Asset {
     const primaryVersionId = optionalTrimmedString(value, "primaryVersionId");
     const source = optionalString(value, "source");
     const note = optionalString(value, "note");
+    const arkAssetId = optionalTrimmedString(value, "arkAssetId");
+    const portraitCertified = optionalBoolean(value, "portraitCertified");
     const metadata = optionalRecord(value.metadata, "metadata");
     const category = value.category === undefined ? undefined : parseAssetCategory(value.category);
     const data = requireRecord(value.data, "data");
@@ -40,6 +42,8 @@ export function parseAssetRecord(value: unknown): Asset {
         ...(primaryVersionId ? { primaryVersionId } : {}),
         ...(source !== undefined ? { source } : {}),
         ...(note !== undefined ? { note } : {}),
+        ...(arkAssetId ? { arkAssetId } : {}),
+        ...(portraitCertified !== undefined ? { portraitCertified } : {}),
         ...(metadata ? { metadata } : {}),
     };
 

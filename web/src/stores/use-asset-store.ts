@@ -44,6 +44,8 @@ type AssetBase<T extends AssetKind> = {
     primaryVersionId?: string;
     source?: string;
     note?: string;
+    arkAssetId?: string;
+    portraitCertified?: boolean;
     createdAt: string;
     updatedAt: string;
     metadata?: Record<string, unknown>;

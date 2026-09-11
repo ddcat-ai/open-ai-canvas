@@ -9,6 +9,7 @@ import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage }
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
+import { Switch } from "@/components/ui/base/switch";
 import { saveAs } from "file-saver";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,8 @@ type AssetFormValues = {
     source?: string;
     note?: string;
     content?: string;
+    arkAssetId?: string;
+    portraitCertified?: boolean;
 };
 
 type ImageDraft = ImageAsset["data"] | null;
@@ -254,7 +257,7 @@ export default function AssetsPage() {
         setImageUploading(false);
         setImageUploadProgress(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", category: "other", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
+        form.setFieldsValue({ kind: "text", category: "other", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "", arkAssetId: "", portraitCertified: false });
         setIsAssetOpen(true);
     };
 
@@ -275,6 +278,8 @@ export default function AssetsPage() {
             source: asset.source,
             note: asset.note,
             content: asset.kind === "text" ? asset.data.content : "",
+            arkAssetId: asset.arkAssetId || "",
+            portraitCertified: asset.portraitCertified === true,
         });
         setIsAssetOpen(true);
     };
@@ -311,6 +316,8 @@ export default function AssetsPage() {
             tags: values.tags || [],
             source: values.source?.trim(),
             note: values.note?.trim(),
+            arkAssetId: values.arkAssetId?.trim() || undefined,
+            portraitCertified: values.portraitCertified || undefined,
             metadata: editingAsset?.metadata || { source: "manual" },
         };
 
@@ -821,6 +828,14 @@ export default function AssetsPage() {
                             <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
                         </Form.Item>
                         <div className="grid gap-4 sm:grid-cols-2">
+                            <Form.Item name="arkAssetId" label="方舟素材 ID" rules={[{ pattern: /^asset-[A-Za-z0-9-]+$/, message: "请输入 asset- 开头的方舟素材 ID" }]}>
+                                <Input autoComplete="off" allowClear placeholder="asset-…，需为本人或被授权可用的方舟素材" />
+                            </Form.Item>
+                            <Form.Item name="portraitCertified" label="人像认证" valuePropName="checked" extra="标记已通过火山方舟实人认证的真人人像素材">
+                                <Switch aria-label="人像认证" />
+                            </Form.Item>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <Form.Item name="source" label="来源">
                                 <Input placeholder="手动添加 / 画布 / 任务中心" />
                             </Form.Item>
@@ -1142,6 +1157,7 @@ function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuIt
                     {kind ? assetKindLabel(kind) : "素材"}
                 </span>
                 {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
+                {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
             <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className="assets-select-check" aria-label={`选择 ${asset.title}`} />
@@ -1369,6 +1385,11 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAss
                                 {tag}
                             </Tag>
                         ))}
+                        {asset.arkAssetId ? (
+                            <Tag className="m-0" color="geekblue" title="火山方舟素材 ID，生成视频时可直接 asset:// 引用">
+                                方舟 {asset.arkAssetId}
+                            </Tag>
+                        ) : null}
                         <StorageTag asset={asset} />
                     </div>
                     <div className="asset-archive-facts">

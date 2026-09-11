@@ -106,7 +106,7 @@ async function buildVolcengineArkContent(prompt: string, references: ReferenceIm
     const imagePlan = resolveVideoImageReferences(references.slice(0, SEEDANCE_REFERENCE_LIMITS.images), options, { videoCount: videoReferences.length, audioCount: audioReferences.length });
     if (prompt.trim()) content.push({ type: "text", text: prompt.trim() });
     for (const { image, role } of imagePlan) {
-        content.push({ type: "image_url", image_url: { url: await resolveVolcengineArkReferenceUrl(image.url || image.dataUrl, image.storageKey) }, role });
+        content.push({ type: "image_url", image_url: { url: await resolveVolcengineArkReferenceUrl(image.arkAssetId ? `asset://${image.arkAssetId}` : image.url || image.dataUrl, image.storageKey) }, role });
     }
     for (const video of videoReferences.slice(0, SEEDANCE_REFERENCE_LIMITS.videos)) {
         content.push({ type: "video_url", video_url: { url: await resolveVolcengineArkReferenceUrl(video.url, video.storageKey) }, role: "reference_video" });
@@ -118,8 +118,10 @@ async function buildVolcengineArkContent(prompt: string, references: ReferenceIm
 }
 
 async function resolveVolcengineArkReferenceUrl(value: string | undefined, storageKey?: string) {
+    // 已录入的方舟素材 ID 优先：已过审或被授权的素材直接引用，无需再换对象存储地址。
+    if (String(value || "").startsWith("asset://")) return String(value);
     if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
-    if (isPublicMediaUrl(value || "") || String(value || "").startsWith("asset://")) return String(value);
+    if (isPublicMediaUrl(value || "")) return String(value);
     throw new Error("火山方舟视频参考素材需要公网 URL 或 asset:// 素材 ID；请先将本地素材保存到对象存储");
 }
 
