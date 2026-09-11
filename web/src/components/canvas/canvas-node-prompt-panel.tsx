@@ -14,7 +14,6 @@ import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefa
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasNodeCameraPanel } from "./canvas-node-camera-dialog";
@@ -54,7 +53,8 @@ type CanvasNodePromptPanelProps = {
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 const PROMPT_REFERENCE_SHELF_HEIGHT = 58;
-const PROMPT_EDITOR_MIN_HEIGHT = 44;
+// Keep the compact editor readable at rest: three 20px lines plus 12px vertical padding.
+const PROMPT_EDITOR_MIN_HEIGHT = 72;
 const PROMPT_EDITOR_EXPANDED_MIN_HEIGHT = 76;
 const PROMPT_EDITOR_LINE_HEIGHT = 20;
 const PROMPT_EDITOR_EXPANDED_LINE_HEIGHT = 24;
@@ -83,6 +83,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
     const [manualExpandedPromptHeight, setManualExpandedPromptHeight] = useState<number | null>(null);
     const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
+    const [cameraPanelOpen, setCameraPanelOpen] = useState(false);
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
@@ -180,6 +181,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         setExpandedPromptContentHeight(estimatePromptContentHeight(normalizedSavedPrompt, true));
         setManualPromptHeight(null);
         setManualExpandedPromptHeight(null);
+        setCameraPanelOpen(false);
     }, [node.id]);
 
     useEffect(() => {
@@ -401,9 +403,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         <>
                             <CameraToolsPopover
                                 cameraControl={node.metadata?.cameraControl}
-                                onCameraControlChange={(options) => onConfigChange(node.id, { cameraControl: options })}
                                 theme={theme}
                                 compact={!expanded}
+                                open={cameraPanelOpen}
+                                onOpenChange={setCameraPanelOpen}
                             />
                             <CanvasImageSettingsPopover
                                 config={config}
@@ -471,6 +474,19 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         );
     };
 
+    const renderCameraPanel = () => (
+        <div className="canvas-node-composer-camera-panel">
+            <CanvasNodeCameraPanel
+                cameraControl={node.metadata?.cameraControl}
+                onClose={() => setCameraPanelOpen(false)}
+                onConfirm={(options) => {
+                    onConfigChange(node.id, { cameraControl: options });
+                    setCameraPanelOpen(false);
+                }}
+            />
+        </div>
+    );
+
     return (
         <CanvasPromptOptimizerDrawer
             open={promptOptimizerOpen}
@@ -486,7 +502,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             onApply={(nextPrompt) => updatePrompt(nextPrompt)}
         >
             <div
-                className="canvas-node-composer"
+                className={`canvas-node-composer${cameraPanelOpen ? " has-camera-panel" : ""}`}
                 style={composerSurfaceStyle}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
@@ -495,6 +511,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             {renderComposerHeader(false)}
 
             {renderPromptEditor(false)}
+            {cameraPanelOpen ? renderCameraPanel() : null}
 
             {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
             {hasVideoPromptTools ? (
@@ -538,9 +555,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     body: { minHeight: 0, padding: 0 },
                 }}
             >
-                <div className="flex min-h-0 flex-col gap-2.5 p-3" style={{ ...composerTokens, color: theme.node.text }}>
+                <div className="relative flex min-h-0 flex-col gap-2.5 overflow-visible p-3" style={{ ...composerTokens, color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     {renderPromptEditor(true)}
+                    {cameraPanelOpen ? renderCameraPanel() : null}
                     {hasVideoPromptTools ? (
                         <div className="canvas-node-composer-parameters shrink-0">
                             <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
@@ -555,39 +573,26 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     );
 }
 
-function CameraToolsPopover({ cameraControl, onCameraControlChange, theme, compact }: { cameraControl?: CameraControlOptions; onCameraControlChange: (options: CameraControlOptions) => void; theme: CanvasTheme; compact: boolean }) {
-    const [open, setOpen] = useState(false);
+function CameraToolsPopover({ cameraControl, theme, compact, open, onOpenChange }: { cameraControl?: CameraControlOptions; theme: CanvasTheme; compact: boolean; open: boolean; onOpenChange: (open: boolean) => void }) {
     const cameraEnabled = cameraControl?.enabled === true;
+    const active = open || cameraEnabled;
     return (
-        <>
-            <button
-                type="button"
-                className={`canvas-node-composer-camera-tools-trigger inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 text-[var(--fs-tiny)] transition-colors ${compact ? "is-compact h-7" : "h-8"}`}
-                style={{
-                    background: cameraEnabled ? `${theme.node.activeStroke}66` : theme.node.fill,
-                    color: cameraEnabled ? theme.node.panel : theme.node.text,
-                }}
-                aria-pressed={cameraEnabled}
-                aria-label="摄像机控制"
-                title={`摄像机控制${cameraEnabled ? " · 已启用" : ""}`}
-                onClick={() => setOpen(true)}
-            >
-                <Camera className="size-4.5" />
-                {!compact ? <span>摄像机</span> : null}
-            </button>
-            {open ? (
-                <AppModal title="摄像机控制" open centered footer={null} width={780} flush onCancel={() => setOpen(false)}>
-                    <CanvasNodeCameraPanel
-                        cameraControl={cameraControl}
-                        onClose={() => setOpen(false)}
-                        onConfirm={(options) => {
-                            onCameraControlChange(options);
-                            setOpen(false);
-                        }}
-                    />
-                </AppModal>
-            ) : null}
-        </>
+        <button
+            type="button"
+            className={`canvas-node-composer-camera-tools-trigger inline-flex shrink-0 items-center gap-1 rounded-[var(--r-md)] border px-1.5 text-[var(--fs-tiny)] transition-colors focus:outline-none focus-visible:outline-none ${compact ? "is-compact h-7" : "h-8"}`}
+            style={{
+                background: active ? `${theme.node.activeStroke}14` : theme.node.fill,
+                borderColor: active ? theme.node.activeStroke : "transparent",
+                color: active ? theme.node.activeStroke : theme.node.text,
+            }}
+            aria-pressed={active}
+            aria-label="摄像机控制"
+            title={`摄像机控制${cameraEnabled ? " · 已启用" : ""}`}
+            onClick={() => onOpenChange(!open)}
+        >
+            <Camera className="size-4.5" />
+            {!compact ? <span>摄像机</span> : null}
+        </button>
     );
 }
 
@@ -599,30 +604,31 @@ function ReferenceToolsPopover({ canAutoMention, autoLinkEnabled, onAutoMention,
             rootClassName="canvas-reference-tools-popover"
             arrow={false}
             align={{ offset: [0, -8] }}
-            styles={{ root: { width: "min(280px, calc(100vw - 24px))" }, container: { width: "100%" }, content: { width: "100%", padding: 12 } }}
+            styles={{ root: { width: "min(280px, calc(100vw - 24px))" }, container: { width: "100%" }, content: { width: "100%", padding: 10 } }}
             content={
-                <div className="space-y-3">
+                <div className="space-y-1.5">
                     <div>
-                        <div className="text-sm font-medium">智能引用</div>
-                        <div className="mt-1 text-xs text-black/50 dark:text-white/50">输入素材序号或名称后按 Tab，可快速引用</div>
+                        <div className="text-sm font-medium leading-5">智能引用</div>
+                        <div className="mt-0.5 text-xs leading-4 text-black/50 dark:text-white/50">输入素材序号或名称后按 Tab，可快速引用</div>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-h-6 items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-sm"><Link2 className="size-3.5" />AutoLink</div>
                         <button
                             type="button"
                             role="switch"
                             aria-checked={autoLinkEnabled}
                             aria-label={autoLinkEnabled ? "关闭 AutoLink" : "开启 AutoLink"}
-                            className={`relative h-5 w-9 rounded-full transition-colors ${autoLinkEnabled ? "" : "bg-black/20 dark:bg-white/20"}`}
-                            style={autoLinkEnabled ? { background: accent } : undefined}
+                            className="canvas-reference-autolink-switch relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                            style={{ background: autoLinkEnabled ? `${accent}14` : "transparent", borderColor: autoLinkEnabled ? accent : "color-mix(in srgb, currentColor 22%, transparent)", color: accent }}
                             onClick={() => onAutoLinkEnabledChange(!autoLinkEnabled)}
                         >
-                            <span className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${autoLinkEnabled ? "translate-x-4" : "translate-x-0"}`} />
+                            <span className={`size-3.5 rounded-full shadow-sm transition-transform ${autoLinkEnabled ? "translate-x-[18px]" : "translate-x-0.5"}`} style={{ background: autoLinkEnabled ? accent : "currentColor" }} />
                         </button>
                     </div>
                     <button
                         type="button"
-                        className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--canvas-composer-control-surface)] px-2 py-1.5 text-sm transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="canvas-reference-tools-mention-button flex h-7 w-full items-center justify-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        style={{ borderColor: accent, color: accent, background: "transparent" }}
                         disabled={!canAutoMention}
                         onClick={onAutoMention}
                     >

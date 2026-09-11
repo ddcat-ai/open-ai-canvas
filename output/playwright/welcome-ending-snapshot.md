@@ -1,0 +1,93 @@
+- generic [ref=f1e3]:
+  - link "前往工作台介绍" [ref=f1e4] [cursor=pointer]:
+    - /url: "#workbench"
+  - banner [ref=f1e5]:
+    - link "影策首页" [ref=f1e6] [cursor=pointer]:
+      - /url: /welcome
+      - text: 影策
+    - navigation "首页导航" [ref=f1e8]:
+      - link "工作台" [ref=f1e9] [cursor=pointer]:
+        - /url: "#workbench"
+      - link "GitHub" [ref=f1e10] [cursor=pointer]:
+        - /url: https://github.com/ddcat-ai/open-ai-canvas
+    - link "开始创作" [ref=f1e14] [cursor=pointer]:
+      - /url: /create
+  - complementary "首页素材版本" [ref=f1e20]:
+    - generic [ref=f1e21] [cursor=pointer]:
+      - generic "Spring · 奇幻" [ref=f1e22]:
+        - text: Spring · 奇幻
+        - combobox "素材版本" [ref=f1e23]
+      - img "down" [ref=f1e25]
+    - link "演示素材 · CC BY" [ref=f1e28] [cursor=pointer]:
+      - /url: /welcome/credits.html#spring
+  - main [ref=f1e32]:
+    - region "影策创作之旅" [ref=f1e33]:
+      - generic [ref=f1e34]:
+        - generic "随着故事章节旋转并展开的电影影像卷轴" [ref=f1e35]
+        - generic:
+          - heading "一个世界， 一张画布。" [level=2]:
+            - generic: 一个世界，
+            - generic: 一张画布。
+        - generic [ref=f1e36]:
+          - button "进入创作现场" [ref=f1e160] [cursor=pointer]
+          - navigation "故事章节" [ref=f1e40]:
+            - button "序幕" [ref=f1e41] [cursor=pointer]
+            - button "故事" [ref=f1e43] [cursor=pointer]
+            - button "角色" [ref=f1e45] [cursor=pointer]
+            - button "分镜" [ref=f1e47] [cursor=pointer]
+            - button "生成" [ref=f1e49] [cursor=pointer]
+            - button "画布" [ref=f1e51] [cursor=pointer]
+          - button "暂停动画" [ref=f1e53] [cursor=pointer]
+    - generic [ref=f1e57]:
+      - heading "让想象，有处落笔。" [level=2] [ref=f1e59]
+      - generic [ref=f1e60]:
+        - generic "工作台预览" [ref=f1e61]:
+          - tablist [ref=f1e62]:
+            - generic [ref=f1e64]
+          - generic:
+            - generic
+        - link "进入即时创作" [ref=f1e71] [cursor=pointer]:
+          - /url: /create
+      - tabpanel [ref=f1e77]:
+        - img "影策即时创作界面" [ref=f1e78]
+      - paragraph [ref=f1e80]: 选择模型与参考素材，在对话中逐步完成图片和视频。
+    - generic [ref=f1e81]:
+      - heading "你的故事， 现在开始。" [level=2] [ref=f1e82]: 你的故事，现在开始。
+      - link "开始创作" [ref=f1e83] [cursor=pointer]:
+        - /url: /create
+      - link "GitHub" [ref=f1e88] [cursor=pointer]:
+        - /url: https://github.com/ddcat-ai/open-ai-canvas
+      - region "一起把故事搬上银幕" [ref=f1e96]:
+        - generic [ref=f1e99]:
+          - generic [ref=f1e100]:
+            - generic [ref=f1e101]: Contributors
+            - generic [ref=f1e106]
+            - link "在 GitHub README 查看贡献者清单" [ref=f1e109] [cursor=pointer]:
+              - /url: https://github.com/ddcat-ai/open-ai-canvas#贡献者与团队
+              - text: 查看清单
+          - list "项目贡献者" [ref=f1e113]:
+            - listitem "正在啃 main 分支，争取下次 merge 的时候变成蝴蝶" [ref=f1e114]
+            - listitem "我亦无他，惟手熟尔" [ref=f1e116]
+            - listitem "HKUST(GZ) UG" [ref=f1e118]
+            - listitem "人生就是要不断的探索" [ref=f1e120]
+            - listitem "无" [ref=f1e122]
+            - listitem "励志成为未来最好用的画布仓库的贡献者" [ref=f1e124]
+            - listitem "剑走偏峰，雷厉风行。" [ref=f1e126]
+            - listitem "走自己的路" [ref=f1e128]
+            - listitem "AI 界热于助人的拖油瓶" [ref=f1e130]
+            - listitem "AI 短剧合规，资产确权" [ref=f1e132]
+            - listitem "Making things that think" [ref=f1e134]
+            - listitem "上善若水" [ref=f1e136]
+            - listitem "就是水水" [ref=f1e138]
+            - listitem "Done is better than perfect" [ref=f1e140]
+            - listitem "年轻的时候不狂，老了拿什么回忆" [ref=f1e142]
+            - listitem "年纪大佬才明白人要顺势而为。" [ref=f1e144]
+            - listitem "AI时代的全栈落地工，欢迎找我聊需求" [ref=f1e146]
+  - contentinfo [ref=f1e148]:
+    - link "影策" [ref=f1e149] [cursor=pointer]:
+      - /url: /welcome
+    - generic [ref=f1e150]: 开源 AI 影视创作工作台
+    - link "Open Source · MIT License" [ref=f1e151] [cursor=pointer]:
+      - /url: https://github.com/ddcat-ai/open-ai-canvas/blob/main/LICENSE
+  - link "Spring · Blender 开放电影演示素材 · 署名与许可" [ref=f1e156] [cursor=pointer]:
+    - /url: /welcome/credits.html#spring

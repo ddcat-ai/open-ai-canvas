@@ -12,12 +12,16 @@ func TestBuiltinCatalogContainsRequestedProtocols(t *testing.T) {
 	registry := Builtins()
 	expected := []string{
 		"chat-completion", "openai-response", "claude-api",
-		"openai-image", "grok-image", "volcengine-ark-image", "volcengine-jimeng-image", "gemini-image",
 		"newapi", "newapi-channel-2", "xai-video", "volcengine-ark-video", "volcengine-jimeng-video", "gemini-veo", "novita-video", "minimax-video", "agnes-video",
 	}
 	for _, id := range expected {
 		if _, ok := registry.Get(id); !ok {
 			t.Fatalf("missing builtin protocol %q", id)
+		}
+	}
+	for _, id := range []string{"openai-image", "grok-image", "volcengine-ark-image", "volcengine-jimeng-image", "openai-audio", "async-audio"} {
+		if _, ok := registry.Get(id); ok {
+			t.Fatalf("host builtin must not keep migrated protocol %q", id)
 		}
 	}
 	if _, ok := registry.Resolve("openai-video"); !ok {
@@ -120,11 +124,6 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 		id, path, poll string
 		request        GenerationRequest
 	}{
-		{"openai-image", "/v1/images/generations", "", GenerationRequest{Model: "dall-e-test", Prompt: "a still", ImageCount: 2, AspectRatio: "1024x1024"}},
-		{"grok-image", "/v1/images/generations", "", GenerationRequest{Model: "grok-imagine-image", Prompt: "a still", AspectRatio: "16:9"}},
-		{"volcengine-ark-image", "/api/v3/images/generations", "", GenerationRequest{Model: "doubao-image", Prompt: "a still"}},
-		{"volcengine-jimeng-image", "/CVSync2AsyncSubmitTask", "/CVSync2AsyncGetResult", GenerationRequest{Model: "jimeng_t2i_v40", Prompt: "a still"}},
-		{"gemini-image", "/v1beta/models/gemini-image:generateContent", "", GenerationRequest{Model: "gemini-image", Prompt: "a still"}},
 		{"newapi", "/v1/videos", "/v1/videos/video-1", GenerationRequest{Model: "video-model", Prompt: "a clip", Duration: 6}},
 		{"newapi-channel-2", "/v1/video/generations", "/v1/video/generations/video-1", GenerationRequest{Model: "video-model", Prompt: "a clip", Duration: 6, AspectRatio: "16:9"}},
 		{"xai-video", "/v1/videos/generations", "/v1/videos/video-1", GenerationRequest{Model: "grok-video", Prompt: "a clip"}},
@@ -505,7 +504,7 @@ func TestEveryBuiltinHasDetailedDocumentation(t *testing.T) {
 }
 
 func TestImageResponseKeepsBase64AsDataURL(t *testing.T) {
-	adapter, _ := Builtins().Get("openai-image")
+	adapter := officialPackageAdapter(t, "openai-images.yingce-plugin", "openai-image")
 	result, err := adapter.ParseCreate(context.Background(), []byte(`{"data":[{"b64_json":"aW1hZ2U="}]}`))
 	if err != nil {
 		t.Fatal(err)
@@ -517,15 +516,24 @@ func TestImageResponseKeepsBase64AsDataURL(t *testing.T) {
 
 func TestAsyncMediaPollKeepsResultKind(t *testing.T) {
 	cases := []struct {
-		id, payload, want string
+		packageName, id, payload, want string
 	}{
-		{"volcengine-jimeng-image", `{"data":{"status":"completed","images":["https://cdn.example/image.png"]}}`, "image"},
-		{"async-audio", `{"task":{"id":"audio-1","status":"completed","audio_url":"https://cdn.example/audio.mp3"}}`, "audio"},
-		{"minimax-video", `{"task":{"id":"video-1","status":"succeeded","content":{"url":"https://cdn.example/video.mp4"}}}`, "video"},
+		{"volcengine-jimeng-image.yingce-plugin", "volcengine-jimeng-image", `{"data":{"status":"completed","image_urls":["https://cdn.example/image.png"]}}`, "image"},
+		{"async-audio.yingce-plugin", "async-audio", `{"id":"audio-1","status":"completed","audio_url":"https://cdn.example/audio.mp3"}`, "audio"},
+		{"", "minimax-video", `{"task":{"id":"video-1","status":"succeeded","content":{"url":"https://cdn.example/video.mp4"}}}`, "video"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.id, func(t *testing.T) {
-			adapter, _ := Builtins().Get(tc.id)
+			var adapter Adapter
+			var ok bool
+			if tc.packageName != "" {
+				adapter = officialPackageAdapter(t, tc.packageName, tc.id)
+			} else {
+				adapter, ok = Builtins().Get(tc.id)
+				if !ok {
+					t.Fatal("adapter missing")
+				}
+			}
 			result, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "fallback"}, []byte(tc.payload))
 			if err != nil {
 				t.Fatal(err)

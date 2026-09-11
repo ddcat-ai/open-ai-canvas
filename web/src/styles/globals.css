@@ -8193,6 +8193,12 @@
         padding: var(--space-3);
     }
 
+    /* 摄像机控制覆盖在提示词编辑区上方，不参与编辑区的尺寸计算。 */
+    .canvas-node-composer.has-camera-panel {
+        overflow: visible;
+        z-index: 20;
+    }
+
     /* 提示词优化保持在输入框附近，使用紧凑的 Popover 作为第二层输入工具。 */
     .canvas-prompt-optimizer-popover-surface {
         width: min(var(--canvas-prompt-optimizer-width, 420px), calc(100vw - 24px));
@@ -9335,6 +9341,55 @@
 
     .canvas-node-composer-editor:focus-within {
         background: transparent;
+    }
+
+    .canvas-node-composer-camera-panel {
+        position: absolute;
+        right: var(--space-3);
+        bottom: calc(var(--space-8) + var(--space-3));
+        z-index: 20;
+        display: block;
+        width: min(780px, calc(100% - (var(--space-3) * 2)));
+        max-height: min(620px, calc(100dvh - 32px));
+        min-width: 0;
+        overflow: auto;
+        pointer-events: auto;
+        border-radius: var(--r-xl);
+    }
+
+    .canvas-node-camera-switch:hover,
+    .canvas-node-camera-switch:focus-visible {
+        box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    .canvas-node-camera-apply:hover,
+    .canvas-node-camera-apply:focus-visible {
+        background: color-mix(in srgb, currentColor 10%, transparent) !important;
+    }
+
+    .canvas-reference-autolink-switch:hover,
+    .canvas-reference-autolink-switch:focus-visible {
+        box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 10%, transparent);
+    }
+
+    .canvas-node-composer-camera-tools-trigger:focus,
+    .canvas-node-composer-camera-tools-trigger:focus-visible {
+        outline: none;
+        box-shadow: none;
+    }
+
+    .canvas-reference-tools-mention-button:hover,
+    .canvas-reference-tools-mention-button:focus-visible {
+        background: color-mix(in srgb, currentColor 9%, transparent) !important;
+    }
+
+    @media (max-width: 640px) {
+        .canvas-node-composer-camera-panel {
+            right: var(--space-2);
+            left: var(--space-2);
+            bottom: calc(var(--space-8) + var(--space-2));
+            width: auto;
+        }
     }
 
     .canvas-node-composer-references {
@@ -13077,6 +13132,22 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 }
 
 .creation-custom-value em { color: var(--creation-muted); font-size: 11px; font-style: normal; }
+
+/* 首页图像参数保持紧凑，避免比例预设把弹层撑成整屏高度。 */
+.creation-parameter-menu .image-size-picker {
+    gap: 7px;
+}
+
+.creation-parameter-menu .image-size-ratios {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.creation-parameter-menu .image-size-ratios button {
+    min-height: 48px;
+    gap: 4px;
+    padding: 5px;
+}
 
 .creation-duration-custom-field {
     display: inline-flex;

@@ -1,0 +1,291 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "seedance-videos-compatible",
+  "name": "Seedance Compatible /videos",
+  "version": "2.0.0",
+  "author": "Gateway profile / 影策",
+  "description": "Seedance Compatible /videos 独立请求协议插件。",
+  "documentation": "# Seedance Compatible /videos\n\n该目录是独立官方协议插件源码。后端从生成的 `seedance-videos-compatible.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Seedance Compatible /videos 接口字段\n\n## 协议身份\n\n- 插件 ID：`seedance-videos-compatible`。\n- Provider ID：`seedance-videos-compatible`。\n- 能力：`video`。\n- 默认 Base URL：`http://127.0.0.1:3000`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /v1/videos`。\n- 查询：`GET /v1/videos/{{taskId}}`。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 视频模型 ID。 |\n| `prompt` | string | 是 | `prompt/content/input` | 视频提示词。 |\n| `images` | media[] | 否 | `first/last/reference image` | 显式 role 图片输入。 |\n| `videos` | media[] | 否 | `reference video` | 参考视频。 |\n| `audios` | media[] | 否 | `reference audio/voice` | 参考音频或音色。 |\n| `duration` | integer | 否 | `duration/seconds` | 时长秒数。 |\n| `aspectRatio` | string | 否 | `ratio/aspect_ratio/size` | 画幅比例或尺寸。 |\n| `resolution` | string | 否 | `resolution` | 分辨率档位。 |\n| `generateAudio` | boolean | 否 | `generate_audio` | 是否生成音频。 |\n| `watermark` | boolean | 否 | `watermark` | 水印开关。 |\n| `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/v1/videos\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body` | `{\"$merge\":[{\"model\":{\"$ref\":\"request.model\"},\"prompt\":{\"$ref\":\"request.prompt\"},\"images\":{\"$omitEmpty\":{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}}},\"videos\":{\"$omitEmpty\":{\"$map\":{\"from\":{\"$ref\":\"request.videos\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}}},\"audios\":{\"$omitEmpty\":{\"$map\":{\"from\":{\"$ref\":\"request.audios\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}}},\"duration\":{\"$omitEmpty\":{\"$ref\":\"request.duration\"}},\"aspect_ratio\":{\"$omitEmpty\":{\"$ref\":\"request.aspectRatio\"}},\"resolution\":{\"$omitEmpty\":{\"$ref\":\"request.resolution\"}},\"parameters\":{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.seedance-videos-compatible.parameters\"}}},{\"$coalesce\":[{\"$ref\":\"request.providerOptions.seedance-videos-compatible.body\"},{\"$ref\":\"request.providerOptions.seedance-videos-compatible.extra_body\"},{}]}]}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/v1/videos/{{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- `providerOptions.seedance-videos-compatible.body`\n- `providerOptions.seedance-videos-compatible.extra_body`\n- `providerOptions.seedance-videos-compatible.parameters`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.id\"},{\"$ref\":\"response.task_id\"},{\"$ref\":\"response.taskId\"},{\"$ref\":\"response.data.id\"},{\"$ref\":\"taskId\"}]}` |\n| `response.status` | `{\"$coalesce\":[{\"$ref\":\"response.status\"},{\"$ref\":\"response.state\"},{\"$ref\":\"response.data.status\"},\"pending\"]}` |\n| `response.message` | `{\"$coalesce\":[{\"$ref\":\"response.error.message\"},{\"$ref\":\"response.message\"},{\"$ref\":\"response.fail_reason\"}]}` |\n| `response.videos` | `{\"$coalesce\":[{\"$ref\":\"response.video_url\"},{\"$ref\":\"response.videoUrl\"},{\"$ref\":\"response.result_url\"},{\"$ref\":\"response.url\"},{\"$ref\":\"response.data.video_url\"},{\"$ref\":\"response.output.url\"}]}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.resultEphemeral` | `true` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.seedance-videos-compatible 的 parameters/input/extra_body 传入；gateway-specific videos JSON。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"seedance-videos-compatible\",\n  \"name\": \"Seedance Compatible /videos\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Gateway profile / 影策\",\n  \"description\": \"Seedance Compatible /videos 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"seedance-videos-compatible\",\n        \"label\": \"Seedance Compatible /videos\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"http://127.0.0.1:3000\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"视频模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt/content/input\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"first/last/reference image\",\n            \"description\": \"显式 role 图片输入。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"reference video\",\n            \"description\": \"参考视频。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"reference audio/voice\",\n            \"description\": \"参考音频或音色。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"duration/seconds\",\n            \"description\": \"时长秒数。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"ratio/aspect_ratio/size\",\n            \"description\": \"画幅比例或尺寸。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution\",\n            \"description\": \"分辨率档位。\"\n          },\n          {\n            \"name\": \"generateAudio\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"generate_audio\",\n            \"description\": \"是否生成音频。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"watermark\",\n            \"description\": \"水印开关。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/videos\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"$merge\": [\n              {\n                \"model\": {\n                  \"$ref\": \"request.model\"\n                },\n                \"prompt\": {\n                  \"$ref\": \"request.prompt\"\n                },\n                \"images\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                },\n                \"videos\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$ref\": \"request.videos\"\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                },\n                \"audios\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$ref\": \"request.audios\"\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                },\n                \"duration\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.duration\"\n                  }\n                },\n                \"aspect_ratio\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"resolution\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.resolution\"\n                  }\n                },\n                \"parameters\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.seedance-videos-compatible.parameters\"\n                  }\n                }\n              },\n              {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.seedance-videos-compatible.body\"\n                  },\n                  {\n                    \"$ref\": \"request.providerOptions.seedance-videos-compatible.extra_body\"\n                  },\n                  {}\n                ]\n              }\n            ]\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/videos/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.videoUrl\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              },\n              {\n                \"$ref\": \"response.data.video_url\"\n              },\n              {\n                \"$ref\": \"response.output.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "seedance-videos-compatible",
+        "label": "Seedance Compatible /videos",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "http://127.0.0.1:3000",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "视频模型 ID。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt/content/input",
+            "description": "视频提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "first/last/reference image",
+            "description": "显式 role 图片输入。"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference video",
+            "description": "参考视频。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference audio/voice",
+            "description": "参考音频或音色。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": false,
+            "mapping": "duration/seconds",
+            "description": "时长秒数。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "ratio/aspect_ratio/size",
+            "description": "画幅比例或尺寸。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "resolution",
+            "description": "分辨率档位。"
+          },
+          {
+            "name": "generateAudio",
+            "type": "boolean",
+            "required": false,
+            "mapping": "generate_audio",
+            "description": "是否生成音频。"
+          },
+          {
+            "name": "watermark",
+            "type": "boolean",
+            "required": false,
+            "mapping": "watermark",
+            "description": "水印开关。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "body": {
+            "$merge": [
+              {
+                "model": {
+                  "$ref": "request.model"
+                },
+                "prompt": {
+                  "$ref": "request.prompt"
+                },
+                "images": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                },
+                "videos": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$ref": "request.videos"
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                },
+                "audios": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$ref": "request.audios"
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                },
+                "duration": {
+                  "$omitEmpty": {
+                    "$ref": "request.duration"
+                  }
+                },
+                "aspect_ratio": {
+                  "$omitEmpty": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "resolution": {
+                  "$omitEmpty": {
+                    "$ref": "request.resolution"
+                  }
+                },
+                "parameters": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.seedance-videos-compatible.parameters"
+                  }
+                }
+              },
+              {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.seedance-videos-compatible.body"
+                  },
+                  {
+                    "$ref": "request.providerOptions.seedance-videos-compatible.extra_body"
+                  },
+                  {}
+                ]
+              }
+            ]
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.fail_reason"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$ref": "response.video_url"
+              },
+              {
+                "$ref": "response.videoUrl"
+              },
+              {
+                "$ref": "response.result_url"
+              },
+              {
+                "$ref": "response.url"
+              },
+              {
+                "$ref": "response.data.video_url"
+              },
+              {
+                "$ref": "response.output.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

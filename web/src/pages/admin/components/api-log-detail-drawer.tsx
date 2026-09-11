@@ -49,7 +49,7 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
     };
 
     return (
-        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden rootClassName="admin-drawer">
+        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} width="min(1200px, 90vw)" destroyOnHidden rootClassName="admin-drawer">
             {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <EmptyState size="compact" title="没有请求详情" />}
         </Drawer>
     );
@@ -64,27 +64,64 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
         ["状态", <AdminStatusBadge label={failed ? "失败" : processing ? "处理中" : "成功"} tone={failed ? "error" : processing ? "warning" : "success"} />],
         [
             "用户",
-            <span>
-                {log.userDisplayName || log.userAccount || "未知用户"}
-                {log.userAccount ? <span className="ml-2 text-foreground/45">@{log.userAccount}</span> : null}
-            </span>,
+            <div>
+                <div className="font-medium text-foreground/90">{log.userDisplayName || log.userAccount || "未知用户"}</div>
+                {log.userAccount ? <div className="mt-0.5 text-xs text-foreground/50">@{log.userAccount}</div> : null}
+            </div>,
         ],
-        ["渠道 / 模型", `${log.channelName || "未记录渠道"} / ${log.model || "未识别模型"}`],
+        [
+            "渠道 / 模型",
+            <div>
+                <div className="text-foreground/85">{log.channelName || "未记录渠道"}</div>
+                <div className="mt-0.5 font-mono text-xs text-foreground/55" title={log.model}>
+                    {log.model || "未识别模型"}
+                </div>
+            </div>,
+        ],
         ["能力", capabilityText(log.capability)],
         ["请求阶段", requestKindText(log.requestKind)],
         ["计费属性", log.billable ? "计费调用" : "不计费"],
-        ["总耗时", formatDuration(log.durationMs)],
-        ["视频轮询", log.capability === "video" ? `${log.pollCount || 0} 次` : "--"],
-        ["Token", log.usageAvailable ? `${log.inputTokens} 输入 / ${log.outputTokens} 输出 / ${log.cachedTokens} 缓存` : "未返回"],
+        ["总耗时", <span className="tabular-nums">{formatDuration(log.durationMs)}</span>],
+        ["视频轮询", log.capability === "video" ? <span className="tabular-nums">{log.pollCount || 0} 次</span> : <span className="text-foreground/35">--</span>],
+        [
+            "Token 用量",
+            log.usageAvailable ? (
+                <div className="space-y-1 font-mono text-sm tabular-nums">
+                    <div>
+                        <span className="text-foreground/55">输入</span> <span className="ml-2 text-foreground/85">{log.inputTokens.toLocaleString()}</span>
+                    </div>
+                    <div>
+                        <span className="text-foreground/55">输出</span> <span className="ml-2 text-foreground/85">{log.outputTokens.toLocaleString()}</span>
+                    </div>
+                    {log.cachedTokens > 0 ? (
+                        <div>
+                            <span className="text-foreground/55">缓存</span> <span className="ml-2 text-foreground/85">{log.cachedTokens.toLocaleString()}</span>
+                        </div>
+                    ) : null}
+                </div>
+            ) : (
+                <span className="text-foreground/35">未返回</span>
+            ),
+        ],
         ["积分计费", billingText(log)],
-        ["上游成本", log.costAvailable ? `${log.currency || "USD"} ${(log.estimatedCostMicros / 1_000_000).toFixed(6)}` : "未配置成本"],
-        ["错误信息", [log.errorCode, log.error].filter(Boolean).join(" · ") || "--"],
-        ["方法与路径", `${log.method} ${log.path}`],
-        ["请求 Content-Type", log.requestContentType || "--"],
-        ["HTTP 状态", String(log.statusCode || "--")],
-        ["任务 ID", log.taskId || "--"],
-        ["供应商任务 ID", log.providerRequestId || "--"],
-        ["上游地址", log.upstreamUrl || "--"],
+        ["上游成本", log.costAvailable ? <span className="font-mono tabular-nums">{log.currency || "USD"} {(log.estimatedCostMicros / 1_000_000).toFixed(6)}</span> : <span className="text-foreground/35">未配置成本</span>],
+        [
+            "错误信息",
+            [log.errorCode, log.error].filter(Boolean).length > 0 ? (
+                <div>
+                    {log.errorCode ? <div className="mb-1 font-mono text-sm font-medium text-red-500">{log.errorCode}</div> : null}
+                    {log.error ? <div className="text-sm text-foreground/75">{log.error}</div> : null}
+                </div>
+            ) : (
+                <span className="text-foreground/35">--</span>
+            ),
+        ],
+        ["方法与路径", <code className="text-sm text-foreground/80">{log.method} {log.path}</code>],
+        ["请求 Content-Type", log.requestContentType ? <code className="text-sm text-foreground/70">{log.requestContentType}</code> : <span className="text-foreground/35">--</span>],
+        ["HTTP 状态", log.statusCode ? <span className="tabular-nums">{log.statusCode}</span> : <span className="text-foreground/35">--</span>],
+        ["任务 ID", log.taskId ? <code className="font-mono text-sm text-foreground/70">{log.taskId}</code> : <span className="text-foreground/35">--</span>],
+        ["供应商任务 ID", log.providerRequestId ? <code className="font-mono text-sm text-foreground/70">{log.providerRequestId}</code> : <span className="text-foreground/35">--</span>],
+        ["上游地址", log.upstreamUrl ? <code className="break-all text-sm text-foreground/70">{log.upstreamUrl}</code> : <span className="text-foreground/35">--</span>],
     ].map(([label, children], index) => ({ key: String(index), label, children }));
 
     const canQueryProviderTask = log.capability === "video" && log.taskStatus === "failed" && Boolean(log.taskId && log.providerRequestId);
@@ -98,9 +135,9 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
                     </Button>
                 </div>
             ) : null}
-            <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }} items={items} />
+            <Descriptions bordered size="middle" column={{ xs: 1, sm: 1, md: 1, lg: 2, xl: 2 }} labelStyle={{ width: "160px", fontWeight: 500 }} items={items} />
             <section>
-                <div className="mb-2 text-sm font-semibold text-foreground/85">原始报文</div>
+                <div className="mb-3 text-base font-semibold text-foreground/90">原始报文</div>
                 <Tabs
                     items={[
                         { key: "request", label: "请求报文", children: <PayloadPanel value={log.requestBody} empty="该请求未记录请求报文" /> },

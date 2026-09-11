@@ -5,6 +5,28 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 后端业务域拆包
+
+- `internal/service` 只保留别名（4 个文件）。组合根和未拆出实现在 `internal/app`。已抽出域：`kernel`、`platform`、`skills`、`prompts`、`auth`、`canvas`、`assets`、`outbound`、`generation`。handler 仍只打 `*service.Service`。
+- [x] `cd backend && go test ./internal/kernel/ ./internal/platform/ ./internal/skills/ ./internal/prompts/ ./internal/auth/ ./internal/canvas/ ./internal/assets/ ./internal/handler/ -count=1`
+- [x] `cd backend && go build ./internal/service/ ./internal/handler/ ./cmd/server/`
+- [ ] 登录后打开技能库：列表、加入、GitHub/ZIP 安装、内置技能正文仍可用。
+- [ ] 管理后台提示词模板、用户风格库、画布按项目画风生成仍走原接口。
+- [ ] 注册、登录、邮件验证码、密码重置、Linux.do 登录仍走原 Cookie 接口。
+- [ ] 公开画布分享链接仍能打开，分享资源 URL 不泄露密钥和任务字段。
+- [ ] 登录后画布库分页、按 ID 读素材、上传/替换用户素材仍走原接口。
+
+## 固定分辨率图片模型
+
+- 比例协议未配置质量参数时，图像设置按管理员启用的尺寸档位显示；未启用的档位仍隐藏。
+- 选中档位会写入 `1k` / `2k` / `4k`；Gemini 图片由官方插件 `google-gemini-image` 映射为上游 `1K` / `2K` / `4K`，业务层不再手写组包。插件优先读 `quality`，画布残留的视频 `vquality`（如 `720`）不能盖掉 4K。
+- [ ] 选 4K 后抓上游请求，确认 `generationConfig.imageConfig.imageSize` 为 `"4K"`，且没有 `candidateCount` 被误写成视频清晰度 `720`。
+- 前台模型从系统模型同步 `imageSize` 预设和 `aspect_ratio` 参数；旧前台快照会从供应线路补回档位，不再把 1K/4K 压成只有 1K。未启用的 1K 不能因为协议默认 `low/medium/high` 出现。未声明 `quality` 的前台模型不能因选 4K 档位报“不支持参数 生成质量”。
+- [ ] 系统模型启用 1K+4K 全尺寸后，打开对应前台模型：画布图像设置应同时出现 1K 和 4K。
+- [ ] 保存同时启用 1K 和 4K 全尺寸、且未配置质量参数的模型后，画布图像设置应同时出现 1K 和 4K，切换档位后参考像素跟着变。
+- [ ] 保存仅启用 4K 的模型后，在画布重新选择该模型，确认只显示 4K，切换比例和重新打开面板仍保持 4K。
+- [ ] 实际生成后确认上游模型输出分辨率；面板参考尺寸不保证上游实际像素。
+
 ## HTTP API 错误码与 OpenAPI
 
 - 路径仍是 `/api`。不做 `/api/v1` 双挂；前后端一起发布。
@@ -86,11 +108,33 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 任务中心删除本机记录：确认框主题正确，只删本机记录不删素材。
 - [ ] 管理后台渠道「设置排序」在无条目时显示 EmptyState；插件中心清空筛选后的空态可点「清除筛选」。
 
+## 后端 Service 域边界试点（generation / outbound）
+
+- 目标：横向按业务域拆包；handler 仍依赖 `*service.Service` 组合根，域包禁止 import `service`。
+- 本轮已落地：`internal/outbound`（SSRF/出站 HTTP）、`internal/generation`（Engine + Deps 端口 + 官方协议注册表运行时）。`service` 通过薄包装再导出。
+- `provider_*` 执行簇仍在 `service`（与编排水合/计费耦合深），后续按 Engine 端口继续迁入 generation。
+- [x] `go build ./internal/generation/ ./internal/outbound/ ./internal/service/`
+- [x] `go test ./internal/generation/ ./internal/outbound/ ./internal/protocol/ -count=1`
+- [x] `go test ./internal/service/ -count=1`：完整 service 回归。
+- [ ] 任选一条图片或视频生成，确认官方插件路径与结果落库仍正常。
+- [x] `go list` 确认 `internal/generation` 的 import 不含 `internal/service`。
+
+## 官方图片 / 音频 InterfaceType 只走声明式插件
+
+- `runImageTask` / `runAudioTask` 对白名单官方接口只走声明式插件：`ensureOfficialProtocolAdapter` → declarative；未安装时报「…插件未安装」，不再回退手写组包。
+- 图片白名单：`openai-image`、`grok-image`、`volcengine-ark-image`、`volcengine-jimeng-image`、`gemini-image`。音频白名单：`openai-audio`、`async-audio`。
+- 已从 Builtins 移除对应 host adapter；真相源为 `plugin-packages/*.yingce-plugin`（含新建 `openai-audio` / `async-audio`，以及重写的 openai-images / grok / ark / jimeng）。
+- 表达式引擎补 `$divide`（配合 `$split` / `$toFloat`）；同步音频支持 `BinaryPayload`。
+- [x] `go test ./internal/protocol/ ./internal/service/ -count=1`：协议与 provider 回归。
+- [ ] 用 OpenAI Images（generations + edits）、Grok Images、方舟 Seedream、即梦图片、Gemini Image 各跑一条，确认创建与结果落库走对应官方包。
+- [ ] 用 `openai-audio` 同步 speech 与 `async-audio` 异步任务各跑一条，确认二进制 / 轮询结果可播放。
+- [ ] 卸掉对应官方图片或音频插件后再提交同类型任务，应看到「…插件未安装」。
+
 ## 官方视频 InterfaceType 只走声明式插件
 
 - `runVideoTask` 对已有官方插件的接口类型不再回退到手写协议。生产注入插件注册表；单测未注入时会补官方包。显式放入空注册表则报「…视频插件未安装」。
 - 覆盖的接口：`minimax-video`、`gemini-veo`、`novita-video`、`newapi-channel-1`、`newapi-channel-2`、`xai-video`、`volcengine-ark-video`、`volcengine-jimeng-video`、`newapi`、`agnes-video`。任务恢复也只查询声明式 adapter，不再回退 `queryNewAPIChannel2VideoTask`。
-- 仍保留的手写路径只有：空 InterfaceType 的 OpenAI 风格 multipart `/videos`、模型名含 `grok` 的 JSON `/videos`、BaseURL 含 `/api/plan/v3` 的 Ark Plan、模型名含 seedance 的 Seedance `/videos`。
+- 仍保留的手写路径只有：BaseURL 含 `/api/plan/v3` 的 Ark Plan Seedance，以及模型名含 seedance 的 Seedance `/videos` 遗留；OpenAI multipart / Grok JSON 视频死代码已删。
 - 插件契约与旧手写实现不一致处按插件为准：MiniMax 时长必须 4–15 秒且不再把 `720`/`1440p` 映射成 `768P`/`2K`；Channel 2 不再做 grok 单图/音频校验；xAI 结果 URL 不可达时不再回退 `/videos/{id}/content`；Channel 1 音频 `type` 跟随宿主 role（当前为 `reference_audio`）。
 - [x] `go test ./internal/service/ ./internal/protocol/ -count=1`：通过。
 - [ ] 用 MiniMax / Veo / Novita / NewAPI Channel 1+2 / xAI / 方舟 / 即梦视频各跑一条生成，确认创建、轮询、下载仍走对应官方插件路径。

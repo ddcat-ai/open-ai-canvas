@@ -598,3 +598,159 @@ func TestOfficialArkSeedreamMapsAspectRatioToPixelSize(t *testing.T) {
 		t.Fatalf("Seedream must omit size when no ratio is requested")
 	}
 }
+
+func TestOfficialGeminiImageMapsQualityToImageSize(t *testing.T) {
+	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
+	tests := []struct {
+		name, quality, wantSize string
+		wantOmitted             bool
+	}{
+		{name: "4k becomes 4K", quality: "4k", wantSize: "4K"},
+		{name: "high becomes 4K", quality: "high", wantSize: "4K"},
+		{name: "2k becomes 2K", quality: "2k", wantSize: "2K"},
+		{name: "1k becomes 1K", quality: "1k", wantSize: "1K"},
+		{name: "video 720 omitted", quality: "720", wantOmitted: true},
+		{name: "auto omitted", quality: "auto", wantOmitted: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "gemini-3-pro-image-preview", Prompt: "landscape", AspectRatio: "16:9", Quality: tt.quality,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if create.Path != "/v1beta/models/gemini-3-pro-image-preview:generateContent" {
+				t.Fatalf("create path = %q", create.Path)
+			}
+			body := manifestTestBody(t, create)
+			generationConfig, _ := body["generationConfig"].(map[string]any)
+			if _, ok := generationConfig["candidateCount"]; ok {
+				t.Fatalf("candidateCount must not be mapped from imageCount, got %#v", generationConfig["candidateCount"])
+			}
+			imageConfig, _ := generationConfig["imageConfig"].(map[string]any)
+			if imageConfig["aspectRatio"] != "16:9" {
+				t.Fatalf("aspectRatio = %#v", imageConfig["aspectRatio"])
+			}
+			if tt.wantOmitted {
+				if imageConfig["imageSize"] != nil {
+					t.Fatalf("imageSize should be omitted, got %#v", imageConfig["imageSize"])
+				}
+				return
+			}
+			if imageConfig["imageSize"] != tt.wantSize {
+				t.Fatalf("imageSize = %#v, want %q", imageConfig["imageSize"], tt.wantSize)
+			}
+		})
+	}
+}
+
+func TestOfficialGeminiImagePrefersQualityOverVideoResolution(t *testing.T) {
+	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
+	tests := []struct {
+		name, quality, resolution, wantSize string
+		wantOmitted                         bool
+	}{
+		{name: "canvas 4k keeps imageSize when vquality is 720", quality: "4k", resolution: "720", wantSize: "4K"},
+		{name: "empty quality still maps resolution 4k", quality: "", resolution: "4k", wantSize: "4K"},
+		{name: "video 720 alone is omitted", quality: "", resolution: "720", wantOmitted: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "gemini-3-pro-image-preview", Prompt: "landscape", AspectRatio: "16:9", Quality: tt.quality, Resolution: tt.resolution,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := manifestTestBody(t, create)
+			generationConfig, _ := body["generationConfig"].(map[string]any)
+			imageConfig, _ := generationConfig["imageConfig"].(map[string]any)
+			if tt.wantOmitted {
+				if imageConfig["imageSize"] != nil {
+					t.Fatalf("imageSize should be omitted, got %#v", imageConfig["imageSize"])
+				}
+				return
+			}
+			if imageConfig["imageSize"] != tt.wantSize {
+				t.Fatalf("imageSize = %#v, want %q", imageConfig["imageSize"], tt.wantSize)
+			}
+		})
+	}
+}
+
+func TestOfficialGrokImageMapsAspectAndResolution(t *testing.T) {
+	adapter := officialPackageAdapter(t, "xai-grok-images.yingce-plugin", "grok-image")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "grok-imagine-image", Prompt: "a cat", AspectRatio: "1280x720", Quality: "high",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if create.Path != "/v1/images/generations" {
+		t.Fatalf("path = %q", create.Path)
+	}
+	body := manifestTestBody(t, create)
+	if body["aspect_ratio"] != "16:9" || body["resolution"] != "2k" {
+		t.Fatalf("body = %#v", body)
+	}
+	if _, ok := body["size"]; ok {
+		t.Fatalf("size must be omitted: %#v", body)
+	}
+}
+
+func TestOfficialJimengImageSplitsPixelSize(t *testing.T) {
+	adapter := officialPackageAdapter(t, "volcengine-jimeng-image.yingce-plugin", "volcengine-jimeng-image")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "jimeng_t2i_v40", Prompt: "still", AspectRatio: "1024x768",
+		Images: []MediaReference{{DataURL: "data:image/png;base64,aGVsbG8="}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, create)
+	if body["width"] != float64(1024) || body["height"] != float64(768) {
+		t.Fatalf("dimensions = %#v %#v", body["width"], body["height"])
+	}
+	binary, ok := body["binary_data_base64"].([]any)
+	if !ok || len(binary) != 1 || binary[0] != "aGVsbG8=" {
+		t.Fatalf("binary_data_base64 = %#v", body["binary_data_base64"])
+	}
+}
+
+func TestOfficialOpenAIAudioUsesBinaryPayload(t *testing.T) {
+	adapter := officialPackageAdapter(t, "openai-audio.yingce-plugin", "openai-audio")
+	result, err := adapter.ParseCreate(context.Background(), []byte("ID3fake-mp3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Audios) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestOfficialOpenAIAudioSpeedDefaultsInvalidAndZeroValues(t *testing.T) {
+	adapter := officialPackageAdapter(t, "openai-audio.yingce-plugin", "openai-audio")
+	for _, test := range []struct {
+		name  string
+		value any
+		want  float64
+	}{
+		{name: "invalid", value: "not-a-number", want: 1},
+		{name: "zero", value: "0", want: 1},
+		{name: "valid", value: "1.25", want: 1.25},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "gpt-4o-mini-tts", Prompt: "hello", Extra: map[string]any{"audioSpeed": test.value},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := manifestTestBody(t, spec)
+			if got := body["speed"]; !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("speed = %#v, want %v", got, test.want)
+			}
+		})
+	}
+}

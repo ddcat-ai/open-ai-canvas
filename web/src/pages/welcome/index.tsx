@@ -143,7 +143,8 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                     <div className="welcome-workbench-caption"><p>{active.detail}</p></div>
                 </section>
 
-                <section className="welcome-ending"><h2>你的故事，<br />现在开始。</h2><Button className="welcome-primary" type="primary" size="large" href="/create" icon={<ArrowRight size={20} />} iconPlacement="end">开始创作</Button><a className="welcome-source" href={github} target="_blank" rel="noreferrer"><Code2 size={16} />GitHub<ArrowUpRight size={14} /></a><WelcomeContributorsCard /></section>
+                <section className="welcome-ending"><h2>你的故事，<br />现在开始。</h2>
+                <WelcomeContributorsCard /></section>
             </main>
             <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>开源 AI 影视创作工作台</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
             {look.credit && <div className="welcome-media-credit"><a href={`/welcome/credits.html#${look.id}`} target="_blank" rel="noreferrer">{look.credit} · 署名与许可<ArrowUpRight size={12} /></a></div>}

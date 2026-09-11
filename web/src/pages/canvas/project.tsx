@@ -2519,6 +2519,7 @@ function InfiniteCanvasPage() {
                             node={dialogNode}
                             viewport={viewport}
                             containerRef={containerRef}
+                            allowOverflow={dialogNode.type !== CanvasNodeType.Config}
                             dragOffset={dragPreview?.nodeIds.has(dialogNode.id) ? { x: dragPreview.x, y: dragPreview.y } : null}
                             isDragging={isNodeDragging && Boolean(dragPreview?.nodeIds.has(dialogNode.id))}
                         >

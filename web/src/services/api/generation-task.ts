@@ -686,15 +686,8 @@ function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode)
                 ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) }
                 : {};
     const filtered = Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
-    // 图片质量和画幅同时参与按规格计费匹配。即使逻辑模型能力声明只把其中一项
-    // 暴露给供应线路，报价仍需要看到客户端最终选择，避免局部重绘等编辑请求落到
-    // “未配置所选规格”的错误分支。
-    if (mode === "image") {
-        for (const key of ["quality", "size"] as const) {
-            const value = candidates[key];
-            if (value !== undefined && value !== null && String(value).trim() !== "") filtered[key] = value;
-        }
-    }
+    // 只把前台模型声明过的参数送进能力匹配。未声明的 quality 不能因为画布选了 4K 档位
+    // 而被硬塞进去，否则会报“不支持参数 生成质量”；插件仍从 config.quality 读取档位。
     return filtered;
 }
 

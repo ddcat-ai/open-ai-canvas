@@ -4,7 +4,7 @@ import { Callout } from "@/components/ui/product/callout";
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { CapabilitySpec, OptionConstraint } from "@/services/api/logical-models";
+import type { CapabilityImageSize, CapabilitySpec, OptionConstraint } from "@/services/api/logical-models";
 import type { ChannelModel } from "@/services/api/wallet";
 import { STANDARD_IMAGE_SIZE_VALUES } from "@/lib/model-capabilities";
 
@@ -106,6 +106,7 @@ export function capabilitySpecFromChannelModel(item?: ChannelModel): CapabilityS
                 transparentBackground: { values: image.transparentBackground.supported ? [false, true] : [false] },
                 count: { min: 1, max: image.maxOutputs, step: 1 },
             }),
+            imageSize: image.size.parameter === "none" ? undefined : { parameter: image.size.parameter, allowCustom: image.size.allowCustom, presets: image.size.presets },
         };
     }
     if (capability === "video") {
@@ -175,7 +176,20 @@ export function mergeCapabilitySpecs(capability: CapabilityKind, specs: Capabili
         }
         result.options![definition.name] = preferredSourceConstraint(constraints);
     }
+    result.imageSize = mergeImageSize(matching);
     return result;
+}
+
+function mergeImageSize(specs: CapabilitySpec[]): CapabilityImageSize | undefined {
+    const parts = specs.map((item) => item.imageSize).filter((item): item is CapabilityImageSize => Boolean(item));
+    if (!parts.length) return undefined;
+    const parameters = [...new Set(parts.map((item) => item.parameter).filter((value): value is NonNullable<CapabilityImageSize["parameter"]> => Boolean(value)))];
+    const presets = [...new Map(parts.flatMap((item) => item.presets || []).map((preset) => [`${preset.tier}:${preset.ratio}:${preset.size}`, preset])).values()];
+    return {
+        parameter: parameters.includes("aspect_ratio") ? "aspect_ratio" : parameters[0],
+        allowCustom: parts.some((item) => item.allowCustom),
+        presets,
+    };
 }
 
 /**
@@ -191,7 +205,7 @@ export function normalizeCapabilitySpecForSources(value: CapabilitySpec | undefi
         if (!sourceConstraint || !isWildcardConstraint(constraint) || !sourceConstraint.values) continue;
         options[name] = { values: uniqueScalars([...(sourceConstraint.values || []), ...(constraint.values || [])]) };
     }
-    return { ...value, options };
+    return { ...value, options, imageSize: value.imageSize?.presets?.length ? value.imageSize : source.imageSize || value.imageSize };
 }
 
 export function capabilitySourceError(capability: CapabilityKind, sourceSpecs: CapabilitySpec[], value?: CapabilitySpec) {

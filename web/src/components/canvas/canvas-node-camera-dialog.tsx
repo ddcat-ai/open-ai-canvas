@@ -23,7 +23,7 @@ import {
 } from "@/lib/canvas/camera-prompt-library";
 
 const defaultCameraControl: CameraControlOptions = {
-    enabled: true,
+    enabled: false,
     camera: "arri_alexa_mini_lf",
     lens: "arri_signature_prime",
     focalLength: 50,
@@ -232,7 +232,7 @@ interface CardColumnProps {
 
 const CardColumn = memo(({ label, tooltipTitle, tooltipDesc, tooltipUseCase, visual, cornerBadge, captionBelow, onPrev, onNext, theme }: CardColumnProps) => {
     return (
-        <div className="flex flex-1 flex-col items-center gap-1.5">
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
             <button
                 type="button"
                 onClick={onPrev}
@@ -244,7 +244,7 @@ const CardColumn = memo(({ label, tooltipTitle, tooltipDesc, tooltipUseCase, vis
             </button>
             <HoverTip title={tooltipTitle} description={tooltipDesc} useCase={tooltipUseCase}>
                 <div
-                    className="relative flex h-[140px] w-[140px] cursor-help flex-col items-center justify-between rounded-xl border px-3 pt-2 pb-2 transition-colors"
+                    className="relative flex h-[clamp(116px,14vw,140px)] w-full min-w-0 cursor-help flex-col items-center justify-between rounded-xl border px-2.5 pt-2 pb-2 transition-colors"
                     style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}
                 >
                     <span className="text-[11px] font-medium tracking-wide" style={{ color: theme.node.muted }}>{label}</span>
@@ -286,7 +286,7 @@ export function CanvasNodeCameraPanel({
     const reducedMotion = useReducedMotion();
     const copyText = useCopyText();
 
-    const [enabled, setEnabled] = useState(cameraControl?.enabled ?? true);
+    const [enabled, setEnabled] = useState(cameraControl?.enabled ?? defaultCameraControl.enabled);
     const [cameraIdx, setCameraIdx] = useState(() => {
         const i = CAMERA_PROFILES.findIndex((c) => c.id === cameraControl?.camera);
         return i >= 0 ? i : 0;
@@ -350,16 +350,30 @@ export function CanvasNodeCameraPanel({
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="w-full overflow-hidden rounded-[var(--r-2xl)] border backdrop-blur-2xl"
+            className="w-full overflow-hidden rounded-[var(--r-xl)] border backdrop-blur-2xl"
             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            {/* 标题区由外层 AppModal 统一提供，面板只负责镜头参数。 */}
-             
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: theme.toolbar.border }}>
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold tracking-tight">摄像机控制</div>
+                    <div className="mt-0.5 truncate text-[11px]" style={{ color: theme.node.muted }}>为当前图片生成设置镜头、焦距与光圈</div>
+                </div>
+                <button
+                    type="button"
+                    className="grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-white/10"
+                    style={{ color: theme.node.muted }}
+                    onClick={onClose}
+                    aria-label="关闭摄像机控制"
+                    title="关闭"
+                >
+                    <X className="size-4" />
+                </button>
+            </div>
 
             {/* 相机、镜头、焦距和光圈均来自已注册枚举，确认时由纯函数再次强校验。 */}
-            <div className="flex justify-center gap-3 px-5 py-5">
+            <div className="grid grid-cols-2 gap-2.5 px-4 py-4 sm:grid-cols-4">
                 <CardColumn
                     label="相机"
                     tooltipTitle={`${currentCamera.zhName} · ${currentCamera.label}`}
@@ -421,13 +435,13 @@ export function CanvasNodeCameraPanel({
             </div>
 
             {/* 当前有效配置摘要。 */}
-            <div className="mx-5 mb-3 rounded-lg border px-3.5 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}>
+            <div className="mx-4 mb-3 rounded-lg border px-3.5 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}>
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.node.faint }}>当前配置</div>
                 <div className="mt-0.5 text-xs">{summary}</div>
             </div>
 
             {/* 操作区：重置与复制不产生写入，只有应用会提交生成配置。 */}
-            <div className="flex h-12 items-center gap-2 border-t px-5" style={{ borderColor: theme.toolbar.border }}>
+            <div className="flex min-h-12 flex-wrap items-center gap-2 border-t px-4 py-2" style={{ borderColor: theme.toolbar.border }}>
                 <button type="button" className={secondaryButtonClass} style={{ color: theme.node.muted }} onClick={handleReset}>
                     <RotateCcw className="size-3.5" />重置参数
                 </button>
@@ -445,18 +459,24 @@ export function CanvasNodeCameraPanel({
                         role="switch"
                         aria-checked={enabled}
                         onClick={() => setEnabled((v) => !v)}
-                        className="relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full transition-colors"
-                        style={{ background: enabled ? theme.node.activeStroke : theme.toolbar.itemHover }}
+                        className="canvas-node-camera-switch relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full border transition-colors"
+                        style={{
+                            background: enabled ? `${theme.node.activeStroke}22` : theme.toolbar.itemHover,
+                            borderColor: enabled ? theme.node.activeStroke : theme.toolbar.border,
+                        }}
                     >
-                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                        <span
+                            className={`inline-block size-3.5 transform rounded-full shadow-sm transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0.5"}`}
+                            style={{ background: enabled ? theme.node.activeStroke : theme.node.muted }}
+                        />
                     </button>
                 </div>
                 <motion.button
                     type="button"
                     whileHover={reducedMotion ? undefined : { y: -1 }}
                     whileTap={reducedMotion ? undefined : { scale: 0.97 }}
-                    className="flex h-8 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-4 text-[var(--fs-label)] font-semibold"
-                    style={{ background: theme.node.activeStroke, color: theme.node.panel }}
+                    className="canvas-node-camera-apply flex h-7 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-3.5 text-[var(--fs-label)] font-semibold transition-colors"
+                    style={{ borderColor: theme.node.activeStroke, color: theme.node.activeStroke, background: "transparent" }}
                     onClick={handleApply}
                 >
                     <CameraIcon className="size-3.5" />应用

@@ -1,0 +1,447 @@
+package app
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"infinite-canvas/backend/internal/database"
+	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+)
+
+func TestCollectOwnedAssetDocumentReferences(t *testing.T) {
+	resources := map[string]struct{}{}
+	raw := `{
+		"data":{"storageKey":"resource:resource-1","url":"/api/resources/resource-2/file"},
+		"metadata":{"taskId":"task-1","referenceResourceIds":["resource-3"],"errorDetails":"failed near /api/resources/not-a-reference/file"}
+	}`
+	if err := collectOwnedAssetDocumentReferences(raw, resources); err != nil {
+		t.Fatal(err)
+	}
+	for _, resourceID := range []string{"resource-1", "resource-2", "resource-3"} {
+		if _, exists := resources[resourceID]; !exists {
+			t.Fatalf("resource %q was not collected: %#v", resourceID, resources)
+		}
+	}
+	if _, exists := resources["not-a-reference"]; exists {
+		t.Fatalf("diagnostic text must not be treated as an actual resource reference: %#v", resources)
+	}
+}
+
+func TestResourceReferenceFieldsUseExplicitSchema(t *testing.T) {
+	resources := map[string]struct{}{}
+	raw := `{
+		"storage_key":"resource:legacy-snake-case",
+		"resourceStorageKey":"resource:guessed-suffix",
+		"errorMessage":"failed to load /api/resources/diagnostic-only/file",
+		"artifacts":[{"id":"bare-id"}],
+		"referenceResourceIds":["explicit-id"],
+		"providerArtifactRef":"resource:explicit-artifact"
+	}`
+	if err := collectOwnedAssetDocumentReferences(raw, resources); err != nil {
+		t.Fatal(err)
+	}
+	for _, resourceID := range []string{"explicit-id", "explicit-artifact"} {
+		if _, exists := resources[resourceID]; !exists {
+			t.Fatalf("explicit resource field %q was not collected: %#v", resourceID, resources)
+		}
+	}
+	for _, resourceID := range []string{"legacy-snake-case", "guessed-suffix", "diagnostic-only", "bare-id"} {
+		if _, exists := resources[resourceID]; exists {
+			t.Fatalf("unregistered field inferred resource %q: %#v", resourceID, resources)
+		}
+	}
+	arrayResources := map[string]struct{}{}
+	if err := collectOwnedAssetDocumentReferences(`{"artifacts":["resource:array-text"]}`, arrayResources); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := arrayResources["array-text"]; exists {
+		t.Fatalf("unnamed array values must not become resource references: %#v", arrayResources)
+	}
+}
+
+func TestDocumentReferencesResourcesUsesExactResourceID(t *testing.T) {
+	candidates := map[string]struct{}{"resource-1": {}}
+	if documentReferencesResources(`{"storageKey":"resource:resource-10"}`, candidates) {
+		t.Fatal("resource-1 must not match resource-10")
+	}
+	if !documentReferencesResources(`{"storageKey":"resource:resource-1"}`, candidates) {
+		t.Fatal("exact resource ID should match")
+	}
+	if documentReferencesResources(`generation failed for resource-1`, candidates) {
+		t.Fatal("free-form diagnostic text must not be treated as a resource reference")
+	}
+	if !documentReferencesResources(`/api/resources/resource-1/file`, candidates) {
+		t.Fatal("a direct resource locator should match")
+	}
+}
+
+func TestResourceOccupiedMessageNamesBusinessRecord(t *testing.T) {
+	message := resourceOccupiedMessage([]resourceUsage{
+		{Kind: "画布", ID: "canvas-1", Title: "广告分镜"},
+		{Kind: "画布", ID: "canvas-1", Title: "广告分镜"},
+	})
+	if !strings.Contains(message, "画布「广告分镜」") || !strings.Contains(message, "解除引用") {
+		t.Fatalf("message = %q", message)
+	}
+}
+
+func TestDeleteLocalResourceObjectRemovesOnlyResourceDirectoryFile(t *testing.T) {
+	dataDir := t.TempDir()
+	resourcePath := filepath.Join(dataDir, "resources", "users", "user-1", "image", "asset.png")
+	if err := os.MkdirAll(filepath.Dir(resourcePath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resourcePath, []byte("image"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{dataDir: dataDir}
+	if err := service.deleteLocalResourceObject("users/user-1/image/asset.png"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(resourcePath); !os.IsNotExist(err) {
+		t.Fatalf("resource file still exists or stat failed unexpectedly: %v", err)
+	}
+
+	outsidePath := filepath.Join(dataDir, "outside.txt")
+	if err := os.WriteFile(outsidePath, []byte("keep"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.deleteLocalResourceObject("../outside.txt"); err == nil {
+		t.Fatal("path traversal should be rejected")
+	}
+	if _, err := os.Stat(outsidePath); err != nil {
+		t.Fatalf("outside file was changed: %v", err)
+	}
+}
+
+func TestDeleteAssetDatabaseFailureLeavesPhysicalObjectAndNoOutbox(t *testing.T) {
+	svc, db, dataDir := newResourceDeletionTestService(t)
+	objectKey := "users/user-1/image/asset.png"
+	resourcePath := filepath.Join(dataDir, "resources", filepath.FromSlash(objectKey))
+	if err := os.MkdirAll(filepath.Dir(resourcePath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resourcePath, []byte("image"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{ID: "resource-1", UserID: "user-1", Provider: "local", ObjectKey: objectKey, Status: model.ResourceStatusReady}
+	asset := model.Asset{ID: "asset-1", UserID: "user-1", Title: "test", PayloadJSON: `{"data":{"storageKey":"resource:resource-1"}}`}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TRIGGER fail_asset_delete BEFORE DELETE ON assets BEGIN SELECT RAISE(ABORT, 'forced asset delete failure'); END;").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.deleteUserAssetWithResources("user-1", "asset-1"); err == nil {
+		t.Fatal("forced database failure should be returned")
+	}
+	if _, err := os.Stat(resourcePath); err != nil {
+		t.Fatalf("physical object changed before the database transaction committed: %v", err)
+	}
+	var assetCount, resourceCount, jobCount int64
+	if err := db.Model(&model.Asset{}).Where("id = ?", asset.ID).Count(&assetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assetCount != 1 || resourceCount != 1 || jobCount != 0 {
+		t.Fatalf("transaction was not rolled back: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
+	}
+}
+
+func TestDeleteAssetKeepsResourceSharedByIndependentAsset(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{ID: "resource-shared", UserID: "user-1", Provider: "local", ObjectKey: "users/user-1/image/shared.png", Status: model.ResourceStatusReady}
+	target := model.Asset{ID: "asset-target", UserID: "user-1", Title: "待删除素材", PayloadJSON: `{"data":{"storageKey":"resource:resource-shared"}}`}
+	independent := model.Asset{ID: "asset-independent", UserID: "user-1", Title: "生成图片", PayloadJSON: `{"data":{"storageKey":"resource:resource-shared"}}`}
+	for _, item := range []any{&resource, &target, &independent} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.DeleteUserAsset("user-1", target.ID); err != nil {
+		t.Fatalf("DeleteUserAsset() error = %v", err)
+	}
+
+	var targetCount, independentCount, resourceCount, jobCount int64
+	if err := db.Model(&model.Asset{}).Where("id = ?", target.ID).Count(&targetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Asset{}).Where("id = ?", independent.ID).Count(&independentCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if targetCount != 0 || independentCount != 1 || resourceCount != 1 || jobCount != 0 {
+		t.Fatalf("unexpected delete result: target=%d independent=%d resource=%d jobs=%d", targetCount, independentCount, resourceCount, jobCount)
+	}
+}
+
+func TestDeleteAssetStillRejectsLiveCanvasResourceReference(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{ID: "resource-canvas", UserID: "user-1", Provider: "local", ObjectKey: "users/user-1/image/canvas.png", Status: model.ResourceStatusReady}
+	asset := model.Asset{ID: "asset-canvas", UserID: "user-1", Title: "画布素材", PayloadJSON: `{"data":{"storageKey":"resource:resource-canvas"}}`}
+	canvas := model.CanvasProject{ID: "canvas-live", UserID: "user-1", Title: "仍在使用的画布", PayloadJSON: `{"nodes":[{"data":{"storageKey":"resource:resource-canvas"}}]}`}
+	for _, item := range []any{&resource, &asset, &canvas} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := svc.DeleteUserAsset("user-1", asset.ID)
+	if err == nil || !strings.Contains(err.Error(), "画布「仍在使用的画布」") {
+		t.Fatalf("DeleteUserAsset() error = %v, want live canvas reference", err)
+	}
+
+	var assetCount, resourceCount int64
+	if err := db.Model(&model.Asset{}).Where("id = ?", asset.ID).Count(&assetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assetCount != 1 || resourceCount != 1 {
+		t.Fatalf("blocked delete changed data: asset=%d resource=%d", assetCount, resourceCount)
+	}
+}
+
+func TestResourceDeletionWorkerRemovesObjectAndCompletesOutbox(t *testing.T) {
+	svc, db, dataDir := newResourceDeletionTestService(t)
+	objectKey := "users/user-1/image/queued.png"
+	resourcePath := filepath.Join(dataDir, "resources", filepath.FromSlash(objectKey))
+	if err := os.MkdirAll(filepath.Dir(resourcePath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resourcePath, []byte("image"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	job := model.ResourceDeletionJob{
+		ID: "deletion-1", UserID: "user-1", ResourceID: "resource-1",
+		Provider: "local", ObjectKey: objectKey,
+		Status: model.ResourceDeletionStatusPending, NextAttemptAt: time.Now().Add(-time.Second),
+	}
+	if err := db.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	svc.drainResourceDeletionJobs(1)
+	if _, err := os.Stat(resourcePath); !os.IsNotExist(err) {
+		t.Fatalf("queued physical object was not deleted: %v", err)
+	}
+	var count int64
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("id = ?", job.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("completed deletion job was not removed")
+	}
+}
+
+func TestExpiredArchivedAssetCleanupRespectsCanvasReferencesAndUsesDeletionOutbox(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	old := time.Now().Add(-45 * 24 * time.Hour)
+	resource := model.Resource{
+		ID: "resource-expired-archive", UserID: "user-1", Provider: "unsupported-test-provider",
+		ObjectKey: "users/user-1/image/expired.png", Status: model.ResourceStatusReady,
+	}
+	asset := model.Asset{
+		ID: "asset-expired-archive", UserID: "user-1", Title: "过期回收站素材",
+		Status: model.AssetVersionStatusArchived, PayloadJSON: `{"data":{"storageKey":"resource:resource-expired-archive"}}`,
+		CreatedAt: old, UpdatedAt: old,
+	}
+	canvas := model.CanvasProject{
+		ID: "canvas-expired-archive", UserID: "user-1", Title: "仍引用回收站素材的画布",
+		PayloadJSON: `{"nodes":[{"data":{"storageKey":"resource:resource-expired-archive"}}]}`,
+	}
+	for _, item := range []any{&resource, &asset, &canvas} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	svc.cleanupExpiredArchivedAssets()
+	var assetCount, resourceCount, jobCount int64
+	if err := db.Model(&model.Asset{}).Where("id = ?", asset.ID).Count(&assetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assetCount != 1 || resourceCount != 1 || jobCount != 0 {
+		t.Fatalf("referenced archived asset cleanup changed data: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
+	}
+
+	if err := db.Delete(&model.CanvasProject{}, "id = ? AND user_id = ?", canvas.ID, canvas.UserID).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc.cleanupExpiredArchivedAssets()
+	if err := db.Model(&model.Asset{}).Where("id = ?", asset.ID).Count(&assetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assetCount != 0 || resourceCount != 0 || jobCount != 1 {
+		t.Fatalf("unreferenced archived asset did not use deletion outbox: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
+	}
+}
+
+func TestDetachedResourceCleanupRemovesOrphanAndKeepsAssetBackedResource(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	old := time.Now().Add(-48 * time.Hour)
+	orphan := model.Resource{
+		ID: "resource-detached", UserID: "user-1", Status: model.ResourceStatusReady,
+		Provider: "unsupported-test-provider", ObjectKey: "users/user-1/image/detached.png",
+		CreatedAt: old, UpdatedAt: old,
+	}
+	backed := model.Resource{
+		ID: "resource-backed", UserID: "user-1", Status: model.ResourceStatusReady,
+		Provider: "local", ObjectKey: "users/user-1/image/backed.png",
+		CreatedAt: old, UpdatedAt: old,
+	}
+	asset := model.Asset{
+		ID: "asset-backed", UserID: "user-1", Title: "素材库图片",
+		PayloadJSON: `{"data":{"storageKey":"resource:resource-backed"}}`, CreatedAt: old, UpdatedAt: old,
+	}
+	for _, item := range []any{&orphan, &backed, &asset} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.cleanupDetachedUserResources("user-1", []model.Resource{orphan, backed}); err != nil {
+		t.Fatalf("cleanupDetachedUserResources() error = %v", err)
+	}
+
+	var orphanCount, backedCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", orphan.ID).Count(&orphanCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", backed.ID).Count(&backedCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if orphanCount != 0 || backedCount != 1 {
+		t.Fatalf("cleanup result: orphan=%d backed=%d", orphanCount, backedCount)
+	}
+}
+
+func TestDetachedResourceCleanupKeepsAppearanceAssets(t *testing.T) {
+	for _, setting := range []string{
+		`{"logoResourceId":"logo","darkLogoResourceId":"dark","authVideoResourceId":"video","authVideoPosterResourceId":"poster"}`,
+		`{invalid`,
+	} {
+		svc, db, _ := newResourceDeletionTestService(t)
+		if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: setting}).Error; err != nil {
+			t.Fatal(err)
+		}
+		var resources []model.Resource
+		for _, id := range []string{"logo", "dark", "video", "poster"} {
+			resource := model.Resource{ID: id, UserID: "admin", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: id, CreatedAt: time.Now().Add(-48 * time.Hour)}
+			if err := db.Create(&resource).Error; err != nil {
+				t.Fatal(err)
+			}
+			resources = append(resources, resource)
+		}
+		if err := svc.cleanupDetachedUserResources("admin", resources); err != nil {
+			t.Fatal(err)
+		}
+		var count, jobs int64
+		db.Model(&model.Resource{}).Count(&count)
+		db.Model(&model.ResourceDeletionJob{}).Count(&jobs)
+		if count != 4 || jobs != 0 {
+			t.Fatalf("appearance cleanup: resources=%d jobs=%d", count, jobs)
+		}
+	}
+}
+
+func TestResourceCleanupCandidatesUseStatusSpecificRetention(t *testing.T) {
+	_, db, _ := newResourceDeletionTestService(t)
+	now := time.Now()
+	resources := []model.Resource{
+		{ID: "pending-old", UserID: "user-1", Status: model.ResourceStatusPending, CreatedAt: now, UpdatedAt: now.Add(-2 * time.Hour)},
+		{ID: "pending-fresh", UserID: "user-1", Status: model.ResourceStatusPending, CreatedAt: now, UpdatedAt: now.Add(-30 * time.Minute)},
+		{ID: "ready-old", UserID: "user-1", Status: model.ResourceStatusReady, CreatedAt: now.Add(-25 * time.Hour), UpdatedAt: now},
+		{ID: "ready-fresh", UserID: "user-1", Status: model.ResourceStatusReady, CreatedAt: now.Add(-23 * time.Hour), UpdatedAt: now},
+	}
+	for index := range resources {
+		if err := db.Create(&resources[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	candidates, err := repository.New(db).ResourceCleanupCandidates(now.Add(-time.Hour), now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, resource := range candidates {
+		ids[resource.ID] = true
+	}
+	if !ids["pending-old"] || !ids["ready-old"] || ids["pending-fresh"] || ids["ready-fresh"] {
+		t.Fatalf("cleanup candidates = %#v", ids)
+	}
+}
+
+func TestDetachedFailedResourceWithoutObjectKeyNeedsNoDeletionJob(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{
+		ID: "resource-failed-empty", UserID: "user-1", Status: model.ResourceStatusFailed,
+		CreatedAt: time.Now().Add(-2 * time.Hour), UpdatedAt: time.Now().Add(-2 * time.Hour),
+	}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.cleanupDetachedUserResources(resource.UserID, []model.Resource{resource}); err != nil {
+		t.Fatal(err)
+	}
+	var resourceCount, jobCount int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if resourceCount != 0 || jobCount != 0 {
+		t.Fatalf("cleanup result: resource=%d jobs=%d", resourceCount, jobCount)
+	}
+}
+
+func newResourceDeletionTestService(t *testing.T) (*Service, *gorm.DB, string) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := t.TempDir()
+	return New(repository.New(db), dataDir), db, dataDir
+}

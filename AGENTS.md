@@ -42,14 +42,15 @@
 ### 后端
 
 - `backend/internal/handler/`：HTTP 入参、鉴权上下文、调用 service、返回统一响应；不放业务判断和数据库查询。
-- `backend/internal/service/`：校验、权限、默认值、ID、时间、配额、幂等、任务编排和外部调用。画布生成调度在 `provider.go`；文本 / 图片 / 视频遗留 / 音频 / HTTP / 声明式协议分别在 `provider_text.go`、`provider_image.go`、`provider_video.go`、`provider_audio.go`、`provider_http_client.go`、`provider_protocol.go`。
+- `backend/internal/service/`：稳定导入面。只再导出 `internal/app` 的类型、常量和包级函数（`aliases_*.go`）。handler/cmd 继续 import 本包。
+- `backend/internal/app/`：HTTP 组合根和尚未拆出的业务实现。校验、权限、跨域编排从这里进入。画布生成调度仍主要在 `provider.go`；文本 / 图片 / 视频遗留 / 音频 / HTTP / 声明式协议分别在 `provider_text.go`、`provider_image.go`、`provider_video.go`、`provider_audio.go`、`provider_http_client.go`、`provider_protocol.go`。技能库在 `internal/skills`，提示词与风格在 `internal/prompts`，登录注册在 `internal/auth`，画布分享在 `internal/canvas`，资源引用解析在 `internal/assets`，运行时策略/限流/worker 在 `internal/platform`，错误码与通用工具在 `internal/kernel`，出站 SSRF 在 `internal/outbound`。域包不得 import `internal/service` 或 `internal/app`。
 - `backend/internal/repository/`：GORM 查询和持久化；不承载业务策略。
 - `backend/internal/model/`：结构、枚举和简单模型方法；不调用外部服务。
 - `backend/internal/provider/`：模型供应商能力和协议实现。
 - `backend/internal/database/`：数据库连接、迁移和连接池。
 - `backend/cmd/`：可执行入口、迁移和启动配置；启动参数不得绕过数据目录约束。
 
-调用链应保持为：`HTTP -> handler -> service -> repository/model -> database/resource`；需要模型上游时由 service 进入 `provider/outbound`。跨层调用必须有明确理由并补测试。
+调用链应保持为：`HTTP -> handler -> service（别名）-> app（组合根）-> 业务域包 -> repository/model -> database/resource`；需要模型上游时由域包或 app 进入 `protocol` / `generation` / `outbound`。跨层调用必须有明确理由并补测试。
 
 ### Agent、插件和文档
 

@@ -12,8 +12,20 @@ const filter = (from, as, where) => ({ $filter: { from, as, where } });
 const eq = (left, right) => ({ $eq: [left, right] });
 const ne = (left, right) => ({ $ne: [left, right] });
 const gt = (left, right) => ({ $gt: [left, right] });
+const gte = (left, right) => ({ $gte: [left, right] });
+const lt = (left, right) => ({ $lt: [left, right] });
+const lte = (left, right) => ({ $lte: [left, right] });
+const and = (...values) => ({ $and: values });
 const len = (value) => ({ $len: value });
+const lower = (value) => ({ $lower: value });
+const trim = (value) => ({ $trim: value });
+const toFloat = (value) => ({ $toFloat: value });
+const toInt = (value) => ({ $toInt: value });
+const split = (value, separator) => ({ $split: [value, separator] });
+const at = (value, index) => ({ $at: [value, index] });
+const divide = (left, right) => ({ $divide: [left, right] });
 const conditional = (condition, thenValue, elseValue = null) => ({ $if: { condition, then: thenValue, else: elseValue } });
+const nonZeroFloat = (value) => conditional(ne(toFloat(value), 0), toFloat(value));
 const first = (value) => ({ $first: value });
 const sorted = (value) => ({ $sortByOrder: value });
 const mediaWithRoles = (path, roles) => filter(sorted(ref(path)), "media", { $in: [ref("media.role"), roles] });
@@ -55,6 +67,12 @@ const videoParams = [
   ["resolution", "string", false, "resolution", "分辨率档位。"],
   ["generateAudio", "boolean", false, "generate_audio", "是否生成音频。"],
   ["watermark", "boolean", false, "watermark", "水印开关。"],
+  ["providerOptions", "object", false, "provider-specific fields", "插件命名空间内的厂商扩展字段。"]
+];
+
+const audioParams = [
+  ["model", "string", true, "model", "音频模型 ID。"],
+  ["prompt", "string", true, "input", "待合成文本。"],
   ["providerOptions", "object", false, "provider-specific fields", "插件命名空间内的厂商扩展字段。"]
 ];
 
@@ -239,16 +257,112 @@ for (const [id, name, vendor, baseUrl] of [
 }
 
 add({
+  id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",
+  baseUrl: "https://api.openai.com", auth: bearer, params: imageParams,
+  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits。quality 的 1k/2k/4k 映射为 OpenAI low/medium/high。",
+  create: {
+    method: "POST",
+    path: "/v1/images/generations",
+    pathTemplate: conditional(gt(len(ref("request.images")), 0), "/v1/images/edits", "/v1/images/generations"),
+    contentType: "application/json",
+    contentTypeTemplate: conditional(gt(len(ref("request.images")), 0), "multipart/form-data", "application/json"),
+    body: {
+      model: ref("request.model"),
+      prompt: ref("request.prompt"),
+      n: omit(conditional(gt(ref("request.imageCount"), 0), ref("request.imageCount"), 1)),
+      size: omit(conditional({ $in: [lower(trim(ref("request.aspectRatio"))), ["", "auto"]] }, null, ref("request.aspectRatio"))),
+      quality: omit({
+        $switch: {
+          cases: [
+            { when: { $in: [lower(trim(ref("request.quality"))), ["1k"]] }, then: "low" },
+            { when: { $in: [lower(trim(ref("request.quality"))), ["2k"]] }, then: "medium" },
+            { when: { $in: [lower(trim(ref("request.quality"))), ["4k"]] }, then: "high" },
+            { when: { $in: [lower(trim(ref("request.quality"))), ["", "auto"]] }, then: null }
+          ],
+          default: ref("request.quality")
+        }
+      }),
+      background: omit(coalesce(
+        ref("request.providerOptions.openai-image.background"),
+        conditional(eq(ref("request.extra.transparentBackground"), "true"), "transparent", null)
+      )),
+      output_format: omit(coalesce(ref("request.providerOptions.openai-image.output_format"), "png")),
+      output_compression: omit(ref("request.providerOptions.openai-image.output_compression")),
+      moderation: omit(ref("request.providerOptions.openai-image.moderation")),
+      response_format: omit(coalesce(ref("request.providerOptions.openai-image.response_format"), "b64_json")),
+      style: omit(ref("request.providerOptions.openai-image.style")),
+      user: omit(ref("request.providerOptions.openai-image.user"))
+    },
+    files: [
+      { name: "image", source: filter(ref("request.images"), "media", ne(ref("media.role"), "mask")), filename: "source.png" },
+      { name: "mask", source: filter(ref("request.images"), "media", eq(ref("media.role"), "mask")), filename: "mask.png" }
+    ]
+  },
+  response: {
+    status: "succeeded",
+    images: map(ref("response.data"), "item", {
+      url: omit(ref("item.url")),
+      dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] })
+    }),
+    usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"]
+  }
+});
+
+const grokAspectSource = lower(trim(ref("request.aspectRatio")));
+const grokSizeParts = split(grokAspectSource, "x");
+const grokSizeWidth = toFloat(at(grokSizeParts, 0));
+const grokSizeHeight = toFloat(at(grokSizeParts, 1));
+const grokSizeRatio = divide(grokSizeWidth, grokSizeHeight);
+const grokHasPixelSize = and(eq(len(grokSizeParts), 2), gt(grokSizeWidth, 0), gt(grokSizeHeight, 0));
+const grokAspectRatio = omit({
+  $switch: {
+    cases: [
+      { when: { $in: [grokAspectSource, ["", "auto"]] }, then: null },
+      { when: { $in: [grokAspectSource, ["1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2", "9:19.5", "19.5:9", "1:2", "2:1"]] }, then: grokAspectSource },
+      { when: and(grokHasPixelSize, eq(grokSizeWidth, grokSizeHeight)), then: "1:1" },
+      { when: and(grokHasPixelSize, gte(grokSizeRatio, 1.7), lte(grokSizeRatio, 1.8)), then: "16:9" },
+      { when: and(grokHasPixelSize, gte(grokSizeRatio, 1.0 / 1.8), lte(grokSizeRatio, 1.0 / 1.7)), then: "9:16" },
+      { when: and(grokHasPixelSize, gt(grokSizeRatio, 1.2), lt(grokSizeRatio, 1.4)), then: "4:3" },
+      { when: and(grokHasPixelSize, gt(grokSizeRatio, 0.7), lt(grokSizeRatio, 0.85)), then: "3:4" },
+      { when: and(grokHasPixelSize, gte(grokSizeRatio, 0.6), lt(grokSizeRatio, 0.72)), then: "2:3" },
+      { when: and(grokHasPixelSize, gt(grokSizeRatio, 1.35), lt(grokSizeRatio, 1.6)), then: "3:2" },
+      { when: and(grokHasPixelSize, gt(grokSizeRatio, 0.45), lt(grokSizeRatio, 0.55)), then: "1:2" },
+      { when: and(grokHasPixelSize, gt(grokSizeRatio, 1.85), lt(grokSizeRatio, 2.2)), then: "2:1" },
+      { when: and(grokHasPixelSize, gt(grokSizeWidth, grokSizeHeight)), then: "16:9" },
+      { when: grokHasPixelSize, then: "9:16" }
+    ],
+    default: null
+  }
+});
+const grokResolutionSource = lower(trim(coalesce(ref("request.resolution"), ref("request.quality"))));
+const grokResolution = omit({
+  $switch: {
+    cases: [
+      { when: { $in: [grokResolutionSource, ["1k", "low", "standard"]] }, then: "1k" },
+      { when: { $in: [grokResolutionSource, ["2k", "medium", "hd", "high", "4k"]] }, then: "2k" }
+    ],
+    default: null
+  }
+});
+
+add({
   id: "xai-grok-images", providerId: "grok-image", name: "xAI Grok Images", vendor: "xAI", capability: "image",
   baseUrl: "https://api.x.ai", auth: bearer, params: imageParams,
-  create: jsonCreate("/v1/images/generations", {
-    model: ref("request.model"), prompt: ref("request.prompt"),
-    image: conditional(gt(len(ref("request.images")), 0), { url: firstMediaFieldWithRoles("request.images", ["edit_source", "reference_image", ""], "value") }),
-    n: conditional(gt(ref("request.imageCount"), 0), ref("request.imageCount"), 1),
-    response_format: coalesce(ref("request.providerOptions.grok-image.response_format"), "url"),
-    aspect_ratio: omit(ref("request.aspectRatio")), resolution: omit(coalesce(ref("request.resolution"), ref("request.quality"))),
-    user: omit(ref("request.providerOptions.grok-image.user"))
-  }),
+  notes: "有参考图时改走 /v1/images/edits；resolution 只接受 1k/2k；像素尺寸会换算为 aspect_ratio。",
+  create: {
+    method: "POST",
+    path: "/v1/images/generations",
+    pathTemplate: conditional(gt(len(ref("request.images")), 0), "/v1/images/edits", "/v1/images/generations"),
+    contentType: "application/json",
+    body: {
+      model: ref("request.model"), prompt: ref("request.prompt"),
+      image: conditional(gt(len(ref("request.images")), 0), { url: firstMediaFieldWithRoles("request.images", ["edit_source", "reference_image", ""], "value") }),
+      n: conditional(gt(ref("request.imageCount"), 0), ref("request.imageCount"), 1),
+      response_format: coalesce(ref("request.providerOptions.grok-image.response_format"), "url"),
+      aspect_ratio: grokAspectRatio, resolution: grokResolution,
+      user: omit(ref("request.providerOptions.grok-image.user"))
+    }
+  },
   response: { status: "succeeded", images: map(ref("response.data"), "item", { url: omit(ref("item.url")), dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] }) }), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
 
@@ -264,18 +378,50 @@ add({
     model: ref("request.model"), prompt: ref("request.prompt"),
     // Ark 的 size 只接受 WIDTHxHEIGHT 或 2k/3k/4k；统一层的比例值在这里换算成 2K 档像素尺寸，像素或档位值原样透传。
     size: omit({ $switch: { cases: arkSeedreamRatioSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: ref("request.aspectRatio") } }),
-    image: omit(map(ref("request.images"), "media", ref("media.value"))),
+    image: omit(conditional(
+      eq(len(ref("request.images")), 1),
+      first(map(ref("request.images"), "media", ref("media.value"))),
+      conditional(gt(len(ref("request.images")), 1), map(ref("request.images"), "media", ref("media.value")), null)
+    )),
     sequential_image_generation: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation")),
     sequential_image_generation_options: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation_options")),
-    watermark: ref("request.watermark"), seed: omit(ref("request.providerOptions.volcengine-ark-image.seed")),
-    response_format: omit(ref("request.providerOptions.volcengine-ark-image.response_format"))
+    watermark: coalesce(ref("request.providerOptions.volcengine-ark-image.watermark"), ref("request.watermark"), false),
+    seed: omit(ref("request.providerOptions.volcengine-ark-image.seed")),
+    response_format: coalesce(ref("request.providerOptions.volcengine-ark-image.response_format"), "b64_json")
   }),
   response: { status: "succeeded", images: ref("response.data"), usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
+});
+
+// Gemini imageConfig.imageSize 只接受 1K/2K/4K；画布统一层用 1k/2k/4k 或 low/medium/high。
+const geminiImageSize = omit({
+  $coalesce: [
+    {
+      $switch: {
+        cases: [
+          { when: { $in: [lower(ref("request.quality")), ["1k", "low"]] }, then: "1K" },
+          { when: { $in: [lower(ref("request.quality")), ["2k", "medium"]] }, then: "2K" },
+          { when: { $in: [lower(ref("request.quality")), ["4k", "high"]] }, then: "4K" }
+        ],
+        default: null
+      }
+    },
+    {
+      $switch: {
+        cases: [
+          { when: { $in: [lower(ref("request.resolution")), ["1k", "low"]] }, then: "1K" },
+          { when: { $in: [lower(ref("request.resolution")), ["2k", "medium"]] }, then: "2K" },
+          { when: { $in: [lower(ref("request.resolution")), ["4k", "high"]] }, then: "4K" }
+        ],
+        default: null
+      }
+    }
+  ]
 });
 
 add({
   id: "google-gemini-image", providerId: "gemini-image", name: "Google Gemini Image", vendor: "Google", capability: "image",
   baseUrl: "https://generativelanguage.googleapis.com", auth: { type: "google-api-key", field: "apiKey" }, params: imageParams,
+  notes: "imageSize 只映射 1K/2K/4K；未知质量值（如视频清晰度 720）必须省略。多图输出由宿主按次创建，不映射 candidateCount。",
   create: jsonCreate("/v1beta/models/{{model}}:generateContent", {
     contents: [{ role: "user", parts: { $concatArrays: [
       [{ text: ref("request.prompt") }],
@@ -283,10 +429,11 @@ add({
     ] } }],
     generationConfig: {
       responseModalities: coalesce(ref("request.providerOptions.gemini-image.responseModalities"), ["TEXT", "IMAGE"]),
-      imageConfig: { aspectRatio: omit(ref("request.aspectRatio")), imageSize: omit(coalesce(ref("request.resolution"), ref("request.quality"))) },
-      candidateCount: omit(ref("request.imageCount")), temperature: omit(ref("request.providerOptions.gemini-image.temperature")), topP: omit(ref("request.providerOptions.gemini-image.topP")), topK: omit(ref("request.providerOptions.gemini-image.topK")), seed: omit(ref("request.providerOptions.gemini-image.seed"))
+      imageConfig: { aspectRatio: omit(ref("request.aspectRatio")), imageSize: geminiImageSize },
+      temperature: omit(ref("request.providerOptions.gemini-image.temperature")), topP: omit(ref("request.providerOptions.gemini-image.topP")), topK: omit(ref("request.providerOptions.gemini-image.topK")), seed: omit(ref("request.providerOptions.gemini-image.seed"))
     },
-    safetySettings: omit(ref("request.providerOptions.gemini-image.safetySettings")), systemInstruction: omit(ref("request.providerOptions.gemini-image.systemInstruction"))
+    safetySettings: omit(ref("request.providerOptions.gemini-image.safetySettings")),
+    systemInstruction: omit(coalesce(ref("request.providerOptions.gemini-image.systemInstruction"), conditional(ref("request.instructions"), { parts: [{ text: ref("request.instructions") }] }, null)))
   }),
   response: {
     status: "succeeded",
@@ -298,17 +445,62 @@ add({
   }
 });
 
+const jimengSizeParts = split(lower(trim(ref("request.aspectRatio"))), "x");
+const jimengHasPixelSize = and(eq(len(jimengSizeParts), 2), gt(toFloat(at(jimengSizeParts, 0)), 0), gt(toFloat(at(jimengSizeParts, 1)), 0));
+
 add({
   id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "Volcengine Jimeng Image", vendor: "Volcengine", capability: "image",
   baseUrl: "https://visual.volcengineapi.com", auth: { type: "volcengine-v4", field: "apiKey", secretField: "secretKey", service: "cv", region: "cn-north-1" }, params: imageParams,
   configuration: config([{ name: "secretKey", type: "secret", label: "Secret Key", required: true }]),
+  notes: "本地参考图走 binary_data_base64；公网 URL 走 image_urls。WxH 尺寸拆成 width/height。",
   create: jsonCreate("/", {
-    req_key: ref("request.model"), prompt: ref("request.prompt"), image_urls: omit(map(ref("request.images"), "media", ref("media.value"))),
-    seed: omit(ref("request.providerOptions.volcengine-jimeng-image.seed")), width: omit(ref("request.output.width")), height: omit(ref("request.output.height")),
+    req_key: ref("request.model"), prompt: ref("request.prompt"), force_single: true,
+    binary_data_base64: omit(map(filter(ref("request.images"), "media", ref("media.dataUrl")), "media", { $dataPayload: ref("media.dataUrl") })),
+    image_urls: omit(map(filter(ref("request.images"), "media", and({ $not: ref("media.dataUrl") }, ref("media.url"))), "media", ref("media.url"))),
+    seed: omit(ref("request.providerOptions.volcengine-jimeng-image.seed")),
+    width: omit(conditional(jimengHasPixelSize, toInt(at(jimengSizeParts, 0)), ref("request.output.width"))),
+    height: omit(conditional(jimengHasPixelSize, toInt(at(jimengSizeParts, 1)), ref("request.output.height"))),
     req_json: omit(ref("request.providerOptions.volcengine-jimeng-image.req_json"))
   }, { originPath: true, query: { Action: "CVSync2AsyncSubmitTask", Version: "2022-08-31" } }),
   poll: { method: "POST", path: "/", originPath: true, contentType: "application/json", query: { Action: "CVSync2AsyncGetResult", Version: "2022-08-31" }, body: { req_key: ref("request.model"), task_id: ref("taskId"), req_json: "{\"return_url\":true}" } },
   response: asyncResponse("image", { taskId: coalesce(ref("response.data.task_id"), ref("response.task_id"), ref("taskId")), status: coalesce(ref("response.data.status"), ref("response.status"), "pending"), images: coalesce(ref("response.data.image_urls"), ref("response.data.binary_data_base64")), errorPaths: ["code"], messagePaths: ["message"] })
+});
+
+add({
+  id: "openai-audio", providerId: "openai-audio", name: "OpenAI Audio Speech", vendor: "OpenAI", capability: "audio",
+  baseUrl: "https://api.openai.com", auth: bearer, params: audioParams,
+  notes: "同步 /v1/audio/speech 返回原始音频流，由 binaryPayload 包装为统一音频结果。",
+  create: jsonCreate("/v1/audio/speech", {
+    model: ref("request.model"),
+    input: ref("request.prompt"),
+    voice: coalesce(ref("request.extra.audioVoice"), ref("request.providerOptions.openai-audio.voice"), "alloy"),
+    response_format: coalesce(ref("request.extra.audioFormat"), ref("request.providerOptions.openai-audio.response_format"), "mp3"),
+    speed: coalesce(nonZeroFloat(ref("request.extra.audioSpeed")), ref("request.providerOptions.openai-audio.speed"), 1),
+    instructions: omit(coalesce(ref("request.extra.audioInstructions"), ref("request.providerOptions.openai-audio.instructions")))
+  }),
+  response: { binaryPayload: true, resultKind: "audio", status: "succeeded", errorPaths: ["error.code"], messagePaths: ["error.message"] }
+});
+
+add({
+  id: "async-audio", providerId: "async-audio", name: "Async Audio Tasks", vendor: "OpenAI compatible", capability: "audio",
+  baseUrl: "https://api.openai.com", auth: bearer, params: audioParams,
+  notes: "异步音频任务：创建 /v1/audio/tasks，轮询同一路径，结果优先 URL，否则下载 /content。",
+  create: jsonCreate("/v1/audio/tasks", {
+    model: ref("request.model"),
+    input: ref("request.prompt"),
+    voice: coalesce(ref("request.extra.audioVoice"), ref("request.providerOptions.async-audio.voice"), "alloy"),
+    response_format: coalesce(ref("request.extra.audioFormat"), ref("request.providerOptions.async-audio.response_format"), "mp3"),
+    speed: coalesce(nonZeroFloat(ref("request.extra.audioSpeed")), ref("request.providerOptions.async-audio.speed"), 1),
+    instructions: omit(coalesce(ref("request.extra.audioInstructions"), ref("request.providerOptions.async-audio.instructions")))
+  }),
+  poll: { method: "GET", path: "/v1/audio/tasks/{{taskId}}" },
+  result: { method: "GET", path: "/v1/audio/tasks/{{taskId}}/content", headers: { Accept: "audio/*" } },
+  response: asyncResponse("audio", {
+    taskId: coalesce(ref("response.id"), ref("response.task_id"), ref("response.data.id"), ref("taskId")),
+    status: coalesce(ref("response.status"), ref("response.data.status"), "pending"),
+    audios: coalesce(ref("response.audio_url"), ref("response.audioUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.audio_url"), ref("response.output.url")),
+    errorPaths: ["error.code"], messagePaths: ["error.message"]
+  })
 });
 
 add({
@@ -318,7 +510,8 @@ add({
     method: "POST", path: "/v1/videos", contentType: "multipart/form-data",
     body: {
       model: ref("request.model"), prompt: ref("request.prompt"), seconds: { $toString: ref("request.duration") },
-      size: omit(ref("request.aspectRatio")), variants: omit(ref("request.providerOptions.newapi.variants"))
+      size: omit(ref("request.aspectRatio")), resolution_name: omit(ref("request.resolution")),
+      variants: omit(ref("request.providerOptions.newapi.variants"))
     },
     files: [{ name: "input_reference", source: first(filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"))), filename: "input-reference.png" }]
   },

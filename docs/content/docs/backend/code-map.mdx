@@ -13,8 +13,8 @@ description: 从产品功能快速定位主要代码入口
 | --- | --- | --- |
 | 首页与导航 | `web/src/pages/home/`、`web/src/layouts/user-layout.tsx` | `components/layout/`、`router.tsx` |
 | 创作工作台 | `web/src/pages/create/index.tsx` | `creation-workspace.tsx`、`creation-conversations.ts`、`creation-types.ts`、`creation-assets.ts`、`creation-references.ts` |
-| 登录注册 | `web/src/pages/auth/` | `stores/use-user-store.ts`、`services/api/auth.ts`、后端 `service/linuxdo.go` |
-| 积分与计费 | `web/src/pages/wallet/`、`pages/admin/components/platform-finance-panel.tsx` | `services/api/wallet.ts`、后端 `service/finance.go`、`repository/finance.go` |
+| 登录注册 | `web/src/pages/auth/` | `stores/use-user-store.ts`、`services/api/auth.ts`、后端 `internal/auth/` |
+| 积分与计费 | `web/src/pages/wallet/`、`pages/admin/components/platform-finance-panel.tsx` | `services/api/wallet.ts`、后端 `internal/app/finance.go`、`repository/finance.go` |
 | 任务中心 | `web/src/pages/tasks/` | `services/api/task-center.ts`、`services/api/task-text-stream.ts` |
 | 我的素材 | `web/src/pages/assets/` | `stores/use-asset-store.ts`、`services/image-storage.ts` |
 | 技能库 | `web/src/pages/skills/` | `services/api/skills.ts`、`services/skill-runtime.ts`、`components/skills/skill-runtime-picker.tsx` |
@@ -51,7 +51,7 @@ description: 从产品功能快速定位主要代码入口
 | 任务结果回填 | `web/src/lib/canvas/canvas-generation-task-sync.ts` |
 | 本地持久化状态 | `web/src/stores/canvas/use-canvas-store.ts` |
 | Agent 会话状态 | `web/src/stores/canvas/use-canvas-agent-store.ts` |
-| 官方提示词目录与客户端起始稿 | `backend/internal/service/prompt_template.go`、`web/src/lib/prompts/`、`web/src/lib/canvas/canvas-agent-protocol.ts` |
+| 官方提示词目录与客户端起始稿 | `backend/internal/prompts/`、`web/src/lib/prompts/`、`web/src/lib/canvas/canvas-agent-protocol.ts` |
 
 ## 前端 HTTP 与产品壳
 
@@ -64,29 +64,49 @@ description: 从产品功能快速定位主要代码入口
 ## 后端调用链
 
 ```text
-HTTP 请求 -> handler -> service -> repository/model -> SQLite/PostgreSQL 或资源存储
-                         |
-                         -> provider/outbound -> 模型上游
+HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合根）-> 业务域包 -> repository/model
+                                                                     |
+                                                                     -> protocol / payment / generation / outbound
 ```
 
-| 功能 | Handler | Service / Repository |
+`internal/service` 只再导出 `internal/app` 的类型、常量和包级函数，handler/cmd 仍 import `internal/service`。组合根和尚未拆出的业务实现在 `internal/app`。已抽出的域包不得 import `service` 或 `app`（防回环）。共享错误码与 ID/字符串工具在 `internal/kernel`。
+
+### 目标业务域
+
+| 域包 | 职责 | 现状 |
+| --- | --- | --- |
+| `service` | HTTP 稳定导入面 | **已变薄**：仅 `aliases_*.go` / `doc.go`（4 个文件） |
+| `app` | 组合根、跨域编排、尚未拆出的业务实现 | **承接原 service 实现**：`provider_*`、`task_*`、`project_*`、OSS/配额、渠道、管理后台等 |
+| `platform` | 运行时策略、功能开关、限流/并发协调、worker 与读缓存 | **已抽出**：`internal/platform`；`app/platform_bridge.go` 委托 |
+| `kernel` | 结构化错误、错误码、ID 与通用字符串/配额换算 | **已抽出**：`internal/kernel` |
+| `generation` | 协议注册表和生成域边界 | **部分抽出**：`internal/generation` 提供协议注册入口；`provider_*` 执行簇仍在 `app` |
+| `outbound` | 出站 URL/Header 校验、SSRF 防护、HTTP 客户端 | **已抽出**：`internal/outbound` |
+| `skills` | 技能库、GitHub/ZIP 包、内置技能种子、后台同步 | **已抽出**：`internal/skills` |
+| `prompts` | 提示词模板、用户定制、风格档案、JSON 抽取 | **已抽出**：`internal/prompts` |
+| `auth` | 登录注册、OAuth、邮件验证码、LibTV/TapNow 导入 | **已抽出**：`internal/auth` |
+| `canvas` | 画布公开分享、媒体引用守卫、用户画布/素材库同步 | **已抽出**：`internal/canvas` |
+| `assets` | 资源 URL/引用解析、流式交付类型 | **部分抽出**：`internal/assets`；OSS/配额/转码仍在 `app` |
+
+组合根原则：`service.New`（委托 `app.New`）组装各域服务；coordinator 不得再持有整个 `*Service` 回灌域包。
+
+| 功能 | Handler | Service / 域包 / Repository |
 | --- | --- | --- |
 | 路由与中间件 | `handler/api.go`、`handler/routes.go` | `RegisterCanvasAPI` 挂到 `/api`。合同见 `docs/content/docs/backend/http-api.mdx`、`handler/openapi.yaml`。 |
-| 用户和管理员 | `handler/auth.go` | `service/auth.go`、`service/admin.go` |
-| 管理后台批量操作 | `handler/auth.go` | `service/admin.go`、`repository/admin_audit.go`、`repository/analytics.go` |
-| 管理后台存储资源 | `handler/admin_storage.go` | `service/admin_storage.go`、`service/admin_storage_delete.go`、`repository/admin_storage.go`、`repository/admin_storage_delete.go` |
-| 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `service/runtime_policy.go`、`service/upload_quota.go`、`service/storage_quota.go`、`service/coordination.go` |
-| 模型响应拦截 | `handler/response_interception.go`、`handler/custom_proxy.go` | `service/response_interception.go`、`repository/repository.go` |
-| 异步任务、文本 SSE 与 Agent | `handler/routes.go` | `service/service.go`、`service/provider.go`（调度）及 `provider_text.go` / `provider_image.go` / `provider_video.go` / `provider_audio.go` / `provider_http_client.go` / `provider_protocol.go`、`service/task_text_stream.go`、`service/text_replay.go` |
-| 用户画布与素材 | `handler/user_data.go` | `service/user_data.go`、`service/user_asset_document.go` |
-| 文件和 OSS | `handler/routes.go` | `service/resource.go`、`service/settings.go` |
-| 画布分享 | `handler/canvas_share.go` | `service/canvas_share.go` |
-| 技能库 | `handler/skills.go` | `service/skills.go`、`repository/skills.go` |
-| 提示词模板 | `handler/auth.go`、`handler/user_data.go` | `service/prompt_template.go`、`service/prompt_template_defaults.go` |
-| 用户风格库 | `handler/style_profile.go` | `service/style_profile.go`、`repository/style_profile.go` |
-| 用量分析 | `handler/admin_analytics.go` | `service/analytics.go`、`repository/analytics.go` |
+| 用户和管理员 | `handler/auth.go` | `internal/auth`、`internal/app/admin.go`（经 `service` 别名） |
+| 管理后台批量操作 | `handler/auth.go` | `internal/app/admin.go`、`repository/admin_audit.go`、`repository/analytics.go` |
+| 管理后台存储资源 | `handler/admin_storage.go` | `internal/app/admin_storage.go`、`repository/admin_storage.go` |
+| 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `internal/platform`、`internal/app/upload_quota.go`、`storage_quota.go`、`coordination.go` |
+| 模型响应拦截 | `handler/response_interception.go`、`handler/custom_proxy.go` | `internal/app/response_interception.go`、`repository/repository.go` |
+| 异步任务、文本 SSE 与 Agent | `handler/routes.go` | `internal/app` 组合根（`provider_*` 仍在此）+ `internal/generation` + `internal/outbound` + `task_text_stream.go`、`text_replay.go` |
+| 用户画布与素材 | `handler/user_data.go` | `internal/canvas` |
+| 文件和 OSS | `handler/routes.go` | `internal/app/resource.go`、`settings.go` |
+| 画布分享 | `handler/canvas_share.go` | `internal/canvas` |
+| 技能库 | `handler/skills.go` | `internal/skills`、`repository/skills.go` |
+| 提示词模板 | `handler/auth.go`、`handler/user_data.go` | `internal/prompts` |
+| 用户风格库 | `handler/style_profile.go` | `internal/prompts`、`repository/style_profile.go` |
+| 用量分析 | `handler/admin_analytics.go` | `internal/app/analytics.go`、`repository/analytics.go` |
 
-登录恢复仅初始化当前账号缓存与增量同步会话，不再自动读取 `GET /api/user-data/snapshot`。画布库通过分页摘要加载，打开、导出、重命名时按 ID 读取完整画布，引用素材通过批量 ID 接口读取；旧快照接口仍保留供显式调用。实现见 `service/user_data_page.go` 和前端 `services/user-data-sync.ts`。用户库素材写入（`UpsertUserAsset` / `ReplaceUserAssets`）在 `user_asset_document.go` 校验 SPA 合同：`kind`、`coverUrl`、`tags` 字符串数组，以及按类型完整的 `data`。不完整 payload 在入库时拒绝；GET 仍返回已保存的原始 JSON。上游异构 JSON 的可选字符串仍走 `stringField`；任务 ID 等关键字段走 `firstJSONString`，数字 ID 不再被当成“缺字段”。
+登录恢复仅初始化当前账号缓存与增量同步会话，不再自动读取 `GET /api/user-data/snapshot`。画布库通过分页摘要加载，打开、导出、重命名时按 ID 读取完整画布，引用素材通过批量 ID 接口读取；旧快照接口仍保留供显式调用。实现见 `internal/canvas/user_data_page.go` 和前端 `services/user-data-sync.ts`。用户库素材写入（`UpsertUserAsset` / `ReplaceUserAssets`）在 `internal/canvas/user_asset_document.go` 校验 SPA 合同：`kind`、`coverUrl`、`tags` 字符串数组，以及按类型完整的 `data`。不完整 payload 在入库时拒绝；GET 仍返回已保存的原始 JSON。上游异构 JSON 的可选字符串仍走 `stringField`；任务 ID 等关键字段走 `firstJSONString`，数字 ID 不再被当成“缺字段”。
 
 后端托管的文本生成通过 `GET /api/tasks/:id/text-events` 返回 `progress`、`delta` 和 `terminal` 事件。`delta` 的递增事件 ID 是断线续传游标，前端使用 `?after=<id>` 恢复；分镜任务复用该通道实时接收阶段和进度，但分镜结构和 Agent 工具参数仍在完整响应结束并校验通过后原子应用，不执行半截 JSON。
 

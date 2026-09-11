@@ -1,0 +1,92 @@
+- generic [ref=e3]:
+  - link "前往工作台介绍" [ref=e4] [cursor=pointer]:
+    - /url: "#workbench"
+  - banner [ref=e5]:
+    - link "影策首页" [ref=e6] [cursor=pointer]:
+      - /url: /welcome
+      - text: 影策
+    - navigation "首页导航" [ref=e8]:
+      - link "工作台" [ref=e9] [cursor=pointer]:
+        - /url: "#workbench"
+      - link "GitHub" [ref=e10] [cursor=pointer]:
+        - /url: https://github.com/ddcat-ai/open-ai-canvas
+    - link "开始创作" [ref=e14] [cursor=pointer]:
+      - /url: /create
+  - complementary "首页素材版本" [ref=e20]:
+    - generic [ref=e21] [cursor=pointer]:
+      - generic "Spring · 奇幻" [ref=e22]:
+        - text: Spring · 奇幻
+        - combobox "素材版本" [ref=e23]
+      - img "down" [ref=e25]
+    - link "演示素材 · CC BY" [ref=e28] [cursor=pointer]:
+      - /url: /welcome/credits.html#spring
+  - main [ref=e32]:
+    - region "影策创作之旅" [ref=e33]:
+      - generic [ref=e34]:
+        - generic "随着故事章节旋转并展开的电影影像卷轴" [ref=e35]
+        - generic:
+          - heading "影策" [level=1]
+          - paragraph: 让一个故事，从文字走向银幕。
+        - generic [ref=e36]:
+          - button "下一幕" [ref=e37] [cursor=pointer]
+          - navigation "故事章节" [ref=e40]:
+            - button "序幕" [ref=e41] [cursor=pointer]
+            - button "故事" [ref=e43] [cursor=pointer]
+            - button "角色" [ref=e45] [cursor=pointer]
+            - button "分镜" [ref=e47] [cursor=pointer]
+            - button "生成" [ref=e49] [cursor=pointer]
+            - button "画布" [ref=e51] [cursor=pointer]
+          - button "暂停动画" [ref=e53] [cursor=pointer]
+    - generic [ref=e57]:
+      - heading "让想象，有处落笔。" [level=2] [ref=e59]
+      - generic [ref=e60]:
+        - generic "工作台预览" [ref=e61]:
+          - tablist [ref=e62]:
+            - generic [ref=e64]
+          - generic:
+            - generic
+        - link "进入即时创作" [ref=e71] [cursor=pointer]:
+          - /url: /create
+      - tabpanel [ref=e77]:
+        - img "影策即时创作界面" [ref=e78]
+      - paragraph [ref=e80]: 选择模型与参考素材，在对话中逐步完成图片和视频。
+    - generic [ref=e81]:
+      - heading "你的故事， 现在开始。" [level=2] [ref=e82]: 你的故事，现在开始。
+      - link "开始创作" [ref=e83] [cursor=pointer]:
+        - /url: /create
+      - link "GitHub" [ref=e88] [cursor=pointer]:
+        - /url: https://github.com/ddcat-ai/open-ai-canvas
+      - region "一起把故事搬上银幕" [ref=e96]:
+        - generic [ref=e99]:
+          - generic [ref=e100]:
+            - generic [ref=e101]: Contributors
+            - generic [ref=e106]
+            - link "在 GitHub README 查看贡献者清单" [ref=e109] [cursor=pointer]:
+              - /url: https://github.com/ddcat-ai/open-ai-canvas#贡献者与团队
+              - text: 查看清单
+          - list "项目贡献者" [ref=e113]:
+            - listitem "正在啃 main 分支，争取下次 merge 的时候变成蝴蝶" [ref=e114]
+            - listitem "我亦无他，惟手熟尔" [ref=e116]
+            - listitem "HKUST(GZ) UG" [ref=e118]
+            - listitem "人生就是要不断的探索" [ref=e120]
+            - listitem "无" [ref=e122]
+            - listitem "励志成为未来最好用的画布仓库的贡献者" [ref=e124]
+            - listitem "剑走偏峰，雷厉风行。" [ref=e126]
+            - listitem "走自己的路" [ref=e128]
+            - listitem "AI 界热于助人的拖油瓶" [ref=e130]
+            - listitem "AI 短剧合规，资产确权" [ref=e132]
+            - listitem "Making things that think" [ref=e134]
+            - listitem "上善若水" [ref=e136]
+            - listitem "就是水水" [ref=e138]
+            - listitem "Done is better than perfect" [ref=e140]
+            - listitem "年轻的时候不狂，老了拿什么回忆" [ref=e142]
+            - listitem "年纪大佬才明白人要顺势而为。" [ref=e144]
+            - listitem "AI时代的全栈落地工，欢迎找我聊需求" [ref=e146]
+  - contentinfo [ref=e148]:
+    - link "影策" [ref=e149] [cursor=pointer]:
+      - /url: /welcome
+    - generic [ref=e150]: 开源 AI 影视创作工作台
+    - link "Open Source · MIT License" [ref=e151] [cursor=pointer]:
+      - /url: https://github.com/ddcat-ai/open-ai-canvas/blob/main/LICENSE
+  - link "Spring · Blender 开放电影演示素材 · 署名与许可" [ref=e156] [cursor=pointer]:
+    - /url: /welcome/credits.html#spring

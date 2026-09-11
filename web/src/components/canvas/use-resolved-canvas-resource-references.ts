@@ -60,7 +60,11 @@ export function useResolvedCanvasResourceReferences(references: CanvasResourceRe
 }
 
 function previewIdentity(reference: CanvasResourceReference, projectId?: string) {
-    if (reference.drawingId && projectId) return `drawing:${projectId}:${reference.drawingId}:${reference.drawingRevision || 0}`;
+    // 只有当 drawingId 和 projectId 同时存在时才返回绘图身份,避免不完整的缓存键导致运行时错误
+    if (reference.drawingId) {
+        if (!projectId) return "";
+        return `drawing:${projectId}:${reference.drawingId}:${reference.drawingRevision || 0}`;
+    }
     const storageKey = reference.kind === "video" ? reference.previewStorageKey : reference.storageKey;
     if (!storageKey || !["image", "video", "character"].includes(reference.kind)) return "";
     return `${reference.kind}:${storageKey}`;

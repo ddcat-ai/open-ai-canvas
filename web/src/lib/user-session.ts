@@ -9,6 +9,7 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/st
 import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { imageSizeConfigWithPresets } from "@/lib/image-size-presets";
 import { useUserStore } from "@/stores/use-user-store";
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
 import { initializeRemoteUserDataSession, installRemoteUserDataAutoSync, resetRemoteUserDataSync, withRemoteUserDataSyncExclusive } from "@/services/user-data-sync";
@@ -198,7 +199,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
     });
 }
 
-function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
+export function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
     const projected = defaultModelCapabilityConfig();
     if (spec.capability === "image" && projected.image) {
         projected.image.references.maxImages = spec.inputs?.image?.max ?? 0;
@@ -208,11 +209,13 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
         projected.image.transparentBackground = { supported: false, default: false };
         const sizeOption = spec.options?.size || spec.options?.aspectRatio;
         const sizeValues = stringValues(sizeOption);
-        const sizeAllowsCustom = sizeValues.includes("*");
+        const sizeAllowsCustom = sizeValues.includes("*") || Boolean(spec.imageSize?.allowCustom);
         const concreteSizeValues = sizeValues.filter((value) => value !== "*");
         const sizePresets = concreteSizeValues.length ? concreteSizeValues : sizeAllowsCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
-        if (sizePresets.length || sizeAllowsCustom) {
-            projected.image!.size = { parameter: "size", values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+        if (sizePresets.length || sizeAllowsCustom || spec.imageSize?.presets?.length) {
+            const parameter = spec.imageSize?.parameter === "aspect_ratio" || spec.imageSize?.parameter === "size" ? spec.imageSize.parameter : "size";
+            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+            if (spec.imageSize?.presets?.length) projected.image.size = imageSizeConfigWithPresets(projected.image, spec.imageSize.presets);
         }
         applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {
             projected.image!.quality = { supported: true, values, default: initial };

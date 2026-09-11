@@ -87,7 +87,7 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
     );
 }
 
-export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth, panelHeight = 190, dragOffset, isDragging = false, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; dragOffset?: Position | null; isDragging?: boolean; children: ReactNode }) {
+export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth, panelHeight = 190, dragOffset, isDragging = false, allowOverflow = false, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; dragOffset?: Position | null; isDragging?: boolean; allowOverflow?: boolean; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
     const { bringToFront, zIndex } = useCanvasOverlayLayer(`node-panel:${node.id}`, "var(--z-modal-overlay)");
     const initialWidth = resolveNodePanelWidth(node, viewport, panelWidth);
@@ -135,8 +135,8 @@ export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidt
             ref={panelRef}
             data-canvas-no-zoom
             data-canvas-node-panel
-            className="thin-scrollbar absolute max-w-[calc(100%_-_24px)] overflow-y-auto"
-            style={{ left: 0, top: 0, transform: `translate3d(${initialPosition.left}px, ${initialPosition.top}px, 0)`, width: initialWidth, maxHeight: "calc(100% - 84px)", zIndex }}
+            className={`thin-scrollbar absolute max-w-[calc(100%_-_24px)] ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}
+            style={{ left: 0, top: 0, transform: `translate3d(${initialPosition.left}px, ${initialPosition.top}px, 0)`, width: initialWidth, maxHeight: allowOverflow ? "none" : "calc(100% - 84px)", zIndex }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDownCapture={bringToFront}
             onFocusCapture={bringToFront}

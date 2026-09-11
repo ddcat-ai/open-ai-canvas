@@ -41,6 +41,7 @@
 
 | 头像 | 昵称 | 邮箱 | 个性签名 |
 | --- | --- | --- | --- |
+| <img src="assets/user-ddcat.jpg" alt="ddCat" width="80"> | ddCat<br><sub>项目发起者 · 微信：ddcat0829</sub> | [ddcat666@126.com](mailto:ddcat666@126.com) | 在计算机里头没有任何黑魔法，所有的东西只不过是我现在不知道而已，总有一天我会把所有的细节、所有的内部的东西全搞明白的。 |
 | <img src="assets/user-sikongyue.png" alt="爱笑的毛毛虫" width="80"> | 爱笑的毛毛虫<br><sub>用户名：sikongyue</sub> | [315515767@qq.com](mailto:315515767@qq.com) | 正在啃 main 分支，争取下次 merge 的时候变成蝴蝶 |
 | <img src="assets/user-delve.jpg" alt="delve-s" width="80"> | delve-s | [3013141136@qq.com](mailto:3013141136@qq.com) | 我亦无他，惟手熟尔 |
 | <img src="assets/user-CyrusAuyeung.jpg" alt="CyrusAuyeung" width="80"> | CyrusAuyeung | [cyrusauyeungho@gmail.com](mailto:cyrusauyeungho@gmail.com) | HKUST(GZ) UG |

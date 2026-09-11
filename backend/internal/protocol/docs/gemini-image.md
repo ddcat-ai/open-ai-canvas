@@ -22,7 +22,7 @@ Content-Type: application/json
 
 {{PARAMETERS}}
 
-`aspectRatio -> generationConfig.imageConfig.aspectRatio`，`quality -> generationConfig.imageConfig.imageSize`。`extra` 可替换 `generationConfig`、`safetySettings` 和 `systemInstruction`；替换完整配置时调用方必须保留所需图片输出配置。
+`aspectRatio -> generationConfig.imageConfig.aspectRatio`。`quality` 优先、`resolution` 回退，经插件映射为 `generationConfig.imageConfig.imageSize`（仅 `1K` / `2K` / `4K`）；未知值（如画布视频清晰度 `720`）省略，不能覆盖已选的图片档位。多图由宿主按次创建，不映射 `candidateCount`。`extra` 可替换 `generationConfig`、`safetySettings` 和 `systemInstruction`；替换完整配置时调用方必须保留所需图片输出配置。
 
 ## 文生图请求
 
