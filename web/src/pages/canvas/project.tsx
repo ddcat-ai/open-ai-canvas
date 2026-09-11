@@ -124,6 +124,7 @@ import { useCanvasKeyboard } from "./use-canvas-keyboard";
 import { useCanvasMediaTools } from "./use-canvas-media-tools";
 import { useCanvasNodeEditor } from "./use-canvas-node-editor";
 import { useCanvasNodeOperations } from "./use-canvas-node-operations";
+import { CanvasSyncConflictGate } from "@/components/canvas/canvas-sync-conflict-gate";
 import { useCanvasProjectLifecycle } from "./use-canvas-project-lifecycle";
 import { useCanvasRenderModel } from "./use-canvas-render-model";
 import { useCanvasSelectionController } from "./use-canvas-selection-controller";
@@ -425,7 +426,7 @@ function InfiniteCanvasPage() {
         [cleanupAssetImages, getHistoryCleanupContext],
     );
 
-    const { loadError, retryLoad, addedSkills, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
+    const { loadError, loadConflict, loadRemoteAfterDiscard, retryLoad, addedSkills, clearCanvasFiles, createAndOpenProject, currentProject, deleteCurrentProject, renameCurrentProject, saveCanvasProject, updateProject } = useCanvasProjectLifecycle({
         projectId,
         projectLoaded,
         nodes,
@@ -2264,7 +2265,17 @@ function InfiniteCanvasPage() {
             onAddScript={() => createNode(CanvasNodeType.Script)}
         />
     ) : null;
-    if (!projectLoaded && loadError) return <main className="flex h-full flex-col items-center justify-center gap-4"><p role="alert">{loadError}</p><Button onClick={retryLoad}>重新加载</Button><Link to="/canvas">返回画布库</Link></main>;
+    if (!projectLoaded && loadError) {
+        return (
+            <CanvasSyncConflictGate
+                message={loadError}
+                conflict={loadConflict}
+                onRetry={retryLoad}
+                onLoadRemote={() => void loadRemoteAfterDiscard()}
+                projectId={projectId}
+            />
+        );
+    }
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
