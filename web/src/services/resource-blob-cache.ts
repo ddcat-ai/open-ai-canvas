@@ -28,7 +28,17 @@ const FALLBACK_CACHE_BYTES = 512 * 1024 * 1024;
 const MIN_CACHE_BYTES = 64 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 500;
 const TOUCH_INTERVAL_MS = 10 * 60 * 1000;
-const MAX_CONCURRENT_DOWNLOADS = 4;
+const MAX_CONCURRENT_DOWNLOADS = 16;
+const recentlyTouched = new Set<string>();
+
+export function peekCachedResourceObjectUrl(storageKey: string): string {
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    if (!resourceId) return "";
+    const userScope = getActiveUserScope();
+    if (userScope === "guest") return "";
+    const key = `${userScope}:${resourceId}:file`;
+    return objectUrls.get(key) || "";
+}
 
 export async function getCachedResourceObjectUrl(storageKey: string) {
     const target = await cacheTarget(storageKey);
@@ -216,6 +226,8 @@ async function cacheTarget(storageKey: string): Promise<ResourceCacheMeta | null
 }
 
 async function touchCacheMeta(target: ResourceCacheMeta) {
+    if (recentlyTouched.has(target.key)) return;
+    recentlyTouched.add(target.key);
     const current = await metaStore.getItem<ResourceCacheMeta>(target.key);
     if (!current || Date.now() - current.lastAccessedAt < TOUCH_INTERVAL_MS) return;
     await metaStore.setItem(target.key, { ...current, lastAccessedAt: Date.now() });
@@ -232,11 +244,15 @@ function touchCacheMetaSafely(target: ResourceCacheMeta) {
 }
 
 async function evictFor(incomingBytes: number, protectedKey: string, aggressive = false) {
+    const entryCount = await metaStore.length().catch(() => 0);
+    const budget = aggressive ? Math.max(MIN_CACHE_BYTES, (await cacheBudget()) / 2) : await cacheBudget();
+    // 只有当条目数接近上限或需要激进淘汰时，才进行全量迭代，避免写入每个文件都跑全表扫描
+    if (!aggressive && entryCount < MAX_CACHE_ENTRIES - 10 && incomingBytes < budget / 10) return;
+
     const metas: ResourceCacheMeta[] = [];
     await metaStore.iterate<ResourceCacheMeta, void>((value) => {
         if (value?.key) metas.push(value);
     });
-    const budget = aggressive ? Math.max(MIN_CACHE_BYTES, (await cacheBudget()) / 2) : await cacheBudget();
     let total = metas.reduce((sum, item) => sum + Math.max(0, item.size || 0), 0);
     let count = metas.length;
     // 当前页面正在使用的 Blob URL 不能在 LRU 清理时撤销，否则已渲染节点会立即变成失效资源。
