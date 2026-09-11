@@ -125,8 +125,12 @@ export function updateAdminTopupProduct(id: string, input: TopupProductInput) {
     return http.put<{ product: TopupProduct }>(`/admin/payments/products/${encodeURIComponent(id)}`, input);
 }
 
+export type AdminPaymentOrder = PaymentOrder & {
+    user: { id: string; username: string; displayName: string; email: string } | null;
+};
+
 export function listAdminPaymentOrders(params: { status?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<{ orders: PaymentOrder[]; total: number; page: number; pageSize: number }>("/admin/payments/orders", { params });
+    return http.get<{ orders: AdminPaymentOrder[]; total: number; page: number; pageSize: number }>("/admin/payments/orders", { params });
 }
 
 export function queryAdminPaymentOrder(id: string) {

@@ -1,6 +1,7 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { Callout } from "@/components/ui/product/callout";
-import { App, Button, DatePicker, Drawer, Form, Input, InputNumber, Select, Tabs } from "antd";
+import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
+import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { Switch } from "@/components/ui/base/switch";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
@@ -22,6 +23,7 @@ import {
     updateAdminPaymentProvider,
     updateAdminTopupProduct,
     type AdminPaymentProvider,
+    type AdminPaymentOrder,
     type PaymentOrder,
     type PaymentReconciliationItem,
     type PaymentReconciliationRun,
@@ -29,7 +31,8 @@ import {
 } from "@/services/api/payments";
 
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminDataTable, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
+import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
+import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import "./payments-page.css";
 
 type ProviderFormValues = {
@@ -81,7 +84,9 @@ export default function AdminPaymentsPage() {
     const [productSaving, setProductSaving] = useState(false);
     const [productForm] = Form.useForm<ProductFormValues>();
 
-    const [orders, setOrders] = useState<PaymentOrder[]>([]);
+    const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+    const [selectedOrder, setSelectedOrder] = useState<AdminPaymentOrder | null>(null);
     const [orderTotal, setOrderTotal] = useState(0);
     const [orderPage, setOrderPage] = useState(1);
     const [orderPageSize, setOrderPageSize] = useState(30);
@@ -378,16 +383,35 @@ export default function AdminPaymentsPage() {
         },
     ];
 
-    const orderColumns: ColumnsType<PaymentOrder> = [
+    const orderColumns: ColumnsType<AdminPaymentOrder> = [
         {
-            title: "订单",
+            title: "用户",
+            key: "user",
+            width: 230,
+            render: (_, order) => (
+                <div className="min-w-0">
+                    {order.user ? <>
+                        <div className="flex min-w-0 items-baseline gap-2">
+                            <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.displayName || order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.displayName || order.user.username}</button>
+                            <span className="truncate text-xs text-foreground/45" title={`@${order.user.username}`}>@{order.user.username}</span>
+                        </div>
+                        <div className="mt-1 truncate text-xs text-foreground/60" title={order.user.email}>{order.user.email || "未填写邮箱"}</div>
+                    </> : <>
+                        <div className="text-foreground/60">用户不存在</div>
+                        <Typography.Text className="text-xs" copyable={order.userId ? { text: order.userId } : false}>{order.userId ? `${order.userId.slice(0, 8)}…${order.userId.slice(-6)}` : "--"}</Typography.Text>
+                    </>}
+                </div>
+            ),
+        },
+        {
+            title: "订单 / 商品",
             key: "order",
-            width: 280,
+            width: 210,
             render: (_, order) => (
                 <div>
-                    <div className="font-mono text-xs">{order.merchantOrderNo}</div>
-                    <div className="mt-1 truncate text-xs text-foreground/45">
-                        用户 {order.userId || "--"} · {order.productName}
+                    <Typography.Text className="font-mono text-xs" title={order.merchantOrderNo} copyable={{ text: order.merchantOrderNo }}>{order.merchantOrderNo.length > 20 ? `${order.merchantOrderNo.slice(0, 10)}…${order.merchantOrderNo.slice(-6)}` : order.merchantOrderNo}</Typography.Text>
+                    <div className="mt-1 truncate text-xs text-foreground/45" title={order.productName}>
+                        {order.productName}
                     </div>
                 </div>
             ),
@@ -395,7 +419,7 @@ export default function AdminPaymentsPage() {
         {
             title: "渠道",
             dataIndex: "providerId",
-            width: 160,
+            width: 150,
             render: (value) => (
                 <span className="inline-flex items-center gap-2">
                     <PaymentBrandIcon providerId={value} compact />
@@ -406,7 +430,7 @@ export default function AdminPaymentsPage() {
         {
             title: "金额 / 积分",
             key: "amount",
-            width: 150,
+            width: 130,
             align: "right",
             render: (_, order) => (
                 <div>
@@ -416,29 +440,22 @@ export default function AdminPaymentsPage() {
             ),
         },
         { title: "状态", dataIndex: "status", width: 110, align: "center", render: (value) => <AdminStatusBadge {...(paymentOrderStatus[value] || { label: value, tone: "neutral" as const })} /> },
-        { title: "创建时间", dataIndex: "createdAt", width: 170, render: (value) => formatDateTime(value) },
+        { title: "创建时间", dataIndex: "createdAt", width: 130, render: (value) => <span title={formatDateTime(value)}>{dayjs(value).format("MM-DD HH:mm")}</span> },
         {
             title: "操作",
             key: "actions",
             width: 150,
+            fixed: "right",
             align: "center",
             render: (_, order) => (
-                <div className="flex justify-center gap-1">
-                    <Button type="text" size="small" loading={orderActionId === order.id} disabled={order.status === "credited" || order.status === "closed"} onClick={() => void queryOrder(order)}>
-                        查单
-                    </Button>
-                    <Button
-                        danger
-                        type="text"
-                        size="small"
-                        icon={<XCircle className="size-3.5" />}
-                        loading={orderActionId === order.id}
-                        disabled={!["created", "pending", "create_failed", "closing"].includes(order.status)}
-                        onClick={() => closeOrder(order)}
-                    >
-                        关单
-                    </Button>
-                </div>
+                <AdminRowActions
+                    primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => setSelectedOrder(order) }}
+                    visibleActionCount={0}
+                    actions={[
+                        { key: "sync", label: "同步支付状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId) || ["credited", "closed"].includes(order.status), onClick: () => queryOrder(order) },
+                        { key: "close", label: "关闭订单", icon: <XCircle className="size-3.5" />, danger: true, disabled: Boolean(orderActionId) || !["created", "pending", "create_failed", "closing"].includes(order.status), onClick: () => closeOrder(order) },
+                    ]}
+                />
             ),
         },
     ];
@@ -538,7 +555,8 @@ export default function AdminPaymentsPage() {
                                         allowClear
                                         prefix={<Search className="size-4 text-foreground/40" />}
                                         value={orderKeyword}
-                                        placeholder="订单号、渠道交易号或用户 ID"
+                                        placeholder="搜索名称、用户名、邮箱、订单号"
+                                        title="支持名称、用户名、邮箱、订单号、渠道交易号和完整用户 ID"
                                         onChange={(event) => setOrderKeyword(event.target.value)}
                                         onPressEnter={() => void loadOrders(1)}
                                     />
@@ -552,7 +570,7 @@ export default function AdminPaymentsPage() {
                                     />
                                 }
                                 trailing={<Button onClick={() => void loadOrders(1)}>查询</Button>}
-                                table={{ rowKey: "id", loading: ordersLoading, columns: orderColumns, dataSource: orders, pagination: false, scroll: { x: 1180 } }}
+                                table={{ rowKey: "id", loading: ordersLoading, columns: orderColumns, dataSource: orders, pagination: false, tableLayout: "fixed", scroll: { x: 1110 } }}
                                 empty={<AdminTableEmpty filtered={Boolean(orderKeyword || orderStatusFilter !== "all")} title="没有支付订单" />}
                                 footer={<PaginationBar alwaysShow current={orderPage} pageSize={orderPageSize} total={orderTotal} onChange={(page, size) => void loadOrders(size !== orderPageSize ? 1 : page, size)} />}
                             />
@@ -599,6 +617,22 @@ export default function AdminPaymentsPage() {
                     },
                 ]}
             />
+
+            <AppDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
+                {selectedOrder && <Descriptions column={1} bordered size="small" items={[
+                    { key: "user", label: "用户", children: selectedOrder.user ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>{selectedOrder.user.displayName || selectedOrder.user.username} · @{selectedOrder.user.username}</button> : "用户不存在" },
+                    { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
+                    { key: "userId", label: "用户 ID", children: <Typography.Text copyable className="break-all">{selectedOrder.userId || "--"}</Typography.Text> },
+                    { key: "order", label: "订单号", children: <Typography.Text copyable className="break-all">{selectedOrder.merchantOrderNo}</Typography.Text> },
+                    { key: "trade", label: "渠道交易号", children: selectedOrder.providerTradeNo ? <Typography.Text copyable className="break-all">{selectedOrder.providerTradeNo}</Typography.Text> : "--" },
+                    { key: "product", label: "商品", children: selectedOrder.productName },
+                    { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
+                    { key: "amount", label: "金额 / 积分", children: `¥ ${(selectedOrder.amountFen / 100).toFixed(2)} / ${formatCredits(selectedOrder.creditsMicrocredits)} 积分` },
+                    { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
+                    ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
+                ]} />}
+            </AppDrawer>
+            <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
 
             <Drawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}

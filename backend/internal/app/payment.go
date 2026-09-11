@@ -101,10 +101,22 @@ type PaymentOrderView struct {
 }
 
 type AdminPaymentOrderPage struct {
-	Orders []PaymentOrderView `json:"orders"`
-	Total  int64              `json:"total"`
-	Page   int                `json:"page"`
-	Limit  int                `json:"pageSize"`
+	Orders []AdminPaymentOrderView `json:"orders"`
+	Total  int64                   `json:"total"`
+	Page   int                     `json:"page"`
+	Limit  int                     `json:"pageSize"`
+}
+
+type AdminPaymentOrderUser struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+}
+
+type AdminPaymentOrderView struct {
+	PaymentOrderView
+	User *AdminPaymentOrderUser `json:"user"`
 }
 
 func (s *Service) PaymentNotificationResponse(providerID string, success bool) (int, string, string) {
@@ -876,9 +888,21 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, status, keyword strin
 	if err != nil {
 		return nil, err
 	}
-	views := make([]PaymentOrderView, 0, len(orders))
+	userIDs := make([]string, 0, len(orders))
 	for _, order := range orders {
-		views = append(views, paymentOrderView(order))
+		userIDs = append(userIDs, order.UserID)
+	}
+	users, err := s.repo.UsersByIDs(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]AdminPaymentOrderView, 0, len(orders))
+	for _, order := range orders {
+		view := AdminPaymentOrderView{PaymentOrderView: paymentOrderView(order)}
+		if user, ok := users[order.UserID]; ok {
+			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName, Email: user.Email}
+		}
+		views = append(views, view)
 	}
 	return &AdminPaymentOrderPage{Orders: views, Total: total, Page: page, Limit: limit}, nil
 }

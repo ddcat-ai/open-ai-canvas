@@ -391,7 +391,8 @@ func (r *Repository) AdminPaymentOrders(status, keyword string, limit, offset in
 	}
 	if normalized := strings.TrimSpace(keyword); normalized != "" {
 		like := "%" + normalized + "%"
-		query = query.Where("merchant_order_no LIKE ? OR provider_trade_no LIKE ? OR user_id LIKE ?", like, like, like)
+		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like), strings.ToLower(like))
+		query = query.Where("merchant_order_no LIKE ? OR provider_trade_no LIKE ? OR user_id = ? OR user_id IN (?)", like, like, normalized, users)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

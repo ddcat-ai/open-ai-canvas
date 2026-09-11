@@ -363,6 +363,50 @@ func TestUnresolvedPaymentOrderCandidateCountOverlapping(t *testing.T) {
 	}
 }
 
+func TestAdminPaymentOrdersSearchUserIdentity(t *testing.T) {
+	db := openPaymentTestDB(t)
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	users := []model.User{
+		{ID: "user-alice", Username: "alice", DisplayName: "小林", Email: "alice@example.com"},
+		{ID: "user-bob", Username: "bob", DisplayName: "小林", Email: "bob@example.com"},
+	}
+	if err := db.Create(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	orders := []model.PaymentOrder{
+		{ID: "a", UserID: "user-alice", MerchantOrderNo: "merchant-a", IdempotencyKey: "a", Status: model.PaymentOrderPending},
+		{ID: "b", UserID: "user-bob", MerchantOrderNo: "merchant-b", IdempotencyKey: "b", Status: model.PaymentOrderClosed},
+		{ID: "c", UserID: "missing-user", MerchantOrderNo: "merchant-c", IdempotencyKey: "c", Status: model.PaymentOrderClosed},
+	}
+	tradeNo := "trade-c"
+	orders[2].ProviderTradeNo = &tradeNo
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	for _, tc := range []struct {
+		keyword, status string
+		total           int64
+	}{
+		{"ALICE@EXAMPLE.COM", "", 1}, {"alice", "", 1}, {"小林", "", 2},
+		{"小林", "pending", 1}, {"alice", "closed", 0}, {"user-bob", "", 1},
+		{"merchant-c", "", 1}, {"trade-c", "", 1}, {"missing-user", "", 1}, {"", "", 3},
+	} {
+		t.Run(tc.keyword+"/"+tc.status, func(t *testing.T) {
+			items, total, err := repo.AdminPaymentOrders(tc.status, tc.keyword, 1, 0)
+			if err != nil || total != tc.total || len(items) > 1 {
+				t.Fatalf("got items=%d total=%d err=%v; want total=%d", len(items), total, err, tc.total)
+			}
+		})
+	}
+	identities, err := repo.UsersByIDs([]string{"user-alice", "missing-user"})
+	if err != nil || len(identities) != 1 || identities["user-alice"].Email != "alice@example.com" {
+		t.Fatalf("identities=%v err=%v", identities, err)
+	}
+}
+
 func openPaymentTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared&_busy_timeout=5000"), &gorm.Config{})
