@@ -285,8 +285,8 @@ export default function ArkPrivateAssetsSettingsPage() {
                             status={<AdminStatusBadge label={prerequisitesReady ? "已配置" : "待配置"} tone={prerequisitesReady ? "success" : "neutral"} />}
                         >
                             <div className="admin-ark-form-grid">
-                                <Form.Item name="region" label="Region">
-                                    <Input autoComplete="off" placeholder="例如：cn-beijing" />
+                                <Form.Item name="region" label="Region" extra="方舟控制面当前仅 cn-beijing 区域开放，其他区域连接会被直接重置。">
+                                    <Input autoComplete="off" placeholder="cn-beijing" />
                                 </Form.Item>
                                 <Form.Item name="projectName" label="Ark ProjectName">
                                     <Input autoComplete="off" placeholder="方舟项目名称" />

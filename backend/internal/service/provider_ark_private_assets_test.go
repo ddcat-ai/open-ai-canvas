@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 func TestArkPrivateAssetUsesRegionalArkControlPlane(t *testing.T) {
@@ -155,5 +157,101 @@ func TestArkPrivateAssetResponseFieldReadsCreateGroupID(t *testing.T) {
 	}
 	if got := arkPrivateAssetResponseField(response, "GroupId", "Id"); got != "group-created" {
 		t.Fatalf("group ID = %q", got)
+	}
+}
+
+func TestShouldRetryArkPrivateAssetBinding(t *testing.T) {
+	cases := []struct {
+		name    string
+		binding *model.ArkPrivateAssetBinding
+		want    bool
+	}{
+		{
+			name:    "素材组未建成时网络失败可重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, Error: `创建方舟素材组失败：Post "https://ark.cn-shanghai.volcengineapi.com/": EOF`},
+			want:    true,
+		},
+		{
+			name:    "素材组未建成时上游业务拒绝也可重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, Error: "创建方舟素材组失败：方舟素材库请求失败（HTTP 403）：SubscriptionRequired"},
+			want:    true,
+		},
+		{
+			name:    "素材组已建时上传素材失败可重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, AssetGroupID: "group-1", Error: "上传方舟可信素材失败：Post \"https://ark.cn-beijing.volcengineapi.com/\": EOF"},
+			want:    true,
+		},
+		{
+			name:    "素材组已建时素材 ID 解析失败可重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, AssetGroupID: "group-1", Error: "方舟素材库没有返回素材 ID"},
+			want:    true,
+		},
+		{
+			name:    "审核拒绝保持终态不重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, AssetGroupID: "group-1", ArkAssetID: "asset-1", Error: "FaceMismatch: Face consistency verification failed."},
+			want:    false,
+		},
+		{
+			name:    "素材组已建时的其他失败不重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusFail, AssetGroupID: "group-1", Error: "生成方舟素材临时地址失败：对象存储不可用"},
+			want:    false,
+		},
+		{
+			name:    "非失败状态不重试",
+			binding: &model.ArkPrivateAssetBinding{Status: arkPrivateAssetStatusLive, ArkAssetID: "asset-1"},
+			want:    false,
+		},
+	}
+	for _, item := range cases {
+		if got := shouldRetryArkPrivateAssetBinding(item.binding); got != item.want {
+			t.Fatalf("%s: shouldRetryArkPrivateAssetBinding() = %v, want %v", item.name, got, item.want)
+		}
+	}
+	if shouldRetryArkPrivateAssetBinding(nil) {
+		t.Fatal("shouldRetryArkPrivateAssetBinding(nil) = true, want false")
+	}
+}
+
+func TestCallArkPrivateAssetAPIPassesThroughUpstreamHTTPErrors(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"ResponseMetadata":{"Error":{"Code":"SubscriptionRequired","Message":"This API requires an active subscription."}}}`))
+	}))
+	defer server.Close()
+
+	previousBaseURL := arkPrivateAssetAPIBaseURLOverride
+	arkPrivateAssetAPIBaseURLOverride = server.URL
+	t.Cleanup(func() { arkPrivateAssetAPIBaseURLOverride = previousBaseURL })
+
+	_, err := callArkPrivateAssetAPI(context.Background(), arkPrivateAssetSettingValue{
+		Region: "test-region", AccessKeyID: "test-access-key", AccessKeySecret: "test-secret-key",
+	}, "CreateAssetGroup", map[string]interface{}{"ProjectName": "project-test"})
+	if err == nil {
+		t.Fatal("callArkPrivateAssetAPI() error = nil, want upstream passthrough error")
+	}
+	for _, want := range []string{"403", "SubscriptionRequired", "This API requires an active subscription."} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("callArkPrivateAssetAPI() error = %q, want contains %q", err.Error(), want)
+		}
+	}
+}
+
+func TestArkPrivateAssetUpstreamDetail(t *testing.T) {
+	if got := arkPrivateAssetUpstreamDetail(map[string]interface{}{}); got != "" {
+		t.Fatalf("empty response detail = %q, want empty", got)
+	}
+	response := map[string]interface{}{
+		"ResponseMetadata": map[string]interface{}{
+			"Error": map[string]interface{}{"Code": "FaceMismatch", "Message": "Face consistency verification failed."},
+		},
+	}
+	if got := arkPrivateAssetUpstreamDetail(response); got != "FaceMismatch Face consistency verification failed." {
+		t.Fatalf("detail = %q", got)
+	}
+	emptyError := map[string]interface{}{"ResponseMetadata": map[string]interface{}{"Error": map[string]interface{}{}}}
+	if got := arkPrivateAssetUpstreamDetail(emptyError); got != "方舟素材库请求失败" {
+		t.Fatalf("empty upstream error detail = %q", got)
 	}
 }

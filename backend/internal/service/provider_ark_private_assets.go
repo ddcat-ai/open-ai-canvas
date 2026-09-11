@@ -215,9 +215,13 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 		}
 	}
 
-	groupID, err := s.ensureArkPrivateAssetGroup(ctx, settingRecord, setting)
-	if err != nil {
-		return "", s.failArkPrivateAssetBinding(binding, err)
+	// 重试时复用已建成的素材组，避免管理员调整配置清空 DefaultGroupID 后重复建组。
+	groupID := strings.TrimSpace(binding.AssetGroupID)
+	if groupID == "" {
+		groupID, err = s.ensureArkPrivateAssetGroup(ctx, settingRecord, setting)
+		if err != nil {
+			return "", s.failArkPrivateAssetBinding(binding, err)
+		}
 	}
 	binding.AssetGroupID = groupID
 	resourceURL, err := s.directResourceURL(resource, time.Now().Add(time.Hour))
@@ -274,11 +278,19 @@ func (s *Service) ensureArkPrivateAssetGroup(ctx context.Context, settingRecord 
 	return groupID, nil
 }
 
+// shouldRetryArkPrivateAssetBinding 判断失败的素材绑定能否安全重试。
+// 素材组尚未建成（两个 ID 均为空）时任何失败都可重试：网络中断、区域配错、
+// 套餐未开通都发生在建组之前，且绝无重复上传风险。素材组已建、素材未建时仅重试
+// 创建素材阶段的失败，最坏情况是组内多出一份素材。审核拒绝发生在拿到素材 ID 之后，
+// ArkAssetID 非空，天然不会进入重试路径。
 func shouldRetryArkPrivateAssetBinding(binding *model.ArkPrivateAssetBinding) bool {
-	if binding == nil || strings.ToLower(strings.TrimSpace(binding.Status)) != arkPrivateAssetStatusFail || binding.AssetGroupID != "" || binding.ArkAssetID != "" {
+	if binding == nil || strings.ToLower(strings.TrimSpace(binding.Status)) != arkPrivateAssetStatusFail || binding.ArkAssetID != "" {
 		return false
 	}
-	return strings.Contains(binding.Error, "方舟素材库没有返回素材组 ID") || strings.Contains(binding.Error, "方舟素材库没有返回素材 ID")
+	if binding.AssetGroupID == "" {
+		return true
+	}
+	return strings.Contains(binding.Error, "上传方舟可信素材失败") || strings.Contains(binding.Error, "方舟素材库没有返回素材 ID")
 }
 
 func shouldResumeArkPrivateAssetPolling(binding *model.ArkPrivateAssetBinding) bool {
@@ -384,16 +396,43 @@ func callArkPrivateAssetAPI(ctx context.Context, setting arkPrivateAssetSettingV
 	}
 	var response map[string]interface{}
 	if err := doJSON(credentials.Sign(req), &response); err != nil {
+		// doJSON 对非 2xx 响应只按状态码生成通用提示（401/403 会被说成“模型服务鉴权失败”），
+		// 方舟把真实原因（如 SubscriptionRequired）放在响应体的 ResponseMetadata.Error 里，必须还原。
+		var httpErr providerHTTPError
+		if errors.As(err, &httpErr) && strings.TrimSpace(httpErr.Body) != "" {
+			var body map[string]interface{}
+			if json.Unmarshal([]byte(httpErr.Body), &body) == nil {
+				if detail := arkPrivateAssetUpstreamDetail(body); detail != "" {
+					return nil, fmt.Errorf("方舟素材库请求失败（HTTP %d）：%s", httpErr.StatusCode, detail)
+				}
+			}
+		}
 		return nil, err
 	}
-	if metadata, ok := response["ResponseMetadata"].(map[string]interface{}); ok {
-		if upstream, ok := metadata["Error"].(map[string]interface{}); ok {
-			code := stringField(upstream, "Code")
-			message := stringField(upstream, "Message")
-			return nil, errors.New(defaultString(strings.TrimSpace(strings.Trim(strings.Join([]string{code, message}, " "), " ")), "方舟素材库请求失败"))
-		}
+	if detail := arkPrivateAssetUpstreamDetail(response); detail != "" {
+		return nil, errors.New(detail)
 	}
 	return response, nil
+}
+
+// arkPrivateAssetUpstreamDetail 提取方舟控制面响应里 ResponseMetadata.Error 的 Code/Message，
+// 用于把上游真实失败原因透传给用户；没有上游错误时返回空串。
+func arkPrivateAssetUpstreamDetail(response map[string]interface{}) string {
+	metadata, _ := response["ResponseMetadata"].(map[string]interface{})
+	if metadata == nil {
+		return ""
+	}
+	upstream, _ := metadata["Error"].(map[string]interface{})
+	if upstream == nil {
+		return ""
+	}
+	code := stringField(upstream, "Code")
+	message := stringField(upstream, "Message")
+	detail := strings.TrimSpace(strings.Trim(strings.Join([]string{code, message}, " "), " "))
+	if detail == "" {
+		return "方舟素材库请求失败"
+	}
+	return detail
 }
 
 func arkPrivateAssetControlPlaneURL(region string) (string, error) {
