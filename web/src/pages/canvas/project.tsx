@@ -27,6 +27,7 @@ import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { App, Button } from "antd";
+import { ArrowLeftRight } from "lucide-react";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { getNodeSpec } from "@/constant/canvas";
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
@@ -72,7 +73,7 @@ import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-co
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
-import { applyCanvasConnectionPromptSync, getContextResourceNodes, normalizeCanvasNodeMentionTokens, reorderCanvasResourceConnections, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { applyCanvasConnectionPromptSync, buildCanvasNodeMentionReferenceMap, getContextResourceNodes, normalizeCanvasNodeMentionTokens, reorderCanvasResourceConnections, replaceCanvasReferenceMentions, writeCanvasNodePrompt, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay, type PendingConnectionCreate } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
@@ -701,6 +702,7 @@ function InfiniteCanvasPage() {
         openAssetsAtPosition,
         pasteAssistantImage,
         pasteSystemClipboard,
+        replaceNodeMedia,
         startUploadStatus,
         uploadModalOpen,
         uploadTimelineMedia,
@@ -925,12 +927,84 @@ function InfiniteCanvasPage() {
         onNodesDeleted: handleNodesDeleted,
     });
 
+    const handleReplaceNodeReference = useCallback((
+        targetNodeId: string,
+        oldReference: { id: string; nodeId?: string; label?: string; title?: string },
+        sourceNodeId: string,
+    ) => {
+        const sourceNode = nodesRef.current.find((n) => n.id === sourceNodeId);
+        if (!sourceNode || sourceNode.id === oldReference.nodeId) return;
+
+        const previousNodes = nodesRef.current;
+        const previousConnections = connectionsRef.current;
+
+        const configNodeId = previousConnections.find((c) => c.fromNodeId === targetNodeId && previousNodes.find((n) => n.id === c.toNodeId)?.type === CanvasNodeType.Config)?.toNodeId;
+        const receiverId = configNodeId || targetNodeId;
+
+        let rewired = false;
+        const nextConnections = previousConnections.map((c) => {
+            if (!rewired && c.fromNodeId === oldReference.nodeId && (c.toNodeId === targetNodeId || c.toNodeId === configNodeId)) {
+                rewired = true;
+                return { ...c, fromNodeId: sourceNodeId };
+            }
+            return c;
+        });
+
+        if (!rewired) {
+            nextConnections.push({
+                id: nanoid(),
+                fromNodeId: sourceNodeId,
+                toNodeId: receiverId,
+            });
+        }
+
+        const nextReferencesMap = buildCanvasNodeMentionReferenceMap(previousNodes, nextConnections, previousNodes);
+        const targetNextReferences = nextReferencesMap.get(targetNodeId) || [];
+        const newRef = targetNextReferences.find((r) => r.nodeId === sourceNodeId);
+
+        const targetNode = previousNodes.find((n) => n.id === targetNodeId);
+        let nextNodes = previousNodes;
+        if (targetNode && newRef) {
+            const currentPrompt = targetNode.metadata?.composerContent ?? targetNode.metadata?.prompt ?? "";
+            const replacementToken = `@${newRef.label}`;
+            const updatedPrompt = replaceCanvasReferenceMentions(
+                currentPrompt,
+                oldReference,
+                replacementToken,
+                sourceNode.title ? sourceNode.title : newRef.label,
+            );
+
+            nextNodes = previousNodes.map((n) => (n.id === targetNodeId ? writeCanvasNodePrompt(n, updatedPrompt) : n));
+        }
+
+        nodesRef.current = nextNodes;
+        connectionsRef.current = nextConnections;
+        setNodes(nextNodes);
+        setConnections(nextConnections);
+        message.success(`已将参考图「${oldReference.label || "参考图"}」替换为「${sourceNode.title || "新图片"}」，提示词已同步更新`);
+    }, [connectionsRef, message, nodesRef, setConnections, setNodes]);
+
+    const handleReplaceNodeReferenceFiles = useCallback((
+        _targetNodeId: string,
+        oldReference: { id: string; nodeId?: string; label?: string; title?: string },
+        files: File[],
+    ) => {
+        const file = files.find((f) => f.type.startsWith("image/"));
+        if (!file || !oldReference.nodeId) return;
+        void replaceNodeMedia(oldReference.nodeId, file).then((success: boolean) => {
+            if (success) {
+                message.success("参考图片已替换");
+            }
+        });
+    }, [message, replaceNodeMedia]);
+
     const {
         cancelPendingConnectionCreate,
         closeConnectionCreateMenu,
         connectionTargetAnchorRatio,
         connectionTargetNodeId,
         connectionApproach,
+        connectionReplaceHover,
         connectingParams,
         createConnectedNode,
         getConnectionCreateDisabledReason,
@@ -958,6 +1032,7 @@ function InfiniteCanvasPage() {
         setContextMenu,
         setDialogNodeId,
         setDrawingNodeId,
+        onReplaceReference: handleReplaceNodeReference,
     });
 
     const batchSourceNodeIds = useMemo(() => nodes
@@ -1902,6 +1977,8 @@ function InfiniteCanvasPage() {
                     onGenerate={handleGenerateNode}
                     onRemoveReference={handleRemoveNodeReference}
                     onReorderReferences={handleReorderNodeReferences}
+                    onReplaceReference={handleReplaceNodeReference}
+                    onReplaceReferenceFiles={handleReplaceNodeReferenceFiles}
                     onClose={() => setDialogNodeId(null)}
                     onNodeMouseDown={handleNodeMouseDown}
                     workspaceMode={workspaceMode}
@@ -1912,7 +1989,7 @@ function InfiniteCanvasPage() {
                 />
             );
         },
-        [configInputsById, handleConfigNodeChange, handleGenerateNode, handleNodePromptChange, handleRemoveNodeReference, handleReorderNodeReferences, mentionReferencesByNodeId, projectId, runningNodeId, skillMentionReferences, workspaceMode],
+        [configInputsById, handleConfigNodeChange, handleGenerateNode, handleNodePromptChange, handleRemoveNodeReference, handleReorderNodeReferences, handleReplaceNodeReference, handleReplaceNodeReferenceFiles, mentionReferencesByNodeId, projectId, runningNodeId, skillMentionReferences, workspaceMode],
     );
 
     const renderCanvasNodeContent = useCallback(
@@ -2349,9 +2426,9 @@ function InfiniteCanvasPage() {
                                     onReloadResource={reloadCanvasNodeResource}
                                     onOpenTaskDetails={openCanvasNodeTaskDetails}
                                     onOpenVersions={openCanvasNodeVersions}
-                                    onViewImage={viewCanvasNodeImage}
-                                    onReplaceMedia={replaceCanvasNodeMedia}
-                                    onOpenTextEditor={openTextNodeEditor}
+                                     onViewImage={viewCanvasNodeImage}
+                                     onReplaceMedia={replaceCanvasNodeMedia}
+                                     onOpenTextEditor={openTextNodeEditor}
                                     onOpenDirector={editCanvasDirector}
                                     onOpenDrawing={openDrawingNode}
                                     onStartBatchConnection={startBatchConnection}
@@ -2538,6 +2615,23 @@ function InfiniteCanvasPage() {
                             onCreate={(type) => void createConnectedNode(type, pendingConnectionCreate)}
                             onClose={cancelPendingConnectionCreate}
                         />
+                    ) : null}
+
+                    {connectionReplaceHover ? (
+                        <div
+                            className="pointer-events-none fixed z-[var(--z-dialog-popover)] flex select-none items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all"
+                            style={{
+                                left: connectionReplaceHover.clientX + 14,
+                                top: connectionReplaceHover.clientY + 14,
+                                transform: "translateY(-50%)",
+                            }}
+                        >
+                            <ArrowLeftRight className="size-3 text-blue-400" />
+                            <span>松开替换</span>
+                            <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-200">
+                                @{connectionReplaceHover.referenceLabel}
+                            </span>
+                        </div>
                     ) : null}
 
                     {selectedNodeBounds && !selectionBox && !isCanvasNodeMoving ? (

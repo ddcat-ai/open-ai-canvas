@@ -215,7 +215,7 @@ function canvasReferenceIdentityChanged(previousReferences: CanvasResourceRefere
     return previousReferences.some((reference) => nextLabelByNodeId.get(reference.nodeId) !== reference.label);
 }
 
-function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string) {
+export function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string) {
     const hasExistingContent = (node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim())) || (node.type === CanvasNodeType.Image && Boolean(node.metadata?.content));
     const promptTemplateMetadata = node.metadata?.promptTemplateOperation
         ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
@@ -232,7 +232,7 @@ function removeCanvasMentionToken(value: string, token: string) {
     return replaceCanvasMentionToken(value, token, "");
 }
 
-function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
+export function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
     if (!token) return value;
     const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Numbered media mentions can touch Chinese prose or another mention, but not a longer number.
@@ -240,6 +240,34 @@ function replaceCanvasMentionToken(value: string, token: string, replacement: st
         ? "(?![0-9])"
         : token.startsWith("@[node:") ? "" : `(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`;
     return value.replace(new RegExp(`${escapedToken}${boundary}`, "gu"), replacement);
+}
+
+/**
+ * 替换提示词中针对某参考对象的所有引用（包含 @图片1、@原标题、@[node:xxx]）。
+ * 只要提示词中存在指向该对象的标记，同步全部替换为新标记。
+ */
+export function replaceCanvasReferenceMentions(
+    prompt: string,
+    oldReference: { label?: string; title?: string; nodeId?: string },
+    replacementToken: string,
+    replacementTitle?: string,
+): string {
+    let result = prompt;
+    const cleanToken = replacementToken.startsWith("@") ? replacementToken : `@${replacementToken}`;
+    const cleanOldLabel = oldReference.label?.replace(/^@/, "");
+    if (cleanOldLabel) {
+        result = replaceCanvasMentionToken(result, `@${cleanOldLabel}`, cleanToken);
+    }
+    const cleanOldTitle = oldReference.title?.replace(/^@/, "");
+    if (cleanOldTitle && cleanOldTitle !== cleanOldLabel) {
+        const cleanRepTitle = replacementTitle?.replace(/^@/, "");
+        const targetTitleToken = cleanRepTitle ? `@${cleanRepTitle}` : cleanToken;
+        result = replaceCanvasMentionToken(result, `@${cleanOldTitle}`, targetTitleToken);
+    }
+    if (oldReference.nodeId) {
+        result = replaceCanvasMentionToken(result, canvasNodeMentionToken(oldReference.nodeId), cleanToken);
+    }
+    return result;
 }
 
 function compactRemovedCanvasMentionPrompt(value: string) {

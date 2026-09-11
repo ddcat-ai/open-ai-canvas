@@ -9425,6 +9425,15 @@
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent);
     }
 
+    .canvas-node-reference-chip[data-connection-hover-replace="true"] {
+        position: relative;
+        outline: 2px solid #3b82f6 !important;
+        outline-offset: 1px !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+        transition: box-shadow 0.15s ease, outline-color 0.15s ease !important;
+        z-index: 50 !important;
+    }
+
     .canvas-node-reference-chip[data-dragging="true"] {
         opacity: 0.58;
     }

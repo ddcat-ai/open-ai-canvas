@@ -720,6 +720,7 @@ export function useCanvasUpload({
         openAssetsAtPosition,
         pasteAssistantImage,
         pasteSystemClipboard,
+        replaceNodeMedia,
         startUploadStatus,
         uploadModalOpen,
         uploadStatus,

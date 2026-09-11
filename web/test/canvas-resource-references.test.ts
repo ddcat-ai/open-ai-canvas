@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { autoMentionCanvasResourceReferences, findCanvasResourceAutoLinkMatch, type CanvasResourceReference, applyCanvasConnectionPromptSync, buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes, imageGenerationReferenceConnections, reorderCanvasResourceConnections } from "../src/lib/canvas/canvas-resource-references";
+import { autoMentionCanvasResourceReferences, findCanvasResourceAutoLinkMatch, type CanvasResourceReference, applyCanvasConnectionPromptSync, buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes, imageGenerationReferenceConnections, reorderCanvasResourceConnections, replaceCanvasMentionToken, replaceCanvasReferenceMentions } from "../src/lib/canvas/canvas-resource-references";
 import { canvasNodeToAsset } from "../src/lib/canvas/canvas-node-asset";
 import { buildNodeGenerationInputs } from "../src/components/canvas/canvas-node-generation";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
@@ -381,5 +381,49 @@ describe("reorder canvas resource connections", () => {
         expect(nextConnections).toEqual([main, connection(imageB.id, config.id), unrelated, connection(imageA.id, config.id)]);
         expect(nextConnections[0]).toBe(main);
         expect(nextConnections[2]).toBe(unrelated);
+    });
+});
+
+describe("replace canvas reference mentions", () => {
+    test("替换参考图时将提示词内所有提及同张图片的标记全部替换", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "图片1",
+            title: "卡通可爱动画风画册",
+            active: true,
+        };
+        const prompt = "@图片1 参考 @图片2 生成，保持 @图片1 的色调与 @卡通可爱动画风画册 的画风";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "@图片3", "未来赛博超跑");
+        expect(replaced).toBe("@图片3 参考 @图片2 生成，保持 @图片3 的色调与 @未来赛博超跑 的画风");
+    });
+
+    test("不会误替换较长数字或无关标记", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "图片1",
+            title: "画册",
+            active: true,
+        };
+        const prompt = "@图片1 和 @图片10 及 @图片11，不要改动 @图片10";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "@图片9");
+        expect(replaced).toBe("@图片9 和 @图片10 及 @图片11，不要改动 @图片10");
+    });
+
+    test("自动规范化带有或缺失@前缀的参数", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "@图片1",
+            title: "@画册",
+            active: true,
+        };
+        const prompt = "@图片1 的画风结合 @画册 的色调";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "图片2", "新封面");
+        expect(replaced).toBe("@图片2 的画风结合 @新封面 的色调");
     });
 });
