@@ -13,6 +13,7 @@ import { resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsse
 import { uploadImage } from "@/services/image-storage";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
+import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
 import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, writeCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
@@ -161,12 +162,35 @@ const CanvasDrawingEditorModal = lazy(() => import("@/components/canvas/canvas-d
 const NODE_STATUS_SUCCESS = "success" as const;
 const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
 
-async function copyImageToSystemClipboard(source: string) {
+async function copyImageToSystemClipboard(source: string, storageKey?: string) {
     if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("当前浏览器不支持复制图片");
-    const response = await fetch(source);
-    if (!response.ok) throw new Error(`图片读取失败（HTTP ${response.status}）`);
-    const sourceBlob = await response.blob();
-    const blob = sourceBlob.type === "image/png" ? sourceBlob : await convertClipboardImageToPNG(sourceBlob);
+    if (typeof window !== "undefined") window.focus();
+
+    const fetchPNG = async (): Promise<Blob> => {
+        let sourceBlob: Blob | null = null;
+        if (storageKey) {
+            sourceBlob = await getCachedResourceBlob(storageKey).catch(() => null);
+        }
+        if (!sourceBlob) {
+            const response = await fetch(source);
+            if (!response.ok) throw new Error(`图片读取失败（HTTP ${response.status}）`);
+            sourceBlob = await response.blob();
+        }
+        return sourceBlob.type === "image/png" ? sourceBlob : await convertClipboardImageToPNG(sourceBlob);
+    };
+
+    // 优先尝试将 Promise 直接传给 ClipboardItem（现代浏览器标准），在用户激活手势内立即声明写入，
+    // 避免因 fetch / 格式转换耗时导致手势过期或窗口失焦抛出 "Document is not focused" 错误。
+    try {
+        const item = new ClipboardItem({ "image/png": fetchPNG() });
+        await navigator.clipboard.write([item]);
+        return;
+    } catch {
+        // 部分浏览器环境不支持延迟 Promise，回退到先取 Blob 再写入
+    }
+
+    const blob = await fetchPNG();
+    if (typeof window !== "undefined") window.focus();
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
@@ -1623,22 +1647,40 @@ function InfiniteCanvasPage() {
         [message, pasteCopiedNodes, pasteSystemClipboard, shouldPreferCopiedNodes],
     );
 
+    const copyingNodeContentRef = useRef(false);
     const copyNodeContentToClipboard = useCallback(
         async (node: CanvasNodeData | null) => {
+            if (copyingNodeContentRef.current) return;
+            copyingNodeContentRef.current = true;
             releaseCopiedNodesPastePriority();
             const content = node?.metadata?.content?.trim();
             const resourceId = resourceIdFromStorageKey(node?.metadata?.storageKey);
             const copySource = content || (node?.type === CanvasNodeType.Image && resourceId ? resourceFileUrl(resourceId) : "");
             if (!node || !copySource) {
+                copyingNodeContentRef.current = false;
                 message.warning("没有可复制的内容");
                 return;
             }
 
             try {
                 if (node.type === CanvasNodeType.Image) {
-                    await copyImageToSystemClipboard(copySource);
-                    message.success("图片已复制");
-                    return;
+                    try {
+                        await copyImageToSystemClipboard(copySource, node.metadata?.storageKey);
+                        message.success("图片已复制到剪贴板");
+                        return;
+                    } catch (imageErr) {
+                        const fallbackUrl = new URL(copySource, window.location.href).toString();
+                        if (navigator.clipboard?.writeText) {
+                            await navigator.clipboard.writeText(fallbackUrl).catch(() => undefined);
+                            message.info("由于浏览器未获得焦点，已为您复制图片地址");
+                            return;
+                        }
+                        if (await copyToClipboard(fallbackUrl)) {
+                            message.info("由于浏览器未获得焦点，已为您复制图片地址");
+                            return;
+                        }
+                        throw imageErr;
+                    }
                 }
 
                 if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(copySource);
@@ -1646,6 +1688,8 @@ function InfiniteCanvasPage() {
                 message.success(node.type === CanvasNodeType.Text ? "文本已复制" : "内容链接已复制");
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "复制失败，请检查浏览器剪贴板权限");
+            } finally {
+                copyingNodeContentRef.current = false;
             }
         },
         [message, releaseCopiedNodesPastePriority],
