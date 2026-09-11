@@ -8,7 +8,7 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { CanvasSyncConflictError, createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, localSavedRemotePendingMessage, saveRemoteUserDataNow, discardLocalCanvasProject } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -82,6 +82,7 @@ export function useCanvasProjectLifecycle({
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
     const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
     const [loadError, setLoadError] = useState("");
+    const [loadConflict, setLoadConflict] = useState<CanvasSyncConflictError | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -90,6 +91,7 @@ export function useCanvasProjectLifecycle({
         let cancelled = false;
         setProjectLoaded(false);
         setLoadError("");
+        setLoadConflict(null);
         const applyRestoredProject = (targetProject: CanvasProject) => {
             if (cancelled) return;
             const fallbackTheme = useThemeStore.getState().theme;
@@ -150,7 +152,13 @@ export function useCanvasProjectLifecycle({
                 });
         };
         void load().catch((error) => {
-            if (!cancelled) setLoadError(error instanceof Error ? error.message : "读取画布失败，请重试");
+            if (!cancelled) return;
+            if (error instanceof CanvasSyncConflictError) {
+                setLoadConflict(error);
+                setLoadError(error.message);
+                return;
+            }
+            setLoadError(error instanceof Error ? error.message : "读取画布失败，请重试");
         });
         return () => {
             cancelled = true;
@@ -256,6 +264,13 @@ export function useCanvasProjectLifecycle({
 
     return {
         loadError,
+        loadConflict,
+        loadRemoteAfterDiscard: async () => {
+            // 冲突页"加载云端版本": 先放弃本地该画布(基线/水位一并清), 再重跑加载 — 纯远端采纳, 不会再次冲突。
+            await discardLocalCanvasProject(projectId);
+            setLoadConflict(null);
+            setLoadAttempt((attempt) => attempt + 1);
+        },
         retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
         addedSkills,
         clearCanvasFiles,

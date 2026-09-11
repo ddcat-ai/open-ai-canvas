@@ -14,6 +14,59 @@ import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store"
 import { repairMissingCanvasAssets } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 
+// 同步水位: "最后一次确认与远端一致"的 updatedAt(按用户持久化到 localStorage)。
+// 会话内基线(acknowledged*)随进程消失, 重启后会把上一会话未同步成功的本地修改误认作"已同步基线"。
+// 水位跨会话存活, 是唯一可靠的"本地是否落后于上次确认同步点"判据。
+// 服务端 upsert 原样存储客户端 updatedAt(backend/internal/service/user_data.go parseClientTime),
+// 因此"同步成功"必然使两侧 updatedAt 相同, 水位对比无时钟歧义。
+let watermarkProjects = new Map<string, string>();
+let watermarkAssets = new Map<string, string>();
+
+function watermarkStorageKey(userId: string) {
+    return `canvas-user-data-sync-watermark:${userId}`;
+}
+
+function loadWatermarks(userId: string) {
+    watermarkProjects = new Map();
+    watermarkAssets = new Map();
+    try {
+        const raw = localStorage.getItem(watermarkStorageKey(userId));
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { p?: Record<string, string>; a?: Record<string, string> };
+        watermarkProjects = new Map(Object.entries(parsed.p ?? {}));
+        watermarkAssets = new Map(Object.entries(parsed.a ?? {}));
+    } catch {
+        // 水位缺失时退回旧行为: 无法识别跨会话未同步修改(不再比旧实现更差), 下次同步成功即重建水位。
+    }
+}
+
+function persistWatermarks() {
+    if (!activeRemoteUserId) return;
+    try {
+        localStorage.setItem(watermarkStorageKey(activeRemoteUserId), JSON.stringify({
+            p: Object.fromEntries(watermarkProjects),
+            a: Object.fromEntries(watermarkAssets),
+        }));
+    } catch {
+        // localStorage 配额满等场景忽略: 水位落后只导致保守冲突(fail-closed), 不会静默覆盖。
+    }
+}
+
+export type CanvasSyncConflictKind = "diverged";
+
+/** 画布本地与远端双向分歧(两版都有对方没有的修改)。阻断打开, 由用户选择导出备份或放弃本地。 */
+export class CanvasSyncConflictError extends Error {
+    readonly kind: CanvasSyncConflictKind;
+    readonly projectId: string;
+
+    constructor(projectId: string, kind: CanvasSyncConflictKind) {
+        super("画布在本地和云端都有修改。可先导出本地备份，再选择加载云端版本（将放弃本地版本）。");
+        this.name = "CanvasSyncConflictError";
+        this.kind = kind;
+        this.projectId = projectId;
+    }
+}
+
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
 
@@ -36,6 +89,7 @@ export async function initializeRemoteUserDataSession(userId: string) {
         resetRemoteUserDataSync();
         activeRemoteUserId = userId;
         incrementalSession = true;
+        loadWatermarks(userId);
         acknowledgedProjects = new Map(useCanvasStore.getState().projects.map((project) => [project.id, project]));
         acknowledgedAssets = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
         remoteUserDataPhase = "ready";
@@ -53,16 +107,27 @@ export async function loadCanvasProjectForEditing(id: string) {
         const { project } = await getRemoteCanvasProject(id);
         await loadReferencedAssets(collectAssetIds(project));
         const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
-        if (current && !sameEntitySnapshot(acknowledgedProjects.get(id), current)) {
-            // 当前页面已经开始编辑本地缓存时，远端详情只建立新的冲突基线；
-            // 保留当前画布内容，后续保存由当前打开的画布显式覆盖远端版本，
-            // 避免旧缓存被永久卡在“自动重试但永远冲突”的状态。
+        // 本地未同步内容 = 会话内编辑(store≠基线) 或 上一会话未同步完(store 领先于水位)。
+        const watermark = watermarkProjects.get(id);
+        const locallyDirty = current !== undefined && (!sameEntitySnapshot(acknowledgedProjects.get(id), current)
+            || (watermark !== undefined && Date.parse(current.updatedAt) !== Date.parse(watermark)));
+        if (current && locallyDirty) {
+            if (watermark !== undefined && Date.parse(project.updatedAt) !== Date.parse(watermark)) {
+                // 远端同样领先于上次确认同步点: 双向分歧, 保留本地继续保存会覆盖另一端的修改,
+                // 升级为结构化冲突交由用户选择(冲突页: 导出备份 / 放弃本地加载云端)。
+                throw new CanvasSyncConflictError(id, "diverged");
+            }
+            // 纯本地领先(远端仍停在水位): 保留当前画布内容，远端详情只建立新的冲突基线；
+            // 基线与 store 的差异由防抖同步补推，避免旧缓存被永久卡在“自动重试但永远冲突”的状态。
             acknowledgedProjects.set(id, project);
             verifiedProjects.add(id);
             return current;
         }
         acknowledgedProjects.set(id, project);
         verifiedProjects.add(id);
+        // 采纳远端后本地与远端一致, 水位推进到该同步点。
+        watermarkProjects.set(id, project.updatedAt);
+        persistWatermarks();
         useCanvasStore.setState((state) => ({ projects: [...state.projects.filter((candidate) => candidate.id !== id), project] }));
         return project;
     });
@@ -72,6 +137,18 @@ export async function loadCanvasProjectForEditing(id: string) {
     };
     void request.then(clearPending, clearPending);
     return request;
+}
+
+/** 冲突页"加载云端版本": 放弃本地该画布(从 store 移除), 下一次 load 即走纯远端采纳。不触碰其它画布与持久媒体。 */
+export async function discardLocalCanvasProject(id: string) {
+    await withRemoteUserDataSyncExclusive(async () => {
+        acknowledgedProjects.delete(id);
+        watermarkProjects.delete(id);
+        verifiedProjects.delete(id);
+        useCanvasStore.setState((state) => ({ projects: state.projects.filter((candidate) => candidate.id !== id) }));
+        await flushCanvasStorePersistence();
+        persistWatermarks();
+    });
 }
 
 async function waitForRemoteProjectLoads() {
@@ -488,6 +565,9 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
             }
             await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
             acknowledgedProjects.set(source.id, source);
+            // 同步成功: 服务端原样存储客户端 updatedAt, 水位即推进到本次提交点。
+            watermarkProjects.set(source.id, source.updatedAt);
+            persistWatermarks();
             verifiedProjects.add(source.id);
             if (total > 0) useSyncProgressStore.getState().setProjectProgress(source.id, null);
         } catch (error) {
