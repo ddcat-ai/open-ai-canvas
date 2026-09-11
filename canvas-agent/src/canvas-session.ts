@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { ServerResponse } from "node:http";
 
+import { isMutationTool, RunStepExecutor, type ReadOnlyExecution, type RunPlan, type StepToolExecutionContext } from "./agent-orchestration.js";
 import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
 import { buildCanvasContext, findCanvasNodes, getCanvasConnection, getCanvasGenerationTasks, getCanvasNode, getCanvasResources, hashState, validateCanvasOps } from "./canvas-context.js";
 import { type ToolName } from "./schemas.js";
@@ -9,11 +10,13 @@ import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
 type PendingRequest = { clientId: string; recoverable: boolean; resolve: (value: unknown) => void; reject: (error: Error) => void };
 type CanvasClient = { response: ServerResponse; timer: NodeJS.Timeout; runtimeSessionId?: string };
+type ActiveAgentRun = { runId: string; executor: RunStepExecutor };
 
 export class CanvasSession {
     private clients = new Map<string, CanvasClient>();
     private pending = new Map<string, PendingRequest>();
     private canvasState: CanvasSnapshot | null = null;
+    private activeAgentRun: ActiveAgentRun | null = null;
 
     health() {
         return { ok: true, hasCanvas: Boolean(this.canvasState), clients: this.clients.size };
@@ -79,6 +82,24 @@ export class CanvasSession {
         this.clients.forEach((client) => sendEvent(client.response, type, payload));
     }
 
+    beginAgentRun(plan: RunPlan, readOnlyExecution?: ReadOnlyExecution) {
+        if (this.activeAgentRun) throw new Error(`已有运行中的 Agent：${this.activeAgentRun.runId}`);
+        this.activeAgentRun = {
+            runId: plan.runId,
+            executor: new RunStepExecutor(plan, (type, payload) => this.emitAll(type, payload), readOnlyExecution),
+        };
+    }
+
+    async finishAgentRun() {
+        const active = this.activeAgentRun;
+        if (!active) return undefined;
+        try {
+            return await active.executor.finish();
+        } finally {
+            if (this.activeAgentRun === active) this.activeAgentRun = null;
+        }
+    }
+
     dispose() {
         this.clients.forEach(({ response, timer }) => {
             clearInterval(timer);
@@ -86,6 +107,7 @@ export class CanvasSession {
         });
         this.clients.clear();
         this.canvasState = null;
+        this.activeAgentRun = null;
         const error = new Error("Canvas session disposed");
         this.pending.forEach((request) => request.reject(error));
         this.pending.clear();
@@ -93,6 +115,7 @@ export class CanvasSession {
 
     async callTool(name: unknown, rawInput: unknown) {
         if (!isToolName(name)) throw new Error(`未知工具：${String(name)}`);
+        const semanticTool = name;
         let tool: ToolName = name;
         let input = parseToolInput(tool, rawInput) as Record<string, unknown>;
         const projectTool = tool.startsWith("project_");
@@ -100,7 +123,7 @@ export class CanvasSession {
             if (!this.clients.size || !this.canvasState) throw new Error("当前没有已连接画布");
             if (!input.projectId && this.canvasState.domainProjectId) input.projectId = this.canvasState.domainProjectId;
             if (!input.projectId) throw new Error("当前画布没有关联短剧项目");
-            return await this.requestCanvasTool(tool, input);
+            return await this.executeTool(tool, input, semanticTool);
         }
         const readTool = ["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_node", "canvas_get_connection", "canvas_get_generation_tasks", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
@@ -214,10 +237,16 @@ export class CanvasSession {
         }
         const validation = validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
         if (!validation.ok) throw new Error(`画布操作校验失败：${validation.issues.filter((item) => item.severity === "error").map((item) => item.message).join("；")}`);
-        return await this.requestCanvasTool(tool, input);
+        return await this.executeTool(tool, input, semanticTool);
     }
 
-    private async requestCanvasTool(name: ToolName, input: Record<string, unknown>) {
+    private executeTool(name: ToolName, input: Record<string, unknown>, semanticTool: ToolName) {
+        const callTool = (context?: StepToolExecutionContext) => this.requestCanvasTool(name, input, context ? { ...context, semanticTool } : undefined);
+        if (!this.activeAgentRun || !isMutationTool(name, input)) return callTool();
+        return this.activeAgentRun.executor.execute(name, input, (context) => callTool(context));
+    }
+
+    private async requestCanvasTool(name: ToolName, input: Record<string, unknown>, context?: StepToolExecutionContext) {
         const requestId = crypto.randomUUID();
         const stateClientId = this.canvasState?.clientId || "";
         const selected = this.clients.has(stateClientId)
@@ -226,7 +255,13 @@ export class CanvasSession {
         const clientId = selected?.[0];
         const client = selected?.[1]?.response;
         if (!clientId || !client) throw new Error("当前没有已连接画布");
-        sendEvent(client, "tool_call", { requestId, name, input });
+        sendEvent(client, "tool_call", {
+            requestId,
+            name,
+            input,
+            semanticTool: context?.semanticTool || name,
+            ...(context ? { runId: context.runId, stepId: context.stepId, agentId: context.agentId, attempt: context.attempt } : {}),
+        });
         const recoverable = hasGenerationContinuation(name, input);
         return await new Promise((resolve, reject) => {
             const timer = setTimeout(() => {

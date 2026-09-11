@@ -5,6 +5,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
+import { buildRunPlan, createSemanticEvent, emitSemanticEvent, formatReadOnlyExecution, formatRunPlan, summarizeRunPlan, type ReadOnlyExecution, type RunPlan, type StepExecution } from "./agent-orchestration.js";
 import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
 import { AGENT_PROMPT, CONFIG_DIR, VERSION } from "./config.js";
 import { assertCodexThreadWorkspace, codexThreadInWorkspace, resolveCodexThread } from "./codex-thread.js";
@@ -16,29 +17,80 @@ type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error
 export type AgentSkillFile = { path: string; mimeType?: string; contentBase64: string };
 export type AgentSkillReference = { skillId?: string; name: string; description?: string; version?: string; files?: AgentSkillFile[]; instruction?: string };
 export type CodexSkillInput = { type: "skill"; name: string; path: string };
-type CodexRunOptions = { threadId?: string; cwd?: string; skills?: AgentSkillReference[]; onThreadId?: (threadId: string) => void };
+export type AgentExecutionStart = { runId: string; plan: RunPlan; readOnlyExecution?: ReadOnlyExecution };
+export type AgentExecutionEnd = { runId: string; plan: RunPlan };
+export type CodexRunOptions = {
+    threadId?: string;
+    cwd?: string;
+    skills?: AgentSkillReference[];
+    onThreadId?: (threadId: string) => void;
+    runId?: string;
+    plan?: RunPlan;
+    readOnlyExecution?: ReadOnlyExecution;
+    onExecutionStart?: (context: AgentExecutionStart) => void | Promise<void>;
+    onExecutionEnd?: (context: AgentExecutionEnd) => StepExecution | undefined | Promise<StepExecution | undefined>;
+};
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 
-let codexQueue: Promise<unknown> = Promise.resolve();
+type CodexTurnOutcome = { ok: boolean; error?: string; execution?: StepExecution };
+export type CodexRunResult = { runId: string; status: "completed" | "failed"; plan: RunPlan; execution?: StepExecution; error?: string };
+
+let codexQueue: Promise<CodexTurnOutcome | undefined> = Promise.resolve(undefined);
 let codexApp: CodexAppClient | null = null;
 let codexThreadId = "";
 const canvasAgentMcp = canvasAgentMcpCommand();
 const INTERNAL_CANVAS_MCP_TIMEOUT_MARGIN_MS = 60_000;
 const require = createRequire(import.meta.url);
 
-export function withAgentPrompt(prompt: string) {
-    return prompt.trim() ? `${AGENT_PROMPT}\n\n用户请求：${prompt}` : "";
+export function withAgentPrompt(prompt: string, plan?: RunPlan, readOnlyExecution?: ReadOnlyExecution) {
+    const request = prompt.trim();
+    if (!request) return "";
+    const preflight = readOnlyExecution ? formatReadOnlyExecution(readOnlyExecution) : "";
+    return `${AGENT_PROMPT}${plan ? `\n\n${formatRunPlan(plan)}` : ""}${preflight ? `\n\n${preflight}` : ""}\n\n用户请求：${request}`;
 }
 
-export async function runCodexTurn(prompt: string, emit: AgentEmit, attachments: AgentAttachment[] = [], options: CodexRunOptions = {}) {
+export async function runCodexTurn(prompt: string, emit: AgentEmit, attachments: AgentAttachment[] = [], options: CodexRunOptions = {}): Promise<CodexRunResult | undefined> {
     if (!prompt.trim()) return;
-    codexQueue = codexQueue.catch(() => undefined).then(() => runCodexTurnNow(prompt, emit, attachments, options));
-    await codexQueue;
+    const plan = options.plan || buildRunPlan({ prompt });
+    const runId = options.runId || plan.runId;
+    emitSemanticEvent(emit, createSemanticEvent({
+        runId,
+        type: "run.started",
+        payload: { plan: summarizeRunPlan(plan) },
+    }));
+    emitSemanticEvent(emit, createSemanticEvent({
+        runId,
+        type: "run.plan.created",
+        payload: { plan: summarizeRunPlan(plan) },
+    }));
+    const runOptions = { ...options, plan, runId };
+    const queuedRun = codexQueue.catch(() => undefined).then(() => runCodexTurnNow(prompt, emit, attachments, runOptions));
+    codexQueue = queuedRun;
+    const outcome = await queuedRun;
+    const execution = outcome?.execution;
+    const failedSteps = execution?.failedStepIds.length || 0;
+    if (outcome?.ok && !failedSteps) {
+        emitSemanticEvent(emit, createSemanticEvent({
+            runId,
+            type: "run.completed",
+            payload: { execution: "single_codex_turn", plannedStepCount: plan.steps.length, ...(execution ? { stepExecution: execution } : {}) },
+        }));
+        return { runId, status: "completed", plan, ...(execution ? { execution } : {}) };
+    }
+    const error = outcome?.error || (failedSteps ? `运行步骤失败：${execution?.failedStepIds.join("、")}` : "Codex turn failed");
+    emitSemanticEvent(emit, createSemanticEvent({
+        runId,
+        type: "run.failed",
+        payload: { execution: "single_codex_turn", error, ...(execution ? { stepExecution: execution } : {}) },
+    }));
+    return { runId, status: "failed", plan, ...(execution ? { execution } : {}), error };
 }
 
-async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: AgentAttachment[], options: CodexRunOptions) {
+async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: AgentAttachment[], options: CodexRunOptions): Promise<CodexTurnOutcome> {
     let files: string[] = [];
     let skillDirectories: string[] = [];
+    let executionStarted = false;
+    let outcome: CodexTurnOutcome = { ok: false, error: "Codex turn failed" };
     try {
         files = await writeAttachmentFiles(attachments);
         const preparedSkills = await writeSkillFiles(options.skills || []);
@@ -46,13 +98,31 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
         codexApp ||= await CodexAppClient.start(emit);
         const threadId = await ensureCodexThread(codexApp, options);
         if (threadId !== options.threadId) options.onThreadId?.(threadId);
-        await codexApp.startTurn(threadId, prompt, files, preparedSkills.inputs);
+        if (options.onExecutionStart && options.plan && options.runId) {
+            await options.onExecutionStart({ runId: options.runId, plan: options.plan, readOnlyExecution: options.readOnlyExecution });
+            executionStarted = true;
+        }
+        await codexApp.startTurn(threadId, prompt, files, preparedSkills.inputs, options.runId);
+        outcome = { ok: true };
     } catch (error) {
-        emit("agent_error", { message: errorMessage(error) });
+        const message = errorMessage(error);
+        emit("agent_error", { message, ...(options.runId ? { runId: options.runId } : {}) });
+        outcome = { ok: false, error: message };
     } finally {
+        if (executionStarted && options.onExecutionEnd && options.plan && options.runId) {
+            try {
+                const execution = await options.onExecutionEnd({ runId: options.runId, plan: options.plan });
+                if (execution) outcome.execution = execution;
+            } catch (error) {
+                const message = errorMessage(error);
+                emit("agent_error", { message, runId: options.runId });
+                outcome = { ok: false, error: outcome.error ? `${outcome.error}；${message}` : message, ...(outcome.execution ? { execution: outcome.execution } : {}) };
+            }
+        }
         await Promise.all(files.map((file) => fs.unlink(file).catch(() => undefined)));
         await Promise.all(skillDirectories.map((directory) => fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)));
     }
+    return outcome;
 }
 
 export async function startCodexThread(emit: AgentEmit, cwd?: string) {
@@ -118,6 +188,7 @@ class CodexAppClient {
     private textByItem = new Map<string, string>();
     private deltaCount = 0;
     private lastUsage: unknown = null;
+    private activeRunId = "";
     private pending = new Map<number, PendingRequest>();
     private activeTurns = new Map<string, PendingRequest>();
     private completedTurns = new Map<string, Error | null>();
@@ -169,17 +240,22 @@ class CodexAppClient {
         return this.request("thread/archive", { threadId });
     }
 
-    async startTurn(threadId: string, prompt: string, images: string[], skills: CodexSkillInput[] = []) {
-        const result = await this.request("turn/start", { threadId, input: codexInput(prompt, images, skills), approvalPolicy: "never" });
-        const turnId = String(field(field(result, "turn"), "id") || "");
-        if (!turnId) throw new Error("Codex app-server 没有返回 turn id");
-        const completed = this.completedTurns.get(turnId);
-        if (this.completedTurns.has(turnId)) {
-            this.completedTurns.delete(turnId);
-            if (completed) throw completed;
-            return;
+    async startTurn(threadId: string, prompt: string, images: string[], skills: CodexSkillInput[] = [], runId = "") {
+        this.activeRunId = runId;
+        try {
+            const result = await this.request("turn/start", { threadId, input: codexInput(prompt, images, skills), approvalPolicy: "never" });
+            const turnId = String(field(field(result, "turn"), "id") || "");
+            if (!turnId) throw new Error("Codex app-server 没有返回 turn id");
+            const completed = this.completedTurns.get(turnId);
+            if (this.completedTurns.has(turnId)) {
+                this.completedTurns.delete(turnId);
+                if (completed) throw completed;
+                return;
+            }
+            await new Promise((resolve, reject) => this.activeTurns.set(turnId, { resolve, reject }));
+        } finally {
+            this.activeRunId = "";
         }
-        await new Promise((resolve, reject) => this.activeTurns.set(turnId, { resolve, reject }));
     }
 
     private request(method: string, params: unknown) {
@@ -223,7 +299,7 @@ class CodexAppClient {
         const event = normalizeCodexNotification(method, params);
         if (!event) return;
         if (event.type === "turn.completed") event.usage = this.lastUsage;
-        this.emit("agent_event", { agent: "codex", ...event });
+        this.emit("agent_event", { agent: "codex", ...(this.activeRunId ? { runId: this.activeRunId } : {}), ...event });
         if (event.type === "turn.completed") {
             const turnId = String(field(params, "turnId") || field(field(params, "turn"), "id") || "");
             const pending = this.activeTurns.get(turnId);
@@ -234,9 +310,10 @@ class CodexAppClient {
             } else if (turnId) {
                 this.completedTurns.set(turnId, error ? new Error(String(field(error, "message") || "Codex turn failed")) : null);
             }
-            this.emit("agent_event", { agent: "codex", type: "stream.summary", delta_count: this.deltaCount });
+            this.emit("agent_event", { agent: "codex", ...(this.activeRunId ? { runId: this.activeRunId } : {}), type: "stream.summary", delta_count: this.deltaCount });
             this.deltaCount = 0;
-            this.emit("agent_done", { agent: "codex", usage: event.usage });
+            this.textByItem.clear();
+            this.emit("agent_done", { agent: "codex", ...(this.activeRunId ? { runId: this.activeRunId } : {}), usage: event.usage });
         }
     }
 
@@ -245,14 +322,14 @@ class CodexAppClient {
         const text = `${this.textByItem.get(id) || ""}${String(field(params, "delta") || "")}`;
         this.deltaCount += 1;
         this.textByItem.set(id, text);
-        this.emit("agent_event", { agent: "codex", type: "item.updated", item: { id, type: "agent_message", text } });
+        this.emit("agent_event", { agent: "codex", ...(this.activeRunId ? { runId: this.activeRunId } : {}), type: "item.updated", item: { id, type: "agent_message", text } });
     }
 
     private answerServerRequest(message: Json) {
         const method = String(message.method);
         const result = method === "mcpServer/elicitation/request" ? { action: "accept", content: {}, _meta: null } : { decision: "decline" };
         this.write({ id: message.id, result });
-        this.emit("agent_event", { agent: "codex", type: "server.request", method, params: message.params, result });
+        this.emit("agent_event", { agent: "codex", ...(this.activeRunId ? { runId: this.activeRunId } : {}), type: "server.request", method, params: message.params, result });
     }
 
     private resolve(id: number, result: unknown) {
