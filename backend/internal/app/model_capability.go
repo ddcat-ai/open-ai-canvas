@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -355,6 +356,14 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 
 // 海螺 H3 官方 prompt 上限（Leonardo.AI / APIDot 等渠道文档明确为 2000 字符）。
 const hailuoH3PromptMaxChars = 2000
+
+// isHailuoH3ViaRelay 判断模型名是否为经 NewAPI 中转的 MiniMax Hailuo H3
+// （minimax_h3 / MiniMax-H3 / hailuo-3 / minimax-hailuo…），与前端
+// web/src/lib/model-capabilities.ts 的同名判定保持一致。
+func isHailuoH3ViaRelay(model string) bool {
+	name := strings.ToLower(strings.TrimSpace(model))
+	return regexp.MustCompile(`minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo`).MatchString(name)
+}
 
 func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
 	if profile == nil {
