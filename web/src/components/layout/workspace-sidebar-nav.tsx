@@ -52,6 +52,7 @@ toolItem("projects", "/projects"),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
                 toolItem("assets", "/assets"),
+                toolItem("prompts", "/prompts"),
             ],
         },
         {
