@@ -76,3 +76,44 @@ func TestArtCritiqueIsUserToggleableApplication(t *testing.T) {
 		t.Fatalf("AI art critique policy = %#v", policy)
 	}
 }
+
+// Regression: editor-shell was missing from officialApplicationPolicies, so the
+// backend classified it as a system protocol and reported it to the admin page
+// as "管理员已停用该插件" even though nothing disabled it.
+func TestEditorShellIsUserToggleableApplication(t *testing.T) {
+	policy := pluginManagement(PluginEditorShell, "bundled")
+	if policy.Origin != PluginOriginOfficial || policy.Kind != PluginKindApplication || policy.ActivationScope != PluginScopeUser || policy.ConfigurationScope != PluginConfigurationNone {
+		t.Fatalf("editor shell policy = %#v", policy)
+	}
+}
+
+func TestEditorShellReportsPlatformAvailableWithoutPlatformState(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.PluginPlatformState{}, &model.UserPluginState{}, &model.AdminAuditEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db), pluginRuntime: center}
+	user := &model.User{ID: "user-1", Role: model.UserRoleUser}
+
+	states, err := svc.PluginStatesForUser(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, ok := states[PluginEditorShell]
+	if !ok {
+		t.Fatalf("editor shell missing from plugin states: %#v", states)
+	}
+	if !state.PlatformAvailable || !state.CanToggle {
+		t.Fatalf("editor shell should be a user-toggleable application, got %#v", state)
+	}
+	if state.BlockedReason == "管理员已停用该插件" {
+		t.Fatalf("editor shell reported as admin-disabled: %#v", state)
+	}
+}

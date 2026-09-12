@@ -8,9 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import { PaginationBar } from "@/components/layout/workspace-page";
 import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
-import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
-import { MEDIA_CONVERSION_PLUGIN_ID } from "@/lib/plugins/builtin/media-conversion";
+import { isOfficialApplicationPluginId } from "@/lib/plugins/official-applications";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import type { PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import { fetchAdminPlugins, setPluginPlatformAvailability, uninstallPlugin, uploadPlugin, type AdminPluginState, type BackendPlugin, type PluginManagement } from "@/services/api/plugins";
@@ -26,8 +25,6 @@ type AdminPluginItem = {
     status?: string;
     error?: string;
 };
-
-const officialApplicationIds = new Set([RUNNINGHUB_PLUGIN_ID, COMFYUI_PLUGIN_ID, EAGLE_PLUGIN_ID, PROMPT_OPTIMIZER_PLUGIN_ID, "portrait-clearance", MEDIA_CONVERSION_PLUGIN_ID]);
 
 export default function AdminPluginsPage() {
     const { message, modal } = App.useApp();
@@ -363,7 +360,7 @@ function PluginBrandIcon({ pluginId }: { pluginId: string }) {
 function mergePlugins(remote: BackendPlugin[]): AdminPluginItem[] {
     const byId = new Map<string, AdminPluginItem>();
     for (const plugin of listRegisteredPlugins()) {
-        const application = officialApplicationIds.has(plugin.manifest.id);
+        const application = isOfficialApplicationPluginId(plugin.manifest.id);
         byId.set(plugin.manifest.id, {
             manifest: plugin.manifest,
             source: plugin.source || "bundled",
