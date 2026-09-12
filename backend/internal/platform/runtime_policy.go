@@ -127,7 +127,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			ImageTimeoutMinutes:      8,
 			TextTimeoutMinutes:       8,
 			AudioTimeoutMinutes:      8,
-			VideoTimeoutMinutes:      30,
+			VideoTimeoutMinutes:      60,
 			StoryboardTimeoutMinutes: 20,
 			DefaultTimeoutMinutes:    10,
 		},

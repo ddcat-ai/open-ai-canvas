@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"reflect"
 	"testing"
@@ -33,6 +35,7 @@ func TestVideoPollRecoversFromTransientHTTPError(t *testing.T) {
 func TestVideoPollWaitsBeforeFirstQueryAndUsesRetryAfter(t *testing.T) {
 	var waits []time.Duration
 	policy := fastVideoPollPolicy()
+	policy.InitialDelay = 10 * time.Millisecond
 	policy.Interval = 10 * time.Millisecond
 	policy.Sleep = func(_ context.Context, delay time.Duration) error {
 		waits = append(waits, delay)
@@ -105,6 +108,68 @@ func TestVideoPollSuccessfulPendingResponseResetsNotFoundCounter(t *testing.T) {
 	}
 }
 
+func TestVideoPollRetriesMalformedResponseTwiceThenSucceeds(t *testing.T) {
+	attempts := 0
+	result, err := runVideoPollLoop(context.Background(), "provider-task-1", fastVideoPollPolicy(), func(context.Context) (videoPollOutcome, error) {
+		attempts++
+		if attempts <= 2 {
+			return videoPollOutcome{}, &json.SyntaxError{Offset: int64(attempts)}
+		}
+		return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video"}}, nil
+	})
+	if err != nil || attempts != 3 || result["mode"] != "video" {
+		t.Fatalf("result = %#v, error = %v, attempts = %d", result, err, attempts)
+	}
+}
+
+func TestVideoPollStopsAfterThreeMalformedResponses(t *testing.T) {
+	attempts := 0
+	_, err := runVideoPollLoop(context.Background(), "provider-task-1", fastVideoPollPolicy(), func(context.Context) (videoPollOutcome, error) {
+		attempts++
+		return videoPollOutcome{}, &json.SyntaxError{Offset: int64(attempts)}
+	})
+	var syntaxError *json.SyntaxError
+	if !errors.As(err, &syntaxError) || attempts != 3 {
+		t.Fatalf("error = %#v, attempts = %d, want three attempts and syntax error", err, attempts)
+	}
+}
+
+func TestVideoPollTreatsCircuitAndInterruptedReadsAsTransient(t *testing.T) {
+	for _, err := range []error{providerCircuitOpenError{}, io.ErrUnexpectedEOF, io.ErrClosedPipe} {
+		retry, notFound := retryableVideoPollError(context.Background(), err)
+		if !retry || notFound {
+			t.Fatalf("error %T classified as retry=%v notFound=%v", err, retry, notFound)
+		}
+	}
+}
+
+func TestVideoPollNotifiesOnlyWhenRetryStartsAndRecovers(t *testing.T) {
+	var events []videoPollEvent
+	policy := fastVideoPollPolicy()
+	policy.Notify = func(_ context.Context, _ string, event videoPollEvent, _ error) {
+		events = append(events, event)
+	}
+	attempts := 0
+	_, err := runVideoPollLoop(context.Background(), "provider-task-1", policy, func(context.Context) (videoPollOutcome, error) {
+		attempts++
+		switch attempts {
+		case 1, 2:
+			return videoPollOutcome{}, providerHTTPError{StatusCode: http.StatusBadGateway}
+		case 3:
+			return videoPollOutcome{}, nil
+		default:
+			return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video"}}, nil
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []videoPollEvent{videoPollEventRetrying, videoPollEventRecovered}
+	if len(events) != len(want) || events[0] != want[0] || events[1] != want[1] {
+		t.Fatalf("events = %#v, want %#v", events, want)
+	}
+}
+
 func TestVideoPollContextCancellationInterruptsInitialWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -118,6 +183,26 @@ func TestVideoPollContextCancellationInterruptsInitialWait(t *testing.T) {
 	}
 	if called {
 		t.Fatal("query ran after cancellation")
+	}
+}
+
+func TestVideoPollAppliesFallbackDeadlineToWaitAndQuery(t *testing.T) {
+	policy := fastVideoPollPolicy()
+	waitHadDeadline := false
+	queryHadDeadline := false
+	policy.Sleep = func(ctx context.Context, _ time.Duration) error {
+		_, waitHadDeadline = ctx.Deadline()
+		return nil
+	}
+	_, err := runVideoPollLoop(context.Background(), "provider-task-1", policy, func(ctx context.Context) (videoPollOutcome, error) {
+		_, queryHadDeadline = ctx.Deadline()
+		return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video"}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !waitHadDeadline || !queryHadDeadline {
+		t.Fatalf("wait deadline = %v, query deadline = %v", waitHadDeadline, queryHadDeadline)
 	}
 }
 
@@ -156,8 +241,21 @@ func TestVideoDownloadStopsAfterThreeTransientFailures(t *testing.T) {
 	}
 }
 
+func TestVideoPollDoesNotRetryExhaustedDownload(t *testing.T) {
+	attempts := 0
+	_, err := runVideoPollLoop(context.Background(), "provider-task-1", fastVideoPollPolicy(), func(context.Context) (videoPollOutcome, error) {
+		attempts++
+		return videoPollOutcome{}, videoDownloadError{TaskID: "provider-task-1", Cause: providerHTTPError{StatusCode: http.StatusBadGateway}}
+	})
+	var downloadError videoDownloadError
+	if !errors.As(err, &downloadError) || attempts != 1 {
+		t.Fatalf("error = %#v, poll attempts = %d, want one exhausted download", err, attempts)
+	}
+}
+
 func fastVideoPollPolicy() videoPollPolicy {
 	policy := defaultVideoPollPolicy()
+	policy.InitialDelay = time.Millisecond
 	policy.Interval = time.Millisecond
 	policy.Sleep = func(context.Context, time.Duration) error { return nil }
 	return policy

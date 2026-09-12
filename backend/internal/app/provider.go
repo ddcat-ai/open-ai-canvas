@@ -100,7 +100,7 @@ type providerConfig struct {
 }
 
 const providerHTTPTimeout = 5 * time.Minute
-const videoPollTimeout = 30 * time.Minute
+const videoPollTimeout = time.Hour
 const maxProviderResponseBytes int64 = 64 << 20
 
 type providerMedia struct {
@@ -143,6 +143,19 @@ type providerHTTPError struct {
 	Status     string
 	Body       string
 	RetryAfter time.Duration
+}
+
+type providerResponseDecodeError struct {
+	Err error
+}
+
+func (e providerResponseDecodeError) Error() string { return e.Err.Error() }
+func (e providerResponseDecodeError) Unwrap() error { return e.Err }
+
+type providerCircuitOpenError struct{}
+
+func (providerCircuitOpenError) Error() string {
+	return "当前渠道连续失败，已暂时熔断，请稍后重试"
 }
 
 type providerStatePendingError struct {

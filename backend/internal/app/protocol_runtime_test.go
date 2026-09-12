@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/protocol"
 )
@@ -345,6 +346,18 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	}
 	if result["mode"] != "video" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDeclarativeProtocolPollingPolicyOnlyChangesVideoBehavior(t *testing.T) {
+	video := declarativeProtocolPollPolicy("video")
+	if video.InitialDelay != defaultVideoPollInterval || !video.RetryTransient {
+		t.Fatalf("video polling policy = %#v, want delayed resilient polling", video)
+	}
+
+	image := declarativeProtocolPollPolicy("image")
+	if image.InitialDelay != 0 || image.Interval != 2500*time.Millisecond || image.RetryTransient {
+		t.Fatalf("image polling policy = %#v, want legacy immediate fail-fast polling", image)
 	}
 }
 

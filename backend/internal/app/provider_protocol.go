@@ -40,7 +40,19 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 }
 
 func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter) (map[string]interface{}, error) {
-	return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, defaultVideoPollPolicy())
+	return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, declarativeProtocolPollPolicy(input.Mode))
+}
+
+func declarativeProtocolPollPolicy(mode string) videoPollPolicy {
+	if mode == "video" {
+		return defaultVideoPollPolicy()
+	}
+	return videoPollPolicy{
+		Interval:          2500 * time.Millisecond,
+		MaxNotFoundMisses: 1,
+		MaxDownloadTries:  3,
+		Sleep:             sleepContext,
+	}
 }
 
 func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, policy videoPollPolicy) (map[string]interface{}, error) {
