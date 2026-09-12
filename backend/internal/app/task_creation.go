@@ -388,7 +388,28 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 		}
 	}
 
-	priceTier := channelModelPriceTierForIntent(*channelModel, intent)
+	pricingIntent := intent
+	if normalizeCapability(channelModel.Capability) == "image" {
+		pricingOptions := make(map[string]any, len(intent.Options)+2)
+		for k, v := range intent.Options {
+			pricingOptions[k] = v
+		}
+		rawQuality := strings.ToLower(strings.TrimSpace(fmt.Sprint(nextConfig["quality"])))
+		if rawQuality != "" && rawQuality != "<nil>" && rawQuality != "auto" && rawQuality != "any" {
+			pricingOptions["quality"] = rawQuality
+		} else if pricingOptions["quality"] == nil || pricingOptions["quality"] == "" || pricingOptions["quality"] == "auto" {
+			pricingOptions["quality"] = "1k"
+		}
+		if rawSize := strings.ToLower(strings.TrimSpace(fmt.Sprint(nextConfig["size"]))); rawSize != "" && rawSize != "<nil>" && rawSize != "auto" {
+			pricingOptions["size"] = rawSize
+		}
+		pricingIntent.Options = pricingOptions
+	}
+
+	priceTier := channelModelPriceTierForIntent(*channelModel, pricingIntent)
+	if priceTier == nil {
+		priceTier = channelModelPriceTierForIntent(*channelModel, intent)
+	}
 	if priceTier == nil || !ValidatePriceTierPrice(priceTier, channelModel.Capability, channelModel.Protocol) {
 		return input, ModelPriceNotConfigured("指定的模型未配置当前规格的有效价格")
 	}
