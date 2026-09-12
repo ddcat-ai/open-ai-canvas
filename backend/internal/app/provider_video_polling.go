@@ -15,6 +15,7 @@ const defaultVideoPollInterval = 30 * time.Second
 type videoPollPolicy struct {
 	Interval          time.Duration
 	MaxNotFoundMisses int
+	MaxDownloadTries  int
 	Sleep             func(context.Context, time.Duration) error
 }
 
@@ -27,6 +28,7 @@ func defaultVideoPollPolicy() videoPollPolicy {
 	return videoPollPolicy{
 		Interval:          defaultVideoPollInterval,
 		MaxNotFoundMisses: 3,
+		MaxDownloadTries:  3,
 		Sleep:             sleepContext,
 	}
 }
@@ -76,10 +78,34 @@ func normalizeVideoPollPolicy(policy videoPollPolicy) videoPollPolicy {
 	if policy.MaxNotFoundMisses <= 0 {
 		policy.MaxNotFoundMisses = 3
 	}
+	if policy.MaxDownloadTries <= 0 {
+		policy.MaxDownloadTries = 3
+	}
 	if policy.Sleep == nil {
 		policy.Sleep = sleepContext
 	}
 	return policy
+}
+
+func runVideoDownload(ctx context.Context, taskID string, policy videoPollPolicy, download func(context.Context) ([]byte, string, error)) ([]byte, string, error) {
+	policy = normalizeVideoPollPolicy(policy)
+	var lastErr error
+	for attempt := 1; attempt <= policy.MaxDownloadTries; attempt++ {
+		data, mimeType, err := download(ctx)
+		if err == nil {
+			return data, mimeType, nil
+		}
+		lastErr = err
+		retry, _ := retryableVideoPollError(ctx, err)
+		if !retry || attempt == policy.MaxDownloadTries {
+			return nil, "", err
+		}
+		delay := max(policy.Interval, providerRetryAfter(err))
+		if err := policy.Sleep(ctx, delay); err != nil {
+			return nil, "", err
+		}
+	}
+	return nil, "", lastErr
 }
 
 func retryableVideoPollError(ctx context.Context, err error) (retry bool, notFound bool) {

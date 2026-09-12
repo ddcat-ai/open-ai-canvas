@@ -145,14 +145,18 @@ func runVideoTaskWithPolicy(ctx context.Context, input canvasGenerationInput, po
 		status := strings.ToLower(stringField(state, "status"))
 		if status == "completed" || status == "succeeded" || status == "success" || status == "done" {
 			if videoURL := newAPIVideoResultURL(state); videoURL != "" {
-				data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+				data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+					return getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+				})
 				if err != nil {
 					return videoPollOutcome{}, fmt.Errorf("视频结果下载失败（任务 %s）：%w", id, err)
 				}
 				mimeType = normalizedMediaMimeType(mimeType, data)
 				return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 			}
-			data, mimeType, err := getBinary(ctx, input.Config, "/videos/"+id+"/content")
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getBinary(withProviderRequestKind(ctx, "download"), input.Config, "/videos/"+id+"/content")
+			})
 			if err != nil {
 				return videoPollOutcome{}, err
 			}
@@ -258,13 +262,17 @@ func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput, pol
 		if status == "completed" || status == "succeeded" {
 			videoURL := stringField(state, "video_url")
 			if videoURL != "" {
-				data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+				data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+					return getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+				})
 				if err != nil {
 					return videoPollOutcome{}, fmt.Errorf("视频结果下载失败：%w", err)
 				}
 				return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 			}
-			data, mimeType, err := getBinary(ctx, input.Config, "/videos/"+id+"/content")
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getBinary(withProviderRequestKind(ctx, "download"), input.Config, "/videos/"+id+"/content")
+			})
 			if err != nil {
 				return videoPollOutcome{}, fmt.Errorf("Seedance 任务成功但未返回视频 URL，备用内容下载失败：%w", err)
 			}
@@ -343,7 +351,9 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 			if videoURL == "" {
 				return videoPollOutcome{}, fmt.Errorf("%s任务成功但没有返回视频 URL", providerName)
 			}
-			data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+			})
 			if err != nil {
 				return videoPollOutcome{}, fmt.Errorf("视频结果下载失败：%w", err)
 			}

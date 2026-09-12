@@ -395,6 +395,52 @@ func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T
 	}
 }
 
+func TestDeclarativeProtocolRetriesResultDownloadWithoutRepolling(t *testing.T) {
+	adapter, err := protocol.LoadManifest([]byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-declarative-download-retry","version":"1.0.0","name":"Test Declarative Download Retry","author":"Test","documentation":"# Test",
+		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollCalls := 0
+	downloadCalls := 0
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"pending"}`))
+		case "/v1/tasks/provider-task-1":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"succeeded","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			downloadCalls++
+			if downloadCalls == 1 {
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "test-declarative-download-retry", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	result, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["mode"] != "video" || pollCalls != 1 || downloadCalls != 2 {
+		t.Fatalf("result = %#v, poll calls = %d, download calls = %d", result, pollCalls, downloadCalls)
+	}
+}
+
 func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T) {
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v1",

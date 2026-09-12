@@ -121,6 +121,41 @@ func TestVideoPollContextCancellationInterruptsInitialWait(t *testing.T) {
 	}
 }
 
+func TestVideoDownloadRetriesTransientFailure(t *testing.T) {
+	attempts := 0
+	waits := 0
+	policy := fastVideoPollPolicy()
+	policy.Sleep = func(context.Context, time.Duration) error {
+		waits++
+		return nil
+	}
+	data, mimeType, err := runVideoDownload(context.Background(), "provider-task-1", policy, func(context.Context) ([]byte, string, error) {
+		attempts++
+		if attempts == 1 {
+			return nil, "", providerHTTPError{StatusCode: http.StatusBadGateway, Status: "502 Bad Gateway"}
+		}
+		return []byte("video"), "video/mp4", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "video" || mimeType != "video/mp4" || attempts != 2 || waits != 1 {
+		t.Fatalf("data = %q, mime = %q, attempts = %d, waits = %d", data, mimeType, attempts, waits)
+	}
+}
+
+func TestVideoDownloadStopsAfterThreeTransientFailures(t *testing.T) {
+	attempts := 0
+	_, _, err := runVideoDownload(context.Background(), "provider-task-1", fastVideoPollPolicy(), func(context.Context) ([]byte, string, error) {
+		attempts++
+		return nil, "", providerHTTPError{StatusCode: http.StatusServiceUnavailable, Status: "503 Service Unavailable"}
+	})
+	var httpErr providerHTTPError
+	if !errors.As(err, &httpErr) || attempts != 3 {
+		t.Fatalf("error = %#v, attempts = %d, want three attempts and provider error", err, attempts)
+	}
+}
+
 func fastVideoPollPolicy() videoPollPolicy {
 	policy := defaultVideoPollPolicy()
 	policy.Interval = time.Millisecond

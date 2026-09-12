@@ -1625,6 +1625,45 @@ func TestRunVideoTaskRetriesTransientPollFailureWithoutRecreating(t *testing.T) 
 	}
 }
 
+func TestRunVideoTaskRetriesDownloadWithoutRepolling(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	pollCalls := 0
+	downloadCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "POST /v1/videos":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"video-1","status":"queued"}`))
+		case "GET /v1/videos/video-1":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"video-1","status":"completed"}`))
+		case "GET /v1/videos/video-1/content":
+			downloadCalls++
+			if downloadCalls == 1 {
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	result, err := runVideoTaskWithPolicy(context.Background(), canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{BaseURL: server.URL + "/v1", APIKey: "test-key", Model: "custom-video-v1"},
+	}, fastVideoPollPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["mode"] != "video" || pollCalls != 1 || downloadCalls != 2 {
+		t.Fatalf("result = %#v, poll calls = %d, download calls = %d", result, pollCalls, downloadCalls)
+	}
+}
+
 func TestRunVideoTaskSendsOnlyDeclaredResolutionName(t *testing.T) {
 	tests := []struct {
 		name           string
