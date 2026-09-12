@@ -524,7 +524,20 @@ func validateCreationSubmissionScope(run *model.CreationRun, version int64, req 
 			if key == "videoSeconds" {
 				metadataKey = "seconds"
 			}
-			if approved := stringValue(meta[metadataKey]); approved != "" && approved != stringValue(config[key]) {
+			approved := strings.TrimSpace(stringValue(meta[metadataKey]))
+			candidate := strings.TrimSpace(stringValue(config[key]))
+			if metadataKey == "quality" {
+				approvedNorm := strings.ToLower(approved)
+				candidateNorm := strings.ToLower(candidate)
+				// auto/any 与空缺在图片生成中等价，前端 omittedImageQuality 可能会省略默认 quality
+				if (approvedNorm == "auto" || approvedNorm == "any" || approvedNorm == "") && (candidateNorm == "auto" || candidateNorm == "any" || candidateNorm == "") {
+					continue
+				}
+				if approvedNorm == candidateNorm {
+					continue
+				}
+			}
+			if approved != "" && approved != candidate {
 				return creationConflict("生成规格与已批准方案不同")
 			}
 		}

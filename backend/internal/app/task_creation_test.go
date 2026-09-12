@@ -319,3 +319,56 @@ func newSelectionPriceTier(id string, selector string, providerModelKey string, 
 		BillingMode: billingMode, UnitPriceMicrocredits: 10, PriceConfigured: true, Enabled: true,
 	}
 }
+
+func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGeminiImage), "gemini-image-model")
+	profile.Image.Quality = ImageQualityConfig{Supported: false, Default: "auto"}
+	profile.Image.Size = ImageSizeConfig{
+		Parameter: "aspect_ratio",
+		Values:    []string{"1:1", "16:9"},
+		Default:   "1:1",
+		Presets: []ImageSizePreset{
+			{Tier: "1k", Ratio: "16:9", Size: "1824x1024", Width: 1824, Height: 1024},
+			{Tier: "2k", Ratio: "16:9", Size: "2752x1536", Width: 2752, Height: 1536},
+			{Tier: "4k", Ratio: "16:9", Size: "3840x2160", Width: 3840, Height: 2160},
+		},
+	}
+	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGeminiImage, profile, []model.ChannelModelPriceTier{
+		newSelectionPriceTier("tier-1k", `{"quality":"1k"}`, "provider-1k", "fixed_request"),
+		newSelectionPriceTier("tier-2k", `{"quality":"2k"}`, "provider-2k", "fixed_request"),
+		newSelectionPriceTier("tier-4k", `{"quality":"4k"}`, "provider-4k", "fixed_request"),
+	})
+
+	for _, tc := range []struct {
+		name     string
+		quality  string
+		size     string
+		wantTier string
+	}{
+		{"1k specified", "1k", "16:9", "tier-1k"},
+		{"2k specified", "2k", "16:9", "tier-2k"},
+		{"4k specified", "4k", "16:9", "tier-4k"},
+		{"auto specified", "auto", "16:9", "tier-1k"},
+		{"empty specified", "", "16:9", "tier-1k"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := map[string]any{
+				"mode": "image",
+				"config": map[string]any{
+					"channelId": channel.ID,
+					"model":     channelModel.ModelKey,
+					"size":      tc.size,
+					"quality":   tc.quality,
+				},
+			}
+			resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+			if err != nil {
+				t.Fatalf("resolve error: %v", err)
+			}
+			cfg := resolved["config"].(map[string]any)
+			if cfg["priceTierId"] != tc.wantTier {
+				t.Fatalf("priceTierId = %#v, want %s", cfg["priceTierId"], tc.wantTier)
+			}
+		})
+	}
+}
