@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -92,6 +94,9 @@ func retryableVideoPollError(ctx context.Context, err error) (retry bool, notFou
 	}
 	var httpErr providerHTTPError
 	if errors.As(err, &httpErr) {
+		if isProviderTaskNotReadyError(httpErr) {
+			return true, true
+		}
 		if httpErr.StatusCode == http.StatusNotFound {
 			return true, true
 		}
@@ -107,6 +112,24 @@ func retryableVideoPollError(ctx context.Context, err error) (retry bool, notFou
 		return networkError.Timeout() || networkError.Temporary(), false
 	}
 	return false, false
+}
+
+func isProviderTaskNotReadyError(httpErr providerHTTPError) bool {
+	if httpErr.StatusCode != http.StatusBadRequest && httpErr.StatusCode != http.StatusNotFound {
+		return false
+	}
+	var payload map[string]any
+	if json.Unmarshal([]byte(httpErr.Body), &payload) != nil {
+		return false
+	}
+	code, message := providerFailureDetails(payload)
+	for _, value := range []string{code, message} {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "task_not_exist", "task_not_found", "task not exist", "task not found":
+			return true
+		}
+	}
+	return false
 }
 
 func providerRetryAfter(err error) time.Duration {

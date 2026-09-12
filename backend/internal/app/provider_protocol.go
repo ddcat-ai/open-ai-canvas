@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 
 	"github.com/google/uuid"
@@ -40,34 +39,16 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 	return runProtocolAdapterTask(ctx, input, adapter)
 }
 
-type protocolPollTiming struct {
-	InitialDelay            time.Duration
-	PollInterval            time.Duration
-	TaskNotExistWindow      time.Duration
-	TaskNotExistMaxMisses   int
-	TaskNotExistRetryDelays []time.Duration
-}
-
-var defaultProtocolPollTiming = protocolPollTiming{
-	InitialDelay:            2 * time.Second,
-	PollInterval:            2500 * time.Millisecond,
-	TaskNotExistWindow:      15 * time.Second,
-	TaskNotExistMaxMisses:   5,
-	TaskNotExistRetryDelays: []time.Duration{2 * time.Second, 3 * time.Second, 5 * time.Second, 5 * time.Second},
-}
-
 func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter) (map[string]interface{}, error) {
-	return runProtocolAdapterTaskWithTiming(ctx, input, adapter, defaultProtocolPollTiming)
+	return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, defaultVideoPollPolicy())
 }
 
-func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, timing protocolPollTiming) (map[string]interface{}, error) {
+func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, policy videoPollPolicy) (map[string]interface{}, error) {
 	// create、poll、download 是同一个外部任务的三个阶段：任一阶段失败都向上返回真实错误，
 	// 不把“已提交但结果未知”伪装成成功，也不把下载失败降级成空结果。
 	request := protocolRequestFromInput(input)
 	taskID := resumedProviderRequestID(ctx)
 	var created protocol.CreateResult
-	createdProviderTask := false
-	syncWindowStartedAt := time.Now()
 	if taskID == "" {
 		// 幂等键只存在于宿主请求元数据中，声明式插件可以把它映射到 Header，
 		// 但不能把宿主控制字段泄漏到供应商 JSON body。恢复已有 taskID 时不会进入 create 分支。
@@ -101,66 +82,33 @@ func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGeneratio
 		if taskID == "" {
 			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
 		}
-		createdProviderTask = true
-		syncWindowStartedAt = time.Now()
-	}
-	if createdProviderTask && input.Config.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2) {
-		if err := sleepContext(ctx, timing.InitialDelay); err != nil {
-			return nil, err
-		}
 	}
 
-	taskNotExistMisses := 0
-	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+	return runVideoPollLoop(ctx, taskID, policy, func(ctx context.Context) (videoPollOutcome, error) {
 		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
 		if err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "poll"), input.Config, spec)
 		if err != nil {
-			if isNewAPIChannel2TaskNotReady(input.Config.InterfaceType, taskID, err) {
-				// NewAPI Channel 2 创建后存在短暂同步窗口。窗口内的 task_not_exist 只表示尚未可查；
-				// 超过窗口仍不可查时返回 pending error，让上层保留任务 ID，而不是误判成功或失败。
-				taskNotExistMisses++
-				maxMisses := timing.TaskNotExistMaxMisses
-				if maxMisses <= 0 {
-					maxMisses = len(timing.TaskNotExistRetryDelays) + 1
-				}
-				if time.Since(syncWindowStartedAt) >= timing.TaskNotExistWindow || taskNotExistMisses >= maxMisses {
-					return nil, providerStatePendingError{TaskID: taskID, Cause: err}
-				}
-				delayIndex := min(taskNotExistMisses-1, len(timing.TaskNotExistRetryDelays)-1)
-				if delayIndex >= 0 {
-					if sleepErr := sleepContext(ctx, timing.TaskNotExistRetryDelays[delayIndex]); sleepErr != nil {
-						return nil, sleepErr
-					}
-				}
-				continue
-			}
-			return nil, err
+			return videoPollOutcome{}, err
 		}
-		taskNotExistMisses = 0
 		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, body)
 		if err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		if state.TaskID != "" {
 			taskID = state.TaskID
 		}
 		switch state.Status {
 		case protocol.StatusSucceeded:
-			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result)
+			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result)
+			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
-			return nil, protocolResultError(state.Message, taskID)
+			return videoPollOutcome{}, protocolResultError(state.Message, taskID)
 		}
-		if err := sleepContext(ctx, timing.PollInterval); err != nil {
-			return nil, err
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return nil, fmt.Errorf("声明式协议任务超时（任务 %s）", taskID)
+		return videoPollOutcome{}, nil
+	})
 }
 
 func extractProviderTaskID(body []byte) (string, error) {
@@ -182,22 +130,6 @@ func extractProviderTaskID(body []byte) (string, error) {
 		}
 	}
 	return "", err
-}
-
-func isNewAPIChannel2TaskNotReady(interfaceType string, taskID string, err error) bool {
-	if strings.TrimSpace(interfaceType) != string(model.ChannelInterfaceNewAPIChannel2) || strings.TrimSpace(taskID) == "" {
-		return false
-	}
-	var httpErr providerHTTPError
-	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadRequest {
-		return false
-	}
-	var payload map[string]any
-	if json.Unmarshal([]byte(httpErr.Body), &payload) != nil {
-		return false
-	}
-	code, message := providerFailureDetails(payload)
-	return strings.EqualFold(strings.TrimSpace(code), "task_not_exist") || strings.EqualFold(strings.TrimSpace(message), "task_not_exist")
 }
 
 // queryProtocolAdapterVideoTask 只读取一次已有的声明式 Provider 任务。

@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"infinite-canvas/backend/internal/protocol"
 )
@@ -336,12 +335,63 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-declarative-video-runtime", AllowLocalChannel: true}
 	ctx := withProviderOutboundPolicy(context.Background(), config)
 	ctx = withProtocolRegistry(ctx, center.registrySnapshot())
-	result, err := runDeclarativeProtocolTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config})
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok {
+		t.Fatal("declarative adapter is unavailable")
+	}
+	result, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result["mode"] != "video" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T) {
+	adapter, err := protocol.LoadManifest([]byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-declarative-video-retry","version":"1.0.0","name":"Test Declarative Video Retry","author":"Test","documentation":"# Test",
+		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	createCalls := 0
+	pollCalls := 0
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			createCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"pending"}`))
+		case "/v1/tasks/provider-task-1":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if pollCalls == 1 {
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = w.Write([]byte(`{"message":"temporary gateway failure"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"provider-task-1","status":"succeeded","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "test-declarative-video-retry", AllowLocalChannel: true}
+	ctx := withProviderOutboundPolicy(context.Background(), config)
+	result, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["mode"] != "video" || createCalls != 1 || pollCalls != 2 {
+		t.Fatalf("result = %#v, create calls = %d, poll calls = %d", result, createCalls, pollCalls)
 	}
 }
 
@@ -393,8 +443,12 @@ func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T
 	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-idempotency-key-runtime", AllowLocalChannel: true}
 	ctx := withProviderOutboundPolicy(context.Background(), config)
 	ctx = withProtocolRegistry(ctx, center.registrySnapshot())
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok {
+		t.Fatal("declarative adapter is unavailable")
+	}
 	for i := 0; i < 2; i++ {
-		result, err := runDeclarativeProtocolTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config})
+		result, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -438,12 +492,7 @@ func TestDeclarativeNewAPIChannel2TaskNotExistRetry(t *testing.T) {
 
 	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "newapi-channel-2", AllowLocalChannel: true}
 	ctx := withProviderOutboundPolicy(context.Background(), config)
-	result, err := runProtocolAdapterTaskWithTiming(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, protocolPollTiming{
-		InitialDelay:            time.Millisecond,
-		PollInterval:            time.Millisecond,
-		TaskNotExistWindow:      time.Second,
-		TaskNotExistRetryDelays: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond},
-	})
+	result, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,43 +524,34 @@ func TestDeclarativeNewAPIChannel2TaskNotExistExhaustion(t *testing.T) {
 
 	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "video-model", InterfaceType: "newapi-channel-2", AllowLocalChannel: true}
 	ctx := withProviderOutboundPolicy(context.Background(), config)
-	_, err := runProtocolAdapterTaskWithTiming(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, protocolPollTiming{
-		InitialDelay:            time.Millisecond,
-		PollInterval:            time.Millisecond,
-		TaskNotExistWindow:      time.Second,
-		TaskNotExistRetryDelays: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond},
-	})
-	var pendingErr providerStatePendingError
+	_, err := runProtocolAdapterTaskWithPolicy(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, fastVideoPollPolicy())
 	var httpErr providerHTTPError
-	if !errors.As(err, &pendingErr) || pendingErr.TaskID != "provider-task-1" || !errors.As(err, &httpErr) {
-		t.Fatalf("error = %#v, want typed provider pending error wrapping HTTP error", err)
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("error = %#v, want provider HTTP error", err)
 	}
-	if createCalls != 1 || pollCalls != 5 {
-		t.Fatalf("create calls = %d, poll calls = %d, want 1 and 5", createCalls, pollCalls)
+	if createCalls != 1 || pollCalls != 3 {
+		t.Fatalf("create calls = %d, poll calls = %d, want 1 and 3", createCalls, pollCalls)
 	}
 }
 
-func TestDeclarativeNewAPIChannel2TaskNotExistStrictClassification(t *testing.T) {
+func TestProviderTaskNotReadyStrictClassification(t *testing.T) {
 	tests := []struct {
-		name          string
-		interfaceType string
-		taskID        string
-		err           error
-		want          bool
+		name string
+		err  providerHTTPError
+		want bool
 	}{
-		{name: "error code", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}, want: true},
-		{name: "error message", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"message":"task_not_exist"}`}, want: true},
-		{name: "other interface", interfaceType: "newapi-channel-1", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}},
-		{name: "missing task id", interfaceType: "newapi-channel-2", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}},
-		{name: "other status", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 404, Body: `{"code":"task_not_exist"}`}},
-		{name: "unstructured body", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: "task_not_exist"}},
-		{name: "partial match", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist_later"}`}},
-		{name: "other provider error", interfaceType: "newapi-channel-2", taskID: "task-1", err: providerHTTPError{StatusCode: 400, Body: `{"code":"invalid_parameter"}`}},
+		{name: "error code", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}, want: true},
+		{name: "error message", err: providerHTTPError{StatusCode: 400, Body: `{"message":"task_not_exist"}`}, want: true},
+		{name: "not found spelling", err: providerHTTPError{StatusCode: 404, Body: `{"code":"task_not_found"}`}, want: true},
+		{name: "other status", err: providerHTTPError{StatusCode: 502, Body: `{"code":"task_not_exist"}`}},
+		{name: "unstructured body", err: providerHTTPError{StatusCode: 400, Body: "task_not_exist"}},
+		{name: "partial match", err: providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist_later"}`}},
+		{name: "other provider error", err: providerHTTPError{StatusCode: 400, Body: `{"code":"invalid_parameter"}`}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := isNewAPIChannel2TaskNotReady(test.interfaceType, test.taskID, test.err); got != test.want {
-				t.Fatalf("isNewAPIChannel2TaskNotReady() = %v, want %v", got, test.want)
+			if got := isProviderTaskNotReadyError(test.err); got != test.want {
+				t.Fatalf("isProviderTaskNotReadyError() = %v, want %v", got, test.want)
 			}
 		})
 	}
