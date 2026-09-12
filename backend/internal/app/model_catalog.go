@@ -22,9 +22,9 @@ const (
 // ModelCatalogResponse 是创作端模型选择的统一读模型。
 // Source=frontend 时读取 Models；Source=system 时读取 Channels。
 type ModelCatalogResponse struct {
-	Source   ModelCatalogSource     `json:"source"`
-	Models   []PublicLogicalModel   `json:"models,omitempty"`
-	Channels []PublicChannelCatalog `json:"channels,omitempty"`
+	Source   ModelCatalogSource      `json:"source"`
+	Models   *[]PublicLogicalModel   `json:"models,omitempty"`
+	Channels *[]PublicChannelCatalog `json:"channels,omitempty"`
 }
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
@@ -81,7 +81,7 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 		}
 		return &ModelCatalogResponse{
 			Source: ModelCatalogSourceFrontend,
-			Models: models,
+			Models: &models,
 		}, nil
 	}
 
@@ -91,7 +91,7 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 	}
 	return &ModelCatalogResponse{
 		Source:   ModelCatalogSourceSystem,
-		Channels: channels,
+		Channels: &channels,
 	}, nil
 }
 
