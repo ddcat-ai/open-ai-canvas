@@ -127,3 +127,7 @@ func fastVideoPollPolicy() videoPollPolicy {
 	policy.Sleep = func(context.Context, time.Duration) error { return nil }
 	return policy
 }
+
+func runVideoTaskForTest(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	return runVideoTaskWithPolicy(ctx, input, fastVideoPollPolicy())
+}
