@@ -188,10 +188,10 @@ func doJSON(req *http.Request, target interface{}) error {
 		return err
 	}
 	if !strings.Contains(mimeType, "json") && !json.Valid(data) {
-		return fmt.Errorf("接口返回非 JSON 内容：%s", mimeType)
+		return providerResponseDecodeError{Err: fmt.Errorf("接口返回非 JSON 内容：%s", mimeType)}
 	}
 	if err := json.Unmarshal(data, target); err != nil {
-		return err
+		return providerResponseDecodeError{Err: err}
 	}
 	if payload, ok := target.(*imageResponse); ok {
 		if payload.Error != nil && payload.Error.Message != "" {
@@ -269,7 +269,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
 		}
 		if open {
-			return nil, "", errors.New("当前渠道连续失败，已暂时熔断，请稍后重试")
+			return nil, "", providerCircuitOpenError{}
 		}
 		slotID := channelID
 		if slotID == "" {

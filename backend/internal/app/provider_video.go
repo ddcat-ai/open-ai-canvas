@@ -10,7 +10,6 @@ import (
 	"mime/multipart"
 	"strconv"
 	"strings"
-	"time"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -52,6 +51,10 @@ func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) 
 }
 
 func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	return runVideoTaskWithPolicy(ctx, input, defaultVideoPollPolicy())
+}
+
+func runVideoTaskWithPolicy(ctx context.Context, input canvasGenerationInput, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	// 路由顺序是协议边界，不是“哪个请求先试”：官方声明式接口必须由已注册适配器执行，
 	// 缺少适配器时直接失败，不能偷偷退回遗留手写协议；只有未声明为官方插件的旧渠道才继续走兼容分支。
 	if strings.TrimSpace(input.Mode) == "" {
@@ -60,17 +63,17 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	// 已有官方声明式插件的 InterfaceType 只走适配器。未注入 registry 时补官方包，
 	// 显式空 registry 则报“插件未安装”，不再回退到手写协议。
 	ctx = ensureOfficialProtocolAdapter(ctx, input.Config.InterfaceType)
-	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
-		return runDeclarativeProtocolTask(ctx, input)
+	if adapter, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, pollPolicy)
 	}
 	if label, official := officialDeclarativeVideoInterface(input.Config.InterfaceType); official {
 		return nil, fmt.Errorf("%s 视频插件未安装", label)
 	}
 	if isArkPlanVideoConfig(input.Config) {
-		return runSeedanceAgentPlanVideoTask(ctx, input)
+		return runSeedanceAgentPlanVideoTask(ctx, input, pollPolicy)
 	}
 	if isSeedanceVideoConfig(input.Config) {
-		return runSeedanceVideosTask(ctx, input)
+		return runSeedanceVideosTask(ctx, input, pollPolicy)
 	}
 	if len(input.ReferenceVideos) > 0 || len(input.ReferenceAudios) > 0 {
 		return nil, errors.New("OpenAI 风格视频接口不支持参考视频或参考音频，请切换到 Seedance / Agent Plan 渠道")
@@ -131,10 +134,10 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	if id == "" {
 		return nil, errors.New("视频接口没有返回任务 ID")
 	}
-	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+	return runVideoPollLoop(ctx, id, pollPolicy, func(ctx context.Context) (videoPollOutcome, error) {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/videos/"+id, &state); err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		if data, ok := state["data"].(map[string]interface{}); ok {
 			state = data
@@ -142,27 +145,28 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		status := strings.ToLower(stringField(state, "status"))
 		if status == "completed" || status == "succeeded" || status == "success" || status == "done" {
 			if videoURL := newAPIVideoResultURL(state); videoURL != "" {
-				data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+				data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+					return getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+				})
 				if err != nil {
-					return nil, fmt.Errorf("视频结果下载失败（任务 %s）：%w", id, err)
+					return videoPollOutcome{}, fmt.Errorf("视频结果下载失败（任务 %s）：%w", id, err)
 				}
 				mimeType = normalizedMediaMimeType(mimeType, data)
-				return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+				return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 			}
-			data, mimeType, err := getBinary(ctx, input.Config, "/videos/"+id+"/content")
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getBinary(withProviderRequestKind(ctx, "download"), input.Config, "/videos/"+id+"/content")
+			})
 			if err != nil {
-				return nil, err
+				return videoPollOutcome{}, err
 			}
-			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+			return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 		}
 		if status == "failed" || status == "cancelled" {
-			return nil, errors.New("视频生成失败")
+			return videoPollOutcome{}, errors.New("视频生成失败")
 		}
-		if err := sleepContext(ctx, 2500*time.Millisecond); err != nil {
-			return nil, err
-		}
-	}
-	return nil, errors.New("视频生成超时")
+		return videoPollOutcome{}, nil
+	})
 }
 
 func newAPIVideoResultURL(state map[string]interface{}) string {
@@ -221,7 +225,7 @@ func grokVideoBody(input canvasGenerationInput) (map[string]interface{}, error) 
 	return body, nil
 }
 
-func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	// 恢复任务已有 provider ID 时只能继续查询，绝不能重新 create，否则会产生第二个计费任务。
 	// create 成功后的 poll/download 任一失败都保留失败或结果未知语义，不降级成“成功但无内容”。
 	id := resumedProviderRequestID(ctx)
@@ -246,10 +250,10 @@ func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput) (ma
 	if id == "" {
 		return nil, errors.New("Seedance 接口没有返回任务 ID")
 	}
-	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+	return runVideoPollLoop(ctx, id, pollPolicy, func(ctx context.Context) (videoPollOutcome, error) {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/videos/"+id, &state); err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		if data, ok := state["data"].(map[string]interface{}); ok {
 			state = data
@@ -258,29 +262,30 @@ func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput) (ma
 		if status == "completed" || status == "succeeded" {
 			videoURL := stringField(state, "video_url")
 			if videoURL != "" {
-				data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+				data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+					return getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+				})
 				if err != nil {
-					return nil, fmt.Errorf("视频结果下载失败：%w", err)
+					return videoPollOutcome{}, fmt.Errorf("视频结果下载失败：%w", err)
 				}
-				return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+				return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 			}
-			data, mimeType, err := getBinary(ctx, input.Config, "/videos/"+id+"/content")
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getBinary(withProviderRequestKind(ctx, "download"), input.Config, "/videos/"+id+"/content")
+			})
 			if err != nil {
-				return nil, fmt.Errorf("Seedance 任务成功但未返回视频 URL，备用内容下载失败：%w", err)
+				return videoPollOutcome{}, fmt.Errorf("Seedance 任务成功但未返回视频 URL，备用内容下载失败：%w", err)
 			}
-			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+			return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 		}
 		if status == "failed" || status == "cancelled" || status == "expired" {
-			return nil, errors.New(defaultString(seedanceErrorMessage(state), "Seedance 视频生成失败"))
+			return videoPollOutcome{}, errors.New(defaultString(seedanceErrorMessage(state), "Seedance 视频生成失败"))
 		}
-		if err := sleepContext(ctx, 5*time.Second); err != nil {
-			return nil, err
-		}
-	}
-	return nil, errors.New("Seedance 视频生成超时")
+		return videoPollOutcome{}, nil
+	})
 }
 
-func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationInput, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	providerName := "Seedance"
 	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) {
 		providerName = "火山方舟"
@@ -331,10 +336,10 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 	if id == "" {
 		return nil, fmt.Errorf("%s接口没有返回任务 ID", providerName)
 	}
-	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+	return runVideoPollLoop(ctx, id, pollPolicy, func(ctx context.Context) (videoPollOutcome, error) {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/contents/generations/tasks/"+id, &state); err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		if data, ok := state["data"].(map[string]interface{}); ok {
 			state = data
@@ -344,22 +349,21 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 			content, _ := state["content"].(map[string]interface{})
 			videoURL := stringField(content, "video_url")
 			if videoURL == "" {
-				return nil, fmt.Errorf("%s任务成功但没有返回视频 URL", providerName)
+				return videoPollOutcome{}, fmt.Errorf("%s任务成功但没有返回视频 URL", providerName)
 			}
-			data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+			data, mimeType, err := runVideoDownload(ctx, id, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+			})
 			if err != nil {
-				return nil, fmt.Errorf("视频结果下载失败：%w", err)
+				return videoPollOutcome{}, fmt.Errorf("视频结果下载失败：%w", err)
 			}
-			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+			return videoPollOutcome{Done: true, Result: map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}}, nil
 		}
 		if status == "failed" || status == "cancelled" || status == "expired" {
-			return nil, fmt.Errorf("%s视频生成失败", providerName)
+			return videoPollOutcome{}, fmt.Errorf("%s视频生成失败", providerName)
 		}
-		if err := sleepContext(ctx, 5*time.Second); err != nil {
-			return nil, err
-		}
-	}
-	return nil, fmt.Errorf("%s视频生成超时", providerName)
+		return videoPollOutcome{}, nil
+	})
 }
 
 func seedanceContent(input canvasGenerationInput) ([]map[string]interface{}, error) {

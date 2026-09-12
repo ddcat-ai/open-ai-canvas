@@ -451,7 +451,7 @@ func (s *Service) runRunningHubWorkflow(ctx context.Context, input canvasGenerat
 	root := runningHubRootURL(input.Config.BaseURL)
 	apiKey := runningHubAPIKey(input.Config)
 	if resumed := resumedProviderRequestID(ctx); resumed != "" {
-		return s.pollRunningHubWorkflow(ctx, input.Config, root, resumed)
+		return s.pollRunningHubWorkflow(ctx, input.Config, root, resumed, input.Mode)
 	}
 	workflowID := strings.TrimSpace(input.Config.WorkflowID)
 	webappID := strings.TrimSpace(input.Config.WebappID)
@@ -535,7 +535,7 @@ func (s *Service) runRunningHubWorkflow(ctx context.Context, input canvasGenerat
 		metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
 		_ = s.log(metadata.UserID, metadata.TaskID, "error", "RunningHub 请求状态保存失败", taskID+"："+err.Error())
 	}
-	return s.pollRunningHubWorkflow(ctx, input.Config, root, taskID)
+	return s.pollRunningHubWorkflow(ctx, input.Config, root, taskID, input.Mode)
 }
 
 func runningHubWorkflowFailureMessage(response map[string]any) string {
@@ -1717,7 +1717,59 @@ func (s *Service) runningHubJSON(ctx context.Context, config providerConfig, end
 	return nil
 }
 
-func (s *Service) pollRunningHubWorkflow(ctx context.Context, config providerConfig, root string, taskID string) (map[string]interface{}, error) {
+func (s *Service) pollRunningHubWorkflow(ctx context.Context, config providerConfig, root string, taskID string, mode string) (map[string]interface{}, error) {
+	if mode == "video" {
+		return s.pollRunningHubVideoWorkflowWithPolicy(ctx, config, root, taskID, defaultVideoPollPolicy())
+	}
+	return s.pollRunningHubWorkflowLegacy(ctx, config, root, taskID)
+}
+
+func (s *Service) pollRunningHubVideoWorkflowWithPolicy(ctx context.Context, config providerConfig, root string, taskID string, policy videoPollPolicy) (map[string]interface{}, error) {
+	return runVideoPollLoop(ctx, taskID, policy, func(ctx context.Context) (videoPollOutcome, error) {
+		var response map[string]any
+		err := s.runningHubJSON(withProviderRequestKind(ctx, "poll"), config, root+"/task/openapi/outputs", map[string]any{"apiKey": runningHubAPIKey(config), "taskId": taskID}, &response)
+		if err != nil {
+			return videoPollOutcome{}, fmt.Errorf("RunningHub 查询任务失败：%w", err)
+		}
+		code, validCode := runningHubPayloadCode(response)
+		if !validCode {
+			validCode = len(runningHubOutputURLs(response["data"])) > 0
+			code = 0
+		}
+		if !validCode {
+			return videoPollOutcome{}, errors.New("RunningHub 查询响应缺少可识别状态")
+		}
+		if code == 0 {
+			urls := runningHubOutputURLs(response["data"])
+			if len(urls) == 0 {
+				return videoPollOutcome{}, errors.New("RunningHub 任务成功但没有返回产物")
+			}
+			for index, rawURL := range urls {
+				urls[index] = resolveRunningHubOutputURL(root, rawURL)
+			}
+			result, err := s.downloadWorkflowVideoOutputs(ctx, urls, taskID, policy)
+			if err != nil {
+				return videoPollOutcome{}, err
+			}
+			_ = s.updateWorkflowProviderState(ctx, taskID, "succeeded", nil)
+			return videoPollOutcome{Done: true, Result: result}, nil
+		}
+		if code == 805 || code == 806 {
+			return videoPollOutcome{}, fmt.Errorf("RunningHub 任务失败：%s", runningHubFailureMessage(response))
+		}
+		stage := "running"
+		if code == 813 {
+			stage = "queued"
+		} else if code != 804 {
+			stage = "pending"
+		}
+		next := time.Now().Add(policy.Interval)
+		_ = s.updateWorkflowProviderState(ctx, taskID, stage, &next)
+		return videoPollOutcome{}, nil
+	})
+}
+
+func (s *Service) pollRunningHubWorkflowLegacy(ctx context.Context, config providerConfig, root string, taskID string) (map[string]interface{}, error) {
 	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		var response map[string]any
 		err := s.runningHubJSON(withProviderRequestKind(ctx, "poll"), config, root+"/task/openapi/outputs", map[string]any{"apiKey": runningHubAPIKey(config), "taskId": taskID}, &response)
@@ -1768,6 +1820,14 @@ func runningHubAPIKey(config providerConfig) string {
 }
 
 func (s *Service) downloadWorkflowOutputs(ctx context.Context, urls []string) (map[string]interface{}, error) {
+	return s.downloadWorkflowOutputsWithPolicy(ctx, urls, "", nil)
+}
+
+func (s *Service) downloadWorkflowVideoOutputs(ctx context.Context, urls []string, taskID string, policy videoPollPolicy) (map[string]interface{}, error) {
+	return s.downloadWorkflowOutputsWithPolicy(ctx, urls, taskID, &policy)
+}
+
+func (s *Service) downloadWorkflowOutputsWithPolicy(ctx context.Context, urls []string, taskID string, policy *videoPollPolicy) (map[string]interface{}, error) {
 	images := make([]map[string]interface{}, 0)
 	var video, audio map[string]interface{}
 	for _, rawURL := range urls {
@@ -1793,7 +1853,16 @@ func (s *Service) downloadWorkflowOutputs(ctx context.Context, urls []string) (m
 		if !isPublicMediaURL(rawURL) {
 			continue
 		}
-		data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), rawURL)
+		var data []byte
+		var mimeType string
+		var err error
+		if policy == nil {
+			data, mimeType, err = getExternalBinary(withProviderRequestKind(ctx, "download"), rawURL)
+		} else {
+			data, mimeType, err = runVideoDownload(ctx, taskID, *policy, func(ctx context.Context) ([]byte, string, error) {
+				return getExternalBinary(withProviderRequestKind(ctx, "download"), rawURL)
+			})
+		}
 		if err != nil {
 			return nil, fmt.Errorf("下载 RunningHub 产物失败：%w", err)
 		}

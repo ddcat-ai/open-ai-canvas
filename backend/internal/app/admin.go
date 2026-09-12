@@ -664,10 +664,18 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 		var nextPollAt *time.Time
 		if stage == "create" && log.Status == model.ApiCallStatusSucceeded && log.ProviderRequestID != "" {
 			stage = "accepted"
-			next := time.Now().Add(2 * time.Second)
+			delay := 2 * time.Second
+			if log.Capability == "video" {
+				delay = defaultVideoPollInterval
+			}
+			next := time.Now().Add(delay)
 			nextPollAt = &next
 		} else if stage == "poll" {
-			next := time.Now().Add(5 * time.Second)
+			delay := 5 * time.Second
+			if log.Capability == "video" {
+				delay = defaultVideoPollInterval
+			}
+			next := time.Now().Add(delay)
 			nextPollAt = &next
 		}
 		if err := s.repo.UpdateTaskProviderState(log.TaskID, log.ProviderRequestID, stage, nextPollAt); err != nil {

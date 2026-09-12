@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 
 	"github.com/google/uuid"
@@ -40,34 +39,28 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 	return runProtocolAdapterTask(ctx, input, adapter)
 }
 
-type protocolPollTiming struct {
-	InitialDelay            time.Duration
-	PollInterval            time.Duration
-	TaskNotExistWindow      time.Duration
-	TaskNotExistMaxMisses   int
-	TaskNotExistRetryDelays []time.Duration
-}
-
-var defaultProtocolPollTiming = protocolPollTiming{
-	InitialDelay:            2 * time.Second,
-	PollInterval:            2500 * time.Millisecond,
-	TaskNotExistWindow:      15 * time.Second,
-	TaskNotExistMaxMisses:   5,
-	TaskNotExistRetryDelays: []time.Duration{2 * time.Second, 3 * time.Second, 5 * time.Second, 5 * time.Second},
-}
-
 func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter) (map[string]interface{}, error) {
-	return runProtocolAdapterTaskWithTiming(ctx, input, adapter, defaultProtocolPollTiming)
+	return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, declarativeProtocolPollPolicy(input.Mode))
 }
 
-func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, timing protocolPollTiming) (map[string]interface{}, error) {
+func declarativeProtocolPollPolicy(mode string) videoPollPolicy {
+	if mode == "video" {
+		return defaultVideoPollPolicy()
+	}
+	return videoPollPolicy{
+		Interval:          2500 * time.Millisecond,
+		MaxNotFoundMisses: 1,
+		MaxDownloadTries:  3,
+		Sleep:             sleepContext,
+	}
+}
+
+func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, policy videoPollPolicy) (map[string]interface{}, error) {
 	// create、poll、download 是同一个外部任务的三个阶段：任一阶段失败都向上返回真实错误，
 	// 不把“已提交但结果未知”伪装成成功，也不把下载失败降级成空结果。
 	request := protocolRequestFromInput(input)
 	taskID := resumedProviderRequestID(ctx)
 	var created protocol.CreateResult
-	createdProviderTask := false
-	syncWindowStartedAt := time.Now()
 	if taskID == "" {
 		// 幂等键只存在于宿主请求元数据中，声明式插件可以把它映射到 Header，
 		// 但不能把宿主控制字段泄漏到供应商 JSON body。恢复已有 taskID 时不会进入 create 分支。
@@ -96,71 +89,38 @@ func runProtocolAdapterTaskWithTiming(ctx context.Context, input canvasGeneratio
 			return nil, protocolResultError(created.Message, taskID)
 		}
 		if created.Status == protocol.StatusSucceeded {
-			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result)
+			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
 		}
 		if taskID == "" {
 			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
 		}
-		createdProviderTask = true
-		syncWindowStartedAt = time.Now()
-	}
-	if createdProviderTask && input.Config.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2) {
-		if err := sleepContext(ctx, timing.InitialDelay); err != nil {
-			return nil, err
-		}
 	}
 
-	taskNotExistMisses := 0
-	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+	return runVideoPollLoop(ctx, taskID, policy, func(ctx context.Context) (videoPollOutcome, error) {
 		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
 		if err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "poll"), input.Config, spec)
 		if err != nil {
-			if isNewAPIChannel2TaskNotReady(input.Config.InterfaceType, taskID, err) {
-				// NewAPI Channel 2 创建后存在短暂同步窗口。窗口内的 task_not_exist 只表示尚未可查；
-				// 超过窗口仍不可查时返回 pending error，让上层保留任务 ID，而不是误判成功或失败。
-				taskNotExistMisses++
-				maxMisses := timing.TaskNotExistMaxMisses
-				if maxMisses <= 0 {
-					maxMisses = len(timing.TaskNotExistRetryDelays) + 1
-				}
-				if time.Since(syncWindowStartedAt) >= timing.TaskNotExistWindow || taskNotExistMisses >= maxMisses {
-					return nil, providerStatePendingError{TaskID: taskID, Cause: err}
-				}
-				delayIndex := min(taskNotExistMisses-1, len(timing.TaskNotExistRetryDelays)-1)
-				if delayIndex >= 0 {
-					if sleepErr := sleepContext(ctx, timing.TaskNotExistRetryDelays[delayIndex]); sleepErr != nil {
-						return nil, sleepErr
-					}
-				}
-				continue
-			}
-			return nil, err
+			return videoPollOutcome{}, err
 		}
-		taskNotExistMisses = 0
 		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, body)
 		if err != nil {
-			return nil, err
+			return videoPollOutcome{}, err
 		}
 		if state.TaskID != "" {
 			taskID = state.TaskID
 		}
 		switch state.Status {
 		case protocol.StatusSucceeded:
-			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result)
+			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, policy)
+			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
-			return nil, protocolResultError(state.Message, taskID)
+			return videoPollOutcome{}, protocolResultError(state.Message, taskID)
 		}
-		if err := sleepContext(ctx, timing.PollInterval); err != nil {
-			return nil, err
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return nil, fmt.Errorf("声明式协议任务超时（任务 %s）", taskID)
+		return videoPollOutcome{}, nil
+	})
 }
 
 func extractProviderTaskID(body []byte) (string, error) {
@@ -184,22 +144,6 @@ func extractProviderTaskID(body []byte) (string, error) {
 	return "", err
 }
 
-func isNewAPIChannel2TaskNotReady(interfaceType string, taskID string, err error) bool {
-	if strings.TrimSpace(interfaceType) != string(model.ChannelInterfaceNewAPIChannel2) || strings.TrimSpace(taskID) == "" {
-		return false
-	}
-	var httpErr providerHTTPError
-	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadRequest {
-		return false
-	}
-	var payload map[string]any
-	if json.Unmarshal([]byte(httpErr.Body), &payload) != nil {
-		return false
-	}
-	code, message := providerFailureDetails(payload)
-	return strings.EqualFold(strings.TrimSpace(code), "task_not_exist") || strings.EqualFold(strings.TrimSpace(message), "task_not_exist")
-}
-
 // queryProtocolAdapterVideoTask 只读取一次已有的声明式 Provider 任务。
 // 人工恢复走此路径，因此检查本地失败任务时绝不会创建第二个计费任务。
 func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, taskID string) (map[string]interface{}, string, error) {
@@ -220,7 +164,7 @@ func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationIn
 	providerStatus := string(state.Status)
 	switch state.Status {
 	case protocol.StatusSucceeded:
-		result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result)
+		result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, defaultVideoPollPolicy())
 		return result, providerStatus, err
 	case protocol.StatusFailed, protocol.StatusCancelled:
 		return nil, providerStatus, protocolResultError(state.Message, taskID)
@@ -799,7 +743,7 @@ func appendProtocolQuery(rawURL string, values map[string][]string) (string, err
 	return parsed.String(), nil
 }
 
-func finishProtocolResult(ctx context.Context, config providerConfig, mode string, result *protocol.Result) (map[string]interface{}, error) {
+func finishProtocolResult(ctx context.Context, config providerConfig, mode string, taskID string, result *protocol.Result, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	if result == nil {
 		return nil, errors.New("声明式协议已完成但没有返回结果")
 	}
@@ -826,7 +770,16 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 	}
 	items := make([]interface{}, 0, len(references))
 	for _, reference := range references {
-		data, mimeType, err := protocolMediaBytes(ctx, config, reference)
+		var data []byte
+		var mimeType string
+		var err error
+		if mode == "video" {
+			data, mimeType, err = runVideoDownload(ctx, taskID, pollPolicy, func(ctx context.Context) ([]byte, string, error) {
+				return protocolMediaBytesOnce(ctx, config, reference)
+			})
+		} else {
+			data, mimeType, err = protocolMediaBytes(ctx, config, reference)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -846,20 +799,29 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 // finishProtocolAdapterResult 优先消费 create/poll 已返回的内联或 URL 结果，只有插件明确声明独立结果端点时才下载。
 // 空响应或下载失败必须向上失败，不能生成伪素材；application/octet-stream 仅表示传输层未知类型，
 // 不会把未知内容伪装成具体图片、视频或音频 MIME。
-func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string, result *protocol.Result) (map[string]interface{}, error) {
+func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string, result *protocol.Result, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	if protocolResultHasOutput(input.Mode, result) {
-		return finishProtocolResult(ctx, input.Config, input.Mode, result)
+		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy)
 	}
 	resultAdapter, ok := adapter.(protocol.ResultAdapter)
 	capability, hasCapability := adapter.(protocol.ResultCapability)
 	if !ok || !hasCapability || !capability.ResultAvailable() {
-		return finishProtocolResult(ctx, input.Config, input.Mode, result)
+		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy)
 	}
 	spec, err := resultAdapter.BuildResult(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
 	if err != nil {
 		return nil, err
 	}
-	data, mimeType, err := executeProtocolBinaryRequest(withProviderRequestKind(ctx, "download"), input.Config, spec)
+	download := func(ctx context.Context) ([]byte, string, error) {
+		return executeProtocolBinaryRequest(withProviderRequestKind(ctx, "download"), input.Config, spec)
+	}
+	var data []byte
+	var mimeType string
+	if input.Mode == "video" {
+		data, mimeType, err = runVideoDownload(ctx, taskID, pollPolicy, download)
+	} else {
+		data, mimeType, err = download(ctx)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("声明式协议结果下载失败：%w", err)
 	}
@@ -882,7 +844,7 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	default:
 		return nil, fmt.Errorf("声明式协议结果下载不支持生成模式 %s", input.Mode)
 	}
-	return finishProtocolResult(ctx, input.Config, input.Mode, downloaded)
+	return finishProtocolResult(ctx, input.Config, input.Mode, taskID, downloaded, pollPolicy)
 }
 
 func protocolResultHasOutput(mode string, result *protocol.Result) bool {
@@ -904,21 +866,13 @@ func protocolResultHasOutput(mode string, result *protocol.Result) bool {
 }
 
 func protocolMediaBytes(ctx context.Context, config providerConfig, reference protocol.MediaReference) ([]byte, string, error) {
-	if strings.TrimSpace(reference.DataURL) != "" {
-		mimeType, data, err := decodeProviderDataURL(reference.DataURL)
-		return data, mimeType, err
-	}
-	value := strings.TrimSpace(reference.URL)
-	if value == "" {
-		return nil, "", errors.New("声明式协议媒体结果地址为空")
-	}
 	var data []byte
 	var mimeType string
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		data, mimeType, err = getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+		data, mimeType, err = protocolMediaBytesOnce(ctx, config, reference)
 		if err == nil {
-			return data, normalizedMediaMimeType(mimeType, data), nil
+			return data, mimeType, nil
 		}
 		if attempt == 2 || !retryableProtocolMediaDownload(err) {
 			break
@@ -928,6 +882,19 @@ func protocolMediaBytes(ctx context.Context, config providerConfig, reference pr
 		}
 	}
 	return nil, "", fmt.Errorf("声明式协议媒体结果下载失败：%w", err)
+}
+
+func protocolMediaBytesOnce(ctx context.Context, config providerConfig, reference protocol.MediaReference) ([]byte, string, error) {
+	if strings.TrimSpace(reference.DataURL) != "" {
+		mimeType, data, err := decodeProviderDataURL(reference.DataURL)
+		return data, mimeType, err
+	}
+	value := strings.TrimSpace(reference.URL)
+	if value == "" {
+		return nil, "", errors.New("声明式协议媒体结果地址为空")
+	}
+	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+	return data, normalizedMediaMimeType(mimeType, data), err
 }
 
 func retryableProtocolMediaDownload(err error) bool {

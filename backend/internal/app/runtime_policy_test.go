@@ -26,6 +26,25 @@ func TestVideoTaskTimeoutHasFiveMinuteSafetyFloor(t *testing.T) {
 	}
 }
 
+func TestDefaultVideoTaskTimeoutIsOneHour(t *testing.T) {
+	policy := defaultRuntimePolicy().Task
+	if policy.VideoTimeoutMinutes != 60 {
+		t.Fatalf("default video timeout = %d minutes, want 60", policy.VideoTimeoutMinutes)
+	}
+	if got := taskExecutionTimeoutWithPolicy("canvas_video", policy); got != time.Hour {
+		t.Fatalf("video execution timeout = %s, want 1h", got)
+	}
+}
+
+func TestProviderPollingDeadlineDefaultsToOneHour(t *testing.T) {
+	startedAt := time.Now()
+	deadline := providerPollingDeadline(context.Background())
+	remaining := deadline.Sub(startedAt)
+	if remaining < time.Hour || remaining > time.Hour+time.Second {
+		t.Fatalf("provider polling deadline = %s, want approximately 1h", remaining)
+	}
+}
+
 func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	svc := &Service{}
 	input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)}})
