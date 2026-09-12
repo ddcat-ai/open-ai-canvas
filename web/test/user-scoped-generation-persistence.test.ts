@@ -14,7 +14,19 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, type Asset,
 import { withGenerationAssetStorageLock } from "../src/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceLock, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
-import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, initializeRemoteUserDataSession, loadCanvasProjectForEditing, loadAssetLibraryPage, installRemoteUserDataAutoSync, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "../src/services/user-data-sync";
+import {
+    deleteAssetWithRemoteSync,
+    deleteCanvasProjectsWithRemoteSync,
+    hasRemoteUserDataSyncSession,
+    initializeRemoteUserDataSession,
+    loadCanvasProjectForEditing,
+    loadAssetLibraryPage,
+    installRemoteUserDataAutoSync,
+    resetRemoteUserDataSync,
+    saveRemoteUserDataNow,
+    syncRemoteUserData,
+    withRemoteUserDataSyncExclusive,
+} from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
 import { useUserStore } from "../src/stores/use-user-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "../src/stores/canvas/use-canvas-history-store";
@@ -4654,6 +4666,68 @@ test("user session initializes without downloading the full remote snapshot", as
         expect(snapshotRequests).toBe(0);
     } finally {
         await applying?.catch(() => undefined);
+        resetRemoteUserDataSync();
+        useUserStore.setState(previousUserState);
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("authenticated session survives unavailable local cache and model catalog", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousUserState = useUserStore.getState();
+    const previousWarn = console.warn;
+    const localStorageValues = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: {
+                getItem: (key: string) => localStorageValues.get(key) ?? null,
+                setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                removeItem: (key: string) => localStorageValues.delete(key),
+            },
+        },
+    });
+    localforage.getItem = (async () => {
+        throw new Error("indexeddb unavailable");
+    }) as typeof localforage.getItem;
+    localforage.setItem = (async (_key: string, value: string) => value) as typeof localforage.setItem;
+    apiClient.defaults.adapter = async (config) => {
+        if (String(config.url || "") === "/model-catalog") throw new Error("model catalog unavailable");
+        throw new Error(`unexpected request: ${String(config.method || "get")} ${String(config.url || "")}`);
+    };
+    console.warn = () => undefined;
+
+    let applying: Promise<void> | undefined;
+    try {
+        resetRemoteUserDataSync();
+        useUserStore.setState({ user: null, hydrated: true });
+        applying = applyUserSession({
+            user: {
+                id: "account-recovery",
+                username: "recovery",
+                displayName: "Recovery",
+                role: "user",
+                status: "active",
+                createdAt: "2026-09-12T00:00:00.000Z",
+                updatedAt: "2026-09-12T00:00:00.000Z",
+            },
+        });
+        await applying;
+        expect(useUserStore.getState().user?.id).toBe("account-recovery");
+        expect(useUserStore.getState().hydrated).toBe(true);
+        expect(hasRemoteUserDataSyncSession()).toBe(true);
+    } finally {
+        await applying?.catch(() => undefined);
+        console.warn = previousWarn;
         resetRemoteUserDataSync();
         useUserStore.setState(previousUserState);
         localforage.getItem = originalGetItem;
