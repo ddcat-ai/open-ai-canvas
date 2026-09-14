@@ -54,7 +54,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
                 width: node.metadata?.naturalWidth || node.width,
                 height: node.metadata?.naturalHeight || node.height,
                 bytes: node.metadata?.bytes || getDataUrlByteSize(dataUrl),
-                mimeType: node.metadata?.mimeType || "image/png",
+                mimeType: concreteMimeType(node.metadata?.mimeType, "image/png", "image"),
             },
         };
     }
@@ -70,7 +70,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
                 durationMs: node.metadata?.durationMs,
                 hasAudio: node.metadata?.hasAudio,
                 bytes: node.metadata?.bytes || 0,
-                mimeType: node.metadata?.mimeType || "video/mp4",
+                mimeType: concreteMimeType(node.metadata?.mimeType, "video/mp4", "video"),
             },
         };
     }
@@ -83,11 +83,16 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
                 storageKey,
                 durationMs: node.metadata?.durationMs,
                 bytes: node.metadata?.bytes || 0,
-                mimeType: node.metadata?.mimeType || "audio/mpeg",
+                mimeType: concreteMimeType(node.metadata?.mimeType, "audio/mpeg", "audio"),
             },
         };
     }
     return null;
+}
+
+function concreteMimeType(value: unknown, fallback: string, kind: string) {
+    const mimeType = typeof value === "string" ? value.trim().toLowerCase() : "";
+    return !mimeType || mimeType === kind || !mimeType.includes("/") ? fallback : mimeType;
 }
 
 export function findCanvasNodeAsset(assets: Asset[], node: CanvasNodeData, canvasId: string, taskId?: string) {

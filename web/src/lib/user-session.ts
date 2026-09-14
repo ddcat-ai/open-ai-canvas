@@ -149,7 +149,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
             sortOrder: channel.sortOrder,
             // 系统渠道必须走带渠道 ID 的站内代理；/api 只是业务 API 根路径，
             // 不能作为模型请求的运行时 Base URL 传给 channelRequest。
-            baseUrl: `/api/${channel.id}`,
+            baseUrl: `/api/ai/system/${channel.id}`,
             apiKey: "system",
             apiFormat: "openai",
             scope: "system" as const,

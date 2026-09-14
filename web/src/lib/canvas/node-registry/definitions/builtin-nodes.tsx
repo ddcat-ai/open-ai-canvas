@@ -1,4 +1,4 @@
-import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video, WandSparkles } from "lucide-react";
+import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Table2, Type, Video, WandSparkles } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
@@ -178,6 +178,14 @@ const BUILTIN_NODE_TRAITS = {
         acceptsInputKind: ["image", "video"],
         maxInputCount: 1,
         inputKind: "image",
+    },
+    [CanvasNodeType.BatchTable]: {
+        label: "批量创作表",
+        icon: <Table2 />,
+        minSize: { width: 720, height: 360 },
+        showInCreateMenu: true,
+        acceptsInputKind: "image",
+        inputKind: "text",
     },
 } satisfies Record<string, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
 

@@ -294,6 +294,26 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			}
 		}
 	}
+	if input.Mode == "image" && strings.TrimSpace(input.Config.InterfaceType) == string(model.ChannelInterfaceOpenAIImage) {
+		const namespace = "openai-image"
+		options := request.ProviderOptions[namespace]
+		if options == nil {
+			options = make(map[string]any)
+			request.ProviderOptions[namespace] = options
+		}
+		if _, configured := options["response_format"]; !configured && imageParameterSupported(input.ImageCapability, "response_format") {
+			options["response_format"] = "b64_json"
+		}
+		if value, configured := options["response_format"]; configured {
+			request.Extra["response_format"] = value
+		}
+		if _, configured := options["output_format"]; !configured && imageParameterSupported(input.ImageCapability, "output_format") {
+			options["output_format"] = "png"
+		}
+		if value, configured := options["output_format"]; configured {
+			request.Extra["output_format"] = value
+		}
+	}
 	return request
 }
 
@@ -437,7 +457,7 @@ func protocolRequestBody(ctx context.Context, config providerConfig, spec protoc
 			}
 		}
 		for _, file := range spec.Files {
-			data, detectedMIME, err := protocolMediaBytes(ctx, config, file.Reference)
+			data, detectedMIME, err := protocolMediaBytes(ctx, config, file.Reference, "")
 			if err != nil {
 				_ = writer.Close()
 				return nil, "", fmt.Errorf("读取 multipart 文件 %s 失败：%w", file.Name, err)
@@ -826,7 +846,7 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 	}
 	items := make([]interface{}, 0, len(references))
 	for _, reference := range references {
-		data, mimeType, err := protocolMediaBytes(ctx, config, reference)
+		data, mimeType, err := protocolMediaBytes(ctx, config, reference, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -903,43 +923,88 @@ func protocolResultHasOutput(mode string, result *protocol.Result) bool {
 	}
 }
 
-func protocolMediaBytes(ctx context.Context, config providerConfig, reference protocol.MediaReference) ([]byte, string, error) {
+func protocolMediaBytes(ctx context.Context, config providerConfig, reference protocol.MediaReference, mode string) ([]byte, string, error) {
 	if strings.TrimSpace(reference.DataURL) != "" {
 		mimeType, data, err := decodeProviderDataURL(reference.DataURL)
-		return data, mimeType, err
+		if err != nil {
+			return nil, "", err
+		}
+		if err := validateProtocolMediaBytes(mode, mimeType, data); err != nil {
+			return nil, "", err
+		}
+		return data, mimeType, nil
 	}
 	value := strings.TrimSpace(reference.URL)
 	if value == "" {
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
+	var lastErr error
 	var data []byte
 	var mimeType string
-	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		data, mimeType, err = getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
-		if err == nil {
-			return data, normalizedMediaMimeType(mimeType, data), nil
+		data, mimeType, lastErr = getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+		if lastErr == nil {
+			mimeType = normalizedMediaMimeType(mimeType, data)
+			if mediaErr := validateProtocolMediaBytes(mode, mimeType, data); mediaErr != nil {
+				lastErr = mediaErr
+			} else {
+				return data, mimeType, nil
+			}
 		}
-		if attempt == 2 || !retryableProtocolMediaDownload(err) {
+		if attempt == 2 || !retryableProtocolMediaDownload(lastErr) {
 			break
 		}
 		if waitErr := sleepContext(ctx, time.Duration(attempt+1)*time.Second); waitErr != nil {
 			return nil, "", fmt.Errorf("声明式协议媒体结果下载失败：%w", waitErr)
 		}
 	}
-	return nil, "", fmt.Errorf("声明式协议媒体结果下载失败：%w", err)
+	return nil, "", fmt.Errorf("声明式协议媒体结果下载失败：%w", lastErr)
+}
+
+func validateProtocolMediaBytes(mode string, mimeType string, data []byte) error {
+	if len(data) == 0 {
+		return errors.New("声明式协议媒体结果为空")
+	}
+	detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	switch mode {
+	case "image":
+		if !strings.HasPrefix(mimeType, "image/") || !strings.HasPrefix(detected, "image/") {
+			return fmt.Errorf("声明式协议图片结果不是有效图片：%s", defaultString(detected, mimeType))
+		}
+	case "video":
+		if !strings.HasPrefix(mimeType, "video/") && !strings.HasPrefix(detected, "video/") {
+			return fmt.Errorf("声明式协议视频结果不是有效视频：%s", defaultString(detected, mimeType))
+		}
+	case "audio":
+		if !strings.HasPrefix(mimeType, "audio/") && !strings.HasPrefix(detected, "audio/") {
+			return fmt.Errorf("声明式协议音频结果不是有效音频：%s", defaultString(detected, mimeType))
+		}
+	}
+	return nil
 }
 
 func retryableProtocolMediaDownload(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
+	var httpError providerHTTPError
+	if errors.As(err, &httpError) {
+		return httpError.StatusCode == http.StatusTooManyRequests || httpError.StatusCode >= http.StatusInternalServerError
+	}
 	var networkError net.Error
 	if errors.As(err, &networkError) && (networkError.Timeout() || networkError.Temporary()) {
 		return true
 	}
 	message := strings.ToLower(err.Error())
-	for _, marker := range []string{"tls handshake timeout", "connection reset", "unexpected eof", "broken pipe"} {
+	for _, marker := range []string{
+		"tls handshake timeout",
+		"connection reset",
+		"connection was forcibly closed",
+		"forcibly closed by the remote host",
+		"unexpected eof",
+		"broken pipe",
+	} {
 		if strings.Contains(message, marker) {
 			return true
 		}

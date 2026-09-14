@@ -69,6 +69,7 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
     const hasCustomContent = props.node.type === CanvasNodeType.Config
         || props.node.type === CanvasNodeType.Script
+        || props.node.type === CanvasNodeType.BatchTable
         || Boolean(props.node.metadata?.directorSceneId)
         || (props.node.metadata?.workflowKind === "character" && Boolean(props.node.metadata.characterAssetId))
         || (props.node.metadata?.workflowKind === "story_input" && !props.isEditingContent)

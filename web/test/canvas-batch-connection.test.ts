@@ -13,6 +13,7 @@ const nodes: CanvasNodeData[] = [
     { id: "script", type: CanvasNodeType.Script, title: "分镜脚本", position: { x: 520, y: 0 }, width: 640, height: 520, metadata: { storyboard: { rows: [{ id: "row-1", shotNumber: 1, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], narrativeIntent: "", viewerPOV: "", performanceBlocking: "", shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", mustHave: [], optionalDetails: [], continuityOut: "", negativePrompt: "", assetBindings: [], status: "idle" }] } } },
     { id: "config", type: CanvasNodeType.Config, title: "图片配置", position: { x: 520, y: 560 }, width: 360, height: 420, metadata: { generationMode: "image" } },
     { id: "frame", type: CanvasNodeType.Frame, title: "背板", position: { x: 0, y: 680 }, width: 500, height: 500 },
+    { id: "batch-table", type: CanvasNodeType.BatchTable, title: "批量创作表", position: { x: 1000, y: 0 }, width: 900, height: 520 },
 ];
 
 const baseConfig = { ...defaultConfig };
@@ -90,6 +91,35 @@ describe("planBatchConnections", () => {
         });
         expect(result.connected).toEqual(["image-a", "image-b"]);
         expect(result.connections).toHaveLength(2);
+    });
+
+    it("connects every selected image to a newly created batch table", () => {
+        const result = planBatchConnections({
+            sourceNodeIds: ["image-a", "image-b"],
+            targetNodeId: "batch-table",
+            nodes,
+            connections: [],
+            config: baseConfig,
+            allowCapacityOverflow: true,
+        });
+
+        expect(result.connected).toEqual(["image-a", "image-b"]);
+        expect(result.connections.every((connection) => connection.toNodeId === "batch-table")).toBe(true);
+        expect(result.skipped).toEqual([]);
+    });
+
+    it("preserves a batch table reference-column target handle", () => {
+        const result = planBatchConnections({
+            sourceNodeIds: ["image-a"],
+            targetNodeId: "batch-table",
+            targetHandleId: "batch-reference:reference-2",
+            nodes,
+            connections: [],
+            config: baseConfig,
+            allowCapacityOverflow: true,
+        });
+
+        expect(result.connections[0]?.toHandleId).toBe("batch-reference:reference-2");
     });
 });
 

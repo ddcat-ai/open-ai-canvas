@@ -212,7 +212,7 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
             width: result.width || meta?.width || 1024,
             height: result.height || meta?.height || 1024,
             bytes: result.bytes || 0,
-            mimeType: result.mimeType || "image/png",
+            mimeType: concreteImageMimeType(result.mimeType),
         };
     }
     const storageKey = generationArtifactStorageKey(effectKey, "image", scope);
@@ -236,8 +236,13 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
         width: result.width || meta?.width || 1024,
         height: result.height || meta?.height || 1024,
         bytes: result.bytes || blob.size,
-        mimeType: result.mimeType || blob.type || "image/png",
+            mimeType: concreteImageMimeType(result.mimeType || blob.type),
     };
+}
+
+function concreteImageMimeType(value?: string) {
+    const mimeType = String(value || "").trim().toLowerCase();
+    return mimeType.startsWith("image/") ? mimeType : "image/png";
 }
 
 async function storedGenerationMedia(dataUrl: string, effectKey: string, mediaType: "video" | "audio", metadata: { width?: number; height?: number; durationMs?: number; bytes?: number; mimeType: string }, scope: string, signal?: AbortSignal) {

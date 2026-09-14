@@ -10,8 +10,10 @@ test("connection menu omits the header and provides descriptions for every optio
     expect(component).not.toContain("ChevronRight");
     expect(component).not.toContain("absolute inset-x-8 top-0 h-px");
     const options = component.match(/<ConnectionCreateOption [^\n]+/g) || [];
-    expect(options).toHaveLength(8);
+    expect(options).toHaveLength(9);
     for (const option of options) expect(option).toMatch(/description="[^"]+"/);
+    expect(component).toContain('title="批量创作表"');
+    expect(component).toContain("onCreate(CanvasNodeType.BatchTable)");
 });
 
 test("add-node submenu uses a four-column medium-size grid", () => {

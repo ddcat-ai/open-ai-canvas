@@ -2089,6 +2089,59 @@ func TestProtocolRequestPreservesVideoImageIDsAndRoles(t *testing.T) {
 	}
 }
 
+func TestProtocolRequestDefaultsOpenAIImageToInlineResult(t *testing.T) {
+	profile := DefaultImageCapabilityConfig("openai-image", "gpt-image-2.5")
+	request := protocolRequestFromInput(canvasGenerationInput{
+		Mode:            "image",
+		Config:          providerConfig{InterfaceType: "openai-image", Model: "gpt-image-2.5"},
+		ImageCapability: profile,
+		ReferenceImages: []providerMedia{{ID: "source", DataURL: testReferenceImageDataURL}},
+	})
+	options := request.ProviderOptions["openai-image"]
+	if options["response_format"] != "b64_json" || options["output_format"] != "png" {
+		t.Fatalf("openai image provider options = %#v", options)
+	}
+	if request.Extra["response_format"] != "b64_json" || request.Extra["output_format"] != "png" {
+		t.Fatalf("openai image fallback options = %#v", request.Extra)
+	}
+	adapter, ok := loadOfficialFallbackRegistry().Resolve("openai-image")
+	if !ok {
+		t.Fatal("official openai-image adapter is unavailable")
+	}
+	spec, err := adapter.BuildCreate(context.Background(), protocol.RequestContext{Request: request})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, ok := spec.Body.(map[string]any)
+	if !ok {
+		t.Fatalf("body = %#v", spec.Body)
+	}
+	if spec.Path != "/v1/images/edits" || spec.ContentType != "multipart/form-data" {
+		t.Fatalf("openai image edit request = %s %s", spec.Path, spec.ContentType)
+	}
+	if body["response_format"] != "b64_json" || body["output_format"] != "png" {
+		t.Fatalf("openai image edit body = %#v", body)
+	}
+
+	request = protocolRequestFromInput(canvasGenerationInput{
+		Mode:            "image",
+		Config:          providerConfig{InterfaceType: "openai-image", Model: "gpt-image-2.5"},
+		ImageCapability: profile,
+		Metadata: map[string]interface{}{
+			"providerOptions": map[string]any{
+				"openai-image": map[string]any{"response_format": "url", "output_format": "webp"},
+			},
+		},
+	})
+	options = request.ProviderOptions["openai-image"]
+	if options["response_format"] != "url" || options["output_format"] != "webp" {
+		t.Fatalf("explicit openai image provider options were overwritten: %#v", options)
+	}
+	if request.Extra["response_format"] != "url" || request.Extra["output_format"] != "webp" {
+		t.Fatalf("explicit openai image fallback options were not preserved: %#v", request.Extra)
+	}
+}
+
 func TestProtocolRequestRestoresDeclaredVideoResolutionEnum(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -1,6 +1,6 @@
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
-import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { isResourceUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask, type CreateTaskInput } from "@/services/api/task-center";
 import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
 import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
@@ -71,6 +71,11 @@ const defaultDependencies: GenerationTaskDependencies = {
     now: () => new Date().toISOString(),
     ensureLocalDreaminaReady: (signal) => useLocalDreaminaModelStore.getState().ensureReady(signal),
 };
+
+// Batch rows can submit the same local reference image at the same time. Keep
+// one browser-side upload in flight per source key; the backend intentionally
+// rejects a second request while the idempotent resource is still pending.
+const referenceImageUploadLocks = new Map<string, Promise<Awaited<ReturnType<typeof uploadResourceFile>>>>();
 
 type PreparedGenerationReferences = {
     referenceImages: Awaited<ReturnType<typeof prepareBackendImageReference>>[];
@@ -548,14 +553,32 @@ async function prepareBackendImageReference(image: ReferenceImage, preferArkAsse
     if (preferArkAssetUrl && image.arkAssetId) return backendImageReference(image, { url: `asset://${image.arkAssetId}` });
     if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
     const sourceUrl = image.url || image.dataUrl;
-    if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
+    // Same-origin resource URLs are legacy/local previews, not public provider
+    // inputs. Materialize them into the remote resource store before submission.
+    if (/^https?:\/\//i.test(sourceUrl) && !isResourceUrl(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
     const blob = image.storageKey ? await getImageBlob(image.storageKey) : sourceUrl ? await (await fetch(sourceUrl)).blob() : null;
     if (!blob) throw new Error("参考图片尚未保存，请重新上传后再生成");
+    const sourceKey = image.storageKey || image.id;
+    const idempotencyKey = `canvas-reference-image:${sourceKey}`;
+    const pending = referenceImageUploadLocks.get(idempotencyKey);
+    if (pending) {
+        const resource = await pending;
+        return backendImageReference(image, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type });
+    }
+    const upload = uploadResourceFile(blob, "image", {
+        fileName: image.name,
+        width: image.width,
+        height: image.height,
+        idempotencyKey,
+    });
+    referenceImageUploadLocks.set(idempotencyKey, upload);
     try {
-        const resource = await uploadResourceFile(blob, "image", { fileName: image.name });
+        const resource = await upload;
         return backendImageReference(image, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type });
     } catch (error) {
         throw new Error(error instanceof Error ? `参考图片上传失败：${error.message}` : "参考图片上传失败");
+    } finally {
+        if (referenceImageUploadLocks.get(idempotencyKey) === upload) referenceImageUploadLocks.delete(idempotencyKey);
     }
 }
 

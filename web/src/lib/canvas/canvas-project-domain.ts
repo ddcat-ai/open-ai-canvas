@@ -9,6 +9,7 @@ import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import type { GenerationTask } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ConnectionHandle, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
@@ -166,7 +167,7 @@ function resetGenerationParamsOnModelSwitch(node: CanvasNodeData, patch: Partial
 export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0) {
     return {
         x: current.handleType === "source" ? node.position.x : node.position.x + node.width,
-        y: storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
+        y: batchReferenceHandleY(node, handleId) ?? storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
     };
 }
 

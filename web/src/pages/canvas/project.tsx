@@ -69,6 +69,7 @@ import { getProject } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
 import { CanvasScriptEditor, CanvasScriptNodeContent } from "@/components/canvas/canvas-script-node";
+import { CanvasBatchTableNodeContent } from "@/components/canvas/canvas-batch-table-node";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardMinNodeHeight, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { CanvasDirectorNodePanel } from "@/components/canvas/director/canvas-director-node-panel";
 import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-compare-modal";
@@ -117,6 +118,7 @@ import { useCanvasStyleWorkflow } from "./use-canvas-style-workflow";
 import { useCanvasDirector } from "./use-canvas-director";
 import { useCanvasGeneration } from "./use-canvas-generation";
 import { useCanvasGenerationBatches } from "./use-canvas-generation-batches";
+import { useCanvasBatchTable } from "./use-canvas-batch-table";
 import { useCanvasGenerationExecutor, type CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
 import { useCanvasGenerationRetry } from "./use-canvas-generation-retry";
 import { useCanvasHistory } from "./use-canvas-history";
@@ -1035,6 +1037,7 @@ function InfiniteCanvasPage() {
         createConnectedNode,
         getConnectionCreateDisabledReason,
         handleConnectStart,
+        handleConnectDrop,
         handleBatchConnectionTargetClick,
         batchConnectionPreview,
         beginBatchConnectionMode,
@@ -1902,6 +1905,15 @@ function InfiniteCanvasPage() {
         handleGenerateNode,
     });
 
+    const { addReferenceColumn: addBatchReferenceColumn, addRow: addBatchRow, fillRowsFromConnections, generateRows: generateBatchRows, patchTable: patchBatchTable, removeRow: removeBatchRow, updateRow: updateBatchRow } = useCanvasBatchTable({
+        nodesRef,
+        connectionsRef,
+        setNodes,
+        setConnections,
+        setSelectedNodeIds,
+        enqueueGenerationBatch,
+    });
+
     const { addScriptRow, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, generateScriptImages, generateScriptRows, generateScriptVideos, removeScriptRow, replaceScriptRows, updateScriptRow } =
         useCanvasStoryboard({
             projectId,
@@ -2053,6 +2065,27 @@ function InfiniteCanvasPage() {
             if (contentNode.metadata?.workflowKind === "story_input") {
                 return <CanvasStoryInputNodeContent node={contentNode} onEdit={() => openStoryInput(contentNode.id)} />;
             }
+            if (contentNode.type === CanvasNodeType.BatchTable) {
+                return (
+                    <CanvasBatchTableNodeContent
+                        node={contentNode}
+                        nodes={nodesRef.current}
+                        connections={connections}
+                        batch={visibleGenerationBatch(contentNode)}
+                        theme={theme}
+                        onPatchTable={(patch) => patchBatchTable(contentNode.id, patch)}
+                        onAddRow={() => addBatchRow(contentNode.id)}
+                        onRemoveRow={(rowId) => removeBatchRow(contentNode.id, rowId)}
+                        onUpdateRow={(rowId, patch) => updateBatchRow(contentNode.id, rowId, patch)}
+                        onFillRows={() => fillRowsFromConnections(contentNode.id)}
+                        onGenerate={(rowIds) => void generateBatchRows(contentNode.id, rowIds)}
+                        onRetryItem={(batchId, itemId) => retryFailedBatchItems(contentNode.id, batchId, itemId)}
+                        onAddReferenceColumn={() => addBatchReferenceColumn(contentNode.id)}
+                        onConnectStart={(event, handleId) => handleConnectStart(event, contentNode.id, "target", handleId)}
+                        onConnectDrop={(event, handleId) => handleConnectDrop(event, contentNode.id, handleId)}
+                    />
+                );
+            }
             if (contentNode.type === CanvasNodeType.Script) {
                 const pipeline = deriveStoryboardPipelineProgress(contentNode, nodesRef.current, connectionsRef.current);
                 return (
@@ -2121,17 +2154,23 @@ function InfiniteCanvasPage() {
             );
         },
         [
+            addBatchReferenceColumn,
+            addBatchRow,
             addScriptRow,
             configInputsById,
+            connections,
             createAndGenerateScriptVideos,
             createScriptActionBoards,
             createScriptImageNodes,
             createScriptVideoNodes,
             currentProject?.directorScenes,
+            fillRowsFromConnections,
+            generateBatchRows,
             generateScriptImages,
             generateScriptRows,
             generateScriptVideos,
             handleConfigNodeChange,
+            handleConnectDrop,
             handleConnectStart,
             handleGenerateNode,
             handleNodeResize,
@@ -2139,10 +2178,14 @@ function InfiniteCanvasPage() {
             mergeVideosByIds,
             openDirectorWorkbench,
             openStoryInput,
+            patchBatchTable,
+            removeBatchRow,
             removeScriptRow,
             retryFailedBatchItems,
             runningNodeId,
             stopRemainingBatchItems,
+            theme,
+            updateBatchRow,
             updateScriptRow,
             viewport.k,
             workspaceMode,
@@ -2629,7 +2672,7 @@ function InfiniteCanvasPage() {
                         />
                     ) : null}
 
-                    {dialogNode && !isCanvasImageSourceNode(dialogNode) && !dialogNode.metadata?.fileUpload && dialogNode.type !== CanvasNodeType.Script && dialogNode.type !== CanvasNodeType.Drawing && dialogNode.type !== CanvasNodeType.Panorama && !selectionBox && !isCanvasNodeMoving ? (
+                    {dialogNode && !isCanvasImageSourceNode(dialogNode) && !dialogNode.metadata?.fileUpload && dialogNode.type !== CanvasNodeType.Script && dialogNode.type !== CanvasNodeType.BatchTable && dialogNode.type !== CanvasNodeType.Drawing && dialogNode.type !== CanvasNodeType.Panorama && !selectionBox && !isCanvasNodeMoving ? (
                         <CanvasNodePanelOverlay
                             node={dialogNode}
                             viewport={viewport}

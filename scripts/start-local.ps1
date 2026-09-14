@@ -1,7 +1,10 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "windows-proxy.ps1")
+Import-CanvasWindowsProxy
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $backendDir = Join-Path $repoRoot "backend"
