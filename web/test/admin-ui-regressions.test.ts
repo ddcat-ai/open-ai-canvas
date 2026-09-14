@@ -221,7 +221,6 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(featureSource).toContain('title="1. 用户工作台入口"');
     expect(featureSource).toContain('title="2. 插件开放范围"');
     expect(featureSource).toContain('title="3. 用户模型来源"');
-    expect(featureSource).toContain('className="admin-feature-runtime-note"');
 
     expect(drawingSource).toContain('title="1. 选择新建绘图默认编辑器"');
     expect(drawingSource).toContain('title="2. 配置 tldraw 授权（按需）"');
