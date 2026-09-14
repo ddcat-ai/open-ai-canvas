@@ -10,7 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 10
+// CurrentSchemaVersion includes the two local compatibility migrations that
+// existed before the v1.2.9 upstream release. Keeping them in the plan lets
+// existing local databases upgrade in place without discarding user data.
+const CurrentSchemaVersion int64 = 12
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -21,6 +24,9 @@ const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const creationRuntimeChecksum = "sha256:creation-runtime-v10-20260909"
+const channelBillingModeChecksum = "sha256:channel-billing-mode-v10-20260911"
+const channelCapabilityChecksum = "sha256:channel-capability-v11-20260911"
+const creationRuntimeRepairChecksum = "sha256:creation-runtime-repair-v12-20260911"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -57,6 +63,8 @@ var schemaMigrations = []migration{
 	{version: 8, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaV8},
 	{version: 9, name: "channel_presentation", checksum: "sha256:channel-presentation-v9-20260908", apply: migrateChannelPresentation},
 	{version: 10, name: "creation_runtime", checksum: creationRuntimeChecksum, apply: migrateSchemaV10},
+	{version: 11, name: "channel_capability", checksum: channelCapabilityChecksum, apply: migrateChannelCapability},
+	{version: 12, name: "creation_runtime_repair", checksum: creationRuntimeRepairChecksum, apply: migrateSchemaV12},
 }
 
 func migrateChannelPresentation(tx *gorm.DB) error {
@@ -73,7 +81,54 @@ func migrateChannelPresentation(tx *gorm.DB) error {
 	return nil
 }
 
+func migrateChannelBillingMode(tx *gorm.DB) error {
+	for _, table := range []string{"channel_models", "channel_model_price_tiers"} {
+		if !tx.Migrator().HasTable(table) {
+			continue
+		}
+		if err := tx.Table(table).Where("billing_mode = ?", "per_request").Update("billing_mode", "fixed_request").Error; err != nil {
+			return fmt.Errorf("规范化 %s 按次计费枚举：%w", table, err)
+		}
+	}
+	return nil
+}
+
+func migrateChannelCapability(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.ChannelModel{}) {
+		return nil
+	}
+	if err := tx.Model(&model.ChannelModel{}).Where("LOWER(TRIM(capability)) = ?", "llm").Update("capability", "text").Error; err != nil {
+		return fmt.Errorf("规范化系统渠道文本模型能力：%w", err)
+	}
+	return nil
+}
+
+// migrateSchemaV12 is intentionally idempotent. The v1.2.8 local line used
+// this repair migration to make the creation runtime tables and task linkage
+// explicit; v1.2.9's v10 migration already contains the same AutoMigrate.
+func migrateSchemaV12(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.CreationRun{}, &model.CreationSubmission{}, &model.Task{}); err != nil {
+		return fmt.Errorf("修复创作运行时结构：%w", err)
+	}
+	return nil
+}
+
 func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
+	plan := append([]migration(nil), schemaMigrations...)
+	var appliedV10 schemaMigration
+	if err := db.First(&appliedV10, "version = ?", 10).Error; err == nil {
+		// Databases created by the local v1.2.8 line used migration 10 for
+		// billing-mode normalization and continued through versions 11/12.
+		// Preserve that history when validating the upgraded v1.2.9 binary.
+		if appliedV10.Name == "channel_billing_mode" {
+			plan[9] = migration{version: 10, name: "channel_billing_mode", checksum: channelBillingModeChecksum, apply: migrateChannelBillingMode}
+			plan[10] = migration{version: 11, name: "channel_capability", checksum: channelCapabilityChecksum, apply: migrateChannelCapability}
+			plan[11] = migration{version: 12, name: "creation_runtime_repair", checksum: creationRuntimeRepairChecksum, apply: migrateSchemaV12}
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("读取数据库迁移 10：%w", err)
+	}
+
 	var applied schemaMigration
 	err := db.First(&applied, "version = ?", 6).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -83,13 +138,12 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 		return nil, fmt.Errorf("读取数据库迁移 6：%w", err)
 	}
 	if applied.Name != "asset_library_folders" {
-		return schemaMigrations, nil
+		return plan, nil
 	}
 	legacy := migration{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7}
 	if err := validateMigrationRecord(applied, legacy); err != nil {
 		return nil, err
 	}
-	plan := append([]migration(nil), schemaMigrations...)
 	for index, item := range plan {
 		switch item.version {
 		case 6:

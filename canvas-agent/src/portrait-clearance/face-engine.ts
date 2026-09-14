@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 
-import * as ort from "onnxruntime-node";
+type OrtModule = typeof import("onnxruntime-node");
+
+let ortModulePromise: Promise<OrtModule> | undefined;
+
+function loadOrt(): Promise<OrtModule> {
+    return (ortModulePromise ??= import("onnxruntime-node"));
+}
 
 import type { DecodedPortraitImage } from "./image-metrics.js";
 import { cosineSimilarity } from "./image-metrics.js";
@@ -33,8 +39,8 @@ type FaceEngineOptions = {
     threshold?: number;
 };
 
-type DetectorSession = { session: ort.InferenceSession; inputName: string };
-type EmbeddingSession = { session: ort.InferenceSession; inputName: string };
+type DetectorSession = { session: import("onnxruntime-node").InferenceSession; inputName: string };
+type EmbeddingSession = { session: import("onnxruntime-node").InferenceSession; inputName: string };
 
 export class PortraitFaceEngine {
     private detector?: Promise<DetectorSession>;
@@ -127,6 +133,7 @@ export class PortraitFaceEngine {
             data[112 * 112 + index] = (aligned[source + 1]! - 127.5) / 127.5;
             data[2 * 112 * 112 + index] = (aligned[source + 2]! - 127.5) / 127.5;
         }
+        const ort = await loadOrt();
         const output = await session.session.run({ [session.inputName]: new ort.Tensor("float32", data, [1, 3, 112, 112]) });
         const embedding = new Float32Array(numericTensorData(output[session.session.outputNames[0]!]));
         let norm = 0;
@@ -150,6 +157,7 @@ export class PortraitFaceEngine {
     private async loadDetector() {
         const filePath = `${portraitModelDirectory(this.options.modelRoot)}/det_10g.onnx`;
         await fs.access(filePath);
+        const ort = await loadOrt();
         const session = await ort.InferenceSession.create(filePath, { executionProviders: ["cpu"] });
         return { session, inputName: session.inputNames[0]! };
     }
@@ -157,6 +165,7 @@ export class PortraitFaceEngine {
     private async loadEmbedding() {
         const filePath = `${portraitModelDirectory(this.options.modelRoot)}/w600k_r50.onnx`;
         await fs.access(filePath);
+        const ort = await loadOrt();
         const session = await ort.InferenceSession.create(filePath, { executionProviders: ["cpu"] });
         return { session, inputName: session.inputNames[0]! };
     }
@@ -175,6 +184,7 @@ function numericTensorData(value: unknown) {
 }
 
 async function detectorTensor(image: DecodedPortraitImage, size: number) {
+    const ort = await loadOrt();
     const source = await import("sharp");
     const resized = await source.default(image.rgb, { raw: { width: image.width, height: image.height, channels: 3 } })
         .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0 } })
