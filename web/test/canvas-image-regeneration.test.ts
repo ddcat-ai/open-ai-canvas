@@ -104,4 +104,72 @@ describe("image generation connections", () => {
         expect(batchConnections[0].fromNodeId).toBe(upstreamRefNode.id);
         expect(batchConnections[0].toNodeId).toBe(rootId);
     });
+
+    test("重试失败的批次子图时，通过 batchRootId 正确解析上游参考图，避免报错提示缺少画布资源", () => {
+        const uploadRefNode: CanvasNodeData = {
+            id: "upload-1",
+            type: CanvasNodeType.Image,
+            title: "参考图素材",
+            position: { x: 0, y: 0 },
+            width: 300,
+            height: 300,
+            metadata: {
+                content: "data:image/png;base64,upload",
+                storageKey: "user:upload-1:file",
+                status: "success",
+            },
+        };
+
+        const batchRootNode: CanvasNodeData = {
+            id: "batch-root",
+            type: CanvasNodeType.Image,
+            title: "批次根节点",
+            position: { x: 400, y: 0 },
+            width: 300,
+            height: 300,
+            metadata: {
+                composerContent: "参考 @图片1 风格，生成水面倒影",
+                prompt: "参考 @图片1 风格，生成水面倒影",
+                status: "error",
+                isBatchRoot: true,
+                batchChildIds: ["child-1", "child-2"],
+            },
+        };
+
+        const batchChildNode: CanvasNodeData = {
+            id: "child-1",
+            type: CanvasNodeType.Image,
+            title: "批次子图 1",
+            position: { x: 800, y: 0 },
+            width: 300,
+            height: 300,
+            metadata: {
+                composerContent: "参考 @图片1 风格，生成水面倒影",
+                prompt: "参考 @图片1 风格，生成水面倒影",
+                status: "error",
+                batchRootId: "batch-root",
+            },
+        };
+
+        const connections: CanvasConnection[] = [
+            { id: "c-ref", fromNodeId: "upload-1", toNodeId: "batch-root" },
+            { id: "c-batch-1", fromNodeId: "batch-root", toNodeId: "child-1" },
+        ];
+
+        const nodes = [uploadRefNode, batchRootNode, batchChildNode];
+
+        // 模拟重试子图定位上下文源节点逻辑
+        const batchRoot = batchChildNode.metadata?.batchRootId ? nodes.find((item) => item.id === batchChildNode.metadata?.batchRootId) : null;
+        const retryContextNode = batchRoot || batchChildNode;
+        expect(retryContextNode.id).toBe("batch-root");
+
+        // 验证从 retryContextNode 能够正确获取上游参考素材
+        const prompt = batchChildNode.metadata.composerContent;
+        const { buildNodeGenerationContext } = require("../src/components/canvas/canvas-node-generation");
+        const context = buildNodeGenerationContext(retryContextNode.id, nodes, connections, prompt, []);
+
+        expect(context.referenceImages).toHaveLength(1);
+        expect(context.referenceImages[0].id).toBe("upload-1");
+        expect(context.prompt).toContain("@图片1");
+    });
 });

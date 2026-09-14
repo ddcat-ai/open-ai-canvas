@@ -398,7 +398,22 @@ export function useCanvasNodeOperations({
             .filter((connection) => copiedIds.has(connection.fromNodeId) && copiedIds.has(connection.toNodeId))
             .map((connection) => ({ ...connection, id: nanoid(), fromNodeId: idMap.get(connection.fromNodeId)!, toNodeId: idMap.get(connection.toNodeId)! }));
         if (!isFrameNode(source)) {
-            connectionsRef.current.filter((connection) => connection.toNodeId === source.id && !copiedIds.has(connection.fromNodeId)).forEach((connection) => copiedConnections.push({ ...connection, id: nanoid(), toNodeId: idMap.get(source.id)! }));
+            const batchRootId = source.metadata?.batchRootId;
+            const targetNewId = idMap.get(source.id)!;
+            if (batchRootId) {
+                // 如果复制的是批次子图，继承其批次根节点的上游输入连接（如 @图片1 等参考素材），
+                // 排除旧批次内部从 batchRoot 指向该子图的连线
+                connectionsRef.current
+                    .filter((connection) => connection.toNodeId === batchRootId && !copiedIds.has(connection.fromNodeId))
+                    .forEach((connection) => copiedConnections.push({ ...connection, id: nanoid(), toNodeId: targetNewId }));
+                connectionsRef.current
+                    .filter((connection) => connection.toNodeId === source.id && connection.fromNodeId !== batchRootId && !copiedIds.has(connection.fromNodeId))
+                    .forEach((connection) => copiedConnections.push({ ...connection, id: nanoid(), toNodeId: targetNewId }));
+            } else {
+                connectionsRef.current
+                    .filter((connection) => connection.toNodeId === source.id && !copiedIds.has(connection.fromNodeId))
+                    .forEach((connection) => copiedConnections.push({ ...connection, id: nanoid(), toNodeId: targetNewId }));
+            }
         }
         const id = idMap.get(source.id)!;
         const nextNodes = [
