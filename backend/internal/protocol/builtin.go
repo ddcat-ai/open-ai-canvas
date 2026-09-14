@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -219,11 +220,19 @@ func newAPIVideosAdapter() Adapter {
 	info.LegacyAliases = []string{"newapi-video-generations"}
 	info.Parameters = videoParams()
 	return videoAdapter(info, func(r GenerationRequest) (RequestSpec, error) {
-		body := map[string]any{"model": r.Model, "prompt": r.Prompt, "seconds": strconv.Itoa(defaultInt(r.Duration, 6)), "aspect_ratio": defaultValue(r.AspectRatio, "16:9")}
-		copyIf(body, "resolution", r.Resolution)
-		if r.GenerateAudio {
-			body["generate_audio"] = true
+		body := map[string]any{"model": r.Model, "prompt": r.Prompt, "aspect_ratio": defaultValue(r.AspectRatio, "16:9")}
+		// MiniMax Hailuo H3 经 NewAPI 中转时，充值站只接受整型 duration（官方 4~15s），
+		// 不认识 seconds 字符串，且没有 generate_audio 参数；继续发这两个字段会被上游
+		// 以 unsupported_duration / invalid parameter（task_not_exist）拒收。
+		if isHailuoH3Model(r.Model) {
+			body["duration"] = clampHailuoH3Duration(defaultInt(r.Duration, 6), r.Resolution)
+		} else {
+			body["seconds"] = strconv.Itoa(defaultInt(r.Duration, 6))
+			if r.GenerateAudio {
+				body["generate_audio"] = true
+			}
 		}
+		copyIf(body, "resolution", r.Resolution)
 		if len(r.Images) > 0 {
 			body["image_urls"] = mediaValues(r.Images)
 		}
@@ -1000,6 +1009,34 @@ func copyIf(body map[string]any, key, value string) {
 	if strings.TrimSpace(value) != "" {
 		body[key] = value
 	}
+}
+
+// hailuoH3ModelPattern 与前端 web/src/lib/model-capabilities.ts 的
+// isHailuoH3ViaRelay、后端 service 包的 isHailuoH3ViaRelay 保持同一套判定。
+var hailuoH3ModelPattern = regexp.MustCompile(`minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo`)
+
+// isHailuoH3Model 判断模型名是否为经 NewAPI 中转的 MiniMax Hailuo H3
+// （minimax_h3 / MiniMax-H3 / hailuo-3 / minimax-hailuo…）。
+func isHailuoH3Model(model string) bool {
+	return hailuoH3ModelPattern.MatchString(strings.ToLower(strings.TrimSpace(model)))
+}
+
+// clampHailuoH3Duration 把 H3 中转时长收进官方允许区间：下限恒为 4s
+// （分镜镜头可能只有 3s，低于 4s 会被上游拒收），上限 768p 档 15s、
+// 1080p/2K 档 8s。
+func clampHailuoH3Duration(duration int, resolution string) int {
+	if duration < 4 {
+		duration = 4
+	}
+	limit := 15
+	name := strings.ToLower(strings.TrimSpace(resolution))
+	if name == "1080p" || name == "2k" || name == "1440p" {
+		limit = 8
+	}
+	if duration > limit {
+		duration = limit
+	}
+	return duration
 }
 func mergeExtra(body map[string]any, extra map[string]any, keys ...string) {
 	for _, key := range keys {
