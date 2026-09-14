@@ -31,7 +31,12 @@ describe("batch creation table", () => {
         const node = createCanvasNode(CanvasNodeType.BatchTable, { x: 500, y: 300 });
 
         expect(node.title).toBe("批量创作表");
-        expect(node.metadata?.batchTable).toEqual({ operation: "try_on", concurrency: 10, referenceColumns: [{ id: "reference-1", label: "参考图 1" }, { id: "reference-2", label: "参考图 2" }], rows: [] });
+        expect(node.metadata?.batchTable).toEqual({ operation: "try_on", concurrency: 10, referenceColumns: [{ id: "reference-1", label: "参考图 1" }, { id: "reference-2", label: "参考图 2" }, { id: "reference-3", label: "参考图 3" }], rows: [] });
+    });
+    test("keeps the third reference handle addressable", () => {
+        const node = createCanvasNode(CanvasNodeType.BatchTable, { x: 500, y: 300 });
+
+        expect(batchReferenceHandleAtY(node, node.position.y + 112 + 2 * 38)).toBe(batchReferenceHandleId("reference-3"));
     });
     test("keeps the second reference handle addressable", () => {
         const node = createCanvasNode(CanvasNodeType.BatchTable, { x: 500, y: 300 });

@@ -129,7 +129,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                         );
                     })
                 ) : (
-                    <div className="grid h-40 place-items-center px-5 text-center opacity-55">把图片拖到左侧磁吸端口，选择“参考图 1”或“参考图 2”；需要更多分组时点击下方 +。</div>
+                    <div className="grid h-40 place-items-center px-5 text-center opacity-55">把图片拖到左侧磁吸端口，选择“参考图 1”“参考图 2”或“参考图 3”；需要更多分组时点击下方 +。</div>
                 )}
             </div>
         </div>

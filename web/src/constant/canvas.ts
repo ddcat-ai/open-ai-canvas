@@ -117,6 +117,7 @@ export const NODE_SPECS = {
                 referenceColumns: [
                     { id: "reference-1", label: "参考图 1" },
                     { id: "reference-2", label: "参考图 2" },
+                    { id: "reference-3", label: "参考图 3" },
                 ],
                 rows: [],
             },
