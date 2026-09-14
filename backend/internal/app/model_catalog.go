@@ -21,10 +21,11 @@ const (
 
 // ModelCatalogResponse 是创作端模型选择的统一读模型。
 // Source=frontend 时读取 Models；Source=system 时读取 Channels。
+// 两个集合都始终序列化为数组：空目录必须发 []，缺字段会被前端判成畸形响应。
 type ModelCatalogResponse struct {
 	Source   ModelCatalogSource     `json:"source"`
-	Models   []PublicLogicalModel   `json:"models,omitempty"`
-	Channels []PublicChannelCatalog `json:"channels,omitempty"`
+	Models   []PublicLogicalModel   `json:"models"`
+	Channels []PublicChannelCatalog `json:"channels"`
 }
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
@@ -74,25 +75,25 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 		return nil, err
 	}
 
+	// 两个集合都初始化成非 nil 空切片：空目录要发 []，不能因为“没有模型”而丢掉字段。
+	response := &ModelCatalogResponse{Models: []PublicLogicalModel{}, Channels: []PublicChannelCatalog{}}
 	if frontendEnabled {
 		models, err := s.PublicLogicalModels(intent)
 		if err != nil {
 			return nil, err
 		}
-		return &ModelCatalogResponse{
-			Source: ModelCatalogSourceFrontend,
-			Models: models,
-		}, nil
+		response.Source = ModelCatalogSourceFrontend
+		response.Models = append(response.Models, models...)
+		return response, nil
 	}
 
 	channels, err := s.publicSystemChannelCatalog(intent)
 	if err != nil {
 		return nil, err
 	}
-	return &ModelCatalogResponse{
-		Source:   ModelCatalogSourceSystem,
-		Channels: channels,
-	}, nil
+	response.Source = ModelCatalogSourceSystem
+	response.Channels = append(response.Channels, channels...)
+	return response, nil
 }
 
 // publicSystemChannelCatalog 组装普通用户可见的系统渠道读模型，不暴露密钥、Base URL 等执行凭证。
