@@ -311,8 +311,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
-                    // 固定占位但不绘制描边，避免聚焦切换时边框宽度变化造成白边跳动。
-                    border: isComposerNode ? "0" : "1px solid transparent",
+                    // 选中/聚焦时边框变蓝，其余保持透明占位
+                    border: isComposerNode ? "0" : `1px solid ${isActive ? "#3b82f6" : "transparent"}`,
                     boxShadow: isComposerNode ? "none" : isSelected || isFocusRelated ? theme.node.hoverShadow : theme.node.shadow,
                     "--connection-tilt-x": `${connectionTilt?.rotateX || 0}deg`,
                     "--connection-tilt-y": `${connectionTilt?.rotateY || 0}deg`,
