@@ -9,6 +9,12 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 欢迎页开放配置
+
+`GET /public/welcome` 无需登录，信封 `data` 仅包含布尔值 `welcomeEnabled`，响应禁用缓存。读取失败按标准错误信封返回。
+
+管理员通过 `GET/PATCH /admin/settings/features` 读取和保存 `welcomeEnabled`，默认 `true`，与其他功能开关一起存入 `system_settings` 的 `feature_availability` JSON，并记录管理员审计。关闭后新访问 `/welcome` 的浏览器跳转到 `/`。
+
 ## 云端 Agent
 
 所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。

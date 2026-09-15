@@ -9,6 +9,7 @@ import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/
 import { cn } from "@/lib/utils";
 import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
 import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
+import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
@@ -473,6 +474,7 @@ export default function AppearanceSettingsPage() {
                                         onChange={(event) => setBrandSlug(event.target.value.toLocaleLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                     />
                                 </Form.Item>
+                                <WelcomeSetting />
                             </Form>
                             <div className="admin-appearance-brand-logo admin-appearance-logo-stack">
                                 <AssetPicker

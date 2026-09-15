@@ -24,6 +24,16 @@ tags:
   - name: agent
   - name: admin
 paths:
+  /public/welcome:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取欢迎页开放状态
+      responses:
+        "200":
+          description: 信封 data 仅包含 welcomeEnabled 布尔值，默认 true；Cache-Control 为 no-store
+        "500":
+          description: 配置读取失败
   /agent/capabilities:
     get:
       tags: [agent]

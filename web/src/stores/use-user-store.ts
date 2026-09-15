@@ -25,6 +25,7 @@ export type RuntimeLimits = {
 };
 
 export type FeatureAvailability = {
+    welcomeEnabled: boolean;
     shortDramaEnabled: boolean;
     taskCenterEnabled: boolean;
     creditsEnabled: boolean;
@@ -38,6 +39,7 @@ export type FeatureAvailability = {
 };
 
 export const defaultFeatureAvailability: FeatureAvailability = {
+    welcomeEnabled: true,
     shortDramaEnabled: true,
     taskCenterEnabled: true,
     creditsEnabled: true,

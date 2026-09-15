@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/platform"
 	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
 
@@ -18,6 +19,9 @@ func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	setting, err := svc.FeatureAvailability()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !setting.WelcomeEnabled {
+		t.Fatal("welcome should be enabled by default")
 	}
 	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
@@ -37,6 +41,28 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	}
 	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
+	}
+	if !setting.WelcomeEnabled {
+		t.Fatal("existing settings without welcomeEnabled should keep welcome enabled")
+	}
+}
+
+func TestWelcomeAvailabilityCanBeDisabledAndReenabled(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+	actor := &model.User{ID: "admin-welcome", Role: model.UserRoleAdmin}
+	for _, enabled := range []bool{false, true} {
+		value := platform.DefaultFeatureAvailability()
+		value.WelcomeEnabled = enabled
+		if _, err := svc.UpdateFeatureAvailability(actor, value); err != nil {
+			t.Fatal(err)
+		}
+		setting, err := svc.FeatureAvailability()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if setting.WelcomeEnabled != enabled {
+			t.Fatalf("welcomeEnabled = %v, want %v", setting.WelcomeEnabled, enabled)
+		}
 	}
 }
 

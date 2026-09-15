@@ -368,6 +368,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         if (typeof record[key] !== "boolean") throw new Error("功能开放配置响应缺少有效开关状态");
     }
     return {
+        welcomeEnabled: record.welcomeEnabled as boolean,
         shortDramaEnabled: record.shortDramaEnabled as boolean,
         taskCenterEnabled: record.taskCenterEnabled as boolean,
         creditsEnabled: record.creditsEnabled as boolean,
