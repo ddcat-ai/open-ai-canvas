@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { clampGridSplitSize, isValidGridSplit, layoutGridSplitCells } from "./canvas-grid-split";
+import { clampGridSplitSize, isValidGridSplit, layoutGridSplitCells } from "@/lib/canvas/canvas-grid-split";
 
 describe("canvas-grid-split", () => {
     test("clamps size into 1..5", () => {

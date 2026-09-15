@@ -379,10 +379,31 @@ func matchOptionConstraint(name string, constraint OptionConstraint, value any) 
 func capabilityOptionValuesEqual(name string, candidate any, value any) bool {
 	left := normalizedScalar(candidate)
 	right := normalizedScalar(value)
-	if canonicalCapabilityOptionName(name) == "vquality" {
+	canonicalName := canonicalCapabilityOptionName(name)
+	if canonicalName == "vquality" {
 		// Compare using the same aliases as request intents and price tiers.
 		left = strings.TrimSuffix(normalizedScalar(normalizeModelRequestOption(name, left)), "p")
 		right = strings.TrimSuffix(normalizedScalar(normalizeModelRequestOption(name, right)), "p")
+	}
+	if canonicalName == "quality" {
+		if left == right {
+			return true
+		}
+		if left == "auto" || left == "any" || right == "auto" || right == "any" {
+			return true
+		}
+		if (left == "auto" || left == "standard" || left == "medium") && (right == "1k" || right == "standard") {
+			return true
+		}
+		if (left == "high" || left == "hd") && (right == "2k" || right == "4k" || right == "high" || right == "hd") {
+			return true
+		}
+		if left == "1k" && (right == "standard" || right == "medium") {
+			return true
+		}
+		if (left == "2k" || left == "4k") && (right == "high" || right == "hd") {
+			return true
+		}
 	}
 	return left == right
 }

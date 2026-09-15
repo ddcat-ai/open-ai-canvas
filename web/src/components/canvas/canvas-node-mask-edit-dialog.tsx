@@ -42,7 +42,8 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
         setMode("paint");
         setError("");
         setAdvancedOpen(true);
-        setGenerationConfig(config);
+        // 局部重绘默认生成 1 张，避免误用历史文生图的批量张数
+        setGenerationConfig({ ...config, count: config.count && Number(config.count) >= 1 ? config.count : "1" });
         void readImageMeta(dataUrl).then(setImage);
     }, [dataUrl, open]);
 
@@ -199,7 +200,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                                     <ImageSettingsPanel
                                         config={generationConfig}
                                         showTitle={false}
-                                        showCount={false}
+                                        showCount={true}
                                         bypassPriceGuard
                                         className="space-y-3"
                                         theme={theme}
@@ -219,7 +220,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                                 取消
                             </Button>
                             <Button type="primary" icon={<WandSparkles className="size-4" />} onClick={submit}>
-                                AI 修改
+                                {Number(generationConfig.count) > 1 ? `AI 修改 (${generationConfig.count} 张)` : "AI 修改"}
                             </Button>
                         </div>
                     </div>

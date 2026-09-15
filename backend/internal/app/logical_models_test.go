@@ -84,6 +84,34 @@ func TestMatchCapabilityTreatsVideoResolutionSuffixAsEquivalent(t *testing.T) {
 	}
 }
 
+func TestMatchCapabilityTreatsImageQualityTiersAsEquivalent(t *testing.T) {
+	// OpenAI 模型声明 values: ["auto", "low", "medium", "high"]
+	openAISpec := CapabilitySpec{
+		Version:    1,
+		Capability: "image",
+		Options:    map[string]OptionConstraint{"quality": {Values: []any{"auto", "low", "medium", "high"}}},
+	}
+	for _, q := range []string{"1k", "2k", "auto", "low", "medium", "high"} {
+		intent := ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": q}}
+		if match := MatchCapability(openAISpec, intent); !match.Matched {
+			t.Errorf("openAISpec should accept quality %q, but got reasons: %#v", q, match.Reasons)
+		}
+	}
+
+	// Grok 模型声明 values: ["1k", "2k"]
+	grokSpec := CapabilitySpec{
+		Version:    1,
+		Capability: "image",
+		Options:    map[string]OptionConstraint{"quality": {Values: []any{"1k", "2k"}}},
+	}
+	for _, q := range []string{"1k", "2k", "auto", "standard"} {
+		intent := ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": q}}
+		if match := MatchCapability(grokSpec, intent); !match.Matched {
+			t.Errorf("grokSpec should accept quality %q, but got reasons: %#v", q, match.Reasons)
+		}
+	}
+}
+
 func TestVideoResolutionAliasesAcrossProductAndPricedRoutes(t *testing.T) {
 	product := CapabilitySpec{
 		Version: 1, Capability: "video",

@@ -39,7 +39,7 @@ import { buildVideoFrameNodes } from "@/lib/canvas/canvas-video-frame-nodes";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { extractVideoAudio, trimVideoSegment } from "@/lib/canvas/canvas-video-segment";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { defaultImageParamsForModel } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { storeGeneratedVideo } from "@/services/api/video";
@@ -48,13 +48,29 @@ import { uploadImage } from "@/services/image-storage";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import type { GenerationTask } from "@/services/api/task-center";
 
-function normalizeMaskEditQuality(quality: string | undefined, size: string | undefined) {
-    const value = String(quality || "").trim().toLowerCase();
-    if (value && value !== "auto" && value !== "any") return value;
-    const match = String(size || "").trim().toLowerCase().match(/^(\d+)x(\d+)$/);
-    if (!match) return quality || "auto";
-    const pixels = Number(match[1]) * Number(match[2]);
-    return pixels <= 2_000_000 ? "1k" : pixels <= 4_300_000 ? "2k" : pixels <= 8_294_400 ? "4k" : quality || "auto";
+function normalizeMaskEditQuality(quality: string | undefined, size: string | undefined, profile?: ImageCapabilityConfig) {
+    const raw = String(quality || "").trim().toLowerCase();
+    if (!profile?.quality?.supported) {
+        return raw === "auto" || raw === "any" ? "auto" : raw;
+    }
+    const supportedValues = (profile.quality.values || []).map((v) => v.toLowerCase());
+    if (raw && raw !== "auto" && raw !== "any" && supportedValues.includes(raw)) {
+        return raw;
+    }
+    if (supportedValues.includes("auto")) {
+        return "auto";
+    }
+    const hasKResolution = supportedValues.some((v) => ["1k", "2k", "4k"].includes(v));
+    if (hasKResolution) {
+        const match = String(size || "").trim().toLowerCase().match(/^(\d+)x(\d+)$/);
+        if (match) {
+            const pixels = Number(match[1]) * Number(match[2]);
+            const tier = pixels <= 2_000_000 ? "1k" : pixels <= 4_300_000 ? "2k" : "4k";
+            if (supportedValues.includes(tier)) return tier;
+        }
+        return profile.quality.default || "1k";
+    }
+    return profile.quality.default || "auto";
 }
 import { defaultConfig, resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState } from "@/types/canvas";
@@ -658,7 +674,7 @@ export function useCanvasMediaTools({
             ...payload.generationConfig,
             model: selectedModel,
             imageModel: payload.generationConfig?.imageModel || payload.generationConfig?.model || effectiveConfig.imageModel,
-            quality: normalizeMaskEditQuality(payload.generationConfig?.quality || node.metadata?.quality || baseGenerationConfig.quality || modelDefaults.quality, payload.generationConfig?.size || node.metadata?.size || baseGenerationConfig.size || modelDefaults.size),
+            quality: normalizeMaskEditQuality(payload.generationConfig?.quality || node.metadata?.quality || baseGenerationConfig.quality || modelDefaults.quality, payload.generationConfig?.size || node.metadata?.size || baseGenerationConfig.size || modelDefaults.size, selectedImageProfile),
             count: String(payload.generationConfig?.count || 1),
             // 原图像素尺寸不是模型的输出尺寸合同；非高级设置时使用模型默认尺寸，避免把节点尺寸误发给上游。
             size: payload.generationConfig?.size || node.metadata?.size || modelDefaults.size,
