@@ -52,6 +52,34 @@ func TestValidateVideoTaskRejectsPromptAboveCapabilityLimit(t *testing.T) {
 	}
 }
 
+// 视频提示词由输入框文本、连线内容和技能上下文合成，默认上限必须留出足够余量，
+// 否则画布工作流会连同线内容一起被拦在本地。这里锁定默认值与边界行为。
+func TestDefaultVideoPromptMaxCharsAllowsComposedCanvasPrompt(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("seedance-videos-compatible", "sd-2.5").Video
+	if profile.References.PromptMaxChars != 8000 {
+		t.Fatalf("视频默认提示词上限 = %d, want 8000", profile.References.PromptMaxChars)
+	}
+
+	// 画布实际合成出的提示词量级（输入框 + 连线 + 技能上下文）必须通过。
+	composed := canvasGenerationInput{Mode: "video", Prompt: strings.Repeat("镜", 2399), Config: providerConfig{Model: "sd-2.5", VideoSeconds: "6", Size: "16:9", VQuality: "720p"}}
+	if err := validateVideoTask(profile, composed); err != nil {
+		t.Fatalf("合成提示词 2399 字符被拒绝: %v", err)
+	}
+	// 恰好等于上限仍然放行，与前端 `actualChars <= maxChars` 的判定保持一致。
+	atLimit := composed
+	atLimit.Prompt = strings.Repeat("镜", 8000)
+	if err := validateVideoTask(profile, atLimit); err != nil {
+		t.Fatalf("提示词 8000 字符被拒绝: %v", err)
+	}
+	// 超出上限必须明确失败，并保持“不自动截断”的语义。
+	overLimit := composed
+	overLimit.Prompt = strings.Repeat("镜", 8001)
+	err := validateVideoTask(profile, overLimit)
+	if err == nil || !strings.Contains(err.Error(), "最多 8000 个字符") || !strings.Contains(err.Error(), "8001 个字符") {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}
+
 func TestValidateTaskCapabilityRejectsWorkflowPromptAboveConfiguredLimit(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("runninghub-workflow-video", "workflow-video")
 	profile.Video.References.PromptMaxChars = 10_000

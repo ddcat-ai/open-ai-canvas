@@ -105,6 +105,11 @@ type VideoReferenceConfig struct {
 	MaxAudioDuration int   `json:"maxAudioDurationSeconds"`
 }
 
+// DefaultVideoPromptMaxChars 是普通视频模型提示词字符数的默认上限。
+// 视频提示词由输入框文本、连线内容和技能上下文合成，远长于用户手输内容；
+// 默认值过小会把画布工作流正常可用的提示词拦在本地。管理员仍可按模型覆盖。
+const DefaultVideoPromptMaxChars = 8000
+
 type VideoDurationConfig struct {
 	Selection string `json:"selection"`
 	Min       int    `json:"min,omitempty"`
@@ -206,7 +211,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	streaming := true
 	text := &TextCapabilityConfig{Streaming: &streaming, References: TextReferenceConfig{PromptMaxChars: 32000}}
 	video := &VideoCapabilityConfig{
-		References:        VideoReferenceConfig{PromptMaxChars: 1000, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
+		References:        VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
 		Ratios:            []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"},
 		DefaultRatio:      "16:9",

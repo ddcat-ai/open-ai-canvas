@@ -24,6 +24,15 @@ export type TextCapabilityConfig = {
 
 export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
 
+/**
+ * 普通视频模型提示词字符数的默认上限。
+ *
+ * 视频提示词由「输入框文本 + 连线内容 + 技能上下文」合成，远长于用户手输内容，
+ * 因此不能沿用偏小的默认值把画布工作流拦在本地。必须与后端
+ * `DefaultVideoPromptMaxChars` 保持一致，否则前端放行后端拒绝（或反之）。
+ */
+export const DEFAULT_VIDEO_PROMPT_MAX_CHARS = 8000;
+
 export type ImageCapabilityConfig = {
     references: {
         promptMaxChars: number;
@@ -262,7 +271,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     };
     const video: VideoCapabilityConfig = {
         references: {
-            promptMaxChars: 1000,
+            promptMaxChars: DEFAULT_VIDEO_PROMPT_MAX_CHARS,
             minImages: 0,
             maxImages: 9,
             maxImageBytes: 30 * 1024 * 1024,
