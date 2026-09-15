@@ -1034,6 +1034,8 @@
 
     /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
     --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
+    --canvas-rail-width: 44px;            /* 画布节点列表导航栏宽度 */
+    --canvas-node-list-width: 240px;      /* 画布节点列表面板宽度 */
     --canvas-panel-width: min(332px, calc(100vw - 24px)); /* 浮动面板默认宽度（活动任务等）*/
     --video-segment-preview-max-height: min(46vh, 480px);
 
@@ -1992,6 +1994,226 @@
         .canvas-project-sidebar-assets-button {
             transition: none;
         }
+    }
+
+    /* 画布节点列表导航栏 */
+    .canvas-rail {
+        display: flex;
+        width: var(--canvas-rail-width);
+        flex: 0 0 var(--canvas-rail-width);
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 8px 0;
+        border-right: 1px solid var(--workspace-border);
+        background: var(--workspace-glass-surface);
+        backdrop-filter: blur(var(--dock-blur)) saturate(var(--glass-saturate));
+    }
+
+    .canvas-rail .rail-btn {
+        display: flex;
+        width: 32px;
+        height: auto;
+        min-height: 32px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 0;
+        margin-bottom: 3px !important;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--foreground);
+        opacity:0.9;
+        cursor: pointer;
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out, opacity var(--motion-instant) ease-out;
+    }
+
+    .canvas-rail .rail-btn:hover {
+        background: var(--surface-hover);
+        opacity: 0.85;
+    }
+
+    .canvas-rail .rail-btn.on {
+        background: var(--surface-active);
+        opacity: 1;
+    }
+
+    .canvas-rail .rail-btn:focus-visible {
+        outline: 2px solid var(--workspace-accent);
+        outline-offset: 1px;
+    }
+
+    .canvas-rail .rail-label {
+        font-size: var(--fs-micro);
+        line-height: 1;
+        text-align: center;
+        margin-top: 4px;
+    }
+
+    .canvas-rail .rail-sep {
+        width: 20px;
+        height: 1px;
+        margin: 4px 0;
+        background: var(--workspace-border);
+    }
+
+    .canvas-rail .rail-grow {
+        flex: 1 1 auto;    
+    }
+
+    .canvas-rail .tip-right[data-tip]::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: calc(100% + 6px);
+        z-index: var(--z-tooltip, 90);
+        white-space: nowrap;
+        border-radius: var(--r-sm);
+        background: var(--foreground);
+        color: var(--background);
+        padding: 2px 8px;
+        font-size: var(--fs-micro);
+        font-weight: 500;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--motion-instant) ease-out;
+    }
+
+    .canvas-rail .tip-right[data-tip]:hover::after {
+        opacity: 0.92;
+    }
+
+    .canvas-workspace-panel {
+        display: flex;
+        width: var(--canvas-node-list-width);
+        flex: 0 0 var(--canvas-node-list-width);
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .canvas-workspace-sidebar {
+        height: 100%;
+    }
+
+    .sidebar-subtabs {
+        display: flex;
+        gap: 0;
+        padding: 0 4px;
+    }
+
+    .sidebar-subtabs button {
+        flex: 1;
+        height: 32px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: var(--foreground);
+        opacity: 0.45;
+        font-size: var(--fs-tiny);
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity var(--motion-instant) ease-out, border-color var(--motion-instant) ease-out;
+    }
+
+    .sidebar-subtabs button:hover {
+        opacity: 0.75;
+    }
+
+    .sidebar-subtabs button.active {
+        opacity: 1;
+        border-bottom-color: var(--workspace-accent, var(--primary));
+    }
+
+    .asset-filters {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .asset-type-chips {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .asset-type-chips .type-chip {
+        height: 22px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        color: var(--foreground);
+        opacity: 0.5;
+        font-size: var(--fs-micro);
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .asset-type-chips .type-chip:hover {
+        opacity: 0.8;
+    }
+
+    .asset-type-chips .type-chip.on {
+        opacity: 1;
+        background: color-mix(in srgb, var(--workspace-accent, var(--primary)) 12%, transparent);
+        color: var(--workspace-accent, var(--primary));
+    }
+
+    .asset-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: auto;
+    }
+
+    .asset-head-actions .icon-btn {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--foreground);
+        opacity: 0.4;
+        cursor: pointer;
+        transition: opacity var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .asset-head-actions .icon-btn:hover {
+        opacity: 0.8;
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
+
+    .asset-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .asset-filter-row .asset-search {
+        flex: 1;
+        min-width: 0;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border-radius: var(--r-sm);
+        background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
+        color: var(--foreground);
+        font-size: var(--fs-tiny);
+        outline: none;
+    }
+
+    .asset-filter-row .asset-search:focus {
+        border-color: var(--workspace-accent, var(--primary));
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--workspace-accent, var(--primary)) 15%, transparent);
+    }
+
+    .asset-filter-row .asset-search::placeholder {
+        opacity: 0.4;
     }
 
     .app-workspace-main-row {

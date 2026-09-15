@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
-import { loadAssetsForUse } from "@/services/user-data-sync";
+import { loadAssetsForUse, deleteAssetWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { canvasAssetHandoffIds } from "@/lib/canvas/canvas-asset-handoff";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
@@ -21,7 +21,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { refreshCanvasCharacterReferenceNodes } from "@/lib/canvas/canvas-character-reference";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { flushCanvasStorePersistence } from "@/stores/canvas/use-canvas-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
@@ -52,6 +52,7 @@ import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dial
 import { CanvasNodeLightingPanel } from "@/components/canvas/canvas-node-lighting-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
+import { CanvasWorkspaceSidebar } from "@/components/canvas/canvas-workspace-sidebar";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
 import { CanvasDirectorTemplateModal } from "@/components/canvas/director/canvas-director-template-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
@@ -122,6 +123,7 @@ import { useCanvasConnectionController } from "./use-canvas-connection-controlle
 import { useCanvasOperationHistory } from "./use-canvas-operation-history";
 import { useCanvasAssistantVisibility } from "./use-canvas-assistant-visibility";
 import { useCanvasActiveTasks } from "./use-canvas-active-tasks";
+import { useCanvasWorkspaceTasks } from "./use-canvas-workspace-tasks";
 import { useCanvasStyleWorkflow } from "./use-canvas-style-workflow";
 import { useCanvasDirector } from "./use-canvas-director";
 import { useCanvasGeneration } from "./use-canvas-generation";
@@ -227,6 +229,8 @@ function visibleGenerationBatch(node: CanvasNodeData) {
     return batches.at(-1);
 }
 
+type LibraryAsset = Exclude<Asset, { kind: "entity" }>;
+
 export default function CanvasPage() {
     useCanvasThemeScope();
     const [mounted, setMounted] = useState(false);
@@ -257,6 +261,8 @@ function InfiniteCanvasPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const assets = useAssetStore((state) => state.assets);
+    const updateAsset = useAssetStore((state) => state.updateAsset);
+    const libraryAssets = useMemo(() => assets.filter((asset): asset is LibraryAsset => asset.kind !== "entity" && asset.status !== "archived"), [assets]);
     const assetsHydrated = useAssetStore((state) => state.hydrated);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const colorTheme = useCanvasThemeStore((state) => state.theme);
@@ -306,6 +312,7 @@ function InfiniteCanvasPage() {
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
+    const [nodeListSidebarOpen, setNodeListSidebarOpen] = useState(true);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [arkPrivateAssetUploadNodeId, setArkPrivateAssetUploadNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
@@ -345,6 +352,8 @@ function InfiniteCanvasPage() {
         setContextMenu(null);
     }, [agentMentionReferences, openAgent]);
     const { tasks: activeTasks } = useCanvasActiveTasks(projectId, projectLoaded);
+    const [sidebarActiveTab, setSidebarActiveTab] = useState<string>("nodes");
+    const { tasks: workspaceTasks, refreshing: workspaceTasksRefreshing, refetch: refetchWorkspaceTasks } = useCanvasWorkspaceTasks(projectId, projectLoaded && sidebarActiveTab === "tasks");
     const { focusMode, enterFocusMode, exitFocusMode, toggleFocusMode } = useFocusMode();
     const [focusDockRevealed, setFocusDockRevealed] = useState(false);
 
@@ -752,6 +761,21 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
     });
     const replaceCanvasNodeMedia = useCallback((node: CanvasNodeData) => handleUploadRequest(node.id), [handleUploadRequest]);
+    const handleInsertAssetImage = useCallback((asset: LibraryAsset) => { if (asset.kind === "image") void createImageAssetNode(asset); }, [createImageAssetNode]);
+    const handleAssetAction = useCallback(async (action: "copy" | "download" | "archive" | "delete", asset: LibraryAsset) => {
+        if (action === "copy" && asset.kind === "text") {
+            try { await navigator.clipboard.writeText(asset.data.content); message.success("文本已复制"); } catch { message.error("复制失败"); }
+        } else if (action === "download" && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model")) {
+            const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+            const ext = asset.kind === "model" ? (asset.data.fileName.split(".").pop() || "glb") : (asset.data.mimeType.split("/")[1] || "png");
+            const a = document.createElement("a"); a.href = url; a.download = `${asset.title || "asset"}.${ext}`; a.click();
+        } else if (action === "archive") {
+            updateAsset(asset.id, { status: "archived" });
+            try { await saveRemoteUserDataNow(); message.success(`已将「${asset.title}」移入回收站`); } catch { message.warning("已在本地移入回收站，待网络恢复后同步"); }
+        } else if (action === "delete") {
+            try { await deleteAssetWithRemoteSync(asset.id); message.success("素材已彻底删除"); } catch { message.error("删除失败"); }
+        }
+    }, [updateAsset]);
     const {
         timelineAddNodeRef,
         timelineMediaAddRef,
@@ -2343,6 +2367,33 @@ function InfiniteCanvasPage() {
             <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: resolvedCanvasAppearance.background, color: theme.node.text }}>
                 {!focusMode && shortDramaEnabled && currentProject?.projectId ? (
                     <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} />
+                ) : null}
+                {!focusMode && nodeListSidebarOpen ? (
+                    <CanvasWorkspaceSidebar
+                        nodes={nodes}
+                        selectedNodeIds={selectedNodeIds}
+                        onFocus={(nodeId) => {
+                            const target = nodeById.get(nodeId);
+                            const parent = target?.parentId ? nodeById.get(target.parentId) : null;
+                            if (parent?.metadata?.frame?.collapsed) toggleFrameCollapsed(parent.id);
+                            const batchRoot = target?.metadata?.batchRootId ? nodeById.get(target.metadata.batchRootId) : null;
+                            if (batchRoot && !batchRoot.metadata?.imageBatchExpanded) toggleBatchExpanded(batchRoot.id);
+                            const selection = new Set([nodeId]);
+                            selectedNodeIdsRef.current = selection;
+                            setSelectedNodeIds(selection);
+                            setSelectedConnectionId(null);
+                            focusCanvasNode(nodeId);
+                        }}
+                        assets={libraryAssets}
+                        onInsertAssetImage={handleInsertAssetImage}
+                        onRefreshAssets={() => void useAssetStore.persist.rehydrate()}
+                        onAssetAction={(action, asset) => void handleAssetAction(action, asset)}
+                        onActiveTabChange={setSidebarActiveTab}
+                        tasks={workspaceTasks}
+                        tasksRefreshing={workspaceTasksRefreshing}
+                        onRefreshTasks={() => void refetchWorkspaceTasks()}
+                        onCancelTask={cancelCanvasTask}
+                    />
                 ) : null}
                 <CanvasOverlayLayerProvider>
                     <section className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden">
