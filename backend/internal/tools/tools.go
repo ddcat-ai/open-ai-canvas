@@ -56,7 +56,7 @@ type ToolItem struct {
 	Prompt     string    `json:"prompt"`
 	Ratio      string    `json:"ratio"`
 	MediaURL   string    `json:"mediaUrl"`
-	OwnerID    int64     `json:"ownerId"`
+	OwnerID    string    `json:"ownerId"`
 	Source     string    `json:"source"`
 	Enabled    bool      `json:"enabled"`
 	Visibility string    `json:"visibility"`
@@ -99,7 +99,7 @@ func New(repo Repository) *Service {
 }
 
 // List 按范围分页查询工具列表。
-func (s *Service) List(userID int64, req ToolListRequest) (*ToolList, error) {
+func (s *Service) List(userID string, req ToolListRequest) (*ToolList, error) {
 	if err := normalizeToolListRequest(&req); err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (s *Service) List(userID int64, req ToolListRequest) (*ToolList, error) {
 }
 
 // SetFavorite 添加/取消收藏；同一用户对同一工具仅一条记录。
-func (s *Service) SetFavorite(userID int64, toolID int64, favorite bool) (*ToolItem, error) {
-	if userID <= 0 {
+func (s *Service) SetFavorite(userID string, toolID int64, favorite bool) (*ToolItem, error) {
+	if userID == "" {
 		return nil, kernel.Unauthorized("请先登录")
 	}
 	if toolID <= 0 {
@@ -148,8 +148,8 @@ func (s *Service) SetFavorite(userID int64, toolID int64, favorite bool) (*ToolI
 }
 
 // Create 创建用户自定义工具。
-func (s *Service) Create(userID int64, req ToolMutationRequest) (*ToolItem, error) {
-	if userID <= 0 {
+func (s *Service) Create(userID string, req ToolMutationRequest) (*ToolItem, error) {
+	if userID == "" {
 		return nil, kernel.Unauthorized("请先登录")
 	}
 	normalized, err := normalizeToolMutationRequest(req)
@@ -185,8 +185,8 @@ func (s *Service) Create(userID int64, req ToolMutationRequest) (*ToolItem, erro
 }
 
 // Delete 删除用户自定义工具；内置工具不可删除，同步清理收藏记录。
-func (s *Service) Delete(userID int64, toolID int64) error {
-	if userID <= 0 {
+func (s *Service) Delete(userID string, toolID int64) error {
+	if userID == "" {
 		return kernel.Unauthorized("请先登录")
 	}
 	if toolID <= 0 {

@@ -28,7 +28,6 @@ type toolSeedItem struct {
 	Visibility string   `json:"visibility"`
 	CreateAt   string   `json:"create_at"`
 	UpdateAt   string   `json:"update_at"`
-	OwnerID    int64    `json:"owner_id"`
 }
 
 type toolSeedGroup struct {
@@ -130,7 +129,7 @@ func EnsureBuiltinTools(repo Repository) error {
 				Prompt:        prompt,
 				Ratio:         strings.TrimSpace(item.Ratio),
 				MediaURL:      strings.TrimSpace(item.MediaURL),
-				OwnerID:       item.OwnerID,
+				OwnerID:       "",
 				Source:        ToolSourceBuiltin,
 				Enabled:       item.Enabled,
 				Visibility:    visibility,

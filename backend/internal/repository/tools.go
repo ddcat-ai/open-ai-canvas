@@ -18,17 +18,25 @@ func (r *Repository) UpsertBuiltinTools(tools []model.Tool) error {
 	if len(tools) == 0 {
 		return nil
 	}
-	return r.db.Clauses(clause.OnConflict{
+	if err := r.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"type", "label_en", "label", "desc", "tag", "cover", "extra_info_json", "prompt", "ratio",
 			"media_url", "owner_id", "source", "enabled", "visibility", "sort_weight", "updated_at",
 		}),
-	}).Create(&tools).Error
+	}).Create(&tools).Error; err != nil {
+		return err
+	}
+	// 内置工具显式写入自增主键，PostgreSQL 的序列不会自动前移；这里同步到当前最大值，
+	// 避免用户自建工具从 1 重新分配而与内置工具主键冲突。
+	if r.Dialect() != "postgres" {
+		return nil
+	}
+	return r.db.Exec("SELECT setval(pg_get_serial_sequence('tools', 'id'), (SELECT COALESCE(MAX(id), 1) FROM tools), true)").Error
 }
 
 // ListTools 按范围查询工具列表并携带当前用户收藏状态。
-func (r *Repository) ListTools(userID int64, req tools.ToolListRequest) ([]tools.ToolWithFavorite, int64, error) {
+func (r *Repository) ListTools(userID string, req tools.ToolListRequest) ([]tools.ToolWithFavorite, int64, error) {
 	base := r.db.Table("tools").Where("enabled = ?", true)
 	switch req.Scope {
 	case tools.ToolScopeFavorites:
@@ -104,7 +112,7 @@ func (r *Repository) ListTools(userID int64, req tools.ToolListRequest) ([]tools
 }
 
 // ToolForUser 校验可见性后返回工具。
-func (r *Repository) ToolForUser(userID int64, toolID int64) (model.Tool, error) {
+func (r *Repository) ToolForUser(userID string, toolID int64) (model.Tool, error) {
 	var tool model.Tool
 	err := r.db.Where("id = ? AND (visibility = ? OR owner_id = ?)", toolID, tools.ToolVisibilityPublic, userID).
 		First(&tool).Error
@@ -118,7 +126,7 @@ func (r *Repository) ToolForUser(userID int64, toolID int64) (model.Tool, error)
 }
 
 // ToolFavorited 返回工具及收藏时间（未收藏时为 nil）。
-func (r *Repository) ToolFavorited(userID int64, toolID int64) (model.Tool, *time.Time, error) {
+func (r *Repository) ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error) {
 	tool, err := r.ToolForUser(userID, toolID)
 	if err != nil {
 		return tool, nil, err
@@ -135,7 +143,7 @@ func (r *Repository) ToolFavorited(userID int64, toolID int64) (model.Tool, *tim
 }
 
 // AddToolFavorite 幂等添加收藏；已收藏时直接成功。
-func (r *Repository) AddToolFavorite(userID int64, toolID int64) error {
+func (r *Repository) AddToolFavorite(userID string, toolID int64) error {
 	favorite := model.ToolFavorite{UserID: userID, ToolID: toolID, CreatedAt: time.Now()}
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}, {Name: "tool_id"}},
@@ -144,7 +152,7 @@ func (r *Repository) AddToolFavorite(userID int64, toolID int64) error {
 }
 
 // RemoveToolFavorite 取消收藏；未收藏时也无错误。
-func (r *Repository) RemoveToolFavorite(userID int64, toolID int64) error {
+func (r *Repository) RemoveToolFavorite(userID string, toolID int64) error {
 	return r.db.Where("user_id = ? AND tool_id = ?", userID, toolID).
 		Delete(&model.ToolFavorite{}).Error
 }
@@ -158,7 +166,7 @@ func (r *Repository) CreateTool(tool *model.Tool) (*model.Tool, error) {
 }
 
 // DeleteUserTool 仅允许删除自己的自定义工具；事务内同步清理收藏记录。
-func (r *Repository) DeleteUserTool(userID int64, toolID int64) error {
+func (r *Repository) DeleteUserTool(userID string, toolID int64) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var tool model.Tool
 		err := tx.Where("id = ? AND owner_id = ? AND source = ?", toolID, userID, tools.ToolSourceUser).

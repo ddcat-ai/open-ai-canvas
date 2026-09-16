@@ -19,13 +19,13 @@ type ToolWithFavorite struct {
 // Repository 定义 tools 域需要的持久化接口，由 repository.Repository 实现。
 type Repository interface {
 	UpsertBuiltinTools(tools []model.Tool) error
-	ListTools(userID int64, req ToolListRequest) ([]ToolWithFavorite, int64, error)
-	ToolForUser(userID int64, toolID int64) (model.Tool, error)
-	ToolFavorited(userID int64, toolID int64) (model.Tool, *time.Time, error)
-	AddToolFavorite(userID int64, toolID int64) error
-	RemoveToolFavorite(userID int64, toolID int64) error
+	ListTools(userID string, req ToolListRequest) ([]ToolWithFavorite, int64, error)
+	ToolForUser(userID string, toolID int64) (model.Tool, error)
+	ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error)
+	AddToolFavorite(userID string, toolID int64) error
+	RemoveToolFavorite(userID string, toolID int64) error
 	CreateTool(tool *model.Tool) (*model.Tool, error)
-	DeleteUserTool(userID int64, toolID int64) error
+	DeleteUserTool(userID string, toolID int64) error
 }
 
 var labelEnPattern = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
