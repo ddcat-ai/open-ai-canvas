@@ -5,7 +5,8 @@ export type ToolScope = "public" | "favorites" | "recent" | "custom";
 export type ToolSource = "builtin" | "user";
 export type ToolVisibility = "public" | "private";
 
-export type ToolItem = {
+// 列表摘要项：不含 prompt、extraInfo 等大字段
+export type ToolSummary = {
     id: number;
     type: ToolType | string;
     labelEn: string;
@@ -13,8 +14,6 @@ export type ToolItem = {
     desc: string;
     tag: string;
     cover: string;
-    extraInfo: string[];
-    prompt: string;
     ratio: string;
     mediaUrl: string;
     ownerId: string;
@@ -27,8 +26,14 @@ export type ToolItem = {
     updatedAt: string;
 };
 
+// 详情/写操作返回的完整工具
+export type ToolItem = ToolSummary & {
+    extraInfo: string[];
+    prompt: string;
+};
+
 export type ToolList = {
-    tools: ToolItem[];
+    tools: ToolSummary[];
     totalCount: number;
     page: number;
     pageSize: number;

@@ -90,8 +90,12 @@ func (r *Repository) ListTools(userID string, req tools.ToolListRequest) ([]tool
 		TFID        *int64     `gorm:"column:tf_id"`
 		TFCreatedAt *time.Time `gorm:"column:tf_created_at"`
 	}
+	// 列表只取摘要字段，不取 extra_info_json、prompt 两个大字段；列与 tools.ToolSummary 对齐。
+	selectColumns := "tools.id, tools.type, tools.label_en, tools.label, tools.desc, tools.tag, tools.cover, " +
+		"tools.ratio, tools.media_url, tools.owner_id, tools.source, tools.enabled, tools.visibility, " +
+		"tools.sort_weight, tools.created_at, tools.updated_at, tf.id AS tf_id, tf.created_at AS tf_created_at"
 	err := base.Session(&gorm.Session{}).
-		Select("tools.*, tf.id AS tf_id, tf.created_at AS tf_created_at").
+		Select(selectColumns).
 		Order(orderBy).
 		Offset(offset).
 		Limit(req.PageSize).

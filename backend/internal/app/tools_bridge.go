@@ -8,6 +8,7 @@ type (
 	ToolListRequest     = tools.ToolListRequest
 	ToolList            = tools.ToolList
 	ToolItem            = tools.ToolItem
+	ToolSummary         = tools.ToolSummary
 	ToolMutationRequest = tools.ToolMutationRequest
 )
 

@@ -7,7 +7,7 @@ import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { VideoPlayer } from "@/components/video-player";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
-import { createTool, deleteTool, listTools, setToolFavorite, type ToolItem, type ToolScope, type ToolType, type ToolVisibility } from "@/services/api/tools";
+import { createTool, deleteTool, listTools, setToolFavorite, type ToolScope, type ToolSummary, type ToolType, type ToolVisibility } from "@/services/api/tools";
 
 type ToolSubTab = "style" | "effect" | "motion";
 
@@ -70,7 +70,7 @@ type CreateToolFormValues = {
 };
 
 export type CanvasWorkspaceToolPanelProps = {
-    onInsert?: (tool: ToolItem) => void;
+    onInsert?: (tool: ToolSummary) => void;
 };
 
 // 种子数据的 mediaUrl 多为相对路径，只有绝对 URL 能直接用于预览。
@@ -79,7 +79,7 @@ function toAbsoluteUrl(value?: string) {
     return /^https?:\/\//i.test(text) ? text : "";
 }
 
-function resolveToolPreview(tool: ToolItem): { kind: "video" | "image"; src: string } | null {
+function resolveToolPreview(tool: ToolSummary): { kind: "video" | "image"; src: string } | null {
     const media = toAbsoluteUrl(tool.mediaUrl);
     if (media && VIDEO_URL_RE.test(media)) return { kind: "video", src: media };
     const cover = toAbsoluteUrl(tool.cover) || media;
@@ -94,7 +94,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
     const [tagFilter, setTagFilter] = useState("");
     const [searchInput, setSearchInput] = useState("");
     const [searchText, setSearchText] = useState("");
-    const [previewTool, setPreviewTool] = useState<ToolItem | null>(null);
+    const [previewTool, setPreviewTool] = useState<ToolSummary | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [createForm] = Form.useForm<CreateToolFormValues>();
 
@@ -178,7 +178,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
         onError: (error) => message.error(error instanceof Error ? error.message : "工具创建失败"),
     });
 
-    function confirmDelete(tool: ToolItem) {
+    function confirmDelete(tool: ToolSummary) {
         modal.confirm({
             title: `删除“${tool.label}”？`,
             content: "删除后不可恢复，该工具的收藏记录也会一同移除。",
@@ -372,13 +372,13 @@ const ToolPresetCard = memo(function ToolPresetCard({
     onToggleFavorite,
     onDelete,
 }: {
-    tool: ToolItem;
+    tool: ToolSummary;
     feedTabLabel: string;
     favoritePending: boolean;
-    onInsert?: (tool: ToolItem) => void;
-    onView?: (tool: ToolItem) => void;
-    onToggleFavorite?: (tool: ToolItem) => void;
-    onDelete?: (tool: ToolItem) => void;
+    onInsert?: (tool: ToolSummary) => void;
+    onView?: (tool: ToolSummary) => void;
+    onToggleFavorite?: (tool: ToolSummary) => void;
+    onDelete?: (tool: ToolSummary) => void;
 }) {
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);

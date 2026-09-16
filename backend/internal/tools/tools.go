@@ -67,13 +67,34 @@ type ToolItem struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
+// ToolSummary 工具列表摘要项；不含 prompt、extraInfo 等大字段，详情/收藏结果才返回完整 ToolItem。
+type ToolSummary struct {
+	ID         int64     `json:"id"`
+	Type       string    `json:"type"`
+	LabelEn    string    `json:"labelEn"`
+	Label      string    `json:"label"`
+	Desc       string    `json:"desc"`
+	Tag        string    `json:"tag"`
+	Cover      string    `json:"cover"`
+	Ratio      string    `json:"ratio"`
+	MediaURL   string    `json:"mediaUrl"`
+	OwnerID    string    `json:"ownerId"`
+	Source     string    `json:"source"`
+	Enabled    bool      `json:"enabled"`
+	Visibility string    `json:"visibility"`
+	SortWeight int       `json:"sortWeight"`
+	Favorited  bool      `json:"favorited"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
 // ToolList 分页结果。
 type ToolList struct {
-	Tools      []ToolItem `json:"tools"`
-	TotalCount int64      `json:"totalCount"`
-	Page       int        `json:"page"`
-	PageSize   int        `json:"pageSize"`
-	HasMore    bool       `json:"hasMore"`
+	Tools      []ToolSummary `json:"tools"`
+	TotalCount int64         `json:"totalCount"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"pageSize"`
+	HasMore    bool          `json:"hasMore"`
 }
 
 // ToolMutationRequest 新增/更新自定义工具的请求体。
@@ -108,9 +129,9 @@ func (s *Service) List(userID string, req ToolListRequest) (*ToolList, error) {
 	if err != nil {
 		return nil, err
 	}
-	tools := make([]ToolItem, 0, len(items))
+	tools := make([]ToolSummary, 0, len(items))
 	for _, item := range items {
-		tools = append(tools, buildToolItem(item.Tool, item.Favorited, item.FavoritedAt))
+		tools = append(tools, buildToolSummary(item.Tool, item.Favorited))
 	}
 	return &ToolList{
 		Tools:      tools,
@@ -300,6 +321,28 @@ func normalizeToolMutationRequest(req ToolMutationRequest) (*model.Tool, error) 
 		MediaURL:      mediaURL,
 		Visibility:    visibility,
 	}, nil
+}
+
+func buildToolSummary(tool model.Tool, favorited bool) ToolSummary {
+	return ToolSummary{
+		ID:         tool.ID,
+		Type:       tool.Type,
+		LabelEn:    tool.LabelEn,
+		Label:      tool.Label,
+		Desc:       tool.Desc,
+		Tag:        tool.Tag,
+		Cover:      tool.Cover,
+		Ratio:      tool.Ratio,
+		MediaURL:   tool.MediaURL,
+		OwnerID:    tool.OwnerID,
+		Source:     tool.Source,
+		Enabled:    tool.Enabled,
+		Visibility: tool.Visibility,
+		SortWeight: tool.SortWeight,
+		Favorited:  favorited,
+		CreatedAt:  tool.CreatedAt,
+		UpdatedAt:  tool.UpdatedAt,
+	}
 }
 
 func buildToolItem(tool model.Tool, favorited bool, favoritedAt *time.Time) ToolItem {
