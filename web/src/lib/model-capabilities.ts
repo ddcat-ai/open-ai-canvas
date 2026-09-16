@@ -254,6 +254,52 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     return image;
 }
 
+// MiniMax Hailuo H3 判定：模型名命中 minimax_h3 / MiniMax-H3 / hailuo-h3 等
+// 拼写，且经 NewAPI 风格中转（协议来自模型 cost 或渠道 interfaceType）时，
+// 该模型真实支持的档位只有 768p / 1080p（2K），无 720p。
+// 该判定在 defaultModelCapabilityConfig（默认档位）与 modelCapabilityConfigFor
+// （合并已固化 capabilityConfig）两处共用，确保旧固化配置里残留的通用档位
+// 不会继续把 768p 挡在生成下拉之外。
+const RELAY_PROTOCOLS = ["newapi", "newapi-channel-1", "newapi-channel-2"] as const;
+const HAILUO_H3_RESOLUTIONS = ["768p", "1080p"] as const;
+const HAILUO_H3_NAME_PATTERN = /minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo/;
+// 海螺 H3 官方 prompt 上限为 2000 字符（Leonardo.AI / APIDot 等渠道文档明确）；
+// 本地历史通用视频默认 1000 偏低，会误拦分镜工作流自动生成的长提示词（常超 1000）。
+const HAILUO_H3_PROMPT_MAX_CHARS = 2000;
+
+// 仅按模型名识别海螺 H3（不关心协议），供请求路由与档位推断在渠道/模型未标注
+// 协议时兜底复用。
+export function isHailuoH3Model(model: string): boolean {
+    return HAILUO_H3_NAME_PATTERN.test(model.trim().toLowerCase());
+}
+
+export function isHailuoH3ViaRelay(protocol: ModelProtocol | undefined, model: string): boolean {
+    return (RELAY_PROTOCOLS as readonly string[]).includes(protocol ?? "") && isHailuoH3Model(model);
+}
+
+// H3 档位判定：经 NewAPI 中转（协议明确为中转）或未标注协议时都按 768p/1080p 处理。
+// 未标注协议（渠道未选 Provider、模型未单独标协议）时，模型名 minimax_h3 已强烈暗示
+// 是海螺 H3，且默认按 NewAPI 中转处理（该模型最常见的接法），避免落到通用
+// 480p..2160p 档位、漏掉 768p。原生 MiniMax 协议（minimax-video）走自己的 768P/2K 档位，
+// 不受此影响。
+function shouldUseHailuoH3Resolutions(protocol: ModelProtocol | undefined, model: string): boolean {
+    return isHailuoH3ViaRelay(protocol, model) || (!protocol && isHailuoH3Model(model));
+}
+
+// 仅当协议/模型真实只支持某组档位时（H3 经中转 = 768p/1080p），把已固化配置里
+// 的通用/过期档位规整到权威档位，防止无 720p 的模型被 UI 引导到会被上游拒收的档位。
+// 规则：保存列表里只要混入任一非权威档位（如通用基线里的 720p/480p），说明它是过期
+// 快照，直接回落权威档位；若已是权威档位的子集（用户刻意收窄），则保留其选择。
+function reconcileSavedResolutions(protocol: ModelProtocol | undefined, model: string, video: VideoCapabilityConfig): VideoCapabilityConfig {
+    if (!shouldUseHailuoH3Resolutions(protocol, model)) return video;
+    const authoritative = HAILUO_H3_RESOLUTIONS;
+    const saved = (video.resolutions || []).map(normalizeCapabilityString).filter(Boolean);
+    const hasInvalidTier = saved.some((value) => !(authoritative as readonly string[]).includes(value));
+    const resolutions = !saved.length || hasInvalidTier ? [...authoritative] : saved;
+    const defaultResolution = resolutions.includes(normalizeCapabilityString(video.defaultResolution)) ? normalizeCapabilityString(video.defaultResolution) : resolutions[0];
+    return { ...video, resolutions, defaultResolution };
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
@@ -341,6 +387,25 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.defaultResolution = "720P";
         video.operations.push("reference_to_video", "audio_to_video");
     }
+    // MiniMax Hailuo H3 (minimax_h3 / MiniMax-H3 / hailuo-*) only exposes
+    // 768p and 1080p (2K) tiers. When routed through a NewAPI-style relay
+    // (newapi / newapi-channel-1 / newapi-channel-2) the generic default
+    // wrongly ships 720p, which upstream rejects with "unsupported H3
+    // resolution". Pin the relay config to 768p/1080p and default to 768p so
+    // longer shots (up to 15s) stay valid; 1080p/2K caps at ~8s.
+    if (shouldUseHailuoH3Resolutions(protocol, model)) {
+        video.references.maxImages = 9;
+        video.references.maxVideos = 3;
+        video.references.maxVideoDurationSeconds = 15;
+        video.references.maxVideoBytes = 200 * 1024 * 1024;
+        video.references.promptMaxChars = HAILUO_H3_PROMPT_MAX_CHARS;
+        video.duration = { selection: "enum", values: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], default: 6 };
+        video.ratios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+        video.resolutions = ["768p", "1080p"];
+        video.defaultResolution = "768p";
+        video.generateAudio = { supported: true, default: true };
+        video.watermark = { supported: true, default: false };
+    }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 
@@ -360,17 +425,31 @@ export function pluginWorkflowCapabilityConfig(protocol: ModelProtocol, workflow
     return { ...fallback, video: workflowVideoCapabilityConfig(fields, fallback.video!) };
 }
 
-export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
+export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; interfaceType?: ModelProtocol; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
     const separator = model.indexOf("::");
     const channelId = separator >= 0 ? model.slice(0, separator) : "";
     const modelName = separator >= 0 ? model.slice(separator + 2) : model;
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
-    const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
+    // 默认能力配置的协议源必须与请求路由保持一致：模型级协议优先，缺省回退到
+    // 渠道接口类型（与 resolveModelRequestConfig 的 interfaceType = protocol || channel.interfaceType 对齐）。
+    // 否则仅设置了渠道级协议（如 newapi-channel-2 中转）而模型未单独标协议的模型，
+    // 其默认清晰度会退化成通用 720p 档位，漏掉 768p 等模型专属档。
+    const protocol = cost?.protocol || channel?.interfaceType;
+    const fallback = defaultModelCapabilityConfig(protocol, modelName);
     if (!cost?.capabilityConfig) return fallback;
     const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
     const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;
-    const video = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video;
+    // 已固化的 capabilityConfig 里可能残留模型升级/档位调整前的过期 resolutions
+    // （如 H3 经中转被存成通用 480p..2160p）。合并后按协议+模型名规整到权威档位，
+    // 避免 UI 提供模型根本不支持、会被上游拒收的分辨率。
+    const mergedVideo = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video!;
+    const video = reconcileSavedResolutions(protocol, modelName, mergedVideo);
+    // 已固化的 capabilityConfig 里同样残留着通用视频默认的 promptMaxChars=1000，
+    // 而海螺 H3 官方上限是 2000。对 H3 强制抬到 2000，避免误拦自动生成的长分镜提示词。
+    if (shouldUseHailuoH3Resolutions(protocol, modelName)) {
+        video.references = { ...video.references, promptMaxChars: HAILUO_H3_PROMPT_MAX_CHARS };
+    }
     const configuredImage = capabilityConfig.image;
     const image = configuredImage
         ? (() => {

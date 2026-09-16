@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,6 +268,11 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	case model.ChannelInterfaceAgnesVideo:
 		video = applyModelSpecificVideoCapability(video, protocol, modelName)
 	}
+	// 海螺 H3 官方 prompt 上限 2000 字符，历史通用视频默认 1000 偏低，会误拦
+	// 分镜工作流自动生成的长提示词（常超 1000）。
+	if isHailuoH3ViaRelay(modelName) {
+		video.References.PromptMaxChars = hailuoH3PromptMaxChars
+	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }
 
@@ -348,8 +354,30 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 	return value, nil
 }
 
+// 海螺 H3 官方 prompt 上限（Leonardo.AI / APIDot 等渠道文档明确为 2000 字符）。
+const hailuoH3PromptMaxChars = 2000
+
+// isHailuoH3ViaRelay 判断模型名是否为经 NewAPI 中转的 MiniMax Hailuo H3
+// （minimax_h3 / MiniMax-H3 / hailuo-3 / minimax-hailuo…），与前端
+// web/src/lib/model-capabilities.ts 的同名判定保持一致。
+func isHailuoH3ViaRelay(model string) bool {
+	name := strings.ToLower(strings.TrimSpace(model))
+	return regexp.MustCompile(`minimax[-_]?h3|hailuo[-_]?3|hailuo[-_]?h3|minimax[-_]?hailuo`).MatchString(name)
+}
+
 func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
-	if profile == nil || model.ChannelInterfaceType(strings.TrimSpace(protocol)) != model.ChannelInterfaceAgnesVideo {
+	if profile == nil {
+		return profile
+	}
+	// 海螺 H3（minimax_h3 / MiniMax-H3 / hailuo-*）经 NewAPI 中转的官方 prompt 上限是
+	// 2000 字符；历史通用视频默认 1000 已固化进渠道配置，这里强制抬到 2000，避免
+	// 误拦分镜工作流自动生成的长提示词。此规整在归一化时对所有视频协议生效。
+	if isHailuoH3ViaRelay(modelName) {
+		value := *profile
+		value.References.PromptMaxChars = hailuoH3PromptMaxChars
+		return &value
+	}
+	if model.ChannelInterfaceType(strings.TrimSpace(protocol)) != model.ChannelInterfaceAgnesVideo {
 		return profile
 	}
 	normalizedModel := strings.ToLower(strings.TrimSpace(modelName))
