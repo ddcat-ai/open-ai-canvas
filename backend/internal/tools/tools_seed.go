@@ -24,6 +24,7 @@ type toolSeedItem struct {
 	Prompt     string   `json:"prompt"`
 	Ratio      string   `json:"ratio"`
 	MediaURL   string   `json:"media_url"`
+	OwnerID    string   `json:"owner_id"`
 	Enabled    bool     `json:"enabled"`
 	Visibility string   `json:"visibility"`
 	CreateAt   string   `json:"create_at"`
@@ -46,6 +47,7 @@ const (
 	ToolTypeStyle         = "style"
 	ToolTypeCameraMotions = "camera_motions"
 	ToolTypeNineGrid      = "nine_grid"
+	ToolTypeEffect        = "effect"
 )
 
 const seedTimeLayout = "2006-01-02 15:04:05"
@@ -129,7 +131,7 @@ func EnsureBuiltinTools(repo Repository) error {
 				Prompt:        prompt,
 				Ratio:         strings.TrimSpace(item.Ratio),
 				MediaURL:      strings.TrimSpace(item.MediaURL),
-				OwnerID:       "",
+				OwnerID:       item.OwnerID,
 				Source:        ToolSourceBuiltin,
 				Enabled:       item.Enabled,
 				Visibility:    visibility,

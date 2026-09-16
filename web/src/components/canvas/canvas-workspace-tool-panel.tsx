@@ -1,18 +1,21 @@
-import { memo, useEffect, useDeferredValue, useMemo, useRef, useState } from "react";
-import { Eye, MoreHorizontal, Plus, Star, Trash2, Wrench, X } from "lucide-react";
-import { Dropdown, type MenuProps } from "antd";
+import { memo, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { Eye, Loader2, MoreHorizontal, Plus, Star, Trash2, Wrench, X } from "lucide-react";
+import { App, Dropdown, Form, Input, Radio, Select, type MenuProps } from "antd";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { VideoPlayer } from "@/components/video-player";
-import { WorkspaceState } from "@/components/layout/workspace-state";
+import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
+import { createTool, deleteTool, listTools, setToolFavorite, type ToolItem, type ToolScope, type ToolType, type ToolVisibility } from "@/services/api/tools";
 
 type ToolSubTab = "style" | "effect" | "motion";
 
-const TOOL_SUB_TABS: Array<{ id: ToolSubTab; label: string }> = [
-    { id: "style", label: "风格" },
-    { id: "effect", label: "特效" },
-    { id: "motion", label: "运镜" },
+// effect 分组对应后端 nine_grid（九宫格）
+const TOOL_SUB_TABS: Array<{ id: ToolSubTab; type: ToolType; label: string }> = [
+    { id: "style", type: "style", label: "风格" },
+    { id: "effect", type: "effect", label: "特效" },
+    { id: "motion", type: "camera_motions", label: "运镜" },
 ];
 
 // 各子 Tab 的独立标签集，与 backend internal/tools/seed/tools.json 的 tags 对齐
@@ -38,7 +41,7 @@ const SUB_TAB_TAGS: Record<Exclude<ToolSubTab, "effect">, Array<{ id: string; la
     ],
 };
 
-type FeedTab = "public" | "favorites" | "recent" | "custom";
+type FeedTab = ToolScope;
 
 const FEED_TABS: Array<{ id: FeedTab; label: string }> = [
     { id: "public", label: "公共" },
@@ -47,68 +50,161 @@ const FEED_TABS: Array<{ id: FeedTab; label: string }> = [
     { id: "custom", label: "自定义" },
 ];
 
-export type ToolPreset = {
-    id: string;
-    title: string;
-    tag: string;
-    coverUrl?: string;
-    mediaUrl?: string;
-    mediaType?: "image" | "video";
-    description?: string;
-};
+const TOOL_PAGE_SIZE = 40;
+const TOOL_SEARCH_DEBOUNCE_MS = 250;
 
-type ToolAction = "insert" | "view" | "favorite" | "delete";
+const VIDEO_URL_RE = /\.(mp4|webm|mov|m4v)(?:$|[?#])/i;
+
+// 悬停播放预览视频的工具类型：运镜、特效
+const HOVER_VIDEO_TYPES = new Set(["camera_motions", "effect"]);
+
+type CreateToolFormValues = {
+    label: string;
+    tag?: string;
+    visibility: ToolVisibility;
+    desc?: string;
+    prompt: string;
+    cover?: string;
+    mediaUrl?: string;
+    ratio?: string;
+};
 
 export type CanvasWorkspaceToolPanelProps = {
-    presets?: ToolPreset[];
-    onInsert?: (preset: ToolPreset) => void;
-    onAction?: (action: ToolAction, preset: ToolPreset) => void;
+    onInsert?: (tool: ToolItem) => void;
 };
 
-const PLACEHOLDER_PRESETS: ToolPreset[] = [
-    { id: "p1", title: "电影感胶片", tag: "decade", coverUrl: "https://picsum.photos/200/300", description: "Kodak Portra 400 质感" },
-    { id: "p2", title: "日系清新", tag: "life", coverUrl: "https://picsum.photos/200/301", description: "低对比柔光人像" },
-    { id: "p3", title: "赛博朋克霓虹", tag: "science_fiction", coverUrl: "https://picsum.photos/200/302", description: "高饱和霓虹光效" },
-    { id: "p4", title: "水彩手绘", tag: "drawing", coverUrl: "https://picsum.photos/200/303", description: "透明水彩笔触" },
-    { id: "p5", title: "厚涂油画", tag: "drawing", coverUrl: "https://picsum.photos/200/304", description: "印象派色彩" },
-    { id: "p6", title: "吉卜力风", tag: "animation", coverUrl: "https://picsum.photos/200/305", description: "宫崎骏动画质感" },
-    { id: "p7", title: "新海诚风", tag: "animation", coverUrl: "https://picsum.photos/200/306", description: "高清远景云层" },
-    { id: "p8", title: "故障艺术", tag: "science_fiction", coverUrl: "https://picsum.photos/200/307", description: "RGB 偏移像素损坏" },
-];
+// 种子数据的 mediaUrl 多为相对路径，只有绝对 URL 能直接用于预览。
+function toAbsoluteUrl(value?: string) {
+    const text = (value || "").trim();
+    return /^https?:\/\//i.test(text) ? text : "";
+}
 
-export function CanvasWorkspaceToolPanel({ presets = PLACEHOLDER_PRESETS, onInsert, onAction }: CanvasWorkspaceToolPanelProps) {
+function resolveToolPreview(tool: ToolItem): { kind: "video" | "image"; src: string } | null {
+    const media = toAbsoluteUrl(tool.mediaUrl);
+    if (media && VIDEO_URL_RE.test(media)) return { kind: "video", src: media };
+    const cover = toAbsoluteUrl(tool.cover) || media;
+    return cover ? { kind: "image", src: cover } : null;
+}
+
+export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelProps) {
+    const { message, modal } = App.useApp();
+    const queryClient = useQueryClient();
     const [subTab, setSubTab] = useState<ToolSubTab>("style");
     const [feedTab, setFeedTab] = useState<FeedTab>("public");
     const [tagFilter, setTagFilter] = useState("");
-    const [query, setQuery] = useState("");
-    const [previewPreset, setPreviewPreset] = useState<ToolPreset | null>(null);
-    const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+    const [searchInput, setSearchInput] = useState("");
+    const [searchText, setSearchText] = useState("");
+    const [previewTool, setPreviewTool] = useState<ToolItem | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [createForm] = Form.useForm<CreateToolFormValues>();
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => setSearchText(searchInput.trim()), TOOL_SEARCH_DEBOUNCE_MS);
+        return () => window.clearTimeout(timer);
+    }, [searchInput]);
+
+    const activeType = TOOL_SUB_TABS.find((tab) => tab.id === subTab)?.type ?? "style";
+    const subTabLabel = TOOL_SUB_TABS.find((tab) => tab.id === subTab)?.label || "";
+    const feedTabLabel = FEED_TABS.find((tab) => tab.id === feedTab)?.label || "";
 
     const tagChips = useMemo(() => {
         const tags = subTab === "style" ? SUB_TAB_TAGS.style : subTab === "motion" ? SUB_TAB_TAGS.motion : [];
         return [{ id: "", label: "全部" }, ...tags];
     }, [subTab]);
 
-    const filteredPresets = useMemo(() => {
-        let result = presets;
-        if (tagFilter) {
-            result = result.filter((p) => p.tag === tagFilter);
-        }
-        if (deferredQuery) {
-            result = result.filter((p) => p.title.toLowerCase().includes(deferredQuery) || p.description?.toLowerCase().includes(deferredQuery));
-        }
-        return result;
-    }, [presets, tagFilter, deferredQuery]);
+    const tagOptions = useMemo(() => {
+        const tags = subTab === "style" ? SUB_TAB_TAGS.style : subTab === "motion" ? SUB_TAB_TAGS.motion : [];
+        return tags.map((tag) => ({ value: tag.id, label: tag.label }));
+    }, [subTab]);
 
-    const subTabLabel = TOOL_SUB_TABS.find((t) => t.id === subTab)?.label || "";
-    const feedTabLabel = FEED_TABS.find((t) => t.id === feedTab)?.label || "";
+    const toolsQuery = useInfiniteQuery({
+        queryKey: ["canvas-tools", feedTab, activeType, tagFilter, searchText],
+        queryFn: ({ pageParam, signal }) =>
+            listTools(
+                {
+                    page: pageParam as number,
+                    pageSize: TOOL_PAGE_SIZE,
+                    scope: feedTab,
+                    type: activeType,
+                    tag: tagFilter || undefined,
+                    search: searchText || undefined,
+                },
+                { signal },
+            ),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+        placeholderData: keepPreviousData,
+    });
+
+    const tools = useMemo(() => toolsQuery.data?.pages.flatMap((page) => page.tools) ?? [], [toolsQuery.data]);
+    const totalCount = toolsQuery.data?.pages[0]?.totalCount ?? 0;
+
+    const invalidateTools = () => queryClient.invalidateQueries({ queryKey: ["canvas-tools"] });
+
+    const favoriteMutation = useMutation({
+        mutationFn: ({ id, favorite }: { id: number; favorite: boolean }) => setToolFavorite(id, favorite),
+        onSuccess: () => void invalidateTools(),
+        onError: (error) => message.error(error instanceof Error ? error.message : "收藏状态更新失败"),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: deleteTool,
+        onSuccess: () => {
+            void invalidateTools();
+            message.success("工具已删除");
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "工具删除失败"),
+    });
+
+    const createMutation = useMutation({
+        mutationFn: (values: CreateToolFormValues) =>
+            createTool({
+                type: activeType,
+                label: values.label.trim(),
+                desc: values.desc?.trim() || undefined,
+                tag: values.tag?.trim() || undefined,
+                cover: values.cover?.trim() || undefined,
+                prompt: values.prompt.trim(),
+                ratio: values.ratio?.trim() || undefined,
+                mediaUrl: values.mediaUrl?.trim() || undefined,
+                visibility: values.visibility,
+            }),
+        onSuccess: () => {
+            message.success("工具已创建");
+            setCreateOpen(false);
+            setFeedTab("custom");
+            void invalidateTools();
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "工具创建失败"),
+    });
+
+    function confirmDelete(tool: ToolItem) {
+        modal.confirm({
+            title: `删除“${tool.label}”？`,
+            content: "删除后不可恢复，该工具的收藏记录也会一同移除。",
+            okText: "删除",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: () => deleteMutation.mutateAsync(tool.id),
+        });
+    }
+
+    function handleScroll(event: UIEvent<HTMLDivElement>) {
+        const el = event.currentTarget;
+        if (el.scrollHeight - el.scrollTop - el.clientHeight > 120) return;
+        if (toolsQuery.hasNextPage && !toolsQuery.isFetchingNextPage) void toolsQuery.fetchNextPage();
+    }
+
+    const emptyTitle = feedTab === "favorites" ? "还没有收藏工具" : feedTab === "custom" ? "还没有自定义工具" : "没有匹配工具";
+    const emptyDescription = feedTab === "custom" ? "点击右上角“+”新建一个工具。" : "换一个分类或关键词继续搜索。";
+    const preview = previewTool ? resolveToolPreview(previewTool) : null;
 
     return (
         <>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2.5">
                 <Wrench className="size-3.5 shrink-0" />
                 <span className="truncate text-xs font-semibold">工具</span>
-                <span className="tabular-nums text-foreground/32">{filteredPresets.length.toLocaleString("zh-CN")}</span>
+                <span className="tabular-nums text-foreground/32">{totalCount.toLocaleString("zh-CN")}</span>
             </header>
 
             <div className="sidebar-subtabs shrink-0 border-b border-border/70">
@@ -118,7 +214,10 @@ export function CanvasWorkspaceToolPanel({ presets = PLACEHOLDER_PRESETS, onInse
                         type="button"
                         className={subTab === tab.id ? "active" : ""}
                         aria-pressed={subTab === tab.id}
-                        onClick={() => { setSubTab(tab.id); setTagFilter(""); }}
+                        onClick={() => {
+                            setSubTab(tab.id);
+                            setTagFilter("");
+                        }}
                     >
                         {tab.label}
                     </button>
@@ -128,88 +227,175 @@ export function CanvasWorkspaceToolPanel({ presets = PLACEHOLDER_PRESETS, onInse
             <div className="asset-filters shrink-0 border-b border-border/70 px-2 py-1.5">
                 <div className="col-feed-tabs">
                     {FEED_TABS.map((tab) => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            className={`col-feed-tab${feedTab === tab.id ? " on" : ""}`}
-                            aria-pressed={feedTab === tab.id}
-                            onClick={() => setFeedTab(tab.id)}
-                        >
+                        <button key={tab.id} type="button" className={`col-feed-tab${feedTab === tab.id ? " on" : ""}`} aria-pressed={feedTab === tab.id} onClick={() => setFeedTab(tab.id)}>
                             {tab.label}
                         </button>
                     ))}
                     <span className="asset-head-actions">
-                        <button type="button" className="icon-btn tip-down" data-tip={`新建${subTabLabel}`} aria-label={`新建${subTabLabel}`}>
+                        <button type="button" className="icon-btn tip-down" data-tip={`新建${subTabLabel}`} aria-label={`新建${subTabLabel}`} onClick={() => setCreateOpen(true)}>
                             <Plus className="size-3.5" />
                         </button>
                     </span>
                 </div>
                 <div className="asset-filter-row mt-1.5">
-                    <input
-                        className="asset-search"
-                        placeholder="搜索名称/标签"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        aria-label="搜索工具"
-                    />
-                    {query ? (
-                        <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setQuery("")} aria-label="清空搜索">
+                    <input className="asset-search" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索工具" />
+                    {searchInput ? (
+                        <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setSearchInput("")} aria-label="清空搜索">
                             <X className="size-3" />
                         </button>
                     ) : null}
                 </div>
                 <div className="col-tag-filter mt-1.5">
                     {tagChips.map((tag) => (
-                        <button
-                            key={tag.id || "all"}
-                            type="button"
-                            className={`col-tag-chip${tagFilter === tag.id ? " on" : ""}`}
-                            aria-pressed={tagFilter === tag.id}
-                            onClick={() => setTagFilter(tag.id)}
-                        >
+                        <button key={tag.id || "all"} type="button" className={`col-tag-chip${tagFilter === tag.id ? " on" : ""}`} aria-pressed={tagFilter === tag.id} onClick={() => setTagFilter(tag.id)}>
                             {tag.label}
                         </button>
                     ))}
                 </div>
             </div>
 
-            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-                {filteredPresets.length ? (
-                    <div className="grid grid-cols-2 gap-1.5">
-                        {filteredPresets.map((preset) => (
-                            <ToolPresetCard
-                                key={preset.id}
-                                preset={preset}
-                                feedTabLabel={feedTabLabel}
-                                onInsert={onInsert}
-                                onAction={onAction}
-                                onView={setPreviewPreset}
-                            />
-                        ))}
-                    </div>
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2" onScroll={handleScroll}>
+                {toolsQuery.isLoading ? (
+                    <ToolGridSkeleton />
+                ) : toolsQuery.isError ? (
+                    <WorkspaceErrorState compact description={toolsQuery.error instanceof Error ? toolsQuery.error.message : undefined} onRetry={() => void toolsQuery.refetch()} />
+                ) : tools.length ? (
+                    <>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {tools.map((tool) => (
+                                <ToolPresetCard
+                                    key={tool.id}
+                                    tool={tool}
+                                    feedTabLabel={feedTabLabel}
+                                    favoritePending={favoriteMutation.isPending}
+                                    onInsert={onInsert}
+                                    onView={setPreviewTool}
+                                    onToggleFavorite={(item) => favoriteMutation.mutate({ id: item.id, favorite: !item.favorited })}
+                                    onDelete={confirmDelete}
+                                />
+                            ))}
+                        </div>
+                        {toolsQuery.isFetchingNextPage ? (
+                            <div className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-foreground/45">
+                                <Loader2 className="size-3.5 animate-spin" />
+                                正在加载…
+                            </div>
+                        ) : null}
+                    </>
                 ) : (
-                    <WorkspaceState icon="canvas" compact title="没有匹配工具" description="换一个分类或关键词继续搜索。" />
+                    <WorkspaceState icon="canvas" compact title={emptyTitle} description={emptyDescription} />
                 )}
             </div>
 
-            {previewPreset ? (
-                previewPreset.mediaType === "video" && previewPreset.mediaUrl ? (
-                    <AppModal flush open title={previewPreset.title} onCancel={() => setPreviewPreset(null)} footer={null} width="min(1200px, calc(100vw - 32px))">
-                        <VideoPlayer src={previewPreset.mediaUrl} title={previewPreset.title || "视频预览"} className="max-h-[84vh] max-w-full bg-black" />
+            {previewTool && preview ? (
+                preview.kind === "video" ? (
+                    <AppModal flush open title={previewTool.label} onCancel={() => setPreviewTool(null)} footer={null} width="min(1200px, calc(100vw - 32px))">
+                        <VideoPlayer src={preview.src} title={previewTool.label || "视频预览"} className="max-h-[84vh] max-w-full bg-black" />
                     </AppModal>
-                ) : previewPreset.coverUrl ? (
-                    <CanvasImagePreview src={previewPreset.mediaUrl || previewPreset.coverUrl} alt={previewPreset.title} onClose={() => setPreviewPreset(null)} />
-                ) : null
+                ) : (
+                    <CanvasImagePreview src={preview.src} alt={previewTool.label} onClose={() => setPreviewTool(null)} />
+                )
             ) : null}
+
+            <AppModal
+                flush
+                open={createOpen}
+                title={`新建${subTabLabel}`}
+                okText="创建"
+                cancelText="取消"
+                confirmLoading={createMutation.isPending}
+                onCancel={() => setCreateOpen(false)}
+                onOk={() => createForm.submit()}
+                afterClose={() => createForm.resetFields()}
+            >
+                <Form<CreateToolFormValues> form={createForm} layout="vertical" requiredMark={false} initialValues={{ visibility: "private" }} onFinish={(values) => createMutation.mutate(values)} className="max-h-[72vh] overflow-y-auto p-6">
+                    <Form.Item name="label" label="名称" rules={[{ required: true, whitespace: true, message: "请输入工具名称" }, { max: 120 }]}>
+                        <Input maxLength={120} showCount placeholder="例如：电影感胶片" />
+                    </Form.Item>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Form.Item name="tag" label="标签">
+                            {tagOptions.length ? <Select allowClear showSearch options={tagOptions} placeholder="选择标签" /> : <Input maxLength={64} placeholder="可选" />}
+                        </Form.Item>
+                        <Form.Item name="visibility" label="可见性">
+                            <Radio.Group
+                                optionType="button"
+                                buttonStyle="solid"
+                                options={[
+                                    { label: "私有", value: "private" },
+                                    { label: "公开", value: "public" },
+                                ]}
+                            />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="desc" label="描述" rules={[{ max: 500 }]}>
+                        <Input.TextArea rows={2} maxLength={500} showCount autoSize={{ minRows: 2, maxRows: 4 }} />
+                    </Form.Item>
+                    <Form.Item name="prompt" label="提示词" rules={[{ required: true, whitespace: true, message: "请输入提示词" }, { max: 8000 }]}>
+                        <Input.TextArea rows={5} maxLength={8000} showCount placeholder="该工具应用到生成节点时使用的提示词" />
+                    </Form.Item>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Form.Item name="cover" label="封面 URL" rules={[{ type: "url", message: "请输入合法 URL" }]}>
+                            <Input placeholder="https://…" />
+                        </Form.Item>
+                        <Form.Item name="mediaUrl" label="媒体 URL" rules={[{ type: "url", message: "请输入合法 URL" }]}>
+                            <Input placeholder="图片或视频地址" />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="ratio" label="比例" rules={[{ max: 32 }]}>
+                        <Input placeholder="可选，例如 original、16:9" />
+                    </Form.Item>
+                </Form>
+            </AppModal>
         </>
     );
 }
 
-const ToolPresetCard = memo(function ToolPresetCard({ preset, feedTabLabel, onInsert, onAction, onView }: { preset: ToolPreset; feedTabLabel: string; onInsert?: (preset: ToolPreset) => void; onAction?: (action: ToolAction, preset: ToolPreset) => void; onView?: (preset: ToolPreset) => void }) {
+const ToolGridSkeleton = memo(function ToolGridSkeleton() {
+    return (
+        <div className="grid grid-cols-2 gap-1.5" aria-busy="true" aria-live="polite">
+            {Array.from({ length: 8 }, (_, index) => (
+                <div key={index} className="flex flex-col gap-1 p-1.5">
+                    <div className="aspect-[4/3] w-full animate-pulse rounded-[var(--r-sm)] bg-surface-active" />
+                    <div className="h-3 w-3/4 animate-pulse rounded bg-surface-active" />
+                </div>
+            ))}
+        </div>
+    );
+});
+
+const ToolPresetCard = memo(function ToolPresetCard({
+    tool,
+    feedTabLabel,
+    favoritePending,
+    onInsert,
+    onView,
+    onToggleFavorite,
+    onDelete,
+}: {
+    tool: ToolItem;
+    feedTabLabel: string;
+    favoritePending: boolean;
+    onInsert?: (tool: ToolItem) => void;
+    onView?: (tool: ToolItem) => void;
+    onToggleFavorite?: (tool: ToolItem) => void;
+    onDelete?: (tool: ToolItem) => void;
+}) {
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [hovered, setHovered] = useState(false);
+    const [videoReady, setVideoReady] = useState(false);
+    const [videoFailed, setVideoFailed] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const commonStyle = { borderColor: "color-mix(in srgb, var(--foreground) 9%, transparent)", background: "color-mix(in srgb, var(--foreground) 5%, transparent)" };
+    const coverUrl = toAbsoluteUrl(tool.cover);
+    const reduceMotion = useMemo(
+        () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        [],
+    );
+    const mediaAbsoluteUrl = toAbsoluteUrl(tool.mediaUrl);
+    const hoverVideoUrl = mediaAbsoluteUrl && VIDEO_URL_RE.test(mediaAbsoluteUrl) ? mediaAbsoluteUrl : "";
+    const showHoverVideo = !reduceMotion && HOVER_VIDEO_TYPES.has(tool.type) && Boolean(hoverVideoUrl) && !videoFailed;
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -223,36 +409,77 @@ const ToolPresetCard = memo(function ToolPresetCard({ preset, feedTabLabel, onIn
         return () => document.removeEventListener("pointerdown", handler, true);
     }, [menuOpen]);
 
+    // 视频只在悬停时挂载；浏览器自动播放策略要求静音，React 首次渲染的 muted 属性不一定写入 DOM 属性，需手动赋值后再 play。
+    useEffect(() => {
+        if (!hovered || !showHoverVideo) {
+            setVideoReady(false);
+            return;
+        }
+        const video = videoRef.current;
+        if (!video) return;
+        video.muted = true;
+        // 缓存命中时 canplay 可能已派发，直接按 readyState 标记可淡入。
+        if (video.readyState >= 3) setVideoReady(true);
+        const handle = window.setTimeout(() => { void video.play().catch(() => {}); }, 0);
+        return () => window.clearTimeout(handle);
+    }, [hovered, showHoverVideo]);
+
     const menuItems: MenuProps["items"] = useMemo(() => {
         const items: NonNullable<MenuProps["items"]> = [];
-        items.push({ key: "insert", icon: <Plus className="size-3.5" />, label: "插入画布", onClick: () => onInsert?.(preset) });
-        items.push({ key: "view", icon: <Eye className="size-3.5" />, label: "查看", onClick: () => onView?.(preset) });
+        items.push({ key: "insert", icon: <Plus className="size-3.5" />, label: "插入画布", onClick: () => onInsert?.(tool) });
+        items.push({ key: "view", icon: <Eye className="size-3.5" />, label: "查看", onClick: () => onView?.(tool) });
         items.push({ type: "divider" as const });
-        items.push({ key: "favorite", icon: <Star className="size-3.5" />, label: "收藏", onClick: () => onAction?.("favorite", preset) });
-        items.push({ type: "divider" as const });
-        items.push({ key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => onAction?.("delete", preset) });
+        items.push({
+            key: "favorite",
+            icon: <Star className={tool.favorited ? "size-3.5 fill-current" : "size-3.5"} />,
+            label: tool.favorited ? "取消收藏" : "收藏",
+            onClick: () => onToggleFavorite?.(tool),
+        });
+        if (tool.source === "user") {
+            items.push({ type: "divider" as const });
+            items.push({ key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => onDelete?.(tool) });
+        }
         return items;
-    }, [preset, onInsert, onAction]);
+    }, [tool, onInsert, onView, onToggleFavorite, onDelete]);
 
     return (
         <div
             ref={rootRef}
             className="group relative flex flex-col gap-1 rounded-[var(--r-md)] border p-1.5 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
             style={commonStyle}
-            onContextMenu={(e) => { e.preventDefault(); setMenuOpen(true); }}
+            onMouseEnter={() => { if (showHoverVideo) setHovered(true); }}
+            onMouseLeave={() => setHovered(false)}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                setMenuOpen(true);
+            }}
         >
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--r-sm)] border" style={commonStyle}>
-                {preset.coverUrl && !failed ? (
-                    <img src={preset.coverUrl} alt="" loading="lazy" decoding="async" className="asset-thumb h-full w-full object-cover" onError={() => setFailed(true)} />
+                {coverUrl && !failed ? (
+                    <img src={coverUrl} alt="" loading="lazy" decoding="async" className="asset-thumb h-full w-full object-cover" onError={() => setFailed(true)} />
                 ) : (
                     <div className="grid h-full w-full place-items-center text-foreground/30">
                         <Wrench className="size-4" />
                     </div>
                 )}
+                {/* 悬停播放的预览视频：仅 hover 时挂载，静音/循环/内联满足各浏览器自动播放策略，首帧就绪后淡入覆盖封面 */}
+                {showHoverVideo && hovered ? (
+                    <video
+                        ref={videoRef}
+                        src={hoverVideoUrl}
+                        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out ${videoReady ? "opacity-100" : "opacity-0"}`}
+                        muted
+                        playsInline
+                        loop
+                        autoPlay
+                        preload="auto"
+                        aria-hidden="true"
+                        onCanPlay={() => setVideoReady(true)}
+                        onError={() => setVideoFailed(true)}
+                    />
+                ) : null}
                 {/* 左上角标签 */}
-                <span className="absolute left-1 top-1 rounded-[var(--r-sm)] bg-black/40 px-1.5 py-0.5 text-[9px] font-medium leading-3 text-white backdrop-blur-sm">
-                    {feedTabLabel}
-                </span>
+                <span className="absolute left-1 top-1 rounded-[var(--r-sm)] bg-black/40 px-1.5 py-0.5 text-[9px] font-medium leading-3 text-white backdrop-blur-sm">{feedTabLabel}</span>
                 {/* 右上角操作按钮 */}
                 <span className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
@@ -260,18 +487,26 @@ const ToolPresetCard = memo(function ToolPresetCard({ preset, feedTabLabel, onIn
                         className="grid size-5 place-items-center rounded-[var(--r-sm)] bg-black/40 text-white backdrop-blur-sm hover:bg-black/55"
                         aria-label="查看"
                         title="查看"
-                        onClick={(e) => { e.stopPropagation(); onView?.(preset); }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onView?.(tool);
+                        }}
                     >
                         <Eye className="size-3" />
                     </button>
                     <button
                         type="button"
-                        className="grid size-5 place-items-center rounded-[var(--r-sm)] bg-black/40 text-white backdrop-blur-sm hover:bg-black/55"
-                        aria-label="收藏"
-                        title="收藏"
-                        onClick={(e) => { e.stopPropagation(); onAction?.("favorite", preset); }}
+                        disabled={favoritePending}
+                        className="grid size-5 place-items-center rounded-[var(--r-sm)] bg-black/40 text-white backdrop-blur-sm hover:bg-black/55 disabled:opacity-60"
+                        aria-label={tool.favorited ? "取消收藏" : "收藏"}
+                        title={tool.favorited ? "取消收藏" : "收藏"}
+                        aria-pressed={tool.favorited}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleFavorite?.(tool);
+                        }}
                     >
-                        <Star className="size-3" />
+                        <Star className={tool.favorited ? "size-3 fill-current text-amber-300" : "size-3"} />
                     </button>
                     <Dropdown trigger={["click"]} menu={{ items: menuItems }} open={menuOpen} onOpenChange={setMenuOpen} autoAdjustOverflow>
                         <button
@@ -279,15 +514,17 @@ const ToolPresetCard = memo(function ToolPresetCard({ preset, feedTabLabel, onIn
                             className="grid size-5 place-items-center rounded-[var(--r-sm)] bg-black/40 text-white backdrop-blur-sm hover:bg-black/55"
                             aria-label="更多操作"
                             title="更多"
-                            onClick={(e) => { e.stopPropagation(); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                            }}
                         >
                             <MoreHorizontal className="size-3" />
                         </button>
                     </Dropdown>
                 </span>
             </div>
-            <span className="truncate text-[11px] font-medium leading-4 text-foreground">{preset.title}</span>
-            {preset.description ? <span className="truncate text-[10px] leading-3 text-foreground/40">{preset.description}</span> : null}
+            <span className="truncate text-[11px] font-medium leading-4 text-foreground">{tool.label}</span>
+            {tool.desc ? <span className="truncate text-[10px] leading-3 text-foreground/40">{tool.desc}</span> : null}
         </div>
     );
 });

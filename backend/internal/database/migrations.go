@@ -70,7 +70,9 @@ var schemaMigrations = []migration{
 	{version: 16, name: "builtin_tools", checksum: "sha256:builtin-tools-v16-20260916", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.Tool{})
 	}},
-	{version: 17, name: "tool_user_actions", checksum: "sha256:tool-user-actions-v17-20260916", apply: func(tx *gorm.DB) error {
+	{version: 17, name: "tool_user_actions", checksum: "sha256:tool-user-actions-v17-20260916-r2", apply: func(tx *gorm.DB) error {
+		// Tool 也要带上：v16 在早期开发版本建表时还没有 source 列，迁移记录已写入不会重跑，
+		// 这里靠 AutoMigrate 的幂等补列；全新库上该次 AutoMigrate 为空操作。
 		return tx.AutoMigrate(&model.Tool{}, &model.ToolFavorite{})
 	}},
 }

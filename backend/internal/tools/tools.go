@@ -31,6 +31,7 @@ var validToolTypes = map[string]struct{}{
 	ToolTypeStyle:         {},
 	ToolTypeCameraMotions: {},
 	ToolTypeNineGrid:      {},
+	ToolTypeEffect:        {},
 }
 
 // ToolListRequest 工具列表查询参数。
