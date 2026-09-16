@@ -9,6 +9,7 @@ import type { CanvasNodeData } from "@/types/canvas";
 import { CanvasWorkspaceAssetPanel, type LibraryAsset } from "./canvas-workspace-asset-panel";
 import { CanvasWorkspaceNodeListPanel } from "./canvas-workspace-node-list-panel";
 import { CanvasWorkspaceTaskPanel } from "./canvas-workspace-task-panel";
+import { CanvasWorkspaceToolPanel } from "./canvas-workspace-tool-panel";
 
 type CanvasWorkspaceSidebarProps = {
     nodes: CanvasNodeData[];
@@ -94,6 +95,8 @@ export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets
                             onRefresh={onRefreshAssets}
                             onAssetAction={onAssetAction}
                         />
+                    ) : activeTab === "tools" ? (
+                        <CanvasWorkspaceToolPanel />
                     ) : activeTab === "tasks" ? (
                         <CanvasWorkspaceTaskPanel
                             tasks={tasks}

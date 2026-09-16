@@ -97,6 +97,14 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 规范化技能包保存在后端数据目录的 `skill-packages/<skill-id>/<version-id>.zip`，数据库只保存索引和版本指针。上传 ZIP 时强制校验 `SKILL.md`、路径越界、软链接、重复路径、文件数量和解压大小；GitHub 技能保存公开仓库、分支、子目录和提交 SHA，后台每 6 小时检查一次开启自动更新的技能，并记录最近检查、同步时间及失败状态。
 
+## 内置工具
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `tools` | 保存画布工具预设（风格、运镜、九宫格） | `id` 自增主键，内置预设使用固定 ID（1-87）保证幂等；启动时 `EnsureBuiltinTools` 从嵌入的 `internal/tools/seed/tools.json` 写入，冲突只更新内容字段，`created_at` 保留首次值 |
+
+`type` 取值 `style`（风格）、`camera_motions`（运镜）、`nine_grid`（九宫格）；`extra_info` 以 JSON 数组保存样本图路径，`ratio` 仅九宫格使用（`original` 或画幅比），`visibility` 取 `public` / `private`。
+
 ## 提示词模板
 
 | 表 | 用途 | 关键边界 |

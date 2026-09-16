@@ -91,6 +91,9 @@ func run(ctx context.Context) error {
 	if err := svc.EnsureSkillPackages(); err != nil {
 		return err
 	}
+	if err := svc.EnsureBuiltinTools(); err != nil {
+		return err
+	}
 	if summary, err := svc.MigrateLegacyStorage(); err != nil {
 		log.Printf("storage migration skipped after error: %v", err)
 	} else if summary.Backup != "" {

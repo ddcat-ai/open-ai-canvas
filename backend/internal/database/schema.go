@@ -58,6 +58,8 @@ func Models() []any {
 		&model.SkillVersion{},
 		&model.SkillFile{},
 		&model.UserSkillState{},
+		&model.Tool{},
+		&model.ToolFavorite{},
 		&model.Resource{},
 		&model.ResourceDeletionJob{},
 		&model.AnnouncementImageDraft{},

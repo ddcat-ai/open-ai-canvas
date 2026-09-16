@@ -1,0 +1,177 @@
+package repository
+
+import (
+	"errors"
+	"strings"
+	"time"
+
+	"infinite-canvas/backend/internal/kernel"
+	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/tools"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+// UpsertBuiltinTools 按 id 幂等更新内置工具；created_at 保留首次写入值。
+func (r *Repository) UpsertBuiltinTools(tools []model.Tool) error {
+	if len(tools) == 0 {
+		return nil
+	}
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"type", "label_en", "label", "desc", "tag", "cover", "extra_info_json", "prompt", "ratio",
+			"media_url", "owner_id", "source", "enabled", "visibility", "sort_weight", "updated_at",
+		}),
+	}).Create(&tools).Error
+}
+
+// ListTools 按范围查询工具列表并携带当前用户收藏状态。
+func (r *Repository) ListTools(userID int64, req tools.ToolListRequest) ([]tools.ToolWithFavorite, int64, error) {
+	base := r.db.Table("tools").Where("enabled = ?", true)
+	switch req.Scope {
+	case tools.ToolScopeFavorites:
+		base = base.Joins("JOIN tool_favorites tf ON tf.tool_id = tools.id AND tf.user_id = ?", userID)
+	case tools.ToolScopeRecent:
+		// 最近 = 收藏时间倒序，其次按更新时间倒序
+		base = base.Joins("LEFT JOIN tool_favorites tf ON tf.tool_id = tools.id AND tf.user_id = ?", userID)
+	default: // public / custom
+		base = base.Joins("LEFT JOIN tool_favorites tf ON tf.tool_id = tools.id AND tf.user_id = ?", userID)
+	}
+
+	// 可见性：公共 scope 只看 public（含他人公开），其余 scope 只看自己可见的
+	switch req.Scope {
+	case tools.ToolScopePublic:
+		base = base.Where("tools.visibility = ?", tools.ToolVisibilityPublic)
+	case tools.ToolScopeFavorites:
+		base = base.Where("tf.user_id = ?", userID)
+	case tools.ToolScopeCustom:
+		base = base.Where("tools.owner_id = ? AND tools.source = ?", userID, tools.ToolSourceUser)
+	case tools.ToolScopeRecent:
+		base = base.Where("(tools.visibility = ? OR tools.owner_id = ?)", tools.ToolVisibilityPublic, userID)
+	}
+
+	if req.Type != "" {
+		base = base.Where("tools.type = ?", req.Type)
+	}
+	if req.Tag != "" {
+		base = base.Where("tools.tag = ?", req.Tag)
+	}
+	if req.Search != "" {
+		keyword := "%" + strings.ToLower(req.Search) + "%"
+		base = base.Where("(LOWER(tools.label) LIKE ? OR LOWER(tools.label_en) LIKE ? OR LOWER(tools.desc) LIKE ?)", keyword, keyword, keyword)
+	}
+
+	var total int64
+	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	orderBy := "tools.sort_weight ASC, tools.id ASC"
+	switch req.Scope {
+	case tools.ToolScopeFavorites:
+		orderBy = "tf.created_at DESC, tools.id DESC"
+	case tools.ToolScopeRecent:
+		orderBy = "COALESCE(tf.created_at, tools.updated_at) DESC, tools.id DESC"
+	}
+
+	offset := (req.Page - 1) * req.PageSize
+	var rows []struct {
+		model.Tool
+		TFID        *int64     `gorm:"column:tf_id"`
+		TFCreatedAt *time.Time `gorm:"column:tf_created_at"`
+	}
+	err := base.Session(&gorm.Session{}).
+		Select("tools.*, tf.id AS tf_id, tf.created_at AS tf_created_at").
+		Order(orderBy).
+		Offset(offset).
+		Limit(req.PageSize).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	items := make([]tools.ToolWithFavorite, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, tools.ToolWithFavorite{
+			Tool:        row.Tool,
+			Favorited:   row.TFID != nil,
+			FavoritedAt: row.TFCreatedAt,
+		})
+	}
+	return items, total, nil
+}
+
+// ToolForUser 校验可见性后返回工具。
+func (r *Repository) ToolForUser(userID int64, toolID int64) (model.Tool, error) {
+	var tool model.Tool
+	err := r.db.Where("id = ? AND (visibility = ? OR owner_id = ?)", toolID, tools.ToolVisibilityPublic, userID).
+		First(&tool).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return tool, kernel.NotFound("工具不存在或不可见")
+	}
+	if err != nil {
+		return tool, err
+	}
+	return tool, nil
+}
+
+// ToolFavorited 返回工具及收藏时间（未收藏时为 nil）。
+func (r *Repository) ToolFavorited(userID int64, toolID int64) (model.Tool, *time.Time, error) {
+	tool, err := r.ToolForUser(userID, toolID)
+	if err != nil {
+		return tool, nil, err
+	}
+	var favorite model.ToolFavorite
+	err = r.db.Where("user_id = ? AND tool_id = ?", userID, toolID).First(&favorite).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return tool, nil, nil
+	}
+	if err != nil {
+		return tool, nil, err
+	}
+	return tool, &favorite.CreatedAt, nil
+}
+
+// AddToolFavorite 幂等添加收藏；已收藏时直接成功。
+func (r *Repository) AddToolFavorite(userID int64, toolID int64) error {
+	favorite := model.ToolFavorite{UserID: userID, ToolID: toolID, CreatedAt: time.Now()}
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "tool_id"}},
+		DoNothing: true,
+	}).Create(&favorite).Error
+}
+
+// RemoveToolFavorite 取消收藏；未收藏时也无错误。
+func (r *Repository) RemoveToolFavorite(userID int64, toolID int64) error {
+	return r.db.Where("user_id = ? AND tool_id = ?", userID, toolID).
+		Delete(&model.ToolFavorite{}).Error
+}
+
+// CreateTool 创建用户自定义工具。
+func (r *Repository) CreateTool(tool *model.Tool) (*model.Tool, error) {
+	if err := r.db.Create(tool).Error; err != nil {
+		return nil, err
+	}
+	return tool, nil
+}
+
+// DeleteUserTool 仅允许删除自己的自定义工具；事务内同步清理收藏记录。
+func (r *Repository) DeleteUserTool(userID int64, toolID int64) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var tool model.Tool
+		err := tx.Where("id = ? AND owner_id = ? AND source = ?", toolID, userID, tools.ToolSourceUser).
+			First(&tool).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return kernel.NotFound("工具不存在或不支持删除")
+		}
+		if err != nil {
+			return err
+		}
+		if err := tx.Where("tool_id = ?", toolID).Delete(&model.ToolFavorite{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Tool{}, toolID).Error
+	})
+}

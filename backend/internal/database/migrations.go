@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 15
+const CurrentSchemaVersion int64 = 17
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -66,6 +66,12 @@ var schemaMigrations = []migration{
 	{version: 14, name: "cloud_agent_recovery_control", checksum: "sha256:cloud-agent-recovery-control-v14", apply: migrateSchemaV14},
 	{version: 15, name: "agent_profiles", checksum: "sha256:agent-profiles-v15-20260914", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.AgentProfile{})
+	}},
+	{version: 16, name: "builtin_tools", checksum: "sha256:builtin-tools-v16-20260916", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Tool{})
+	}},
+	{version: 17, name: "tool_user_actions", checksum: "sha256:tool-user-actions-v17-20260916", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Tool{}, &model.ToolFavorite{})
 	}},
 }
 

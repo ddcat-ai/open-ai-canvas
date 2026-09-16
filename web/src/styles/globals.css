@@ -1035,7 +1035,7 @@
     /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
     --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
     --canvas-rail-width: 44px;            /* 画布节点列表导航栏宽度 */
-    --canvas-node-list-width: 240px;      /* 画布节点列表面板宽度 */
+    --canvas-node-list-width: 290px;      /* 画布节点列表面板宽度 */
     --canvas-panel-width: min(332px, calc(100vw - 24px)); /* 浮动面板默认宽度（活动任务等）*/
     --video-segment-preview-max-height: min(46vh, 480px);
 
@@ -2214,6 +2214,67 @@
 
     .asset-filter-row .asset-search::placeholder {
         opacity: 0.4;
+    }
+
+    .col-feed-tabs {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .col-feed-tab {
+        height: 22px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--foreground);
+        opacity: 0.45;
+        font-size: var(--fs-micro);
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .col-feed-tab:hover {
+        opacity: 0.75;
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    }
+
+    .col-feed-tab.on {
+        opacity: 1;
+        background: color-mix(in srgb, var(--workspace-accent, var(--primary)) 12%, transparent);
+        color: var(--workspace-accent, var(--primary));
+    }
+
+    .col-tag-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .col-tag-chip {
+        height: 20px;
+        padding: 0 7px;
+        border: 0;
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+        color: var(--foreground);
+        opacity: 0.5;
+        font-size: var(--fs-micro);
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .col-tag-chip:hover {
+        opacity: 0.8;
+    }
+
+    .col-tag-chip.on {
+        opacity: 1;
+        background: color-mix(in srgb, var(--workspace-accent, var(--primary)) 14%, transparent);
+        color: var(--workspace-accent, var(--primary));
     }
 
     .app-workspace-main-row {
