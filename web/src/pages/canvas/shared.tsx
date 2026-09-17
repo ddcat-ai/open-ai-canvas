@@ -237,7 +237,7 @@ export default function SharedCanvasPage() {
     }));
     const renderSharedNode = useCallback((node: CanvasNodeData): ReactNode => {
         if (node.type === CanvasNodeType.Script) return <SharedScriptNode node={node} onUnauthorized={unauthorized} />;
-        if (node.type === CanvasNodeType.BatchTable) return <CanvasBatchTableNodeContent node={node} nodes={nodes} connections={connections} batch={node.metadata?.generationBatches?.at(-1)} theme={theme} readOnly onPatchTable={() => {}} onAddRow={() => {}} onRemoveRow={() => {}} onUpdateRow={() => {}} onFillRows={() => {}} onGenerate={() => {}} onRetryItem={() => {}} onAddReferenceColumn={() => {}} onConnectStart={() => {}} />;
+        if (node.type === CanvasNodeType.BatchTable) return <CanvasBatchTableNodeContent node={node} nodes={nodes} connections={connections} batch={node.metadata?.generationBatches?.at(-1)} theme={theme} readOnly onPatchTable={() => {}} onAddRow={() => {}} onRemoveRow={() => {}} onUpdateRow={() => {}} onFillRows={() => {}} onGenerate={() => {}} onRetryItem={() => {}} onAddReferenceColumn={() => {}} onAddTextColumn={() => {}} onReorderReferenceColumns={() => {}} onMoveReferenceCell={() => {}} onReplaceReference={() => {}} onUploadReference={() => {}} onConnectStart={() => {}} />;
         return <SharedConfigNode node={node} onUnauthorized={unauthorized} />;
     }, [connections, nodes, theme, unauthorized]);
     const toolbarNodeKey = selectedNodeId;

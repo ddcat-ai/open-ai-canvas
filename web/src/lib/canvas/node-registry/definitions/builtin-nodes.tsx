@@ -165,26 +165,12 @@ const BUILTIN_NODE_TRAITS = {
         resourceKind: () => "image",
         inputKind: "image",
     },
-    [CanvasNodeType.MediaConversion]: {
-        label: "转换",
-        icon: <WandSparkles />,
-        minSize: { width: 400, height: 360 },
-        showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => {
-            const conversion = node.metadata?.mediaConversion;
-            if (conversion?.status !== "completed" || !conversion.resultStorageKey) return null;
-            return conversion.outputKind === "video" ? "video" : "image";
-        },
-        acceptsInputKind: ["image", "video"],
-        maxInputCount: 1,
-        inputKind: "image",
-    },
     [CanvasNodeType.BatchTable]: {
         label: "批量创作表",
         icon: <Table2 />,
         minSize: { width: 720, height: 360 },
         showInCreateMenu: true,
-        acceptsInputKind: "image",
+        acceptsInputKind: ["image", "text"],
         inputKind: "text",
     },
 } satisfies Record<string, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
