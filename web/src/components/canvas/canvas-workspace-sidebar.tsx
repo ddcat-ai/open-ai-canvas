@@ -21,6 +21,7 @@ type CanvasWorkspaceSidebarProps = {
     onAssetAction?: (action: "copy" | "download" | "archive" | "delete", asset: LibraryAsset) => void;
     onActiveTabChange?: (tab: RailTab) => void;
     tasks?: GenerationTask[];
+    historyTasks?: GenerationTask[];
     tasksRefreshing?: boolean;
     onRefreshTasks?: () => void;
     onCancelTask?: (task: GenerationTask) => void;
@@ -36,7 +37,7 @@ const RAIL_ITEMS: Array<{ id: RailTab; label: string; icon: ComponentType<{ clas
     { id: "history", label: "历史", icon: History },
 ];
 
-export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets = [], onInsertAssetImage, onRefreshAssets, onAssetAction, onActiveTabChange, tasks = [], tasksRefreshing, onRefreshTasks, onCancelTask }: CanvasWorkspaceSidebarProps) {
+export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets = [], onInsertAssetImage, onRefreshAssets, onAssetAction, onActiveTabChange, tasks = [], historyTasks = [], tasksRefreshing, onRefreshTasks, onCancelTask }: CanvasWorkspaceSidebarProps) {
     const [activeTab, setActiveTab] = useState<RailTab>("nodes");
     const [panelCollapsed, setPanelCollapsed] = useState(false);
     const [query, setQuery] = useState("");
@@ -100,6 +101,14 @@ export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets
                     ) : activeTab === "tasks" ? (
                         <CanvasWorkspaceTaskPanel
                             tasks={tasks}
+                            refreshing={tasksRefreshing}
+                            onRefresh={onRefreshTasks}
+                            onCancelTask={onCancelTask}
+                        />
+                    ) : activeTab === "history" ? (
+                        <CanvasWorkspaceTaskPanel
+                            title="历史"
+                            tasks={historyTasks}
                             refreshing={tasksRefreshing}
                             onRefresh={onRefreshTasks}
                             onCancelTask={onCancelTask}

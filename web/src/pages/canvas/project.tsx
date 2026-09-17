@@ -353,7 +353,7 @@ function InfiniteCanvasPage() {
     }, [agentMentionReferences, openAgent]);
     const { tasks: activeTasks } = useCanvasActiveTasks(projectId, projectLoaded);
     const [sidebarActiveTab, setSidebarActiveTab] = useState<string>("nodes");
-    const { tasks: workspaceTasks, refreshing: workspaceTasksRefreshing, refetch: refetchWorkspaceTasks } = useCanvasWorkspaceTasks(projectId, projectLoaded && sidebarActiveTab === "tasks");
+    const { tasks: workspaceTasks, allTasks: workspaceHistoryTasks, refreshing: workspaceTasksRefreshing, refetch: refetchWorkspaceTasks } = useCanvasWorkspaceTasks(projectId, projectLoaded && (sidebarActiveTab === "tasks" || sidebarActiveTab === "history"));
     const { focusMode, enterFocusMode, exitFocusMode, toggleFocusMode } = useFocusMode();
     const [focusDockRevealed, setFocusDockRevealed] = useState(false);
 
@@ -2390,6 +2390,7 @@ function InfiniteCanvasPage() {
                         onAssetAction={(action, asset) => void handleAssetAction(action, asset)}
                         onActiveTabChange={setSidebarActiveTab}
                         tasks={workspaceTasks}
+                        historyTasks={workspaceHistoryTasks}
                         tasksRefreshing={workspaceTasksRefreshing}
                         onRefreshTasks={() => void refetchWorkspaceTasks()}
                         onCancelTask={cancelCanvasTask}

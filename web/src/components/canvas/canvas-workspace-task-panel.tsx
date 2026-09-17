@@ -8,8 +8,9 @@ import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, 
 import type { GenerationTask } from "@/services/api/task-center";
 import { useUserStore } from "@/stores/use-user-store";
 
-export function CanvasWorkspaceTaskPanel({ tasks, refreshing, onRefresh, onCancelTask }: {
+export function CanvasWorkspaceTaskPanel({ tasks, title = "任务", refreshing, onRefresh, onCancelTask }: {
     tasks: GenerationTask[];
+    title?: string;
     refreshing?: boolean;
     onRefresh?: () => void;
     onCancelTask?: (task: GenerationTask) => void;
@@ -18,7 +19,7 @@ export function CanvasWorkspaceTaskPanel({ tasks, refreshing, onRefresh, onCance
         <>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2.5">
                 <ListChecks className="size-3.5 shrink-0" />
-                <span className="truncate text-xs font-semibold">任务</span>
+                <span className="truncate text-xs font-semibold">{title}</span>
                 <span className="tabular-nums text-foreground/32">{tasks.length.toLocaleString("zh-CN")}</span>
                 <span className="ml-auto">
                     <button type="button" className="icon-btn tip-down" data-tip="刷新" aria-label="刷新" onClick={onRefresh}>
@@ -82,23 +83,24 @@ const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: { task: 
                 </span>
                 <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-medium leading-4 text-foreground" title={formatTaskKind(task)}>{formatTaskKind(task)}</span>
+                        <span className="truncate text-xs font-medium leading-4 text-foreground" title={formatTaskKind(task)}>{task.prompt}</span>
                         <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none" style={{ borderColor: `color-mix(in srgb, ${statusColor} 30%, transparent)`, color: statusColor }}>
                             {generationTaskStatusLabel(task)}
                         </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-[10px] leading-3 text-foreground/45" title={generationTaskStageLabel(task)}>
-                        {generationTaskStageLabel(task)}
-                    </span>
+                   
                     {showsProgress && progress !== undefined && isActive ? (
                         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
                             <div className="h-full rounded-full transition-[width] duration-300 ease-out" style={{ width: `${progress}%`, background: statusColor }} />
                         </div>
                     ) : null}
-                    <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-foreground/40">
+                    <span className="mt-1.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-foreground/40">
                         <Clock3 className="size-2.5 shrink-0" />
                         <span className="truncate">{durationLabel}</span>
-                        {creditsEnabled && billingLabel ? <span className="truncate">· {billingLabel}</span> : null}
+                        {creditsEnabled && billingLabel ? <span className="truncate">· {billingLabel}</span> : null} 
+                         <span className="mt-0.5 block truncate text-[10px] leading-3 text-foreground/45" title={generationTaskStageLabel(task)}>
+                        {generationTaskStageLabel(task)}
+                    </span>
                     </span>
                 </span>
                 {expanded ? <ChevronUp className="mt-0.5 size-3.5 shrink-0 text-foreground/40" /> : <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-foreground/40" />}
