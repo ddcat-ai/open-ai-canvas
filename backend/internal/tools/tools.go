@@ -142,6 +142,21 @@ func (s *Service) List(userID string, req ToolListRequest) (*ToolList, error) {
 	}, nil
 }
 
+// Detail 返回单个工具详情（含提示词），供工具栏快捷调用。
+func (s *Service) Detail(userID string, toolID int64) (*ToolItem, error) {
+	if userID == "" {
+		return nil, kernel.Unauthorized("请先登录")
+	}
+	if toolID <= 0 {
+		return nil, kernel.BadAuthRequest("工具 ID 无效")
+	}
+	tool, err := s.repo.ToolForUser(userID, toolID)
+	if err != nil {
+		return nil, err
+	}
+	return buildToolItemPtr(tool, false, nil), nil
+}
+
 // SetFavorite 添加/取消收藏；同一用户对同一工具仅一条记录。
 func (s *Service) SetFavorite(userID string, toolID int64, favorite bool) (*ToolItem, error) {
 	if userID == "" {

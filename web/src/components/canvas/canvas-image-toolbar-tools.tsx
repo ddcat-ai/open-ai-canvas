@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { Brush, Camera, Copy, FileText, Globe2, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Crop, SlidersHorizontal, Smile, Sun, Upload, Scaling } from "lucide-react";
+import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, Sun, Upload, Scaling } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 import type { NodeToolbarGroup } from "@/lib/canvas/tool-registry";
 
-type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view";
+type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view" | "multi_camera_nine_grid" | "story_pitch_four_grid" | "character_face_three_view" | "product_three_view" | "storyboard_25_grid" | "character_three_view_generation" | "cinematic_light_correction" | "image_projection_after_3s" | "image_projection_before_5s";
 
 type ImageToolHandlers = {
     onUpload: (node: CanvasNodeData) => void;
@@ -22,6 +22,7 @@ type ImageToolHandlers = {
     onViewImage: (node: CanvasNodeData) => void;
     onCopyPrompt: (node: CanvasNodeData) => void;
     onReversePrompt: (node: CanvasNodeData) => void;
+    onNineGrid: (node: CanvasNodeData, toolId: number) => void;
 };
 
 type ImageToolDefinition = {
@@ -181,6 +182,98 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         order: 80,
         run: (node, handlers) => handlers.onPanorama(node),
     },
+    // 九宫格工具组——对应后端 nine_grid 种子数据
+    {
+        id: "multi_camera_nine_grid",
+        label: "多机位九宫格",
+        section: "宫格生成",
+        description: "生成 3x3 多机位联系表",
+        icon: () => <Grid3x3 className="size-3.5" />,
+        group: "nine_grid",
+        order: 10,
+        run: (node, handlers) => handlers.onNineGrid(node, 79),
+    },
+    {
+        id: "story_pitch_four_grid",
+        label: "剧情推演四宫格",
+        section: "宫格生成",
+        description: "生成 2x2 剧情推演联系表",
+        icon: () => <Grid2x2 className="size-3.5" />,
+        group: "nine_grid",
+        order: 20,
+        run: (node, handlers) => handlers.onNineGrid(node, 80),
+    },
+    {
+        id: "character_face_three_view",
+        label: "角色脸部三视图",
+        section: "设定图",
+        description: "生成 3x2 角色脸部联系表",
+        icon: () => <ScanFace className="size-3.5" />,
+        group: "nine_grid",
+        order: 30,
+        run: (node, handlers) => handlers.onNineGrid(node, 81),
+    },
+    {
+        id: "product_three_view",
+        label: "产品三视图",
+        section: "设定图",
+        description: "生成 3x2 产品联系表",
+        icon: () => <Package className="size-3.5" />,
+        group: "nine_grid",
+        order: 40,
+        run: (node, handlers) => handlers.onNineGrid(node, 82),
+    },
+    {
+        id: "storyboard_25_grid",
+        label: "25宫格连贯分镜",
+        section: "宫格生成",
+        description: "生成 5x5 连贯分镜联系表",
+        icon: () => <Clapperboard className="size-3.5" />,
+        group: "nine_grid",
+        order: 50,
+        run: (node, handlers) => handlers.onNineGrid(node, 83),
+    },
+    {
+        id: "character_three_view_generation",
+        label: "角色三视图",
+        section: "设定图",
+        description: "生成 16:9 角色三视图联系表",
+        icon: () => <PersonStanding className="size-3.5" />,
+        group: "nine_grid",
+        order: 60,
+        run: (node, handlers) => handlers.onNineGrid(node, 85),
+    },
+    {
+        id: "cinematic_light_correction",
+        label: "电影级光影校正",
+        section: "光影",
+        description: "修正电影灯光，使场景更真实",
+        icon: () => <Contrast className="size-3.5" />,
+        group: "nine_grid",
+        order: 70,
+        run: (node, handlers) => handlers.onNineGrid(node, 84),
+    },
+    {
+        id: "image_projection_after_3s",
+        label: "画面推演-3秒后",
+        section: "画面推演",
+        description: "生成 3 秒后的画面帧",
+        icon: () => <FastForward className="size-3.5" />,
+        group: "nine_grid",
+        order: 80,
+        run: (node, handlers) => handlers.onNineGrid(node, 86),
+    },
+    {
+        id: "image_projection_before_5s",
+        label: "画面推演-5秒前",
+        section: "画面推演",
+        description: "生成 5 秒前的画面帧",
+        icon: () => <Rewind className="size-3.5" />,
+        group: "nine_grid",
+        order: 90,
+        run: (node, handlers) => handlers.onNineGrid(node, 87),
+    },
+
 ];
 
 export function buildImageToolbarTools(node: CanvasNodeData, handlers: ImageToolHandlers) {

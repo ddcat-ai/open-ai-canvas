@@ -28,6 +28,10 @@ func (s *Service) Tools(userID string, req ToolListRequest) (*ToolList, error) {
 	return s.toolDomain().List(userID, req)
 }
 
+func (s *Service) ToolDetail(userID string, toolID int64) (*ToolItem, error) {
+	return s.toolDomain().Detail(userID, toolID)
+}
+
 func (s *Service) SetToolFavorite(userID string, toolID int64, favorite bool) (*ToolItem, error) {
 	return s.toolDomain().SetFavorite(userID, toolID, favorite)
 }

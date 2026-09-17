@@ -63,8 +63,12 @@ export type ToolMutationInput = {
 };
 
 export function listTools(input: ListToolsInput = {}, config?: HttpRequestConfig) {
-    const params = serializeApiParams(compactApiParams(input as ApiParams));
-    return http.get<ToolList>(`/tools?${params.toString()}`, config);
+	const params = serializeApiParams(compactApiParams(input as ApiParams));
+	return http.get<ToolList>(`/tools?${params.toString()}`, config);
+}
+
+export function getTool(id: number, config?: HttpRequestConfig) {
+	return http.get<ToolItem>(`/tools/${encodeURIComponent(String(id))}`, config);
 }
 
 export function setToolFavorite(id: number, favorite: boolean) {

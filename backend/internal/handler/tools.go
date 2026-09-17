@@ -37,6 +37,25 @@ func RegisterToolRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, result)
 	})
 
+	r.GET("/tools/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		toolID, err := parseToolID(c)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		item, err := svc.ToolDetail(user.ID, toolID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, item)
+	})
+
 	r.POST("/tools", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -856,6 +856,7 @@ function InfiniteCanvasPage() {
         extractingVideoFramesNodeId,
         frameDialogNodeId,
         generateAngleNode,
+        generateNineGridNode,
         generateLightingNode,
         openPanoramaConfig,
         createPanoramaViewerWithConfig,
@@ -2828,6 +2829,7 @@ function InfiniteCanvasPage() {
                             onToggleFreeResize={(node) => toggleNodeFreeResize(node.id)}
                             onToggleLocked={(node) => toggleNodeLocked(node.id)}
                             onDelete={(node) => deleteNodes(new Set([node.id]))}
+                            onNineGrid={(node, toolId) => void generateNineGridNode(node, toolId)}
                         />
 
 {isMiniMapOpen && !focusMode ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} canvasContainerRef={containerRef} onViewportPreviewChange={previewViewport} onViewportChange={handleViewportChange} /> : null}
