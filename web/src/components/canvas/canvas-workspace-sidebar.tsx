@@ -7,6 +7,7 @@ import { searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { CanvasNodeData } from "@/types/canvas";
 import { CanvasWorkspaceAssetPanel, type LibraryAsset } from "./canvas-workspace-asset-panel";
+import { CanvasWorkspaceHistoryPanel } from "./canvas-workspace-history-panel";
 import { CanvasWorkspaceNodeListPanel } from "./canvas-workspace-node-list-panel";
 import { CanvasWorkspaceTaskPanel } from "./canvas-workspace-task-panel";
 import { CanvasWorkspaceToolPanel } from "./canvas-workspace-tool-panel";
@@ -106,8 +107,7 @@ export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets
                             onCancelTask={onCancelTask}
                         />
                     ) : activeTab === "history" ? (
-                        <CanvasWorkspaceTaskPanel
-                            title="历史"
+                        <CanvasWorkspaceHistoryPanel
                             tasks={historyTasks}
                             refreshing={tasksRefreshing}
                             onRefresh={onRefreshTasks}
