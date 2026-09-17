@@ -90,12 +90,12 @@ export function CanvasWorkspaceAssetPanel({ assets, onInsertAssetImage, onRefres
                         </button>
                     </Dropdown>
                     <span className="asset-head-actions">
-                        <button type="button" className="icon-btn tip-down" data-tip="新建文件夹" aria-label="新建文件夹">
+                        {/* <button type="button" className="icon-btn tip-down" data-tip="新建文件夹" aria-label="新建文件夹">
                             <FolderPlus className="size-3.5" />
                         </button>
                         <button type="button" className="icon-btn tip-down" data-tip="上传素材" aria-label="上传素材" onClick={() => uploadInputRef.current?.click()}>
                             <Upload className="size-3.5" />
-                        </button>
+                        </button> */}
                         <button type="button" className="icon-btn tip-down" data-tip="刷新" aria-label="刷新" onClick={onRefresh}>
                             <RefreshCw className="size-3.5" />
                         </button>

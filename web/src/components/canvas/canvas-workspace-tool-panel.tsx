@@ -1,12 +1,14 @@
 import { memo, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { Eye, Loader2, MoreHorizontal, Plus, Star, Trash2, Wrench, X } from "lucide-react";
-import { App, Dropdown, Form, Input, Radio, Select, type MenuProps } from "antd";
+import { Eye, Loader2, MoreHorizontal, Plus, Star, Trash2, Upload, Wrench, X } from "lucide-react";
+import { App, Button, Dropdown, Form, Input, Modal, Radio, Select, Space, type MenuProps } from "antd";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { VideoPlayer } from "@/components/video-player";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
+import { uploadMediaFile } from "@/services/file-storage";
+import { uploadImage } from "@/services/image-storage";
 import { createTool, deleteTool, listTools, setToolFavorite, type ToolScope, type ToolSummary, type ToolType, type ToolVisibility } from "@/services/api/tools";
 
 type ToolSubTab = "style" | "effect" | "motion";
@@ -54,6 +56,12 @@ const TOOL_PAGE_SIZE = 40;
 const TOOL_SEARCH_DEBOUNCE_MS = 250;
 
 const VIDEO_URL_RE = /\.(mp4|webm|mov|m4v)(?:$|[?#])/i;
+// 上传到资源服务的文件 URL（/api/resources/:id/file）没有扩展名，按路径形态识别。
+const RESOURCE_FILE_URL_RE = /\/resources\/[^/?#]+\/file(?:[?#]|$)/i;
+
+function isVideoUrl(url: string) {
+    return VIDEO_URL_RE.test(url) || RESOURCE_FILE_URL_RE.test(url);
+}
 
 // 悬停播放预览视频的工具类型：运镜、特效
 const HOVER_VIDEO_TYPES = new Set(["camera_motions", "effect"]);
@@ -73,15 +81,18 @@ export type CanvasWorkspaceToolPanelProps = {
     onInsert?: (tool: ToolSummary) => void;
 };
 
-// 种子数据的 mediaUrl 多为相对路径，只有绝对 URL 能直接用于预览。
+// 种子数据的 mediaUrl 多为相对路径（如 "period_idol/cover.webp"），无法直接预览；
+// 绝对 http(s) URL 原样保留，站内资源路径（/api/resources/…）按当前 origin 绝对化。
 function toAbsoluteUrl(value?: string) {
     const text = (value || "").trim();
-    return /^https?:\/\//i.test(text) ? text : "";
+    if (/^https?:\/\//i.test(text)) return text;
+    if (text.startsWith("/")) return new URL(text, window.location.origin).href;
+    return "";
 }
 
 function resolveToolPreview(tool: ToolSummary): { kind: "video" | "image"; src: string } | null {
     const media = toAbsoluteUrl(tool.mediaUrl);
-    if (media && VIDEO_URL_RE.test(media)) return { kind: "video", src: media };
+    if (media && isVideoUrl(media)) return { kind: "video", src: media };
     const cover = toAbsoluteUrl(tool.cover) || media;
     return cover ? { kind: "image", src: cover } : null;
 }
@@ -97,6 +108,40 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
     const [previewTool, setPreviewTool] = useState<ToolSummary | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [createForm] = Form.useForm<CreateToolFormValues>();
+    const [coverUploading, setCoverUploading] = useState(false);
+    const [mediaUploading, setMediaUploading] = useState(false);
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
+
+    // 上传成功才回填表单；本地降级（pendingRemoteUpload）拿到的是页面级 objectURL，
+    // 刷新即失效，绝不能写进工具数据。
+    async function handleCoverUpload(file: File) {
+        setCoverUploading(true);
+        try {
+            const image = await uploadImage(file);
+            if (image.pendingRemoteUpload) throw new Error(image.remoteUploadError || "图片暂存本机，尚未上传到云端，请稍后重试");
+            createForm.setFieldValue("cover", toAbsoluteUrl(image.url));
+            message.success("封面已上传");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "封面上传失败");
+        } finally {
+            setCoverUploading(false);
+        }
+    }
+
+    async function handleMediaUpload(file: File) {
+        setMediaUploading(true);
+        try {
+            const uploaded = await uploadMediaFile(file, "video");
+            if (uploaded.pendingRemoteUpload) throw new Error(uploaded.remoteUploadError || "视频暂存本机，尚未上传到云端，请稍后重试");
+            createForm.setFieldValue("mediaUrl", toAbsoluteUrl(uploaded.url));
+            message.success("演示视频已上传");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "视频上传失败");
+        } finally {
+            setMediaUploading(false);
+        }
+    }
 
     useEffect(() => {
         const timer = window.setTimeout(() => setSearchText(searchInput.trim()), TOOL_SEARCH_DEBOUNCE_MS);
@@ -297,8 +342,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                 )
             ) : null}
 
-            <AppModal
-                flush
+            <Modal                
                 open={createOpen}
                 title={`新建${subTabLabel}`}
                 okText="创建"
@@ -308,7 +352,7 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                 onOk={() => createForm.submit()}
                 afterClose={() => createForm.resetFields()}
             >
-                <Form<CreateToolFormValues> form={createForm} layout="vertical" requiredMark={false} initialValues={{ visibility: "private" }} onFinish={(values) => createMutation.mutate(values)} className="max-h-[72vh] overflow-y-auto p-6">
+                <Form<CreateToolFormValues> form={createForm} layout="vertical" requiredMark={false} initialValues={{ visibility: "private" }} onFinish={(values) => createMutation.mutate(values)} className="max-h-[72vh] overflow-y-auto p-6 px-8">
                     <Form.Item name="label" label="名称" rules={[{ required: true, whitespace: true, message: "请输入工具名称" }, { max: 120 }]}>
                         <Input maxLength={120} showCount placeholder="例如：电影感胶片" />
                     </Form.Item>
@@ -333,19 +377,57 @@ export function CanvasWorkspaceToolPanel({ onInsert }: CanvasWorkspaceToolPanelP
                     <Form.Item name="prompt" label="提示词" rules={[{ required: true, whitespace: true, message: "请输入提示词" }, { max: 8000 }]}>
                         <Input.TextArea rows={5} maxLength={8000} showCount placeholder="该工具应用到生成节点时使用的提示词" />
                     </Form.Item>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Form.Item name="cover" label="封面 URL" rules={[{ type: "url", message: "请输入合法 URL" }]}>
-                            <Input placeholder="https://…" />
-                        </Form.Item>
-                        <Form.Item name="mediaUrl" label="媒体 URL" rules={[{ type: "url", message: "请输入合法 URL" }]}>
-                            <Input placeholder="图片或视频地址" />
-                        </Form.Item>
-                    </div>
-                    <Form.Item name="ratio" label="比例" rules={[{ max: 32 }]}>
-                        <Input placeholder="可选，例如 original、16:9" />
+                    <Form.Item label="封面图">
+                        <Space.Compact block>
+                            <Form.Item name="cover" noStyle className="flex-1 min-w-0" rules={[{ type: "url", message: "请输入合法 URL" }]}>
+                                <Input placeholder="上传图片或粘贴 URL" allowClear disabled={coverUploading} />
+                            </Form.Item>
+                            <Button icon={<Upload className="size-3.5" />} loading={coverUploading} onClick={() => coverInputRef.current?.click()}>
+                                上传
+                            </Button>
+                        </Space.Compact>
                     </Form.Item>
+                    {HOVER_VIDEO_TYPES.has(activeType) ? (
+                        <Form.Item label="演示视频">
+                            <Space.Compact block>
+                                <Form.Item name="mediaUrl" noStyle className="flex-1 min-w-0" rules={[{ type: "url", message: "请输入合法 URL" }]}>
+                                    <Input placeholder="上传视频或粘贴 URL" allowClear disabled={mediaUploading} />
+                                </Form.Item>
+                                <Button icon={<Upload className="size-3.5" />} loading={mediaUploading} onClick={() => mediaInputRef.current?.click()}>
+                                    上传
+                                </Button>
+                            </Space.Compact>
+                        </Form.Item>
+                    ) : null}
+                    <input
+                        ref={coverInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (file) void handleCoverUpload(file);
+                        }}
+                    />
+                    {HOVER_VIDEO_TYPES.has(activeType) ? (
+                        <input
+                            ref={mediaInputRef}
+                            type="file"
+                            accept="video/*"
+                            style={{ display: "none" }}
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) void handleMediaUpload(file);
+                            }}
+                        />
+                    ) : null}
+                    {/* <Form.Item name="ratio" label="比例" rules={[{ max: 32 }]}>
+                        <Input placeholder="可选，例如 original、16:9" />
+                    </Form.Item> */}
                 </Form>
-            </AppModal>
+            </Modal>
         </>
     );
 }
@@ -389,12 +471,9 @@ const ToolPresetCard = memo(function ToolPresetCard({
     const videoRef = useRef<HTMLVideoElement>(null);
     const commonStyle = { borderColor: "color-mix(in srgb, var(--foreground) 9%, transparent)", background: "color-mix(in srgb, var(--foreground) 5%, transparent)" };
     const coverUrl = toAbsoluteUrl(tool.cover);
-    const reduceMotion = useMemo(
-        () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-        [],
-    );
+    const reduceMotion = useMemo(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
     const mediaAbsoluteUrl = toAbsoluteUrl(tool.mediaUrl);
-    const hoverVideoUrl = mediaAbsoluteUrl && VIDEO_URL_RE.test(mediaAbsoluteUrl) ? mediaAbsoluteUrl : "";
+    const hoverVideoUrl = mediaAbsoluteUrl && isVideoUrl(mediaAbsoluteUrl) ? mediaAbsoluteUrl : "";
     const showHoverVideo = !reduceMotion && HOVER_VIDEO_TYPES.has(tool.type) && Boolean(hoverVideoUrl) && !videoFailed;
 
     useEffect(() => {
@@ -420,7 +499,9 @@ const ToolPresetCard = memo(function ToolPresetCard({
         video.muted = true;
         // 缓存命中时 canplay 可能已派发，直接按 readyState 标记可淡入。
         if (video.readyState >= 3) setVideoReady(true);
-        const handle = window.setTimeout(() => { void video.play().catch(() => {}); }, 0);
+        const handle = window.setTimeout(() => {
+            void video.play().catch(() => {});
+        }, 0);
         return () => window.clearTimeout(handle);
     }, [hovered, showHoverVideo]);
 
@@ -447,7 +528,9 @@ const ToolPresetCard = memo(function ToolPresetCard({
             ref={rootRef}
             className="group relative flex flex-col gap-1 rounded-[var(--r-md)] border p-1.5 text-left transition-[background-color] hover:bg-[var(--surface-hover)] focus-within:ring-2 focus-within:ring-primary/35"
             style={commonStyle}
-            onMouseEnter={() => { if (showHoverVideo) setHovered(true); }}
+            onMouseEnter={() => {
+                if (showHoverVideo) setHovered(true);
+            }}
             onMouseLeave={() => setHovered(false)}
             onContextMenu={(e) => {
                 e.preventDefault();

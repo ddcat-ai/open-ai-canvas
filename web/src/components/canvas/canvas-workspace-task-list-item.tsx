@@ -48,7 +48,7 @@ export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: {
                 </span>
                 <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-medium leading-4 text-foreground" title={formatTaskKind(task)}>{task.prompt}</span>
+                        <span className="truncate text-xs font-medium leading-4 text-foreground" title={`${formatTaskKind(task)}:${task.prompt}`}>{task.prompt}</span>
                         <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none" style={{ borderColor: `color-mix(in srgb, ${statusColor} 30%, transparent)`, color: statusColor }}>
                             {generationTaskStatusLabel(task)}
                         </span>
