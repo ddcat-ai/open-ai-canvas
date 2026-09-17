@@ -43,7 +43,7 @@ export function HoverBorderGradient<T extends ElementType = "button">({
     onMouseLeave,
     ...props
 }: HoverBorderGradientProps<T>) {
-    const Tag = (as || "button") as ElementType;
+    const Tag = (as || "button") as any;
     const reducedMotion = useReducedMotion();
     const [hovered, setHovered] = useState(false);
     const [direction, setDirection] = useState<Direction>("TOP");
@@ -58,15 +58,15 @@ export function HoverBorderGradient<T extends ElementType = "button">({
 
     return (
         <Tag
-            {...props}
+            {...(props as any)}
             className={cn("relative flex h-min w-full content-center items-center overflow-hidden bg-[var(--user-surface)] p-px transition-colors duration-500", containerClassName)}
             onMouseEnter={(event: MouseEvent<HTMLElement>) => {
                 setHovered(true);
-                onMouseEnter?.(event as never);
+                (onMouseEnter as any)?.(event);
             }}
             onMouseLeave={(event: MouseEvent<HTMLElement>) => {
                 setHovered(false);
-                onMouseLeave?.(event as never);
+                (onMouseLeave as any)?.(event);
             }}
         >
             <div className={cn("relative z-10 w-full rounded-[inherit]", className)}>{children}</div>

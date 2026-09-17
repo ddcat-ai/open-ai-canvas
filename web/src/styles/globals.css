@@ -1307,6 +1307,41 @@
         --workspace-overlay-shadow: 0 30px 84px rgba(0, 0, 0, 0.62), 0 8px 24px rgba(0, 0, 0, 0.34);
     }
 
+    /* 全局轻量通知与消息提示框 */
+    .ant-message-notice .ant-message-notice-content {
+        color: var(--foreground) !important;
+        background: var(--color-surface, var(--workspace-overlay-bg-strong, #ffffff)) !important;
+        border: 1px solid var(--color-border, var(--workspace-overlay-border, rgba(0, 0, 0, 0.12))) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    .dark .ant-message-notice .ant-message-notice-content,
+    .dark body .ant-message-notice-content {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55) !important;
+    }
+
+    .ant-notification-notice {
+        color: var(--foreground) !important;
+        background: var(--color-surface, var(--workspace-overlay-bg-strong, #ffffff)) !important;
+        border: 1px solid var(--color-border, var(--workspace-overlay-border, rgba(0, 0, 0, 0.12))) !important;
+    }
+
+    .dark .ant-notification-notice,
+    .dark body .ant-notification-notice {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+    }
+
+    .dark .ant-tooltip .ant-tooltip-inner {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    }
+
     body.app-spatial-overlays :where(
         .ant-dropdown-menu,
         .ant-select-dropdown,
@@ -8029,7 +8064,7 @@ html:not(.dark) .creation-studio-control:hover,
 
     .canvas-model-picker-menu {
         width: max-content !important;
-        min-width: var(--canvas-model-picker-trigger-width, 0px);
+        min-width: max(var(--canvas-model-picker-trigger-width, 0px), 260px);
         max-width: calc(100vw - 24px);
         max-height: min(420px, calc(100vh - 32px));
         overflow-x: hidden;
@@ -8089,6 +8124,9 @@ html:not(.dark) .creation-studio-control:hover,
         flex: 1 1 auto;
         min-width: 0;
         overflow: hidden;
+        display: flex;
+        align-items: center;
+        width: 100%;
     }
 
     .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) {
@@ -16230,7 +16268,7 @@ html:not(.dark) .creation-history-drawer-root {
 
 /* 空态：banner 剧照 + 三张欢迎卡 */
 .assets-empty { display: flex; width: 100%; flex-direction: column; align-items: center; padding: 5vh 0 8vh; }
-.assets-empty-banner { position: relative; width: min(720px, calc(100% - 24px)); height: 180px; }
+.assets-empty-banner { position: relative; width: min(720px, calc(100% - 24px)); height: 180px; margin-bottom: 24px; }
 .assets-empty-banner-frame { position: absolute; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-radius: var(--r-lg); box-shadow: var(--elevation-card); }
 .assets-empty-banner-frame img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.45) contrast(.94) saturate(.7); }
 .assets-empty-banner-frame.is-back { top: 16px; left: 2%; width: 24%; height: 132px; transform: rotate(-6deg); opacity: .45; }
@@ -16238,9 +16276,9 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-empty-banner-frame.is-front { top: 20px; right: 2%; width: 24%; height: 132px; transform: rotate(6deg); opacity: .5; }
 .assets-empty-banner-frame.is-main::after { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--foreground) 55%, transparent)); content: ""; }
 .assets-empty-banner-frame span { position: absolute; right: 12px; bottom: 10px; z-index: 1; color: #fff; font-size: var(--fs-micro); letter-spacing: .08em; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
-.assets-empty-banner-caption { position: absolute; right: 19%; bottom: 2px; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-micro); letter-spacing: .1em; }
+.assets-empty-banner-caption { position: absolute; left: 0; right: 0; bottom: -22px; text-align: center; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-micro); letter-spacing: .1em; z-index: 3; }
 .assets-empty-banner-caption span { color: var(--workspace-accent); font-weight: 620; font-variant-numeric: tabular-nums; }
-.assets-empty-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: min(680px, calc(100% - 24px)); margin-top: 34px; }
+.assets-empty-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: min(680px, calc(100% - 24px)); margin-top: 24px; }
 .assets-empty-card {
     display: flex;
     flex-direction: column;
@@ -17685,13 +17723,32 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     flex: 0 0 34px;
     place-items: center;
     border-radius: 10px;
-    color: rgba(0, 0, 0, .46);
+    color: var(--user-ink-muted);
     transition: background-color .18s ease, color .18s ease;
 }
 
 .app-user-workspace .app-workspace-sidebar-notification:hover {
-    background: rgba(72, 72, 73, .055);
-    color: #171717;
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+
+.dark .app-user-workspace .app-workspace-sidebar-notification,
+.dark .app-user-workspace .app-workspace-topbar-icon-button,
+.dark .app-user-workspace .app-workspace-sidebar-rail-button {
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.dark .app-user-workspace .app-workspace-sidebar-notification:hover,
+.dark .app-user-workspace .app-workspace-topbar-icon-button:hover,
+.dark .app-user-workspace .app-workspace-sidebar-rail-button:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+.dark .app-user-workspace .app-workspace-topbar-icon-button svg,
+.dark .app-user-workspace .app-workspace-sidebar-notification svg,
+.dark .app-user-workspace .app-workspace-sidebar-rail-button svg {
+    color: currentColor !important;
 }
 
 .app-user-workspace .app-workspace-sidebar-notification svg {
@@ -18015,7 +18072,25 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .dark .app-user-workspace .app-workspace-sidebar-profile-menu button:hover { background: rgba(108,94,236,.15); color: #dcd8ff; }
 .dark .app-user-workspace .creation-home-heading h1 { color: #f5f5f5; }
 .dark .app-user-workspace .creation-home-heading p,
-.dark .app-user-workspace .app-workspace-topbar-breadcrumb { color: rgba(255, 255, 255, .48); }
+.dark .app-user-workspace .app-workspace-topbar-breadcrumb > span:not(.truncate) {
+    color: rgba(255, 255, 255, 0.28) !important;
+}
+
+.dark .app-user-workspace .app-workspace-sidebar-collapse-button {
+    color: rgba(255, 255, 255, 0.55) !important;
+    opacity: 0.85;
+}
+
+.dark .app-user-workspace .app-workspace-sidebar-collapse-button:hover,
+.dark .app-user-workspace .app-workspace-sidebar-collapse-button:focus-visible {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    opacity: 1;
+}
+
+.dark .app-user-workspace .app-workspace-sidebar-collapse-button svg {
+    color: currentColor !important;
+}
 .dark .app-user-workspace .app-workspace-topbar { border-bottom-color: rgba(255, 255, 255, .08); }
 .dark .app-user-workspace .creation-empty-workspace > .creation-mode-capsule { background: #232326; border-color: rgba(255,255,255,.08); }
 .dark .app-user-workspace .creation-empty-workspace > .creation-mode-capsule .creation-chat-control[aria-selected="true"] { background: #303034; color: #ffffff; }

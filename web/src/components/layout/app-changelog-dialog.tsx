@@ -11,7 +11,6 @@ export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: 
 
     return (
         <AppModal
-            flush
             rootClassName="app-spatial-modal app-changelog-modal"
             title={
                 <div className="app-changelog-heading">
@@ -30,6 +29,7 @@ export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: 
             footer={null}
             centered
             onCancel={onClose}
+            styles={{ body: { padding: 0 } }}
             modalRender={(node) => (
                 <motion.div initial={reducedMotion ? false : { opacity: 0, y: 14, scale: 0.975 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}>
                     {node}

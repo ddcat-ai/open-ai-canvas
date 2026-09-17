@@ -222,6 +222,8 @@ export default function ProjectsPage() {
                             variant="creation"
                             placeholder="选择文本模型"
                             showSelectedPrice={false}
+                            showOptionPrices
+                            popoverClassName="agent-model-picker-popover"
                         />
                         <Button type="default" icon={<Sparkles className="size-3.5" />} disabled={!storyDraft.trim() || generating} loading={generating} onClick={() => void generateStory()}>AI 生成章节</Button>
                         <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => openCreate(createSource)}>开始创作</Button>

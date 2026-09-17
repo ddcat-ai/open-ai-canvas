@@ -8,6 +8,23 @@
     z-index: calc(var(--z-modal-overlay) + 1000) !important;
 }
 
+.agent-model-picker-popover .canvas-model-picker-menu {
+    width: min(340px, calc(100vw - 24px)) !important;
+    max-width: min(340px, calc(100vw - 24px)) !important;
+}
+
+.agent-model-picker-popover .canvas-model-picker-two-pane {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.agent-model-picker-popover .canvas-model-picker-brand-rail {
+    display: none !important;
+}
+
+.agent-model-picker-popover .canvas-model-picker-model-pane {
+    min-width: 0 !important;
+}
+
 /* Flex 子页必须允许收缩，长模型名和 Skill 文案不能决定窗口宽度。 */
 .canvas-agent-panel > div,
 .canvas-agent-settings,

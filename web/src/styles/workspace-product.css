@@ -660,6 +660,157 @@
     .app-product-workspace .story-launcher-panel { padding: 16px; border-radius: 16px; }
 }
 
+/* Changelog Modal Styles */
+.app-changelog-modal .ant-modal-container {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: 20px;
+    background: var(--user-page-bg);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    max-height: min(84vh, 780px);
+}
+
+.app-changelog-modal .ant-modal-header {
+    margin-bottom: 0;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--user-border);
+    background: var(--user-surface);
+}
+
+.app-changelog-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.app-changelog-heading-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    place-items: center;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--user-accent) 14%, var(--user-surface));
+    color: var(--user-accent);
+}
+
+.app-changelog-heading-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 2px;
+}
+
+.app-changelog-heading-title {
+    color: var(--user-ink);
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.app-changelog-heading-description {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.app-changelog-current-version {
+    margin-right: 28px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--user-accent) 25%, transparent);
+    background: color-mix(in srgb, var(--user-accent) 10%, var(--user-surface));
+    padding: 3px 10px;
+    color: var(--user-accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.app-changelog-scroll {
+    max-height: min(66vh, 600px);
+    overflow-y: auto;
+    padding: 20px 28px 32px;
+    color: var(--user-ink);
+}
+
+.app-changelog-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 24px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--user-border);
+    color: var(--user-ink);
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.app-changelog-section-heading:first-child {
+    margin-top: 0;
+}
+
+.app-changelog-section-marker {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--user-ink-muted);
+}
+
+.app-changelog-section-heading.is-latest .app-changelog-section-marker {
+    background: var(--user-accent);
+}
+
+.app-changelog-latest-badge {
+    border-radius: 999px;
+    background: var(--user-accent);
+    padding: 1px 7px;
+    color: var(--user-accent-foreground, #fff);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.app-changelog-list {
+    margin: 8px 0 16px 20px;
+    padding: 0;
+    list-style-type: disc;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.app-changelog-list li {
+    color: color-mix(in srgb, var(--user-ink) 88%, transparent);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+.app-changelog-paragraph {
+    margin: 6px 0;
+    color: color-mix(in srgb, var(--user-ink) 78%, transparent);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.app-changelog-code {
+    border-radius: 5px;
+    border: 1px solid var(--user-border);
+    background: var(--user-surface-muted);
+    padding: 1px 5px;
+    color: var(--user-accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11.5px;
+}
+
+@media (max-width: 620px) {
+    .app-changelog-heading-description { display: none; }
+    .app-changelog-current-version { display: none; }
+    .app-changelog-scroll { padding: 14px 16px 24px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .app-product-workspace *,
     .app-product-overlays * { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }

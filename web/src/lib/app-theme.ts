@@ -354,6 +354,20 @@ export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): T
                 headerFontSize: 15,
                 bodyPadding: 18,
             },
+            Message: {
+                contentBg: elevatedBackground,
+                contentPadding: "10px 18px",
+            },
+            Notification: {
+                colorBgElevated: elevatedBackground,
+            },
+            Tooltip: {
+                colorBgSpotlight: elevatedBackground,
+                colorTextLightSolid: color.selectedFg,
+            },
+            Popover: {
+                colorBgElevated: elevatedBackground,
+            },
         },
     };
 }
@@ -385,6 +399,9 @@ export function getWorkspaceAntThemeConfig(): ThemeConfig {
             Dropdown: { borderRadiusLG: 16, controlItemBgHover: "var(--user-surface-muted)", paddingBlock: 6 },
             Modal: { borderRadiusLG: 20 },
             Popconfirm: { borderRadiusLG: 16 },
+            Message: { borderRadiusLG: 14, contentPadding: "10px 18px" },
+            Notification: { borderRadiusLG: 18 },
+            Tooltip: { borderRadius: 8 },
         },
     };
 }
