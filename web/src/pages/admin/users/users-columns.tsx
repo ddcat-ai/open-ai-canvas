@@ -1,5 +1,5 @@
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Power } from "lucide-react";
+import { Eye, LogIn, Pencil, Power } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -20,12 +20,16 @@ export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locke
 
 export function createUserColumns({
     actorId,
+    canImpersonateUsers,
+    onImpersonate,
     visibleColumns,
     onView,
     onEdit,
     onToggleStatus,
 }: {
     actorId?: string;
+    canImpersonateUsers: boolean;
+    onImpersonate: (user: AdminUser) => Promise<void>;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
@@ -58,13 +62,24 @@ export function createUserColumns({
         {
             key: "actions",
             title: "操作",
-            width: 280,
+            width: canImpersonateUsers ? 340 : 280,
             align: "center",
             render: (_, user) => (
                 <AdminRowActions
                     primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => onView(user) }}
-                    visibleActionCount={2}
+                    visibleActionCount={3}
                     actions={[
+                        ...(canImpersonateUsers && user.id !== actorId && user.role === "user" && user.status === "active" ? [{
+                            key: "impersonate",
+                            label: "进入",
+                            icon: <LogIn className="size-3.5" />,
+                            confirm: {
+                                title: `以 ${user.displayName || user.username} 的身份进入？`,
+                                description: "将切换当前浏览器的登录账号，以该用户权限查看和操作工作区，修改会真实保存。可从顶部入口返回管理员账号。",
+                                okText: "确认进入",
+                            },
+                            onClick: () => onImpersonate(user),
+                        }] : []),
                         { key: "edit", label: "编辑用户", icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
                         {
                             key: "toggle-status",

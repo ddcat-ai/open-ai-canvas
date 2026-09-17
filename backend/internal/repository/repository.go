@@ -199,6 +199,15 @@ func (r *Repository) UserByAccount(account string) (*model.User, error) {
 	return &user, nil
 }
 
+// FirstUser anchors impersonation permission to the initial account, not a mutable role.
+func (r *Repository) FirstUser() (*model.User, error) {
+	var user model.User
+	if err := r.db.Order("created_at asc, id asc").First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *Repository) UserByUsername(username string) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("lower(username) = lower(?)", username).First(&user).Error; err != nil {
@@ -277,7 +286,36 @@ func (r *Repository) DeleteExpiredAuthSessions() error {
 }
 
 func (r *Repository) DeleteUserAuthSessions(userID string) error {
-	return r.db.Delete(&model.AuthSession{}, "user_id = ?", userID).Error
+	return r.db.Where("user_id = ? OR impersonator_user_id = ?", userID, userID).Delete(&model.AuthSession{}).Error
+}
+
+func (r *Repository) SaveUserAndRevokeSessions(user *model.User) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		return tx.Where("user_id = ? OR impersonator_user_id = ?", user.ID, user.ID).Delete(&model.AuthSession{}).Error
+	})
+}
+
+// Rotate the session and record the actor atomically; a consumed session cannot be reused.
+func (r *Repository) ReplaceAuthSessionWithAudit(currentSessionID string, nextSession *model.AuthSession, event *model.AdminAuditEvent) error {
+	if nextSession == nil || event == nil {
+		return errors.New("replacement session and audit event are required")
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		deleted := tx.Delete(&model.AuthSession{}, "id = ?", currentSessionID)
+		if deleted.Error != nil {
+			return deleted.Error
+		}
+		if deleted.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Create(nextSession).Error; err != nil {
+			return err
+		}
+		return tx.Create(event).Error
+	})
 }
 
 func (r *Repository) LatestEmailVerificationCode(email string, purpose string) (*model.EmailVerificationCode, error) {
@@ -330,7 +368,7 @@ func (r *Repository) ResetUserPasswordWithEmailVerification(userID string, email
 		if userResult.RowsAffected != 1 {
 			return ErrEmailVerificationCodeInvalid
 		}
-		if err := tx.Delete(&model.AuthSession{}, "user_id = ?", userID).Error; err != nil {
+		if err := tx.Where("user_id = ? OR impersonator_user_id = ?", userID, userID).Delete(&model.AuthSession{}).Error; err != nil {
 			return err
 		}
 		return tx.Model(&model.EmailVerificationCode{}).

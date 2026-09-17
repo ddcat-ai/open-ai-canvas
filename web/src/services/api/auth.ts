@@ -38,6 +38,8 @@ export type AdminUser = LocalUser & {
 
 export type AuthSessionPayload = {
     user: LocalUser | null;
+    canImpersonateUsers?: boolean;
+    impersonation?: { actorDisplayName: string; actorUsername: string };
     logicalModels?: PublicLogicalModel[];
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
@@ -430,6 +432,18 @@ export async function logout() {
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+
+export async function startAdminUserImpersonation(id: string) {
+    const result = await http.post<{ user: LocalUser }>(`/admin/users/${encodeURIComponent(id)}/impersonation`);
+    invalidateAuthSessionCache();
+    return result;
+}
+
+export async function exitUserImpersonation() {
+    const result = await http.post<{ user: LocalUser }>("/auth/impersonation/exit");
+    invalidateAuthSessionCache();
+    return result;
+}
 
 export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });

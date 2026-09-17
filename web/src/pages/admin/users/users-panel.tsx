@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, startAdminUserImpersonation, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { switchUserIdentity } from "@/lib/user-session";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
@@ -18,6 +19,7 @@ const allColumnKeys = userColumnOptions.map((item) => item.key);
 
 export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: LocalUser) => void }) {
     const actor = useUserStore((state) => state.user);
+    const canImpersonateUsers = useUserStore((state) => state.canImpersonateUsers);
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
     const debouncedFilter = useDebouncedValue(state.filter);
@@ -102,13 +104,24 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         }
     }, [message, replaceUser]);
 
+    const impersonateUser = useCallback(async (user: AdminUser) => {
+        try {
+            await switchUserIdentity(() => startAdminUserImpersonation(user.id), "/canvas");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "切换用户身份失败");
+            throw error;
+        }
+    }, [message]);
+
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
+        canImpersonateUsers,
+        onImpersonate: impersonateUser,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
         onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+    }), [actor?.id, canImpersonateUsers, impersonateUser, toggleStatus, visibleColumns]);
 
     const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
 

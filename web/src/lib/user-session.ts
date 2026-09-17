@@ -43,6 +43,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         const persistedCreationPreferences = scopedLocalStorage.getItem(CREATION_PREFERENCES_STORE_KEY);
         usePluginStore.setState({ hydrated: false, runtimeStatuses: {}, pluginStates: {} });
         useUserStore.getState().setUser(payload.user);
+        useUserStore.getState().setImpersonation(payload.impersonation, payload.canImpersonateUsers);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
@@ -88,6 +89,27 @@ export async function applyUserSession(payload: AuthSessionPayload) {
 export async function refreshSystemChannels() {
     const catalog = await getModelCatalog();
     useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+}
+
+// Drain writes under the old cookie before switching; reload before hydrating the new user's stores.
+export async function switchUserIdentity(operation: () => Promise<unknown>, destination: string) {
+    await withGenerationConsumersPaused(async () => {
+        await withRemoteUserDataSyncExclusive(async () => {
+            await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            await appQueryClient.cancelQueries();
+            let nextPath = window.location.pathname + window.location.search + window.location.hash;
+            try {
+                await operation();
+                nextPath = destination;
+            } finally {
+                // A lost response may still have replaced the cookie; never resume old-account writes.
+                resetRemoteUserDataSync();
+                appQueryClient.clear();
+                useUserStore.getState().setHydrated(false);
+                window.location.replace(nextPath);
+            }
+        });
+    });
 }
 
 // 模型目录来源决定数据形状；这里统一做运行时收口，避免畸形响应被当成“空目录”写入用户配置。

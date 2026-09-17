@@ -545,6 +545,7 @@ paths:
     get:
       tags: [auth]
       summary: 当前登录会话
+      description: data 包含 user 和 canImpersonateUsers；代入会话另含 impersonation（actorDisplayName、actorUsername）。未登录时 user 为 null。
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -568,6 +569,37 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+  /admin/users/{id}/impersonation:
+    post:
+      tags: [admin]
+      summary: 主管理员进入普通用户工作区
+      description: 仅初始化首个且仍启用的管理员可进入已启用的普通用户。更换当前 Cookie，撤销原会话，并在同一事务记录发起人审计；后续请求按目标用户权限执行，不能嵌套代入。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 user；Set-Cookie 写入新的 HttpOnly 会话
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /auth/impersonation/exit:
+    post:
+      tags: [auth]
+      summary: 结束代入并返回原管理员
+      description: 必须持有有效代入会话且原管理员权限仍有效。撤销代入会话，创建管理员会话并记录退出审计。
+      responses:
+        "200":
+          description: 信封 data 包含管理员 user；Set-Cookie 写入新的 HttpOnly 会话
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
   /projects:

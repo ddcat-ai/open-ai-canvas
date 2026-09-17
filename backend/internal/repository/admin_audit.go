@@ -55,7 +55,7 @@ func (r *Repository) BulkDisableUsers(actorID string, userIDs []string, events [
 		if remainingAdmins == 0 {
 			return ErrBulkLastActiveAdmin
 		}
-		if err := tx.Delete(&model.AuthSession{}, "user_id IN ?", userIDs).Error; err != nil {
+		if err := tx.Where("user_id IN ? OR impersonator_user_id IN ?", userIDs, userIDs).Delete(&model.AuthSession{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Delete(&model.TaskTextDelta{}, "user_id IN ?", userIDs).Error; err != nil {

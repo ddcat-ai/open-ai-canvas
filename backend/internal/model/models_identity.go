@@ -16,12 +16,13 @@ type User struct {
 }
 
 type AuthSession struct {
-	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	UserID    string    `json:"userId" gorm:"index;size:36"`
-	TokenHash string    `json:"-"`
-	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID             string    `json:"userId" gorm:"index;size:36"`
+	ImpersonatorUserID string    `json:"-" gorm:"index;size:36;not null;default:''"`
+	TokenHash          string    `json:"-"`
+	ExpiresAt          time.Time `json:"expiresAt" gorm:"index"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 type UserIdentity struct {

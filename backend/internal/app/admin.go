@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"infinite-canvas/backend/internal/kernel"
 	stdlog "log"
 	"strings"
@@ -342,14 +341,17 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, err
 		}
 		user.PasswordHash = hash
-		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
-			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
-		}
 	}
+	revokeSessions := req.Password != "" || user.Role != nextRole || user.Status != nextStatus
 	user.Role = nextRole
 	user.Status = nextStatus
 	user.UpdatedAt = time.Now()
-	if err := s.repo.Save(user); err != nil {
+	if revokeSessions {
+		err = s.repo.SaveUserAndRevokeSessions(user)
+	} else {
+		err = s.repo.Save(user)
+	}
+	if err != nil {
 		return nil, err
 	}
 	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, "更新用户账号状态或资料", map[string]any{"role": user.Role, "status": user.Status}); err != nil {

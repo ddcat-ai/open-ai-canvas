@@ -140,6 +140,22 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	return s.authDomain().CurrentUser(cookieValue)
 }
 
+func (s *Service) CurrentAuthSession(cookieValue string) (*auth.AuthSessionContext, error) {
+	return s.authDomain().CurrentAuthSession(cookieValue)
+}
+
+func (s *Service) CanImpersonateUsers(user *model.User) (bool, error) {
+	return s.authDomain().CanImpersonateUsers(user)
+}
+
+func (s *Service) StartUserImpersonation(cookieValue string, targetID string) (*AuthSessionResult, error) {
+	return s.authDomain().StartUserImpersonation(cookieValue, targetID)
+}
+
+func (s *Service) ExitUserImpersonation(cookieValue string) (*AuthSessionResult, error) {
+	return s.authDomain().ExitUserImpersonation(cookieValue)
+}
+
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	return s.authDomain().PublicAuthUser(user)
 }

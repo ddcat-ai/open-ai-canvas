@@ -203,6 +203,14 @@ func (s *Service) Logout(cookieValue string) error {
 }
 
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
+	context, err := s.CurrentAuthSession(cookieValue)
+	if err != nil {
+		return nil, err
+	}
+	return context.User, nil
+}
+
+func (s *Service) CurrentAuthSession(cookieValue string) (*AuthSessionContext, error) {
 	sessionID, token := parseSessionCookie(cookieValue)
 	if sessionID == "" || token == "" {
 		return nil, kernel.Unauthorized("请先登录")
@@ -227,7 +235,29 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	if user.Status != model.UserStatusActive {
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
-	return user, nil
+	context := &AuthSessionContext{User: user, Session: session}
+	if session.ImpersonatorUserID == "" {
+		return context, nil
+	}
+	actor, err := s.repo.User(session.ImpersonatorUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, kernel.Unauthorized("管理员身份已失效，请重新登录")
+		}
+		return nil, err
+	}
+	allowed, err := s.CanImpersonateUsers(actor)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed || user.Role != model.UserRoleUser {
+		if err := s.repo.DeleteAuthSession(sessionID); err != nil {
+			return nil, err
+		}
+		return nil, kernel.Unauthorized("身份切换权限已失效，请重新登录")
+	}
+	context.Impersonator = actor
+	return context, nil
 }
 
 // 认证响应只补充当前用户自己的第三方公开身份，不把身份表或密钥字段暴露给其他列表接口。
@@ -248,24 +278,33 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 }
 
 func (s *Service) createAuthSession(user *model.User) (*AuthSessionResult, error) {
-	publicUser, err := s.PublicAuthUser(user)
+	result, session, err := s.newAuthSession(user, "")
 	if err != nil {
 		return nil, err
+	}
+	if err := s.repo.Create(session); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *Service) newAuthSession(user *model.User, impersonatorUserID string) (*AuthSessionResult, *model.AuthSession, error) {
+	publicUser, err := s.PublicAuthUser(user)
+	if err != nil {
+		return nil, nil, err
 	}
 	token := RandomToken()
 	now := time.Now()
 	session := model.AuthSession{
-		ID:        kernel.NewID(),
-		UserID:    user.ID,
-		TokenHash: HashToken(token),
-		ExpiresAt: now.Add(sessionMaxAge),
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                 kernel.NewID(),
+		UserID:             user.ID,
+		ImpersonatorUserID: impersonatorUserID,
+		TokenHash:          HashToken(token),
+		ExpiresAt:          now.Add(sessionMaxAge),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
-	if err := s.repo.Create(&session); err != nil {
-		return nil, err
-	}
-	return &AuthSessionResult{User: publicUser, Session: session.ID + "." + token, MaxAgeSecs: int(sessionMaxAge.Seconds())}, nil
+	return &AuthSessionResult{User: publicUser, Session: session.ID + "." + token, MaxAgeSecs: int(sessionMaxAge.Seconds())}, &session, nil
 }
 
 func HashPassword(password string) (string, error) {

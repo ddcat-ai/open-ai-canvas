@@ -9,6 +9,14 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 管理员代入用户
+
+- `POST /admin/users/:id/impersonation`：仅初始化时的首个账号且仍为启用管理员可以使用；目标必须是已启用的普通用户。不能进入自己、其他管理员或嵌套代入。成功返回 `{ user }`，通过 HttpOnly Cookie 更换登录会话。
+- `POST /auth/impersonation/exit`：有效代入会话返回原管理员，成功返回 `{ user }` 并再次更换 Cookie。
+- `GET /auth/session`：增加 `canImpersonateUsers`；代入期间增加 `impersonation: { actorDisplayName, actorUsername }`。业务权限和数据归属使用目标用户，原管理员只用于退出和审计。禁用、撤销会话、重置密码以及角色变化会使相关代入权限失效。
+
+进入和退出均在同一事务撤销旧会话、创建新会话并记录 `user.impersonation.start/exit` 审计。操作具有目标用户的真实写入权限，不是只读预览。Cookie 在同一浏览器标签页间共享；切换时前端等待旧同步结束并重新加载，其他打开的标签页应刷新后再继续操作。
+
 ## 欢迎页开放配置
 
 `GET /public/welcome` 无需登录，信封 `data` 仅包含布尔值 `welcomeEnabled`，响应禁用缓存。读取失败按标准错误信封返回。

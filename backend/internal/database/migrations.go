@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 19
+const CurrentSchemaVersion int64 = 20
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -77,6 +77,22 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.AgentMemorySetting{})
 	}},
 	{version: 19, name: "payment_plugin_version", checksum: "sha256:payment-plugin-version-v19-20260917", apply: migrateSchemaV19},
+	{version: 20, name: "auth_session_impersonation", checksum: "sha256:auth-session-impersonation-v20", apply: migrateSchemaV20},
+}
+
+func migrateSchemaV20(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.AuthSession{}) {
+		return tx.Migrator().CreateTable(&model.AuthSession{})
+	}
+	if !tx.Migrator().HasColumn(&model.AuthSession{}, "ImpersonatorUserID") {
+		if err := tx.Migrator().AddColumn(&model.AuthSession{}, "ImpersonatorUserID"); err != nil {
+			return err
+		}
+	}
+	if !tx.Migrator().HasIndex(&model.AuthSession{}, "ImpersonatorUserID") {
+		return tx.Migrator().CreateIndex(&model.AuthSession{}, "ImpersonatorUserID")
+	}
+	return nil
 }
 
 func migrateSchemaV14(tx *gorm.DB) error {
