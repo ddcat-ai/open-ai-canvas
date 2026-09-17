@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"infinite-canvas/backend/internal/tools"
 )
 
@@ -39,5 +41,16 @@ func (s *Service) DeleteTool(userID string, toolID int64) error {
 }
 
 func (s *Service) EnsureBuiltinTools() error {
-	return tools.EnsureBuiltinTools(s.repo)
+	return tools.EnsureBuiltinTools(s.repo, s)
+}
+
+// ImportSeedResource 将外部 URL 资源导入本地存储，返回登录态访问路径。
+// 使用原始 URL 作为 uploadIdentity 保证幂等：重复启动不会重复下载。
+// 公开路径需要签名参数且会过期，不适合持久化存储；内置工具用登录态路径即可。
+func (s *Service) ImportSeedResource(ownerID string, rawURL string, kind string) (string, error) {
+	resource, err := s.ImportResourceURL(ownerID, rawURL, kind, 0, 0, 0, rawURL)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("/api/resources/%s/file", resource.ID), nil
 }

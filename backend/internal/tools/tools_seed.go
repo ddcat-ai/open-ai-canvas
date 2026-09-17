@@ -52,8 +52,20 @@ const (
 
 const seedTimeLayout = "2006-01-02 15:04:05"
 
+// SeedResourceImporter 用于将内置工具的外部 CDN 封面/视频导入本地存储。
+// 返回可供前端直接访问的资源 URL（如 /api/public/resources/{id}/file）。
+type SeedResourceImporter interface {
+	ImportSeedResource(ownerID string, rawURL string, kind string) (string, error)
+}
+
+// isLocalResourceURL 判断 URL 是否已经是本地资源路径，避免重复导入。
+func isLocalResourceURL(raw string) bool {
+	return strings.HasPrefix(raw, "/api/") || strings.HasPrefix(raw, "/resources/")
+}
+
 // EnsureBuiltinTools 将预设工具列表幂等写入数据库；重复启动只更新内容字段，不删除已有数据。
-func EnsureBuiltinTools(repo Repository) error {
+// importer 不为空时，会先将外部 CDN 的 cover/media_url 导入本地存储再写入。
+func EnsureBuiltinTools(repo Repository, importer SeedResourceImporter) error {
 	var file builtinToolsFile
 	if err := json.Unmarshal(builtinToolsJSON, &file); err != nil {
 		return fmt.Errorf("解析内置工具失败: %w", err)
@@ -118,6 +130,21 @@ func EnsureBuiltinTools(repo Repository) error {
 				extraInfoJSON = string(data)
 			}
 
+			// cover 和 media_url 如果不为空，调用存储服务导入到本地，导入失败时降级使用原始 URL
+			cover := strings.TrimSpace(item.Cover)
+			mediaURL := strings.TrimSpace(item.MediaURL)
+			if importer != nil {
+				if cover != "" && !isLocalResourceURL(cover) {
+					if localURL, err := importer.ImportSeedResource(item.OwnerID, cover, "image"); err == nil && localURL != "" {
+						cover = localURL
+					}
+				}
+				if mediaURL != "" && !isLocalResourceURL(mediaURL) {
+					if localURL, err := importer.ImportSeedResource(item.OwnerID, mediaURL, "video"); err == nil && localURL != "" {
+						mediaURL = localURL
+					}
+				}
+			}
 			sortWeight++
 			tools = append(tools, model.Tool{
 				ID:            item.ID,
@@ -126,11 +153,11 @@ func EnsureBuiltinTools(repo Repository) error {
 				Label:         label,
 				Desc:          strings.TrimSpace(item.Desc),
 				Tag:           strings.TrimSpace(item.Tag),
-				Cover:         strings.TrimSpace(item.Cover),
+				Cover:         cover,
 				ExtraInfoJSON: extraInfoJSON,
 				Prompt:        prompt,
 				Ratio:         strings.TrimSpace(item.Ratio),
-				MediaURL:      strings.TrimSpace(item.MediaURL),
+				MediaURL:      mediaURL,
 				OwnerID:       item.OwnerID,
 				Source:        ToolSourceBuiltin,
 				Enabled:       item.Enabled,
