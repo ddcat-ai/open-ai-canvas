@@ -1,7 +1,9 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -21,28 +23,7 @@ func cloudAgentPendingPlanItems(plan []cloudAgentPlanItem) []string {
 	return pending
 }
 
-func cloudAgentPlanBlock(plan []cloudAgentPlanItem) string {
-	if len(plan) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(cloudAgentPlanBlockMarker)
-	b.WriteString("当前用户消息是本轮目标。清单只辅助推进仍覆盖在该目标下的步骤；用户已改口时不要回头确认上一轮有没有做完。每完成一项就调用 plan_update 更新它的 status。\n\n")
-	for _, item := range plan {
-		mark := "未开始"
-		switch item.Status {
-		case "doing":
-			mark = "进行中"
-		case "done":
-			mark = "已完成"
-		}
-		b.WriteString(fmt.Sprintf("- [%s] %s. %s\n", mark, item.ID, item.Title))
-	}
-	return b.String()
-}
-
 const cloudAgentPlanBlockMarker = "\n\n## 本轮待办清单\n\n"
-const cloudAgentRuntimeContextMarker = "【运行状态】"
 
 func stripCloudAgentPlanBlock(system string) string {
 	if i := strings.Index(system, cloudAgentPlanBlockMarker); i >= 0 {
@@ -55,11 +36,16 @@ func isCloudAgentRuntimeContextMessage(message map[string]any) bool {
 	if stringField(message, "role") != "user" {
 		return false
 	}
-	return strings.HasPrefix(strings.TrimSpace(stringField(message, "content")), cloudAgentRuntimeContextMarker)
+	return stringField(message, cloudAgentContextSourceKey) == "runtime"
 }
 
 func stripCloudAgentRuntimeContext(messages []map[string]any) []map[string]any {
 	if len(messages) == 0 || !isCloudAgentRuntimeContextMessage(messages[len(messages)-1]) {
+		return messages
+	}
+	var context cloudAgentRuntimeContext
+	content := strings.TrimPrefix(stringField(messages[len(messages)-1], "content"), cloudAgentRuntimeContextMarker)
+	if json.Unmarshal([]byte(content), &context) != nil || context.Kind != cloudAgentContextPlan {
 		return messages
 	}
 	return messages[:len(messages)-1]
@@ -71,14 +57,10 @@ func attachCloudAgentPlan(canonical *canonicalAgentRequest, plan []cloudAgentPla
 	}
 	canonical.SystemPrompt = stripCloudAgentPlanBlock(canonical.SystemPrompt)
 	canonical.Messages = stripCloudAgentRuntimeContext(canonical.Messages)
-	block := cloudAgentPlanBlock(plan)
-	if block == "" {
+	if len(plan) == 0 {
 		return
 	}
-	canonical.Messages = append(canonical.Messages, map[string]any{
-		"role":    "user",
-		"content": cloudAgentRuntimeContextMarker + "这不是新的用户指令，只是当前待办状态。当前用户消息仍是本轮目标。\n" + strings.TrimSpace(block),
-	})
+	canonical.Messages = append(slices.Clone(canonical.Messages), cloudAgentRuntimeMessage(cloudAgentRuntimeContext{Kind: cloudAgentContextPlan, Items: plan}))
 }
 
 func cloudAgentPlanRequiresFirstApproval(state *cloudAgentRuntime, call cloudAgentCall) bool {
@@ -89,45 +71,11 @@ func cloudAgentPlanRequiresFirstApproval(state *cloudAgentRuntime, call cloudAge
 	return ok
 }
 
-func cloudAgentLastMessageIsUserInstruction(messages []map[string]any) bool {
-	if len(messages) == 0 {
-		return false
-	}
-	last := messages[len(messages)-1]
-	if stringField(last, "role") != "user" {
-		return false
-	}
-	content := strings.TrimSpace(stringField(last, "content"))
-	if content == "" {
-		return false
-	}
-	if strings.HasPrefix(content, cloudAgentRuntimeContextMarker) {
-		return false
-	}
-	if strings.HasPrefix(content, "【用户插话】") {
-		return true
-	}
-	if strings.Contains(content, "待办清单") || strings.Contains(content, "现在就调用工具") {
-		return false
-	}
-	return true
-}
-
-func cloudAgentUserFirstPrefix(state *cloudAgentRuntime) string {
-	if state == nil || !cloudAgentLastMessageIsUserInstruction(state.Canonical.Messages) {
-		return ""
-	}
-	last := state.Canonical.Messages[len(state.Canonical.Messages)-1]
-	userText := truncateRunes(strings.TrimSpace(stringField(last, "content")), 200)
-	return "用户刚给了新要求：「" + userText + "」。**先按用户的最新要求来做**，做完再继续下面这件事："
-}
-
-func cloudAgentPlanNudgeContent(state *cloudAgentRuntime, pendingTitle string) string {
-	return cloudAgentUserFirstPrefix(state) + "待办清单里「" + pendingTitle + "」还没完成，这一轮不能算结束。请按这个循环推进：**执行 → 检查结果 → 用 plan_update 更新该项状态 → 做下一项**。现在就调用工具继续。"
-}
-
-func cloudAgentPlanRequiredNudgeContent(state *cloudAgentRuntime) string {
-	return cloudAgentUserFirstPrefix(state) + "你还没有把这次要做的事列成待办清单，服务端无法判断是否做完。请先用 plan_update 把剩余工作一次列全（一项一个可验收的产出，例如「生成镜头2视频」），再按清单逐项推进：每完成一项就更新该项状态，然后做下一项。现在就调用工具。"
+func cloudAgentPlanNudgeMessage(state *cloudAgentRuntime, pendingTitle string) map[string]any {
+	return cloudAgentRuntimeMessage(cloudAgentRuntimeContext{
+		Kind: cloudAgentContextPendingPlan, PendingTitle: pendingTitle,
+		LatestUserMessage: cloudAgentLatestUserInstruction(state.Canonical.Messages),
+	})
 }
 
 func cloudAgentPlanApprovalPreview(call cloudAgentCall) (cloudAgentApprovalPreview, bool) {
@@ -182,6 +130,9 @@ func cloudAgentApplyPlanUpdate(state *cloudAgentRuntime, call cloudAgentCall) (a
 		default:
 			args.Items[i].Status = "pending"
 		}
+	}
+	if !slices.Equal(state.Plan, args.Items) {
+		state.ActionNudged = false
 	}
 	state.Plan = args.Items
 	return map[string]any{"items": args.Items, "pendingTitles": cloudAgentPendingPlanItems(args.Items)}, nil

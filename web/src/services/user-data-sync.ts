@@ -159,13 +159,20 @@ export async function refreshCanvasAfterAgent(id: string) {
         const { project } = await getRemoteCanvasProject(id);
         if (epoch !== sessionEpoch) throw new Error("账号已切换");
         const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
+        const baseline = acknowledgedProjects.get(id);
         const cachedDirty = current && incrementalSession && !verifiedProjects.has(id) && current.remoteContentHash !== await canvasContentHash(current);
         if (epoch !== sessionEpoch) throw new Error("账号已切换");
-        if (current && (cachedDirty || !sameCanvasContent(acknowledgedProjects.get(id), current))) {
+        if (current && (cachedDirty || !sameCanvasContent(baseline, current)) && !sameCanvasContent(current, project)) {
+            // Replayed events can request a snapshot while local edits await saving.
+            // An unchanged, verified ancestor is not a concurrent cloud edit.
+            if (!cachedDirty && current.revision === project.revision && baseline?.revision === project.revision && sameCanvasContent(baseline, project)) {
+                useSyncProgressStore.getState().setProjectProgress(id, { phase: "pending", message: "本地修改等待保存到云端" });
+                scheduleRemoteUserDataSync();
+                return current;
+            }
             await preserveAgentConflict(current);
             throw new Error("Agent 已更新服务端画布，但本地存在未同步编辑。已保留本地草稿，请加载云端最新版本。");
         }
-        if (current && current.revision === project.revision && sameCanvasContent(current, project)) return current;
         const projected = { ...project, viewport: current?.viewport || project.viewport, remoteContentHash: await canvasContentHash(project) };
         if (epoch !== sessionEpoch || useCanvasStore.getState().openProject(id) !== (current || null)) throw new Error("画布仍在更新，请重新同步 Agent 结果");
         try {
@@ -176,7 +183,7 @@ export async function refreshCanvasAfterAgent(id: string) {
             if (current) await preserveAgentConflict(current);
             throw error;
         }
-        acknowledgedProjects.set(id, project);
+        acknowledgedProjects.set(id, projected);
         verifiedProjects.add(id);
         useCanvasStore.setState((state) => ({ projects: [...state.projects.filter((candidate) => candidate.id !== id), projected] }));
         await flushCanvasStorePersistence();
@@ -194,27 +201,24 @@ export async function applyAgentCanvasPatches(id: string, patches: AgentCanvasPa
         if (!baseline || !current) throw new Error("缺少画布同步基线，需要重新读取画布");
         let remote = baseline;
         let projected = current;
-        try {
-            if (incrementalSession && !verifiedProjects.has(id) && baseline.remoteContentHash !== await canvasContentHash(baseline)) throw new Error("本地缓存尚未核对，请加载云端最新版本");
-            if (current.revision !== baseline.revision || !Number.isSafeInteger(baseline.revision)) throw new Error("画布同步基线已变化");
-            for (const patch of patches) {
-                if (!Number.isSafeInteger(patch.revision) || !Number.isSafeInteger(patch.baseRevision)) throw new Error("Agent 增量缺少版本，请重新读取画布");
-                if (patch.revision! <= remote.revision!) continue;
-                if (patch.baseRevision !== remote.revision || patch.revision !== patch.baseRevision! + 1) throw new Error("Agent 画布增量版本不连续，请重新读取画布");
-                remote = { ...applyAgentCanvasPatch(remote, patch), revision: patch.revision };
-                projected = { ...applyAgentCanvasPatch(projected, patch), revision: patch.revision };
-            }
-            if (projected === current) return current;
-            const hash = await canvasContentHash(remote);
-            if (epoch !== sessionEpoch || useCanvasStore.getState().openProject(id) !== current) throw new Error("画布仍在更新，请重新同步 Agent 结果");
-            remote = { ...remote, remoteContentHash: hash };
-            projected = { ...projected, remoteContentHash: hash };
-            if (!sameCanvasContent(projected, current)) {
-                for (const listener of agentCanvasListeners) listener(projected, current);
-            }
-        } catch (error) {
-            if (epoch === sessionEpoch) await preserveAgentConflict(useCanvasStore.getState().openProject(id) || current);
-            throw error;
+        // A rejected delta requests a snapshot through createAgentCanvasSync.
+        // Only that reconciliation can distinguish stale replay from a conflict.
+        if (incrementalSession && !verifiedProjects.has(id) && baseline.remoteContentHash !== await canvasContentHash(baseline)) throw new Error("本地缓存尚未核对，请加载云端最新版本");
+        if (current.revision !== baseline.revision || !Number.isSafeInteger(baseline.revision)) throw new Error("画布同步基线已变化");
+        for (const patch of patches) {
+            if (!Number.isSafeInteger(patch.revision) || !Number.isSafeInteger(patch.baseRevision)) throw new Error("Agent 增量缺少版本，请重新读取画布");
+            if (patch.revision! <= remote.revision!) continue;
+            if (patch.baseRevision !== remote.revision || patch.revision !== patch.baseRevision! + 1) throw new Error("Agent 画布增量版本不连续，请重新读取画布");
+            remote = { ...applyAgentCanvasPatch(remote, patch), revision: patch.revision };
+            projected = { ...applyAgentCanvasPatch(projected, patch), revision: patch.revision };
+        }
+        if (projected === current) return current;
+        const hash = await canvasContentHash(remote);
+        if (epoch !== sessionEpoch || useCanvasStore.getState().openProject(id) !== current) throw new Error("画布仍在更新，请重新同步 Agent 结果");
+        remote = { ...remote, remoteContentHash: hash };
+        projected = { ...projected, remoteContentHash: hash };
+        if (!sameCanvasContent(projected, current)) {
+            for (const listener of agentCanvasListeners) listener(projected, current);
         }
         acknowledgedProjects.set(id, remote);
         verifiedProjects.add(id);

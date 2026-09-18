@@ -34,7 +34,7 @@ func TestCloudAgentContinuationReplySplitsFactsFromAssistantText(t *testing.T) {
 	if strings.Contains(context, "canvas_get_state") || strings.Contains(context, `"event"`) {
 		t.Fatalf("摘要不得把工具流水当成本轮目标：%s", context)
 	}
-	if !strings.Contains(context, "上一轮已结束（failed）") || !strings.Contains(context, "当前用户消息") {
+	if !strings.Contains(context, "上一轮已结束（failed）") {
 		t.Fatalf("失败摘要不对：%s", context)
 	}
 }
@@ -71,7 +71,7 @@ func TestCloudAgentContinuationKeepsSubmittedTaskIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(context, "task-1") || !strings.Contains(context, "task-2") || !strings.Contains(context, "不要重发") {
+	if !strings.Contains(context, "task-1") || !strings.Contains(context, "task-2") || !strings.Contains(context, "已提交生成任务") {
 		t.Fatalf("已提交任务应留下防重发提示：%s", context)
 	}
 }

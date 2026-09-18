@@ -28,6 +28,8 @@ description: 从产品功能快速定位主要代码入口
 
 ## 画布核心
 
+云端 Agent 的提示词维护边界见[画布 Agent 提示词与用户意图](/docs/backend/agent-prompt-policy)：行为策略在版本化 md，动态事实由 `cloud_agent_policy.go` 编译，运行状态消息由 `cloud_agent_prompt_context.go` 统一编码；`cloud_agent_anchor.go` 不再推断用户授权或锁定首轮目标。
+
 | 职责 | 代码位置 |
 | --- | --- |
 | 页面装配和跨域动作协调 | `web/src/pages/canvas/project.tsx` |

@@ -61,6 +61,7 @@ description: 信封、错误码与 OpenAPI
 - Agent 的 `snapshotHash` 忽略顶层 `viewport`、`updatedAt`。`canvas_get_state` 另返回 `mediaSnapshotHash`，供 `generate_media.snapshotHash` 使用，并额外忽略节点 `position`；创建生成草稿后的审批也固定该内容哈希。因此移动图片或草稿不会使生成审批失效，执行时保留最新坐标；节点内容、素材、锁定状态和连线变化仍需重新读取并审批。画布修改与撤销继续使用包含位置的 `snapshotHash`，数据库写入仍使用完整快照 CAS。客户端刷新保留本地视口。
 - `read_only` 只允许读取；`request_approval` 对写画布和媒体生成暂停为 `waiting_approval`；`auto` 可在预算内执行已授权画布操作，但图片 / 视频生成始终独立审批，不能绕过。`maxGenerationTasks` / `maxVideoSeconds` 为非负整数，0 表示该项不设业务上限，正数按本轮累计执行；不再固定 8 次模型调用、8 个生成任务或 120 秒视频。积分上限仍必填且大于 0，实际报价在任务创建与预留积分前校验，时长必须符合所选模型的实际能力。失败事件保留具体错误和已有任务的 `taskId`、`nodeId`、`status`；媒体结果的 `phase` 区分 `admission` 与 `completion`，`taskSubmitted` 表达是否已提交。已提交的收费生成失败作为工具错误交回模型，整轮保持可继续，不得自动重试收费生成；只有生成结果无法回写画布时才把整轮标为 `failed`。模型应报告错误，不能自行删减提示词。
 - 必须有当前用户已保存的画布。首轮摘要最多取前 80 个节点，并按约 60KB 预算截断；装不下的节点记入 `omittedNodes`，不因摘要过大整轮拒绝。`canvas_get_state` 可按 `offset` 每页读取 40 个节点、资产可引用状态及相关连线，按 `nodeIds` 精读最多 8 个节点（正文每字段最多 16000 字符），通过 `hasMore` / `nextOffset` 和字段 `Truncated` 判断是否完整。分镜表包含镜头、角色节点与资产绑定；摘要每页最多 20 行，精读每次 1 行，可用 `storyboardOffset` 翻页；单行叙事文本累计最多 24000 字符，角色 / 绑定各最多 16 项。上下文不含媒体 URL、任意元数据或未同步修改；节点名称不等于图像视觉识别。普通任务重试接口不能重试 Agent 任务。
+- `canvas_get_state` 首次调用传 `{}`，仅接受可选的 `offset`、`storyboardOffset`（非负整数）和 `nodeIds`（最多 8 个字符串组成的数组）；当前画布由运行绑定，不接受 `canvasId`、`limit` 或 `page`。读取工具分别反馈非对象 / 多对象、JSON 格式错误、未知字段和字段类型错误。可纠正的工具参数失败在 `tool_failed.result` 及模型工具结果中返回 `reason: invalid_tool_arguments`、本轮已声明的 `parameters` 和 `guidance`；画布读取额外给出 `exampleArguments: {}`。失败调用仍如实记录，由模型修正参数后继续，不静默丢弃字段或自动重放写操作；资源归属、审批、快照和收费校验仍按原规则执行。
 - `GET /agent/runs/:id` 返回运行信息；`POST /agent/runs/:id/cancel` 取消当前运行及活动子任务；`POST /agent/runs/:id/approvals/:approvalId/decision` 接受 `{"decision":"approve"|"reject","reason":"..."}`，审批决定幂等且服务端校验归属。
 - `GET /agent/runs/:id/events` 返回 `agent_event` 和首次 / 状态版本变化时的紧凑 `run_snapshot` SSE；无变化时只发送 heartbeat。事件 `Seq` 在运行内递增；支持 `?after=` / `Last-Event-ID`，游标不是运行 ID。`cleanupPending: true` 时即使运行已进入终态也会继续推送，直到后台收尾完成。前端应以快照恢复状态，代理只对这一精确路径关闭缓冲。
 - `generation_task_created` 携带 `canvasId`、`nodeId`、`taskId`、`title`、`mode`、`referenceNodeIds`。草稿、提交、画布工具写入，以及媒体成功 / 失败 / 取消的真实节点变更，均在画布写入与运行检查点的同一事务持久化 `canvas_updated`。节点已删除或换任务时不伪造更新；`run_failed` 本身不代表节点媒体任务失败。
@@ -72,6 +73,8 @@ description: 信封、错误码与 OpenAPI
 - 生成按钮与提交入口共用节点任务状态：排队 / 运行中不可重复生成，终态解除任务锁，历史 `taskId` 不永久禁用。聊天留痕保留节点名、引用与失败任务 ID，点击使用现有画布聚焦；已删除节点只提示，不自动重建。聊天缓存不重复保存增量中的完整节点正文。
 
 Agent 的聊天列表缓存只负责 UI 恢复；运行、技能快照、审批、工具调用、子任务和事件均以服务端持久化状态为准。提交响应丢失时，客户端应使用同一幂等键重试，不生成新的提交。
+
+媒体完成事件分别报告生成与回写结果：`tool_failed.result.status` 始终是媒体任务真实状态，`generationError` 是脱敏后的生成错误；`writebackError` / `writebackReason` 记录回写失败，不能覆盖生成错误。`targetNodeId` 保留原调用目标，`nodeId` 只在匹配到真实任务绑定时返回。回写原因包含 `canvas_unavailable`、`target_node_missing`、`task_binding_changed`、`result_resource_unavailable`，缺少可验证目标时为 `target_node_unknown`。终态 `run_failed` 同步提供目标节点、`generationStatus`、两层错误及回写 `reason`，并持久化 `failureMessage`。回写必须同时匹配原目标节点和任务 ID，不能仅凭另一个节点复制的 taskId 改写目标；恢复收尾同样使用任务持久化的目标信息。失败任务只承诺保留任务记录，不宣称已经生成可用媒体。
 
 Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`（已启用技能）和 `path`；空路径表示列目录，不表示已读取文件。目录结果中的 `entryPath` 固定为 `SKILL.md`，`files` 为本轮固定快照的可读路径；Agent 先读取入口，再按入口引用读取必要文件。同一运行内同技能同路径只允许请求一次（包括不存在的路径），重复请求返回工具失败和继续执行指引，状态随运行持久化。模型初始上下文只包含技能版本、哈希、入口和可读文件清单，不包含技能正文。
 

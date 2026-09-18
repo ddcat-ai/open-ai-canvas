@@ -166,13 +166,57 @@ test("50 distinct media completions project once and keep the local viewport", a
     expect(get).not.toHaveBeenCalled();
 });
 
-test("a missing Agent revision preserves the local draft and prevents automatic overwrite", async () => {
+test("a delta gap reconciles against the cloud before declaring a conflict", async () => {
     await setup();
     await expect(applyAgentCanvasPatches(initial.id, [{ canvasId: initial.id, baseRevision: 2, revision: 3, nodes: [], connections: [] }])).rejects.toThrow("版本不连续");
     expect(useCanvasStore.getState().projects[0].revision).toBe(1);
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id]?.phase).not.toBe("conflict");
+    expect(await readCanvasSyncDrafts(initial.id)).toHaveLength(0);
+    await refreshCanvasAfterAgent(initial.id);
+    expect(useCanvasStore.getState().projects[0]).toMatchObject(remote);
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("done");
+});
+
+test("reconciliation after a delta gap still protects genuinely conflicting edits", async () => {
+    await setup();
+    useCanvasStore.setState({ projects: [{ ...initial, title: "未保存标题" }] });
+    await expect(applyAgentCanvasPatches(initial.id, [{ canvasId: initial.id, baseRevision: 2, revision: 3, nodes: [], connections: [] }])).rejects.toThrow("版本不连续");
+    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
     expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("conflict");
-    expect((await readCanvasSyncDrafts(initial.id))[0].project.revision).toBe(1);
+    expect((await readCanvasSyncDrafts(initial.id))[0].project.title).toBe("未保存标题");
     await expect(saveRemoteUserDataNow(initial.id)).rejects.toThrow("云端画布已有更新");
+});
+
+test("an identical cloud snapshot clears a stale conflict without replaying editor nodes", async () => {
+    await setup(initial);
+    useSyncProgressStore.getState().setProjectProgress(initial.id, { phase: "conflict", draftCount: 9 });
+    let deliveries = 0;
+    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries++; });
+    await refreshCanvasAfterAgent(initial.id);
+    expect(deliveries).toBe(0);
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id]).toMatchObject({ phase: "done", draftCount: 9 });
+    await expect(saveRemoteUserDataNow(initial.id)).resolves.toBeUndefined();
+});
+
+test("replayed events against an unchanged cloud ancestor preserve pending local edits", async () => {
+    await setup(initial);
+    await refreshCanvasAfterAgent(initial.id);
+    const edited = { ...initial, title: "等待保存的标题" };
+    useCanvasStore.setState({ projects: [edited] });
+    await refreshCanvasAfterAgent(initial.id);
+    expect(useCanvasStore.getState().projects[0]).toBe(edited);
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("pending");
+    expect(await readCanvasSyncDrafts(initial.id)).toHaveLength(0);
+});
+
+test("an unverified dirty cache cannot become a save baseline merely because revisions match", async () => {
+    await setup(initial);
+    const edited = { ...initial, title: "离线标题" };
+    useCanvasStore.setState({ projects: [edited] });
+    await initializeRemoteUserDataSession("agent-user");
+    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
+    expect(useCanvasStore.getState().projects[0]).toBe(edited);
+    expect((await readCanvasSyncDrafts(initial.id))[0].project.title).toBe(edited.title);
 });
 
 test("Agent updates merge a local title edit and the next save uses the new revision", async () => {

@@ -149,13 +149,16 @@ func cloudAgentDrainInterjections(runID string, state *cloudAgentRuntime) bool {
 		// 前缀是给模型看的**结构信号**：与系统催办区分开，它会按"用户中途改了要求"来对待，
 		// 而不是当成自己上一句的延续。
 		state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{
-			"role":    "user",
-			"content": "【用户插话】" + item.Text,
+			"role":                     "user",
+			"content":                  "【用户插话】" + item.Text,
+			cloudAgentContextSourceKey: "user_interjection",
 		})
 		state.event(runID, "user_interjection_delivered", map[string]any{"messageId": item.ID, "text": item.Text})
 		cloudAgentRememberInterjectionID(state, item.ID)
 	}
 	state.PendingInterjections = nil
+	state.ActionNudged = false
+	state.Canonical.ToolChoice = "auto"
 	return true
 }
 

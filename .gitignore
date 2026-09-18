@@ -19,6 +19,7 @@ docs/content/docs/plugins/*
 !docs/content/docs/backend/
 docs/content/docs/backend/*
 !docs/content/docs/backend/task-runtime-stability.mdx
+!docs/content/docs/backend/agent-prompt-policy.mdx
 !docs/content/docs/backend/http-api.mdx
 !docs/content/docs/backend/code-map.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx

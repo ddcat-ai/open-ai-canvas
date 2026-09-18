@@ -269,8 +269,8 @@ func TestLessonsBlockIsIndexNotDump(t *testing.T) {
 	if strings.Contains(block, "不该出现的做法全文") || strings.Contains(block, "；做法：") {
 		t.Fatalf("记忆不得把做法全文塞进系统提示：%s", block)
 	}
-	if !strings.Contains(block, "recall_lessons") || !strings.Contains(block, "当前用户消息才是目标") {
-		t.Fatalf("应保留按需取全文入口：%s", block)
+	if strings.Contains(block, "动手前") || strings.Contains(block, "仍应 recall_lessons") {
+		t.Fatalf("索引不应注入强制召回指令：%s", block)
 	}
 }
 

@@ -55,7 +55,7 @@ func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) strin
 	var b strings.Builder
 	b.WriteString("上一轮已结束（")
 	b.WriteString(firstNonEmpty(run.Status, "unknown"))
-	b.WriteString("）。本轮只执行当前用户消息，不要回头核对上一轮待办是否完成。")
+	b.WriteString("）。")
 	if failed {
 		reason := strings.TrimSpace(run.FailureMessage)
 		if reason == "" {
@@ -68,7 +68,7 @@ func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) strin
 		if len(submitted) > 8 {
 			submitted = submitted[:8]
 		}
-		b.WriteString(" 已提交生成任务（不要重发）：")
+		b.WriteString(" 已提交生成任务：")
 		b.WriteString(strings.Join(submitted, ", "))
 	}
 	return b.String()

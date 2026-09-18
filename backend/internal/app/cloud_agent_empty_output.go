@@ -21,10 +21,7 @@ func cloudAgentEmptyModelOutput(task *model.Task) bool {
 func (s *Service) correctCloudAgentEmptyOutput(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
 	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		state.EmptyOutputNudged++
-		state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{
-			"role":    "user",
-			"content": "你上一条回复是**空的**：既没有正文，也没有任何工具调用。请直接继续 —— 要么调用工具推进当前任务，要么给出结论；不要复述这条提示。",
-		})
+		state.Canonical.Messages = append(state.Canonical.Messages, cloudAgentRuntimeMessage(cloudAgentRuntimeContext{Kind: cloudAgentContextEmptyOutput}))
 		state.ActiveTaskID = ""
 		state.Calls = nil
 		state.CallIndex = 0

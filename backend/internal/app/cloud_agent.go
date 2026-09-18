@@ -376,7 +376,6 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
-		creativeAnchor = parentState.CreativeAnchor
 		inheritedPlan = parentState.Plan
 		history = parentState.TextHistory
 		if history == nil {
@@ -388,7 +387,13 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 		// The user's goal survives a failed first model call too. Tool facts are
 		// context, not authorization to replay a write or charge a second time.
-		history = append(history, providerTextMessage{Role: "user", Content: parent.Prompt}, providerTextMessage{Role: "assistant", Content: text})
+		history = append(history, providerTextMessage{Role: "user", Content: parent.Prompt})
+		for _, message := range parentState.Canonical.Messages {
+			if stringField(message, cloudAgentContextSourceKey) == "user_interjection" {
+				history = append(history, providerTextMessage{Role: "user", Content: stringField(message, "content")})
+			}
+		}
+		history = append(history, providerTextMessage{Role: "assistant", Content: text})
 		if strings.TrimSpace(context) != "" {
 			history = append(history, providerTextMessage{Role: "user", Content: context})
 		}
@@ -401,11 +406,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if len(encodedHistory) > cloudAgentHistoryMaxBytes {
 		return nil, BadAuthRequest("对话上下文超过 64KB，请新建对话")
 	}
-	var inheritedAnchor *cloudAgentCreativeAnchor
-	if creativeAnchor.Version > 0 {
-		inheritedAnchor = &creativeAnchor
-	}
-	creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt, inheritedAnchor)
+	creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt)
 	if err != nil {
 		return nil, err
 	}

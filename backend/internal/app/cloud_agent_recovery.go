@@ -83,12 +83,16 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 	defer s.storageMu.Unlock()
 	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		if mediaTask != nil {
-			if _, err := completeCloudAgentMediaNode(repo, run.UserID, canvasID, mediaTask, policy); err != nil {
+			targetNodeID := ""
+			if taskContext := taskClientContext(mediaTask.InputJSON); taskContext != nil {
+				targetNodeID = taskContext.NodeID
+			}
+			if _, err := completeCloudAgentMediaNode(repo, run.UserID, canvasID, targetNodeID, mediaTask, policy); err != nil {
 				var appErr *AppError
 				if !errors.Is(err, gorm.ErrRecordNotFound) && !(errors.As(err, &appErr) && (appErr.Status == 400 || appErr.Status == 409)) {
 					return err
 				}
-				current.FailureMessage = "生成节点已删除、被修改或结果不可用；任务结果保留在任务中心"
+				current.FailureMessage = cloudAgentSafeToolError(err) + "；任务记录保留在任务中心"
 			}
 		}
 		current.CleanupPending = false

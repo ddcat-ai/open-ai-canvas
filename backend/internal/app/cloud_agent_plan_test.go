@@ -77,7 +77,7 @@ func TestCloudAgentInheritedPlanReachesFirstModelRequest(t *testing.T) {
 	if err := db.First(&task, "id = ?", child.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(task.InputJSON, "本轮待办清单") || !strings.Contains(task.InputJSON, "生成镜头2视频") {
+	if !strings.Contains(task.InputJSON, "plan_state") || !strings.Contains(task.InputJSON, "生成镜头2视频") {
 		t.Fatalf("继承清单没有进入第一拍模型请求: %s", task.InputJSON)
 	}
 	_, childState := agentInterjectionState(t, s, child.ID)
@@ -122,8 +122,8 @@ func TestCloudAgentPlanNudgePrefersLatestUserInstruction(t *testing.T) {
 	state := &cloudAgentRuntime{
 		Canonical: canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": "改成 16:9"}}},
 	}
-	content := cloudAgentPlanNudgeContent(state, "生成镜头2视频")
-	if !strings.Contains(content, "改成 16:9") || !strings.Contains(content, "生成镜头2视频") || !strings.Contains(content, "plan_update") {
+	content := stringField(cloudAgentPlanNudgeMessage(state, "生成镜头2视频"), "content")
+	if !strings.Contains(content, "改成 16:9") || !strings.Contains(content, "生成镜头2视频") || !strings.Contains(content, "pending_plan") {
 		t.Fatalf("nudge missing user-first prefix: %s", content)
 	}
 }
@@ -160,11 +160,31 @@ func TestCloudAgentPendingPlanPreventsTextOnlyCompletion(t *testing.T) {
 	found := false
 	for _, message := range state.Canonical.Messages {
 		content, _ := message["content"].(string)
-		if strings.Contains(content, "生成镜头1") && strings.Contains(content, "plan_update") {
+		if strings.Contains(content, "生成镜头1") && strings.Contains(content, "pending_plan") {
 			found = true
 		}
 	}
 	if !found {
 		t.Fatalf("没有催办未完成项: %+v", state.Canonical.Messages)
+	}
+	if state.Canonical.ToolChoice != "auto" {
+		t.Fatal("旧计划催办不得强制工具调用")
+	}
+	// An unchanged plan gets one reminder, not an endless loop of paid steps.
+	if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, state = agentInterjectionState(t, s, root.ID)
+	if err := db.Model(&model.Task{}).Where("id = ?", state.ActiveTaskID).Updates(map[string]any{
+		"status": model.TaskStatusSucceeded, "result_json": `{"text":"按最新要求停止生成，保留草稿。"}`,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state = agentInterjectionState(t, s, root.ID)
+	if run.Status != "completed" || state.Plan[0].Status == "done" {
+		t.Fatalf("应允许结束对话而不伪造计划完成: status=%s plan=%+v", run.Status, state.Plan)
 	}
 }

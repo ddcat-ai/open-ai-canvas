@@ -4,7 +4,8 @@ import { apiClient } from "../src/services/api/request";
 import { canvasContentHash } from "../src/lib/canvas/canvas-content";
 import { rebaseCanvasProjects, parseCanvasStorageDocument } from "../src/lib/canvas/canvas-storage-revision";
 import { readCanvasSyncDrafts } from "../src/services/canvas-sync-drafts";
-import { initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
+import { applyAgentCanvasPatches, refreshCanvasAfterAgent, initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
+import { createAgentCanvasSync } from "../src/services/agent-canvas-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { flushAssetStorePersistence, useAssetStore } from "../src/stores/use-asset-store";
 import { useSyncProgressStore } from "../src/stores/use-sync-progress-store";
@@ -133,6 +134,42 @@ test("stale viewport, no-op restore and open do not submit old content", async (
     expect(latest.viewport).toEqual({ x: 100, y: 40, k: 2 });
     await saveRemoteUserDataNow();
     expect(requests.filter((request) => request.method === "put")).toHaveLength(0);
+});
+
+test("load latest, save and reload stay synced when Agent history replays an unversioned delta", async () => {
+    remote.set("canvas", { ...canvas(), revision: 9 });
+    await loadCanvasProjectForEditing("canvas", { latest: true });
+    useCanvasStore.getState().renameProject("canvas", "已保存的标题");
+    await saveRemoteUserDataNow("canvas");
+    expect(remote.get("canvas")!.revision).toBe(10);
+
+    for (let reload = 0; reload < 3; reload++) {
+        resetRemoteUserDataSync();
+        await useCanvasStore.persist.rehydrate();
+        await initializeRemoteUserDataSession(scope);
+        await loadCanvasProjectForEditing("canvas");
+        let resolve!: () => void;
+        let reject!: (error: unknown) => void;
+        const reconciled = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
+        const sync = createAgentCanvasSync({
+            canvasId: "canvas", batchMs: 0,
+            applyPatches: (patches) => applyAgentCanvasPatches("canvas", patches),
+            refresh: async () => { await refreshCanvasAfterAgent("canvas"); resolve(); },
+            onError: reject,
+        });
+        try {
+            sync.receive({ eventId: "historical-event", runId: "completed-run", seq: 1, type: "canvas_updated", createdAt: "2026-09-17", payload: {
+                canvasId: "canvas",
+                canvasPatch: { canvasId: "canvas", updatedAt: "2026-09-17", nodes: [{ before: null, after: { ...canvas().nodes[0], id: "stale-node" } }], connections: [] },
+            } });
+            await reconciled;
+            expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("done");
+            await saveRemoteUserDataNow("canvas");
+            expect(useCanvasStore.getState().openProject("canvas")).toMatchObject({ revision: 10, title: "已保存的标题", nodes: canvas().nodes });
+            expect(await readCanvasSyncDrafts("canvas")).toHaveLength(0);
+        } finally { sync.dispose(); }
+    }
+    expect(requests.filter((request) => request.method === "put")).toHaveLength(1);
 });
 
 test("a conflict preserves drafts, stops retries and does not block another canvas", async () => {
