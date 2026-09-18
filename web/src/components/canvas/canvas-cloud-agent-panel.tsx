@@ -10,6 +10,7 @@ import { nanoid } from "nanoid";
 import { ModelPicker } from "@/components/model-picker";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { cn } from "@/lib/utils";
+import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";

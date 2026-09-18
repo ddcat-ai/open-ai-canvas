@@ -1,7 +1,8 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, UserRound, Video, Workflow } from "lucide-react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ArrowLeft, Brush, Camera, Clapperboard, ChevronRight, Clock, Contrast, FastForward, FileText, Folder, Globe2, Grid2x2, Grid3x3, Image as ImageIcon, Music2, Package, Pencil, PersonStanding, Rewind, ScanFace, Search, SlidersHorizontal, Sun, UserRound, Video, Workflow } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
@@ -574,6 +575,16 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
     );
 });
 
+const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+    Brush, Camera, Clapperboard, Clock, Contrast, FastForward, Globe2, Grid2x2, Grid3x3, Package, PersonStanding, Rewind, ScanFace, SlidersHorizontal, Sun,
+};
+
+function toolIconSvg(iconName: string): string {
+    const Icon = TOOL_ICON_MAP[iconName];
+    if (!Icon) return "🔧";
+    return renderToStaticMarkup(<Icon className="size-3" />);
+}
+
 function createInlineMentionChip(reference: CanvasResourceReference, token: string) {
     const chip = document.createElement("span");
     chip.contentEditable = "false";
@@ -587,7 +598,13 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
 
     const prefix = document.createElement("span");
     prefix.className = isDecorated ? "canvas-resource-inline-skill-icon" : "canvas-resource-inline-at";
-    prefix.textContent = reference.kind === "skill" ? "✦" : reference.kind === "tool" ? "🔧" : "@";
+    if (reference.kind === "skill") {
+        prefix.textContent = "✦";
+    } else if (reference.kind === "tool") {
+        prefix.innerHTML = toolIconSvg(reference.toolIcon ?? "Grid3x3");
+    } else {
+        prefix.textContent = "@";
+    }
     chip.appendChild(prefix);
 
     // Skill/tool chip 的前缀已经承担图标职责，不再追加 fallback preview，避免出现两个图标。

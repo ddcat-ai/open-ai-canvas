@@ -44,7 +44,7 @@ func (s *Service) DeleteTool(userID string, toolID int64) error {
 	return s.toolDomain().Delete(userID, toolID)
 }
 
-// ResolveToolMentionTokens 将 prompt 中的 @[tool:ID:label] 令牌替换为对应工具的提示词文本。
+// ResolveToolMentionTokens 将 prompt 中的 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本。
 func (s *Service) ResolveToolMentionTokens(prompt string) (string, error) {
 	return s.toolDomain().ResolveToolMentionTokens(prompt)
 }

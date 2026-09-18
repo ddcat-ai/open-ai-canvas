@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// toolMentionPattern 匹配 @[tool:ID:label] 令牌，提取工具 ID 和标签。
-var toolMentionPattern = regexp.MustCompile(`@\[tool:(\d+):[^\]]+\]`)
+// toolMentionPattern 匹配 @[tool:type:ID:label:icon] 令牌，提取工具类型和 ID。
+var toolMentionPattern = regexp.MustCompile(`@\[tool:(\w+):(\d+):[^:\]]+:[^\]]+\]`)
 
-// ResolveToolMentionTokens 将 prompt 中的 @[tool:ID:label] 令牌替换为对应工具的提示词文本。
+// ResolveToolMentionTokens 将 prompt 中的 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本。
 // 未找到对应工具的令牌保持不变。
 func (s *Service) ResolveToolMentionTokens(prompt string) (string, error) {
 	matches := toolMentionPattern.FindAllStringSubmatchIndex(prompt, -1)
@@ -20,7 +20,7 @@ func (s *Service) ResolveToolMentionTokens(prompt string) (string, error) {
 	// 收集去重的工具 ID
 	toolIDs := make(map[int]struct{})
 	for _, match := range matches {
-		idStr := prompt[match[2]:match[3]]
+		idStr := prompt[match[4]:match[5]]
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			continue
@@ -43,10 +43,10 @@ func (s *Service) ResolveToolMentionTokens(prompt string) (string, error) {
 	// 替换令牌
 	result := toolMentionPattern.ReplaceAllStringFunc(prompt, func(token string) string {
 		subs := toolMentionPattern.FindStringSubmatch(token)
-		if len(subs) < 2 {
+		if len(subs) < 3 {
 			return token
 		}
-		id, err := strconv.Atoi(subs[1])
+		id, err := strconv.Atoi(subs[2])
 		if err != nil {
 			return token
 		}

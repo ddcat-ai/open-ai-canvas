@@ -58,7 +58,7 @@ type CanvasNodeToolbarProps = {
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onToggleLocked: (node: CanvasNodeData) => void;
     onDelete: (node: CanvasNodeData) => void;
-    onNineGrid: (node: CanvasNodeData, toolId: number) => void;
+    onNineGrid: (node: CanvasNodeData, toolId: number, label: string, icon: string) => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
 

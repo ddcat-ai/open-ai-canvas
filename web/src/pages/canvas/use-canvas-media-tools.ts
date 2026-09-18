@@ -865,17 +865,12 @@ export function useCanvasMediaTools({
         }
     }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, nodesRef, persistMediaNodes, projectId, resolveImageEditStyle, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, startGenerationRequest]);
     
-    const generateNineGridNode = useCallback(async (node: CanvasNodeData, toolId: number) => {
+    const generateNineGridNode = useCallback(async (node: CanvasNodeData, toolId: number, label: string, icon: string) => {
         if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
             message.warning("图片节点为空，无法执行九宫格工具");
             return;
         }
-        const toolDetail = await getTool(toolId);
-        if (!toolDetail.prompt) {
-            message.warning("该工具没有提示词");
-            return;
-        }
-        const child = createNineGridNode(node, nanoid(), toolId, toolDetail.label, toolDetail.prompt);
+        const child = createNineGridNode(node, nanoid(), toolId, label, "nine_grid",icon);
         setHoveredNodeId(null);
         setToolbarNodeId(null);
         setNodes((current) => [...current, child]);

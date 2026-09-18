@@ -33,27 +33,31 @@ export type CanvasResourceReference = {
     mentionToken?: string;
     /** 仅 kind === "tool" 时使用，对应后端工具 ID。 */
     toolId?: number;
+    /** 仅 kind === "tool" 时使用，对应工具类型（style/nine_grid/effect/camera_motions）。 */
+    toolType?: string;
+    /** 仅 kind === "tool" 时使用，lucide 图标名称。 */
+    toolIcon?: string;
 };
 
 export function canvasSkillMentionToken(skillId: string) {
     return `@[skill:${skillId}]`;
 }
 
-export function canvasToolMentionToken(toolId: number, label: string) {
-    return `@[tool:${toolId}:${label}]`;
+export function canvasToolMentionToken(toolId: number, label: string, type: string, icon: string) {
+    return `@[tool:${type}:${toolId}:${label}:${icon}]`;
 }
 
-const TOOL_REF_PATTERN = /@\[tool:(\d+):([^\]]+)\]/g;
+const TOOL_REF_PATTERN = /@\[tool:(\w+):(\d+):([^:\]]+):([^\]]+)\]/g;
 
-/** 从文本中解析所有 @[tool:ID:label] 令牌，返回去重的工具引用。 */
-export function parseToolMentionTokens(text: string): { toolId: number; label: string }[] {
-    const results: { toolId: number; label: string }[] = [];
+/** 从文本中解析所有 @[tool:type:ID:label:icon] 令牌，返回去重的工具引用。 */
+export function parseToolMentionTokens(text: string): { type: string; toolId: number; label: string; icon: string }[] {
+    const results: { type: string; toolId: number; label: string; icon: string }[] = [];
     const seen = new Set<number>();
     for (const match of text.matchAll(TOOL_REF_PATTERN)) {
-        const toolId = Number(match[1]);
+        const toolId = Number(match[2]);
         if (seen.has(toolId)) continue;
         seen.add(toolId);
-        results.push({ toolId, label: match[2] });
+        results.push({ type: match[1], toolId, label: match[3], icon: match[4] });
     }
     return results;
 }
@@ -65,7 +69,7 @@ export function canvasNodeMentionToken(nodeId: string) {
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.mentionToken) return reference.mentionToken;
     if (reference.kind === "skill" && reference.skill?.skillId) return canvasSkillMentionToken(reference.skill.skillId);
-    if (reference.kind === "tool" && reference.toolId != null) return canvasToolMentionToken(reference.toolId, reference.label);
+    if (reference.kind === "tool" && reference.toolId != null) return canvasToolMentionToken(reference.toolId, reference.label, reference.toolType ?? "nine_grid", reference.toolIcon ?? "Grid3x3");
     if (reference.assetId) return `@[asset:${reference.assetId}]`;
     return `@${reference.label}`;
 }
@@ -542,7 +546,7 @@ function skillResourceText(node: CanvasNodeData) {
     return [skill.name, skill.description, skill.template, skill.outputContract].filter(Boolean).join("\n\n");
 }
 
-export function buildToolMentionReference(toolId: number, label: string): CanvasResourceReference {
+export function buildToolMentionReference(toolId: number, label: string, type: string, icon: string): CanvasResourceReference {
     return {
         id: `tool:${toolId}`,
         nodeId: `tool:${toolId}`,
@@ -551,6 +555,8 @@ export function buildToolMentionReference(toolId: number, label: string): Canvas
         title: label,
         active: true,
         toolId,
-        mentionToken: canvasToolMentionToken(toolId, label),
+        toolType: type,
+        toolIcon: icon,
+        mentionToken: canvasToolMentionToken(toolId, label, type, icon),
     };
 }

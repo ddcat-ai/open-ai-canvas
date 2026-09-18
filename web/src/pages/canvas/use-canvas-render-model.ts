@@ -350,26 +350,32 @@ export function useCanvasRenderModel({
     );
     const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
     const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
-    const toolMentionReferences = useMemo(() => {
-        const refs: ReturnType<typeof buildToolMentionReference>[] = [];
-        const seen = new Set<number>();
+    const toolMentionReferencesByNodeId = useMemo(() => {
+        const map = new Map<string, ReturnType<typeof buildToolMentionReference>[]>();
         for (const node of semanticNodes) {
             const text = node.metadata?.composerContent || node.metadata?.prompt || "";
-            for (const { toolId, label } of parseToolMentionTokens(text)) {
+            const tokens = parseToolMentionTokens(text);
+            if (!tokens.length) continue;
+            const seen = new Set<number>();
+            const refs: ReturnType<typeof buildToolMentionReference>[] = [];
+            for (const { type, toolId, label, icon } of tokens) {
                 if (seen.has(toolId)) continue;
                 seen.add(toolId);
-                refs.push(buildToolMentionReference(toolId, label));
+                refs.push(buildToolMentionReference(toolId, label, type, icon));
             }
+            if (refs.length) map.set(node.id, refs);
         }
-        return refs;
+        return map;
     }, [semanticNodes]);
     const mentionReferencesByNodeId = useMemo(() => {
         const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, visibleNodes);
-        const extraReferences = [...skillMentionReferences, ...toolMentionReferences];
-        if (!extraReferences.length) return map;
-        map.forEach((references, nodeId) => map.set(nodeId, [...references, ...extraReferences]));
+        if (!skillMentionReferences.length && toolMentionReferencesByNodeId.size === 0) return map;
+        map.forEach((references, nodeId) => {
+            const extras = [...skillMentionReferences, ...(toolMentionReferencesByNodeId.get(nodeId) ?? [])];
+            if (extras.length) map.set(nodeId, [...references, ...extras]);
+        });
         return map;
-    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferences, visibleNodes]);
+    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferencesByNodeId, visibleNodes]);
 
     return {
         activeDirectorNode,

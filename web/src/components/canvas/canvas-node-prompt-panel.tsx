@@ -1,7 +1,7 @@
 import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, Grid3x3, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Palette, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -49,6 +49,9 @@ type CanvasNodePromptPanelProps = {
     onClose?: () => void;
     onNodeMouseDown?: (event: ReactPointerEvent, nodeId: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
+    onChooseStyle?: () => void;
+    onChooseEffect?: () => void;
+    onChooseMotion?: () => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
 
@@ -64,7 +67,7 @@ const PROMPT_EDITOR_VERTICAL_PADDING = 12;
 const PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING = 20;
 const PROMPT_EDITOR_MAX_LINES = 8;
 
-export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, onChooseStyle, onChooseEffect, onChooseMotion, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const themeName = useActiveTheme();
     const theme = canvasThemes[themeName];
@@ -89,7 +92,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
     const normalizedSavedPrompt = useMemo(() => normalizeCanvasNodeMentionTokens(savedPrompt, mentionReferences), [mentionReferences, savedPrompt]);
-    const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill");
+    const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const requirements: ModelRequirements = {
         capability: mode,
         input: {
@@ -160,10 +163,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         boxShadow: theme.node.shadow,
     } as CSSProperties;
     const controlSurface = "var(--canvas-composer-control-surface)";
-    const promptBounds = promptEditorBounds(false, activeReferenceCount > 0);
-    const expandedPromptBounds = promptEditorBounds(true, activeReferenceCount > 0);
-    const composerHeight = clampPromptHeight(manualPromptHeight ?? promptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), promptBounds);
-    const expandedComposerHeight = clampPromptHeight(manualExpandedPromptHeight ?? expandedPromptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), expandedPromptBounds);
+    const promptBounds = promptEditorBounds(false, true);
+    const expandedPromptBounds = promptEditorBounds(true, true);
+    const composerHeight = clampPromptHeight(manualPromptHeight ?? promptContentHeight + PROMPT_REFERENCE_SHELF_HEIGHT, promptBounds);
+    const expandedComposerHeight = clampPromptHeight(manualExpandedPromptHeight ?? expandedPromptContentHeight + PROMPT_REFERENCE_SHELF_HEIGHT, expandedPromptBounds);
     const isSubmitDisabled = !isRunning && !prompt.trim();
     const canExpandPrompt = mode === "image" || mode === "video";
     const canOptimizePrompt = Boolean(promptOptimizerProvider) && canExpandPrompt;
@@ -445,11 +448,16 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         targetNodeId={node.id}
                         references={resolvedMentionReferences}
                         theme={theme}
+                        mode={mode}
                         onInsert={insertPromptReference}
                         onRemove={(reference) => onRemoveReference?.(node.id, reference)}
                         onReorder={onReorderReferences ? (orderedNodeIds) => onReorderReferences(node.id, orderedNodeIds) : undefined}
                         onReplaceReference={onReplaceReference ? (oldReference, sourceNodeId) => onReplaceReference(node.id, oldReference, sourceNodeId) : undefined}
                         onReplaceReferenceFiles={onReplaceReferenceFiles ? (oldReference, files) => onReplaceReferenceFiles(node.id, oldReference, files) : undefined}
+                        onChooseStyle={onChooseStyle}
+                        onChoosePreset={() => setPresetOpen(true)}
+                        onChooseEffect={onChooseEffect}
+                        onChooseMotion={onChooseMotion}
                     />
                     <CanvasResourceMentionTextarea
                         value={prompt}
@@ -640,26 +648,35 @@ function ConnectedReferenceShelf({
     targetNodeId,
     references,
     theme,
+    mode,
     onInsert,
     onRemove,
     onReorder,
     onReplaceReference,
     onReplaceReferenceFiles,
+    onChooseStyle,
+    onChoosePreset,
+    onChooseEffect,
+    onChooseMotion,
 }: {
     targetNodeId?: string;
     references: CanvasResourceReference[];
     theme: CanvasTheme;
+    mode: CanvasNodeGenerationMode;
     onInsert: (reference: CanvasResourceReference) => void;
     onRemove?: (reference: CanvasResourceReference) => void;
     onReorder?: (orderedNodeIds: string[]) => void;
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (oldReference: CanvasResourceReference, files: File[]) => void;
+    onChooseStyle?: () => void;
+    onChoosePreset?: () => void;
+    onChooseEffect?: () => void;
+    onChooseMotion?: () => void;
 }) {
-    const activeReferences = references.filter((item) => item.active && item.kind !== "skill");
+    const activeReferences = references.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
     const [draggedReferenceId, setDraggedReferenceId] = useState<string | null>(null);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
-    if (!activeReferences.length) return null;
 
     const moveReference = (sourceId: string, targetId: string) => {
         if (!onReorder || sourceId === targetId) return;
@@ -683,6 +700,58 @@ function ConnectedReferenceShelf({
         <>
             <div className="canvas-node-composer-references" role="group" aria-label="已连接素材">
                 <div className="canvas-node-composer-references-track thin-scrollbar">
+                    {mode === "image" && onChooseStyle ? (
+                        <button
+                            type="button"
+                            className="canvas-node-fixed-chip"
+                            title="选择项目风格"
+                            aria-label="选择项目风格"
+                            onClick={onChooseStyle}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <Palette className="size-4" />
+                            <span className="truncate">风格</span>
+                        </button>
+                    ) : null}
+                    {mode === "image" && onChoosePreset ? (
+                        <button
+                            type="button"
+                            className="canvas-node-fixed-chip"
+                            title="预设"
+                            aria-label="预设"
+                            onClick={onChoosePreset}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <Grid3x3 className="size-4" />
+                            <span className="truncate">预设</span>
+                        </button>
+                    ) : null}
+                    {mode === "video" && onChooseEffect ? (
+                        <button
+                            type="button"
+                            className="canvas-node-fixed-chip"
+                            title="特效"
+                            aria-label="特效"
+                            onClick={onChooseEffect}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <Sparkles className="size-4" />
+                            <span className="truncate">特效</span>
+                        </button>
+                    ) : null}
+                    {mode === "video" && onChooseMotion ? (
+                        <button
+                            type="button"
+                            className="canvas-node-fixed-chip"
+                            title="运镜"
+                            aria-label="运镜"
+                            onClick={onChooseMotion}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <Camera className="size-4" />
+                            <span className="truncate">运镜</span>
+                        </button>
+                    ) : null}
                     {activeReferences.map((reference, index) => {
                         const canPreview = Boolean(reference.previewUrl) && (reference.kind === "image" || reference.kind === "character" || reference.kind === "video");
                         const isDropTarget = dropTargetReferenceId === reference.id;

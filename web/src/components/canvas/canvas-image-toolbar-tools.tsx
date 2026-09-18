@@ -22,7 +22,7 @@ type ImageToolHandlers = {
     onViewImage: (node: CanvasNodeData) => void;
     onCopyPrompt: (node: CanvasNodeData) => void;
     onReversePrompt: (node: CanvasNodeData) => void;
-    onNineGrid: (node: CanvasNodeData, toolId: number) => void;
+    onNineGrid: (node: CanvasNodeData, toolId: number, label: string, icon: string) => void;
 };
 
 type ImageToolDefinition = {
@@ -191,7 +191,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Grid3x3 className="size-3.5" />,
         group: "nine_grid",
         order: 10,
-        run: (node, handlers) => handlers.onNineGrid(node, 79),
+        run: (node, handlers) => handlers.onNineGrid(node, 79, "多机位九宫格", "Grid3x3"),
     },
     {
         id: "story_pitch_four_grid",
@@ -201,7 +201,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Grid2x2 className="size-3.5" />,
         group: "nine_grid",
         order: 20,
-        run: (node, handlers) => handlers.onNineGrid(node, 80),
+        run: (node, handlers) => handlers.onNineGrid(node, 80, "剧情推演四宫格", "Grid2x2"),
     },
     {
         id: "character_face_three_view",
@@ -211,7 +211,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <ScanFace className="size-3.5" />,
         group: "nine_grid",
         order: 30,
-        run: (node, handlers) => handlers.onNineGrid(node, 81),
+        run: (node, handlers) => handlers.onNineGrid(node, 81, "角色脸部三视图", "ScanFace"),
     },
     {
         id: "product_three_view",
@@ -221,7 +221,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Package className="size-3.5" />,
         group: "nine_grid",
         order: 40,
-        run: (node, handlers) => handlers.onNineGrid(node, 82),
+        run: (node, handlers) => handlers.onNineGrid(node, 82, "产品三视图", "Package"),
     },
     {
         id: "storyboard_25_grid",
@@ -231,7 +231,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Clapperboard className="size-3.5" />,
         group: "nine_grid",
         order: 50,
-        run: (node, handlers) => handlers.onNineGrid(node, 83),
+        run: (node, handlers) => handlers.onNineGrid(node, 83, "25宫格连贯分镜", "Clapperboard"),
     },
     {
         id: "character_three_view_generation",
@@ -241,7 +241,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <PersonStanding className="size-3.5" />,
         group: "nine_grid",
         order: 60,
-        run: (node, handlers) => handlers.onNineGrid(node, 85),
+        run: (node, handlers) => handlers.onNineGrid(node, 85, "角色三视图", "PersonStanding"),
     },
     {
         id: "cinematic_light_correction",
@@ -251,7 +251,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Contrast className="size-3.5" />,
         group: "nine_grid",
         order: 70,
-        run: (node, handlers) => handlers.onNineGrid(node, 84),
+        run: (node, handlers) => handlers.onNineGrid(node, 84, "电影级光影校正", "Contrast"),
     },
     {
         id: "image_projection_after_3s",
@@ -261,7 +261,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <FastForward className="size-3.5" />,
         group: "nine_grid",
         order: 80,
-        run: (node, handlers) => handlers.onNineGrid(node, 86),
+        run: (node, handlers) => handlers.onNineGrid(node, 86, "画面推演-3秒后", "FastForward"),
     },
     {
         id: "image_projection_before_5s",
@@ -271,7 +271,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Rewind className="size-3.5" />,
         group: "nine_grid",
         order: 90,
-        run: (node, handlers) => handlers.onNineGrid(node, 87),
+        run: (node, handlers) => handlers.onNineGrid(node, 87, "画面推演-5秒前", "Rewind"),
     },
 
 ];

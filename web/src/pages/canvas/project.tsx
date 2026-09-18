@@ -2073,6 +2073,9 @@ function InfiniteCanvasPage() {
                         setNodeImageSettingsOpen(open);
                         if (open) setToolbarNodeId(null);
                     }}
+                    onChooseStyle={() => setStylePickerOpen(true)}
+                    onChooseEffect={() => setSidebarActiveTab("tools")}
+                    onChooseMotion={() => setSidebarActiveTab("tools")}
                 />
             );
         },
@@ -2829,7 +2832,7 @@ function InfiniteCanvasPage() {
                             onToggleFreeResize={(node) => toggleNodeFreeResize(node.id)}
                             onToggleLocked={(node) => toggleNodeLocked(node.id)}
                             onDelete={(node) => deleteNodes(new Set([node.id]))}
-                            onNineGrid={(node, toolId) => void generateNineGridNode(node, toolId)}
+                            onNineGrid={(node, toolId, label, icon) => void generateNineGridNode(node, toolId, label, icon)}
                         />
 
 {isMiniMapOpen && !focusMode ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} canvasContainerRef={containerRef} onViewportPreviewChange={previewViewport} onViewportChange={handleViewportChange} /> : null}
