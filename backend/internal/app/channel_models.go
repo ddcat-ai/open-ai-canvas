@@ -438,7 +438,7 @@ func (s *Service) syncLogicalModelsFromChannelModel(actor *model.User, channelMo
 }
 
 func supportsTokenBilling(capability string, protocol model.ChannelInterfaceType) bool {
-	return capability == "text" || (capability == "video" && protocol == model.ChannelInterfaceVolcengineArkVideo)
+	return capability == "text" || (capability == "video" && model.IsVolcengineArkVideoProtocol(protocol))
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {

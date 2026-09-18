@@ -1,4 +1,4 @@
-import { http } from "@/services/api/request";
+import { ApiError, compactApiParams, http } from "@/services/api/request";
 
 export type PaymentProvider = {
     id: "wechat-native" | "alipay-page-pay" | string;
@@ -129,8 +129,11 @@ export type AdminPaymentOrder = PaymentOrder & {
     user: { id: string; username: string; displayName: string; email: string } | null;
 };
 
-export function listAdminPaymentOrders(params: { status?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<{ orders: AdminPaymentOrder[]; total: number; page: number; pageSize: number }>("/admin/payments/orders", { params });
+export type PaymentOrderFilters = { status?: string; keyword?: string; providerId?: string; timeField?: "created" | "paid" | "credited"; from?: string; to?: string };
+export type PaymentReconciliationFilters = { providerId?: string; status?: string; from?: string; to?: string };
+
+export function listAdminPaymentOrders(params: PaymentOrderFilters & { page?: number; pageSize?: number } = {}, signal?: AbortSignal) {
+    return http.get<{ orders: AdminPaymentOrder[]; total: number; page: number; pageSize: number }>("/admin/payments/orders", { params: compactApiParams(params), signal });
 }
 
 export function queryAdminPaymentOrder(id: string) {
@@ -182,10 +185,44 @@ export function runAdminPaymentReconciliation(input: { providerId: string; billD
     return http.post<{ run: PaymentReconciliationRun }>("/admin/payments/reconciliations", input);
 }
 
-export function listAdminPaymentReconciliations(params: { providerId?: string; status?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<{ runs: PaymentReconciliationRun[]; total: number; page: number; pageSize: number }>("/admin/payments/reconciliations", { params });
+export function listAdminPaymentReconciliations(params: PaymentReconciliationFilters & { page?: number; pageSize?: number } = {}, signal?: AbortSignal) {
+    return http.get<{ runs: PaymentReconciliationRun[]; total: number; page: number; pageSize: number }>("/admin/payments/reconciliations", { params: compactApiParams(params), signal });
 }
 
-export function listAdminPaymentReconciliationItems(id: string, params: { result?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<{ run: PaymentReconciliationRun; items: PaymentReconciliationItem[]; total: number; page: number; pageSize: number }>(`/admin/payments/reconciliations/${encodeURIComponent(id)}/items`, { params });
+export function listAdminPaymentReconciliationItems(id: string, params: { result?: string; page?: number; pageSize?: number } = {}, signal?: AbortSignal) {
+    return http.get<{ run: PaymentReconciliationRun; items: PaymentReconciliationItem[]; total: number; page: number; pageSize: number }>(`/admin/payments/reconciliations/${encodeURIComponent(id)}/items`, { params: compactApiParams(params), signal });
+}
+
+export function exportAdminPaymentOrders(params: PaymentOrderFilters) {
+    return downloadPaymentCSV("/admin/payments/orders/export.csv", params);
+}
+
+export function exportAdminPaymentReconciliations(params: PaymentReconciliationFilters) {
+    return downloadPaymentCSV("/admin/payments/reconciliations/export.csv", params);
+}
+
+export function exportAdminPaymentReconciliationItems(id: string, result?: string) {
+    return downloadPaymentCSV(`/admin/payments/reconciliations/${encodeURIComponent(id)}/items/export.csv`, { result });
+}
+
+async function downloadPaymentCSV(url: string, params: Record<string, string | undefined>) {
+    try {
+        const response = await http.raw<Blob>({ method: "get", url, params: compactApiParams(params), responseType: "blob" });
+        return response.data;
+    } catch (error) {
+        // Axios also wraps JSON error envelopes in a Blob for download requests.
+        const blob = error instanceof ApiError ? (error.cause as { response?: { data?: unknown } } | undefined)?.response?.data : undefined;
+        if (blob instanceof Blob) {
+            let envelope: { msg?: string; code?: number; reason?: string } | undefined;
+            try {
+                envelope = JSON.parse(await blob.text());
+            } catch {
+                /* Keep the original transport error. */
+            }
+            if (envelope?.msg && error instanceof ApiError) {
+                throw new ApiError(envelope.msg, { status: error.status, code: envelope.code, reason: envelope.reason, cause: error });
+            }
+        }
+        throw error;
+    }
 }

@@ -68,3 +68,5 @@ camera_language_guide.md
 
 # Local backend executable; never commit build output.
 backend/cmd/server/server
+# One-off local probe scripts and their compiled output.
+backend/tmp_*

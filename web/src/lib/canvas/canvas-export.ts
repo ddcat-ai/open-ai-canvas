@@ -8,7 +8,7 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { loadCanvasDrawing, loadCanvasDrawingPreview, loadCanvasDrawingRender } from "@/lib/canvas/canvas-drawing-storage";
 import type { CanvasDrawingExport } from "@/types/canvas-export";
 
-export async function exportCanvasProjects(projects: CanvasProject[], fileName = "画布") {
+export async function exportCanvasProjects(projects: CanvasProject[], fileName = "画布", options: { includeLocalDrawings?: boolean } = {}) {
     const zipFiles: { name: string; data: BlobPart }[] = [];
     const exportedProjects = await Promise.all(
         projects.map(async (project) => {
@@ -22,7 +22,7 @@ export async function exportCanvasProjects(projects: CanvasProject[], fileName =
                     zipFiles.push({ name: path, data: blob });
                 }),
             );
-            const drawingDocuments = (await Promise.all(project.nodes.filter((node) => node.type === "drawing" && node.metadata?.drawingId).map(async (node): Promise<CanvasDrawingExport | null> => {
+            const drawingDocuments = (await Promise.all(project.nodes.filter((node) => options.includeLocalDrawings !== false && node.type === "drawing" && node.metadata?.drawingId).map(async (node): Promise<CanvasDrawingExport | null> => {
                 const drawingId = node.metadata?.drawingId;
                 if (!drawingId) return null;
                 const [saved, preview, render] = await Promise.all([

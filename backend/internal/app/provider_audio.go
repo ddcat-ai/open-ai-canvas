@@ -172,7 +172,7 @@ func asyncAudioErrorMessage(state map[string]interface{}) string {
 func decodeProviderDataURL(value string) (string, []byte, error) {
 	header, encoded, ok := strings.Cut(value, ",")
 	if !ok || !strings.HasPrefix(header, "data:") || !strings.HasSuffix(strings.ToLower(header), ";base64") {
-		return "", nil, errors.New("音频 data URL 格式无效")
+		return "", nil, errors.New("data URL 格式无效")
 	}
 	mimeType := strings.TrimSuffix(strings.TrimPrefix(header, "data:"), ";base64")
 	data, err := base64.StdEncoding.DecodeString(encoded)

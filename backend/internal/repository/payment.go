@@ -382,23 +382,44 @@ func (r *Repository) PaymentOrdersNeedingQuery(cutoff time.Time, limit int) ([]m
 	return items, err
 }
 
-func (r *Repository) AdminPaymentOrders(status, keyword string, limit, offset int) ([]model.PaymentOrder, int64, error) {
+func (r *Repository) AdminPaymentOrders(filter PaymentOrderFilter, limit, offset int) ([]model.PaymentOrder, int64, error) {
 	var items []model.PaymentOrder
 	var total int64
+	query := r.paymentOrderQuery(filter)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("created_at desc, id desc").Limit(limit).Offset(offset).Find(&items).Error
+	return items, total, err
+}
+
+func (r *Repository) paymentOrderQuery(filter PaymentOrderFilter) *gorm.DB {
 	query := r.db.Model(&model.PaymentOrder{})
-	if normalized := strings.TrimSpace(status); normalized != "" && normalized != "all" {
+	if normalized := strings.TrimSpace(filter.Status); normalized != "" && normalized != "all" {
 		query = query.Where("status = ?", normalized)
 	}
-	if normalized := strings.TrimSpace(keyword); normalized != "" {
+	if normalized := strings.TrimSpace(filter.Keyword); normalized != "" {
 		like := "%" + normalized + "%"
 		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like), strings.ToLower(like))
 		query = query.Where("merchant_order_no LIKE ? OR provider_trade_no LIKE ? OR user_id = ? OR user_id IN (?)", like, like, normalized, users)
 	}
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
+	if filter.ProviderID != "" && filter.ProviderID != "all" {
+		query = query.Where("provider_id = ?", filter.ProviderID)
 	}
-	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&items).Error
-	return items, total, err
+	column := "created_at"
+	switch filter.TimeField {
+	case "paid":
+		column = "provider_paid_at"
+	case "credited":
+		column = "credited_at"
+	}
+	if !filter.From.IsZero() {
+		query = query.Where(column+" >= ?", filter.From)
+	}
+	if !filter.Until.IsZero() {
+		query = query.Where(column+" < ?", filter.Until)
+	}
+	return query
 }
 
 // BeginPaymentReconciliation creates or safely reuses the single daily run
@@ -503,34 +524,42 @@ func (r *Repository) PaymentReconciliationRunByDate(providerID, billDate string)
 	return &run, r.db.First(&run, "provider_id = ? AND bill_date = ?", strings.TrimSpace(providerID), strings.TrimSpace(billDate)).Error
 }
 
-func (r *Repository) AdminPaymentReconciliationRuns(providerID, status string, limit, offset int) ([]model.PaymentReconciliationRun, int64, error) {
+func (r *Repository) AdminPaymentReconciliationRuns(filter PaymentReconciliationFilter, limit, offset int) ([]model.PaymentReconciliationRun, int64, error) {
 	var runs []model.PaymentReconciliationRun
 	var total int64
-	query := r.db.Model(&model.PaymentReconciliationRun{})
-	if normalized := strings.TrimSpace(providerID); normalized != "" && normalized != "all" {
-		query = query.Where("provider_id = ?", normalized)
-	}
-	if normalized := strings.TrimSpace(status); normalized != "" && normalized != "all" {
-		query = query.Where("status = ?", normalized)
-	}
+	query := r.paymentReconciliationQuery(filter)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := query.Order("bill_date desc, started_at desc").Limit(limit).Offset(offset).Find(&runs).Error
+	err := query.Order("bill_date desc, started_at desc, id desc").Limit(limit).Offset(offset).Find(&runs).Error
 	return runs, total, err
+}
+
+func (r *Repository) paymentReconciliationQuery(filter PaymentReconciliationFilter) *gorm.DB {
+	query := r.db.Model(&model.PaymentReconciliationRun{})
+	if normalized := strings.TrimSpace(filter.ProviderID); normalized != "" && normalized != "all" {
+		query = query.Where("provider_id = ?", normalized)
+	}
+	if normalized := strings.TrimSpace(filter.Status); normalized != "" && normalized != "all" {
+		query = query.Where("status = ?", normalized)
+	}
+	if filter.From != "" {
+		query = query.Where("bill_date >= ?", filter.From)
+	}
+	if filter.To != "" {
+		query = query.Where("bill_date <= ?", filter.To)
+	}
+	return query
 }
 
 func (r *Repository) PaymentReconciliationItems(runID, result string, limit, offset int) ([]model.PaymentReconciliationItem, int64, error) {
 	var items []model.PaymentReconciliationItem
 	var total int64
-	query := r.db.Model(&model.PaymentReconciliationItem{}).Where("run_id = ?", strings.TrimSpace(runID))
-	if normalized := strings.TrimSpace(result); normalized != "" && normalized != "all" {
-		query = query.Where("result = ?", normalized)
-	}
+	query := r.paymentReconciliationItemsQuery(runID, result)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := query.Order("resolved asc, created_at asc").Limit(limit).Offset(offset).Find(&items).Error
+	err := query.Order("resolved asc, created_at asc, id asc").Limit(limit).Offset(offset).Find(&items).Error
 	return items, total, err
 }
 

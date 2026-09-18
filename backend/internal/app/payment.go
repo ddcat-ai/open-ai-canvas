@@ -929,12 +929,16 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	}
 }
 
-func (s *Service) AdminPaymentOrderPage(actor *model.User, status, keyword string, page, limit int) (*AdminPaymentOrderPage, error) {
+func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQuery, page, limit int) (*AdminPaymentOrderPage, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
-	orders, total, err := s.repo.AdminPaymentOrders(status, keyword, limit, (page-1)*limit)
+	filter, err := query.filter()
+	if err != nil {
+		return nil, err
+	}
+	orders, total, err := s.repo.AdminPaymentOrders(filter, limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}

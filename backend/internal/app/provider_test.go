@@ -2224,6 +2224,48 @@ func TestArkPlanConfigStaysSeparateFromSeedanceVideosEndpoint(t *testing.T) {
 	}
 }
 
+func TestArkPlanImageConfigDoesNotUseVideoAssetPath(t *testing.T) {
+	imageConfig := providerConfig{
+		InterfaceType: "volcengine-ark-agent-plan-image",
+		BaseURL:       "https://ark.cn-beijing.volces.com/api/plan/v3",
+		Model:         "doubao-seedream-4-0-250828",
+	}
+	if isArkPlanVideoConfig(imageConfig) {
+		t.Fatal("agent plan image must not match isArkPlanVideoConfig")
+	}
+	if isArkPrivateAssetVideoConfig(imageConfig) {
+		t.Fatal("agent plan image must not trigger ark private asset sync")
+	}
+	if isSeedanceVideoConfig(imageConfig) {
+		t.Fatal("agent plan image must not match isSeedanceVideoConfig")
+	}
+
+	videoConfig := providerConfig{
+		InterfaceType: "volcengine-ark-agent-plan-video",
+		BaseURL:       "https://ark.cn-beijing.volces.com/api/plan/v3",
+		Model:         "doubao-seedance-1-5-pro-251215",
+	}
+	if !isArkPlanVideoConfig(videoConfig) || !isArkPrivateAssetVideoConfig(videoConfig) {
+		t.Fatal("agent plan video should keep video/asset path")
+	}
+}
+
+func TestPrepareArkPrivateAssetReferencesSkipsImageMode(t *testing.T) {
+	svc := &Service{}
+	err := svc.prepareArkPrivateAssetReferences(context.Background(), "user-1", &canvasGenerationInput{
+		Mode: "image",
+		Config: providerConfig{
+			InterfaceType:         "volcengine-ark-agent-plan-image",
+			BaseURL:               "https://ark.cn-beijing.volces.com/api/plan/v3",
+			ArkPrivateAssetUpload: "true",
+		},
+		ReferenceImages: []providerMedia{{StorageKey: "resource:res-1", URL: "https://example.com/ref.png"}},
+	})
+	if err != nil {
+		t.Fatalf("prepareArkPrivateAssetReferences() error = %v", err)
+	}
+}
+
 func TestVolcengineArkVideoProtocolUsesContentTaskAndDownloadsResult(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	paths := make([]string, 0, 3)

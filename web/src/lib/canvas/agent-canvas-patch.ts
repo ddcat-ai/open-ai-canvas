@@ -1,9 +1,11 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
 
-type Change<T> = { before: T | null; after: T };
+type Change<T> = { before: T | null; after: T | null };
 export type AgentCanvasPatch = {
     canvasId: string;
+    baseRevision?: number;
+    revision?: number;
     updatedAt: string;
     nodes: Change<CanvasNodeData>[];
     connections: Change<CanvasConnection>[];
@@ -44,8 +46,11 @@ function mergeItems<T extends { id: string }>(items: T[], changes: Change<T>[]):
     if (!changes.length) return items;
     const next = new Map(items.map((item) => [item.id, item]));
     for (const { before, after } of changes) {
-        if (!after?.id || (before && before.id !== after.id)) throw new Error("无效的画布增量节点");
-        next.set(after.id, mergeValue(next.get(after.id) ?? null, before, after) as T);
+        const id = after?.id || before?.id;
+        if (!id || (before && after && before.id !== after.id)) throw new Error("无效的画布增量节点");
+        const merged = mergeValue(next.get(id) ?? null, before, after) as T | null;
+        if (merged === null) next.delete(id);
+        else next.set(id, merged);
     }
     const result = [...next.values()];
     return result.length === items.length && result.every((item, index) => item === items[index]) ? items : result;
@@ -55,6 +60,7 @@ export function applyAgentCanvasPatch(project: CanvasProject, patch: AgentCanvas
     if (patch.canvasId !== project.id || !Array.isArray(patch.nodes) || !Array.isArray(patch.connections)) throw new Error("画布增量不属于当前画布或格式无效");
     const byId = new Map(project.nodes.map((node) => [node.id, node]));
     const nodeChanges = patch.nodes.map((change) => {
+        if (!change.after) return change;
         const current = byId.get(change.after.id);
         const beforeTask = change.before?.metadata?.taskId;
         const afterTask = change.after.metadata?.taskId;
@@ -81,8 +87,10 @@ export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: Canvas
     const changes = <T extends { id: string }>(before: T[], after: T[]): Change<T>[] => {
         const byId = new Map(before.map((item) => [item.id, item]));
         const afterIds = new Set(after.map((item) => item.id));
-        if (before.some((item) => !afterIds.has(item.id))) throw new Error("画布节点已删除，请先同步本地编辑");
-        return after.filter((item) => !equal(item, byId.get(item.id))).map((item) => ({ before: byId.get(item.id) ?? null, after: item }));
+        return [
+            ...after.filter((item) => !equal(item, byId.get(item.id))).map((item) => ({ before: byId.get(item.id) ?? null, after: item })),
+            ...before.filter((item) => !afterIds.has(item.id)).map((item) => ({ before: item, after: null })),
+        ];
     };
     return applyAgentCanvasPatch({ ...previous, nodes, connections }, {
         canvasId: previous.id,

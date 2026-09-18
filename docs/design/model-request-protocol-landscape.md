@@ -435,6 +435,8 @@ if model name contains minimax/h3
 | `openai-videos` | multipart create/task/content/cancel |
 | `xai-video` | xAI JSON video + reference_images |
 | `volcengine-ark-seedance` | Ark contents task + multimodal roles |
+| `volcengine-ark-agent-plan-seedream` | Agent Plan `/api/plan/v3/images/generations` |
+| `volcengine-ark-agent-plan-seedance` | Agent Plan `/api/plan/v3/contents/generations/tasks` |
 | `minimax-hailuo-video-v2` | MiniMax `/v2/video_generation` |
 | `dashscope-wan-video` | DashScope async Wan task |
 | `newapi-media-task-v1` | NewAPI Channel 1 包装 |

@@ -18,12 +18,118 @@ tags:
   - name: meta
   - name: auth
   - name: projects
+  - name: canvas
   - name: resources
   - name: tasks
   - name: assets
   - name: agent
   - name: admin
 paths:
+  /canvas-projects/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [canvas]
+      summary: 读取当前用户画布内容和 revision
+      responses:
+        "200":
+          description: 信封 data.project 包含完整画布及服务端 revision
+        "404":
+          description: 画布不存在或不属于当前用户
+    put:
+      tags: [canvas]
+      summary: 按 revision 保存画布内容
+      description: 新建传 revision 0，更新传读取到的版本；成功原子加 1。忽略客户端 viewport 和 remoteContentHash，updatedAt 由服务端生成。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project]
+              properties:
+                project:
+                  type: object
+                  required: [id, revision]
+                  properties:
+                    id: { type: string }
+                    revision: { type: integer, format: int64, minimum: 0 }
+                  additionalProperties: true
+      responses:
+        "200":
+          description: 信封 data.project 返回摘要及递增后的 revision
+        "400":
+          description: 请求、版本或素材引用不合法
+        "409":
+          description: 版本或资源状态冲突，原内容未被覆盖；保留草稿后加载最新版
+        "428":
+          description: 缺少 revision，需刷新客户端并重新读取
+  /canvas-projects/{id}/history:
+    get:
+      tags: [canvas]
+      summary: 读取当前画布版本与最近 20 份历史摘要
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 currentRevision 和 snapshots；每项含 id、revision、title、nodeCount、connectionCount、payloadBytes、reason、contentUpdatedAt、createdAt，不含正文
+        "404":
+          description: 画布不存在或无权访问
+  /canvas-projects/{id}/history/{snapshotId}:
+    get:
+      tags: [canvas]
+      summary: 按需读取历史正文
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 snapshot 摘要和 project 正文
+        "404":
+          description: 画布或快照不存在、已过期或无权访问
+  /canvas-projects/{id}/history/{snapshotId}/restore:
+    post:
+      tags: [canvas]
+      summary: 备份当前内容并将历史内容恢复为新版本
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "200":
+          description: 信封 data.project 返回恢复后的摘要及新 revision；当前 ID、归属与项目关联保留
+        "404":
+          description: 画布或快照不存在、已过期或无权访问
+        "409":
+          description: 当前版本或素材状态已变化，恢复未执行
+        "428":
+          description: 缺少当前 revision
   /public/welcome:
     get:
       tags: [meta]

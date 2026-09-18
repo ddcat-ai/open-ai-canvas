@@ -1,4 +1,5 @@
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
 import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { getResourceOSSUrl } from "@/services/api/resources";
 import { getMediaBlob } from "@/services/file-storage";
@@ -13,13 +14,13 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 import { hasExplicitVideoFrames, resolveVideoImageReferences } from "./video-reference-roles";
 
 export function isSeedanceConfig(config: ResolvedAiConfig) {
-    return config.interfaceType === "volcengine-ark-video" || isSeedanceVideoConfig(config);
+    return isVolcengineArkVideoProtocol(config.interfaceType) || isSeedanceVideoConfig(config);
 }
 
 export async function createSeedanceTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
     assertSeedanceVideoReferences(videoReferences);
     assertSeedanceAudioReferences(audioReferences);
-    const isVolcengineArk = config.interfaceType === "volcengine-ark-video";
+    const isVolcengineArk = isVolcengineArkVideoProtocol(config.interfaceType);
     const payload = isVolcengineArk || isArkPlanBaseUrl(config.baseUrl)
         ? await buildSeedanceAgentPlanPayload(config, model, prompt, references, videoReferences, audioReferences, deps, options)
         : await buildSeedanceVideosPayload(config, model, prompt, references, videoReferences, audioReferences, deps, options);
@@ -77,15 +78,15 @@ function assertSeedanceAudioReferences(audioReferences: ReferenceAudio[]) {
 }
 
 function seedanceApiUrl(config: ResolvedAiConfig, taskId?: string) {
-    if (config.interfaceType === "volcengine-ark-video" || isArkPlanBaseUrl(config.baseUrl)) return buildApiUrl(config.baseUrl, `/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`);
+    if (isVolcengineArkVideoProtocol(config.interfaceType) || isArkPlanBaseUrl(config.baseUrl)) return buildApiUrl(config.baseUrl, `/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`);
     return buildApiUrl(config.baseUrl, `/videos${taskId ? `/${encodeURIComponent(taskId)}` : ""}`);
 }
 
 async function buildSeedanceAgentPlanPayload(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], deps: VideoProviderDeps, options?: RequestOptions) {
     if (audioReferences.length && !references.length && !videoReferences.length) {
-        throw new Error(config.interfaceType === "volcengine-ark-video" ? "火山方舟全模态参考不支持纯音频或文本+音频，请同时添加参考图片或参考视频" : "Seedance 参考音频不能单独使用，请同时添加参考图或参考视频");
+        throw new Error(isVolcengineArkVideoProtocol(config.interfaceType) ? "火山方舟全模态参考不支持纯音频或文本+音频，请同时添加参考图片或参考视频" : "Seedance 参考音频不能单独使用，请同时添加参考图或参考视频");
     }
-    const content = config.interfaceType === "volcengine-ark-video"
+    const content = isVolcengineArkVideoProtocol(config.interfaceType)
         ? await buildVolcengineArkContent(prompt, references, videoReferences, audioReferences, options)
         : await buildSeedanceContent(config, prompt, references, videoReferences, audioReferences, deps, options);
     if (!content.length) throw new Error("请输入视频提示词，或连接参考图片/视频/音频");

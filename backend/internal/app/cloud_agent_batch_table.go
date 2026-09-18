@@ -29,6 +29,7 @@ type cloudAgentBatchTableEditArgs struct {
 	Patch        map[string]any `json:"patch"`
 	Operation    string         `json:"operation"`
 	Concurrency  int            `json:"concurrency"`
+	GlobalPrompt string         `json:"globalPrompt"`
 }
 
 type cloudAgentBatchTableMutationPlan struct {
@@ -86,6 +87,12 @@ func batchTableNodeFromDocument(doc map[string]any, nodeID string) (map[string]a
 		concurrency, ok := cloudAgentInteger(table["concurrency"])
 		if !ok || !cloudAgentBatchConcurrencyAllowed(concurrency) {
 			return nil, nil, nil, nil, BadAuthRequest("批量创作表包含无效的并发数")
+		}
+		if rawPrompt, exists := table["globalPrompt"]; exists {
+			globalPrompt, ok := rawPrompt.(string)
+			if !ok || utf8.RuneCountInString(globalPrompt) > maxCloudAgentBatchPromptRunes {
+				return nil, nil, nil, nil, BadAuthRequest("批量创作表包含无效或过长的全局提示词")
+			}
 		}
 		columns := creationMaps(table["referenceColumns"])
 		if len(columns) < 1 || len(columns) > maxCloudAgentBatchReferences {
@@ -182,7 +189,7 @@ func prepareCloudAgentBatchTableEdit(repo *repository.Repository, userID, canvas
 	if err := validateCloudAgentID(args.NodeID, "批量创作表节点ID", 80); err != nil {
 		return nil, err
 	}
-	allowedActions := map[string]bool{"append": true, "update": true, "remove": true, "set_operation": true, "set_concurrency": true, "add_reference_column": true}
+	allowedActions := map[string]bool{"append": true, "update": true, "remove": true, "set_operation": true, "set_concurrency": true, "add_reference_column": true, "remove_reference_column": true, "set_global_prompt": true}
 	if !allowedActions[args.Action] {
 		return nil, BadAuthRequest("批量创作表操作无效")
 	}
@@ -302,6 +309,38 @@ func prepareCloudAgentBatchTableEdit(repo *repository.Repository, userID, canvas
 		table["referenceColumns"] = mapsAsAny(columns)
 		fields = []string{"参考图列"}
 		summaryVerb = "新增参考图列到"
+	case "remove_reference_column":
+		if len(columns) <= 1 {
+			return nil, BadAuthRequest("批量创作表至少保留1组参考图")
+		}
+		if args.RowID != "" || len(args.Patch) != 0 || args.Operation != "" || args.Concurrency != 0 {
+			return nil, BadAuthRequest("减少参考图列不接受其他修改参数")
+		}
+		columns = columns[:len(columns)-1]
+		for index, column := range columns {
+			column["label"] = fmt.Sprintf("参考图 %d", index+1)
+		}
+		table["referenceColumns"] = mapsAsAny(columns)
+		for _, row := range rows {
+			row["inputNodeIds"] = cloudAgentBatchInputIDs(row["inputNodeIds"], len(columns))
+		}
+		table["rows"] = mapsAsAny(rows)
+		fields = []string{"参考图列"}
+		summaryVerb = "减少参考图列自"
+	case "set_global_prompt":
+		if utf8.RuneCountInString(args.GlobalPrompt) > maxCloudAgentBatchPromptRunes {
+			return nil, BadAuthRequest("全局提示词必须是不超过20000字的文本")
+		}
+		if args.RowID != "" || len(args.Patch) != 0 || args.Operation != "" || args.Concurrency != 0 {
+			return nil, BadAuthRequest("设置全局提示词不接受其他修改参数")
+		}
+		if strings.TrimSpace(args.GlobalPrompt) == "" {
+			delete(table, "globalPrompt")
+		} else {
+			table["globalPrompt"] = args.GlobalPrompt
+		}
+		fields = []string{"全局提示词"}
+		summaryVerb = "设置全局提示词到"
 	}
 	metadata["batchTable"] = table
 	title := cloudAgentApprovalNodeTitle(node, "批量创作表")

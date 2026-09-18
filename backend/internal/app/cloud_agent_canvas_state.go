@@ -364,6 +364,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 		columns = defaultCloudAgentBatchReferenceColumns()
 	}
 
+	globalPrompt := strings.TrimSpace(stringValue(table["globalPrompt"]))
 	all := creationMaps(table["rows"])
 	count, textLimit := 20, 240
 	if precise {
@@ -375,10 +376,14 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 	for _, row := range all {
 		rowEnabled, _ := row["enabled"].(bool)
 		prompt := strings.TrimSpace(stringValue(row["prompt"]))
+		effectivePrompt := globalPrompt
+		if effectivePrompt == "" {
+			effectivePrompt = prompt
+		}
 		inputs := cloudAgentBatchInputIDs(row["inputNodeIds"], len(columns))
 		if rowEnabled {
 			enabled++
-			if prompt == "" {
+			if effectivePrompt == "" {
 				missingPrompt++
 			}
 			minimumInputs := 1
@@ -388,7 +393,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 			if len(inputs) < minimumInputs {
 				missingReferences++
 			}
-			if prompt != "" && len(inputs) >= minimumInputs {
+			if effectivePrompt != "" && len(inputs) >= minimumInputs {
 				ready++
 			}
 		}
@@ -419,7 +424,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 		}
 		rows = append(rows, item)
 	}
-	return map[string]any{
+	projected := map[string]any{
 		"operation": operation, "concurrency": concurrency, "referenceColumns": columns,
 		"rows": rows, "totalRows": len(all), "nextOffset": next, "hasMore": next > 0,
 		"generationPreview": map[string]any{
@@ -427,6 +432,13 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 			"missingReferenceRows": missingReferences, "outputLinkedRows": outputLinked,
 		},
 	}
+	if globalPrompt != "" {
+		projected["globalPrompt"] = truncateRunes(globalPrompt, textLimit)
+		if len([]rune(globalPrompt)) > textLimit {
+			projected["globalPromptTruncated"] = true
+		}
+	}
+	return projected
 }
 
 func cloudAgentBatchInputIDs(value any, limit int) []any {

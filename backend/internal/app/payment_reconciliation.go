@@ -272,12 +272,16 @@ func safePaymentReconciliationError(err error) string {
 	return truncateRunes(strings.TrimSpace(err.Error()), 1000)
 }
 
-func (s *Service) AdminPaymentReconciliationPage(actor *model.User, providerID, status string, page, limit int) (*AdminPaymentReconciliationPage, error) {
+func (s *Service) AdminPaymentReconciliationPage(actor *model.User, query PaymentReconciliationQuery, page, limit int) (*AdminPaymentReconciliationPage, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
-	runs, total, err := s.repo.AdminPaymentReconciliationRuns(providerID, status, limit, (page-1)*limit)
+	filter, err := query.filter()
+	if err != nil {
+		return nil, err
+	}
+	runs, total, err := s.repo.AdminPaymentReconciliationRuns(filter, limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}
@@ -289,6 +293,9 @@ func (s *Service) AdminPaymentReconciliationItems(actor *model.User, runID, resu
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
+	if err := validatePaymentResult(result); err != nil {
+		return nil, err
+	}
 	run, err := s.repo.PaymentReconciliationRun(runID)
 	if err != nil {
 		return nil, err

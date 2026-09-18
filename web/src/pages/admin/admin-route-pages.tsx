@@ -8,6 +8,7 @@ import { readAnnouncementPendingReview } from "./components/admin-announcement-s
 
 const AnalyticsPanel = lazy(() => import("./components/analytics-panel"));
 const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announcements-panel"));
+const AdminBannerAnnouncementsPanel = lazy(() => import("./components/admin-banner-announcements-panel"));
 const CreditOperationsPanel = lazy(() => import("./components/credit-operations-panel"));
 const AccessSettingsPanel = lazy(() => import("./components/access-settings-panel"));
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
@@ -49,6 +50,27 @@ export function AnnouncementsPage() {
             }
         >
             <AdminAnnouncementsPanel publishOpen={publishOpen} publishBlocked={publishBlocked} publishReturnFocus={publishReturnFocus} onPublishOpenChange={setPublishOpen} onPublishBlockedChange={setPublishBlocked} />
+        </AdminPageFrame>
+    );
+}
+
+export function BannerAnnouncementsPage() {
+    const [createOpen, setCreateOpen] = useState(false);
+    return (
+        <AdminPageFrame
+            title="常驻通知"
+            description="配置首页顶部常驻展示的通知，支持标题、状态与有效期"
+            actions={
+                <Button
+                    type="primary"
+                    icon={<Plus className="size-4" />}
+                    onClick={() => setCreateOpen(true)}
+                >
+                    新增常驻通知
+                </Button>
+            }
+        >
+            <AdminBannerAnnouncementsPanel createOpen={createOpen} onCreateOpenChange={setCreateOpen} />
         </AdminPageFrame>
     );
 }

@@ -192,14 +192,15 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"rowId":        str("update/remove 使用 canvas_read_storyboard 返回的真实 rowId；append 留空"),
 			"patch":        cloudAgentStoryboardPatchSchema(),
 		}, "snapshotHash", "nodeId", "action")
-		add("canvas_edit_batch_table", "操作批量创作表组件：追加、修改或删除任务行，切换批量换装/创意生图，设置1/5/10并发，或新增参考图列。必须先用 canvas_read_batch_table 获取最新 snapshotHash 和真实 rowId。行 patch 仅允许 enabled、inputNodeIds、prompt；prompt 可使用读取结果中的 @参考图1、@参考图2 等 mentionToken 指代本行对应位置的图片。append 未传 inputNodeIds 时会继承上一行参考图；图片ID必须来自当前画布。不能写 outputNodeId、任务状态、URL、storageKey 或任意 metadata。本工具只编辑计划，不提交收费生成。", map[string]any{
+		add("canvas_edit_batch_table", "操作批量创作表组件：追加、修改或删除任务行，切换批量换装/创意生图，设置1/5/10并发，新增或减少参考图列，或设置覆盖各任务的全局提示词。必须先用 canvas_read_batch_table 获取最新 snapshotHash 和真实 rowId。行 patch 仅允许 enabled、inputNodeIds、prompt；prompt 可使用读取结果中的 @参考图1、@参考图2 等 mentionToken 指代本行对应位置的图片。append 未传 inputNodeIds 时会继承上一行参考图；图片ID必须来自当前画布。不能写 outputNodeId、任务状态、URL、storageKey 或任意 metadata。本工具只编辑计划，不提交收费生成。", map[string]any{
 			"snapshotHash": str("最近一次批量创作表读取返回的 snapshotHash"),
 			"nodeId":       str("真实批量创作表节点ID"),
-			"action":       map[string]any{"type": "string", "enum": []string{"append", "update", "remove", "set_operation", "set_concurrency", "add_reference_column"}},
+			"action":       map[string]any{"type": "string", "enum": []string{"append", "update", "remove", "set_operation", "set_concurrency", "add_reference_column", "remove_reference_column", "set_global_prompt"}},
 			"rowId":        str("update/remove 使用 canvas_read_batch_table 返回的真实 rowId；其他操作留空"),
 			"patch":        cloudAgentBatchTablePatchSchema(),
 			"operation":    map[string]any{"type": "string", "enum": []string{"try_on", "creative"}},
 			"concurrency":  map[string]any{"type": "integer", "enum": []int{1, 5, 10}},
+			"globalPrompt": str("set_global_prompt 使用；非空时覆盖各任务提示词，空字符串清除全局提示词"),
 		}, "snapshotHash", "nodeId", "action")
 		opProperties := map[string]any{
 			"type":       map[string]any{"type": "string", "enum": []string{"add_node", "update_node", "connect_nodes"}},

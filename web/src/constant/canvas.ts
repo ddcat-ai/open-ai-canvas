@@ -27,7 +27,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Chart]: { width: 480, height: 320, title: "图表" },
     [CanvasNodeType.ColorGrade]: { width: 420, height: 360, title: "调色" },
     [CanvasNodeType.MediaConversion]: { width: 480, height: 460, title: "转换" },
-    [CanvasNodeType.BatchTable]: { width: 900, height: 520, title: "批量创作表" },
+    [CanvasNodeType.BatchTable]: { width: 1280, height: 560, title: "批量创作表" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {

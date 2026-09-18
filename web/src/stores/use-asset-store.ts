@@ -13,6 +13,7 @@ import { cleanupUnusedImages, collectImageStorageKeys, resolveImageUrl, uploadIm
 import { cleanupUnusedMedia, collectMediaStorageKeys, resolveMediaUrl } from "@/services/file-storage";
 import { flushGenerationAssetStorageLocks, insertOrReturnGenerationAsset, withGenerationArtifactCommitLock, withGenerationAssetStorageLock } from "@/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, commitPendingCanvasStorePersistenceLocked, pendingCanvasStorePersistence, withCanvasStorePersistenceLock } from "@/stores/canvas/use-canvas-store";
+import { readAllCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 
 export type AssetKind = "text" | "image" | "video" | "audio" | "model" | "entity";
 export type { AssetCategory } from "@/lib/asset-category";
@@ -414,6 +415,7 @@ export const useAssetStore = create<AssetStore>()(
                 await new Promise<void>((resolve, reject) => {
                     window.setTimeout(() =>
                         withGenerationArtifactCommitLock(scope, async () => {
+                            const syncDrafts = await readAllCanvasSyncDrafts(scope);
                             // 固定锁序：artifact -> Canvas（释放）-> Asset，避免跨 store 锁重入。
                             const canvasProjects = await withCanvasStorePersistenceLock(scope, async () => {
                                 await commitPendingCanvasStorePersistenceLocked(scope);
@@ -423,7 +425,7 @@ export const useAssetStore = create<AssetStore>()(
                             await withGenerationAssetStorageLock(scope, async () => {
                                 await commitPendingAssetStorePersistenceLocked(scope);
                                 const durableAssets = (await readPersistedAssetDocumentForScope(scope)).state.assets;
-                                const references = { projects: canvasProjects, assets: durableAssets };
+                                const references = { projects: canvasProjects, assets: durableAssets, syncDrafts };
                                 const imageKeys = new Set([...frozenExtraImageKeys, ...collectImageStorageKeys(references)]);
                                 const mediaKeys = new Set([...frozenExtraMediaKeys, ...collectMediaStorageKeys(references)]);
                                 await cleanupUnusedImages(

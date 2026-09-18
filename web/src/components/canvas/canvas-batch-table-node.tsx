@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Button, Switch, Tooltip } from "antd";
-import { Image as ImageIcon, LoaderCircle, Play, Plus, RefreshCw, Rows3, Trash2 } from "lucide-react";
+import { Image as ImageIcon, LoaderCircle, Minus, Play, Plus, Rows3, Trash2, Upload } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
@@ -8,6 +8,8 @@ import {
     BATCH_REFERENCE_HANDLE_GAP,
     BATCH_REFERENCE_HANDLE_TOP,
     MAX_BATCH_REFERENCE_COLUMNS,
+    MIN_BATCH_REFERENCE_COLUMNS,
+    batchPromptForRow,
     batchReferenceColumns,
     batchReferenceHandleId,
     batchReferenceMentionToken,
@@ -15,6 +17,8 @@ import {
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasBatchOperation, CanvasBatchRow, CanvasBatchTableData, CanvasConnection, CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasNodeData } from "@/types/canvas";
+
+type ReferenceCell = { rowId: string; columnIndex: number };
 
 type Props = {
     node: CanvasNodeData;
@@ -30,6 +34,11 @@ type Props = {
     onGenerate: (rowIds?: string[]) => void;
     onRetryItem: (batchId: string, itemId: string) => void;
     onAddReferenceColumn: () => void;
+    onRemoveReferenceColumn?: () => void;
+    onFocusOutput?: (nodeId: string) => void;
+    onReorderReferenceColumns?: (fromColumnId: string, toColumnId: string) => void;
+    onMoveReferenceCell?: (sourceRowId: string, sourceColumnIndex: number, targetRowId: string, targetColumnIndex: number) => void;
+    onUploadReference?: (rowId: string, columnIndex: number, file: File) => void;
     onConnectStart: (event: ReactPointerEvent, handleId: string) => void;
     onConnectDrop?: (event: ReactPointerEvent, handleId: string) => void;
     readOnly?: boolean;
@@ -42,83 +51,212 @@ const OPERATION_OPTIONS = [
 
 const CONCURRENCY_OPTIONS = [1, 5, 10] as const;
 
-export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, theme, onPatchTable, onAddRow, onRemoveRow, onUpdateRow, onFillRows, onGenerate, onRetryItem, onAddReferenceColumn, onConnectStart, onConnectDrop, readOnly = false }: Props) {
+export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, theme, onPatchTable, onAddRow, onRemoveRow, onUpdateRow, onFillRows, onGenerate, onRetryItem, onAddReferenceColumn, onRemoveReferenceColumn, onReorderReferenceColumns, onMoveReferenceCell, onUploadReference, onFocusOutput, onConnectStart, onConnectDrop, readOnly = false }: Props) {
     const table = node.metadata?.batchTable || { operation: "try_on" as const, concurrency: 10, rows: [] };
     const referenceColumns = batchReferenceColumns(table);
+    const globalPrompt = table.globalPrompt || "";
+    const hasGlobalPrompt = Boolean(globalPrompt.trim());
     const nodeById = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes]);
     const batchItemByRowId = useMemo(() => new Map((batch?.items || []).map((item) => [item.rowId, item])), [batch?.items]);
     const connectedImageCount = useMemo(() => new Set(connections.filter((connection) => connection.toNodeId === node.id && connection.relation !== "batch-output").map((connection) => connection.fromNodeId)).size, [connections, node.id]);
     const completed = table.rows.filter((row) => hasNodeMedia(row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined)).length;
-    const unfinishedReadyCount = table.rows.filter((row) => rowReady(row, table.operation, nodeById) && !hasNodeMedia(row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined)).length;
-    const gridTemplateColumns = `54px repeat(${referenceColumns.length}, 84px) minmax(280px, 1fr) 146px 76px`;
+    const unfinishedReadyCount = table.rows.filter((row) => rowReady(row, table, nodeById) && !hasNodeMedia(row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined)).length;
+    const gridTemplateColumns = `64px repeat(${referenceColumns.length}, 88px) minmax(280px, 1fr) 88px 80px`;
     const subtleSurface = `color-mix(in srgb, ${theme.node.text} 4%, transparent)`;
+    const inputSurface = theme.node.panel;
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const uploadTargetRef = useRef<ReferenceCell | null>(null);
+    const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
+    const [draggingCell, setDraggingCell] = useState<ReferenceCell | null>(null);
+    const draggingCellRef = useRef<ReferenceCell | null>(null);
+    const dragStartRef = useRef<{ x: number; y: number; pointerId: number; cell: ReferenceCell } | null>(null);
+    const suppressClickRef = useRef(false);
+
+    const clearReferenceDrag = useCallback(() => {
+        dragStartRef.current = null;
+        draggingCellRef.current = null;
+        setDraggingCell(null);
+    }, []);
+
+    const findReferenceCellAtPoint = useCallback((clientX: number, clientY: number) => {
+        const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-batch-reference-cell]");
+        const rowId = target?.dataset.rowId;
+        const columnIndex = Number(target?.dataset.columnIndex);
+        return rowId && Number.isInteger(columnIndex) ? { rowId, columnIndex } : null;
+    }, []);
+
+    useEffect(() => {
+        if (readOnly) return;
+        const handleMove = (event: PointerEvent) => {
+            const start = dragStartRef.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+            if (!draggingCellRef.current && distance < 5) return;
+            if (!draggingCellRef.current) {
+                draggingCellRef.current = start.cell;
+                suppressClickRef.current = true;
+                setDraggingCell(start.cell);
+            }
+        };
+        const handleUp = (event: PointerEvent) => {
+            const start = dragStartRef.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            const sourceCell = draggingCellRef.current;
+            const targetCell = sourceCell ? findReferenceCellAtPoint(event.clientX, event.clientY) : null;
+            if (sourceCell && targetCell) onMoveReferenceCell?.(sourceCell.rowId, sourceCell.columnIndex, targetCell.rowId, targetCell.columnIndex);
+            const didDrag = Boolean(sourceCell);
+            clearReferenceDrag();
+            if (didDrag) {
+                suppressClickRef.current = true;
+                window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+            }
+        };
+        window.addEventListener("pointermove", handleMove);
+        window.addEventListener("pointerup", handleUp);
+        window.addEventListener("pointercancel", handleUp);
+        return () => {
+            window.removeEventListener("pointermove", handleMove);
+            window.removeEventListener("pointerup", handleUp);
+            window.removeEventListener("pointercancel", handleUp);
+        };
+    }, [clearReferenceDrag, findReferenceCellAtPoint, onMoveReferenceCell, readOnly]);
+
+    const startCellDrag = (event: ReactPointerEvent, rowId: string, columnIndex: number) => {
+        if (readOnly || event.button !== 0) return;
+        event.stopPropagation();
+        dragStartRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, cell: { rowId, columnIndex } };
+    };
+
+    const pickReferenceFile = (rowId: string, columnIndex: number) => {
+        if (readOnly) return;
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+        }
+        uploadTargetRef.current = { rowId, columnIndex };
+        fileInputRef.current?.click();
+    };
 
     return (
-        <div data-canvas-no-zoom data-canvas-wheel-scroll className="relative flex h-full w-full flex-col overflow-visible text-xs" style={{ color: theme.node.text }} onPointerDown={(event) => event.stopPropagation()}>
+        <div data-canvas-batch-table data-canvas-no-zoom data-canvas-wheel-scroll className="relative flex h-full w-full flex-col overflow-visible text-xs" style={{ color: theme.node.text }}>
+            {!readOnly ? <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                const target = uploadTargetRef.current;
+                event.currentTarget.value = "";
+                uploadTargetRef.current = null;
+                if (file && target) onUploadReference?.(target.rowId, target.columnIndex, file);
+            }} /> : null}
             {!readOnly ? <BatchReferenceHandles columns={referenceColumns} theme={theme} onConnectStart={onConnectStart} onConnectDrop={onConnectDrop} /> : null}
 
-            <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2" style={{ borderColor: theme.node.stroke, background: subtleSurface }}>
-                <BatchChoiceGroup ariaLabel="批量任务类型" theme={theme} disabled={readOnly} options={OPERATION_OPTIONS} value={table.operation} onChange={(operation) => onPatchTable({ operation: operation as CanvasBatchOperation })} />
-                <div className="flex items-center gap-1.5 rounded-lg px-2 py-1" style={{ background: theme.node.panel }}>
-                    <span className="font-medium" style={{ color: theme.node.muted }}>并发</span>
-                    <BatchChoiceGroup ariaLabel="并发数" theme={theme} disabled={readOnly} compact options={CONCURRENCY_OPTIONS.map((value) => ({ value, label: String(value) }))} value={table.concurrency} onChange={(concurrency) => onPatchTable({ concurrency: Number(concurrency) })} />
-                </div>
-                <div className="flex h-7 items-center gap-1 rounded-lg px-2" style={{ background: theme.node.panel, color: theme.node.muted }}>
-                    <span>{referenceColumns.length}/{MAX_BATCH_REFERENCE_COLUMNS} 组参考</span>
+            <div className="shrink-0 overflow-hidden rounded-t-[inherit] border-b" style={{ borderColor: theme.node.stroke, background: subtleSurface }}>
+                <div data-canvas-batch-drag className="flex h-11 cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" onPointerDown={(event) => event.stopPropagation()}>
+                        <BatchChoiceGroup ariaLabel="批量任务类型" theme={theme} disabled={readOnly} options={OPERATION_OPTIONS} value={table.operation} onChange={(operation) => onPatchTable({ operation: operation as CanvasBatchOperation })} />
+                        <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2" style={{ background: theme.node.panel }}>
+                            <span className="font-medium" style={{ color: theme.node.muted }}>并发</span>
+                            <BatchChoiceGroup ariaLabel="并发数" theme={theme} disabled={readOnly} compact options={CONCURRENCY_OPTIONS.map((value) => ({ value, label: String(value) }))} value={table.concurrency} onChange={(concurrency) => onPatchTable({ concurrency: Number(concurrency) })} />
+                        </div>
+                        <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2" style={{ background: theme.node.panel, color: theme.node.muted }}>
+                            <span className="pr-1">{referenceColumns.length}/{MAX_BATCH_REFERENCE_COLUMNS} 组参考</span>
+                            {!readOnly ? (
+                                <>
+                                    <Tooltip title={referenceColumns.length <= MIN_BATCH_REFERENCE_COLUMNS ? "至少保留 1 组参考图" : "减少一组参考图"}>
+                                        <button type="button" aria-label="减少一组参考图" className="grid size-5 place-items-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/10" style={{ color: theme.node.text }} disabled={referenceColumns.length <= MIN_BATCH_REFERENCE_COLUMNS} onClick={onRemoveReferenceColumn}>
+                                            <Minus className="size-3.5" />
+                                        </button>
+                                    </Tooltip>
+                                    <Tooltip title={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS ? "最多支持 6 组参考图" : `新增参考图 ${referenceColumns.length + 1}`}>
+                                        <button type="button" aria-label={`新增参考图 ${referenceColumns.length + 1}`} className="grid size-5 place-items-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/10" style={{ color: theme.node.text }} disabled={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS} onClick={onAddReferenceColumn}>
+                                            <Plus className="size-3.5" />
+                                        </button>
+                                    </Tooltip>
+                                </>
+                            ) : null}
+                        </div>
+                        <span className="shrink-0 tabular-nums" style={{ color: theme.node.muted }}>已连 {connectedImageCount} · 完成 {completed}/{table.rows.length}</span>
+                    </div>
                     {!readOnly ? (
-                        <Tooltip title={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS ? "最多支持 6 组参考图" : `新增参考图 ${referenceColumns.length + 1}`}>
-                            <button type="button" aria-label={`新增参考图 ${referenceColumns.length + 1}`} className="grid size-5 place-items-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/10" style={{ color: theme.node.text }} disabled={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS} onClick={onAddReferenceColumn}>
-                                <Plus className="size-3.5" />
-                            </button>
-                        </Tooltip>
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5" onPointerDown={(event) => event.stopPropagation()}>
+                            <Tooltip title="增量同步画布连线，不会删除已有任务行">
+                                <Button size="small" type="text" icon={<Rows3 className="size-3.5" />} onClick={onFillRows}>同步连线</Button>
+                            </Tooltip>
+                            <Button size="small" type="text" icon={<Plus className="size-3.5" />} onClick={onAddRow}>添加任务</Button>
+                            <Button size="small" type="primary" icon={<Play className="size-3.5" />} disabled={!unfinishedReadyCount} onClick={() => onGenerate()}>
+                                生成未完成项{unfinishedReadyCount ? ` · ${unfinishedReadyCount}` : ""}
+                            </Button>
+                        </div>
                     ) : null}
                 </div>
-                <span className="tabular-nums" style={{ color: theme.node.muted }}>已连 {connectedImageCount} · 完成 {completed}/{table.rows.length}</span>
-
-                {!readOnly ? (
-                    <div className="ml-auto flex items-center gap-1.5">
-                        <Tooltip title="增量同步画布连线，不会删除已有任务行">
-                            <Button size="small" type="text" icon={<Rows3 className="size-3.5" />} onClick={onFillRows}>同步连线</Button>
-                        </Tooltip>
-                        <Button size="small" type="text" icon={<Plus className="size-3.5" />} onClick={onAddRow}>添加任务</Button>
-                        <Button size="small" type="primary" icon={<Play className="size-3.5" />} disabled={!unfinishedReadyCount} onClick={() => onGenerate()}>
-                            生成未完成项{unfinishedReadyCount ? ` · ${unfinishedReadyCount}` : ""}
-                        </Button>
-                    </div>
-                ) : null}
+                <div className="flex h-9 items-center gap-2 border-t px-3" style={{ borderColor: theme.node.stroke }} onPointerDown={(event) => event.stopPropagation()}>
+                    <span className="shrink-0 font-medium" style={{ color: theme.node.muted }}>全局提示词</span>
+                    <input
+                        value={globalPrompt}
+                        readOnly={readOnly}
+                        placeholder="填写后覆盖各任务提示词，留空则使用每行自己的提示词"
+                        aria-label="全局提示词"
+                        className="h-7 min-w-0 flex-1 rounded-md border px-2.5 text-xs outline-none"
+                        style={{ background: inputSurface, borderColor: theme.node.stroke, color: theme.node.text }}
+                        onChange={(event) => onPatchTable({ globalPrompt: event.target.value })}
+                    />
+                </div>
             </div>
 
-            <div className="thin-scrollbar min-h-0 flex-1 overflow-auto rounded-b-[inherit]">
-                <div className="sticky top-0 z-10 grid min-w-[820px] items-center border-b px-2 py-2 text-[11px] font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted, gridTemplateColumns }}>
-                    <span className="pl-1">任务</span>
-                    {referenceColumns.map((column, index) => (
-                        <span key={column.id} className="flex min-w-0 flex-col leading-4">
-                            <span className="truncate">{column.label}</span>
-                            <span className="font-normal opacity-50">{batchReferenceMentionToken(index)}</span>
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-auto rounded-b-[inherit]" onPointerDown={(event) => event.stopPropagation()}>
+                <div className="sticky top-0 z-10 grid h-9 items-center border-b px-3 text-center text-[11px] font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.muted, gridTemplateColumns }}>
+                    <span className="min-w-0 truncate px-1">任务</span>
+                    {referenceColumns.map((column) => (
+                        <span
+                            key={column.id}
+                            draggable={!readOnly}
+                            title={column.label}
+                            className="min-w-0 cursor-grab truncate px-1 active:cursor-grabbing"
+                            style={{ opacity: draggingColumnId === column.id ? 0.45 : 1 }}
+                            onDragStart={() => setDraggingColumnId(column.id)}
+                            onDragEnd={() => setDraggingColumnId(null)}
+                            onDragOver={(event) => { event.preventDefault(); }}
+                            onDrop={() => { if (draggingColumnId) onReorderReferenceColumns?.(draggingColumnId, column.id); setDraggingColumnId(null); }}
+                        >
+                            {column.label}
                         </span>
                     ))}
-                    <span>任务提示词</span>
-                    <span>生成结果</span>
-                    <span className="text-center">操作</span>
+                    <span className="min-w-0 truncate px-1">任务提示词</span>
+                    <span className="min-w-0 truncate px-1">生成结果</span>
+                    <span className="min-w-0 truncate px-1">操作</span>
                 </div>
 
                 {table.rows.length ? (
                     table.rows.map((row, index) => {
                         const output = row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined;
                         const item = batchItemByRowId.get(row.id);
-                        const status = row.enabled ? rowStatus(item, output) : { label: "已停用", loading: false, retryable: false };
-                        const ready = rowReady(row, table.operation, nodeById);
+                        const status = row.enabled ? rowStatus(item, output) : { label: "已停用", tone: "idle" as const, loading: false, retryable: false };
+                        const ready = rowReady(row, table, nodeById);
                         const completedRow = hasNodeMedia(output);
                         const references = batchRowMentionReferences(row, referenceColumns, nodeById);
-                        const disabledReason = status.loading ? "当前任务正在生成" : !row.enabled ? "请先启用这一行" : !row.prompt.trim() ? "请填写任务提示词" : table.operation === "try_on" && row.inputNodeIds.length < 2 ? "批量换装至少需要两张参考图" : !ready ? "请补齐有效参考图" : "";
+                        const effectivePrompt = batchPromptForRow(table, row);
+                        const disabledReason = status.loading ? "当前任务正在生成" : !row.enabled ? "请先启用这一行" : !effectivePrompt.trim() ? "请填写任务提示词" : table.operation === "try_on" && row.inputNodeIds.filter(Boolean).length < 2 ? "批量换装至少需要两张参考图" : !ready ? "请补齐有效参考图" : "";
                         return (
-                            <div key={row.id} className="group grid min-w-[820px] items-center gap-2 border-b px-2 py-2.5 transition-colors hover:bg-black/[.025] dark:hover:bg-white/[.025]" style={{ borderColor: theme.node.stroke, gridTemplateColumns, opacity: row.enabled ? 1 : 0.58 }}>
-                                <div className="flex items-center gap-2 pl-1">
+                            <div key={row.id} className="group grid items-center border-b px-3 py-3 transition-colors hover:bg-black/[.025] dark:hover:bg-white/[.025]" style={{ borderColor: theme.node.stroke, gridTemplateColumns, opacity: row.enabled ? 1 : 0.58 }}>
+                                <div className="flex items-center justify-center gap-1.5">
                                     {!readOnly ? <Switch size="small" checked={row.enabled} aria-label={`启用任务 ${index + 1}`} onChange={(enabled) => onUpdateRow(row.id, { enabled })} /> : null}
                                     <span className="tabular-nums" style={{ color: theme.node.muted }}>{index + 1}</span>
                                 </div>
-                                {referenceColumns.map((column, columnIndex) => <ReferenceThumbnail key={column.id} node={nodeById.get(row.inputNodeIds[columnIndex])} label={batchReferenceMentionToken(columnIndex)} theme={theme} />)}
-                                <div className="min-w-0">
+                                {referenceColumns.map((column, columnIndex) => (
+                                    <div key={column.id} className="flex justify-center">
+                                        <ReferenceThumbnail
+                                            node={nodeById.get(row.inputNodeIds[columnIndex])}
+                                            label={batchReferenceMentionToken(columnIndex)}
+                                            theme={theme}
+                                            readOnly={readOnly}
+                                            rowId={row.id}
+                                            columnIndex={columnIndex}
+                                            isDraggingCell={draggingCell?.rowId === row.id && draggingCell.columnIndex === columnIndex}
+                                            onPickFile={() => pickReferenceFile(row.id, columnIndex)}
+                                            onUploadFile={(file) => onUploadReference?.(row.id, columnIndex, file)}
+                                            onPointerDown={(event) => startCellDrag(event, row.id, columnIndex)}
+                                        />
+                                    </div>
+                                ))}
+                                <div className="min-w-0 pr-3">
                                     <CanvasResourceMentionTextarea
                                         value={row.prompt}
                                         references={references}
@@ -126,27 +264,26 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                                         sendOnEnter={false}
                                         mentionMenuWidth={300}
                                         aria-label={`任务 ${index + 1} 提示词`}
-                                        placeholder="描述生成目标，输入 @ 引用本行参考图"
-                                        containerClassName="h-[76px]"
+                                        placeholder={hasGlobalPrompt ? "已使用全局提示词，可在此填写行级覆盖" : "描述生成目标，输入 @ 引用本行参考图"}
+                                        containerClassName="h-[108px]"
                                         className="thin-scrollbar h-full w-full overflow-y-auto rounded-lg border px-3 py-2 text-xs leading-5 outline-none transition-shadow focus-visible:ring-2"
-                                        style={{ background: subtleSurface, borderColor: theme.node.stroke, color: theme.node.text }}
+                                        style={{ background: inputSurface, borderColor: theme.node.stroke, color: theme.node.text }}
                                         onChange={(prompt) => onUpdateRow(row.id, { prompt })}
                                         onSubmit={!readOnly && ready && !status.loading ? () => onGenerate([row.id]) : undefined}
                                         onPointerDown={(event) => event.stopPropagation()}
                                         onWheel={(event) => event.stopPropagation()}
                                     />
-                                    <div className="mt-1 flex items-center justify-between px-1 text-[10px]" style={{ color: theme.node.faint }}>
-                                        <span>输入 @ 插入参考图</span>
-                                        {!readOnly ? <span>⌘/Ctrl + Enter 单行生成</span> : null}
+                                    <div className="mt-1 truncate px-0.5 text-[10px]" style={{ color: theme.node.faint }}>
+                                        {readOnly ? "输入 @ 插入参考图" : "输入 @ 插入参考图 · ⌘/Ctrl + Enter 生成此行"}
                                     </div>
                                 </div>
-                                <div className="flex min-w-0 items-center gap-2">
-                                    {completedRow ? <CachedResourceImage eager src={output?.metadata?.previewContent || output?.metadata?.content} storageKey={output?.metadata?.storageKey} alt="生成结果" className="size-12 rounded-lg object-cover" fallback={<EmptyThumbnail theme={theme} compact />} /> : <EmptyThumbnail theme={theme} compact />}
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate font-medium" title={status.label}>{status.label}</div>
-                                        {!readOnly && status.retryable && batch && item ? <Button type="link" size="small" className="h-auto p-0 text-[11px]" icon={<RefreshCw className="size-3" />} onClick={() => onRetryItem(batch.id, item.id)}>重试</Button> : completedRow ? <span className="text-[10px]" style={{ color: theme.node.muted }}>已关联到画布</span> : null}
-                                    </div>
-                                    {status.loading ? <LoaderCircle className="size-4 shrink-0 animate-spin" style={{ color: theme.node.muted }} /> : null}
+                                <div className="flex justify-center">
+                                    <ResultThumbnail
+                                        output={output}
+                                        status={status}
+                                        theme={theme}
+                                        onFocus={() => { if (row.outputNodeId) onFocusOutput?.(row.outputNodeId); }}
+                                    />
                                 </div>
                                 {!readOnly ? (
                                     <div className="flex items-center justify-center gap-1">
@@ -176,7 +313,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
 
 function BatchChoiceGroup({ ariaLabel, options, value, onChange, theme, compact = false, disabled = false }: { ariaLabel: string; options: Array<{ value: string | number; label: string }>; value: string | number; onChange: (value: string | number) => void; theme: CanvasTheme; compact?: boolean; disabled?: boolean }) {
     return (
-        <div role="group" aria-label={ariaLabel} className="flex items-center rounded-lg p-0.5" style={{ background: theme.node.panel }}>
+        <div role="group" aria-label={ariaLabel} className="flex shrink-0 items-center rounded-lg p-0.5" style={{ background: theme.node.panel }}>
             {options.map((option) => {
                 const selected = option.value === value;
                 return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} className={`rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? "min-w-7 px-1.5 py-1 text-[10px]" : "px-2.5 py-1.5 text-[11px]"}`} style={{ background: selected ? theme.accent.primary : "transparent", color: selected ? theme.accent.onPrimary : theme.node.muted }} onClick={() => onChange(option.value)}>{option.label}</button>;
@@ -219,39 +356,108 @@ function batchRowMentionReferences(row: CanvasBatchRow, columns: ReturnType<type
     });
 }
 
-function ReferenceThumbnail({ node, label, theme }: { node?: CanvasNodeData; label: string; theme: CanvasTheme }) {
-    if (!node || !hasNodeMedia(node)) return <EmptyThumbnail theme={theme} />;
+function ReferenceThumbnail({ node, label, theme, readOnly, rowId, columnIndex, isDraggingCell, onPickFile, onUploadFile, onPointerDown }: { node?: CanvasNodeData; label: string; theme: CanvasTheme; readOnly: boolean; rowId: string; columnIndex: number; isDraggingCell: boolean; onPickFile: () => void; onUploadFile: (file: File) => void; onPointerDown: (event: ReactPointerEvent) => void }) {
+    const filled = node && hasNodeMedia(node);
     const fallback = <EmptyThumbnail theme={theme} />;
     return (
-        <Tooltip title={`${label} · ${node.title || "图片"}`}>
-            <div className="relative size-14 overflow-hidden rounded-lg border" style={{ borderColor: theme.node.stroke }}>
-                <CachedResourceImage eager src={node.metadata?.previewContent || node.metadata?.content} storageKey={node.metadata?.storageKey} alt={node.title || "参考图"} className="size-14 object-cover" fallback={fallback} />
+        <Tooltip title={filled ? `${label} · ${node.title || "图片"}` : `${label} · 点击上传或拖入图片`}>
+            <button
+                type="button"
+                data-batch-reference-cell
+                data-row-id={rowId}
+                data-column-index={columnIndex}
+                className="relative size-16 overflow-hidden rounded-lg border"
+                style={{ borderColor: filled ? theme.node.stroke : "transparent", opacity: isDraggingCell ? 0.55 : 1 }}
+                disabled={readOnly}
+                onPointerDown={onPointerDown}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    if (!readOnly) onPickFile();
+                }}
+                onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/"));
+                    if (file && !readOnly) onUploadFile(file);
+                }}
+            >
+                {filled ? <CachedResourceImage eager src={node.metadata?.previewContent || node.metadata?.content} storageKey={node.metadata?.storageKey} alt={node.title || "参考图"} className="size-16 object-cover" fallback={fallback} /> : fallback}
                 <span className="absolute bottom-1 left-1 rounded px-1 py-0.5 text-[8px] font-medium text-white" style={{ background: "rgba(0,0,0,.58)" }}>{label}</span>
-            </div>
+            </button>
         </Tooltip>
     );
 }
 
-function EmptyThumbnail({ theme, compact = false }: { theme: CanvasTheme; compact?: boolean }): ReactNode {
-    return <div className={`grid shrink-0 place-items-center rounded-lg border ${compact ? "size-12" : "size-14"}`} style={{ borderColor: theme.node.stroke, color: theme.node.placeholder, background: `color-mix(in srgb, ${theme.node.text} 3%, transparent)` }}><ImageIcon className={compact ? "size-4" : "size-5"} /></div>;
+function ResultThumbnail({ output, status, theme, onFocus }: { output?: CanvasNodeData; status: ReturnType<typeof rowStatus>; theme: CanvasTheme; onFocus: () => void }) {
+    const filled = hasNodeMedia(output);
+    const tone = statusColor(status.tone, theme.node.stroke);
+    const title = filled ? `${status.label} · 点击定位到画布节点` : status.label;
+    return (
+        <Tooltip title={title}>
+            <button
+                type="button"
+                aria-label={title}
+                disabled={!output}
+                className="relative size-16 overflow-hidden rounded-lg border-2"
+                style={{ borderColor: tone, cursor: output ? "pointer" : "default" }}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    if (output) onFocus();
+                }}
+            >
+                {filled && output ? <CachedResourceImage eager src={output.metadata?.previewContent || output.metadata?.content} storageKey={output.metadata?.storageKey} alt="生成结果" className="size-16 object-cover" fallback={<EmptyThumbnail theme={theme} compact />} /> : <EmptyThumbnail theme={theme} compact />}
+                {status.loading ? <span className="absolute inset-0 grid place-items-center bg-black/35"><LoaderCircle className="size-4 animate-spin" style={{ color: tone }} /></span> : null}
+                <span className="absolute right-1 top-1 size-2 rounded-full" style={{ background: tone }} />
+            </button>
+        </Tooltip>
+    );
 }
 
-function rowReady(row: CanvasBatchRow, operation: CanvasBatchOperation, nodeById: Map<string, CanvasNodeData>) {
-    if (!row.enabled || !row.prompt.trim()) return false;
-    if (operation === "try_on" && row.inputNodeIds.length < 2) return false;
-    if (!row.inputNodeIds.length) return false;
-    return row.inputNodeIds.every((id) => hasNodeMedia(nodeById.get(id)));
+function statusColor(tone: RowStatusTone, fallback: string) {
+    if (tone === "success") return "var(--status-success)";
+    if (tone === "error") return "var(--status-error)";
+    if (tone === "loading") return "var(--status-loading)";
+    return fallback;
+}
+
+function EmptyThumbnail({ theme, compact = false }: { theme: CanvasTheme; compact?: boolean }): ReactNode {
+    const sizeClass = compact ? "size-12" : "size-16";
+    return (
+        <div
+            className={`grid shrink-0 place-items-center rounded-lg border border-dashed ${sizeClass}`}
+            style={{ borderColor: theme.node.stroke, color: theme.node.placeholder, background: `color-mix(in srgb, ${theme.node.text} 3%, transparent)` }}
+        >
+            {compact ? <ImageIcon className="size-4" /> : (
+                <span className="flex flex-col items-center gap-0.5">
+                    <Upload className="size-4" />
+                    <span className="text-[9px] leading-none">上传</span>
+                </span>
+            )}
+        </div>
+    );
+}
+
+function rowReady(row: CanvasBatchRow, table: CanvasBatchTableData, nodeById: Map<string, CanvasNodeData>) {
+    if (!row.enabled || !batchPromptForRow(table, row).trim()) return false;
+    const inputNodeIds = row.inputNodeIds.filter(Boolean);
+    if (table.operation === "try_on" && inputNodeIds.length < 2) return false;
+    if (!inputNodeIds.length) return false;
+    return inputNodeIds.every((id) => hasNodeMedia(nodeById.get(id)));
 }
 
 function hasNodeMedia(node?: CanvasNodeData) {
     return Boolean(node?.metadata?.content || node?.metadata?.storageKey);
 }
 
-function rowStatus(item: CanvasGenerationBatchItem | undefined, output: CanvasNodeData | undefined) {
-    if (hasNodeMedia(output)) return { label: "生成完成", loading: false, retryable: false };
-    if (item?.status === "failed") return { label: item.errorDetails || "生成失败", loading: false, retryable: true };
-    if (item?.status === "cancelled") return { label: "已停止", loading: false, retryable: false };
-    if (item && ["waiting", "submitting", "queued", "running"].includes(item.status)) return { label: item.status === "waiting" ? "等待中" : item.status === "submitting" ? "正在提交" : item.status === "queued" ? "已排队" : "生成中", loading: true, retryable: false };
-    if (output?.metadata?.status === "error") return { label: output.metadata.errorDetails || "生成失败", loading: false, retryable: false };
-    return { label: "待生成", loading: false, retryable: false };
+type RowStatusTone = "success" | "error" | "loading" | "idle";
+type RowStatus = { label: string; tone: RowStatusTone; loading: boolean; retryable: boolean };
+
+function rowStatus(item: CanvasGenerationBatchItem | undefined, output: CanvasNodeData | undefined): RowStatus {
+    if (hasNodeMedia(output)) return { label: "生成完成", tone: "success", loading: false, retryable: false };
+    if (item?.status === "failed") return { label: item.errorDetails || "生成失败", tone: "error", loading: false, retryable: true };
+    if (item?.status === "cancelled") return { label: "已停止", tone: "error", loading: false, retryable: false };
+    if (item && ["waiting", "submitting", "queued", "running"].includes(item.status)) return { label: item.status === "waiting" ? "等待中" : item.status === "submitting" ? "正在提交" : item.status === "queued" ? "已排队" : "生成中", tone: "loading", loading: true, retryable: false };
+    if (output?.metadata?.status === "error") return { label: output.metadata.errorDetails || "生成失败", tone: "error", loading: false, retryable: false };
+    return { label: "待生成", tone: "idle", loading: false, retryable: false };
 }

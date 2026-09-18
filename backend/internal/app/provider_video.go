@@ -287,7 +287,7 @@ func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput, pol
 
 func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationInput, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	providerName := "Seedance"
-	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) {
+	if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) {
 		providerName = "火山方舟"
 	}
 	// Agent Plan 与 Videos API 使用相同的恢复合同：已有任务只查询，不重复创建。
@@ -299,7 +299,7 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 		if err != nil {
 			return nil, err
 		}
-		if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) {
+		if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) {
 			for _, item := range content {
 				if item["type"] == "image_url" {
 					item["role"] = "reference_image"

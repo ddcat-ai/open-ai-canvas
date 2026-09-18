@@ -1,8 +1,9 @@
-import { Coins, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Link, useLocation } from "react-router";
 
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
+import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -48,7 +49,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
                 {creditsEnabled ? <button type="button" className="app-workspace-topbar-credit-pill" aria-label={`打开积分中心，可用 ${balance} 积分`} onClick={() => openWorkspaceWallet()}>
-                    <Coins aria-hidden="true" />
+                    <WorkspaceCreditGiftMark />
                     <span>积分</span>
                     <strong>{balance}</strong>
                 </button> : null}

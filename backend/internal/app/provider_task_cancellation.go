@@ -194,15 +194,15 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 }
 
 func supportsProviderCancellation(interfaceType string) bool {
-	return interfaceType == string(model.ChannelInterfaceGeminiVeo) || interfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
+	return interfaceType == string(model.ChannelInterfaceGeminiVeo) || model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(interfaceType))
 }
 
 func cancelProviderTask(ctx context.Context, config providerConfig, providerRequestID string) error {
-	switch config.InterfaceType {
-	case string(model.ChannelInterfaceGeminiVeo):
+	switch {
+	case config.InterfaceType == string(model.ChannelInterfaceGeminiVeo):
 		path := "/" + strings.TrimLeft(providerRequestID, "/") + ":cancel"
 		return postGeminiJSON(ctx, config, path, map[string]any{}, &map[string]any{})
-	case string(model.ChannelInterfaceVolcengineArkVideo):
+	case model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(config.InterfaceType)):
 		path := "/contents/generations/tasks/" + url.PathEscape(providerRequestID)
 		return deleteProviderTask(ctx, config, path)
 	default:
@@ -228,8 +228,8 @@ func deleteProviderTask(ctx context.Context, config providerConfig, path string)
 }
 
 func queryProviderCancellation(ctx context.Context, config providerConfig, providerRequestID string) (providerCancellationOutcome, string, error) {
-	switch config.InterfaceType {
-	case string(model.ChannelInterfaceGeminiVeo):
+	switch {
+	case config.InterfaceType == string(model.ChannelInterfaceGeminiVeo):
 		// Gemini 用 operation.error 表示取消终态，此处必须保留该字段再判断，
 		// 不能让通用 JSON 解包提前把它转换成请求失败。
 		var operation geminiOperation
@@ -248,7 +248,7 @@ func queryProviderCancellation(ctx context.Context, config providerConfig, provi
 			return providerCancellationFailed, firstNonEmpty(message, "failed"), nil
 		}
 		return providerCancellationSucceeded, "succeeded", nil
-	case string(model.ChannelInterfaceVolcengineArkVideo):
+	case model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(config.InterfaceType)):
 		var state map[string]any
 		if err := getJSON(ctx, config, "/contents/generations/tasks/"+url.PathEscape(providerRequestID), &state); err != nil {
 			return "", "", err

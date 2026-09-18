@@ -111,13 +111,13 @@ func TestUndoCloudAgentCanvasRejectsChangedCanvasAndSubmittedTask(t *testing.T) 
 	afterHash := cloudAgentCanvasHash(changedDoc)
 	// A user edit after the Agent mutation must make the compare-and-restore fail.
 	changed.PayloadJSON = `{"nodes":[{"id":"user-node","type":"text","title":"用户编辑","metadata":{"content":"后来修改"}}]}`
-	if err := s.repo.CompareSaveCreationCanvas(changed, changed.PayloadJSON); err == nil {
+	if err := saveCreationCanvasWithHistory(s.repo, changed, changed.PayloadJSON); err == nil {
 		t.Fatal("test setup unexpectedly saved with the new value as previous snapshot")
 	}
 	latest, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
 	previous := latest.PayloadJSON
 	latest.PayloadJSON = `{"nodes":[{"id":"user-node","type":"text","title":"用户编辑","metadata":{"content":"后来修改"}}]}`
-	if err := s.repo.CompareSaveCreationCanvas(latest, previous); err != nil {
+	if err := saveCreationCanvasWithHistory(s.repo, latest, previous); err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, afterHash, "冲突")

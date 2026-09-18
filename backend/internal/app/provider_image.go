@@ -28,7 +28,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineJiMengImage) {
 		return runVolcengineJiMengImageTask(ctx, input)
 	}
-	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkImage) {
+	if model.IsVolcengineArkImageProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) {
 		return runVolcengineArkImageTask(ctx, input)
 	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {

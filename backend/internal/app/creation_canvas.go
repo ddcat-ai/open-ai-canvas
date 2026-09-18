@@ -246,7 +246,7 @@ func (s *Service) CommitCreationCanvas(userID, id string, req CreationRequest) (
 		if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", false, int64(len(req.Document)-len(previous)), policy.Resource); err != nil {
 			return err
 		}
-		if err = repo.CompareSaveCreationCanvas(canvas, previous); err != nil {
+		if err = saveCreationCanvasWithHistory(repo, canvas, previous); err != nil {
 			return err
 		}
 		out = map[string]any{"snapshotHash": creationHash(doc)}

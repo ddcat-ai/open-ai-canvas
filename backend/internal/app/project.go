@@ -609,7 +609,7 @@ func (s *Service) UnlinkCanvasProject(userID string, projectID string, canvasID 
 		return err
 	}
 	// 关系列、同步快照和更新时间必须原子更新，否则浏览器会用旧 projectId 把关系重新写回。
-	return s.repo.UnassignCanvasFromProject(userID, projectID, canvas.ID, payloadJSON, now)
+	return s.repo.UnassignCanvasFromProject(userID, projectID, canvas.ID, payloadJSON, now, canvas.Revision)
 }
 
 func canvasPayloadWithoutProject(payloadJSON string, updatedAt time.Time) (string, error) {

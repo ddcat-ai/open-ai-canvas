@@ -20,6 +20,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(
 		&model.Project{}, &model.ProjectUnit{}, &model.Resource{}, &model.Asset{}, &model.AssetVersion{}, &model.AssetRepresentation{},
 		&model.CanvasProject{}, &model.StyleProfile{}, &model.ProjectAssetCandidate{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{},
+		&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{},
 		&model.Shot{}, &model.ShotArtifact{}, &model.VoiceProfile{},
 		&model.Task{}, &model.TaskLog{}, &model.Result{},
 		&model.CreationRun{}, &model.CreationSubmission{},

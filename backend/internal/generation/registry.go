@@ -70,7 +70,7 @@ func OfficialDeclarativeVideoInterface(interfaceType string) (string, bool) {
 		return "NewAPI 媒体任务", true
 	case string(model.ChannelInterfaceXAIVideo):
 		return "xAI", true
-	case string(model.ChannelInterfaceVolcengineArkVideo):
+	case string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo):
 		return "火山方舟", true
 	case string(model.ChannelInterfaceVolcengineJiMengVideo):
 		return "即梦", true
@@ -91,6 +91,8 @@ func OfficialDeclarativeImageInterface(interfaceType string) (string, bool) {
 		return "Grok Images", true
 	case string(model.ChannelInterfaceVolcengineArkImage):
 		return "火山方舟图片", true
+	case string(model.ChannelInterfaceVolcengineArkAgentPlanImage):
+		return "火山方舟 Agent Plan 图片", true
 	case string(model.ChannelInterfaceVolcengineJiMengImage):
 		return "即梦图片", true
 	default:

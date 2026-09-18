@@ -53,7 +53,7 @@ export function createAgentCanvasSync(options: Options) {
             if (patch && patch.canvasId === options.canvasId) {
                 supportsPatches = true;
                 patches.push(patch);
-            } else if (!supportsPatches && (event.type === "canvas_updated" || event.type === "generation_task_created" || event.type === "tool_failed" || event.type === "run_failed" || (event.type === "tool_completed" && ["canvas_apply_ops", "generate_media"].includes(String(event.payload.toolName))))) {
+            } else if (event.type === "canvas_updated" || event.type === "canvas_undone" || (!supportsPatches && (event.type === "generation_task_created" || event.type === "tool_failed" || event.type === "run_failed" || (event.type === "tool_completed" && ["canvas_apply_ops", "generate_media"].includes(String(event.payload.toolName)))))) {
                 needsRefresh = true;
             }
             schedule();

@@ -10639,3 +10639,218 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
         grid-template-columns: 100px minmax(0, 1fr);
     }
 }
+
+/* 常驻通知标题：富文本编辑区与明暗两态预览。
+ * 预览固定明暗两套底色，编辑时不受当前主题影响，便于同时校验两种主题下的可读性。 */
+.admin-banner-title-editor {
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+    padding: 8px 12px;
+    transition: border-color 160ms ease;
+}
+
+.admin-banner-title-editor:focus-within {
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--admin-card-border));
+}
+
+.admin-banner-title-editor .ProseMirror {
+    min-height: 26px;
+    outline: none;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.admin-banner-title-editor .ProseMirror p {
+    margin: 0;
+}
+
+.admin-banner-title-editor .ProseMirror p.is-editor-empty:first-child::before {
+    float: left;
+    height: 0;
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    content: attr(data-placeholder);
+    pointer-events: none;
+}
+
+/* 预览容器强制指定四种通知类型的明 / 暗底色，不依赖页面当前主题。 */
+.admin-banner-title-preview-light {
+    --notice-banner-surface-notice: var(--palette-banner-notice-500);
+    --notice-banner-surface-activity: var(--palette-banner-activity-500);
+    --notice-banner-surface-update: var(--palette-banner-update-500);
+    --notice-banner-surface-warning: var(--palette-banner-warning-500);
+}
+
+.admin-banner-title-preview-dark {
+    --notice-banner-surface-notice: var(--palette-banner-notice-700);
+    --notice-banner-surface-activity: var(--palette-banner-activity-700);
+    --notice-banner-surface-update: var(--palette-banner-update-700);
+    --notice-banner-surface-warning: var(--palette-banner-warning-700);
+}
+
+/* 常驻通知标题图标选择器 */
+.admin-banner-icon-picker {
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+}
+
+.admin-banner-icon-picker-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: var(--admin-layer-1);
+}
+
+.admin-banner-icon-picker-body {
+    max-height: 208px;
+    overflow-y: auto;
+    padding: 2px 8px 8px;
+}
+
+.admin-banner-icon-picker-group-label {
+    display: block;
+    padding: 8px 2px 4px;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+}
+
+.admin-banner-icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+    gap: 4px;
+}
+
+.admin-banner-icon-picker-option {
+    display: grid;
+    height: 34px;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease;
+}
+
+.admin-banner-icon-picker-option:hover {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: var(--foreground);
+}
+
+/* emoji 素材项：emoji 是文本字符，用原生字号渲染（彩色字形不受 color 影响） */
+.admin-banner-icon-picker-option-emoji {
+    font-size: 16px;
+    line-height: 1;
+}
+
+
+.admin-banner-icon-picker-option.is-active {
+    border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+    background: var(--control-selected-bg);
+    color: var(--foreground);
+}
+
+.admin-banner-icon-picker-option:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-banner-icon-picker-empty {
+    padding: 14px 2px;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+
+/* 通知类型选择：卡片直接铺出该类型的真实底色，比文字描述颜色更直观。 */
+.admin-banner-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.admin-banner-type-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+    padding: 8px 10px 10px;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 160ms ease,
+        background-color 160ms ease;
+}
+
+.admin-banner-type-card:hover {
+    background: color-mix(in srgb, var(--foreground) 4%, var(--admin-layer-1));
+}
+
+.admin-banner-type-card.is-active {
+    border-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+    background: var(--control-selected-bg);
+}
+
+.admin-banner-type-card:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-banner-type-card-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--foreground);
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+
+.admin-banner-type-card-check {
+    margin-left: auto;
+    color: var(--foreground);
+}
+
+.admin-banner-type-card-hint {
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+
+/* 类型卡片上的真实底色条；颜色由卡片的 data-banner-type 选中对应 token。 */
+.admin-banner-type-card-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #ffffff;
+    font-size: var(--fs-micro);
+    line-height: 1.4;
+}
+
+.admin-banner-type-card[data-banner-type="notice"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-notice);
+}
+
+.admin-banner-type-card[data-banner-type="activity"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-activity);
+}
+
+.admin-banner-type-card[data-banner-type="update"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-update);
+}
+
+.admin-banner-type-card[data-banner-type="warning"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-warning);
+}
+

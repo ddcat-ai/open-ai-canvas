@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 func isPublicMediaURL(value string) bool {
@@ -13,8 +15,8 @@ func isPublicMediaURL(value string) bool {
 }
 
 func isSeedanceVideoConfig(config providerConfig) bool {
-	model := strings.ToLower(config.Model)
-	return strings.Contains(model, "seedance") || strings.Contains(model, "doubao-seedance") || isArkPlanVideoConfig(config)
+	modelName := strings.ToLower(config.Model)
+	return strings.Contains(modelName, "seedance") || strings.Contains(modelName, "doubao-seedance") || isArkPlanVideoConfig(config)
 }
 
 func isGrokVideoConfig(config providerConfig) bool {
@@ -22,7 +24,15 @@ func isGrokVideoConfig(config providerConfig) bool {
 }
 
 func isArkPlanVideoConfig(config providerConfig) bool {
-	return strings.Contains(strings.ToLower(config.BaseURL), "/api/plan/v3")
+	if !strings.Contains(strings.ToLower(config.BaseURL), "/api/plan/v3") {
+		return false
+	}
+	// Agent Plan 图片与视频共用 /api/plan/v3；按协议排除图片，避免 Seedream 误走视频/可信素材路径。
+	iface := strings.TrimSpace(config.InterfaceType)
+	if iface == string(model.ChannelInterfaceVolcengineArkImage) || iface == "volcengine-ark-agent-plan-image" {
+		return false
+	}
+	return true
 }
 
 func normalizeImageQuality(value string) string {

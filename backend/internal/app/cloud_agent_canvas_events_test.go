@@ -84,6 +84,22 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 				t.Fatalf("submission failed to lock the existing draft: %+v", submission)
 			}
 			completion := agentCanvasPatchForOperation(t, state, "generate_media_complete")["canvasPatch"].(map[string]any)
+			previousRevision := patch["baseRevision"]
+			for _, delta := range []map[string]any{patch, submission, completion} {
+				if delta["baseRevision"] != previousRevision {
+					t.Fatalf("discontinuous Agent revision: %+v", delta)
+				}
+				base, ok := delta["baseRevision"].(float64)
+				next, nextOK := delta["revision"].(float64)
+				if !ok || !nextOK || next != base+1 {
+					t.Fatalf("invalid Agent revisions: %+v", delta)
+				}
+				previousRevision = delta["revision"]
+			}
+			history, err := s.CanvasHistory("user", "agent-canvas")
+			if err != nil || len(history.Snapshots) == 0 || float64(history.CurrentRevision) != previousRevision {
+				t.Fatalf("Agent save did not retain history/revision: %+v %v", history, err)
+			}
 			changes = creationMaps(completion["nodes"])
 			if len(changes) != 1 || len(creationMaps(completion["connections"])) != 0 {
 				t.Fatalf("completion includes unrelated canvas data: %+v", completion)
@@ -124,6 +140,34 @@ func TestCloudAgentMediaImageSourceHasActionableCorrection(t *testing.T) {
 	args.SourceNodeID = ""
 	if _, _, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(args)); err != nil {
 		t.Fatalf("reference-only image-to-video should be valid: %v", err)
+	}
+}
+
+func TestCloudAgentDeletionInvalidatesTheWholeCanvasRevision(t *testing.T) {
+	s, _, _ := agentMediaFixture(t)
+	canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := canvas.PayloadJSON
+	doc, err := creationDocument(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := creationMaps(doc["nodes"])
+	doc["nodes"] = nodes[1:]
+	nodes[1]["title"] = "Also updated"
+	raw, _ := json.Marshal(doc)
+	canvas.PayloadJSON = string(raw)
+	if err := saveCreationCanvasWithHistory(s.repo, canvas, previous); err != nil {
+		t.Fatal(err)
+	}
+	state := cloudAgentRuntime{}
+	if err := emitCloudAgentCanvasChange(s.repo, "run", &state, cloudAgentMutationInput{UserID: "user", CanvasID: canvas.ID, BeforeJSON: previous}); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Events) != 1 || state.Events[0].Payload["requiresRefresh"] != true || state.Events[0].Payload["canvasPatch"] != nil {
+		t.Fatalf("incomplete delta would acknowledge a deleted node: %+v", state.Events)
 	}
 }
 

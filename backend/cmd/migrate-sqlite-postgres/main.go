@@ -135,10 +135,14 @@ func primaryKeyColumn[T any](db *gorm.DB) (string, error) {
 	if err := statement.Parse(new(T)); err != nil {
 		return "", err
 	}
-	if len(statement.Schema.PrimaryFields) != 1 {
-		return "", fmt.Errorf("表 %s 必须有且只有一个主键", statement.Schema.Table)
+	if len(statement.Schema.PrimaryFields) == 0 {
+		return "", fmt.Errorf("表 %s 必须有主键", statement.Schema.Table)
 	}
-	return statement.Schema.PrimaryFields[0].DBName, nil
+	columns := make([]string, 0, len(statement.Schema.PrimaryFields))
+	for _, field := range statement.Schema.PrimaryFields {
+		columns = append(columns, field.DBName)
+	}
+	return strings.Join(columns, ", "), nil
 }
 
 var timeType = reflect.TypeOf(time.Time{})
@@ -279,11 +283,14 @@ func migrations() []tableMigration {
 		migrateTable[model.WorkflowStepTask]("workflow_step_tasks"),
 		migrateTable[model.ProductionTaskLink]("production_task_links"),
 		migrateTable[model.CanvasProject]("canvas_projects"),
+		migrateTable[model.CanvasSnapshot]("canvas_snapshots"),
+		migrateTable[model.CanvasSnapshotResource]("canvas_snapshot_resources"),
 		migrateTable[model.CanvasShare]("canvas_shares"),
 		migrateTable[model.PromptTemplate]("prompt_templates"),
 		migrateTable[model.UserPromptCustomization]("user_prompt_customizations"),
 		migrateTable[model.Announcement]("announcements"),
 		migrateTable[model.UserAnnouncementRead]("user_announcement_reads"),
+		migrateTable[model.BannerAnnouncement]("banner_announcements"),
 		migrateTable[model.CreationRun]("creation_runs"),
 		migrateTable[model.CreationSubmission]("creation_submissions"),
 		migrateTable[model.Task]("tasks"),

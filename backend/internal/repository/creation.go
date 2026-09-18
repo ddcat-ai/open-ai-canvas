@@ -105,17 +105,7 @@ func (r *Repository) RevokeCreationSubmissions(runID string) error {
 	return r.db.Model(&model.CreationSubmission{}).Where("run_id = ? AND task_id IS NULL AND revoked_at IS NULL", runID).Update("revoked_at", time.Now()).Error
 }
 func (r *Repository) CreateCreationCanvas(canvas *model.CanvasProject) error {
-	return r.db.Create(canvas).Error
-}
-func (r *Repository) CompareSaveCreationCanvas(canvas *model.CanvasProject, previous string) error {
-	result := r.db.Model(&model.CanvasProject{}).Where("id = ? AND user_id = ? AND payload_json = ?", canvas.ID, canvas.UserID, previous).Updates(map[string]any{"payload_json": canvas.PayloadJSON, "title": canvas.Title, "updated_at": time.Now()})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrCreationConflict
-	}
-	return nil
+	return r.UpsertCanvasProject(canvas)
 }
 
 // Capture server-side configuration versions, never channel credentials.

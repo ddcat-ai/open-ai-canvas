@@ -2,23 +2,26 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"time"
 
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/canvas"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 type (
-	CanvasShareRequest        = canvas.CanvasShareRequest
-	CanvasShareStatus         = canvas.CanvasShareStatus
-	PublicCanvasShare         = canvas.PublicCanvasShare
-	AssetsSyncRequest         = canvas.AssetsSyncRequest
-	CanvasProjectsSyncRequest = canvas.CanvasProjectsSyncRequest
-	UserDataSummary           = canvas.UserDataSummary
-	UserDataSnapshot          = canvas.UserDataSnapshot
-	CanvasLibrarySummary      = canvas.CanvasLibrarySummary
-	CanvasLibraryPage         = canvas.CanvasLibraryPage
+	CanvasShareRequest   = canvas.CanvasShareRequest
+	CanvasShareStatus    = canvas.CanvasShareStatus
+	PublicCanvasShare    = canvas.PublicCanvasShare
+	AssetsSyncRequest    = canvas.AssetsSyncRequest
+	CanvasHistoryList    = canvas.CanvasHistoryList
+	UserDataSummary      = canvas.UserDataSummary
+	UserDataSnapshot     = canvas.UserDataSnapshot
+	CanvasLibrarySummary = canvas.CanvasLibrarySummary
+	CanvasLibraryPage    = canvas.CanvasLibraryPage
 )
 
 type canvasHost struct {
@@ -207,8 +210,32 @@ func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
 	return s.canvasDomain().DeleteUserCanvasProject(userID, id)
 }
 
-func (s *Service) ReplaceUserCanvasProjects(userID string, req CanvasProjectsSyncRequest) ([]json.RawMessage, error) {
-	return s.canvasDomain().ReplaceUserCanvasProjects(userID, req)
+func (s *Service) CanvasHistory(userID, canvasID string) (CanvasHistoryList, error) {
+	return s.canvasDomain().CanvasHistory(userID, canvasID)
+}
+
+func (s *Service) CanvasHistorySnapshot(userID, canvasID, snapshotID string) (*model.CanvasSnapshot, error) {
+	return s.canvasDomain().CanvasHistorySnapshot(userID, canvasID, snapshotID)
+}
+
+func (s *Service) RestoreCanvasHistory(userID, canvasID, snapshotID string, revision *int64) (UserDataSummary, error) {
+	return s.canvasDomain().RestoreCanvasHistory(userID, canvasID, snapshotID, revision)
+}
+
+func saveCreationCanvasWithHistory(repo *repository.Repository, project *model.CanvasProject, previous string) error {
+	before, err := repo.CanvasProjectForUser(project.UserID, project.ID)
+	if err != nil {
+		return err
+	}
+	if before.PayloadJSON != previous || before.Revision != project.Revision {
+		return repository.ErrCreationConflict
+	}
+	project.UpdatedAt = time.Now().UTC()
+	err = canvas.SaveDocumentWithHistory(repo, before, project, "automatic")
+	if errors.Is(err, repository.ErrCanvasRevisionConflict) {
+		return repository.ErrCreationConflict
+	}
+	return err
 }
 
 func (s *Service) UserAssetsByIDs(userID string, ids []string) ([]json.RawMessage, error) {

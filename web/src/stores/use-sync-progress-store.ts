@@ -4,8 +4,9 @@ export type SyncProjectProgress = {
     projectId: string;
     total: number;
     completed: number;
-    phase: "uploading" | "saving" | "done" | "error";
+    phase: "pending" | "uploading" | "saving" | "done" | "error" | "conflict";
     message?: string;
+    draftCount?: number;
 };
 
 type SyncProgressStore = {
@@ -55,7 +56,7 @@ export const useSyncProgressStore = create<SyncProgressStore>((set, get) => ({
     clearAll: () => set({ syncingProjects: {} }),
     isAnySyncing: () => {
         const list = Object.values(get().syncingProjects);
-        return list.some((item) => item.phase === "uploading" || item.phase === "saving");
+        return list.some((item) => item.phase !== "done");
     },
 }));
 

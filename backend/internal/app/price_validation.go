@@ -14,7 +14,7 @@ func ValidateChannelModelPrice(billingMode string, capability string, protocol m
 		return unitPrice >= 0
 	case "token":
 		if capability == "video" {
-			return protocol == model.ChannelInterfaceVolcengineArkVideo && inputPrice >= 0 && outputPrice >= 0 && cachedPrice >= 0
+			return model.IsVolcengineArkVideoProtocol(protocol) && inputPrice >= 0 && outputPrice >= 0 && cachedPrice >= 0
 		}
 		if capability != "" && capability != "text" {
 			return false

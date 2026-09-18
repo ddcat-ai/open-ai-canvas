@@ -599,6 +599,36 @@ func TestOfficialArkSeedreamMapsAspectRatioToPixelSize(t *testing.T) {
 	}
 }
 
+func TestOfficialArkAgentPlanPluginsUsePlanPaths(t *testing.T) {
+	image := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedream.yingce-plugin", "volcengine-ark-agent-plan-image")
+	imageCreate, err := image.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedream-5-0-260128", Prompt: "circle", AspectRatio: "1:1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imageCreate.Path != "/api/plan/v3/images/generations" {
+		t.Fatalf("agent plan image create = %#v", imageCreate)
+	}
+	if body := manifestTestBody(t, imageCreate); body["size"] != "2048x2048" {
+		t.Fatalf("agent plan image size = %#v", body["size"])
+	}
+
+	video := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedance.yingce-plugin", "volcengine-ark-agent-plan-video")
+	videoCreate, err := video.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedance-2-0-260128", Prompt: "walk", AspectRatio: "16:9", Resolution: "720p", Duration: 5}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if videoCreate.Path != "/api/plan/v3/contents/generations/tasks" {
+		t.Fatalf("agent plan video create = %#v", videoCreate)
+	}
+	poll, err := video.BuildPoll(context.Background(), PollContext{TaskID: "task-1", Model: "doubao-seedance-2-0-260128"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poll.Path != "/api/plan/v3/contents/generations/tasks/task-1" {
+		t.Fatalf("agent plan video poll = %#v", poll)
+	}
+}
+
 func TestOfficialGeminiImageMapsQualityToImageSize(t *testing.T) {
 	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
 	tests := []struct {
@@ -750,6 +780,30 @@ func TestOfficialOpenAIAudioSpeedDefaultsInvalidAndZeroValues(t *testing.T) {
 			body := manifestTestBody(t, spec)
 			if got := body["speed"]; !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("speed = %#v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestOfficialArkSeedreamParsesB64JSONAsDataURL(t *testing.T) {
+	for _, tc := range []struct {
+		packageName, providerID string
+	}{
+		{"volcengine-ark-seedream.yingce-plugin", "volcengine-ark-image"},
+		{"volcengine-ark-agent-plan-seedream.yingce-plugin", "volcengine-ark-agent-plan-image"},
+	} {
+		t.Run(tc.providerID, func(t *testing.T) {
+			adapter := officialPackageAdapter(t, tc.packageName, tc.providerID)
+			result, err := adapter.ParseCreate(context.Background(), []byte(`{"created":1,"data":[{"b64_json":"aW1hZ2U=","output_format":"jpeg","size":"1824x1024"}]}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Result == nil || len(result.Result.Images) != 1 {
+				t.Fatalf("result = %#v", result.Result)
+			}
+			dataURL := result.Result.Images[0].DataURL
+			if dataURL != "data:image/jpeg;base64,aW1hZ2U=" {
+				t.Fatalf("DataURL = %q, want jpeg data URL from b64_json + output_format", dataURL)
 			}
 		})
 	}

@@ -23,13 +23,27 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 19。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上。已发布版本的实现和校验和不得修改。
+当前结构版本为 23。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。已发布版本的实现和校验和不得修改。
 
 历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
 
 升级前备份数据库，迁移命令必须沿用部署实际配置的数据库连接和数据目录。开发环境启用自动迁移时重新启动新代码即可；关闭自动迁移的部署先使用新构建的 `migrate-schema up`，然后 `migrate-schema verify`，成功后启动 Backend。迁移与记录写入在事务中执行；此修复不提供降级迁移，回退旧二进制可能无法识别历史顺序，应恢复匹配的备份和版本，不手工改迁移表。
 
 版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
+
+## 画布版本与快照
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `canvas_projects` | 当前画布内容及递增 `revision`（非空，默认 1） | 客户端新建传 0；后续写入按用户、ID、原版本原子校验，成功才加 1 |
+| `canvas_snapshots` | 结构 JSON、版本、标题、节点/连线数、字节数、内容时间和备份时间 | `(canvas_id, revision)` 唯一；列表只读摘要，正文按需加载；不复制媒体文件 |
+| `canvas_snapshot_resources` | 历史快照引用的资源 | `(snapshot_id, resource_id)` 联合主键；资源外键禁止删除被引用记录 |
+
+浏览器、云端 Agent 和创作任务共用保存事务。内容变化时备份旧内容，普通备份最短间隔 5 分钟，每画布最多保留 20 份；恢复前强制备份当前内容。版本号每次成功写入递增，快照按间隔采样，两者不是一一对应。画布关联项目或解除关联同样推进版本，使旧页面的全量保存失效。
+
+恢复历史保留当前画布 ID、归属和项目关联，按当前版本做 CAS 后形成新版本；不会把 revision 改回历史值。快照写入、引用保护、恢复和保留数量清理在同一事务内完成。资源删除检查与异步物理删除任务均检查历史引用（包括同对象的资源别名），仍被历史引用的媒体延后回收；删除画布时清理该画布快照及引用。
+
+升级不改变已有画布正文，也不会凭空产生升级前历史。前后端应一起升级：旧客户端缺少 revision 的保存返回 428，需刷新客户端。
 
 ## 已部署 PostgreSQL 的素材 bytes 修复
 
@@ -209,8 +223,17 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | `announcements` | 保存管理员发布的系统公告 | `pinned` 只改变排序；`image_resource_id` 只能绑定由当前管理员上传并在发布事务中消费的公告配图草稿 |
 | `announcement_image_drafts` | 标记尚未发布的公告配图资源 | 发布/更新事务消费草稿；取消编辑显式回收，超过 24 小时的异常遗留草稿由后台清理 |
 | `user_announcement_reads` | 保存用户已读状态 | 同一用户和公告唯一；公告重新发布时清除旧已读记录 |
+| `banner_announcements` | 保存首页顶部常驻展示的滚动通知条 | 与系统公告完全独立：只有标题、图标与跳转链接，无正文、无配图、无已读状态；`link` 仅接受 `http(s)` 外链或 `/` 开头的站内路径；`status` 为 `active` / `disabled`，`starts_at` / `ends_at` 构成生效窗口（可预约未来开始）；`title_runs` 以 JSON 文本保存标题的样式分段；`notice_type` 决定通知条底色，`icon` 是标题前的图标键 |
 
 活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。公告只要求标题，正文和配图均可为空。用户首次进入工作区时会自动看到未读公告，可以只关闭本次或选择今日不再提醒；主动打开公告中心后才会写入服务端已读状态。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
+
+常驻通知的标题支持按分段设置样式：`title_runs` 是可选的 JSON 数组，每项为 `{ text, fontSize?, fontWeight?, fontFamily?, color? }`，只在有分段时写入，历史数据与纯文本标题保持为空。后端在写入前统一收口取值——字号 10-20、字重 400/500/600/700、字体 `sans` / `serif` / `mono`、颜色 `#RRGGBB`，并合并相邻同样式分段；标题总字数上限 120 与纯文本标题一致。`title` 列始终保存由分段拼接出的纯文本，列表展示与关键字检索不受样式影响，通知条渲染分段时也不依赖该列。
+
+常驻通知的通知类型与标题图标同样是白名单枚举。`notice_type` 取 `notice`（公告）/ `activity`（活动）/ `update`（更新）/ `warning`（警告），决定通知条底色——四种类型在 `globals.css` 里各有一组明暗两档色值，浅色档按白字 4.5:1 反推，深色档统一压到 7:1 以上。`icon` 取前端 `lib/announcements/banner-notice` 图标库里的键（kebab-case，当前 42 个），前端按下标取 lucide 组件渲染。两个字段都允许为空，后端在写入时补齐默认值（`notice` / `megaphone`），保证行数据始终是可直接渲染的具体取值；白名单在 `backend/internal/app/announcement.go`，与前端注册表的一致性由 `web/test/banner-notice.test.ts` 双向校验，改任一侧都会让测试失败。
+
+常驻通知由管理后台「运营 → 常驻通知」维护，公开接口 `GET /api/banner-announcements` 按生效窗口返回 `active` 条目（`starts_at <= now <= ends_at`，空窗口视为长期有效），前台工作台顶部布局层轮播展示；点击按 `link` 跳转：外链新窗口打开，站内路径前端路由跳转，无链接则不可点击。
+
+后台编辑弹窗可选中通知类型（卡片上直接铺出该类型的真实底色）、选中标题文字直接调整样式，并通过工具栏「图标」按钮在光标处插入 emoji 素材（可插入多个、任意位置），全部实时联动到深浅两套主题的预览（含文字对比度提示）。预览与前台通知条共用 `components/layout/banner-announcement-content.tsx` 的展示单元，因此「预览即前台结果」；标题在通知条内固定单行展示，超长按可用宽度裁切。通知条默认不显示任何图标，是否带图标完全由标题内容决定。
 
 ## 资源存储
 

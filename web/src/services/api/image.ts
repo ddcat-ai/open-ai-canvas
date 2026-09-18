@@ -6,6 +6,7 @@ import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
+import { isVolcengineArkImageProtocol } from "@/lib/model-protocols";
 import { aiApiUrl, aiHeaders, imageChannelTransport, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
 
 const IMAGE_OUTPUT_FORMAT = "png";
@@ -94,7 +95,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     }
     const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
     const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
-    const isVolcengineArk = requestConfig.interfaceType === "volcengine-ark-image";
+    const isVolcengineArk = isVolcengineArkImageProtocol(requestConfig.interfaceType);
     const normalizedRequestSize = requestSize?.parameter === "size" && isVolcengineArk ? { ...requestSize, value: normalizeVolcengineArkImageSize(requestSize.value)! } : requestSize;
     try {
         const payload = isVolcengineArk
@@ -174,7 +175,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             throw new Error(readAxiosError(error, "Grok 图片编辑失败"));
         }
     }
-    if (requestConfig.interfaceType === "volcengine-ark-image") {
+    if (isVolcengineArkImageProtocol(requestConfig.interfaceType)) {
         if (mask) throw new Error("火山方舟图片协议不支持蒙版编辑，请移除蒙版后重试");
         const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
         const sizeRequest = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);

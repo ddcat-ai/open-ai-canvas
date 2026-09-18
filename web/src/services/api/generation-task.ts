@@ -95,7 +95,7 @@ export async function runBackendGenerationTask(
     throwIfAborted(signal);
     assertClientPromptLimit(mode, prompt, config, metadata);
     assertBackendRuntimeConfigured(config, mode);
-    const prepared = await prepareGenerationReferences({ config, referenceImages, referenceVideos, referenceAudios, mask });
+    const prepared = await prepareGenerationReferences({ config, mode, referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
     return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking, clientOperationId, retryOf, attemptGroupId }, prepared, dependencies);
 }
@@ -233,12 +233,14 @@ function assertClientPromptLimit(mode: BackendGenerationMode, prompt: string, co
 
 async function prepareGenerationReferences({
     config,
+    mode,
     referenceImages = [],
     referenceVideos = [],
     referenceAudios = [],
     mask,
-}: Pick<BackendGenerationTaskOptions, "config" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
-    const preferArkAssetUrl = usesArkVideoAssetReference(config);
+}: Pick<BackendGenerationTaskOptions, "config" | "mode" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
+    // asset:// 仅视频生成可用；Agent Plan Seedream 与 Seedance 共用 /api/plan/v3，不能按 BaseURL 误判。
+    const preferArkAssetUrl = mode === "video" && usesArkVideoAssetReference(config);
     const preparedImages = await Promise.all(referenceImages.map((image) => prepareBackendImageReference(image, preferArkAssetUrl)));
     const preparedVideos = await Promise.all(referenceVideos.map(prepareBackendMediaReference));
     const preparedAudios = await Promise.all(referenceAudios.map(prepareBackendMediaReference));
@@ -249,7 +251,10 @@ async function prepareGenerationReferences({
 // 与后端 isArkPrivateAssetVideoConfig 对齐：方舟视频渠道允许参考图直接 asset:// 引用，
 // 跳过可信素材上传同步（适合已录入方舟素材 ID 的素材，例如被授权的真人像素材）。
 function usesArkVideoAssetReference(config: AiConfig) {
-    return resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-ark-video" || isArkPlanBaseUrl(config.baseUrl || "");
+    const interfaceType = resolveModelRequestConfig(config, config.model).interfaceType;
+    if (interfaceType === "volcengine-ark-video" || interfaceType === "volcengine-ark-agent-plan-video") return true;
+    if (interfaceType === "volcengine-ark-image" || interfaceType === "volcengine-ark-agent-plan-image") return false;
+    return isArkPlanBaseUrl(config.baseUrl || "");
 }
 
 async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {

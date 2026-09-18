@@ -59,7 +59,12 @@ const seedancePixels = {
 
 export function isSeedanceVideoConfig(config: AiConfig | Pick<AiConfig, "model" | "videoModel" | "baseUrl">) {
     const requestConfig = "channels" in config ? resolveModelRequestConfig(config, config.model || config.videoModel) : config;
-    return isSeedanceVideoModel(modelOptionName(requestConfig.model || requestConfig.videoModel)) || isArkPlanBaseUrl(requestConfig.baseUrl);
+    // Agent Plan 图片与视频共用 /api/plan/v3；按协议排除图片，避免 Seedream 误判为 Seedance。
+    if ("interfaceType" in requestConfig) {
+        const interfaceType = requestConfig.interfaceType;
+        if (interfaceType === "volcengine-ark-image" || interfaceType === "volcengine-ark-agent-plan-image") return false;
+    }
+    return isSeedanceVideoModel(modelOptionName(requestConfig.model || requestConfig.videoModel)) || isArkPlanBaseUrl(requestConfig.baseUrl || "");
 }
 
 export function isSeedanceVideoModel(model: string) {

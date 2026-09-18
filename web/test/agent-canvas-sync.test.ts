@@ -71,3 +71,14 @@ test("fallback snapshots obey the configured minimum refresh interval", async ()
     expect(times).toHaveLength(2);
     expect(times[1] - times[0]).toBeGreaterThanOrEqual(100);
 });
+
+test("a full invalidation and undo still refresh after delta support was detected", async () => {
+    const refresh = mock(async () => {});
+    const sync = createAgentCanvasSync({ canvasId: "canvas", applyPatches: async () => {}, refresh, onError: () => {}, batchMs: 0, refreshIntervalMs: 0 });
+    sync.receive(delta); await sleep();
+    sync.receive(event("canvas_updated", { canvasId: "canvas", requiresRefresh: true })); await sleep();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    sync.receive(event("canvas_undone", { canvasId: "canvas" })); await sleep();
+    expect(refresh).toHaveBeenCalledTimes(2);
+    sync.dispose();
+});

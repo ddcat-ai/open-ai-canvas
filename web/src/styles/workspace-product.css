@@ -456,20 +456,20 @@
     transform: translateX(2px);
 }
 
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link { min-height: 62px; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 2px; border-radius: 14px; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-main { flex-direction: column; gap: 4px; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link.is-collapsed .app-workspace-nav-title { display: block !important; max-width: 100%; color: var(--user-ink-muted); font-size: 10px; line-height: 1.1; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link { min-height: 52px; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 2px; border-radius: 12px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-main { flex-direction: column; gap: 2px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link.is-collapsed .app-workspace-nav-title { display: block !important; max-width: 100%; color: var(--user-ink-muted); font-size: 10px; line-height: 1.1; margin-top: -1px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link.is-active .app-workspace-nav-title { color: var(--user-ink); }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta { display: none !important; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-group { gap: 10px; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link { width: 54px !important; padding: 6px 0 !important; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-group { gap: 6px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link { width: 54px !important; padding: 4px 0 !important; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-main { width: 100%; align-items: center; justify-content: center; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-icon { width: 30px; height: 30px; flex-basis: 30px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-icon { width: 24px; height: 24px; flex-basis: 24px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link .app-workspace-nav-icon svg,
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-nav-link .app-workspace-nav-main > svg { width: 18px !important; height: 18px !important; flex: 0 0 18px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-account { width: 100%; align-items: center; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-checkin { width: 48px; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-storage { width: 36px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-storage { width: 40px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile-row { width: 100%; justify-content: center; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile { width: 48px; min-width: 48px; flex: 0 0 48px; margin-inline: auto; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-notification-spacer { display: none; }

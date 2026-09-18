@@ -24,6 +24,7 @@ description: 从产品功能快速定位主要代码入口
 | 画布编辑器 | `web/src/pages/canvas/project.tsx` | `pages/canvas/canvas-project-*`、`pages/canvas/use-canvas-*`、`components/canvas/`、`lib/canvas/`、`stores/canvas/` |
 | 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/infinite-canvas.tsx`、`services/api/canvas-share.ts` |
 | 管理后台 | `web/src/pages/admin/`、`router.tsx` | `admin-context.tsx`、`users/`、`channels/`、`logs/`、`storyboard-prompts/`、`settings/`、`components/agent-lessons-panel.tsx` |
+| 支付 CSV 导出 | `web/src/pages/admin/payments/payments-page.tsx` | `services/api/payments.ts`、`AdminExportButton`；后端 `handler/payment_export.go`、`app/payment_export.go`、`repository/payment_export.go`（共享筛选、只读快照） |
 
 ## 画布核心
 
@@ -32,6 +33,8 @@ description: 从产品功能快速定位主要代码入口
 | 页面装配和跨域动作协调 | `web/src/pages/canvas/project.tsx` |
 | 画布领域规则和生成协议 | `web/src/lib/canvas/canvas-project-domain.ts`、`canvas-project-generation.ts` |
 | 项目恢复、持久化和项目级动作 | `web/src/pages/canvas/use-canvas-project-lifecycle.ts` |
+| 云端版本校验与冲突草稿 | `web/src/services/user-data-sync.ts`、`canvas-sync-drafts.ts`、`web/src/lib/canvas/canvas-content.ts`、`web/src/pages/canvas/canvas-sync-status.tsx` |
+| 历史树与独立只读预览 | `web/src/pages/canvas/canvas-version-history.tsx`、`canvas-version-preview.tsx`；后端 `internal/canvas/canvas_history.go` 与 `repository/canvas_history.go`，Agent 写入桥接在 `app/canvas_bridge.go` |
 | Patch 历史、生成任务和重试控制 | `web/src/pages/canvas/use-canvas-history.ts`、`use-canvas-generation.ts`、`use-canvas-generation-executor.ts`、`use-canvas-generation-retry.ts` |
 | 文本、图片、视频和音频生成执行 | `web/src/pages/canvas/canvas-*-generation-executor*.ts` |
 | 云端 Agent、助手面板、导演台和全局快捷键控制 | `web/src/components/canvas/canvas-cloud-agent-panel.tsx`、`web/src/pages/canvas/use-canvas-assistant-visibility.ts`、`use-canvas-director.ts`、`use-canvas-keyboard.ts`；画布操作契约在 `web/src/lib/canvas/canvas-operation-contract.ts` |

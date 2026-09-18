@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 
+import { BannerAnnouncementsSlider } from "@/components/layout/banner-announcements-slider";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
 import { readWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
@@ -80,6 +81,8 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
             <WorkspaceTopBarExtensionProvider>
                 <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full flex-col overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
                     {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
+
+                    {showGlobalTopBar ? <BannerAnnouncementsSlider /> : null}
 
                     <div className="app-workspace-main-row flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         {!hideChrome ? (

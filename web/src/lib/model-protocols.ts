@@ -9,8 +9,16 @@ export function protocolGroups(protocols: ModelProtocolDefinition[]) {
 export function modelProtocolDefinition(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return definitions.find((item) => item.value === value); }
 export function modelProtocolLabel(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return modelProtocolDefinition(value, definitions)?.label || (value ? value : "未安装协议"); }
 export function modelProtocolCapability(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return modelProtocolDefinition(value, definitions)?.capability; }
+export function isVolcengineArkImageProtocol(protocol?: string) {
+    return protocol === "volcengine-ark-image" || protocol === "volcengine-ark-agent-plan-image";
+}
+
+export function isVolcengineArkVideoProtocol(protocol?: string) {
+    return protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video";
+}
+
 export function modelProtocolSupportsTokenBilling(capability?: string, protocol?: string) {
-    return capability === "text" || (capability === "video" && protocol === "volcengine-ark-video");
+    return capability === "text" || (capability === "video" && isVolcengineArkVideoProtocol(protocol));
 }
 
 export function protocolForModelCatalog(_endpointTypes: string[] = []): ModelProtocol | undefined {

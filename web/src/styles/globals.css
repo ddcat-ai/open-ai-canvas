@@ -53,6 +53,17 @@
     --palette-status-loading: #2563eb;
     --palette-status-warning: #d97706;
 
+    /* 顶部常驻通知条主题色：按「通知类型」区分底色（类型定义见 lib/announcements/banner-notice）
+       两档取值都由白字对比度反推——light 档 ≥ 4.5:1（WCAG AA 正文），dark 档约 8.5:1（压暗避免刺眼）*/
+    --palette-banner-notice-500: #5c67e2; /* 公告 · 白字 4.67:1 */
+    --palette-banner-notice-700: #3f4590; /* 白字 8.52:1 */
+    --palette-banner-activity-500: #da2470; /* 活动 · 白字 4.70:1 */
+    --palette-banner-activity-700: #7b3552; /* 白字 8.49:1 */
+    --palette-banner-update-500: #138279; /* 更新 · 白字 4.67:1 */
+    --palette-banner-update-700: #235450; /* 白字 8.55:1 */
+    --palette-banner-warning-500: #b55b0c; /* 警告 · 白字 4.70:1 */
+    --palette-banner-warning-700: #6a4424; /* 白字 8.52:1 */
+
     /* --- 2. 间距（4px 栅格 + 半距）--- */
     --space-0: 0px;
     --space-half: 2px;
@@ -529,7 +540,10 @@
     --color-cn-stroke: var(--cn-stroke);
     --color-cn-fill: var(--cn-fill);
 
-    /* 字号（可用 text-fs-body / text-fs-caption 等）*/
+    /* 字号
+       注意：Tailwind v4 的字号命名空间是 --text-*，--font-size-* 不被识别，
+       因此下面这组声明不会生成 text-micro / text-caption 之类的工具类。
+       组件请沿用既有惯例直接引用 Primitive：text-[var(--fs-label)]、text-[var(--fs-caption)] 等。 */
     --font-size-micro: var(--fs-micro);
     --font-size-tiny: var(--fs-tiny);
     --font-size-label: var(--fs-label);
@@ -594,6 +608,15 @@
     --accent: var(--workspace-accent);
     --accent-soft: var(--workspace-accent-soft);
     --muted: var(--color-neutral-100);
+
+    /* 顶部常驻通知条（Layer 3 组件引用；文字恒为白）
+       四个 --notice-banner-surface-<type> 与通知类型一一对应，dark 覆盖见 .dark 语义覆盖区；
+       --notice-banner-surface 是「公告」的别名，供不区分类型的引用使用。*/
+    --notice-banner-surface-notice: var(--palette-banner-notice-500);
+    --notice-banner-surface-activity: var(--palette-banner-activity-500);
+    --notice-banner-surface-update: var(--palette-banner-update-500);
+    --notice-banner-surface-warning: var(--palette-banner-warning-500);
+    --notice-banner-surface: var(--notice-banner-surface-notice);
 
     /* Canvas Theme 语义（从 CSS 变量反序列化到 TS 主题对象，对应 #96 决策3）*/
     --cn-text: var(--color-neutral-950);
@@ -753,6 +776,13 @@
     --surface-hover: rgba(255, 255, 255, 0.07);
     --surface-active: rgba(255, 255, 255, 0.12);
     --muted: var(--color-neutral-900);
+
+    /* 顶部常驻通知条：暗色下四种类型统一压暗，白字对比度约 8.5:1 */
+    --notice-banner-surface-notice: var(--palette-banner-notice-700);
+    --notice-banner-surface-activity: var(--palette-banner-activity-700);
+    --notice-banner-surface-update: var(--palette-banner-update-700);
+    --notice-banner-surface-warning: var(--palette-banner-warning-700);
+    --notice-banner-surface: var(--notice-banner-surface-notice);
 
     /* composio 文字层级（dark 直取）*/
     --workspace-text-body: #a8a8a8;  /* body（tokens.json text/body）*/
@@ -1308,7 +1338,8 @@
     }
 
     /* 全局轻量通知与消息提示框 */
-    .ant-message-notice .ant-message-notice-content {
+    .ant-message-notice .ant-message-notice-content,
+    :where(.dark, [data-theme="dark"]) .ant-message-notice .ant-message-notice-content {
         color: var(--foreground) !important;
         background: var(--color-surface, var(--workspace-overlay-bg-strong, #ffffff)) !important;
         border: 1px solid var(--color-border, var(--workspace-overlay-border, rgba(0, 0, 0, 0.12))) !important;
@@ -1316,11 +1347,19 @@
     }
 
     .dark .ant-message-notice .ant-message-notice-content,
-    .dark body .ant-message-notice-content {
+    .dark body .ant-message-notice-content,
+    [data-theme="dark"] .ant-message-notice .ant-message-notice-content,
+    .dark .ant-message-custom-content,
+    .dark .ant-message-notice {
         color: #f4f4f5 !important;
         background: #1e1e20 !important;
         border-color: rgba(255, 255, 255, 0.16) !important;
         box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55) !important;
+    }
+
+    .dark .ant-message-notice-content span,
+    .dark .ant-message-custom-content span {
+        color: #f4f4f5 !important;
     }
 
     .ant-notification-notice {
@@ -1824,6 +1863,10 @@
 
     .canvas-topbar-action:hover:not(:disabled) {
         background: var(--dock-command-hover) !important;
+    }
+
+    .canvas-topbar-action:hover:not(:disabled) .app-workspace-credit-gift {
+        transform: translateY(-1px) rotate(-8deg);
     }
 
     .canvas-topbar-project-cluster {
@@ -16372,11 +16415,12 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .app-workspace-topbar-credit-pill {
     display: inline-flex;
     flex-shrink: 0;
+    overflow: visible;
     white-space: nowrap;
     height: 36px;
     align-items: center;
-    gap: 7px;
-    padding: 0 12px;
+    gap: 8px;
+    padding: 0 12px 0 8px;
     border: 1px solid rgba(0, 0, 0, .075);
     border-radius: 999px;
     background: #fff;
@@ -16386,15 +16430,46 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .app-user-workspace .app-workspace-topbar-credit-pill:hover {
-    border-color: rgba(91, 78, 224, .26);
-    background: #fbfaff;
+    border-color: color-mix(in srgb, #ff8a28 34%, transparent);
+    background: #fffaf4;
     transform: translateY(-1px);
 }
 
-.app-user-workspace .app-workspace-topbar-credit-pill svg {
-    width: 15px;
-    height: 15px;
-    color: #6a58e8;
+.app-user-workspace .app-workspace-credit-gift {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    place-items: center;
+    filter: drop-shadow(0 1px 1px rgba(92, 42, 0, .22));
+    transform-origin: 50% 70%;
+    transition: transform .18s ease;
+}
+
+.app-user-workspace .app-workspace-credit-gift svg {
+    width: 24px;
+    height: 24px;
+    overflow: visible;
+    color: unset;
+}
+
+.app-user-workspace .app-workspace-credit-gift.is-compact,
+.app-user-workspace .app-workspace-credit-gift.is-compact svg {
+    width: 18px;
+    height: 18px;
+}
+
+.app-user-workspace .app-workspace-topbar-credit-pill:hover .app-workspace-credit-gift {
+    transform: translateY(-1px) rotate(-8deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-user-workspace .app-workspace-topbar-credit-pill,
+    .app-user-workspace .app-workspace-credit-gift,
+    .app-user-workspace .app-workspace-topbar-credit-pill:hover .app-workspace-credit-gift {
+        transform: none;
+        transition: none;
+    }
 }
 
 .app-user-workspace .app-workspace-topbar-credit-pill strong {
@@ -16541,9 +16616,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .app-workspace-sidebar-storage {
     display: flex;
     min-width: 0;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 8px 6px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
     border-radius: 12px;
     color: inherit;
     text-decoration: none;
@@ -16555,9 +16630,38 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     background: var(--user-surface-hover, rgba(72, 72, 73, .055));
 }
 
+.app-user-workspace .app-workspace-sidebar-storage:hover .app-workspace-sidebar-storage-icon,
+.app-user-workspace .app-workspace-sidebar-storage:focus-visible .app-workspace-sidebar-storage-icon {
+    color: var(--user-ink, var(--foreground));
+}
+
 .app-user-workspace .app-workspace-sidebar-storage:focus-visible {
     outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
+}
+
+.app-user-workspace .app-workspace-sidebar-storage-icon {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    place-items: center;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--user-ink, var(--foreground)) 8%, transparent);
+    color: color-mix(in srgb, var(--user-ink, var(--foreground)) 78%, transparent);
+}
+
+.app-user-workspace .app-workspace-sidebar-storage-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.app-user-workspace .app-workspace-sidebar-storage-body {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .app-user-workspace .app-workspace-sidebar-storage-copy {
@@ -16565,6 +16669,13 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     min-width: 0;
     flex-direction: column;
     gap: 2px;
+}
+
+.app-user-workspace .app-workspace-sidebar-storage-foot {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
 }
 
 .app-user-workspace .app-workspace-sidebar-storage-meta {
@@ -16599,12 +16710,14 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .app-user-workspace .app-workspace-sidebar-storage-remain {
-    min-width: 0;
+    line-height: 1;
 }
 
 .app-user-workspace .app-workspace-sidebar-storage-track {
     display: block;
-    height: 5px;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 4px;
     overflow: hidden;
     border-radius: 999px;
     background: color-mix(in srgb, var(--user-ink, var(--foreground)) 10%, transparent);
@@ -16626,16 +16739,26 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     background: color-mix(in srgb, var(--user-ink, var(--foreground)) 8%, transparent);
 }
 
-.app-user-workspace .app-workspace-sidebar-storage.is-warn .app-workspace-sidebar-storage-used {
+.app-user-workspace .app-workspace-sidebar-storage.is-warn .app-workspace-sidebar-storage-used,
+.app-user-workspace .app-workspace-sidebar-storage.is-warn .app-workspace-sidebar-storage-icon {
     color: var(--status-warning);
+}
+
+.app-user-workspace .app-workspace-sidebar-storage.is-warn .app-workspace-sidebar-storage-icon {
+    background: color-mix(in srgb, var(--status-warning) 14%, transparent);
 }
 
 .app-user-workspace .app-workspace-sidebar-storage.is-warn .app-workspace-sidebar-storage-track > span {
     background: var(--status-warning);
 }
 
-.app-user-workspace .app-workspace-sidebar-storage.is-critical .app-workspace-sidebar-storage-used {
+.app-user-workspace .app-workspace-sidebar-storage.is-critical .app-workspace-sidebar-storage-used,
+.app-user-workspace .app-workspace-sidebar-storage.is-critical .app-workspace-sidebar-storage-icon {
     color: var(--status-error);
+}
+
+.app-user-workspace .app-workspace-sidebar-storage.is-critical .app-workspace-sidebar-storage-icon {
+    background: color-mix(in srgb, var(--status-error) 14%, transparent);
 }
 
 .app-user-workspace .app-workspace-sidebar-storage.is-critical .app-workspace-sidebar-storage-track > span {
@@ -16652,6 +16775,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     font-size: var(--fs-tiny);
 }
 
+.app-user-workspace .app-workspace-sidebar-storage.is-error .app-workspace-sidebar-storage-icon {
+    color: color-mix(in srgb, var(--status-error) 72%, transparent);
+    background: color-mix(in srgb, var(--status-error) 12%, transparent);
+}
+
 .app-user-workspace .app-workspace-sidebar-storage.is-error button {
     color: var(--user-ink, var(--foreground));
     text-decoration: underline;
@@ -16664,24 +16792,41 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .app-user-workspace .app-workspace-sidebar-storage.is-collapsed {
-    width: 36px;
-    padding: 8px 0 6px;
+    width: 40px;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
     margin-inline: auto;
 }
 
+.app-user-workspace .app-workspace-sidebar-storage.is-collapsed .app-workspace-sidebar-storage-track {
+    flex: none;
+    width: 32px;
+}
+
 .app-user-workspace .app-workspace-sidebar-storage.is-collapsed.is-error {
-    width: 36px;
+    width: 40px;
     min-height: 0;
-    padding: 2px 0 4px;
+    padding: 2px 0;
 }
 
 .app-user-workspace .app-workspace-sidebar-storage.is-collapsed.is-error button {
-    display: block;
-    width: 36px;
-    height: 5px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--status-error) 48%, transparent);
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--status-error) 14%, transparent);
+    color: var(--status-error);
     text-decoration: none;
+}
+
+.app-user-workspace .app-workspace-sidebar-storage.is-collapsed.is-error .app-workspace-sidebar-storage-icon {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    color: inherit;
 }
 
 .app-user-workspace .app-workspace-sidebar-profile-row {
@@ -18877,6 +19022,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 .app-user-workspace .app-workspace-topbar-breadcrumb { color: var(--user-ink-muted) !important; }
 .app-user-workspace .app-workspace-topbar-credit-pill { border-color: var(--user-border) !important; background: var(--user-surface) !important; color: var(--user-ink-muted) !important; }
+.app-user-workspace .app-workspace-topbar-credit-pill:hover,
+.app-user-workspace .app-workspace-topbar-credit-pill:focus-visible {
+    border-color: color-mix(in srgb, #ff8a28 36%, var(--user-border)) !important;
+    background: color-mix(in srgb, #ff8a28 10%, var(--user-surface)) !important;
+}
 .app-user-workspace .app-workspace-topbar-credit-pill strong { color: var(--user-ink) !important; }
 
 /* One scroll owner on the creation route. */

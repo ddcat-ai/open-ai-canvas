@@ -49,6 +49,9 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 		resourceIDs = append(resourceIDs, resource.ID)
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
+			return err
+		}
 		var current []model.Resource
 		query := tx.Where("id IN ?", resourceIDs)
 		if r.Dialect() == "postgres" {

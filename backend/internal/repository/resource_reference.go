@@ -86,6 +86,11 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
 	}
+	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Direct = append(snapshot.Direct, history...)
 
 	var assets []model.Asset
 	assetQuery := r.db.Where("user_id = ? AND id <> ?", userID, excludingAssetID)
@@ -322,6 +327,9 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 
 func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
+			return err
+		}
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", assetID)
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
 			return err

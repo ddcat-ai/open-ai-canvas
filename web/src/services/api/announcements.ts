@@ -1,5 +1,9 @@
 import { http, apiBaseURL } from "@/services/api/request";
 import type { RemoteResource } from "@/services/api/resources";
+import type { BannerNoticeType } from "@/lib/announcements/banner-notice";
+import type { BannerTitleRun } from "@/lib/announcements/banner-title";
+
+export type { BannerTitleRun };
 
 export type AnnouncementLevel = "info" | "success" | "warning" | "critical";
 export type AnnouncementStatus = "active" | "closed";
@@ -72,4 +76,57 @@ export function updateAdminAnnouncement(id: string, input: { title: string; cont
 
 export function closeAdminAnnouncement(id: string) {
     return http.post<{ announcement: SystemAnnouncement }>(`/admin/announcements/${encodeURIComponent(id)}/close`);
+}
+
+export type BannerAnnouncement = {
+    id: string;
+    title: string;
+    /** 标题样式分段；为空表示纯文本标题（取值白名单见 lib/announcements/banner-title）。 */
+    titleRuns?: BannerTitleRun[];
+    /** 通知类型，决定通知条底色；未知值按「公告」处理。 */
+    noticeType?: BannerNoticeType;
+    link?: string;
+    status: "active" | "disabled";
+    startsAt?: string;
+    endsAt?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminBannerListParams = {
+    keyword?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+};
+
+export type AdminBannerPayload = {
+    title: string;
+    titleRuns?: BannerTitleRun[];
+    noticeType?: BannerNoticeType;
+    link?: string;
+    status: "active" | "disabled";
+    startsAt?: string;
+    endsAt?: string;
+};
+
+export function getActiveBanners() {
+    return http.get<{ banners: BannerAnnouncement[] }>("/banner-announcements");
+}
+
+export function listAdminBanners(params: AdminBannerListParams = {}) {
+    return http.get<{ banners: BannerAnnouncement[]; total: number; page: number; pageSize: number }>("/admin/banner-announcements", { params });
+}
+
+export function createAdminBanner(input: AdminBannerPayload) {
+    return http.post<{ banner: BannerAnnouncement }>("/admin/banner-announcements", input);
+}
+
+export function updateAdminBanner(id: string, input: AdminBannerPayload) {
+    return http.put<{ banner: BannerAnnouncement }>(`/admin/banner-announcements/${encodeURIComponent(id)}`, input);
+}
+
+export function deleteAdminBanner(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/banner-announcements/${encodeURIComponent(id)}`);
 }

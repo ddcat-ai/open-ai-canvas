@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
+import { sameCanvasContent } from "@/lib/canvas/canvas-content";
 import { DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, readCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { parseCanvasStorageDocument, rebaseCanvasProjects, serializeCanvasStorageDocument, type CanvasStorageDocument } from "@/lib/canvas/canvas-storage-revision";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
@@ -14,6 +15,8 @@ import type { TimelineProject } from "@/types/timeline";
 
 export type CanvasProject = {
     id: string;
+    revision?: number;
+    remoteContentHash?: string;
     projectId?: string;
     title: string;
     createdAt: string;
@@ -448,6 +451,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 const appearanceDefault = readCanvasAppearanceDefault();
                 const project: CanvasProject = {
                     id,
+                    revision: 0,
                     projectId,
                     title,
                     createdAt: now,
@@ -469,6 +473,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 const now = new Date().toISOString();
                 const project: CanvasProject = {
                     id: nanoid(),
+                    revision: 0,
                     projectId: source.projectId,
                     title: source.title || "导入画布",
                     createdAt: source.createdAt || now,
@@ -490,20 +495,27 @@ export const useCanvasStore = create<CanvasStore>()(
             openProject: (id) => {
                 return get().projects.find((item) => item.id === id) || null;
             },
-            renameProject: (id, title) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, title: title.trim() || project.title, updatedAt: new Date().toISOString() } : project)),
-                })),
+            renameProject: (id, title) => set((state) => {
+                const current = state.projects.find((project) => project.id === id);
+                const nextTitle = title.trim() || current?.title;
+                if (!current || current.title === nextTitle) return state;
+                return { projects: state.projects.map((project) => project === current ? { ...project, title: nextTitle!, updatedAt: new Date().toISOString() } : project) };
+            }),
             deleteProjects: (ids) =>
                 set((state) => {
                     const projects = state.projects.filter((project) => !ids.includes(project.id));
                     return { projects };
                 }),
             replaceProjects: (projects) => set({ projects }),
-            updateProject: (id, patch) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),
-                })),
+            updateProject: (id, patch) => set((state) => {
+                const current = state.projects.find((project) => project.id === id);
+                if (!current) return state;
+                const next = { ...current, ...patch };
+                const contentChanged = !sameCanvasContent(current, next);
+                if (!contentChanged && samePersistenceValue(current.viewport, next.viewport)) return state;
+                if (contentChanged) next.updatedAt = new Date().toISOString();
+                return { projects: state.projects.map((project) => project === current ? next : project) };
+            }),
         }),
         {
             name: CANVAS_STORE_KEY,

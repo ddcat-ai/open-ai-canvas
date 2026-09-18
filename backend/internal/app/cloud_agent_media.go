@@ -539,7 +539,7 @@ func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasPro
 	}
 	before := canvas.PayloadJSON
 	canvas.PayloadJSON = string(raw)
-	return repo.CompareSaveCreationCanvas(canvas, before)
+	return saveCreationCanvasWithHistory(repo, canvas, before)
 }
 
 // Called inside the same transaction as the task, charge reservation and Agent checkpoint.

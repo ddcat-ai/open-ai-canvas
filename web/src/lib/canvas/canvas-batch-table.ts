@@ -5,9 +5,18 @@ import type { CanvasBatchOperation, CanvasBatchReferenceColumn, CanvasBatchRow, 
 export const TRY_ON_BATCH_PROMPT = "参考图1是人物原图，参考图2是目标服装。保持人物身份、五官、姿态和背景不变，将人物服装替换为参考图2中的款式。准确还原服装版型、颜色、材质、纹理和装饰细节，穿着关系自然，光影与原图一致。";
 export const CREATIVE_BATCH_PROMPT = "基于参考图创作一张新的商业图片，保留主体身份和关键产品细节，画面构图完整，光影自然。";
 export const BATCH_REFERENCE_HANDLE_PREFIX = "batch-reference:";
-export const BATCH_REFERENCE_HANDLE_TOP = 112;
-export const BATCH_REFERENCE_HANDLE_GAP = 38;
+/** 两行工具栏（操作栏 44 + 全局提示词 36 + 分隔 1）之后，对准表头中线。 */
+export const BATCH_REFERENCE_HANDLE_TOP = 102;
+export const BATCH_REFERENCE_HANDLE_GAP = 40;
+export const MIN_BATCH_REFERENCE_COLUMNS = 1;
 export const MAX_BATCH_REFERENCE_COLUMNS = 6;
+const LEGACY_BATCH_TABLE_WIDTH = 900;
+
+/** 旧默认 900 宽的批量创作表升级到当前默认尺寸，已经手动改过宽度的节点保持原样。 */
+export function promoteLegacyBatchTableSize(node: CanvasNodeData): CanvasNodeData {
+    if (node.type !== "batch-table" || node.width !== LEGACY_BATCH_TABLE_WIDTH) return node;
+    return { ...node, width: 1280, height: Math.max(node.height, 560) };
+}
 
 export function defaultBatchReferenceColumns(): CanvasBatchReferenceColumn[] {
     return [
@@ -20,10 +29,6 @@ export function defaultBatchReferenceColumns(): CanvasBatchReferenceColumn[] {
 export function batchReferenceColumns(table?: CanvasBatchTableData) {
     const columns = table?.referenceColumns;
     if (!columns?.length) return defaultBatchReferenceColumns();
-    // Older tables were created before the second default slot existed. They
-    // never had a remove-column action, so extending this exact legacy shape is
-    // a safe migration and makes reference slot 2 immediately selectable.
-    if (columns.length === 1 && columns[0].id === "reference-1") return defaultBatchReferenceColumns();
     return columns;
 }
 
@@ -61,6 +66,60 @@ export function batchReferenceHandleAtY(node: CanvasNodeData, worldY: number, hi
         }
     });
     return nearestIndex >= 0 && nearestDistance <= hitRadius ? batchReferenceHandleId(columns[nearestIndex].id) : undefined;
+}
+
+export function removeLastBatchReferenceColumn(table: CanvasBatchTableData): CanvasBatchTableData | null {
+    const columns = batchReferenceColumns(table);
+    if (columns.length <= MIN_BATCH_REFERENCE_COLUMNS) return null;
+    const nextColumns = columns.slice(0, -1).map((column, index) => ({ ...column, label: `参考图 ${index + 1}` }));
+    return {
+        ...table,
+        referenceColumns: nextColumns,
+        rows: table.rows.map((row) => ({ ...row, inputNodeIds: nextColumns.map((_, index) => row.inputNodeIds[index] || "") })),
+    };
+}
+
+export function reorderBatchReferenceColumns(table: CanvasBatchTableData, fromColumnId: string, toColumnId: string): CanvasBatchTableData {
+    const columns = batchReferenceColumns(table);
+    const fromIndex = columns.findIndex((column) => column.id === fromColumnId);
+    const toIndex = columns.findIndex((column) => column.id === toColumnId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return table;
+    const nextColumns = [...columns];
+    const [moved] = nextColumns.splice(fromIndex, 1);
+    nextColumns.splice(toIndex, 0, moved);
+    return {
+        ...table,
+        referenceColumns: nextColumns.map((column, index) => ({ ...column, label: `参考图 ${index + 1}` })),
+        rows: table.rows.map((row) => ({
+            ...row,
+            inputNodeIds: nextColumns.map((column) => {
+                const oldIndex = columns.findIndex((item) => item.id === column.id);
+                return row.inputNodeIds[oldIndex] || "";
+            }),
+        })),
+    };
+}
+
+export function moveBatchReferenceCell(table: CanvasBatchTableData, sourceRowId: string, sourceColumnIndex: number, targetRowId: string, targetColumnIndex: number): CanvasBatchTableData {
+    if (sourceRowId === targetRowId && sourceColumnIndex === targetColumnIndex) return table;
+    if (sourceColumnIndex < 0 || targetColumnIndex < 0) return table;
+    const referenceCount = Math.max(batchReferenceColumns(table).length, sourceColumnIndex + 1, targetColumnIndex + 1);
+    const sourceRow = table.rows.find((row) => row.id === sourceRowId);
+    const targetRow = table.rows.find((row) => row.id === targetRowId);
+    if (!sourceRow || !targetRow) return table;
+    const nextRows = table.rows.map((row) => ({ ...row, inputNodeIds: Array.from({ length: referenceCount }, (_, index) => row.inputNodeIds[index] || "") }));
+    const nextSource = nextRows.find((row) => row.id === sourceRowId)!;
+    const nextTarget = nextRows.find((row) => row.id === targetRowId)!;
+    const sourceNodeId = nextSource.inputNodeIds[sourceColumnIndex];
+    if (!sourceNodeId) return table;
+    const targetNodeId = nextTarget.inputNodeIds[targetColumnIndex];
+    nextTarget.inputNodeIds[targetColumnIndex] = sourceNodeId;
+    nextSource.inputNodeIds[sourceColumnIndex] = targetNodeId || "";
+    return { ...table, rows: nextRows };
+}
+
+export function batchPromptForRow(table: CanvasBatchTableData, row: CanvasBatchRow) {
+    return table.globalPrompt?.trim() || row.prompt;
 }
 
 export function batchInputColumns(node: CanvasNodeData, connections: CanvasConnection[]) {

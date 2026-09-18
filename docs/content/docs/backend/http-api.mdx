@@ -9,6 +9,23 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 画布保存、历史与恢复
+
+画布内容使用数据库递增的 `revision` 做乐观并发校验；`updatedAt` 仅用于展示，不作为版本依据。新建 `PUT /canvas-projects/:id` 的 `project.revision` 为 0，已有画布必须带上读取到的版本。数据库在同一次条件更新中匹配 ID、用户与版本，成功后返回 `data.project` 摘要及递增后的版本；缺失版本返回 428，陈旧版本返回 409，非法版本返回 400。客户端不能获取新版号后直接重发旧内容。
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET /canvas-projects/:id` | 返回当前内容及权威版本号 |
+| `GET /canvas-projects/:id/history` | 返回 `snapshots` 摘要与 `currentRevision`，不批量读取历史正文 |
+| `GET /canvas-projects/:id/history/:snapshotId` | 按需返回 `snapshot` 摘要和 `project` 历史正文 |
+| `POST /canvas-projects/:id/history/:snapshotId/restore` | 请求 `{ revision }` 为当前画布版本，成功返回新版本摘要；恢复前强制备份当前内容 |
+
+历史接口先验证画布归属；无权访问、已删除画布或不存在的快照返回 404。恢复沿用画布写入限流和素材校验，在同一事务完成版本校验、备份、内容写入及历史资源保护。恢复保留当前画布 ID 和项目归属，生成新版本，不倒退版本号。升级前的内容无法补建历史。
+
+平移和缩放只持久化浏览器视口，内容 PUT 忽略客户端 `viewport` 和 `remoteContentHash`。前端遇到 409/428 会保留账号隔离的本地草稿、暂停该画布自动提交，并提供加载最新版和下载草稿入口；载入最新版前草稿写入失败时停止替换。其他画布仍可保存。
+
+云端 Agent 与创作任务的写入共用版本和历史事务；Agent `canvasPatch` 携带 `baseRevision`、`revision`，客户端只接受连续增量，跳过重复事件，缺口或同字段冲突时保留草稿并重新核对。删除、重排或顶层内容变化无法由增量完整表示时，事件携带 `requiresRefresh: true` 且不附 `canvasPatch`，客户端完整核对后才推进基线；撤销事件同样触发核对。保存日志仅记录请求/链路 ID、画布/用户 ID、版本、节点数量变化及 HTTP 状态，不记录正文、提示词或媒体 URL。
+
 ## 欢迎页开放配置
 
 `GET /public/welcome` 无需登录，信封 `data` 仅包含布尔值 `welcomeEnabled`，响应禁用缓存。读取失败按标准错误信封返回。
@@ -62,11 +79,33 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 管理员支付订单
 
-`GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；状态过滤同时生效，返回匹配总数和当前页订单。
+`GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。
 
 每条管理员列表订单在原有字段之外包含 `user: { id, username, displayName, email }`，由当前页用户 ID 批量读取；用户不存在时返回 `user: null`，保留原 `userId` 与历史订单。此身份摘要仅用于管理员订单列表，不添加到普通用户支付接口或支付状态同步响应。
 
 后台支付订单列表展示用户身份，点击名称打开用户详情；订单详情提供完整订单号、渠道交易号、用户 ID 和各阶段时间。同步支付状态与关闭订单位于更多菜单，关闭订单仍需确认。
+
+### 支付对账筛选及 CSV 导出
+
+`GET /api/admin/payments/reconciliations` 支持 `providerId`、`status`（`running` / `completed` / `failed`）、`from`、`to`（账单日期，包含起止日）、`page`、`pageSize`。`GET /api/admin/payments/reconciliations/:id/items` 支持 `result`、`page`、`pageSize`；`result=abnormal` 同时选出所有非 `matched`、非 `recovered` 明细，未指定或 `all` 表示全部。具体结果还支持 `matched`、`recovered`、`local_order_not_found`、`provider_record_missing`、`amount_mismatch`、`trade_no_mismatch`、`credit_failed`。
+
+三个只读导出接口均在 service 校验管理员权限，返回 `text/csv; charset=utf-8` 附件，设置 `Cache-Control: no-store`。导出复用列表筛选条件，不受 `page`、`pageSize` 影响：
+
+| 接口 | 参数与内容 |
+| --- | --- |
+| `GET /api/admin/payments/orders/export.csv` | 与订单列表相同的筛选；完整订单号、渠道交易号、用户身份、商品、渠道、金额、币种、积分、订单/渠道状态及各阶段时间 |
+| `GET /api/admin/payments/reconciliations/export.csv` | 与对账列表相同的筛选；每日执行状态、总笔数、一致/补发/异常笔数、失败原因、发起人 ID 或系统、开始/完成时间 |
+| `GET /api/admin/payments/reconciliations/:id/items/export.csv` | `result`；单次对账的完整交易明细及对账开始/完成时间，便于区分同日重跑结果 |
+
+最多导出 10000 行数据（不含表头）；超限返回 400 业务错误，提示缩小筛选范围，不截断文件。无匹配数据时接口返回仅含表头的 CSV；前端无数据时禁用导出。导出不查单、不重跑对账、不补发积分。
+
+对账完成不代表无异常，汇总保留异常笔数；失败记录仍可导出汇总及失败原因。明细仅允许已完成的对账，执行中或失败返回 409。对账重跑复用记录并替换明细，明细导出使用可重复读快照，保证汇总与明细来自同一次数据库快照。订单及关联用户身份也在同一快照内读取。
+
+明细的“记录金额”附带“金额来源”：通常为渠道账单，`provider_record_missing` 为本地订单。该字段不声称同时保存渠道和本地金额，不根据订单当前值推算历史差额。订单金额和积分为订单数据，未支付订单的积分不代表已经发放。
+
+CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两位小数，积分从微积分转换并保留最多六位小数，时间表头注明北京时间。空时间留空。文本转义逗号/引号/换行，并在公式触发字符前加单引号；可被解析为数字或科学计数法的 ID/订单号也加单引号防止表格软件丢失精度，不生成 `="..."` 公式。通用 CSV 消费者可能看见该保护前缀，按文本导入并按需移除；仅 CSV 引号不能声明列类型。
+
+前端使用已经应用到列表的筛选条件导出；更改条件后，先查询/筛选再启用导出，分页和刷新沿用已应用条件。明细抽屉支持“仅异常”和单独刷新，切换记录/筛选时取消旧请求，避免旧响应覆盖新记录。下载接口的 JSON 错误 Blob 会解析为业务提示，超量或重跑冲突不会被保存为 CSV。
 
 ## 用户 Agent 记忆
 

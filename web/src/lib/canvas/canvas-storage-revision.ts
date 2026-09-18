@@ -1,6 +1,7 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData } from "@/types/canvas";
 import { normalizeAssetCategory } from "@/lib/asset-category";
+import { sameCanvasContent } from "@/lib/canvas/canvas-content";
 
 export type CanvasStorageTombstones = {
     projects: Record<string, number>;
@@ -302,6 +303,12 @@ function mergeSessions(input: {
 }
 
 function mergeProject(base: CanvasProject | undefined, local: CanvasProject, durable: CanvasProject, document: CanvasStorageDocument, baseRevision: number, nextRevision: number, conflicts: CanvasStorageConflict[]) {
+    if (local.revision !== durable.revision) {
+        // Never attach another tab's newer server revision to this tab's stale edits.
+        // Preserve the whole edited branch; the server will reject its stale revision.
+        if (local.revision === base?.revision && sameCanvasContent(base, local)) return { ...durable, viewport: local.viewport };
+        return local;
+    }
     const common = {
         projectId: local.id,
         tombstones: document.tombstones,

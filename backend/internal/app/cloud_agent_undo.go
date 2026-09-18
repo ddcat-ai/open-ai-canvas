@@ -100,7 +100,7 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 		}
 		previous := canvas.PayloadJSON
 		canvas.PayloadJSON = mutation.BeforeJSON
-		if err := repo.CompareSaveCreationCanvas(canvas, previous); err != nil {
+		if err := saveCreationCanvasWithHistory(repo, canvas, previous); err != nil {
 			if errors.Is(err, repository.ErrCreationConflict) {
 				return creationConflict("画布已发生后续变化，未执行撤销")
 			}

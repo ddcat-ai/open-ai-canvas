@@ -296,7 +296,7 @@ func TestCloudAgentStoryboardRejectsUnsafeOrStaleMutations(t *testing.T) {
 	stored, _ := s.repo.CanvasProjectForUser("user", canvas.ID)
 	before := stored.PayloadJSON
 	stored.PayloadJSON = string(raw)
-	if err := s.repo.CompareSaveCreationCanvas(stored, before); err != nil {
+	if err := saveCreationCanvasWithHistory(s.repo, stored, before); err != nil {
 		t.Fatal(err)
 	}
 	wrongType := cloudAgentStoryboardCall(t, "canvas_edit_storyboard", "wrong-type", map[string]any{

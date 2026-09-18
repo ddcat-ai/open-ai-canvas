@@ -29,6 +29,7 @@ import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/servi
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { CanvasSyncDraftMenu } from "./canvas-sync-status";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
@@ -358,15 +359,21 @@ export default function CanvasPage() {
                     await flushCanvasStorePersistence();
                     if (remoteSyncEnabled) {
                         try {
-                            await saveRemoteUserDataNow();
+                            await saveRemoteUserDataNow(importedProjectId);
                         } catch (syncError) {
                             remoteSyncWarning ||= syncError;
                             scheduleRemoteUserDataSync();
                             console.warn("导入画布云端同步失败，等待自动重试", syncError);
                         }
                     }
+                } catch (error) {
+                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, {
+                        phase: "error",
+                        message: error instanceof Error ? error.message : "画布导入未完成",
+                    });
+                    throw error;
                 } finally {
-                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
+                    if (!remoteSyncEnabled) useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
                 }
             }
 
@@ -409,6 +416,7 @@ export default function CanvasPage() {
                     meta={<span className="app-projects-header-meta">{totalProjects} 个</span>}
                     actions={
                         <div className="collection-header-actions">
+                            <CanvasSyncDraftMenu />
                             <Button type="primary" disabled={!hydrated} icon={<Plus />} onClick={createAndEnter}>
                                 新建画布
                             </Button>

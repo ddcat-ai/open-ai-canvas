@@ -711,12 +711,58 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			if reference.DataURL == "" {
 				reference.DataURL = firstString(typed, "data_url", "b64_json")
 			}
+			// OpenAI / Ark 等渠道常直接返回裸 b64_json；声明式结果下载要求 data URL。
+			reference.DataURL = normalizeManifestInlineDataURL(reference.DataURL, reference.Kind, firstString(typed, "output_format", "mime_type", "mimeType"))
 			if reference.URL != "" || reference.DataURL != "" {
 				result = append(result, reference)
 			}
 		}
 	}
 	return result
+}
+
+func normalizeManifestInlineDataURL(value, kind, formatHint string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.HasPrefix(value, "data:") {
+		return value
+	}
+	return "data:" + manifestInlineMediaMIME(kind, formatHint) + ";base64," + value
+}
+
+func manifestInlineMediaMIME(kind, formatHint string) string {
+	hint := strings.ToLower(strings.TrimSpace(formatHint))
+	switch hint {
+	case "image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/ogg", "video/mp4", "video/webm":
+		return hint
+	case "image/jpg":
+		return "image/jpeg"
+	case "audio/mp3":
+		return "audio/mpeg"
+	case "png":
+		return "image/png"
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "webp":
+		return "image/webp"
+	case "gif":
+		return "image/gif"
+	case "mp3", "mpeg":
+		return "audio/mpeg"
+	case "wav":
+		return "audio/wav"
+	case "mp4":
+		return "video/mp4"
+	case "webm":
+		return "video/webm"
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "audio":
+		return "audio/mpeg"
+	case "video":
+		return "video/mp4"
+	default:
+		return "image/png"
+	}
 }
 
 var (

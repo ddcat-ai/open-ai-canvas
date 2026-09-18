@@ -47,7 +47,8 @@ func withoutProviderAnalytics(ctx context.Context) context.Context {
 }
 
 func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID string, input *canvasGenerationInput) error {
-	if input == nil || !isArkPrivateAssetVideoConfig(input.Config) || !parseBool(input.Config.ArkPrivateAssetUpload, true) {
+	// 可信素材 asset:// 仅方舟视频协议支持；Agent Plan Seedream 等图片渠道不能上传或改写。
+	if input == nil || input.Mode != "video" || !isArkPrivateAssetVideoConfig(input.Config) || !parseBool(input.Config.ArkPrivateAssetUpload, true) {
 		return nil
 	}
 	hasOwnedReference := false
@@ -107,7 +108,12 @@ func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID s
 }
 
 func isArkPrivateAssetVideoConfig(config providerConfig) bool {
-	return config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) || isArkPlanVideoConfig(config)
+	iface := strings.TrimSpace(config.InterfaceType)
+	// Agent Plan 图片与视频共用 /api/plan/v3；图片协议不得进入可信素材同步。
+	if iface == string(model.ChannelInterfaceVolcengineArkImage) || iface == "volcengine-ark-agent-plan-image" {
+		return false
+	}
+	return iface == string(model.ChannelInterfaceVolcengineArkVideo) || iface == "volcengine-ark-agent-plan-video" || isArkPlanVideoConfig(config)
 }
 
 func arkPrivateAssetAutomaticSyncEnabled(setting arkPrivateAssetSettingValue) (bool, error) {

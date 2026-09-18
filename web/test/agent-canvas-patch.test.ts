@@ -67,3 +67,13 @@ test("task progress ahead of the server checkpoint still accepts terminal state"
     expect(result.nodes[0].metadata?.taskStatus).toBe("failed");
     expect(isCanvasNodeGenerating(result.nodes[0])).toBe(false);
 });
+
+test("full Agent refresh removes unchanged nodes but preserves conflicting local edits", () => {
+    const remaining = { ...node, id: "remaining", metadata: {} };
+    const previous = { ...project, nodes: [node, remaining] };
+    const incoming = { ...previous, nodes: [remaining] };
+    expect(mergeAgentCanvasEditor(previous, incoming, previous.nodes, []).nodes).toEqual([remaining]);
+    const local = { ...node, title: "Unsaved local title" };
+    expect(() => mergeAgentCanvasEditor(previous, incoming, [local, remaining], [])).toThrow("冲突");
+    expect(local.title).toBe("Unsaved local title");
+});

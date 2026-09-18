@@ -14,6 +14,7 @@ import (
 
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
 	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
 	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
@@ -139,6 +140,9 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 	// 业务记录和 Outbox 必须在同一事务提交。事务失败时物理文件完全不动；
 	// 提交成功后由幂等 worker 清理，进程退出或对象存储暂时失败都可继续重试。
 	if err := s.repo.DeleteAssetAndResources(userID, assetID, ownedIDs, deletionJobs); err != nil {
+		if errors.Is(err, repository.ErrCanvasHistoryResourceReferenced) {
+			return BadAuthRequest("素材仍被画布历史版本引用，已保留文件")
+		}
 		return fmt.Errorf("素材记录删除失败，请重试：%w", err)
 	}
 	if len(deletionJobs) > 0 {
@@ -233,6 +237,13 @@ func (s *Service) deleteStoredResourceObject(userID string, resource *model.Reso
 	}
 	if strings.TrimSpace(resource.ObjectKey) == "" {
 		return fmt.Errorf("资源 %s 的存储路径为空", resource.ID)
+	}
+	protected, err := s.repo.CanvasHistoryReferencesObject(resource)
+	if err != nil {
+		return err
+	}
+	if protected {
+		return errors.New("资源仍被画布历史版本引用")
 	}
 	switch strings.ToLower(strings.TrimSpace(resource.Provider)) {
 	case "", "local":

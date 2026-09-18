@@ -395,7 +395,7 @@ func TestAdminPaymentOrdersSearchUserIdentity(t *testing.T) {
 		{"merchant-c", "", 1}, {"trade-c", "", 1}, {"missing-user", "", 1}, {"", "", 3},
 	} {
 		t.Run(tc.keyword+"/"+tc.status, func(t *testing.T) {
-			items, total, err := repo.AdminPaymentOrders(tc.status, tc.keyword, 1, 0)
+			items, total, err := repo.AdminPaymentOrders(PaymentOrderFilter{Status: tc.status, Keyword: tc.keyword}, 1, 0)
 			if err != nil || total != tc.total || len(items) > 1 {
 				t.Fatalf("got items=%d total=%d err=%v; want total=%d", len(items), total, err, tc.total)
 			}

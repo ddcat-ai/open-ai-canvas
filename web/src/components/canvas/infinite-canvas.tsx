@@ -8,6 +8,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
 type InfiniteCanvasProps = {
+    interactive?: boolean;
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
     appearance?: CanvasAppearance;
@@ -43,7 +44,7 @@ type PinchState = {
     initialScale: number;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, boxSelectEnabled = false, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ interactive = true, containerRef, viewport, appearance, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, boxSelectEnabled = false, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
     const colorTheme = useActiveTheme();
     const resolvedAppearance = resolveCanvasAppearance(appearance, colorTheme);
     const panState = useRef({
@@ -68,6 +69,27 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
     const spacePressedRef = useRef(false);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
+
+    useLayoutEffect(() => {
+        if (interactive) return;
+        const container = containerRef.current;
+        for (const id of [panState.current.pointerId, ...touchPointsRef.current.keys()]) {
+            if (container?.hasPointerCapture(id)) container.releasePointerCapture(id);
+        }
+        panState.current.isPanning = false;
+        pinchStateRef.current.active = false;
+        touchPointsRef.current.clear();
+        interactingRef.current = false;
+        if (frameRef.current) cancelAnimationFrame(frameRef.current);
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        frameRef.current = null;
+        syncTimerRef.current = null;
+        nextViewportRef.current = null;
+        delete container?.dataset.canvasViewportInteracting;
+        setIsPanning(false);
+        setIsSpacePressed(false);
+        document.body.style.cursor = "default";
+    }, [interactive, containerRef]);
 
     useLayoutEffect(() => {
         if (interactingRef.current) return;
@@ -95,7 +117,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
         [containerRef],
     );
 
-    const syncViewport = useCallback(() => onViewportChange(viewportRef.current), [onViewportChange]);
+    const syncViewport = useCallback(() => { if (interactive) onViewportChange(viewportRef.current); }, [interactive, onViewportChange]);
 
     const scheduleViewportChange = useCallback(
         (next: ViewportTransform, commitAfterIdle = false) => {
@@ -127,6 +149,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
     );
 
     useEffect(() => {
+        if (!interactive) return;
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.code !== "Space") return;
             if (event.target instanceof Element && event.target.closest("input,textarea,select,button,[contenteditable='true']")) return;
@@ -154,7 +177,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
             window.removeEventListener("keyup", handleKeyUp);
             window.removeEventListener("blur", handleBlur);
         };
-    }, []);
+    }, [interactive]);
 
     const handleWheel = useCallback(
         (event: WheelEvent) => {
@@ -208,6 +231,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
     );
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!interactive) return;
         const target = event.target instanceof Element ? event.target : null;
         // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
         if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
@@ -297,6 +321,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
     };
 
     useEffect(() => {
+        if (!interactive) return;
         const handlePointerMove = (event: PointerEvent) => {
             if (event.pointerType === "touch" && touchPointsRef.current.has(event.pointerId)) {
                 touchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -374,11 +399,11 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
             window.removeEventListener("pointerup", handlePointerEnd);
             window.removeEventListener("pointercancel", handlePointerEnd);
         };
-    }, [containerRef, onCanvasDeselect, scheduleViewportChange, syncViewport]);
+    }, [interactive, containerRef, onCanvasDeselect, scheduleViewportChange, syncViewport]);
 
     useEffect(() => {
         const container = containerRef.current;
-        if (!container) return;
+        if (!container || !interactive) return;
         const updateRect = () => {
             containerRectRef.current = container.getBoundingClientRect();
         };
@@ -392,7 +417,7 @@ export function InfiniteCanvas({ containerRef, viewport, appearance, backgroundM
             window.removeEventListener("resize", updateRect);
             container.removeEventListener("wheel", handleWheel, { capture: true });
         };
-    }, [containerRef, handleWheel]);
+    }, [interactive, containerRef, handleWheel]);
 
     return (
         <div

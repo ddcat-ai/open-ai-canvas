@@ -47,7 +47,9 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 	}
 	nodes := cloudAgentObjectChanges(before["nodes"], after["nodes"])
 	edges := cloudAgentObjectChanges(before["connections"], after["connections"])
-	if len(nodes) == 0 && len(edges) == 0 {
+	if !cloudAgentPatchCoversDocument(before, after) {
+		// A partial delta must never acknowledge a revision containing omitted edits.
+		state.event(runID, "canvas_updated", map[string]any{"canvasId": input.CanvasID, "operation": input.Operation, "requiresRefresh": true})
 		return nil
 	}
 	actions := []map[string]any{}
@@ -126,7 +128,7 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 	}
 	payload := map[string]any{
 		"canvasId": input.CanvasID, "operation": input.Operation, "actions": actions,
-		"canvasPatch": map[string]any{"canvasId": input.CanvasID, "updatedAt": after["updatedAt"], "nodes": nodes, "connections": edges},
+		"canvasPatch": map[string]any{"canvasId": input.CanvasID, "baseRevision": canvas.Revision - 1, "revision": canvas.Revision, "updatedAt": after["updatedAt"], "nodes": nodes, "connections": edges},
 	}
 	if input.Preview != nil {
 		payload["preview"] = input.Preview
@@ -137,4 +139,29 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 	}
 	state.event(runID, "canvas_updated", payload)
 	return nil
+}
+
+func cloudAgentPatchCoversDocument(before, after map[string]any) bool {
+	for _, key := range []string{"nodes", "connections"} {
+		old, next := creationMaps(before[key]), creationMaps(after[key])
+		if len(next) < len(old) {
+			return false
+		}
+		// The delta merger updates existing items in place and appends new items.
+		for i, item := range old {
+			if item["id"] != next[i]["id"] {
+				return false
+			}
+		}
+	}
+	content := func(doc map[string]any) map[string]any {
+		result := map[string]any{}
+		for key, value := range doc {
+			if key != "nodes" && key != "connections" && key != "updatedAt" && key != "viewport" {
+				result[key] = value
+			}
+		}
+		return result
+	}
+	return reflect.DeepEqual(content(before), content(after))
 }

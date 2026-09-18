@@ -48,7 +48,7 @@ func TestCloudAgentBatchTableCapabilityMatchesCanvasComponent(t *testing.T) {
 	if !ok {
 		t.Fatal("batch-table capability missing")
 	}
-	if descriptor.Label != "批量创作表" || descriptor.DefaultWidth != 900 || descriptor.DefaultHeight != 520 || descriptor.InputKind != "text" || descriptor.ProjectionKind != "batch_table" || descriptor.ProjectionField != "batchTable" {
+	if descriptor.Label != "批量创作表" || descriptor.DefaultWidth != 1280 || descriptor.DefaultHeight != 560 || descriptor.InputKind != "text" || descriptor.ProjectionKind != "batch_table" || descriptor.ProjectionField != "batchTable" {
 		t.Fatalf("batch-table capability differs from component contract: %+v", descriptor)
 	}
 	if err := descriptor.ValidateConnection("image"); err != nil {
@@ -96,6 +96,20 @@ func TestCloudAgentBatchTableToolsAreScopedAndStructured(t *testing.T) {
 		if patch[field] == nil {
 			t.Fatalf("batch row patch schema missing %s", field)
 		}
+	}
+	if properties["globalPrompt"] == nil {
+		t.Fatal("batch table edit schema missing globalPrompt")
+	}
+	actionEnum, _ := properties["action"].(map[string]any)["enum"].([]string)
+	foundGlobalPrompt := false
+	for _, action := range actionEnum {
+		if action == "set_global_prompt" {
+			foundGlobalPrompt = true
+			break
+		}
+	}
+	if !foundGlobalPrompt {
+		t.Fatalf("batch table edit schema missing set_global_prompt: %+v", actionEnum)
 	}
 	for _, forbidden := range []string{"outputNodeId", "taskId", "url", "storageKey", "metadata"} {
 		if patch[forbidden] != nil {
@@ -184,6 +198,85 @@ func TestCloudAgentCanReadAndEditBatchTableRows(t *testing.T) {
 	})
 	if _, err := applyCloudAgentBatchTableMutation(s.repo, "user", canvas.ID, updateCall, policy); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCloudAgentCanSetBatchTableGlobalPrompt(t *testing.T) {
+	s, canvas := cloudAgentBatchTableFixture(t)
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendCall := cloudAgentBatchTableCall(t, "canvas_edit_batch_table", "append-empty-prompt", map[string]any{
+		"snapshotHash": cloudAgentCanvasHash(doc), "nodeId": "batch-1", "action": "append",
+		"patch": map[string]any{"inputNodeIds": []string{"image-1", "image-2"}, "prompt": " "},
+	})
+	appendResult, err := applyCloudAgentBatchTableMutation(s.repo, "user", canvas.ID, appendCall, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{CanvasID: canvas.ID}}
+	readCall := cloudAgentBatchTableCall(t, "canvas_read_batch_table", "read-before-global", map[string]any{"nodeId": "batch-1", "offset": 0})
+	before, err := cloudAgentReadTool(s.repo, "user", state, readCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforePreview := before.(map[string]any)["batchTable"].(map[string]any)["generationPreview"].(map[string]any)
+	if beforePreview["readyRows"] != 0 || beforePreview["missingPromptRows"] != 1 {
+		t.Fatalf("empty row prompt should not be ready before global prompt: %+v", beforePreview)
+	}
+
+	setCall := cloudAgentBatchTableCall(t, "canvas_edit_batch_table", "set-global", map[string]any{
+		"snapshotHash": appendResult.(map[string]any)["snapshotHash"], "nodeId": "batch-1", "action": "set_global_prompt",
+		"globalPrompt": " 全局换装提示词 ",
+	})
+	setResult, err := applyCloudAgentBatchTableMutation(s.repo, "user", canvas.ID, setCall, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := cloudAgentReadTool(s.repo, "user", state, readCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := after.(map[string]any)["batchTable"].(map[string]any)
+	if table["globalPrompt"] != "全局换装提示词" && table["globalPrompt"] != " 全局换装提示词 " {
+		t.Fatalf("global prompt was not projected: %+v", table)
+	}
+	preview := table["generationPreview"].(map[string]any)
+	if preview["readyRows"] != 1 || preview["missingPromptRows"] != 0 {
+		t.Fatalf("global prompt should make the row ready: %+v", preview)
+	}
+
+	clearCall := cloudAgentBatchTableCall(t, "canvas_edit_batch_table", "clear-global", map[string]any{
+		"snapshotHash": setResult.(map[string]any)["snapshotHash"], "nodeId": "batch-1", "action": "set_global_prompt",
+		"globalPrompt": "   ",
+	})
+	if _, err := applyCloudAgentBatchTableMutation(s.repo, "user", canvas.ID, clearCall, policy); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := cloudAgentReadTool(s.repo, "user", state, readCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearedTable := cleared.(map[string]any)["batchTable"].(map[string]any)
+	if _, exists := clearedTable["globalPrompt"]; exists {
+		t.Fatalf("empty global prompt should be cleared: %+v", clearedTable)
+	}
+	clearedPreview := clearedTable["generationPreview"].(map[string]any)
+	if clearedPreview["readyRows"] != 0 {
+		t.Fatalf("cleared global prompt should restore missing prompt: %+v", clearedPreview)
+	}
+
+	reject := cloudAgentBatchTableCall(t, "canvas_edit_batch_table", "reject-global-row", map[string]any{
+		"snapshotHash": cleared.(map[string]any)["snapshotHash"], "nodeId": "batch-1", "action": "set_global_prompt",
+		"rowId": "row-should-not-be-accepted", "globalPrompt": "x",
+	})
+	if _, err := prepareCloudAgentBatchTableEdit(s.repo, "user", canvas.ID, reject); err == nil || !strings.Contains(err.Error(), "不接受其他修改参数") {
+		t.Fatalf("set_global_prompt should reject row-level parameters: %v", err)
 	}
 }
 

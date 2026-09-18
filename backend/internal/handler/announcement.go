@@ -10,6 +10,14 @@ import (
 )
 
 func RegisterAnnouncementRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/banner-announcements", func(c *gin.Context) {
+		banners, err := svc.ActiveBannerAnnouncements()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"banners": banners})
+	})
 	r.GET("/announcements", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -176,5 +184,80 @@ func RegisterAnnouncementRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"announcement": announcement})
+	})
+
+	r.GET("/admin/banner-announcements", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, limit, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		banners, err := svc.AdminBannerAnnouncementPage(user, service.AdminListQuery{
+			Keyword: c.Query("keyword"),
+			Status:  c.Query("status"),
+			Page:    page,
+			Limit:   limit,
+		})
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, banners)
+	})
+
+	r.POST("/admin/banner-announcements", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.CreateBannerAnnouncementRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		banner, err := svc.CreateBannerAnnouncement(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"banner": banner})
+	})
+
+	r.PUT("/admin/banner-announcements/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateBannerAnnouncementRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		banner, err := svc.UpdateBannerAnnouncement(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"banner": banner})
+	})
+
+	r.DELETE("/admin/banner-announcements/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteBannerAnnouncement(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
 	})
 }

@@ -3,6 +3,8 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	PaymentOrderQuery                      = app.PaymentOrderQuery
+	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet
@@ -83,7 +85,7 @@ type (
 	BulkDisableUsersResult                 = app.BulkDisableUsersResult
 	CanvasLibraryPage                      = app.CanvasLibraryPage
 	CanvasLibrarySummary                   = app.CanvasLibrarySummary
-	CanvasProjectsSyncRequest              = app.CanvasProjectsSyncRequest
+	CanvasHistoryList                      = app.CanvasHistoryList
 	CanvasShareRequest                     = app.CanvasShareRequest
 	CanvasShareStatus                      = app.CanvasShareStatus
 	CapabilityMatch                        = app.CapabilityMatch
@@ -107,6 +109,7 @@ type (
 	ConfirmProjectAssetCandidateRequest    = app.ConfirmProjectAssetCandidateRequest
 	CreateAdminUserRequest                 = app.CreateAdminUserRequest
 	CreateAnnouncementRequest              = app.CreateAnnouncementRequest
+	CreateBannerAnnouncementRequest        = app.CreateBannerAnnouncementRequest
 	CreateAssetCandidatesRequest           = app.CreateAssetCandidatesRequest
 	CreateAssetFolderRequest               = app.CreateAssetFolderRequest
 	CreateAssetVersionRequest              = app.CreateAssetVersionRequest
@@ -307,6 +310,7 @@ type (
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
 	TopupProductRequest                    = app.TopupProductRequest
 	UpdateAnnouncementRequest              = app.UpdateAnnouncementRequest
+	UpdateBannerAnnouncementRequest        = app.UpdateBannerAnnouncementRequest
 	UpdateAssetFolderRequest               = app.UpdateAssetFolderRequest
 	UpdateManager                          = app.UpdateManager
 	UpdatePaymentProviderConfigRequest     = app.UpdatePaymentProviderConfigRequest
