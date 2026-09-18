@@ -1,8 +1,5 @@
 import { Button, Form, Input, InputNumber } from "antd";
-import { Select } from "@/components/ui/base/select";
-import { IconButton } from "@/components/ui/base/buttons";
-import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import { Tooltip } from "@/components/ui/base/tooltip";
+import { IconButton, SegmentedControl, Select, Tooltip } from "@/pages/admin/ui/controls";
 import { Check, Copy, LockKeyhole, Moon, Plus, Sparkles, Sun, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 

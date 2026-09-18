@@ -42,7 +42,7 @@ export function ModelPicker({
     onMissingConfig,
     showSelectedPrice = true,
     showOptionPrices = showSelectedPrice,
-    variant = "default",
+    variant = "creation",
     requirements,
     showConfiguredModelName = false,
 }: ModelPickerProps) {
@@ -173,10 +173,8 @@ export function ModelPicker({
             ref={menuRef}
             data-canvas-no-zoom
             className={cn(
-                "canvas-model-picker-menu max-w-[calc(100vw-24px)]",
-                creationVariant
-                    ? cn("creation-model-picker-menu", activeGroupKey === null ? "is-brand-list" : "is-model-list")
-                    : "w-[var(--panel-width-compact)]",
+                "canvas-model-picker-menu creation-model-picker-menu max-w-[calc(100vw-24px)]",
+                activeGroupKey === null ? "is-brand-list" : "is-model-list",
             )}
             style={
                 {
@@ -252,7 +250,7 @@ export function ModelPicker({
                                             model={displayModel}
                                             capability={capability}
                                             theme={theme}
-                                            creationVariant={creationVariant}
+                                            creationVariant
                                             showConfiguredModelName={showConfiguredModelName}
                                             showPrice={showOptionPrices && creditsEnabled}
                                             disabledReason={disabledReason}
@@ -283,8 +281,8 @@ export function ModelPicker({
                 arrow={false}
                 content={content}
                 classNames={{
-                    root: cn("canvas-model-picker-popover", creationVariant && "creation-model-picker-popover", popoverClassName),
-                    container: cn("canvas-composer-popover-surface", creationVariant && "creation-model-picker-surface"),
+                    root: cn("canvas-model-picker-popover", "creation-model-picker-popover", popoverClassName),
+                    container: cn("canvas-composer-popover-surface", "creation-model-picker-surface"),
                     content: "canvas-composer-popover-content",
                 }}
             >

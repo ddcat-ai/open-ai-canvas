@@ -4,7 +4,7 @@ import { Tooltip } from "@/components/ui/base/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, AtSign, CheckCircle2, ChevronDown, CircleAlert, CircleDot, Eye, ImagePlus, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Square, X, XCircle } from "lucide-react";
+import { ArrowUp, AtSign, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, ImagePlus, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Square, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -24,6 +24,12 @@ type CloudAgentOperationImpact = {
     items: string[];
     warning?: string;
 };
+export type CloudAgentPlanItem = { id: string; title: string; status: "pending" | "doing" | "done" };
+export type CloudAgentUserQuestion = {
+    question: string;
+    options: Array<{ label: string; detail?: string }>;
+    allowFreeform?: boolean;
+};
 export type CloudAgentChatMessage = {
     id: string;
     role: "user" | "assistant" | "system" | "tool" | "error";
@@ -31,9 +37,12 @@ export type CloudAgentChatMessage = {
     text: string;
     streaming?: boolean;
     reasoning?: boolean;
+    planItems?: CloudAgentPlanItem[];
+    question?: CloudAgentUserQuestion;
     meta?: string;
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
+    interjection?: "sent" | "undelivered";
 };
 
 export type CloudAgentQuickAction = { label: string; prompt: string };
@@ -156,6 +165,16 @@ export function AgentChatMessage({
         <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
             {!isUser ? <AgentTimelineMarker theme={theme} tone="agent" /> : null}
             <div className={`min-w-0 text-sm leading-6 ${isUser ? "max-w-[82%] rounded-2xl rounded-br-md px-3.5 py-2.5 text-right" : "max-w-[calc(100%-36px)] flex-1 text-left"}`} style={{ color, ...(isUser ? { background: theme.node.agentUserMessage } : {}) }}>
+                {item.interjection ? (
+                    <span
+                        className="mb-1 inline-flex items-center rounded-full px-1.5 py-[1px] text-[var(--fs-label)] leading-4"
+                        style={item.interjection === "undelivered"
+                            ? { background: `${theme.accent.danger}22`, color: theme.accent.danger }
+                            : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
+                    >
+                        {item.interjection === "undelivered" ? "插话未送达" : "插话"}
+                    </span>
+                ) : null}
                 {item.role === "assistant" ? (
                     <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>
                         {item.text}
@@ -343,11 +362,89 @@ export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (t
     );
 }
 
+export function AgentPlanBar({ items, theme, minimized, onToggle }: {
+    items: CloudAgentPlanItem[];
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    minimized: boolean;
+    onToggle: () => void;
+}) {
+    const doneCount = items.filter((entry) => entry.status === "done").length;
+    const allDone = doneCount === items.length;
+    return (
+        <div className="agent-plan-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ background: theme.node.fill, border: `1px solid ${theme.node.stroke}`, color: theme.node.text }}>
+            <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={!minimized} onClick={onToggle}>
+                <ListChecks className="size-3.5 shrink-0" style={{ color: allDone ? "#429477" : theme.node.muted }} />
+                <span className="text-xs font-semibold">本轮待办</span>
+                <span className="text-[11px] tabular-nums opacity-50">{doneCount}/{items.length}</span>
+                <span className="min-w-0 flex-1" />
+                <span className="shrink-0 text-[11px] opacity-50">{minimized ? "展开" : "收起"}</span>
+                {minimized ? <ChevronDown className="size-3.5 shrink-0 opacity-50" /> : <ChevronUp className="size-3.5 shrink-0 opacity-50" />}
+            </button>
+            {minimized ? null : (
+                <ul className="thin-scrollbar max-h-40 space-y-1 overflow-y-auto px-3 pb-2">
+                    {items.map((entry) => {
+                        const done = entry.status === "done";
+                        const doing = entry.status === "doing";
+                        const Icon = done ? CheckCircle2 : doing ? LoaderCircle : CircleDot;
+                        return (
+                            <li key={entry.id} className="flex min-w-0 items-start gap-1.5 text-xs">
+                                <Icon className={doing ? "mt-[3px] size-3 shrink-0 animate-spin" : "mt-[3px] size-3 shrink-0"} style={{ color: done ? "#429477" : doing ? theme.accent.primary : theme.node.muted }} />
+                                <span className={done ? "min-w-0 break-words line-through opacity-50" : "min-w-0 break-words"}>{entry.title}</span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
+    );
+}
+
+export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: {
+    question: CloudAgentUserQuestion;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onAnswer: (label: string) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ background: theme.node.fill, border: `1px solid ${theme.accent.primary}`, color: theme.node.text }}>
+            <div className="flex items-start gap-2 px-3 pt-2.5">
+                <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
+                <span className="min-w-0 flex-1 text-xs font-semibold leading-5">{question.question}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 px-3 pb-2 pt-2">
+                {question.options.map((option) => (
+                    <button
+                        key={option.label}
+                        type="button"
+                        disabled={disabled}
+                        title={option.detail || option.label}
+                        className="max-w-full rounded-md border px-3 py-1.5 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ borderColor: theme.node.stroke, background: theme.toolbar.itemHover }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onAnswer(option.label);
+                        }}
+                    >
+                        <span className="block break-words font-medium">{option.label}</span>
+                        {option.detail ? <span className="mt-0.5 block break-words text-[10px] leading-4 opacity-60">{option.detail}</span> : null}
+                    </button>
+                ))}
+            </div>
+            <div className="px-3 pb-2 text-[10px] opacity-50">
+                {question.allowFreeform === false ? "请从上面选一项。" : "点一项即可，也可以在下方输入框里自己说明。"}
+            </div>
+        </div>
+    );
+}
+
 export function AgentChatComposer({
     prompt,
     attachments = [],
     disabled,
     sending,
+    running,
     placeholder,
     theme,
     onPromptChange,
@@ -365,6 +462,7 @@ export function AgentChatComposer({
     attachments?: CloudAgentChatAttachment[];
     disabled?: boolean;
     sending?: boolean;
+    running?: boolean;
     placeholder: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onPromptChange: (value: string) => void;
@@ -397,7 +495,7 @@ export function AgentChatComposer({
     const attachmentReferences = useMemo(() => agentAttachmentReferences(attachments), [attachments]);
     const skillReferences = useMemo(() => buildSkillMentionReferences(availableSlashSkills), [availableSlashSkills]);
     const composerReferences = useMemo(() => [...references, ...skillReferences, ...attachmentReferences].filter((reference, index, all) => all.findIndex((item) => item.id === reference.id) === index), [attachmentReferences, references, skillReferences]);
-    const canStop = Boolean(sending && onStop);
+    const canStop = Boolean(running && onStop);
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(slashCandidates.length - 1, 0));
@@ -643,32 +741,47 @@ export function AgentChatComposer({
                         {left}
                     </div>
                     <div className="agent-composer-submit flex items-center gap-2">
-                        <span className="agent-composer-send-hint">Enter 换行 · ⌘/Ctrl+Enter 发送</span>
+                        <span className="agent-composer-send-hint">{canStop ? "运行中：发送即插话，下一步生效" : "Enter 换行 · ⌘/Ctrl+Enter 发送"}</span>
+                        {canStop ? <motion.button
+                            type="button"
+                            disabled={stopping}
+                            aria-label="停止本轮"
+                            title="停止当前 Agent 运行"
+                            onClick={() => void onStop?.()}
+                            whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
+                            whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
+                            animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
+                            transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                            className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                            style={{ background: theme.accent.danger, color: theme.accent.onPrimary, boxShadow: `0 8px 20px ${theme.accent.danger}45` }}
+                        >
+                            {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
+                        </motion.button> : null}
                         <motion.button
                             type="button"
-                            disabled={!canSubmit && !canStop}
-                            aria-label={canStop ? "停止本轮" : sending ? "发送中" : "发送"}
-                            title={canStop ? "停止当前 Agent 运行" : "点击发送；⌘/Ctrl+Enter 发送"}
-                            onClick={() => void (canStop ? onStop?.() : onSubmit())}
-                            whileHover={(canSubmit || canStop) && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
-                            whileTap={(canSubmit || canStop) && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
+                            disabled={!canSubmit}
+                            aria-label={sending ? "发送中" : canStop ? "插话" : "发送"}
+                            title={canStop ? "插话：Agent 下一次开口时看到它" : "点击发送；⌘/Ctrl+Enter 发送"}
+                            onClick={() => onSubmit()}
+                            whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
+                            whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
                             animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1, rotate: 0 }}
                             transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
                             className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
                             style={{
-                                background: canStop ? theme.accent.danger : canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
-                                color: canStop || canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
-                                boxShadow: canStop || canSubmit || sending ? `0 8px 20px ${canStop ? theme.accent.danger : theme.accent.primary}45` : "none",
+                                background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
+                                color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
+                                boxShadow: canSubmit || sending ? `0 8px 20px ${theme.accent.primary}45` : "none",
                             }}
                         >
                             <motion.span
-                                key={stopping ? "stopping" : canStop ? "stop" : sending ? "sending" : "ready"}
+                                key={stopping ? "stopping" : sending ? "sending" : "ready"}
                                 initial={reducedMotion ? false : { opacity: 0, scale: 0.65, rotate: sending ? -25 : 25 }}
                                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
                                 transition={{ duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }}
                                 className="grid place-items-center"
                             >
-                                {stopping || (sending && !canStop) ? <LoaderCircle className="size-4 animate-spin" /> : canStop ? <Square className="size-3.5" fill="currentColor" /> : <ArrowUp className="size-4" />}
+                                {sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                             </motion.span>
                         </motion.button>
                     </div>

@@ -1057,10 +1057,13 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 			log.UsageAvailable = log.OutputTokens > 0
 		}
 		if details, ok := usage["input_tokens_details"].(map[string]any); ok {
-			log.CachedTokens = firstInt64(details, "cached_tokens")
+			log.CachedTokens = firstInt64(details, "cached_tokens", "cache_read_input_tokens")
 		}
 		if details, ok := usage["prompt_tokens_details"].(map[string]any); ok && log.CachedTokens == 0 {
-			log.CachedTokens = firstInt64(details, "cached_tokens")
+			log.CachedTokens = firstInt64(details, "cached_tokens", "cache_read_input_tokens")
+		}
+		if log.CachedTokens == 0 {
+			log.CachedTokens = firstInt64(usage, "cached_tokens", "cache_read_input_tokens", "prompt_cache_hit_tokens")
 		}
 	}
 	if usageMetadata, ok := payload["usageMetadata"].(map[string]any); ok {

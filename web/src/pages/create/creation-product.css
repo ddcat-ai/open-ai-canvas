@@ -54,6 +54,7 @@
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action::after { animation: creation-submit-sheen 640ms cubic-bezier(.16, 1, .3, 1); }
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action svg { transform: translateY(-1px); }
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { transform: scale(.97); }
+    .app-product-workspace .creation-home .creation-chat-composer.is-thread .creation-submit.ant-btn .creation-submit-action { height: 34px; padding: 0 14px; }
 }
 .creation-inspiration-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .creation-inspiration-filters button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: 36px; border: 0; border-radius: 999px; color: var(--user-ink-muted); background: transparent; font-size: 13px; transition: background var(--user-motion), color var(--user-motion); }
@@ -119,4 +120,155 @@
     .app-user-workspace .creation-voice-trigger.ant-btn,
     .app-user-workspace .creation-submit-action { transition: none !important; transform: none !important; }
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action::after { animation: none; }
+}
+
+/* 参数弹窗挂在 body overlays，必须直接用用户表面 token；描边由 Ant inner 的 1px border 造成。 */
+.app-user-overlays .creation-control-popover,
+.app-product-overlays .creation-control-popover {
+    --popover: var(--user-surface-raised);
+    --border: transparent;
+    --creation-text: var(--user-ink);
+    --creation-muted: var(--user-ink-muted);
+    --creation-faint: var(--user-ink-soft);
+    --control-selected-bg: var(--user-control-pressed);
+    --control-selected-fg: var(--user-ink);
+}
+
+.app-user-overlays .creation-control-popover .ant-popover-arrow,
+.app-product-overlays .creation-control-popover .ant-popover-arrow { display: none; }
+
+.app-user-overlays .creation-control-popover.ant-popover,
+.app-user-overlays .creation-control-popover .ant-popover-container,
+.app-user-overlays .creation-control-popover .ant-popover-inner,
+.app-user-overlays .creation-control-popover-surface,
+.app-product-overlays .creation-control-popover.ant-popover,
+.app-product-overlays .creation-control-popover .ant-popover-container,
+.app-product-overlays .creation-control-popover .ant-popover-inner,
+.app-product-overlays .creation-control-popover-surface {
+    border: 0 !important;
+    outline: 0 !important;
+    background: var(--user-surface-raised) !important;
+    background-image: none !important;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .36) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 16px !important;
+}
+
+.app-user-overlays .creation-control-popover .ant-popover-inner,
+.app-product-overlays .creation-control-popover .ant-popover-inner {
+    overflow: hidden;
+    padding: 0 !important;
+}
+
+.app-user-overlays .creation-parameter-menu,
+.app-product-overlays .creation-parameter-menu { padding: 12px !important; }
+
+.app-user-overlays .creation-parameter-section h3,
+.app-user-overlays .creation-duration-heading > span,
+.app-product-overlays .creation-parameter-section h3,
+.app-product-overlays .creation-duration-heading > span { color: var(--user-ink-muted) !important; }
+
+.app-user-overlays .creation-parameter-section > header > span,
+.app-user-overlays .creation-duration-heading strong,
+.app-product-overlays .creation-parameter-section > header > span,
+.app-product-overlays .creation-duration-heading strong { color: var(--user-ink) !important; }
+
+.app-user-overlays .creation-choice-grid,
+.app-product-overlays .creation-choice-grid { gap: 6px !important; }
+
+.app-user-overlays .creation-choice-grid button,
+.app-user-overlays .creation-duration-choices button,
+.app-product-overlays .creation-choice-grid button,
+.app-product-overlays .creation-duration-choices button {
+    min-height: 40px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--user-ink-muted) !important;
+}
+
+.app-user-overlays .creation-choice-grid.is-resolution button,
+.app-user-overlays .creation-choice-grid.is-quality button,
+.app-user-overlays .creation-choice-grid.is-count button,
+.app-user-overlays .creation-duration-choices button,
+.app-product-overlays .creation-choice-grid.is-resolution button,
+.app-product-overlays .creation-choice-grid.is-quality button,
+.app-product-overlays .creation-choice-grid.is-count button,
+.app-product-overlays .creation-duration-choices button { min-height: 34px !important; }
+
+.app-user-overlays .creation-choice-grid button:hover,
+.app-user-overlays .creation-duration-choices button:hover,
+.app-product-overlays .creation-choice-grid button:hover,
+.app-product-overlays .creation-duration-choices button:hover {
+    background: var(--user-surface-hover) !important;
+    color: var(--user-ink) !important;
+}
+
+.app-user-overlays .creation-choice-grid button.is-selected,
+.app-user-overlays .creation-duration-choices button.is-selected,
+.app-product-overlays .creation-choice-grid button.is-selected,
+.app-product-overlays .creation-duration-choices button.is-selected {
+    background: var(--user-control-pressed) !important;
+    color: var(--user-ink) !important;
+}
+
+.app-user-overlays .creation-choice-grid .creation-ratio-preview > span,
+.app-product-overlays .creation-choice-grid .creation-ratio-preview > span {
+    border: 0 !important;
+    border-radius: 3px !important;
+    background: currentColor;
+    opacity: .55;
+}
+
+.app-user-overlays .creation-choice-grid button.is-selected .creation-ratio-preview > span,
+.app-product-overlays .creation-choice-grid button.is-selected .creation-ratio-preview > span { opacity: .92; }
+
+.app-user-overlays .creation-custom-value,
+.app-product-overlays .creation-custom-value {
+    border: 0 !important;
+    background: var(--user-surface-muted) !important;
+    color: var(--user-ink-muted) !important;
+}
+
+.app-user-overlays .creation-parameter-menu .image-size-tiers button,
+.app-user-overlays .creation-parameter-menu .image-size-ratios button,
+.app-user-overlays .creation-parameter-menu .image-size-auto,
+.app-product-overlays .creation-parameter-menu .image-size-tiers button,
+.app-product-overlays .creation-parameter-menu .image-size-ratios button,
+.app-product-overlays .creation-parameter-menu .image-size-auto {
+    border: 0 !important;
+    background: var(--user-surface-muted) !important;
+    box-shadow: none !important;
+    color: var(--user-ink-muted) !important;
+}
+
+.app-user-overlays .creation-parameter-menu .image-size-tiers button[aria-pressed="true"],
+.app-user-overlays .creation-parameter-menu .image-size-ratios button[aria-pressed="true"],
+.app-user-overlays .creation-parameter-menu .image-size-auto[aria-pressed="true"],
+.app-product-overlays .creation-parameter-menu .image-size-tiers button[aria-pressed="true"],
+.app-product-overlays .creation-parameter-menu .image-size-ratios button[aria-pressed="true"],
+.app-product-overlays .creation-parameter-menu .image-size-auto[aria-pressed="true"] {
+    background: var(--user-control-pressed) !important;
+    box-shadow: none !important;
+    color: var(--user-ink) !important;
+}
+
+.app-user-overlays .creation-parameter-menu .image-size-ratio-icon,
+.app-product-overlays .creation-parameter-menu .image-size-ratio-icon {
+    border: 0 !important;
+    background: currentColor;
+    opacity: .55;
+}
+
+html:not(.dark) .app-user-overlays .creation-control-popover.ant-popover,
+html:not(.dark) .app-user-overlays .creation-control-popover .ant-popover-container,
+html:not(.dark) .app-user-overlays .creation-control-popover .ant-popover-inner,
+html:not(.dark) .app-user-overlays .creation-control-popover-surface,
+html:not(.dark) .app-product-overlays .creation-control-popover.ant-popover,
+html:not(.dark) .app-product-overlays .creation-control-popover .ant-popover-container,
+html:not(.dark) .app-product-overlays .creation-control-popover .ant-popover-inner,
+html:not(.dark) .app-product-overlays .creation-control-popover-surface {
+    box-shadow: 0 16px 40px rgba(25, 25, 30, .12) !important;
 }

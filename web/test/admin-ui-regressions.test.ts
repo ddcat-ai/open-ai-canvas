@@ -292,3 +292,43 @@ test("request logs display user credit billing independently from upstream cost"
     expect(apiSource).toContain("billingAmountMicrocredits: number");
     expect(apiSource).toContain("billingAvailable: boolean");
 });
+
+test("admin console tokens and shell stay isolated from the user workspace", async () => {
+    const [tokens, shell, chrome, globals] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/theme/admin-tokens.css", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
+    ]);
+
+    expect(tokens).toContain("--admin-canvas: #f5f5f5;");
+    expect(tokens).toContain("--admin-canvas: #0f0f0f;");
+    expect(tokens).not.toContain("--admin-layer-0: var(--workspace-");
+    expect(tokens).not.toContain("--admin-layer-0: var(--skin-admin-");
+    expect(shell).toContain("data-admin-root");
+    expect(shell).toContain("getIsolatedAdminAntTheme");
+    expect(shell).not.toContain("WorkspacePage");
+    expect(shell).not.toContain("getAdminAntThemeConfig");
+    expect(shell).not.toContain("app-workspace-nav-link");
+    expect(chrome).toContain("[data-admin-root] .admin-nav-link");
+    expect(chrome).toContain("border-left: 0 !important");
+    expect(chrome).not.toContain("left: -8px");
+    expect(chrome).toContain(".admin-drawer .ant-drawer-content");
+    expect(globals).not.toContain("/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */");
+
+    const [overlays, userDetail, prompts, payments, modelEditor] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/ui/overlays.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/components/admin-user-detail-drawer.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/payments/payments-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/components/channel-model-editor.tsx", import.meta.url)).text(),
+    ]);
+    expect(overlays).toContain('rootClassName={cn("admin-drawer"');
+    expect(overlays).toContain('rootClassName={cn("admin-modal-root"');
+    expect(overlays).not.toContain("@/components/ui/product");
+    for (const source of [userDetail, prompts, payments, modelEditor]) {
+        expect(source).not.toContain("@/components/ui/product");
+        expect(source).not.toContain("AppDrawer");
+        expect(source).not.toContain("AppModal");
+    }
+});

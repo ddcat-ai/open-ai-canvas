@@ -4,7 +4,7 @@
 
 ## 1. 包格式
 
-上传文件必须是 `.yingce-plugin` ZIP 包，大小不超过 16 MiB。包内必须有根目录 `manifest.json`；不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
+上传文件必须是 `.yingce-plugin` ZIP 包，大小不超过 48 MiB。包内必须有根目录 `manifest.json`；不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
 
 ```text
 my-plugin.yingce-plugin

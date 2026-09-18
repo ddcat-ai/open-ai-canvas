@@ -24,6 +24,8 @@ var (
 const (
 	ProviderWeChatNative = "wechat-native"
 	ProviderAlipayPage   = "alipay-page-pay"
+	ProviderXunHuPay     = "xunhupay-aggregate"
 	PluginWeChatNative   = "official-payment-wechat-native"
 	PluginAlipayPage     = "official-payment-alipay-page"
+	PluginXunHuPay       = "official-payment-xunhupay"
 )

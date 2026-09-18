@@ -47,6 +47,37 @@ func TestCloudAgentCanonicalUsesAutomaticToolChoice(t *testing.T) {
 	}
 }
 
+func TestCloudAgentPlanDoesNotBustSystemPrefix(t *testing.T) {
+	state := cloudAgentRuntime{
+		Canonical: canonicalAgentRequest{
+			SystemPrompt:   "frozen-system",
+			PromptCacheKey: "cloud-agent:abc",
+			Messages:       []map[string]any{{"role": "user", "content": "做分镜"}},
+		},
+	}
+	first := cloudAgentCanonicalWithPlan(&state)
+	state.Plan = []cloudAgentPlanItem{{ID: "1", Title: "写分镜", Status: "doing"}}
+	second := cloudAgentCanonicalWithPlan(&state)
+	state.Plan[0].Status = "done"
+	state.Plan = append(state.Plan, cloudAgentPlanItem{ID: "2", Title: "生成视频", Status: "pending"})
+	third := cloudAgentCanonicalWithPlan(&state)
+	if first.SystemPrompt != "frozen-system" || second.SystemPrompt != first.SystemPrompt || third.SystemPrompt != first.SystemPrompt {
+		t.Fatalf("待办变化不得改写系统提示: %q / %q / %q", first.SystemPrompt, second.SystemPrompt, third.SystemPrompt)
+	}
+	if first.PromptCacheKey != "cloud-agent:abc" || second.PromptCacheKey != first.PromptCacheKey {
+		t.Fatal("prompt cache key 应保持冻结")
+	}
+	if isCloudAgentRuntimeContextMessage(first.Messages[len(first.Messages)-1]) {
+		t.Fatal("没有清单时不应追加运行状态")
+	}
+	if !strings.Contains(stringField(second.Messages[len(second.Messages)-1], "content"), "写分镜") {
+		t.Fatal("清单应挂在末尾消息")
+	}
+	if strings.Contains(stringField(state.Canonical.Messages[len(state.Canonical.Messages)-1], "content"), "生成视频") {
+		t.Fatal("运行态历史不得钉死清单快照")
+	}
+}
+
 func TestCloudAgentUnlimitedBudgetKeepsGenerationTools(t *testing.T) {
 	for _, limit := range []int{0, 25} {
 		req := agentTestRequest()

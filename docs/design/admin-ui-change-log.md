@@ -1191,3 +1191,30 @@
 - 集成验证：隔离迁移正常退出，schema current/expected 6/6，公开主题可从 schema 5 配置读取并投影为 schema 6；既有 appearance 数据摘要保持不变。首页、注册、登录、找回密码、后台深链、liveness、readiness、公开外观与版本接口均通过，未登录管理员外观 API 返回 401。生产构建产物已确认包含 `.admin-shell .app-workspace-nav-link{border-radius:var(--menu-radius)}` 与“后台菜单”预览。
 - 浏览器验收：1440×900、1280×800、430×932、390×844 均无横向溢出、无可见内置品牌或仓库名残留，首屏直接显示当前自定义品牌。测试会话无管理员登录态，因此真实主题增删改保存、危险按钮/开关各状态和后台菜单圆角的登录后截图仍留作人工验收，不伪造账户或运营数据。
 - 回滚与残余风险：本批不增加关系型数据库迁移；源码回滚应成对恢复 schema v6 新增颜色字段、前后端兼容补全、Ant/CSS 映射、编辑器和测试。回滚前先备份当前 appearance JSON，避免丢失管理员在 schema v6 下保存的主题状态色。`project-memory/` 继续 Git 忽略且不进入 Git。
+
+## 批次 138：管理后台独立设计系统与用户端隔离
+
+- 日期时间：2026-09-17 20:45 CST
+- 目的：把管理后台从用户工作台的皮肤、token、Ant 主题和共享控件中拆出来，用一套高密度运营台规范覆盖全部后台页面，而不是继续给每个入口打补丁。
+- 隔离：新增 `pages/admin/theme/admin-tokens.css`、`admin-chrome.css`、`admin-ant-theme.ts` 与 `pages/admin/ui/controls.tsx`。壳层挂 `data-admin-root`，浮层走 `body.admin-overlays`。后台不再调用 `getAdminAntThemeConfig`、`WorkspacePage`、用户端 `Switch/Select/Checkbox/Tooltip/StatusBadge/EmptyState`。`globals.css` 中约 1100 行管理端规则已删除。
+- 视觉：冷灰表面台阶、发丝线、32px 控件、40px 表行；命令条统一为页头下粘性条，设置卡与功能开放域共用同一分组卡，不做玻璃拟态或逐页皮肤。
+- 验证：后台回归测试覆盖隔离合同；`tsc` 中本批管理端文件无新增错误。用户端组件未被改样式。登录态浏览器验收见 pending-test。
+- 逐项回滚：恢复本批新增的 `pages/admin/theme/`、`pages/admin/ui/controls.tsx`，以及 `admin-shell.tsx`、`admin-ui.tsx`、`globals.css`、`admin-ui.css` 和各页面 import 改写。
+
+## 批次 139：管理端抽屉/弹窗脱离产品壳
+
+- 日期时间：2026-09-17 20:50 CST
+- 目的：后台浮层不再复用用户端 `AppDrawer` / `AppModal`，避免产品弹窗内边距和外壳样式渗进运营台。
+- 涉及文件：`web/src/pages/admin/ui/overlays.tsx`（新增）、用户详情抽屉、提示词模板页、支付页、渠道模型编辑器、`admin-chrome.css`。
+- 具体改动：新增 `AdminDrawer` / `AdminModal`，强制挂 `admin-drawer` / `admin-modal-root`；浮层表面、标题和分隔线走 `--admin-*`。
+- 验证：后台回归测试覆盖不再引用产品壳；浏览器用独立预览核对照片密度与用户登录页隔离。
+- 逐项回滚：删除 `overlays.tsx` 并把四处调用改回产品壳即可。
+
+## 批次 140：侧栏去掉树状线并恢复原中性色
+
+- 日期时间：2026-09-17 21:20 CST
+- 目的：上一批把后台换成冷蓝灰，但树状分组线、选中描边和左侧指示条还在。按反馈恢复原来的黑白后台色，并真正拆掉那些装饰线。
+- 涉及文件：`admin-tokens.css`、`admin-ant-theme.ts`、`admin-chrome.css`、`admin-ui.css`、设计规范。
+- 具体改动：暗色回到 `#0f0f0f / #181818`，亮色回到 `#f5f5f5 / #ffffff`，仍写死在后台 token 里不读皮肤。分组标题取消圆点与渐隐短线；组内取消竖向连接线和缩进；当前页只保留底色，不再加描边和左侧指示条。
+- 验证：回归测试更新隔离色值与“无树状线”断言。
+- 逐项回滚：恢复本批上述文件即可。

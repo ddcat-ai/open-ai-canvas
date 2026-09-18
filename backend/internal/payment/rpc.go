@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"debug/elf"
+	"debug/macho"
+	"debug/pe"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -25,6 +27,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"infinite-canvas/backend/internal/protocol"
 )
 
 const (
@@ -35,6 +39,7 @@ const (
 
 type RPCProvider struct {
 	descriptor Descriptor
+	entry      string
 	command    string
 	dir        string
 }
@@ -49,7 +54,11 @@ func NewRPCProvider(descriptor Descriptor, packageDir, entry string) (*RPCProvid
 	if strings.TrimSpace(packageDir) == "" {
 		return nil, errors.New("payment plugin package directory is empty")
 	}
-	return &RPCProvider{descriptor: descriptor, command: filepath.Join(packageDir, filepath.FromSlash(entry)), dir: packageDir}, nil
+	packageDir, err := filepath.Abs(packageDir)
+	if err != nil {
+		return nil, fmt.Errorf("payment plugin package directory is invalid: %w", err)
+	}
+	return &RPCProvider{descriptor: descriptor, entry: entry, dir: packageDir}, nil
 }
 
 func (p *RPCProvider) Descriptor() Descriptor { return p.descriptor }
@@ -73,10 +82,14 @@ type rpcResponse struct {
 }
 
 func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) error {
-	if p == nil || strings.TrimSpace(p.command) == "" {
+	if p == nil {
 		return errors.New("payment plugin runtime is unavailable")
 	}
-	info, err := os.Stat(p.command)
+	command, err := p.executable()
+	if err != nil {
+		return p.startError(err)
+	}
+	info, err := os.Stat(command)
 	if err != nil {
 		return p.startError(err)
 	}
@@ -86,7 +99,7 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		return p.startError(fmt.Errorf("payment plugin executable has no execute bit: %w", syscall.EACCES))
 	}
-	if err := validatePaymentExecutablePlatform(p.command); err != nil {
+	if err := validatePaymentExecutablePlatform(command); err != nil {
 		return p.startError(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, pluginRPCTimeout)
@@ -95,9 +108,9 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, p.command)
+	cmd := exec.CommandContext(ctx, command)
 	cmd.Dir = p.dir
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent"}
+	cmd.Env = paymentPluginCommandEnv()
 	cmd.Stdin = strings.NewReader(string(payload) + "\n")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -148,19 +161,94 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 	return nil
 }
 
+func (p *RPCProvider) executable() (string, error) {
+	if p == nil {
+		return "", errors.New("payment plugin runtime is unavailable")
+	}
+	if strings.TrimSpace(p.command) != "" {
+		return p.command, nil
+	}
+	command, err := ResolveRPCBackendPath(p.dir, p.entry)
+	if err != nil {
+		return "", err
+	}
+	command, err = filepath.Abs(command)
+	if err != nil {
+		return "", err
+	}
+	p.command = command
+	return command, nil
+}
+
 func (p *RPCProvider) startError(cause error) error {
 	providerErr := classifyPaymentPluginStartError(cause)
+	command := strings.TrimSpace(p.command)
+	if command == "" {
+		command, _ = ResolveRPCBackendPath(p.dir, p.entry)
+	}
 	log.Printf(
 		"payment plugin executable failed: provider=%q plugin=%q host=%s/%s command=%q code=%s error=%v",
 		p.descriptor.ID,
 		p.descriptor.PluginID,
 		runtime.GOOS,
 		runtime.GOARCH,
-		p.command,
+		command,
 		providerErr.Code,
 		cause,
 	)
 	return providerErr
+}
+
+func paymentPluginCommandEnv() []string {
+	if runtime.GOOS == "windows" {
+		systemRoot := strings.TrimSpace(os.Getenv("SystemRoot"))
+		if systemRoot == "" {
+			systemRoot = strings.TrimSpace(os.Getenv("SYSTEMROOT"))
+		}
+		env := []string{"HOME=" + filepath.Join("C:\\", "nonexistent")}
+		if systemRoot != "" {
+			env = append(env, "SystemRoot="+systemRoot, "SYSTEMROOT="+systemRoot)
+		}
+		return env
+	}
+	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent"}
+}
+
+func ResolveRPCBackendPath(packageDir, entry string) (string, error) {
+	if strings.TrimSpace(packageDir) == "" {
+		return "", fmt.Errorf("payment plugin executable for %s/%s is missing: %w", runtime.GOOS, runtime.GOARCH, os.ErrNotExist)
+	}
+	var missingErr, formatErr error
+	for _, candidate := range protocol.PaymentRPCBackendCandidates(entry, runtime.GOOS, runtime.GOARCH) {
+		target := filepath.Join(packageDir, filepath.FromSlash(candidate))
+		info, err := os.Stat(target)
+		if err != nil {
+			if missingErr == nil {
+				missingErr = err
+			}
+			continue
+		}
+		if info.IsDir() {
+			if missingErr == nil {
+				missingErr = os.ErrNotExist
+			}
+			continue
+		}
+		if err := validatePaymentExecutablePlatform(target); err != nil {
+			if formatErr == nil {
+				formatErr = err
+			}
+			continue
+		}
+		return target, nil
+	}
+	if formatErr != nil {
+		return "", fmt.Errorf("payment plugin executable for %s/%s is incompatible: %w", runtime.GOOS, runtime.GOARCH, formatErr)
+	}
+	if missingErr == nil {
+		missingErr = os.ErrNotExist
+	}
+	return "", fmt.Errorf("payment plugin executable for %s/%s is missing: %w", runtime.GOOS, runtime.GOARCH, missingErr)
 }
 
 func classifyPaymentPluginStartError(cause error) *ProviderError {
@@ -177,9 +265,6 @@ func classifyPaymentPluginStartError(cause error) *ProviderError {
 }
 
 func validatePaymentExecutablePlatform(command string) error {
-	if runtime.GOOS != "linux" {
-		return nil
-	}
 	file, err := os.Open(command)
 	if err != nil {
 		return err
@@ -190,26 +275,90 @@ func validatePaymentExecutablePlatform(command string) error {
 	if _, err := io.ReadFull(file, magic[:]); err != nil {
 		return fmt.Errorf("payment plugin executable header is incomplete: %w", syscall.ENOEXEC)
 	}
-	if bytes.Equal(magic[:2], []byte{'M', 'Z'}) {
-		return fmt.Errorf("payment plugin executable is Windows PE on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
-	}
-	if isMachOMagic(magic) {
-		return fmt.Errorf("payment plugin executable is Mach-O on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
-	}
-	if !bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'}) {
-		// Scripts and other kernel-supported executable formats are left to
-		// cmd.Start. Unknown binary data will be classified from ENOEXEC there.
+
+	switch runtime.GOOS {
+	case "linux":
+		if bytes.Equal(magic[:2], []byte{'M', 'Z'}) {
+			return fmt.Errorf("payment plugin executable is Windows PE on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if isMachOMagic(magic) {
+			return fmt.Errorf("payment plugin executable is Mach-O on linux/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if !bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'}) {
+			return nil
+		}
+		binary, err := elf.NewFile(file)
+		if err != nil {
+			return fmt.Errorf("payment plugin ELF header is invalid: %w", syscall.ENOEXEC)
+		}
+		defer binary.Close()
+		expected, ok := expectedPaymentELFMachine(runtime.GOARCH)
+		if binary.Class != elf.ELFCLASS64 || (ok && binary.Machine != expected) {
+			return fmt.Errorf("payment plugin ELF architecture mismatch: host=linux/%s class=%s machine=%s: %w", runtime.GOARCH, binary.Class, binary.Machine, syscall.ENOEXEC)
+		}
+		return nil
+	case "darwin":
+		if bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'}) {
+			return fmt.Errorf("payment plugin executable is ELF on darwin/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if bytes.Equal(magic[:2], []byte{'M', 'Z'}) {
+			return fmt.Errorf("payment plugin executable is Windows PE on darwin/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if !isMachOMagic(magic) {
+			return nil
+		}
+		return validateMachOArchitecture(command)
+	case "windows":
+		if bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'}) {
+			return fmt.Errorf("payment plugin executable is ELF on windows/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if isMachOMagic(magic) {
+			return fmt.Errorf("payment plugin executable is Mach-O on windows/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+		}
+		if !bytes.Equal(magic[:2], []byte{'M', 'Z'}) {
+			return nil
+		}
+		return validateWindowsPEArchitecture(command)
+	default:
 		return nil
 	}
+}
 
-	binary, err := elf.NewFile(file)
-	if err != nil {
-		return fmt.Errorf("payment plugin ELF header is invalid: %w", syscall.ENOEXEC)
+func validateMachOArchitecture(command string) error {
+	expected, ok := expectedMachOCPU(runtime.GOARCH)
+	file, err := macho.Open(command)
+	if err == nil {
+		defer file.Close()
+		if ok && file.Cpu != expected {
+			return fmt.Errorf("payment plugin Mach-O architecture mismatch: host=darwin/%s cpu=%s: %w", runtime.GOARCH, file.Cpu, syscall.ENOEXEC)
+		}
+		return nil
 	}
-	defer binary.Close()
-	expected, ok := expectedPaymentELFMachine(runtime.GOARCH)
-	if binary.Class != elf.ELFCLASS64 || (ok && binary.Machine != expected) {
-		return fmt.Errorf("payment plugin ELF architecture mismatch: host=linux/%s class=%s machine=%s: %w", runtime.GOARCH, binary.Class, binary.Machine, syscall.ENOEXEC)
+	fat, fatErr := macho.OpenFat(command)
+	if fatErr != nil {
+		return fmt.Errorf("payment plugin Mach-O header is invalid: %w", syscall.ENOEXEC)
+	}
+	defer fat.Close()
+	if !ok {
+		return nil
+	}
+	for _, arch := range fat.Arches {
+		if arch.Cpu == expected {
+			return nil
+		}
+	}
+	return fmt.Errorf("payment plugin Mach-O architecture mismatch: host=darwin/%s: %w", runtime.GOARCH, syscall.ENOEXEC)
+}
+
+func validateWindowsPEArchitecture(command string) error {
+	file, err := pe.Open(command)
+	if err != nil {
+		return fmt.Errorf("payment plugin PE header is invalid: %w", syscall.ENOEXEC)
+	}
+	defer file.Close()
+	expected, ok := expectedPEMachine(runtime.GOARCH)
+	if ok && file.Machine != expected {
+		return fmt.Errorf("payment plugin PE architecture mismatch: host=windows/%s machine=%d: %w", runtime.GOARCH, file.Machine, syscall.ENOEXEC)
 	}
 	return nil
 }
@@ -229,6 +378,28 @@ func expectedPaymentELFMachine(arch string) (elf.Machine, bool) {
 		return elf.EM_AARCH64, true
 	default:
 		return elf.EM_NONE, false
+	}
+}
+
+func expectedMachOCPU(arch string) (macho.Cpu, bool) {
+	switch arch {
+	case "amd64":
+		return macho.CpuAmd64, true
+	case "arm64":
+		return macho.CpuArm64, true
+	default:
+		return 0, false
+	}
+}
+
+func expectedPEMachine(arch string) (uint16, bool) {
+	switch arch {
+	case "amd64":
+		return pe.IMAGE_FILE_MACHINE_AMD64, true
+	case "arm64":
+		return pe.IMAGE_FILE_MACHINE_ARM64, true
+	default:
+		return 0, false
 	}
 }
 

@@ -3,7 +3,7 @@ import { App, Button, Checkbox, Input, Modal, Popconfirm, Select, Space } from "
 import type { ColumnsType } from "antd/es/table";
 import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIcon } from "@/components/model-picker";
 import { modelProtocolDefinition, modelProtocolLabel, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";

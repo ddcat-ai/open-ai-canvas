@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
-import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { IconButton } from "@/components/ui/base/buttons";
-import { EmptyState } from "@/components/ui/product/empty-state";
+import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
 import { formatCredits } from "@/constant/credits";
-import { AdminDataTable, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
+import { IconButton } from "@/pages/admin/ui/controls";
+import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
@@ -91,7 +89,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
     }, [auditPage, message, userId]);
 
     return (
-        <AppDrawer
+        <AdminDrawer
             title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}
             open={Boolean(userId)}
             onClose={onClose}
@@ -227,9 +225,9 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                     ]}
                 />
             ) : (
-                <EmptyState size="compact" title="没有用户详情" />
+                <AdminEmpty size="compact" title="没有用户详情" />
             )}
-        </AppDrawer>
+        </AdminDrawer>
     );
 }
 

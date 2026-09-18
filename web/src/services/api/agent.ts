@@ -27,7 +27,7 @@ export type AgentProfileView = {
     layers: AgentProfileLayer[];
 };
 
-export type AgentApprovalPreviewOperation = "add_node" | "update_node" | "connect_nodes" | "generate_media" | "create_storyboard" | "edit_storyboard";
+export type AgentApprovalPreviewOperation = "add_node" | "update_node" | "connect_nodes" | "generate_media" | "create_storyboard" | "edit_storyboard" | "plan_step";
 
 export type AgentApprovalPreviewItem = {
     operation: AgentApprovalPreviewOperation;
@@ -114,7 +114,7 @@ export type CreateAgentRunInput = {
     skillIds?: string[];
     permissionMode?: AgentPermissionMode;
     contextScope?: string[];
-    budget?: { maxCredits?: number; maxGenerationTasks?: number; maxVideoSeconds?: number };
+    budget?: { maxCredits?: number; maxGenerationTasks?: number; maxVideoSeconds?: number; maxSteps?: number };
     idempotencyKey: string;
 };
 
@@ -143,6 +143,10 @@ export async function createAgentRun(input: CreateAgentRunInput) {
 
 export async function sendAgentMessage(runId: string, input: CreateAgentRunInput) {
     return submitAgentRequest(`/agent/runs/${encodeURIComponent(runId)}/messages`, input);
+}
+
+export function sendAgentInterjection(runId: string, input: { text: string; messageId: string }) {
+    return http.post<{ accepted: boolean; pending: number }>(`/agent/runs/${encodeURIComponent(runId)}/interjections`, input, { timeout: 20_000 });
 }
 
 export function getAgentCapabilities() {

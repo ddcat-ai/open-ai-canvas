@@ -66,8 +66,10 @@ export function parseAssetRecord(value: unknown): Asset {
         const parsed = {
             url: requireString(data, "url"),
             storageKey: optionalString(data, "storageKey"),
-            width: requirePositiveNumber(data, "width"),
-            height: requirePositiveNumber(data, "height"),
+            // 上游视频结果经常不带 width/height。0 表示未知，不是伪造尺寸；
+            // 若按「必须大于 0」拒绝，生成成功并已扣费的视频会在入库时被判失败。
+            width: requireNonNegativeNumber(data, "width"),
+            height: requireNonNegativeNumber(data, "height"),
             durationMs: optionalNonNegativeNumber(data, "durationMs"),
             hasAudio: optionalBoolean(data, "hasAudio"),
             bytes: requireNonNegativeNumber(data, "bytes"),

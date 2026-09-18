@@ -40,7 +40,7 @@ paths:
       summary: 读取云端 Agent 能力
       responses:
         "200":
-          description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 和 maxSteps 为 0 表示无固定轮数上限，历史仍受 maxHistoryBytes 限制
+          description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
   /agent/profile:
     get:
       tags: [agent]
@@ -78,6 +78,204 @@ paths:
           description: 返回更新后的生效偏好视图
         "409":
           description: 偏好 revision 已变化，须重新读取后保存
+  /agent/memories:
+    get:
+      tags: [agent]
+      summary: 列出当前用户的 Agent 记忆
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: 信封 data.memories
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [agent]
+      summary: 手动添加一条个人记忆（直接批准）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic, category, situation]
+              properties:
+                topic: { type: string }
+                category: { type: string }
+                situation: { type: string }
+                lesson: { type: string }
+                source: { type: string }
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      tool: { type: string }
+                      action: { type: string }
+                      note: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/export:
+    get:
+      tags: [agent]
+      summary: 导出当前用户的 Agent 记忆
+      responses:
+        "200":
+          description: 信封 data 为 version/kind/exportedAt/memories
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/import:
+    post:
+      tags: [agent]
+      summary: 导入 Agent 记忆 JSON
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: integer }
+                kind: { type: string }
+                memories: { type: array }
+      responses:
+        "200":
+          description: 信封 data 含 imported、merged、skipped
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/settings:
+    get:
+      tags: [agent]
+      summary: 读取当前用户的记忆压缩设置与最近一次压缩状态
+      responses:
+        "200":
+          description: 信封 data 含 compactInterval、模型字段、lastStatus、summary
+        "401":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [agent]
+      summary: 更新记忆压缩周期和文本模型
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                compactInterval:
+                  type: string
+                  enum: [off, daily, weekly, monthly]
+                logicalModelId: { type: string }
+                channelId: { type: string }
+                channelModelKey: { type: string }
+                model: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/compact:
+    post:
+      tags: [agent]
+      summary: 提交一次个人记忆压缩任务（走用户文本模型计费）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logicalModelId: { type: string }
+                channelId: { type: string }
+                channelModelKey: { type: string }
+                model: { type: string }
+      responses:
+        "200":
+          description: 信封 data 为压缩设置视图，lastStatus 为 queued
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [agent]
+      summary: 更新一条属于当前用户的记忆
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [agent]
+      summary: 删除一条属于当前用户的记忆
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /agent/memories/{id}/decide:
+    post:
+      tags: [agent]
+      summary: 批准或拒绝一条属于当前用户的待审记忆
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, reject]
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /agent/runs:
     post:
       tags: [agent]
@@ -123,6 +321,33 @@ paths:
           description: 信封 data.run（新的 ID）
         "409":
           description: 父轮仍在执行或幂等键冲突
+  /agent/runs/{id}/interjections:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 向正在运行的 Agent 轮次插入一句话
+      description: 不新建轮次、不产生新的扣费身份。插话排进当前运行，在下一次模型调用前送达；运行已结束返回 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text, messageId]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                messageId:
+                  type: string
+                  maxLength: 160
+      responses:
+        "200":
+          description: 信封 data.accepted 与 data.pending
+        "409":
+          description: 本轮已结束，应改为新一轮发送
   /agent/runs/{id}/cancel:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -253,6 +478,55 @@ paths:
     post:
       tags: [admin]
       summary: 复制系统渠道
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /admin/agent-lessons:
+    get:
+      tags: [admin]
+      summary: 按用户筛选查看个人 Agent 记忆
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - in: query
+          name: userId
+          schema:
+            type: string
+        - in: query
+          name: keyword
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: 信封 data.lessons 含解析后的 steps、authorUserId、authorUsername、authorDisplayName
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/agent-lessons/{id}:
+    delete:
+      tags: [admin]
+      summary: 删除一条用户的 Agent 记忆
       parameters:
         - in: path
           name: id

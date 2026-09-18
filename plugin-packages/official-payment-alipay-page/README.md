@@ -1,3 +1,3 @@
 # 支付宝电脑网站支付
 
-官方 `yingce.payment/v1` 支付插件。后端入口由构建脚本编译为 `backend/provider`。
+官方 `yingce.payment/v1` 支付插件。构建脚本交叉编译 macOS、Linux、Windows 的 amd64/arm64，入口仍声明为 `backend/provider`。

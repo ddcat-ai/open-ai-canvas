@@ -1,12 +1,12 @@
 import { App, Button, Input, Modal, Select } from "antd";
-import { IconButton } from "@/components/ui/base/buttons";
+import { IconButton } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Play, Search } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";

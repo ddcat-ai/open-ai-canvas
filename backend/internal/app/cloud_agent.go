@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -37,8 +38,19 @@ type CloudAgentRequest struct {
 		MaxCredits         float64 `json:"maxCredits"`
 		MaxGenerationTasks int     `json:"maxGenerationTasks,omitempty"`
 		MaxVideoSeconds    int     `json:"maxVideoSeconds,omitempty"`
+		// 0 = 不限制模型调用步数（与官方取消固定截断一致）。正数时夹到上限。
+		MaxSteps int `json:"maxSteps,omitempty"`
 	} `json:"budget"`
 	IdempotencyKey string `json:"idempotencyKey"`
+}
+
+const cloudAgentMaxStepsLimit = 9999
+
+func cloudAgentStepLimit(req CloudAgentRequest) int {
+	if req.Budget.MaxSteps > 0 {
+		return min(req.Budget.MaxSteps, cloudAgentMaxStepsLimit)
+	}
+	return 0
 }
 
 type cloudAgentState struct {
@@ -47,6 +59,7 @@ type cloudAgentState struct {
 	ParentID       string                    `json:"parentId"`
 	Fingerprint    string                    `json:"fingerprint"`
 	CreativeAnchor cloudAgentCreativeAnchor  `json:"creativeAnchor,omitempty"`
+	Plan           []cloudAgentPlanItem      `json:"plan,omitempty"`
 	Skills         []cloudAgentSkill         `json:"skills,omitempty"`
 	Profile        cloudAgentProfileSnapshot `json:"profile"`
 	Policy         cloudAgentPolicySnapshot  `json:"policy"`
@@ -136,8 +149,8 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	} else if req.Model != "" && req.Model != req.ChannelModelKey {
 		return BadAuthRequest("渠道模型标识与 model 不一致")
 	}
-	if req.Budget.MaxGenerationTasks < 0 || req.Budget.MaxVideoSeconds < 0 {
-		return BadAuthRequest("生成任务和视频秒数预算不能为负数")
+	if req.Budget.MaxGenerationTasks < 0 || req.Budget.MaxVideoSeconds < 0 || req.Budget.MaxSteps < 0 {
+		return BadAuthRequest("生成任务、视频秒数和模型调用步数预算不能为负数")
 	}
 	seen := map[string]bool{}
 	for i, id := range req.SkillIDs {
@@ -330,6 +343,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	}
 	var history []providerTextMessage
 	var creativeAnchor cloudAgentCreativeAnchor
+	var inheritedPlan []cloudAgentPlanItem
 	if parentID != "" {
 		parent, _, parentErr := s.cloudAgentTask(userID, parentID)
 		if parentErr != nil {
@@ -341,6 +355,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if parent.Status == model.TaskStatusQueued || parent.Status == model.TaskStatusRunning {
 			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
 		}
+		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
 		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
 			return nil, err
 		}
@@ -348,7 +363,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, err
 		}
-		if !cloudAgentRunTerminal(parentRun.Status) || parentRun.CleanupPending {
+		if superseded {
+			log.Printf("agent run %s cannot resume after a contract change; continuing in a new turn", parentID)
+		} else if !cloudAgentRunTerminal(parentRun.Status) || parentRun.CleanupPending {
 			return nil, kernel.NewAppError(409, "上一轮 Agent 尚未结束")
 		}
 		parentExecution, err := s.repo.CloudAgent(userID, parentID)
@@ -360,24 +377,28 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
 		creativeAnchor = parentState.CreativeAnchor
+		inheritedPlan = parentState.Plan
 		history = parentState.TextHistory
 		if history == nil {
 			history = cloudAgentLegacyHistory(parentState.Canonical.Messages, parent.Prompt)
 		}
-		text, err := cloudAgentContinuationReply(parent, parentRun)
+		text, context, err := cloudAgentContinuationReply(parent, parentRun)
 		if err != nil {
 			return nil, err
 		}
 		// The user's goal survives a failed first model call too. Tool facts are
 		// context, not authorization to replay a write or charge a second time.
 		history = append(history, providerTextMessage{Role: "user", Content: parent.Prompt}, providerTextMessage{Role: "assistant", Content: text})
+		if strings.TrimSpace(context) != "" {
+			history = append(history, providerTextMessage{Role: "user", Content: context})
+		}
 	}
-	// Bound prompt growth without silently injecting a huge canvas or transcript.
+	history = trimCloudAgentTextHistory(history, cloudAgentHistoryKeepRounds, cloudAgentHistoryMaxBytes)
 	encodedHistory, err := json.Marshal(history)
 	if err != nil {
 		return nil, err
 	}
-	if len(encodedHistory) > 64000 {
+	if len(encodedHistory) > cloudAgentHistoryMaxBytes {
 		return nil, BadAuthRequest("对话上下文超过 64KB，请新建对话")
 	}
 	var inheritedAnchor *cloudAgentCreativeAnchor
@@ -403,8 +424,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
-	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Skills: skillSnapshots, Profile: profile, Policy: policy}
-	canonical := cloudAgentCanonical(system, history, req.Prompt, req)
+	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, Skills: skillSnapshots, Profile: profile, Policy: policy}
+	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
+	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
+	canonical.PromptCacheKey = cloudAgentPromptCacheKey(req.CanvasID, canonical.SystemPrompt)
+	attachCloudAgentPlan(&canonical, inheritedPlan)
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
@@ -452,6 +476,11 @@ func cloudAgentLegacyHistory(messages []map[string]interface{}, currentPrompt st
 	return history
 }
 
+const (
+	cloudAgentCanvasSummaryMaxNodes    = 80
+	cloudAgentCanvasSummaryBudgetBytes = 60 << 10
+)
+
 func cloudAgentCanvasSummary(canvas *model.CanvasProject) (string, error) {
 	var payload struct {
 		Nodes []struct {
@@ -466,32 +495,40 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject) (string, error) {
 	}
 	nodes := make([]map[string]any, 0)
 	for index, node := range payload.Nodes {
-		if index == 80 {
+		if index >= cloudAgentCanvasSummaryMaxNodes {
 			break
 		}
 		descriptor, known := cloudAgentNodeCapabilityForType(node.Type)
 		item := map[string]any{"id": truncateRunes(node.ID, 100), "type": truncateRunes(node.Type, 40), "title": truncateRunes(node.Title, 300)}
-		if !known {
+		if known {
+			projected, err := cloudAgentProjectNodeFields(map[string]any{"title": node.Title}, node.Metadata, descriptor, descriptor.SummaryFields, 600, false, 0)
+			if err != nil {
+				return "", err
+			}
+			for key, value := range projected {
+				item[key] = value
+			}
+		} else {
 			item["agentSupported"] = false
 			item["agentUnsupportedReason"] = "仅展示基础信息；当前 Agent 不支持操作此类型节点"
-			nodes = append(nodes, item)
-			continue
 		}
-		projected, err := cloudAgentProjectNodeFields(map[string]any{"title": node.Title}, node.Metadata, descriptor, descriptor.SummaryFields, 600, false, 0)
+		nodes = append(nodes, item)
+		encoded, err := json.Marshal(nodes)
 		if err != nil {
 			return "", err
 		}
-		for key, value := range projected {
-			item[key] = value
+		if len(encoded) > cloudAgentCanvasSummaryBudgetBytes {
+			nodes = nodes[:len(nodes)-1]
+			break
 		}
-		nodes = append(nodes, item)
 	}
-	data, err := json.Marshal(map[string]any{"title": truncateRunes(canvas.Title, 240), "savedAt": canvas.UpdatedAt, "totalNodes": len(payload.Nodes), "includedNodes": len(nodes), "nodes": nodes})
+	summary := map[string]any{"title": truncateRunes(canvas.Title, 240), "savedAt": canvas.UpdatedAt, "totalNodes": len(payload.Nodes), "includedNodes": len(nodes), "nodes": nodes}
+	if omitted := len(payload.Nodes) - len(nodes); omitted > 0 {
+		summary["omittedNodes"] = omitted
+	}
+	data, err := json.Marshal(summary)
 	if err != nil {
 		return "", err
-	}
-	if len(data) > 64000 {
-		return "", BadAuthRequest("画布摘要超过 64KB，请缩小画布后重试")
 	}
 	return string(data), nil
 }

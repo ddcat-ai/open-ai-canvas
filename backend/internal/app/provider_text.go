@@ -215,7 +215,10 @@ func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
 		}
 		body["messages"] = claudeMessages
 		if len(system) > 0 {
-			body["system"] = strings.Join(system, "\n\n")
+			body["system"] = []interface{}{map[string]interface{}{
+				"type": "text", "text": strings.Join(system, "\n\n"),
+				"cache_control": map[string]interface{}{"type": "ephemeral"},
+			}}
 		}
 	}
 	if tools, ok := request["tools"].([]interface{}); ok && len(tools) > 0 {
@@ -231,6 +234,9 @@ func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
 			})
 		}
 		if len(claudeTools) > 0 {
+			if last, ok := claudeTools[len(claudeTools)-1].(map[string]interface{}); ok {
+				last["cache_control"] = map[string]interface{}{"type": "ephemeral"}
+			}
 			body["tools"] = claudeTools
 		}
 	}

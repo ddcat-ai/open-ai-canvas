@@ -6,8 +6,8 @@ import { Link } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { WorkspaceAccountCard } from "./workspace-account-card";
-import { WorkspaceWalletModal } from "./workspace-wallet-modal";
 import { UserAvatar } from "./user-avatar";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -17,9 +17,7 @@ export function WorkspaceAccountMenu() {
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const [menuOpen, setMenuOpen] = useState(false);
-    const [walletOpen, setWalletOpen] = useState(false);
 
     if (!hydrated) {
         return <span className="size-9 animate-pulse rounded-[var(--r-md)] bg-foreground/[.06]" aria-hidden />;
@@ -34,7 +32,7 @@ export function WorkspaceAccountMenu() {
             onOpenChange={setMenuOpen}
             content={(
                 <div className="workspace-topbar-account-menu">
-                    <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onWallet={() => { setMenuOpen(false); setWalletOpen(true); }} />
+                    <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onWallet={() => { setMenuOpen(false); openWorkspaceWallet(); }} />
 
                     <div className="workspace-topbar-account-section">
                         <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32" />
@@ -51,7 +49,7 @@ export function WorkspaceAccountMenu() {
             <button type="button" className="app-workspace-topbar-icon-button app-workspace-account-trigger" aria-label="账户菜单" title={user.displayName || user.username}>
                 <UserAvatar user={user} className="size-6" />
             </button>
-        </Popover>{creditsEnabled ? <WorkspaceWalletModal open={walletOpen} onClose={() => setWalletOpen(false)} /> : null}</>
+        </Popover></>
     ) : (
         <Link to="/login" className="app-workspace-topbar-icon-button" aria-label="登录" title="登录">
             <LogIn />

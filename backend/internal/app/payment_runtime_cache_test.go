@@ -139,12 +139,47 @@ func TestPaymentRuntimeRejectsInvalidDigest(t *testing.T) {
 	}
 }
 
+func TestPaymentRuntimeReadyAcceptsTaggedBackend(t *testing.T) {
+	packageData := paymentRuntimePackageFiles(t, map[string][]byte{"backend/provider-darwin-arm64": []byte("darwin-provider")})
+	pkg, err := protocol.ParsePluginPackage(packageData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packageDir := t.TempDir()
+	runtimeDir, err := materializePaymentBackend(packageDir, pluginHash(packageData), pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(runtimeDir, "backend", "provider")); !os.IsNotExist(err) {
+		t.Fatalf("canonical provider should be absent: %v", err)
+	}
+	actual, err := os.ReadFile(filepath.Join(runtimeDir, "backend", "provider-darwin-arm64"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, []byte("darwin-provider")) {
+		t.Fatalf("tagged runtime provider = %q", actual)
+	}
+	if !paymentRuntimeReady(runtimeDir, pluginHash(packageData), "backend/provider") {
+		t.Fatal("tagged payment runtime was not marked ready")
+	}
+}
+
 func paymentRuntimePackage(t *testing.T, provider []byte) []byte {
 	t.Helper()
+	return paymentRuntimePackageFiles(t, map[string][]byte{"backend/provider": provider})
+}
+
+func paymentRuntimePackageFiles(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
 	manifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"test-payment-runtime","version":"1.0.0","name":"Test Payment Runtime","author":"Test","enabled":true,"runtime":{"backend":"rpc","backendEntry":"backend/provider"},"contributes":{"paymentProviders":[{"id":"test-payment","label":"Test Payment","icon":"brand:test","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
+	payload := map[string][]byte{"manifest.json": manifest}
+	for name, content := range files {
+		payload[name] = content
+	}
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
-	for name, content := range map[string][]byte{"manifest.json": manifest, "backend/provider": provider} {
+	for name, content := range payload {
 		file, err := writer.Create(name)
 		if err != nil {
 			t.Fatal(err)

@@ -461,8 +461,16 @@ func TestClaudeAgentBodyMapsOpenAIStyleTools(t *testing.T) {
 		}}},
 		"tool_choice": "required",
 	})
-	if body["system"] != "You are concise." || body["max_tokens"] != 4096 {
+	systemBlocks, _ := body["system"].([]interface{})
+	if len(systemBlocks) != 1 || body["max_tokens"] != 4096 {
 		t.Fatalf("body = %#v", body)
+	}
+	system, _ := systemBlocks[0].(map[string]interface{})
+	if system["text"] != "You are concise." {
+		t.Fatalf("system = %#v", system)
+	}
+	if cache, _ := system["cache_control"].(map[string]interface{}); cache["type"] != "ephemeral" {
+		t.Fatalf("system cache_control = %#v", system["cache_control"])
 	}
 	messages, _ := body["messages"].([]interface{})
 	if len(messages) != 3 {
@@ -472,6 +480,9 @@ func TestClaudeAgentBodyMapsOpenAIStyleTools(t *testing.T) {
 	tool, _ := tools[0].(map[string]interface{})
 	if tool["name"] != "canvas_get_state" || body["tool_choice"].(map[string]interface{})["type"] != "any" {
 		t.Fatalf("tools/choice = %#v / %#v", body["tools"], body["tool_choice"])
+	}
+	if cache, _ := tool["cache_control"].(map[string]interface{}); cache["type"] != "ephemeral" {
+		t.Fatalf("tool cache_control = %#v", tool["cache_control"])
 	}
 }
 

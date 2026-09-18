@@ -1339,117 +1339,47 @@
     margin-top: 5px;
 }
 
-/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */
-.admin-shell,
-.admin-drawer,
-.admin-secondary-drawer,
-.admin-modal-root,
-.admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #f5f5f5);
-    --admin-layer-1: var(--skin-admin-layer-1, #ffffff);
-    --admin-layer-2: var(--skin-admin-layer-2, #f6f6f6);
-    --admin-layer-3: var(--skin-admin-layer-3, #ececec);
-    --admin-sidebar: var(--admin-layer-0);
-    --admin-text-primary: var(--foreground);
-    --admin-text-secondary: color-mix(in srgb, var(--foreground) 72%, transparent);
-    --admin-text-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
-    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
-    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
-    --admin-divider: rgba(17, 17, 17, 0.12);
-    --admin-card-border: rgba(17, 17, 17, 0.15);
-    --admin-row-border: rgba(17, 17, 17, 0.09);
-    --admin-row-hover: #f2f2f2;
-    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(17, 17, 17, 0.04));
-    --admin-status-success: var(--palette-status-success);
-    --admin-status-warning: var(--palette-status-warning);
-    --admin-status-error: var(--palette-status-error);
-    --admin-status-info: var(--palette-status-loading);
-    --admin-chart-primary: var(--workspace-accent);
-    --admin-chart-secondary: oklch(0.55 0.11 180);
-    --admin-chart-warning: oklch(0.64 0.14 78);
-    --admin-sidebar-width: 224px;
-}
-
-.dark .admin-shell,
-.dark .admin-drawer,
-.dark .admin-secondary-drawer,
-.dark .admin-modal-root,
-.dark .admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #0f0f0f);
-    --admin-layer-1: var(--skin-admin-layer-1, #181818);
-    --admin-layer-2: var(--skin-admin-layer-2, #222222);
-    --admin-layer-3: var(--skin-admin-layer-3, #2a2a2a);
-    --admin-sidebar: var(--admin-layer-0);
-    --admin-text-primary: var(--foreground);
-    --admin-text-secondary: color-mix(in srgb, var(--foreground) 74%, transparent);
-    --admin-text-muted: color-mix(in srgb, var(--foreground) 54%, transparent);
-    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 43%, transparent);
-    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
-    --admin-divider: rgba(255, 255, 255, 0.12);
-    --admin-card-border: rgba(255, 255, 255, 0.16);
-    --admin-row-border: rgba(255, 255, 255, 0.085);
-    --admin-row-hover: #242424;
-    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.32));
-    --admin-status-success: var(--palette-status-success);
-    --admin-status-warning: var(--palette-status-warning);
-    --admin-status-error: var(--palette-status-error);
-    --admin-status-info: var(--palette-status-loading);
-    --admin-chart-secondary: oklch(0.72 0.11 180);
-    --admin-chart-warning: oklch(0.78 0.14 78);
-}
+/* Token source of truth: pages/admin/theme/admin-tokens.css */
 
 .admin-shell {
     position: relative;
 }
 
 .admin-shell .admin-nav-group-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    display: block;
     margin-bottom: 6px !important;
-    padding-inline: 2px !important;
-    color: color-mix(in srgb, var(--foreground) 68%, transparent) !important;
+    padding-inline: 8px !important;
+    color: var(--admin-text-muted) !important;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
     line-height: 16px;
-    transition: color var(--motion-instant) ease-out;
 }
 
-.admin-shell .admin-nav-group-label::before {
-    display: block;
-    width: 5px;
-    height: 5px;
-    flex: 0 0 auto;
-    border: 1px solid color-mix(in srgb, var(--admin-text-muted) 72%, transparent);
-    border-radius: 999px;
-    background: var(--admin-sidebar);
-    content: "";
-    transition:
-        border-color var(--motion-instant) ease-out,
-        background-color var(--motion-instant) ease-out;
-}
-
+.admin-shell .admin-nav-group-label::before,
 .admin-shell .admin-nav-group-label::after {
-    display: block;
-    height: 1px;
-    min-width: 12px;
-    flex: 1 1 auto;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--foreground) 14%, transparent), transparent);
-    content: "";
+    content: none !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    flex: none !important;
+    border: 0 !important;
+    background: none !important;
 }
 
 .admin-shell .admin-nav-group-label span {
-    flex: 0 0 auto;
+    display: block;
 }
 
-.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label {
+.admin-shell .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-group-label {
     color: var(--admin-text-primary) !important;
 }
 
-.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label::before {
-    border-color: var(--admin-text-primary);
-    background: var(--admin-text-primary);
+.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label::before,
+.admin-shell .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-group-label::before {
+    content: none !important;
+    display: none !important;
 }
 
 .admin-shell .app-workspace-nav-link {
@@ -1654,17 +1584,21 @@
 }
 
 .admin-shell .admin-nav-group + .admin-nav-group {
-    margin-top: 14px;
+    margin-top: 18px;
 }
 
+.admin-shell .admin-nav-group-items,
 .admin-shell .admin-nav-group-items:not(.is-collapsed) {
-    margin-left: 4px;
-    padding-left: 9px;
-    border-left: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
 }
 
 .admin-shell .admin-nav-group-items:not(.is-collapsed) .app-workspace-nav-link {
-    padding-left: 10px !important;
+    padding-left: 8px !important;
 }
 
 .admin-shell .admin-nav-collapsed-separator {
@@ -9704,7 +9638,7 @@
     }
 
     .admin-shell .admin-nav-group + .admin-nav-group {
-        margin-top: 16px;
+        margin-top: 20px;
     }
 
     .admin-shell .admin-sidebar-footer {
@@ -10044,6 +9978,42 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-system-update-progress,
 .admin-system-update-backup {
     padding: 16px;
+}
+
+.admin-system-update-versions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px;
+    padding-bottom: 14px;
+}
+
+.admin-system-update-versions > div {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.admin-system-update-versions span {
+    width: 100%;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.admin-system-update-versions strong {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: clamp(18px, 2.4vw, 26px);
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+}
+
+.admin-system-update-hint {
+    margin: 0 0 14px;
+    color: var(--admin-text-secondary, var(--admin-text-muted));
+    font-size: 12px;
+    line-height: 1.65;
 }
 
 .admin-system-update-version-row {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { App, Button } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 

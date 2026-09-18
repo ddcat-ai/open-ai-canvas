@@ -42,6 +42,33 @@ func TestParsePluginPackageValidatesWebEntry(t *testing.T) {
 	}
 }
 
+func TestParsePluginPackageAcceptsTaggedRPCBackend(t *testing.T) {
+	manifest := []byte(`{
+        "apiVersion":"yingce.plugin/v1",
+        "id":"tagged-payment",
+        "name":"Tagged Payment",
+        "version":"1.0.0",
+        "author":"Test",
+        "enabled":true,
+        "runtime":{"backend":"rpc","backendEntry":"backend/provider"},
+        "contributes":{"paymentProviders":[{"id":"tagged-pay","label":"Tagged","icon":"brand:test","checkoutMode":"qr_code","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}
+    }`)
+	pkg, err := ParsePluginPackage(zipPluginPackage(t, map[string][]byte{
+		"manifest.json":                 manifest,
+		"backend/provider-darwin-arm64": []byte("darwin-provider"),
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := pkg.Files["backend/provider"]; ok {
+		t.Fatal("canonical backend/provider should not be required when a tagged artifact exists")
+	}
+
+	if _, err := ParsePluginPackage(zipPluginPackage(t, map[string][]byte{"manifest.json": manifest})); err == nil {
+		t.Fatal("rpc package without any backend artifact was accepted")
+	}
+}
+
 func zipPluginPackage(t *testing.T, files map[string][]byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer

@@ -1,16 +1,78 @@
-import { App, Button, Input, QRCode, Skeleton } from "antd";
+import { App, Button, Input, Skeleton } from "antd";
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 
+import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
-import { closePaymentOrder, createPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
+import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
+import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
+import { useUserStore } from "@/stores/use-user-store";
 
 type WalletModalTab = "topup" | "history";
 
-export function WorkspaceWalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function WorkspaceWalletHost() {
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const { pathname, search } = useLocation();
+    const navigate = useNavigate();
+    const [open, setOpen] = useState(false);
+    const [pendingPaymentOrderId, setPendingPaymentOrderId] = useState("");
+    const [paymentInvalid, setPaymentInvalid] = useState(false);
+
+    const applyOpen = (detail: WorkspaceWalletOpenDetail = {}) => {
+        if (!useUserStore.getState().features.creditsEnabled) return;
+        setPendingPaymentOrderId(detail.paymentOrderId || "");
+        setPaymentInvalid(Boolean(detail.paymentInvalid));
+        setOpen(true);
+    };
+
+    useEffect(() => {
+        const handleOpen = (raw: Event) => {
+            applyOpen((raw as CustomEvent<WorkspaceWalletOpenDetail>).detail || {});
+        };
+        window.addEventListener(WORKSPACE_WALLET_OPEN_EVENT, handleOpen);
+        return () => window.removeEventListener(WORKSPACE_WALLET_OPEN_EVENT, handleOpen);
+    }, []);
+
+    useEffect(() => {
+        if (pathname !== "/wallet") return;
+        const params = new URLSearchParams(search);
+        openWorkspaceWallet({
+            paymentOrderId: params.get("paymentOrder") || undefined,
+            paymentInvalid: params.get("payment") === "invalid",
+        });
+        navigate("/", { replace: true });
+    }, [navigate, pathname, search]);
+
+    if (!creditsEnabled) return null;
+    return (
+        <WorkspaceWalletModal
+            open={open}
+            pendingPaymentOrderId={pendingPaymentOrderId}
+            paymentInvalid={paymentInvalid}
+            onClose={() => {
+                setOpen(false);
+                setPendingPaymentOrderId("");
+                setPaymentInvalid(false);
+            }}
+        />
+    );
+}
+
+export function WorkspaceWalletModal({
+    open,
+    onClose,
+    pendingPaymentOrderId,
+    paymentInvalid,
+}: {
+    open: boolean;
+    onClose: () => void;
+    pendingPaymentOrderId?: string;
+    paymentInvalid?: boolean;
+}) {
     const { message } = App.useApp();
     const [tab, setTab] = useState<WalletModalTab>("topup");
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
@@ -67,6 +129,11 @@ export function WorkspaceWalletModal({ open, onClose }: { open: boolean; onClose
     }, [open]);
 
     useEffect(() => {
+        if (!open || !paymentInvalid) return;
+        message.error("支付结果无效，未产生积分充值");
+    }, [open, paymentInvalid]);
+
+    useEffect(() => {
         idempotencyKey.current = "";
     }, [selectedProductId, selectedProviderId]);
 
@@ -91,6 +158,17 @@ export function WorkspaceWalletModal({ open, onClose }: { open: boolean; onClose
         await reloadWallet(1);
         window.dispatchEvent(new CustomEvent("wallet:updated"));
     };
+
+    useEffect(() => {
+        if (!open || !pendingPaymentOrderId) return;
+        getPaymentOrder(pendingPaymentOrderId)
+            .then(async ({ order }) => {
+                setPaymentOrder(order);
+                setPaymentOpen(true);
+                if (order.status === "credited") await announceWalletUpdated(order.id);
+            })
+            .catch((error) => message.error(error instanceof Error ? error.message : "读取支付结果失败"));
+    }, [open, pendingPaymentOrderId]);
 
     const redeem = async () => {
         const normalized = code.trim().toLowerCase();
@@ -257,7 +335,7 @@ export function WorkspaceWalletModal({ open, onClose }: { open: boolean; onClose
                     <span className="workspace-wallet-payment-icon"><CreditCard /></span>
                     <strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong>
                     <p>{paymentOrder.productName} · {formatCredits(paymentOrder.creditsMicrocredits, 6)} 积分</p>
-                    {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? <><QRCode value={paymentOrder.checkout.value} size={208} bordered={false} /><span>请使用支付应用扫码完成支付</span></> : null}
+                    {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? <><PaymentCheckoutCode value={paymentOrder.checkout.value} /><span>请使用支付应用扫码完成支付</span></> : null}
                     <PaymentStatus order={paymentOrder} now={clock} />
                 </div> : null}
             </AppModal>

@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, Bot, Check, ChevronRight, CircleDot, Clock3, Download, History, LoaderCircle, MessageSquarePlus, Settings2, ShieldCheck, Trash2, Sparkles, X } from "lucide-react";
 import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
-import { markdownPlainText } from "@/lib/markdown-plain-text";
+import { agentPlanVisible, latestAgentPlanItems, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
 import { nanoid } from "nanoid";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -14,7 +14,7 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { agentErrorPresentation, agentSubmissionErrorTitle } from "@/lib/canvas/agent-error-presentation";
-import { cancelAgentRun, getAgentCapabilities, getAgentProfile, getAgentRun, createAgentRun, decideAgentApproval, sendAgentMessage, subscribeAgentEvents, updateAgentProfile, type AgentEvent, type AgentPermissionMode, type AgentProfileScope, type AgentProfileView, type AgentReasoningMode, type AgentRun } from "@/services/api/agent";
+import { cancelAgentRun, getAgentCapabilities, getAgentProfile, getAgentRun, createAgentRun, decideAgentApproval, sendAgentInterjection, sendAgentMessage, subscribeAgentEvents, updateAgentProfile, type AgentEvent, type AgentPermissionMode, type AgentProfileScope, type AgentProfileView, type AgentReasoningMode, type AgentRun } from "@/services/api/agent";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 import { agentApprovalMatchesSettings, agentImageApproval } from "@/lib/canvas/agent-media-approval";
 import type { AgentMediaSettings } from "@/services/api/agent";
@@ -26,7 +26,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
-import { AgentChatComposer, AgentChatMessage, AgentWorkingMessage, type CloudAgentChatMessage } from "./canvas-cloud-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentPlanBar, AgentQuestionBar, AgentWorkingMessage, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
@@ -79,6 +79,10 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     const [activeConversationId, setActiveConversationId] = useState(() => nanoid());
     const [historyHydrated, setHistoryHydrated] = useState(false);
     const [pendingHydrated, setPendingHydrated] = useState(false);
+    const [planMinimized, setPlanMinimized] = useState(false);
+    const planItems = useMemo(() => latestAgentPlanItems(messages), [messages]);
+    const planVisible = agentPlanVisible(planItems);
+    const pendingQuestion = useMemo(() => pendingAgentQuestion(messages), [messages]);
     const panelLayout = useAgentPanelLayout();
     const lastSeqRef = useRef(0);
     const canvasSyncRef = useRef<ReturnType<typeof createAgentCanvasSync> | null>(null);
@@ -321,7 +325,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                     lastSeqRef.current = event.seq;
                 }
                 setMessages((current) => current.filter((item) => item.id !== `stream-error-${run.id}`));
-                applyAgentEvent(event, setMessages, setRun, setApproval);
+                applyAgentEvent(event, setMessages, setRun, setApproval, setPrompt);
                 canvasSyncRef.current?.receive(event);
             },
             {
@@ -345,8 +349,33 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
         return () => window.removeEventListener("online", reconnect);
     }, [run?.id, connectionStatus]);
 
-    const submit = async () => {
-        const value = prompt.trim();
+    const interject = async (value: string) => {
+        const activeRun = run;
+        if (!value || !activeRun?.id || busy || connectionStatus !== "connected" || currentScope.current !== conversationScope || !historyHydrated) return;
+        const scope = conversationScope;
+        const messageId = `user-${crypto.randomUUID()}`;
+        setBusy(true);
+        try {
+            await sendAgentInterjection(activeRun.id, { text: value, messageId });
+            if (currentScope.current !== scope) return;
+            setPrompt("");
+            setMessages((current) => appendUniqueMessage(current, { id: messageId, role: "user", text: value, interjection: "sent" }));
+        } catch (cause) {
+            if (currentScope.current !== scope) return;
+            const status = (cause as { status?: number }).status;
+            setMessages((current) => appendAgentError(current, `interject-error-${activeConversationId}-${messageId}`, cause, "插话没有送达"));
+            if (status === 409) setPrompt(value);
+        } finally {
+            if (currentScope.current === scope) setBusy(false);
+        }
+    };
+
+    const submit = async (override?: string) => {
+        const value = (override ?? prompt).trim();
+        if (running) {
+            await interject(value);
+            return;
+        }
         if (!value || busy || running || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
         const scope = conversationScope;
         submissionRequestRef.current = true;
@@ -689,11 +718,21 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         onApprove={(settings) => void submitApproval("approve", settings)}
                                         onReject={() => void submitApproval("reject")}
                                     />
+                                    {planVisible ? <AgentPlanBar items={planItems} theme={theme} minimized={planMinimized} onToggle={() => setPlanMinimized((value) => !value)} /> : null}
+                                    {pendingQuestion ? (
+                                        <AgentQuestionBar
+                                            question={pendingQuestion}
+                                            theme={theme}
+                                            disabled={approvalSubmitting || connectionStatus !== "connected"}
+                                            onAnswer={(label) => void submit(label)}
+                                        />
+                                    ) : null}
                                     <AgentChatComposer
                                         prompt={prompt}
-                                        disabled={busy || running || Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
-                                        sending={busy || running}
-                                        placeholder="输入操作指导；用 @ 引用画布节点，用 / 引用 Skills"
+                                        disabled={Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
+                                        sending={busy}
+                                        running={running}
+                                        placeholder={running ? "运行中可直接插话，会在它下一步生效" : "输入操作指导；用 @ 引用画布节点，用 / 引用 Skills"}
                                         theme={theme}
                                         onPromptChange={setPrompt}
                                         onSubmit={() => void submit()}
@@ -1047,7 +1086,7 @@ function ApprovalCard({ approval, theme, submitting, onFocusNode, onReasonChange
 }
 
 function ApprovalPreviewItemView({ item, theme, onFocusNode }: { item: ReturnType<typeof agentApprovalPresentation>["items"][number]; theme: CanvasTheme; onFocusNode?: (nodeId: string) => void }) {
-    const operationLabel = item.operation === "add_node" ? "新增" : item.operation === "update_node" ? "修改" : item.operation === "connect_nodes" ? "连线" : item.operation === "create_storyboard" ? "创建分镜" : item.operation === "edit_storyboard" ? "修改分镜" : "生成";
+    const operationLabel = item.operation === "add_node" ? "新增" : item.operation === "update_node" ? "修改" : item.operation === "connect_nodes" ? "连线" : item.operation === "create_storyboard" ? "创建分镜" : item.operation === "edit_storyboard" ? "修改分镜" : item.operation === "plan_step" ? "计划" : "生成";
     const renderNode = (title: string | undefined, id: string | undefined, typeLabel: string | undefined, role: "source" | "target" | "node") => {
         if (!title) return null;
         const content = <><span className="canvas-agent-approval-node-title">{title}</span>{typeLabel ? <span className="canvas-agent-approval-node-type">{typeLabel}</span> : null}</>;
@@ -1093,7 +1132,7 @@ function formatConversationTime(value: string) {
     if (date.toDateString() === today.toDateString()) return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
     return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
-function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction<CloudAgentChatMessage[]>>, setRun: Dispatch<SetStateAction<AgentRun | null>>, setApproval: Dispatch<SetStateAction<ApprovalState | null>>) {
+function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction<CloudAgentChatMessage[]>>, setRun: Dispatch<SetStateAction<AgentRun | null>>, setApproval: Dispatch<SetStateAction<ApprovalState | null>>, setPrompt?: Dispatch<SetStateAction<string>>) {
     const payload = event.payload || {};
     const text = String(payload.text || payload.summary || payload.message || "");
     if (event.type === "run_status") {
@@ -1130,6 +1169,51 @@ function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction
         const id = String(payload.messageId || `${event.runId}:reasoning`);
         setMessages((current) => upsertTextMessage(current, id, text, event.type === "reasoning_delta")
             .map((item) => item.id === id ? { ...item, reasoning: true } : item));
+        return;
+    }
+    if (event.type === "plan_updated" && Array.isArray(payload.items)) {
+        const id = `plan-${event.runId}`;
+        const planItems = payload.items as CloudAgentPlanItem[];
+        setMessages((current) => {
+            const index = current.findIndex((entry) => entry.id === id);
+            const message: CloudAgentChatMessage = { id, role: "tool", text: "", planItems };
+            if (index < 0) return [...current, message];
+            const next = [...current];
+            next[index] = message;
+            return next;
+        });
+        return;
+    }
+    if (event.type === "user_interjection") {
+        if (!text) return;
+        setMessages((current) => appendUniqueMessage(current, { id: String(payload.messageId || event.eventId), role: "user", text, interjection: "sent" }));
+        return;
+    }
+    if (event.type === "user_interjection_dropped") {
+        const messageId = String(payload.messageId || event.eventId);
+        const reason = String(payload.reason || "本轮已结束");
+        setMessages((current) => {
+            const marked = current.map((item) => item.id === messageId ? { ...item, interjection: "undelivered" as const } : item);
+            return appendUniqueMessage(marked, { id: `interjection-dropped-${messageId}`, role: "system", text: `${reason}，这条插话没有送到模型。需要的话重新发一次，它会作为新一轮。` });
+        });
+        setPrompt?.((current) => (current.trim() ? current : text));
+        return;
+    }
+    if (event.type === "user_question") {
+        const options = Array.isArray(payload.options)
+            ? (payload.options as Array<{ label?: unknown; detail?: unknown }>)
+                .map((option) => ({ label: String(option?.label || "").trim(), detail: option?.detail === undefined ? undefined : String(option.detail) }))
+                .filter((option) => option.label)
+            : [];
+        const question = String(payload.question || "").trim();
+        if (!question || options.length < 2) return;
+        const id = `question-${event.runId}:${event.seq ?? event.eventId}`;
+        setMessages((current) => appendUniqueMessage(current, {
+            id,
+            role: "assistant",
+            text: "",
+            question: { question, options, allowFreeform: payload.allowFreeform !== false },
+        }));
         return;
     }
     if (event.type === "assistant_message") {

@@ -1,0 +1,23 @@
+.payment-checkout-code {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 232px;
+    height: 232px;
+    padding: 12px;
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.payment-checkout-code img,
+.payment-checkout-code canvas,
+.payment-checkout-code svg {
+    display: block;
+    width: 208px;
+    height: 208px;
+}
+
+.payment-checkout-code img {
+    object-fit: contain;
+    background: #ffffff;
+}

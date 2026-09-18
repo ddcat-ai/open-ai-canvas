@@ -171,7 +171,11 @@ func TestCloudAgentReliabilityFailedContinuation(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("failed first turn -> continue: inherited history messages=%d", len(input.TextHistory))
-	if len(input.TextHistory) != 2 || input.TextHistory[0].Content != agentTestRequest().Prompt || !strings.Contains(input.TextHistory[1].Content, "failed") {
+	if len(input.TextHistory) != 3 ||
+		input.TextHistory[0].Content != agentTestRequest().Prompt ||
+		input.TextHistory[1].Role != "assistant" ||
+		input.TextHistory[2].Role != "user" ||
+		!strings.Contains(input.TextHistory[2].Content, "failed") {
 		t.Fatalf("continuation lost facts: %+v", input.TextHistory)
 	}
 }

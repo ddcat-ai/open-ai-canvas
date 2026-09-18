@@ -372,6 +372,31 @@ func TestCloudAgentMediaChangedCanvasRollsBackAdmission(t *testing.T) {
 	}
 }
 
+func TestCloudAgentMediaFillsMissingSnapshotHash(t *testing.T) {
+	s, db, a := agentMediaFixture(t)
+	if sqlDB, err := db.DB(); err == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+	want := a.SnapshotHash
+	a.SnapshotHash = ""
+	run, state := agentMediaRun(t, s, a, "auto", "fill-missing-snapshot")
+	_, plan, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(a))
+	if err != nil {
+		t.Fatalf("missing snapshotHash should be filled from current canvas: %v", err)
+	}
+	if plan.Args.SnapshotHash == "" {
+		t.Fatal("filled snapshotHash is empty")
+	}
+	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	doc, _ := creationDocument(canvas.PayloadJSON)
+	if plan.Args.SnapshotHash != cloudAgentMediaContentHash(doc) {
+		t.Fatalf("filled hash %s, want media content hash", plan.Args.SnapshotHash)
+	}
+	if want == "" {
+		t.Fatal("fixture snapshot missing")
+	}
+}
+
 func TestCloudAgentMediaFailedTaskUpdatesNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	run, _ := agentMediaRun(t, s, a, "auto")
@@ -403,6 +428,9 @@ func TestCloudAgentMediaFailedTaskUpdatesNode(t *testing.T) {
 	result, _ := last.Payload["result"].(map[string]any)
 	if last.Type != "tool_failed" || result["taskId"] != taskID || result["nodeId"] != a.NodeID || !strings.Contains(stringValue(result["error"]), "上游拒绝该生成规格") {
 		t.Fatalf("failure lost diagnostic details: %+v", last)
+	}
+	if run.Status == "failed" {
+		t.Fatalf("media task failure must keep the agent run alive: status=%s events=%d", run.Status, len(state.Events))
 	}
 }
 

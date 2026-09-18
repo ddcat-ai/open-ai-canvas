@@ -137,7 +137,7 @@ func (s *Service) Plugins() []PluginView {
 	}
 	items := s.pluginRuntime.list()
 	for index := range items {
-		items[index].Management = pluginManagement(items[index].Manifest.ID, items[index].Source)
+		items[index].Management = pluginManagementFromView(items[index])
 	}
 	return items
 }
@@ -202,7 +202,7 @@ func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName
 	if err != nil {
 		return PluginView{}, err
 	}
-	plugin.Management = pluginManagement(plugin.Manifest.ID, plugin.Source)
+	plugin.Management = pluginManagementFromView(plugin)
 	now := time.Now()
 	state := &model.PluginPlatformState{PluginID: plugin.Manifest.ID, Available: plugin.Status == "enabled", UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SavePluginPlatformState(state); err != nil {

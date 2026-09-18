@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Alert, App, Button, Form, Input, Segmented, Switch, Tabs } from "antd";
-import { AppModal } from "@/components/ui/product/app-modal";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { FlaskConical, Plus } from "lucide-react";
 import { ModelIconPicker } from "@/components/model-logo";
 import { ModelIcon } from "@/components/model-picker";
@@ -169,7 +169,7 @@ export function ChannelModelEditor({
     };
 
     return (
-        <AppModal
+        <AdminModal
             open
             title={
                 <div className="admin-model-editor-title">
@@ -408,7 +408,7 @@ export function ChannelModelEditor({
                     ]}
                 />
             </Form>
-        </AppModal>
+        </AdminModal>
     );
 }
 

@@ -1,6 +1,6 @@
 import { Button, InputNumber, Select, Tag } from "antd";
-import { Switch } from "@/components/ui/base/switch";
-import { Callout } from "@/components/ui/product/callout";
+import { Switch } from "@/pages/admin/ui/controls";
+import { Callout } from "@/pages/admin/ui/controls";
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 

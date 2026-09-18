@@ -156,7 +156,11 @@ func (m *Manager) Check(ctx context.Context) (Status, error) {
 	}
 	if CompareVersions(current, release.Version) < 0 {
 		m.state.Operation.Phase = PhaseReady
-		m.appendLogLocked(PhaseReady, fmt.Sprintf("发现新版本 %s", release.Version))
+		if IsReleaseVersion(current) {
+			m.appendLogLocked(PhaseReady, fmt.Sprintf("发现新版本 %s", release.Version))
+		} else {
+			m.appendLogLocked(PhaseReady, fmt.Sprintf("当前部署为 %s，可更新到正式版 %s", current, release.Version))
+		}
 	} else {
 		m.state.Operation.Phase = PhaseNoUpdate
 		m.appendLogLocked(PhaseNoUpdate, "当前已是最新版本")
@@ -430,6 +434,8 @@ func (m *Manager) checks(current string, currentErr error) []Check {
 	if currentErr != nil {
 		items[1].Status = "failed"
 		items[1].Detail = currentErr.Error()
+	} else if current != "" && !IsReleaseVersion(current) {
+		items[1].Detail = current + " · 非正式镜像标签，可切换到正式 Release"
 	}
 	if m.state.LastBackup != nil {
 		items[2].Status = "passed"

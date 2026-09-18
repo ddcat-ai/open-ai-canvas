@@ -1,14 +1,14 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
-import { Callout } from "@/components/ui/product/callout";
+import { Callout } from "@/pages/admin/ui/controls";
 import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
-import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { Switch } from "@/components/ui/base/switch";
+import { AdminDrawer } from "@/pages/admin/ui/overlays";
+import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import {
     closeAdminPaymentOrder,
@@ -618,7 +618,7 @@ export default function AdminPaymentsPage() {
                 ]}
             />
 
-            <AppDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
+            <AdminDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
                 {selectedOrder && <Descriptions column={1} bordered size="small" items={[
                     { key: "user", label: "用户", children: selectedOrder.user ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>{selectedOrder.user.displayName || selectedOrder.user.username} · @{selectedOrder.user.username}</button> : "用户不存在" },
                     { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
@@ -631,7 +631,7 @@ export default function AdminPaymentsPage() {
                     { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
                     ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
                 ]} />}
-            </AppDrawer>
+            </AdminDrawer>
             <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
 
             <Drawer

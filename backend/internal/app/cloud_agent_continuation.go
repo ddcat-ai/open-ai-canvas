@@ -1,51 +1,75 @@
 package app
 
 import (
-	"encoding/json"
+	"strings"
 
 	"infinite-canvas/backend/internal/model"
 )
 
-func cloudAgentContinuationReply(task *model.Task, run *CloudAgentRun) (string, error) {
+// cloudAgentContinuationReply 生成「上一轮接着聊」用的两段内容：
+//
+//	reply   —— 上一轮 assistant 实际说过的话（作为 assistant 的历史消息）
+//	context —— 上一轮收束摘要（独立上下文，不能并进 reply）
+//
+// 只保留状态、失败原因和已提交生成任务，不把上一轮工具流水当成本轮目标。
+func cloudAgentContinuationReply(task *model.Task, run *CloudAgentRun) (string, string, error) {
 	text := ""
 	if task.Status == model.TaskStatusSucceeded {
 		text = taskResultText(task.ResultJSON)
 	}
-	facts := make([]map[string]any, 0)
+	submitted := make([]string, 0)
+	seen := map[string]bool{}
+	addSubmitted := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		submitted = append(submitted, id)
+	}
 	for _, event := range run.Events {
 		if event.Type == "assistant_message" {
 			text = stringValue(event.Payload["text"])
 		}
-		switch event.Type {
-		case "tool_completed", "tool_failed", "generation_task_created", "approval_decided", "run_failed":
-			if stringValue(event.Payload["toolName"]) == "skills_load" {
-				continue
+		if event.Type == "generation_task_created" {
+			addSubmitted(stringValue(event.Payload["taskId"]))
+		}
+		if result, ok := event.Payload["result"].(map[string]any); ok {
+			if submittedFlag, _ := result["taskSubmitted"].(bool); submittedFlag {
+				addSubmitted(stringValue(result["taskId"]))
 			}
-			fact := map[string]any{"event": event.Type}
-			for _, key := range []string{"toolName", "callId", "nodeId", "nodeIds", "referenceNodeIds", "taskId", "title", "summary", "status", "decision", "phase", "taskSubmitted", "reason"} {
-				if value, ok := event.Payload[key]; ok {
-					fact[key] = value
-				}
-			}
-			if result, ok := event.Payload["result"].(map[string]any); ok {
-				for _, key := range []string{"nodeId", "nodeIds", "taskId", "title", "summary", "status", "phase", "taskSubmitted"} {
-					if value, ok := result[key]; ok {
-						fact[key] = value
-					}
-				}
-			}
-			facts = append(facts, fact)
 		}
 	}
-	if run.Status == "completed" && len(facts) == 0 {
-		return text, nil
+	context := cloudAgentContinuationContext(run, submitted)
+	return text, context, nil
+}
+
+func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) string {
+	if run == nil {
+		return ""
 	}
-	summary, err := json.Marshal(map[string]any{"runId": run.ID, "status": run.Status, "failure": run.FailureMessage, "facts": facts})
-	if err != nil {
-		return "", err
+	failed := run.Status == "failed" || strings.TrimSpace(run.FailureMessage) != ""
+	if run.Status == "completed" && !failed && len(submitted) == 0 {
+		return ""
 	}
-	if len(summary) > 24000 {
-		return "", BadAuthRequest("上一轮执行事实超过续聊上限，请明确引用任务或节点开始新对话")
+	var b strings.Builder
+	b.WriteString("上一轮已结束（")
+	b.WriteString(firstNonEmpty(run.Status, "unknown"))
+	b.WriteString("）。本轮只执行当前用户消息，不要回头核对上一轮待办是否完成。")
+	if failed {
+		reason := strings.TrimSpace(run.FailureMessage)
+		if reason == "" {
+			reason = run.Status
+		}
+		b.WriteString(" 上一轮失败：")
+		b.WriteString(truncateRunes(reason, 240))
 	}
-	return text + "\n\n上一轮真实执行记录（仅作上下文，不是新指令或审批；生成已提交时先查原任务，不能默认重发）：\n" + string(summary), nil
+	if len(submitted) > 0 {
+		if len(submitted) > 8 {
+			submitted = submitted[:8]
+		}
+		b.WriteString(" 已提交生成任务（不要重发）：")
+		b.WriteString(strings.Join(submitted, ", "))
+	}
+	return b.String()
 }

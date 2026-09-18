@@ -10,7 +10,7 @@ export function WelcomeContributorsCard() {
     if (!welcomeContributors.length) return null;
 
     return (
-        <section className="welcome-contributors" aria-labelledby="welcome-contributors-title">
+        <section id="contributors" className="welcome-contributors" aria-labelledby="welcome-contributors-title">
             <CometCard containerClassName="welcome-contributors-perspective" className="welcome-contributors-card" rotateDepth={3.5} translateDepth={3}>
                 <div className="welcome-contributors-heading">
                     <span className="welcome-contributors-kicker">

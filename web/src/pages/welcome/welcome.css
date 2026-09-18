@@ -518,6 +518,7 @@ body:has(.welcome-page) {
     width: 100%;
     max-width: 1280px;
     margin: 48px auto 0;
+    scroll-margin-top: calc(var(--welcome-header-height) + 16px);
     text-align: left;
 }
 .welcome-contributors-perspective {

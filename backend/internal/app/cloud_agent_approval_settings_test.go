@@ -187,13 +187,13 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	}
 }
 
-func TestCloudAgentConversationContinuesBeyondEightRounds(t *testing.T) {
+func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
 		t.Fatal(err)
 	}
 	parent := ""
-	for round := 0; round < 11; round++ {
+	for round := 0; round < 15; round++ {
 		req := agentTestRequest()
 		req.IdempotencyKey = fmt.Sprintf("long-conversation-%d", round)
 		run, err := s.CreateCloudAgentRun("user", req, parent)
@@ -202,8 +202,15 @@ func TestCloudAgentConversationContinuesBeyondEightRounds(t *testing.T) {
 		}
 		execution, _ := s.repo.CloudAgent("user", run.ID)
 		state, err := cloudAgentDecode(execution)
-		if err != nil || len(state.TextHistory) != round*2 {
-			t.Fatalf("history was lost at round %d: %v", round, err)
+		if err != nil {
+			t.Fatalf("history decode failed at round %d: %v", round, err)
+		}
+		want := round * 2
+		if want > cloudAgentHistoryKeepRounds*2 {
+			want = cloudAgentHistoryKeepRounds * 2
+		}
+		if len(state.TextHistory) != want {
+			t.Fatalf("history window at round %d: got %d want %d", round, len(state.TextHistory), want)
 		}
 		if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"继续创作"}`}).Error; err != nil {
 			t.Fatal(err)
@@ -213,7 +220,6 @@ func TestCloudAgentConversationContinuesBeyondEightRounds(t *testing.T) {
 		}
 		parent = run.ID
 	}
-	// Removing the turn cap must not remove the existing context-size bound.
 	run, _ := s.repo.CloudAgent("user", parent)
 	state, _ := cloudAgentDecode(run)
 	for i := range state.TextHistory {
@@ -224,8 +230,23 @@ func TestCloudAgentConversationContinuesBeyondEightRounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := agentTestRequest()
-	req.IdempotencyKey = "long-conversation-byte-bound"
-	if _, err := s.CreateCloudAgentRun("user", req, parent); err == nil || !strings.Contains(err.Error(), "64KB") {
-		t.Fatalf("context byte bound removed: %v", err)
+	req.IdempotencyKey = "long-conversation-trim-bytes"
+	child, err := s.CreateCloudAgentRun("user", req, parent)
+	if err != nil {
+		t.Fatalf("oversize history should trim not fail: %v", err)
+	}
+	childRun, err := s.repo.CloudAgent("user", child.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	childState, err := cloudAgentDecode(childRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cloudAgentHistoryJSONSize(childState.TextHistory) > cloudAgentHistoryMaxBytes {
+		t.Fatal("trimmed history still over cap")
+	}
+	if cloudAgentHistoryUserInstructionCount(childState.TextHistory) < 1 {
+		t.Fatal("trimmed away the conversation")
 	}
 }

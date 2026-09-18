@@ -82,7 +82,7 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                         >
                             <CloudUpload className="plugin-upload-dropzone-icon" />
                             <p className="ant-upload-text">{isDraggingPlugin ? "释放文件以上传插件" : "点击选择插件文件，也可拖拽到此处"}</p>
-                            <p className="ant-upload-hint">支持 .yingce-plugin 包 · 大小不超过 16 MiB</p>
+                            <p className="ant-upload-hint">支持 .yingce-plugin 包 · 大小不超过 48 MiB</p>
                         </Upload.Dragger>
                     </div>
                     <div className="plugin-upload-notice">

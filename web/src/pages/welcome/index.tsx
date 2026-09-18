@@ -106,6 +106,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                 </a>
                 <nav className={menu ? "welcome-nav is-open" : "welcome-nav"} aria-label="首页导航">
                     <a href="#workbench" onClick={() => setMenu(false)}>工作台</a>
+                    <a href="#contributors" onClick={() => setMenu(false)}>贡献者</a>
                     <a href={github} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={13} /></a>
                 </nav>
                 <Button className="welcome-header-cta" type="primary" href="/create" icon={<ArrowUpRight size={16} />} iconPlacement="end">开始创作</Button>

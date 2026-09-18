@@ -1,0 +1,97 @@
+{
+  "apiVersion": "yingce.plugin/v1",
+  "id": "official-payment-xunhupay",
+  "name": "虎皮椒聚合支付",
+  "version": "1.0.0",
+  "author": "虎皮椒",
+  "description": "虎皮椒聚合支付充值适配器，支持微信/支付宝扫码或跳转收银。",
+  "enabled": true,
+  "installable": true,
+  "runtime": {
+    "backend": "rpc",
+    "backendEntry": "backend/provider"
+  },
+  "surfaces": [
+    "wallet",
+    "settings"
+  ],
+  "permissions": [
+    "payment.create",
+    "payment.query",
+    "payment.close",
+    "payment.reconcile"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "publicBaseUrl",
+        "type": "url",
+        "label": "服务器公网地址",
+        "required": true,
+        "description": "用于生成异步通知和同步返回地址，必须可被虎皮椒访问。"
+      },
+      {
+        "name": "appId",
+        "type": "string",
+        "label": "虎皮椒 APPID",
+        "required": true
+      },
+      {
+        "name": "appSecret",
+        "type": "password",
+        "label": "虎皮椒 APPSECRET",
+        "required": true,
+        "secret": true
+      },
+      {
+        "name": "gateway",
+        "type": "url",
+        "label": "支付网关",
+        "required": true,
+        "default": "https://api.xunhupay.com",
+        "description": "正式环境 https://api.xunhupay.com，备用 https://api.dpweixin.com。"
+      },
+      {
+        "name": "checkoutMode",
+        "type": "string",
+        "label": "收银方式",
+        "required": false,
+        "default": "qr_code",
+        "values": [
+          "qr_code",
+          "redirect"
+        ],
+        "description": "qr_code 展示渠道返回的二维码图片 url_qrcode（约 5 分钟有效），钱包直接显示该图片；redirect 跳转手机端支付页 url。"
+      }
+    ]
+  },
+  "contributes": {
+    "paymentProviders": [
+      {
+        "id": "xunhupay-aggregate",
+        "label": "虎皮椒聚合支付",
+        "icon": "assets/icon.svg",
+        "checkoutMode": "qr_code",
+        "identityFields": [
+          "appId"
+        ],
+        "expiryPolicy": {
+          "defaultMinutes": 5,
+          "minMinutes": 5,
+          "maxMinutes": 1440
+        },
+        "notificationSuccess": {
+          "status": 200,
+          "contentType": "text/plain; charset=utf-8",
+          "body": "success"
+        },
+        "notificationFailure": {
+          "status": 400,
+          "contentType": "text/plain; charset=utf-8",
+          "body": "failure"
+        }
+      }
+    ]
+  },
+  "documentation": "# 虎皮椒聚合支付\n\n官方 `yingce.payment/v1` 支付插件。构建脚本交叉编译 macOS、Linux、Windows 的 amd64/arm64，入口仍声明为 `backend/provider`。扫码模式返回虎皮椒 `url_qrcode` 图片地址，由钱包直接展示该图。\n\n---\n\n## yingce.payment/v1\n\n支持 `validate_config`、`create_order`、`query_order`、`close_order`、`verify_notification` 和 `download_trade_bill`，统一返回 JSON 响应。\n\n虎皮椒渠道协议全部封装在本插件内：下单 `POST /payment/do.html`（JSON），查单 `POST /payment/query.html`，异步通知为 form，成功应答 `success`。配置字段包括 `publicBaseUrl`、`appId`、`appSecret`、`gateway`、`checkoutMode`。没有独立关单和交易账单下载接口：未支付关单按查单结果本地关闭，对账账单返回 not found。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v1\",\n  \"id\": \"official-payment-xunhupay\",\n  \"name\": \"虎皮椒聚合支付\",\n  \"version\": \"1.0.0\",\n  \"author\": \"虎皮椒\",\n  \"description\": \"虎皮椒聚合支付充值适配器，支持微信/支付宝扫码或跳转收银。\",\n  \"enabled\": true,\n  \"installable\": true,\n  \"runtime\": {\n    \"backend\": \"rpc\",\n    \"backendEntry\": \"backend/provider\"\n  },\n  \"surfaces\": [\n    \"wallet\",\n    \"settings\"\n  ],\n  \"permissions\": [\n    \"payment.create\",\n    \"payment.query\",\n    \"payment.close\",\n    \"payment.reconcile\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"publicBaseUrl\",\n        \"type\": \"url\",\n        \"label\": \"服务器公网地址\",\n        \"required\": true,\n        \"description\": \"用于生成异步通知和同步返回地址，必须可被虎皮椒访问。\"\n      },\n      {\n        \"name\": \"appId\",\n        \"type\": \"string\",\n        \"label\": \"虎皮椒 APPID\",\n        \"required\": true\n      },\n      {\n        \"name\": \"appSecret\",\n        \"type\": \"password\",\n        \"label\": \"虎皮椒 APPSECRET\",\n        \"required\": true,\n        \"secret\": true\n      },\n      {\n        \"name\": \"gateway\",\n        \"type\": \"url\",\n        \"label\": \"支付网关\",\n        \"required\": true,\n        \"default\": \"https://api.xunhupay.com\",\n        \"description\": \"正式环境 https://api.xunhupay.com，备用 https://api.dpweixin.com。\"\n      },\n      {\n        \"name\": \"checkoutMode\",\n        \"type\": \"string\",\n        \"label\": \"收银方式\",\n        \"required\": false,\n        \"default\": \"qr_code\",\n        \"values\": [\n          \"qr_code\",\n          \"redirect\"\n        ],\n        \"description\": \"qr_code 展示渠道返回的二维码图片 url_qrcode（约 5 分钟有效），钱包直接显示该图片；redirect 跳转手机端支付页 url。\"\n      }\n    ]\n  },\n  \"contributes\": {\n    \"paymentProviders\": [\n      {\n        \"id\": \"xunhupay-aggregate\",\n        \"label\": \"虎皮椒聚合支付\",\n        \"icon\": \"assets/icon.svg\",\n        \"checkoutMode\": \"qr_code\",\n        \"identityFields\": [\n          \"appId\"\n        ],\n        \"expiryPolicy\": {\n          \"defaultMinutes\": 5,\n          \"minMinutes\": 5,\n          \"maxMinutes\": 1440\n        },\n        \"notificationSuccess\": {\n          \"status\": 200,\n          \"contentType\": \"text/plain; charset=utf-8\",\n          \"body\": \"success\"\n        },\n        \"notificationFailure\": {\n          \"status\": 400,\n          \"contentType\": \"text/plain; charset=utf-8\",\n          \"body\": \"failure\"\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

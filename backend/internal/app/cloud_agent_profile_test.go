@@ -250,3 +250,61 @@ func TestCloudAgentContinuationReadsLatestProfileWithoutChangingParent(t *testin
 		}
 	}
 }
+
+func cloudAgentToolNamesFromTaskInput(t *testing.T, raw string) []string {
+	t.Helper()
+	var input struct {
+		AgentRequests struct {
+			Canonical struct {
+				Tools []map[string]any `json:"tools"`
+			} `json:"canonical"`
+		} `json:"agentRequests"`
+	}
+	if err := json.Unmarshal([]byte(raw), &input); err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(input.AgentRequests.Canonical.Tools))
+	for _, tool := range input.AgentRequests.Canonical.Tools {
+		fn, _ := tool["function"].(map[string]any)
+		if name, _ := fn["name"].(string); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func TestCloudAgentOmitsProfileReadWhenNoLayers(t *testing.T) {
+	s, _, canvasID := cloudAgentProfileFixture(t)
+	req := agentTestRequest()
+	req.CanvasID = canvasID
+	req.IdempotencyKey = "profile-empty-tools"
+	run, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := s.repo.TaskForUser("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range cloudAgentToolNamesFromTaskInput(t, task.InputJSON) {
+		if name == "agent_profile_read" {
+			t.Fatal("empty profile snapshot still exposed agent_profile_read")
+		}
+	}
+	call := cloudAgentCall{}
+	call.Function.Name, call.Function.Arguments = "agent_profile_read", `{"scope":"user"}`
+	_, err = cloudAgentReadTool(nil, "user", &cloudAgentRuntime{}, call)
+	if err == nil || !strings.Contains(err.Error(), "本轮没有长期偏好层") {
+		t.Fatalf("empty profile read should refuse: %v", err)
+	}
+}
+
+func TestCloudAgentProfileReadListsAvailableLayers(t *testing.T) {
+	state := cloudAgentRuntime{Profile: cloudAgentProfileSnapshot{Layers: []AgentProfileLayer{{Scope: model.AgentProfileScopeUser, Content: "only-user"}}}}
+	call := cloudAgentCall{}
+	call.Function.Name, call.Function.Arguments = "agent_profile_read", `{"scope":"canvas"}`
+	_, err := cloudAgentReadTool(nil, "user", &state, call)
+	if err == nil || !strings.Contains(err.Error(), "user") || strings.Contains(err.Error(), "请只读取系统清单列出的层") {
+		t.Fatalf("missing layer should list readable scopes: %v", err)
+	}
+}

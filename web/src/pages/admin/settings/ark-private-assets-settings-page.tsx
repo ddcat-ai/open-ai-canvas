@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import { AlertTriangle, CloudUpload, KeyRound, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router";

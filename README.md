@@ -404,4 +404,19 @@ Issue 反馈、技术讨论和产品升级建议可以在微信交流群中沟�
   <br clear="left">
 </td>
 </tr>
+<tr>
+<td width="50%" valign="top">
+  <img src="assets/user-morrow.jpg" alt="morrow" width="56" align="left">
+  <strong>morrow<br><sub>VV：morrow0127</sub></strong><br>
+  <a href="mailto:3201190041@qq.com">3201190041@qq.com</a><br>
+  <em>最难不过坚持</em>
+  <br clear="left">
+</td>
+<td width="50%" valign="top">
+  <img src="assets/user-chunqiu.jpg" alt="春秋" width="56" align="left">
+  <strong>春秋<br><sub>Agent记忆核心贡献者 · VV：A13068788886</sub></strong><br>
+  <a href="mailto:558328@qq.com">558328@qq.com</a><br>
+  <br clear="left">
+</td>
+</tr>
 </table>

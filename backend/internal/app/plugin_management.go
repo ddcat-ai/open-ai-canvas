@@ -118,6 +118,21 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 	}
 }
 
+func pluginManagementFromView(plugin PluginView) PluginManagementView {
+	policy := pluginManagement(plugin.Manifest.ID, plugin.Source)
+	if policy.Kind != PluginKindProtocol || len(plugin.Manifest.Contributes.PaymentProviders) == 0 {
+		return policy
+	}
+	origin := strings.TrimSpace(plugin.Source)
+	if origin == "" {
+		origin = PluginOriginOfficial
+	}
+	return PluginManagementView{
+		Origin: origin, Kind: PluginKindPayment,
+		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
+	}
+}
+
 func knownPluginIDs(items []PluginView) []string {
 	seen := make(map[string]struct{}, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))
 	ids := make([]string, 0, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))

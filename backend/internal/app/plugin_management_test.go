@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
@@ -67,6 +68,22 @@ func TestUploadedManifestCannotClaimUserActivationScope(t *testing.T) {
 	policy := pluginManagement(PluginPromptOptimizer, PluginOriginUploaded)
 	if policy.Origin != PluginOriginUploaded || policy.ActivationScope != PluginScopeSystem || policy.ConfigurationScope != PluginConfigurationSystem {
 		t.Fatalf("uploaded plugin policy = %#v", policy)
+	}
+}
+
+func TestPaymentContributionInfersPaymentManagementKind(t *testing.T) {
+	plugin := PluginView{
+		Source: PluginOriginOfficial,
+		Manifest: PluginManifestView{
+			ID: "official-payment-xunhupay",
+			Contributes: protocol.ManifestContributions{PaymentProviders: []protocol.ManifestPaymentProvider{{
+				ID: "xunhupay-aggregate", Label: "虎皮椒聚合支付", Icon: "assets/icon.svg", CheckoutMode: "qr_code",
+			}}},
+		},
+	}
+	policy := pluginManagementFromView(plugin)
+	if policy.Kind != PluginKindPayment || policy.Origin != PluginOriginOfficial || policy.ActivationScope != PluginScopeSystem {
+		t.Fatalf("inferred payment policy = %#v", policy)
 	}
 }
 

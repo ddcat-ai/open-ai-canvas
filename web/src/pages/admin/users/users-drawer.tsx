@@ -1,5 +1,5 @@
 import { App, Button, Drawer, Form, Input } from "antd";
-import { Select } from "@/components/ui/base/select";
+import { Select } from "@/pages/admin/ui/controls";
 import { useEffect, useState } from "react";
 
 import { createAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
