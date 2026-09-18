@@ -129,6 +129,19 @@ func (r *Repository) ToolForUser(userID string, toolID int64) (model.Tool, error
 	return tool, nil
 }
 
+// ToolByID 按 ID 查询工具，不做可见性校验，用于令牌解析等不依赖用户的场景。
+func (r *Repository) ToolByID(toolID int64) (model.Tool, error) {
+	var tool model.Tool
+	err := r.db.Where("id = ?", toolID).First(&tool).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return tool, kernel.NotFound("工具不存在")
+	}
+	if err != nil {
+		return tool, err
+	}
+	return tool, nil
+}
+
 // ToolFavorited 返回工具及收藏时间（未收藏时为 nil）。
 func (r *Repository) ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error) {
 	tool, err := r.ToolForUser(userID, toolID)

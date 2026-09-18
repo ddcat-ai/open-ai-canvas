@@ -21,6 +21,7 @@ type Repository interface {
 	UpsertBuiltinTools(tools []model.Tool) error
 	ListTools(userID string, req ToolListRequest) ([]ToolWithFavorite, int64, error)
 	ToolForUser(userID string, toolID int64) (model.Tool, error)
+	ToolByID(toolID int64) (model.Tool, error)
 	ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error)
 	AddToolFavorite(userID string, toolID int64) error
 	RemoveToolFavorite(userID string, toolID int64) error

@@ -4,7 +4,7 @@ import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/component
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
-import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
+import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
 import type { Skill } from "@/services/api/skills";
@@ -350,12 +350,26 @@ export function useCanvasRenderModel({
     );
     const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
     const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
+    const toolMentionReferences = useMemo(() => {
+        const refs: ReturnType<typeof buildToolMentionReference>[] = [];
+        const seen = new Set<number>();
+        for (const node of semanticNodes) {
+            const text = node.metadata?.composerContent || node.metadata?.prompt || "";
+            for (const { toolId, label } of parseToolMentionTokens(text)) {
+                if (seen.has(toolId)) continue;
+                seen.add(toolId);
+                refs.push(buildToolMentionReference(toolId, label));
+            }
+        }
+        return refs;
+    }, [semanticNodes]);
     const mentionReferencesByNodeId = useMemo(() => {
         const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, visibleNodes);
-        if (!skillMentionReferences.length) return map;
-        map.forEach((references, nodeId) => map.set(nodeId, [...references, ...skillMentionReferences]));
+        const extraReferences = [...skillMentionReferences, ...toolMentionReferences];
+        if (!extraReferences.length) return map;
+        map.forEach((references, nodeId) => map.set(nodeId, [...references, ...extraReferences]));
         return map;
-    }, [connections, semanticNodes, skillMentionReferences, visibleNodes]);
+    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferences, visibleNodes]);
 
     return {
         activeDirectorNode,

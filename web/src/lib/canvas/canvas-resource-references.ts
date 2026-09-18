@@ -7,7 +7,7 @@ import type { Skill } from "@/services/api/skills";
 import type { Asset, AssetCategory } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
-export type CanvasResourceKind = "image" | "video" | "audio" | "text" | "skill" | "character";
+export type CanvasResourceKind = "image" | "video" | "audio" | "text" | "skill" | "character" | "tool";
 
 export type CanvasResourceReference = {
     id: string;
@@ -31,10 +31,31 @@ export type CanvasResourceReference = {
     assetId?: string;
     category?: AssetCategory;
     mentionToken?: string;
+    /** 仅 kind === "tool" 时使用，对应后端工具 ID。 */
+    toolId?: number;
 };
 
 export function canvasSkillMentionToken(skillId: string) {
     return `@[skill:${skillId}]`;
+}
+
+export function canvasToolMentionToken(toolId: number, label: string) {
+    return `@[tool:${toolId}:${label}]`;
+}
+
+const TOOL_REF_PATTERN = /@\[tool:(\d+):([^\]]+)\]/g;
+
+/** 从文本中解析所有 @[tool:ID:label] 令牌，返回去重的工具引用。 */
+export function parseToolMentionTokens(text: string): { toolId: number; label: string }[] {
+    const results: { toolId: number; label: string }[] = [];
+    const seen = new Set<number>();
+    for (const match of text.matchAll(TOOL_REF_PATTERN)) {
+        const toolId = Number(match[1]);
+        if (seen.has(toolId)) continue;
+        seen.add(toolId);
+        results.push({ toolId, label: match[2] });
+    }
+    return results;
 }
 
 export function canvasNodeMentionToken(nodeId: string) {
@@ -44,13 +65,14 @@ export function canvasNodeMentionToken(nodeId: string) {
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.mentionToken) return reference.mentionToken;
     if (reference.kind === "skill" && reference.skill?.skillId) return canvasSkillMentionToken(reference.skill.skillId);
+    if (reference.kind === "tool" && reference.toolId != null) return canvasToolMentionToken(reference.toolId, reference.label);
     if (reference.assetId) return `@[asset:${reference.assetId}]`;
     return `@${reference.label}`;
 }
 
 export function normalizeCanvasNodeMentionTokens(prompt: string, references: CanvasResourceReference[]) {
     return references.reduce((value, reference) => {
-        if (!reference.nodeId || reference.assetId || reference.kind === "skill") return value;
+        if (!reference.nodeId || reference.assetId || reference.kind === "skill" || reference.kind === "tool") return value;
         return value.split(canvasNodeMentionToken(reference.nodeId)).join(`@${reference.label}`);
     }, prompt);
 }
@@ -59,7 +81,7 @@ export function normalizeCanvasNodeMentionTokens(prompt: string, references: Can
 export function autoMentionCanvasResourceReferences(prompt: string, references: CanvasResourceReference[]) {
     const referenceByName = new Map<string, CanvasResourceReference | null>();
     references
-        .filter((reference) => reference.active && !reference.assetId && reference.kind !== "skill")
+        .filter((reference) => reference.active && !reference.assetId && reference.kind !== "skill" && reference.kind !== "tool")
         .forEach((reference, index) => {
             canvasResourceMentionNames(reference, index, true).forEach((name) => {
                 if (!referenceByName.has(name)) {
@@ -103,7 +125,7 @@ export function findCanvasResourceAutoLinkMatch(prompt: string, cursor: number, 
     if (/@(?:\[[^\]]*|[^\s@,.;:!?，。；：！？、)\]}】）]*)$/u.test(prefix)) return null;
     const aliases = new Map<string, CanvasResourceReference | null>();
     references
-        .filter((reference) => reference.active && !reference.assetId && reference.kind !== "skill")
+        .filter((reference) => reference.active && !reference.assetId && reference.kind !== "skill" && reference.kind !== "tool")
         .forEach((reference, index) => {
             canvasResourceMentionNames(reference, index, true).forEach((name) => {
                 if (!aliases.has(name)) aliases.set(name, reference);
@@ -158,7 +180,7 @@ const CANVAS_RESOURCE_MENTION_BOUNDARY = /(?:$|\s|[,.!?;:，。！？；：、)\
 
 function canvasResourceReferenceMentionTokens(reference: CanvasResourceReference) {
     const tokens = [canvasResourceMentionToken(reference), `@${reference.label}`];
-    if (reference.nodeId && !reference.assetId && reference.kind !== "skill") tokens.push(canvasNodeMentionToken(reference.nodeId));
+    if (reference.nodeId && !reference.assetId && reference.kind !== "skill" && reference.kind !== "tool") tokens.push(canvasNodeMentionToken(reference.nodeId));
     return [...new Set(tokens.filter(Boolean))];
 }
 
@@ -207,7 +229,7 @@ export function applyCanvasConnectionPromptSync(previousNodes: CanvasNodeData[],
 }
 
 function canvasNodeBoundReferences(references: CanvasResourceReference[]) {
-    return references.filter((reference) => reference.nodeId && !reference.assetId && reference.kind !== "skill");
+    return references.filter((reference) => reference.nodeId && !reference.assetId && reference.kind !== "skill" && reference.kind !== "tool");
 }
 
 function canvasReferenceIdentityChanged(previousReferences: CanvasResourceReference[], nextReferences: CanvasResourceReference[]) {
@@ -461,7 +483,7 @@ function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[]
 }
 
 function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
-    const counts: Record<CanvasResourceKind, number> = { image: 0, video: 0, audio: 0, text: 0, skill: 0, character: 0 };
+    const counts: Record<CanvasResourceKind, number> = { image: 0, video: 0, audio: 0, text: 0, skill: 0, character: 0, tool: 0 };
     let drawingCount = 0;
     return nodes.flatMap((node): CanvasResourceReference[] => {
         const kind = resourceKind(node);
@@ -500,6 +522,7 @@ function labelForKind(kind: CanvasResourceKind, index: number) {
     if (kind === "video") return seedanceReferenceLabel("video", index);
     if (kind === "audio") return seedanceReferenceLabel("audio", index);
     if (kind === "skill") return `技能${index + 1}`;
+    if (kind === "tool") return `工具${index + 1}`;
     return `文本${index + 1}`;
 }
 
@@ -517,4 +540,17 @@ function skillResourceText(node: CanvasNodeData) {
     const skill = node.metadata?.skillSnapshot;
     if (!skill) return node.metadata?.content || "";
     return [skill.name, skill.description, skill.template, skill.outputContract].filter(Boolean).join("\n\n");
+}
+
+export function buildToolMentionReference(toolId: number, label: string): CanvasResourceReference {
+    return {
+        id: `tool:${toolId}`,
+        nodeId: `tool:${toolId}`,
+        kind: "tool",
+        label,
+        title: label,
+        active: true,
+        toolId,
+        mentionToken: canvasToolMentionToken(toolId, label),
+    };
 }

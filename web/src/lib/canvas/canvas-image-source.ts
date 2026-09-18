@@ -28,3 +28,18 @@ export function createPortraitTextureNode(source: CanvasNodeData, id: string): C
         },
     };
 }
+export function createNineGridNode(source: CanvasNodeData, id: string, toolId: number, label: string, prompt: string): CanvasNodeData {
+    return {
+        id,
+        type: CanvasNodeType.Image,
+        title: `${source.title || "图片"} · ${label}`,
+        position: { x: source.position.x + source.width + 96, y: source.position.y },
+        width: source.width,
+        height: source.height,
+        metadata: {
+            prompt: `@图片1 @[tool:${toolId}:${label}]`,
+            composerContent: `@图片1 @[tool:${toolId}:${label}]`,
+            generationType: "edit",
+        },
+    };
+}

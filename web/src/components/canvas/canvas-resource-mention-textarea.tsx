@@ -579,20 +579,19 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     chip.contentEditable = "false";
     chip.dataset.mentionToken = token;
     chip.dataset.mentionReferenceId = reference.id;
-    chip.className = `canvas-resource-inline-mention ${reference.kind === "skill" ? "is-skill" : ""}`;
+    const isDecorated = reference.kind === "skill" || reference.kind === "tool";
+    chip.className = `canvas-resource-inline-mention ${isDecorated ? `is-${reference.kind}` : ""}`;
     chip.title = "双击放大预览";
     if (reference.kind === "skill") chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference));
+    if (reference.kind === "tool") chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference));
 
     const prefix = document.createElement("span");
-    prefix.className = reference.kind === "skill" ? "canvas-resource-inline-skill-icon" : "canvas-resource-inline-at";
-    // “/” is an input command, not part of the selected Skill name. Keep the
-    // command token in the serialized value, but render the chip as a normal
-    // icon + label so it remains readable after selection and submission.
-    prefix.textContent = reference.kind === "skill" ? "✦" : "@";
+    prefix.className = isDecorated ? "canvas-resource-inline-skill-icon" : "canvas-resource-inline-at";
+    prefix.textContent = reference.kind === "skill" ? "✦" : reference.kind === "tool" ? "🔧" : "@";
     chip.appendChild(prefix);
 
-    // Skill chip 的前缀已经承担图标职责，不再追加 fallback preview，避免出现两个星标。
-    if (reference.kind !== "skill") chip.appendChild(createInlinePreview(reference));
+    // Skill/tool chip 的前缀已经承担图标职责，不再追加 fallback preview，避免出现两个图标。
+    if (!isDecorated) chip.appendChild(createInlinePreview(reference));
 
     const label = document.createElement("span");
     label.className = "canvas-resource-inline-label";
