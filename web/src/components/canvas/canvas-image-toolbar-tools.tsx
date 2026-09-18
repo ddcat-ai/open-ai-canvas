@@ -35,6 +35,10 @@ type ImageToolDefinition = {
     description?: string;
     active?: (node: CanvasNodeData) => boolean;
     run: (node: CanvasNodeData, handlers: ImageToolHandlers) => void;
+    /** 仅 group === "nine_grid" 时使用，对应后端工具 ID */
+    toolId?: number;
+    /** 仅 group === "nine_grid" 时使用，图标名称（lucide 图标名） */
+    toolIconName?: string;
 };
 
 const imageToolDefinitions: ImageToolDefinition[] = [
@@ -191,6 +195,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Grid3x3 className="size-3.5" />,
         group: "nine_grid",
         order: 10,
+        toolId: 79,
+        toolIconName: "Grid3x3",
         run: (node, handlers) => handlers.onNineGrid(node, 79, "多机位九宫格", "Grid3x3"),
     },
     {
@@ -201,6 +207,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Grid2x2 className="size-3.5" />,
         group: "nine_grid",
         order: 20,
+        toolId: 80,
+        toolIconName: "Grid2x2",
         run: (node, handlers) => handlers.onNineGrid(node, 80, "剧情推演四宫格", "Grid2x2"),
     },
     {
@@ -211,6 +219,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <ScanFace className="size-3.5" />,
         group: "nine_grid",
         order: 30,
+        toolId: 81,
+        toolIconName: "ScanFace",
         run: (node, handlers) => handlers.onNineGrid(node, 81, "角色脸部三视图", "ScanFace"),
     },
     {
@@ -221,6 +231,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Package className="size-3.5" />,
         group: "nine_grid",
         order: 40,
+        toolId: 82,
+        toolIconName: "Package",
         run: (node, handlers) => handlers.onNineGrid(node, 82, "产品三视图", "Package"),
     },
     {
@@ -231,6 +243,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Clapperboard className="size-3.5" />,
         group: "nine_grid",
         order: 50,
+        toolId: 83,
+        toolIconName: "Clapperboard",
         run: (node, handlers) => handlers.onNineGrid(node, 83, "25宫格连贯分镜", "Clapperboard"),
     },
     {
@@ -241,6 +255,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <PersonStanding className="size-3.5" />,
         group: "nine_grid",
         order: 60,
+        toolId: 85,
+        toolIconName: "PersonStanding",
         run: (node, handlers) => handlers.onNineGrid(node, 85, "角色三视图", "PersonStanding"),
     },
     {
@@ -251,6 +267,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Contrast className="size-3.5" />,
         group: "nine_grid",
         order: 70,
+        toolId: 84,
+        toolIconName: "Contrast",
         run: (node, handlers) => handlers.onNineGrid(node, 84, "电影级光影校正", "Contrast"),
     },
     {
@@ -261,6 +279,8 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <FastForward className="size-3.5" />,
         group: "nine_grid",
         order: 80,
+        toolId: 86,
+        toolIconName: "FastForward",
         run: (node, handlers) => handlers.onNineGrid(node, 86, "画面推演-3秒后", "FastForward"),
     },
     {
@@ -271,9 +291,10 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Rewind className="size-3.5" />,
         group: "nine_grid",
         order: 90,
+        toolId: 87,
+        toolIconName: "Rewind",
         run: (node, handlers) => handlers.onNineGrid(node, 87, "画面推演-5秒前", "Rewind"),
     },
-
 ];
 
 export function buildImageToolbarTools(node: CanvasNodeData, handlers: ImageToolHandlers) {
@@ -292,4 +313,28 @@ export function buildImageToolbarTools(node: CanvasNodeData, handlers: ImageTool
 
 function resolveToolText(value: string | ((node: CanvasNodeData) => string), node: CanvasNodeData) {
     return typeof value === "function" ? value(node) : value;
+}
+
+export type NineGridMenuItem = {
+    id: string;
+    label: string;
+    section: string;
+    description: string;
+    toolId: number;
+    toolIconName: string;
+};
+
+/** 从 imageToolDefinitions 中筛选 nine_grid 组，返回九宫格菜单项数据 */
+export function getNineGridMenuItems(): NineGridMenuItem[] {
+    return imageToolDefinitions
+        .filter((tool) => tool.group === "nine_grid" && tool.toolId != null)
+        .sort((a, b) => a.order - b.order)
+        .map((tool) => ({
+            id: tool.id,
+            label: typeof tool.label === "function" ? tool.label({} as CanvasNodeData) : tool.label,
+            section: tool.section || "常用操作",
+            description: tool.description || "",
+            toolId: tool.toolId!,
+            toolIconName: tool.toolIconName || "Grid3x3",
+        }));
 }

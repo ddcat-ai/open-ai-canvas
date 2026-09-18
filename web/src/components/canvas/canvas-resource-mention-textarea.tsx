@@ -76,13 +76,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const rawAssetReferences = useMemo(() => includeAssetLibrary ? buildAssetMentionReferences(assets) : [], [assets, includeAssetLibrary]);
     const assetReferences = useResolvedCanvasResourceReferences(rawAssetReferences);
     const activeCanvasReferences = useMemo(() => canvasReferences.filter((item) => item.active), [canvasReferences]);
-    const availableReferences = useMemo(() => [...(onSelectReference ? canvasReferences : activeCanvasReferences), ...assetReferences], [onSelectReference, canvasReferences, activeCanvasReferences, assetReferences]);
+    // 工具标签只能经九宫格等面板入口插入，@ 引用菜单不再重复展示。
+    const mentionCanvasReferences = useMemo(() => canvasReferences.filter((item) => item.kind !== "tool"), [canvasReferences]);
+    const activeMentionCanvasReferences = useMemo(() => mentionCanvasReferences.filter((item) => item.active), [mentionCanvasReferences]);
+    const availableReferences = useMemo(() => [...(onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences), ...assetReferences], [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, assetReferences]);
     const candidates = useMemo(() => {
         if (!mention) return [];
         const query = mention.query.trim().toLowerCase();
-        if (!query) return onSelectReference ? canvasReferences : activeCanvasReferences;
+        if (!query) return onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences;
         return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
-    }, [onSelectReference, canvasReferences, activeCanvasReferences, availableReferences, mention]);
+    }, [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, availableReferences, mention]);
     const activeReferences = useMemo(() => {
         if (!highlightLabels) return [];
         return [...activeCanvasReferences, ...assetReferences.filter((item) => value.includes(canvasResourceMentionToken(item)))];
@@ -319,7 +322,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const menu = mention && availableReferences.length && menuAnchor ? (
         <MentionMenu
             anchor={menuAnchor}
-            connectedReferences={activeCanvasReferences}
+            connectedReferences={activeMentionCanvasReferences}
             assetReferences={assetReferences}
             filteredReferences={candidates}
             query={mention.query}
@@ -575,7 +578,7 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
     );
 });
 
-const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+export const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
     Brush, Camera, Clapperboard, Clock, Contrast, FastForward, Globe2, Grid2x2, Grid3x3, Package, PersonStanding, Rewind, ScanFace, SlidersHorizontal, Sun,
 };
 

@@ -66,6 +66,29 @@ export function canvasNodeMentionToken(nodeId: string) {
     return `@[node:${nodeId}]`;
 }
 
+/** 这些工具类型的标签在提示词中唯一，再次选择时直接覆盖旧标签而不是追加。 */
+const UNIQUE_TOOL_MENTION_TYPES = new Set(["style", "nine_grid", "effect"]);
+
+/**
+ * 用新工具标签覆盖提示词中已有的同类型（style/nine_grid/effect）标签：
+ * 第一处原位替换，多余同类型标签连同其后一个空白一并清理。
+ * 没有同类型旧标签时返回 null，由调用方走普通插入。
+ */
+export function overwriteSameTypeToolMention(prompt: string, reference: CanvasResourceReference): string | null {
+    if (reference.kind !== "tool" || reference.toolId == null) return null;
+    const toolType = reference.toolType ?? "nine_grid";
+    if (!UNIQUE_TOOL_MENTION_TYPES.has(toolType)) return null;
+    const token = canvasResourceMentionToken(reference);
+    const pattern = new RegExp(`@\\[tool:${escapeRegExp(toolType)}:\\d+:[^\\]]*\\]`, "gu");
+    const segments = prompt.split(pattern);
+    if (segments.length === 1) return null;
+    let result = `${segments[0]}${token}${segments[1]}`;
+    for (let index = 2; index < segments.length; index += 1) {
+        result += segments[index].replace(/^\s/, "");
+    }
+    return result;
+}
+
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.mentionToken) return reference.mentionToken;
     if (reference.kind === "skill" && reference.skill?.skillId) return canvasSkillMentionToken(reference.skill.skillId);
