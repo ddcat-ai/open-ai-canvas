@@ -76,6 +76,9 @@ EOF
     chown root:"$APP_GROUP" "$env_file"
     chmod 0640 "$env_file"
 fi
+if ! grep -q '^REDIS_URL=' "$env_file"; then
+    printf 'REDIS_URL=redis://127.0.0.1:6379/0\n' >>"$env_file"
+fi
 
 install -m 0644 deploy/native/systemd/open-ai-canvas-backend.service /etc/systemd/system/open-ai-canvas-backend.service
 install -m 0644 deploy/native/systemd/open-ai-canvas-web.service /etc/systemd/system/open-ai-canvas-web.service
