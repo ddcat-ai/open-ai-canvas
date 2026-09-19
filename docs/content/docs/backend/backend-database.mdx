@@ -121,7 +121,7 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | --- | --- | --- |
 | `tools` | 保存画布工具预设（风格、运镜、九宫格） | `id` 自增主键，内置预设使用固定 ID（1-87）保证幂等；启动时 `EnsureBuiltinTools` 从嵌入的 `internal/tools/seed/tools.json` 写入，冲突只更新内容字段，`created_at` 保留首次值 |
 
-`type` 取值 `style`（风格）、`camera_motions`（运镜）、`nine_grid`（九宫格）；`extra_info` 以 JSON 数组保存样本图路径，`ratio` 仅九宫格使用（`original` 或画幅比），`visibility` 取 `public` / `private`。
+`type` 取值 `style`（风格）、`motion`（运镜）、`nine_grid`（九宫格）；`extra_info` 以 JSON 数组保存样本图路径，`ratio` 仅九宫格使用（`original` 或画幅比），`visibility` 取 `public` / `private`。
 
 ## 提示词模板
 

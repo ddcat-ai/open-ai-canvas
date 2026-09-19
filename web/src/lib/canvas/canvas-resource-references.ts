@@ -33,7 +33,7 @@ export type CanvasResourceReference = {
     mentionToken?: string;
     /** 仅 kind === "tool" 时使用，对应后端工具 ID。 */
     toolId?: number;
-    /** 仅 kind === "tool" 时使用，对应工具类型（style/nine_grid/effect/camera_motions）。 */
+    /** 仅 kind === "tool" 时使用，对应工具类型（style/nine_grid/effect/motion）。 */
     toolType?: string;
     /** 仅 kind === "tool" 时使用，lucide 图标名称。 */
     toolIcon?: string;

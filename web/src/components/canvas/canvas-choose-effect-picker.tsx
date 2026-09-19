@@ -1,43 +1,39 @@
 import { useEffect, useState } from "react";
 import { Dropdown } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { LoaderCircle, Palette, Wrench, X } from "lucide-react";
+import { LoaderCircle, Sparkles, Wrench, X, XCircle } from "lucide-react";
 
 import { listTools, type ToolScope, type ToolSummary } from "@/services/api/tools";
-import { FEED_TABS, SUB_TAB_TAGS, toAbsoluteUrl } from "./canvas-workspace-tool-panel";
+import { FEED_TABS, toAbsoluteUrl } from "./canvas-workspace-tool-panel";
 
-const STYLE_TOOL_PAGE_SIZE = 100;
+const EFFECT_TOOL_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 250;
 
-export function CanvasChooseImageStylePicker({
+export function CanvasChooseEffectPicker({
     open,
     onOpenChange,
     activeToolId,
     activeLabel,
     scope = "public",
-    tag,
     onSelect,
     onClear,
 }: {
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
-    /** 当前提示词中 style 工具标签的 toolId，未选择时为 undefined。 */
+    /** 当前提示词中 effect 工具标签的 toolId，未选择时为 undefined。 */
     activeToolId?: number;
-    /** 当前 style 标签的 label 段，列表未加载或查不到时用于按钮回显。 */
+    /** 当前 effect 标签的 label 段，列表未加载或查不到时用于按钮回显。 */
     activeLabel?: string;
     /** 工具范围初始值（public/favorites/recent/custom），弹层内可切换，语义与侧边栏工具面板一致。 */
     scope?: ToolScope;
-    /** 标签过滤初始值，弹层内可切换。 */
-    tag?: string;
     onSelect: (toolId: number, label: string) => void;
-    /** 关闭已选风格：从提示词移除 style 工具标签。 */
+    /** 关闭已选特效：从提示词移除 effect 工具标签。 */
     onClear?: () => void;
 }) {
     const [internalOpen, setInternalOpen] = useState(false);
     const [searchInput, setSearchInput] = useState("");
     const [searchText, setSearchText] = useState("");
     const [scopeTab, setScopeTab] = useState(scope);
-    const [tagFilter, setTagFilter] = useState(tag ?? "");
     const actualOpen = open ?? internalOpen;
     const setOpen = (next: boolean) => {
         setInternalOpen(next);
@@ -50,8 +46,8 @@ export function CanvasChooseImageStylePicker({
     }, [searchInput]);
 
     const toolsQuery = useQuery({
-        queryKey: ["canvas-tools", "style-picker", scopeTab, tagFilter, searchText],
-        queryFn: ({ signal }) => listTools({ page: 1, pageSize: STYLE_TOOL_PAGE_SIZE, scope: scopeTab, type: "style", tag: tagFilter || undefined, search: searchText || undefined }, { signal }),
+        queryKey: ["canvas-tools", "effect-picker", scopeTab, searchText],
+        queryFn: ({ signal }) => listTools({ page: 1, pageSize: EFFECT_TOOL_PAGE_SIZE, scope: scopeTab, type: "effect", search: searchText || undefined }, { signal }),
     });
     const tools = toolsQuery.data?.tools ?? [];
     const activeTool = tools.find((tool) => tool.id === activeToolId);
@@ -90,32 +86,25 @@ export function CanvasChooseImageStylePicker({
                                         </button>
                                     ))}
                                 </div>
-                                <input className="asset-search min-w-0 flex-1" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索风格" />
+                                <input className="asset-search min-w-0 flex-1" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索特效" />
                                 {searchInput ? (
                                     <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setSearchInput("")} aria-label="清空搜索">
                                         <X className="size-3" />
                                     </button>
                                 ) : null}
                             </div>
-                            <div className="col-tag-filter mt-1.5">
-                                {[{ id: "", label: "全部" }, ...SUB_TAB_TAGS.style].map((chip) => (
-                                    <button key={chip.id || "all"} type="button" className={`col-tag-chip${tagFilter === chip.id ? " on" : ""}`} aria-pressed={tagFilter === chip.id} onClick={() => setTagFilter(chip.id)}>
-                                        {chip.label}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
-                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-1.5 overflow-y-auto p-2" role="listbox" aria-label="风格工具">
+                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-1.5 overflow-y-auto p-2" role="listbox" aria-label="特效工具">
                             {toolsQuery.isPending ? (
-                                <div className="col-span-3 grid h-24 place-items-center text-foreground/40">
+                                <div className="col-span-5 grid h-24 place-items-center text-foreground/40">
                                     <LoaderCircle className="size-4 animate-spin" />
                                 </div>
                             ) : toolsQuery.isError ? (
-                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">风格工具加载失败，请稍后重试</div>
+                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">特效工具加载失败，请稍后重试</div>
                             ) : tools.length === 0 ? (
-                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? "没有匹配的风格" : "暂无风格工具"}</div>
+                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? "没有匹配的特效" : "暂无特效工具"}</div>
                             ) : (
-                                tools.map((tool) => <StyleToolCard key={tool.id} tool={tool} selected={tool.id === activeToolId} onSelect={handleSelect} />)
+                                tools.map((tool) => <EffectToolCard key={tool.id} tool={tool} selected={tool.id === activeToolId} onSelect={handleSelect} />)
                             )}
                         </div>
                     </div>
@@ -125,7 +114,7 @@ export function CanvasChooseImageStylePicker({
             <button
                 type="button"
                 className="canvas-node-fixed-chip relative overflow-hidden"
-                title={resolvedLabel ? `风格：${resolvedLabel}` : "选择风格"}
+                title={resolvedLabel ? `特效：${resolvedLabel}` : "选择特效"}
                 aria-expanded={actualOpen}
                 aria-haspopup="menu"
                 onClick={() => setOpen(true)}
@@ -133,27 +122,27 @@ export function CanvasChooseImageStylePicker({
             >
                 {activeToolId != null && activeCover ? (
                     <>
-                        <img src={activeCover} alt="" className="absolute inset-0 h-full rounded-[8px] w-full object-cover" />
+                        <img src={activeCover} alt="" className="absolute inset-0 h-full w-full rounded-[8px] object-cover" />
                         {onClear ? (
                             <button
                                 type="button"
                                 className="absolute right-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/55 text-white/90 transition-colors hover:bg-black/75 hover:text-white"
-                                title="移除风格"
-                                aria-label="移除风格"
+                                title="移除特效"
+                                aria-label="移除特效"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onClear();
                                 }}
                                 onPointerDown={(event) => event.stopPropagation()}
                             >
-                                <X className="size-3" />
+                                <XCircle className="size-3" />
                             </button>
                         ) : null}
                     </>
                 ) : (
                     <>
-                        <Palette className="size-4 shrink-0" />
-                        <span className="truncate">风格</span>
+                        <Sparkles className="size-4 shrink-0" />
+                        <span className="truncate">特效</span>
                     </>
                 )}
             </button>
@@ -161,7 +150,7 @@ export function CanvasChooseImageStylePicker({
     );
 }
 
-function StyleToolCard({ tool, selected, onSelect }: { tool: ToolSummary; selected: boolean; onSelect: (tool: ToolSummary) => void }) {
+function EffectToolCard({ tool, selected, onSelect }: { tool: ToolSummary; selected: boolean; onSelect: (tool: ToolSummary) => void }) {
     const coverUrl = toAbsoluteUrl(tool.cover);
     return (
         <button

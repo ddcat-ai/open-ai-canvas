@@ -28,10 +28,10 @@ const (
 )
 
 var validToolTypes = map[string]struct{}{
-	ToolTypeStyle:         {},
-	ToolTypeCameraMotions: {},
-	ToolTypeNineGrid:      {},
-	ToolTypeEffect:        {},
+	ToolTypeStyle:    {},
+	ToolTypeMotion:   {},
+	ToolTypeNineGrid: {},
+	ToolTypeEffect:   {},
 }
 
 // ToolListRequest 工具列表查询参数。
@@ -39,7 +39,7 @@ type ToolListRequest struct {
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 	Scope    string `json:"scope"` // public | favorites | recent | custom
-	Type     string `json:"type"`  // style | camera_motions | nine_grid
+	Type     string `json:"type"`  // style | motion | nine_grid | effect
 	Tag      string `json:"tag"`
 	Search   string `json:"search"`
 }
@@ -260,7 +260,7 @@ func normalizeToolListRequest(req *ToolListRequest) error {
 func normalizeToolMutationRequest(req ToolMutationRequest) (*model.Tool, error) {
 	toolType := strings.TrimSpace(req.Type)
 	if _, ok := validToolTypes[toolType]; !ok {
-		return nil, kernel.BadAuthRequest("工具类型无效，仅支持 style、camera_motions、nine_grid")
+		return nil, kernel.BadAuthRequest("工具类型无效，仅支持 style、motion、nine_grid、effect")
 	}
 	label := strings.TrimSpace(req.Label)
 	if label == "" {

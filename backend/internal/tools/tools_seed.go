@@ -38,16 +38,16 @@ type toolSeedGroup struct {
 }
 
 type builtinToolsFile struct {
-	Style         toolSeedGroup `json:"style"`
-	CameraMotions toolSeedGroup `json:"camera_motions"`
-	NineGrid      toolSeedGroup `json:"nine_grid"`
+	Style    toolSeedGroup `json:"style"`
+	Motion   toolSeedGroup `json:"motion"`
+	NineGrid toolSeedGroup `json:"nine_grid"`
 }
 
 const (
-	ToolTypeStyle         = "style"
-	ToolTypeCameraMotions = "camera_motions"
-	ToolTypeNineGrid      = "nine_grid"
-	ToolTypeEffect        = "effect"
+	ToolTypeStyle    = "style"
+	ToolTypeMotion   = "motion"
+	ToolTypeNineGrid = "nine_grid"
+	ToolTypeEffect   = "effect"
 )
 
 const seedTimeLayout = "2006-01-02 15:04:05"
@@ -79,7 +79,7 @@ func EnsureBuiltinTools(repo Repository, importer SeedResourceImporter) error {
 		group toolSeedGroup
 	}{
 		{ToolTypeStyle, file.Style},
-		{ToolTypeCameraMotions, file.CameraMotions},
+		{ToolTypeMotion, file.Motion},
 		{ToolTypeNineGrid, file.NineGrid},
 	}
 

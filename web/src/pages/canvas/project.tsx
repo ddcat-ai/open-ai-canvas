@@ -2143,8 +2143,6 @@ function InfiniteCanvasPage() {
                         setNodeImageSettingsOpen(open);
                         if (open) setToolbarNodeId(null);
                     }}
-                    onChooseEffect={() => setSidebarActiveTab("tools")}
-                    onChooseMotion={() => setSidebarActiveTab("tools")}
                 />
             );
         },

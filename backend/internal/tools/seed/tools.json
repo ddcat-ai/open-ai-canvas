@@ -916,7 +916,7 @@
       }
     ]
   },
-  "camera_motions": {
+  "motion": {
     "title": "运镜",
     "tags": {
       "basic": "基础控制",

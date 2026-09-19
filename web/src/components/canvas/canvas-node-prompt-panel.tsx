@@ -1,7 +1,7 @@
 import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, AtSign, Boxes, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -24,6 +24,8 @@ import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
 import { CanvasNineGridPicker } from "./canvas-nine-grid-picker";
 import { CanvasChooseImageStylePicker } from "./canvas-choose-image-style-picker";
+import { CanvasChooseEffectPicker } from "./canvas-choose-effect-picker";
+import { CanvasChooseMotionPicker } from "./canvas-choose-motion-picker";
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasPromptOptimizerDrawer } from "./canvas-prompt-optimizer-drawer";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
@@ -52,8 +54,6 @@ type CanvasNodePromptPanelProps = {
     onClose?: () => void;
     onNodeMouseDown?: (event: ReactPointerEvent, nodeId: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
-    onChooseEffect?: () => void;
-    onChooseMotion?: () => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
 
@@ -73,7 +73,7 @@ const PROMPT_EDITOR_MODAL_WIDTH = "min(1200px, 92vw)";
 const PROMPT_EDITOR_MODAL_DEFAULT_WIDTH = 1200;
 const PROMPT_EDITOR_MODAL_DEFAULT_HEIGHT = 420;
 
-export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, onChooseEffect, onChooseMotion, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const themeName = useActiveTheme();
     const theme = canvasThemes[themeName];
@@ -92,6 +92,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [expandedNineGridOpen, setExpandedNineGridOpen] = useState(false);
     const [styleToolOpen, setStyleToolOpen] = useState(false);
     const [expandedStyleToolOpen, setExpandedStyleToolOpen] = useState(false);
+    const [effectToolOpen, setEffectToolOpen] = useState(false);
+    const [expandedEffectToolOpen, setExpandedEffectToolOpen] = useState(false);
+    const [motionToolOpen, setMotionToolOpen] = useState(false);
+    const [expandedMotionToolOpen, setExpandedMotionToolOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
     const [expandedModalSize, setExpandedModalSize] = useState<{ width: number; height: number } | null>(null);
     const expandedModalRef = useRef<HTMLDivElement>(null);
@@ -106,6 +110,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const activeNineGridIcon = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "nine_grid")?.icon ?? "Grid3x3", [prompt]);
     // 当前提示词持有的风格工具标签，用于风格按钮回显与原位替换。
     const activeStyleTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "style"), [prompt]);
+    // 当前提示词持有的特效工具标签，用于特效按钮回显与原位替换。
+    const activeEffectTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "effect"), [prompt]);
+    // 当前提示词持有的运镜工具标签（可多个），用于运镜按钮回显与菜单高亮。
+    const activeMotionTools = useMemo(() => parseToolMentionTokens(prompt).filter((tool) => tool.type === "motion"), [prompt]);
+    const activeMotionTool = activeMotionTools[0];
     const normalizedSavedPrompt = useMemo(() => normalizeCanvasNodeMentionTokens(savedPrompt, mentionReferences), [mentionReferences, savedPrompt]);
     const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const requirements: ModelRequirements = {
@@ -272,6 +281,20 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         if (!activeStyleTool) return;
         const styleMentionRe = new RegExp(`\\s*@\\[tool:style:${activeStyleTool.toolId}:[^\\]]*\\](\\s|$)`, "g");
         updatePrompt(prompt.replace(styleMentionRe, "").replace(/\s{2,}/g, " ").trim());
+    };
+
+    // 移除提示词中的 effect 工具标签（连同其后一个空白），用于特效 chip 的关闭操作。
+    const removeEffectToolMention = () => {
+        if (!activeEffectTool) return;
+        const effectMentionRe = new RegExp(`\\s*@\\[tool:effect:${activeEffectTool.toolId}:[^\\]]*\\](\\s|$)`, "g");
+        updatePrompt(prompt.replace(effectMentionRe, "").replace(/\s{2,}/g, " ").trim());
+    };
+
+    // 移除提示词中的所有 motion 工具标签，用于运镜 chip 的关闭操作。
+    const removeMotionToolMention = () => {
+        if (activeMotionTools.length === 0) return;
+        const motionMentionRe = /\s*@\[tool:motion:\d+:[^\]]*\](\s|$)/g;
+        updatePrompt(prompt.replace(motionMentionRe, "").replace(/\s{2,}/g, " ").trim());
     };
 
     const submit = () => {
@@ -502,12 +525,22 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         activeStyleToolLabel={activeStyleTool?.label}
                         onStyleToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "style", "Palette"))}
                         onClearStyleTool={removeStyleToolMention}
+                        onEffectToolOpenChange={expanded ? setExpandedEffectToolOpen : setEffectToolOpen}
+                        effectToolOpen={expanded ? expandedEffectToolOpen : effectToolOpen}
+                        activeEffectToolId={activeEffectTool?.toolId}
+                        activeEffectToolLabel={activeEffectTool?.label}
+                        onEffectToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "effect", "Sparkles"))}
+                        onClearEffectTool={removeEffectToolMention}
+                        onMotionToolOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen}
+                        motionToolOpen={expanded ? expandedMotionToolOpen : motionToolOpen}
+                        activeMotionToolIds={activeMotionTools.map((t) => t.toolId)}
+                        activeMotionToolLabel={activeMotionTool?.label}
+                        onMotionToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "motion", "Camera"))}
+                        onClearMotionTool={removeMotionToolMention}
                         onNineGridOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen}
                         nineGridOpen={expanded ? expandedNineGridOpen : nineGridOpen}
                         nineGridIcon={activeNineGridIcon}
                         onNineGridItem={(toolId, label, icon) => insertPromptReference(buildToolMentionReference(toolId, label, "nine_grid", icon))}
-                        onChooseEffect={onChooseEffect}
-                        onChooseMotion={onChooseMotion}
                     />
                     <CanvasResourceMentionTextarea
                         value={prompt}
@@ -715,12 +748,22 @@ function ConnectedReferenceShelf({
     activeStyleToolLabel,
     onStyleToolItem,
     onClearStyleTool,
+    onEffectToolOpenChange,
+    effectToolOpen,
+    activeEffectToolId,
+    activeEffectToolLabel,
+    onEffectToolItem,
+    onClearEffectTool,
+    onMotionToolOpenChange,
+    motionToolOpen,
+    activeMotionToolIds,
+    activeMotionToolLabel,
+    onMotionToolItem,
+    onClearMotionTool,
     onNineGridOpenChange,
     nineGridOpen,
     nineGridIcon = "Grid3x3",
     onNineGridItem,
-    onChooseEffect,
-    onChooseMotion,
 }: {
     targetNodeId?: string;
     references: CanvasResourceReference[];
@@ -740,13 +783,29 @@ function ConnectedReferenceShelf({
     onStyleToolItem?: (toolId: number, label: string) => void;
     /** 关闭已选风格：从提示词移除 style 工具标签。 */
     onClearStyleTool?: () => void;
+    onEffectToolOpenChange?: (open: boolean) => void;
+    effectToolOpen?: boolean;
+    /** 当前提示词中 effect 工具标签的 toolId，未选择时为 undefined。 */
+    activeEffectToolId?: number;
+    /** 当前 effect 标签的 label 段，列表未加载或查不到时用于按钮回显。 */
+    activeEffectToolLabel?: string;
+    onEffectToolItem?: (toolId: number, label: string) => void;
+    /** 关闭已选特效：从提示词移除 effect 工具标签。 */
+    onClearEffectTool?: () => void;
+    onMotionToolOpenChange?: (open: boolean) => void;
+    motionToolOpen?: boolean;
+    /** 当前提示词中 motion 工具标签的 toolId 列表（可多个），未选择时为空。 */
+    activeMotionToolIds?: number[];
+    /** 当前 motion 标签的 label 段，列表未加载或查不到时用于按钮回显。 */
+    activeMotionToolLabel?: string;
+    onMotionToolItem?: (toolId: number, label: string) => void;
+    /** 关闭已选运镜：从提示词移除 motion 工具标签。 */
+    onClearMotionTool?: () => void;
     onNineGridOpenChange?: (open: boolean) => void;
     nineGridOpen?: boolean;
     /** 当前已选九宫格工具的 lucide 图标名，无选择时回退 Grid3x3。 */
     nineGridIcon?: string;
     onNineGridItem?: (toolId: number, label: string, icon: string) => void;
-    onChooseEffect?: () => void;
-    onChooseMotion?: () => void;
 }) {
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
@@ -793,31 +852,25 @@ function ConnectedReferenceShelf({
                             onSelect={onNineGridItem}
                         />
                     ) : null}
-                    {mode === "video" && onChooseEffect ? (
-                        <button
-                            type="button"
-                            className="canvas-node-fixed-chip"
-                            title="特效"
-                            aria-label="特效"
-                            onClick={onChooseEffect}
-                            onPointerDown={(event) => event.stopPropagation()}
-                        >
-                            <Sparkles className="size-4" />
-                            <span className="truncate">特效</span>
-                        </button>
+                    {mode === "video" && onEffectToolItem ? (
+                        <CanvasChooseEffectPicker
+                            open={effectToolOpen}
+                            onOpenChange={onEffectToolOpenChange}
+                            activeToolId={activeEffectToolId}
+                            activeLabel={activeEffectToolLabel}
+                            onSelect={onEffectToolItem}
+                            onClear={onClearEffectTool}
+                        />
                     ) : null}
-                    {mode === "video" && onChooseMotion ? (
-                        <button
-                            type="button"
-                            className="canvas-node-fixed-chip"
-                            title="运镜"
-                            aria-label="运镜"
-                            onClick={onChooseMotion}
-                            onPointerDown={(event) => event.stopPropagation()}
-                        >
-                            <Camera className="size-4" />
-                            <span className="truncate">运镜</span>
-                        </button>
+                    {mode === "video" && onMotionToolItem ? (
+                        <CanvasChooseMotionPicker
+                            open={motionToolOpen}
+                            onOpenChange={onMotionToolOpenChange}
+                            activeToolIds={activeMotionToolIds}
+                            activeLabel={activeMotionToolLabel}
+                            onSelect={onMotionToolItem}
+                            onClear={onClearMotionTool}
+                        />
                     ) : null}
                     {activeReferences.map((reference, index) => {
                         const canPreview = Boolean(reference.previewUrl) && (reference.kind === "image" || reference.kind === "character" || reference.kind === "video");

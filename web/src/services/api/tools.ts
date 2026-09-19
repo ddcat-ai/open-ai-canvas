@@ -1,6 +1,6 @@
 import { http, compactApiParams, serializeApiParams, type ApiParams, type HttpRequestConfig } from "@/services/api/request";
 
-export type ToolType = "style" | "camera_motions" | "nine_grid" | "effect";
+export type ToolType = "style" | "motion" | "nine_grid" | "effect";
 export type ToolScope = "public" | "favorites" | "recent" | "custom";
 export type ToolSource = "builtin" | "user";
 export type ToolVisibility = "public" | "private";

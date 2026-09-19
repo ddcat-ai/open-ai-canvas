@@ -17,7 +17,7 @@ type ToolSubTab = "style" | "effect" | "motion";
 const TOOL_SUB_TABS: Array<{ id: ToolSubTab; type: ToolType; label: string }> = [
     { id: "style", type: "style", label: "风格" },
     { id: "effect", type: "effect", label: "特效" },
-    { id: "motion", type: "camera_motions", label: "运镜" },
+    { id: "motion", type: "motion", label: "运镜" },
 ];
 
 // 各子 Tab 的独立标签集，与 backend internal/tools/seed/tools.json 的 tags 对齐
@@ -64,7 +64,7 @@ function isVideoUrl(url: string) {
 }
 
 // 悬停播放预览视频的工具类型：运镜、特效
-const HOVER_VIDEO_TYPES = new Set(["camera_motions", "effect"]);
+const HOVER_VIDEO_TYPES = new Set(["motion", "effect"]);
 
 type CreateToolFormValues = {
     label: string;
