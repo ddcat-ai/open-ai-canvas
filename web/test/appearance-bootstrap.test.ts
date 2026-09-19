@@ -5,7 +5,7 @@ import { appearanceLogoURL, normalizePublicAppearance } from "../src/stores/use-
 test("initial HTML stays brand neutral until the public appearance is resolved", async () => {
     const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
 
-    expect(html).not.toContain("影策");
+    expect(html).not.toContain("影绘");
     expect(html).not.toContain("/logo.svg");
     expect(html).toContain("<title>正在加载</title>");
     expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
@@ -122,7 +122,7 @@ test("object storage can adopt the configured English brand identifier without r
 test("appearance management exposes a server-side reset to the built-in Yingce brand", async () => {
     const [pageSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/appearance.ts", import.meta.url)).text()]);
 
-    expect(pageSource).toContain("恢复影策默认");
+    expect(pageSource).toContain("恢复影绘默认");
     expect(pageSource).toContain("resetAdminAppearance()");
     expect(pageSource).toContain("已上传文件仍保留在存储资源中");
     expect(apiSource).toContain('http.delete<{ setting: AdminAppearance }>("/admin/settings/appearance")');

@@ -122,7 +122,7 @@ jobs:
             found && /^## / { exit }
             found { print }
           ' CHANGELOG.md > dist/RELEASE_NOTES.md
-          test -s dist/RELEASE_NOTES.md || printf '影策 %s\n' "$version" > dist/RELEASE_NOTES.md
+          test -s dist/RELEASE_NOTES.md || printf '影绘 %s\n' "$version" > dist/RELEASE_NOTES.md
 
       - name: Create GitHub Release
         env:

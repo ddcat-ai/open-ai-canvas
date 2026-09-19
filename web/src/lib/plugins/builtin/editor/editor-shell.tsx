@@ -16,7 +16,7 @@ const manifest: PluginManifestV2 = {
     name: "剪辑工作台",
     version: "0.1.0",
     description: "注册时间线、预览、检查器、素材、字幕、转写、导出和 AI 编辑八个工作台插槽。",
-    author: "影策团队",
+    author: "影绘团队",
     surfaces: ["fullscreen"],
     permissions: ["timeline.read", "timeline.command", "export.run"],
     trusted: true,

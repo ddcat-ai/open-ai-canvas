@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="影策 logo">
+  <img src="web/public/logo.svg" width="88" alt="影绘 logo">
 </p>
 
-<h1 align="center">影策</h1>
+<h1 align="center">影绘</h1>
 
 <p align="center">让一个故事，从文字走向银幕</p>
 
@@ -13,7 +13,7 @@
   <a href="SECURITY.md">安全策略</a>
 </p>
 
-影策是一个开源的 AI 影视与短剧创作工作台。它把自由画布、结构化分镜、角色与风格资产、图片/视频/音频生成、异步任务和本地 Agent 放在同一条创作链路里，让创作者从文字 brief 走到可复用的镜头资产。
+影绘是一个开源的 AI 影视与短剧创作工作台。它把自由画布、结构化分镜、角色与风格资产、图片/视频/音频生成、异步任务和本地 Agent 放在同一条创作链路里，让创作者从文字 brief 走到可复用的镜头资产。
 
 > 项目仍在快速开发，数据结构和外部接口可能直接调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
@@ -24,7 +24,7 @@
 
 ## 赞助商
 
-感谢以下赞助商对影策项目的支持：
+感谢以下赞助商对影绘项目的支持：
 
 | LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
 | --- | --- | --- | --- | --- |
@@ -64,7 +64,7 @@
 Issue 反馈、技术讨论和产品升级建议都可以在 微信 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/wx.jpg" alt="影策 微信交流群" width="100%">
+  <img src="assets/wx.jpg" alt="影绘 微信交流群" width="100%">
 </p>
 
 
@@ -283,4 +283,4 @@ cd docs && bun run types:check
 
 ## 许可证和上游
 
-本项目采用 [MIT](LICENSE) 协议。影策基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
+本项目采用 [MIT](LICENSE) 协议。影绘基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。

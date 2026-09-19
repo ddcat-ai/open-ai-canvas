@@ -1,6 +1,6 @@
 ---
 name: asset-aware-generation
-description: 基于影策画布已有角色、场景、道具、风格和媒体资源创建生成流程；适用于生图、视频、音频或分镜资产工作。
+description: 基于影绘画布已有角色、场景、道具、风格和媒体资源创建生成流程；适用于生图、视频、音频或分镜资产工作。
 ---
 
 # 资源感知生成
@@ -12,4 +12,4 @@ description: 基于影策画布已有角色、场景、道具、风格和媒体�
 5. 通过 `canvas_create_generation_flow` 或对应 `canvas_generate_*` 工具创建清晰的提示词节点、参考节点和目标节点关系。
 6. 返回结果后确认目标节点、连线和任务状态；生成任务未完成时不要声称成片已完成。
 
-生成任务必须走影策共享 GenerationTask；不要直接调用 provider、模拟点击或把密钥放进 URL。
+生成任务必须走影绘共享 GenerationTask；不要直接调用 provider、模拟点击或把密钥放进 URL。

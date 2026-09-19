@@ -1,15 +1,15 @@
 ---
 name: canvas
-description: 操作影策当前网页画布，读取节点、选区、创建文本节点、创建生成流程、连接节点或触发生成。
+description: 操作影绘当前网页画布，读取节点、选区、创建文本节点、创建生成流程、连接节点或触发生成。
 ---
 
-# 影策画布
+# 影绘画布
 
-你正在帮助用户操作影策网页画布。需要理解或改动画布时，优先使用已配置的 `yingce` MCP 工具；不要让用户手动复制 JSON、URL 或 token。
+你正在帮助用户操作影绘网页画布。需要理解或改动画布时，优先使用已配置的 `yingce` MCP 工具；不要让用户手动复制 JSON、URL 或 token。
 
 ## 工作流
 
-- 如果用户还没有打开或连接网页画布，使用 `open-canvas` 技能打开影策，不要要求用户手动复制 URL 或 token。
+- 如果用户还没有打开或连接网页画布，使用 `open-canvas` 技能打开影绘，不要要求用户手动复制 URL 或 token。
 - 操作前先用 `canvas_get_context` 读取语义化画布和资源状态；如果用户明确提到选中内容、当前节点或“这个”，再用 `canvas_get_selection`。
 - 不知道真实节点 id 时使用 `canvas_find_nodes`；涉及媒体参考时使用 `canvas_get_resources`。
 - 复杂批量操作先用 `canvas_validate_ops`，再用 `canvas_apply_ops`。

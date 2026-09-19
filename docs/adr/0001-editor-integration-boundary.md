@@ -8,7 +8,7 @@
 
 Concat（WolfCut）的核心架构原则是"引擎拥有项目模型"（engine doctrine）：Rust 引擎持有时间线模型、全部编辑命令（`commands.rs`）、撤销栈、渲染与导出路径、文档格式（wolfcut.json）；Tauri host 只是管道，UI 只渲染状态并派发命令。这一形态依赖本地文件系统、ffmpeg 子进程和 GPU 组合器，与其桌面产品定位绑定。
 
-影策是 Web 应用（React 19 + Go 后端 + Node canvas-agent），画布节点模型以 TS 状态机为真相源（localforage user-scope + 后端项目接口持久化）。时间线已有第一期字幕数据落地与第二期类型（`TimelineProject` v2，含轨道/片段/directMedia），第三期规划了 ffmpeg 导出（`timeline-to-ffmpeg.ts` 纯函数规划层已存在）。后端 Go 目前不执行 ffmpeg。
+影绘是 Web 应用（React 19 + Go 后端 + Node canvas-agent），画布节点模型以 TS 状态机为真相源（localforage user-scope + 后端项目接口持久化）。时间线已有第一期字幕数据落地与第二期类型（`TimelineProject` v2，含轨道/片段/directMedia），第三期规划了 ffmpeg 导出（`timeline-to-ffmpeg.ts` 纯函数规划层已存在）。后端 Go 目前不执行 ffmpeg。
 
 ## 决策
 

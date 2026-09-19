@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: 影策 HTTP API
+  title: 影绘 HTTP API
   version: "1.0.0"
   description: |
     路径前缀是 `/api`。前后端一起发布，不按路径做 API 版本。

@@ -85,7 +85,7 @@
 | 多轨编辑（视频/音频/字幕/文字） | ✅ | TimelineProject v2 轨道类型齐全 |
 | 剪切工具 split/trim/merge | ✅ | M2 命令集含分割/裁剪/移动/删除；merge 需在 M2 命令集确认补一条 |
 | 变速 speed control | ✅ | 命令集含 setSpeed |
-| 自动字幕 | ✅（形态不同） | Concat 本地 whisper；影策服务端任务（ADR-0004），浏览器不跑模型 |
+| 自动字幕 | ✅（形态不同） | Concat 本地 whisper；影绘服务端任务（ADR-0004），浏览器不跑模型 |
 | 字幕高亮 | ✅（领先） | 已有 subtitle-highlight-* 库；Concat 尚在 roadmap |
 | 标题与样式文本 | 🟡 | text 轨道 + 字幕工具批量样式；复杂标题动画依赖画布文本节点 |
 | 转场 transitions | 🟡 | 单一滤镜图计划含转场降级；效果库是渲染器插槽扩展点，首版基础淡入淡出 |

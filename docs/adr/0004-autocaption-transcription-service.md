@@ -8,7 +8,7 @@
 
 Concat 的招牌智能功能之一是自动字幕：以 7 个转写命令（转写片段、取消、状态等）驱动本地 whisper 模型，模型文件按需下载并管理。其前提是桌面应用可在本地跑模型与 ffmpeg。
 
-影策是服务端应用：模型渠道统一经后端中转（`custom-channel-relay` 的 `/api/ai/custom`），任务走任务队列与配额体系；素材已服务端化；时间线一期已有字幕数据与 SRT 解析/切分能力（`srt-parser`、`srt-resegment`），字幕轨道已是 `TimelineProject` v2 的一等轨道类型。
+影绘是服务端应用：模型渠道统一经后端中转（`custom-channel-relay` 的 `/api/ai/custom`），任务走任务队列与配额体系；素材已服务端化；时间线一期已有字幕数据与 SRT 解析/切分能力（`srt-parser`、`srt-resegment`），字幕轨道已是 `TimelineProject` v2 的一等轨道类型。
 
 ## 决策
 

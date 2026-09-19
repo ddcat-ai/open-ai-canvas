@@ -12,7 +12,7 @@
 - **权限执行**：清单声明 + 宿主在 API 调用点校验（fail-closed / warn+noop / 抛错三档），未声明即不可见不可用。
 - **能力贡献**：capability-runtime（hub/provider/registry/access）+ capability-sdk，插件以 provider 身份注册能力。
 
-**影策现状（改造对象）**：现有 `yingce.plugin/v1`（`web/src/lib/plugins/`）只有**画布域**贡献（provider / workflow / canvas-node / transform / asset-source 等），存在结构性缺口：无 UI 插槽注册 API（surfaces 只是声明字段）、无编辑器任何贡献类型（时间线/预览/导出/转写没有插件入口）、无预设（系统）插件分发语义、内置插件是 `builtin/` 源码硬编码 import、权限只有清单字符串无宿主执行校验。对"编辑器插件化"这一目标不可直接支撑（即现状"不可理"之处）。
+**影绘现状（改造对象）**：现有 `yingce.plugin/v1`（`web/src/lib/plugins/`）只有**画布域**贡献（provider / workflow / canvas-node / transform / asset-source 等），存在结构性缺口：无 UI 插槽注册 API（surfaces 只是声明字段）、无编辑器任何贡献类型（时间线/预览/导出/转写没有插件入口）、无预设（系统）插件分发语义、内置插件是 `builtin/` 源码硬编码 import、权限只有清单字符串无宿主执行校验。对"编辑器插件化"这一目标不可直接支撑（即现状"不可理"之处）。
 
 ## 决策
 
@@ -29,7 +29,7 @@
 
 - **推倒重写插件体系**：现有 v1 已融入画布/生成/素材链路（application.tsx 静态注册 builtin、use-plugin-store 持久化启用态、后端 pluginStates），重写会破坏既有功能且无必要；否决，选择在同一代码库演进。
 - **编辑器独立自建面板，不做插件化**：违背"插件化做成预设插件"的产品方向，且重复造轮子；否决。
-- **照搬 astravia 包结构（SDK 独立包 + 独立市场）**：影策是单体 web 仓库，先以 v2 形态在 `web/src/lib/plugins/` 内演进，待出现真正的外部插件需求再抽 SDK/打包工具链；当前阶段预设插件足够。
+- **照搬 astravia 包结构（SDK 独立包 + 独立市场）**：影绘是单体 web 仓库，先以 v2 形态在 `web/src/lib/plugins/` 内演进，待出现真正的外部插件需求再抽 SDK/打包工具链；当前阶段预设插件足够。
 
 ## 后果
 

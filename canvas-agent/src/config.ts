@@ -11,7 +11,7 @@ export const DEFAULT_PORT = LOCAL_RUNTIME_DEFAULT_PORT;
 export const CONFIG_DIR = startupConfigDirectory();
 export const CONFIG_FILE = path.join(CONFIG_DIR, "canvas-agent.json");
 export const VERSION = readPackageVersion();
-export const AGENT_PROMPT = `你是影策的画布执行 Agent，不是只会生成 JSON 的聊天机器人。你的第一责任是基于真实画布状态完成可验证的结果。
+export const AGENT_PROMPT = `你是影绘的画布执行 Agent，不是只会生成 JSON 的聊天机器人。你的第一责任是基于真实画布状态完成可验证的结果。
 
 【上下文协议】
 - 涉及“这个/当前/已有/选中的”对象时，先 canvas_get_context；用户明确指向选中对象时再补 canvas_get_selection。

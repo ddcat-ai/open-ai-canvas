@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>影策 · 第一期创作 Agent 交互设计</title>
+  <title>影绘 · 第一期创作 Agent 交互设计</title>
   <style>
     :root { color-scheme:light; --yc-bg:#f1f1f1; --yc-surface:#fff; --yc-panel:#f7f7f7; --yc-hover:#efefef; --yc-text:#202020; --yc-muted:#727272; --yc-border:#e5e5e5; --yc-strong:#181818; --yc-on-strong:#fff; --yc-success:#26754a; --yc-success-bg:#eef8f1; --yc-warn:#976017; --yc-warn-bg:#fff7e9; --yc-shadow:0 16px 48px #0000000a; --yc-node-shadow:0 5px 18px #00000009; --yc-line:#b6b6b6; --yc-radius:14px; }
     [data-theme="dark"] { color-scheme:dark; --yc-bg:#111112; --yc-surface:#1c1c1e; --yc-panel:#242426; --yc-hover:#303032; --yc-text:#eeeeef; --yc-muted:#a0a0a4; --yc-border:#363639; --yc-strong:#f5f5f5; --yc-on-strong:#191919; --yc-success:#82c9a0; --yc-success-bg:#203129; --yc-warn:#e1b974; --yc-warn-bg:#362e20; --yc-shadow:0 16px 48px #0004; --yc-node-shadow:0 5px 18px #0003; --yc-line:#626268; }
@@ -74,14 +74,14 @@
       }
       function shell() {
         const onCanvas=s.canvasCreated;
-        return `<aside class="app-sidebar"><div class="brand"><span class="brand-mark">∞</span><span class="brand-word">影策<small>创作工作台</small></span></div>
+        return `<aside class="app-sidebar"><div class="brand"><span class="brand-mark">∞</span><span class="brand-word">影绘<small>创作工作台</small></span></div>
           <button class="side-action ${!onCanvas?'active':''}" data-action="home"><span class="side-glyph">⌂</span><span class="nav-text">创作首页</span></button>
           <button class="side-action" data-action="short-drama"><span class="side-glyph">▤</span><span class="nav-text">短剧工作台</span></button>
           <button class="side-action ${onCanvas?'active':''}" data-action="canvas"><span class="side-glyph">▦</span><span class="nav-text">画布</span></button>
           <button class="side-action" data-action="assets"><span class="side-glyph">▧</span><span class="nav-text">素材库</span></button>
           <div class="side-group">最近创作</div><button class="side-action" data-action="resume"><span class="side-glyph">◷</span><span class="nav-text">雨夜来信</span></button>
           <div class="side-foot"><span class="avatar">YC</span><span class="account-text">我的工作空间<small>个人创作</small></span></div></aside>
-          <main class="app-stage"><header class="app-topbar"><div class="breadcrumb"><span class="optional">影策</span><span class="optional">/</span><strong>${onCanvas?'雨夜来信':s.stage==='home'?'创作首页':'新创作'}</strong>${s.stage!=='home'?'<span class="soft-pill">悬疑短片</span>':''}</div><div class="top-actions">${onCanvas?'<span class="top-status">同一会话 · 5 个节点</span>':s.stage!=='home'?'<span class="top-status">画布节点 0</span>':''}${onCanvas?btn(s.mobileCanvas?'返回会话':'查看画布','mobile-canvas','mini-btn mobile-toggle'):''}${btn('新创作','new','mini-btn')}</div></header><div class="content">${s.stage==='home'?home():onCanvas?canvas():`<section class="conversation-only">${chat()}</section>`}</div></main>`;
+          <main class="app-stage"><header class="app-topbar"><div class="breadcrumb"><span class="optional">影绘</span><span class="optional">/</span><strong>${onCanvas?'雨夜来信':s.stage==='home'?'创作首页':'新创作'}</strong>${s.stage!=='home'?'<span class="soft-pill">悬疑短片</span>':''}</div><div class="top-actions">${onCanvas?'<span class="top-status">同一会话 · 5 个节点</span>':s.stage!=='home'?'<span class="top-status">画布节点 0</span>':''}${onCanvas?btn(s.mobileCanvas?'返回会话':'查看画布','mobile-canvas','mini-btn mobile-toggle'):''}${btn('新创作','new','mini-btn')}</div></header><div class="content">${s.stage==='home'?home():onCanvas?canvas():`<section class="conversation-only">${chat()}</section>`}</div></main>`;
       }
       function home() {
         return `<section class="home-page"><div class="home-inner"><div class="eyebrow">从一个想法，到一份作品</div><h1>今天，想创作点什么？</h1><p class="home-subtitle">告诉我你的想法，我们一起把它变成画面。</p>
@@ -90,7 +90,7 @@
           <div class="home-examples"><button class="example" data-action="example" data-example="short"><span>短剧 / 影视</span><strong>15 秒，讲一个悬疑故事</strong><p>从创意、参考素材到完整短片</p></button><button class="example" data-action="example" data-example="marketing"><span>营销创作</span><strong>把一个卖点讲得更动人</strong><p>从受众、文案到视觉方案</p></button><button class="example" data-action="example" data-example="commerce"><span>电商设计</span><strong>让商品成为画面的主角</strong><p>从商品素材到场景图组</p></button></div><p class="home-note">本次完整演示：悬疑短片。营销、电商入口展示后续复用位置。</p></div></section>`;
       }
       function userMessage(text) {return `<div class="message user"><div class="user-bubble">${esc(text)}</div></div>`;}
-      function assistant(body) {return `<div class="message assistant"><div class="assistant-label"><span class="assistant-dot">∞</span>影策</div>${body}</div>`;}
+      function assistant(body) {return `<div class="message assistant"><div class="assistant-label"><span class="assistant-dot">∞</span>影绘</div>${body}</div>`;}
       function questionCard() {
         const q=questions[s.question];
         return `<div class="question-card"><div class="card-overline"><span>补充创作需求 · ${s.question+1} / ${questions.length}</span><span class="step-dots">${questions.map((_,i)=>`<i class="${i<=s.question?'current':''}"></i>`).join('')}</span></div><h3 class="question-title">${q.title}</h3><p class="question-help">${q.hint}</p><div class="options">${q.options.map(([title,desc])=>`<button class="option" data-action="answer" data-value="${esc(title)}" aria-pressed="${s.answers[s.question]===title}"><i class="option-radio"></i><span><strong>${title}</strong><small>${desc}</small></span></button>`).join('')}</div><label class="free-label" for="answer-extra">自定义或补充要求</label><textarea class="field" id="answer-extra" rows="2" placeholder="也可以直接写你的想法…">${esc(s.extras[s.question])}</textarea><div id="question-error" class="error-text" aria-live="polite"></div><div class="card-footer"><div class="left">${btn('上一题','prev-question','mini-btn',s.question===0?'disabled':'')}</div><div class="right">${btn(s.question===2?'提交需求':'下一题 →',s.question===2?'submit-answers':'next-question','primary')}</div></div></div>`;

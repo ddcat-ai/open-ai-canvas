@@ -7,18 +7,18 @@
   },
   "repository": "https://github.com/ddcat-ai/open-ai-canvas",
   "license": "MIT",
-  "keywords": ["yingce", "影策", "canvas", "mcp", "agent"],
+  "keywords": ["yingce", "影绘", "canvas", "mcp", "agent"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "影策",
+    "displayName": "影绘",
     "shortDescription": "Use Codex to operate the current Yingce canvas.",
     "longDescription": "Connects Codex to the local Canvas Agent MCP server so Codex can inspect the current Yingce canvas, create nodes, connect flows, and trigger generation through the web canvas confirmation flow.",
     "developerName": "ddcat",
     "category": "Productivity",
     "capabilities": ["Canvas", "MCP", "Creative Workflow"],
     "defaultPrompt": [
-      "打开影策",
+      "打开影绘",
       "读取当前画布并总结节点结构",
       "根据选中节点创建一组生图提示词"
     ],

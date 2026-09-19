@@ -15,7 +15,7 @@
 
 主界面（Canvas 工作台 `web/src/pages/canvas/` 与 `web/src/components/canvas/`）自研组件消费处于**扩散中**：114 个 tsx 中 35 个已引用 `@/components/ui`（约 31%），但画布 AI 助手等高阶场景仍大量直接使用 AntD 原子或裸 Tailwind，应用层组件缺位。后台管理区（`web/src/pages/admin/`）是另一主要消费方，与画布主界面的「AI 优先」场景仍有落差。
 
-**结论**：基础能力已可用，短板在「应用层组件」与「主界面消费率」。BoardUI 恰以 AI/agent 界面应用层组件见长，与影策画布 AI 助手场景天然互补，不是重复造轮子。
+**结论**：基础能力已可用，短板在「应用层组件」与「主界面消费率」。BoardUI 恰以 AI/agent 界面应用层组件见长，与影绘画布 AI 助手场景天然互补，不是重复造轮子。
 
 ## 2. BoardUI 可吸收清单（不只 UI）
 
