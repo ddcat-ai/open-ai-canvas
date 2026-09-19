@@ -81,6 +81,7 @@ install -d -m 0755 /etc/caddy/sites
 caddy_site=/etc/caddy/sites/open-ai-canvas.caddy
 if [[ -f "$caddy_site" ]]; then cp -p "$caddy_site" "${caddy_site}.bak-$(date -u +%Y%m%dT%H%M%SZ)"; fi
 sed "s/canvas\.yingpix\.com/${APP_DOMAIN}/g" deploy/native/caddy/open-ai-canvas.caddy >"$caddy_site"
+chmod 0644 "$caddy_site"
 if ! grep -Fqx "import ${caddy_site}" /etc/caddy/Caddyfile; then printf '\nimport %s\n' "$caddy_site" >> /etc/caddy/Caddyfile; fi
 
 install -d -m 0750 "$OPS_DIR"
