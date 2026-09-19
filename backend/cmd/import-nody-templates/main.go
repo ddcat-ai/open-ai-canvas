@@ -193,7 +193,7 @@ func main() {
 			log.Printf("跳过 %s：安装模板媒体失败：%v", id, err)
 			continue
 		}
-		document := convertPreview(preview, mediaByName)
+		document := convertPreview(preview, mediaByName, id)
 		document.Media = media
 		assignMediaNodes(&document)
 		documentJSON, err := json.Marshal(document)
@@ -391,7 +391,7 @@ func readJSON(file packageFile, target any) error {
 	return json.NewDecoder(reader).Decode(target)
 }
 
-func convertPreview(preview nodyPreview, mediaByName map[string]string) canvasDocument {
+func convertPreview(preview nodyPreview, mediaByName map[string]string, templateID string) canvasDocument {
 	supported := map[string]bool{}
 	nodes := make([]canvasNode, 0, len(preview.Nodes))
 	for _, node := range preview.Nodes {
@@ -435,6 +435,7 @@ func convertPreview(preview nodyPreview, mediaByName map[string]string) canvasDo
 			}
 			if mediaIDs := mediaIDsForNode(node.Data, mediaByName); len(mediaIDs) > 0 {
 				metadata["templateMediaIds"] = mediaIDs
+				metadata["templateMediaTemplateId"] = templateID
 			}
 		}
 		if canvasType == "frame" {

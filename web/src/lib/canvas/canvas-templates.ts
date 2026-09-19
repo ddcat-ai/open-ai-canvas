@@ -150,6 +150,7 @@ export function canvasTemplateDocumentFromSelection(nodes: CanvasNodeData[], con
                 "previewContent",
                 "templateMediaURL",
                 "templateMediaKind",
+                "templateMediaTemplateId",
                 "videoPreview",
                 "fileUpload",
                 "fileUploadProgress",
@@ -191,7 +192,7 @@ export function canvasTemplateFromDocument(input: { id: string; title: string; d
         source: input.source,
         version: input.version,
         document: input.document,
-        createGraph: (center) => normalizeTemplateGraph(input.document, center, input.mediaURL),
+        createGraph: (center) => normalizeTemplateGraph(input.document, center, input.id, input.mediaURL),
     };
 }
 
@@ -201,7 +202,7 @@ export function canvasTemplateDocumentForExport(template: CanvasTemplate): Canva
     return canvasTemplateDocumentFromSelection(graph.nodes, graph.connections);
 }
 
-function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Position, mediaURL?: (mediaId: string) => string): CanvasTemplateGraph {
+function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Position, templateId: string, mediaURL?: (mediaId: string) => string): CanvasTemplateGraph {
     const nodes = document.nodes;
     if (!nodes.length) return { nodes: [], connections: [...document.connections] };
     const minX = Math.min(...nodes.map((node) => node.position.x));
@@ -215,7 +216,7 @@ function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Positi
         nodes: nodes.map((node) => {
             const mediaIds = node.metadata?.templateMediaIds || [];
             const media = mediaIds.map((mediaId) => mediaById.get(mediaId)).find((item) => item && mediaURL?.(item.id));
-            const metadata = media && mediaURL ? { ...node.metadata, templateMediaURL: mediaURL(media.id), templateMediaKind: media.kind } : node.metadata;
+            const metadata = media && mediaURL ? { ...node.metadata, templateMediaURL: mediaURL(media.id), templateMediaKind: media.kind, templateMediaTemplateId: templateId } : node.metadata;
             return { ...node, metadata, position: { x: node.position.x + offsetX, y: node.position.y + offsetY } };
         }),
         connections: [...document.connections],
