@@ -23,7 +23,20 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 27。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。版本 24 `channel_model_label` 为渠道模型增加 `channel_label`（最长 80 字、非空、默认空字符串），不重写模型标识、上游 ID、价格或能力；版本 25 `video_token_formula_snapshot` 为账单增加视频公式用量及用量来源快照。版本 26 `channel_model_description` 为渠道模型增加 `description`（最长 500 字、非空、默认空字符串），供二级选项展示使用说明，不重写身份或价格。版本 27 `channel_credit_cost` 为价格档添加管理员积分成本，并在账单保存执行线路的成本快照；成本不进入普通用户 API。已发布版本的实现和校验和不得修改。
+当前结构版本为 20。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `ecommerce_design_workbench` 创建电商商品项目、输出槽位、素材引用和候选版本表，媒体仍只引用 `resources`，生成任务仍复用 `tasks`；版本 20 `ecommerce_design_default_slots` 为历史上没有槽位的电商项目补齐默认槽位，不修改项目 brief、素材引用或版本记录。已发布版本的实现和校验和不得修改。
+
+当前实现结构版本已推进到 21；版本 21 `canvas_template_library` 创建画布模板元数据和不可变版本表，模板正文只保存经过校验的节点图，不保存媒体资源或任务引用。上方历史版本清单中的基线数字由既有文档保留，部署状态以迁移表和服务健康检查为准。
+
+## 电商视觉工作台
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `ecommerce_design_projects` | 保存电商商品项目、商品 brief、设计方向、状态和修订号 | 独立于短剧 `projects`；`delivered`、`archived` 项目只读，封面只引用当前用户已就绪资源 |
+| `ecommerce_design_slots` | 保存主图、副图等输出槽位、平台规格和当前采用版本 | 槽位规格由服务端预设校验；详情长图和视频封面当前保留但不可生成 |
+| `ecommerce_design_references` | 保存项目对现有图片资源的角色引用 | 只保存 `resource_id`，不复制媒体；用户、项目、资源归属由 service 校验 |
+| `ecommerce_design_versions` | 保存 Skill 模板版本、提示词、生成任务、批次、候选状态和输出资源 | 一个候选版本对应一条 `canvas_image` 任务；生成结果先进入候选区，采用通过事务更新槽位当前版本 |
+
+电商任务的 `input_json.metadata.source` 固定为 `ecommerce-design-workbench`，并包含电商项目、槽位、版本、Skill、规格和生成批次 ID；不使用短剧 `Task.project_id` 表达电商归属。任务成功后的资源回写由公共任务终态收尾和项目详情读取共同保证幂等。
 
 历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
 
@@ -44,6 +57,17 @@ description: 影策后端核心持久化表与状态边界
 恢复历史保留当前画布 ID、归属和项目关联，按当前版本做 CAS 后形成新版本；不会把 revision 改回历史值。快照写入、引用保护、恢复和保留数量清理在同一事务内完成。资源删除检查与异步物理删除任务均检查历史引用（包括同对象的资源别名），仍被历史引用的媒体延后回收；删除画布时清理该画布快照及引用。
 
 升级不改变已有画布正文，也不会凭空产生升级前历史。前后端应一起升级：旧客户端缺少 revision 的保存返回 428，需刷新客户端。
+
+## 画布模板库
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `canvas_templates` | 保存模板名称、分类、标签、归属、发布状态和当前版本 | 用户模板默认私有；公共模板必须由管理员发布并设置为 public；读取、更新和删除均校验归属或管理员权限 |
+| `canvas_template_versions` | 保存不可变的模板节点图版本 | `(template_id, version)` 唯一；正文限制为 `yingce.canvas-template` schema；节点图不能包含 `storageKey`、`assetId`、`taskId` 或运行时媒体引用 |
+
+模板版本保存可重新生成的工作流结构、提示词草稿和可选的模板预览媒体清单。预览媒体不属于用户素材，也不会作为任务结果写入画布；文件由导入命令安装到 `CANVAS_BACKEND_DATA_DIR/template-media`，通过模板媒体接口按模板可见性读取。NodyHub 公共预览导入命令优先读取带本地引用的 `offline-preview.json`，将外部媒体转换为空输入节点，并以公共发布模板写入当前部署数据库；重复执行按稳定模板 ID 替换导入版本和对应媒体目录。
+
+仓库内的带媒体模板包位于 `backend/templates/canvas/nody-templates-with-media-20260919`，可使用 `--package-dir` 直接导入目录；其中超过 GitHub 单文件限制的 MP4 使用 `.part-000` / `.part-001` 分片，导入器会自动合并。外部 ZIP 仍可通过 `--archive` 导入。
 
 ## 已部署 PostgreSQL 的素材 bytes 修复
 
@@ -85,8 +109,6 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 若报告仍有 `unresolved`，需按素材 ID 核查实际文件大小及引用；不要批量填零，也不要把未解决记录删除。工具不访问外部 URL，不下载媒体。应用后让用户重新加载素材库验证；不会要求清空本地存储。若数据库更新失败或检测到并发修改，整批写入事务回滚，`repaired` 为零。已成功提交后的回滚应在隔离数据库恢复备份并核查，再选择性恢复相关记录；不要在恢复写入后直接覆盖整库，以免丢失后续数据。
 
 ## 平台外观配置
-
-当前外观 JSON 合同版本为 8，主题参数新增 `skinThemes[].tokens.buttons.light/dark`：填充模式、角度、常态/悬停/按下双色和文字色。经典主题默认为紫蓝渐变，其余旧主题缺少此块时保持纯色；公开 `activeSkin` 使用相同结构。无表结构迁移，读取补齐只在内存执行，管理员保存时写回。回退应用版本前保留外观 JSON 备份，旧版本不支持新按钮填充参数。
 
 平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 的 JSON 值使用版本化合同；版本 3 保存品牌名称、英文品牌标识、登录页主标题与可选说明文案、浅色与可选深色 Logo 资源 ID、Logo 外框开关、登录页视频资源 ID、可选封面资源 ID 和预留皮肤 ID。只配置一套 Logo 时，公开投影会在浅色和深色主题复用同一资源；旧版本缺少深色 Logo 与外框字段时分别回退到单 Logo 和启用外框，不改变既有视觉。资源元数据和文件仍分别由 `resources` 表与当前资源存储承担。恢复默认外观时删除这条设置记录并回到内置值，不级联删除已经上传的资源。
 
@@ -188,16 +210,10 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
-| `model_channels` | 保存系统渠道与用户渠道的连接配置和排序 | 系统渠道密钥不进入公开目录；废弃渠道级前台名称，历史 `public_alias` 列保留但不再用于取名或 API 返回；按 `sort_order, created_at, id` 升序展示 |
-| `channel_models` | 保存系统渠道中的调用标识、上游模型 ID、模型展示名、渠道展示名、描述、Logo、排序、能力、协议和版本状态 | 创作目录跨渠道按 `display_name` 分组一级，`channel_label` 为二级、最长 80 字、空值使用所属渠道名称；`description` 最长 500 字、非空、默认空字符串；同一渠道内调用标识唯一，跨渠道归组不依赖调用标识；模型排序不递增价格或能力版本 |
+| `model_channels` | 保存系统渠道与用户渠道的连接配置，以及系统渠道前台别名和排序 | 系统渠道密钥不进入公开目录；公开名称优先使用 `public_alias`，为空时使用原名；按 `sort_order, created_at, id` 升序展示 |
+| `channel_models` | 保存系统渠道中的产品模型标识、上游模型 ID、显示名称、模型 Logo、排序、能力、协议和版本状态 | 模型排序独立保存，不递增价格或能力版本；能力、协议、启用状态和价格仍由 service 强校验 |
 | `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录。档位 `provider_model_key` 非空时优先于渠道模型上游键发往供应商；管理端修改模型级上游 ID 时，与旧值相同的档位键自动级联跟随，其余显式 SKU 保持不变 |
-| `logical_models` | 保存逻辑模型的名称、Logo、能力类型和归档状态 | 不再作为创作端模型选择目录的数据源；既有任务与供应线路仍通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一 |
-
-schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_configured`（非空、默认 false）及 `cost_unit_price_microcredits`、`cost_input_token_price_microcredits`、`cost_output_token_price_microcredits`、`cost_cached_token_price_microcredits`（非空整数、默认 0）。账单另外保存 `cost_billing_mode`（默认空字符串）、`cost_quantity`、`cost_video_formula_tokens`（默认 0），构成下单时不可变成本快照。请求日志成本从内部账单快照计算，非持久字段 `creditCostMicrocredits` 仅供管理端投影；旧订单不反查新价格，不回填假零成本。已有售价、余额和结算金额不变。
-
-部署需前后端与 schema v27 一起升级；关闭自动迁移时执行 `migrate-schema up`、`migrate-schema verify`。迁移只新增列，不删除旧数据，可重复校验；没有降级迁移，回滚使用匹配的数据库备份和程序版本，旧程序不记录成本快照。
-
-所有视频协议开放 Token 定价。`channel_model_price_tiers.selector_json` 支持 `videoGenerateAudio: "true" | "false"`，省略表示任意音频；参考视频仍匹配 `operation: "video_to_video"`。视频仅使用输出 Token 单价，输入和缓存价必须为 0，明确配置的零价表示免费。schema v25 为 `billing_orders` 新增 `video_formula_tokens`（非空、默认 0，提交时固化不含余量的公式用量）及 `usage_source`（非空、默认空字符串，`provider` 或 `video_formula`）。缺少有效上游用量的新视频订单按公式快照结算并记录 `usage_available=false`，不伪造上游用量；历史快照为 0 的订单保持旧规则。价格档、费率、倍率、预留金额和既有账单不被迁移重算。前后端和 schema 一起升级，旧程序不支持新公式结算及非 Ark Token 配置，回滚需匹配数据库备份与二进制版本。完整算法见[视频 Token 计费](/docs/backend/video-token-billing)。
+| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一，归档后可用同 code 重建目录项 |
 
 图片分档尺寸保存在现有模型能力 JSON 的 `image.size.presets` 中，不新增表、列或 SQL 迁移。每项结构为 `{ tier, ratio, size, width, height }`，例如 `{ "tier": "1k", "ratio": "16:9", "size": "1824x1024", "width": 1824, "height": 1024 }`。
 

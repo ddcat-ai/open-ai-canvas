@@ -1,0 +1,18 @@
+{
+  "id": "0dc2d28b-0614-4b7e-8503-f9e8993d1f2b",
+  "seller_id": 2,
+  "library_key": "",
+  "title": "酷炫动效提示词模板，适用于人/宠物",
+  "description": "超级动效，适用于动物/人的通用模板，只需要换图生成即可",
+  "price": 0,
+  "cover_image_url": "../../assets/0dc2d28b-0614-4b7e-8503-f9e8993d1f2b/005_cover_5.jpg",
+  "tags": "电影",
+  "purchase_count": 40,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-08-26T04:12:18.797Z",
+  "updated_at": "2026-09-19T06:17:59.01Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

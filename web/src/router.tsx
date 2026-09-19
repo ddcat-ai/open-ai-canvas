@@ -34,6 +34,7 @@ const ThirdPartySettingsPage = lazy(() => import("@/pages/admin/settings/libtv-s
 const SystemUpdatePage = lazy(() => import("@/pages/admin/settings/system-update-page"));
 const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
+const CanvasTemplatesPage = lazy(() => import("@/pages/admin/canvas-templates-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
 const AssetsPage = lazy(loadAssetsPage);
 const LoginPage = lazy(() => import("@/pages/auth/login"));
@@ -190,6 +191,7 @@ export const router = createBrowserRouter([
                     { path: "plugins", element: <AdminPluginsPage /> },
                     { path: "payments", element: <AdminPaymentsPage /> },
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },
+                    { path: "canvas-templates", element: <CanvasTemplatesPage /> },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: <AnnouncementsPage /> },
                     { path: "banner-announcements", element: <BannerAnnouncementsPage /> },

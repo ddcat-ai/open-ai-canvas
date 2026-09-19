@@ -1,0 +1,18 @@
+{
+  "id": "ba3e658c-a4c0-48d2-99ed-2d4b9d4c8f76",
+  "seller_id": 7,
+  "library_key": "",
+  "title": "新闻报道",
+  "description": "通过简单描述自动生成真实新闻报道画面内容",
+  "price": 500000,
+  "cover_image_url": "https://templates.nodyhub.com/templates/7/98236315-bc5b-434a-8ab7-c09baa5cb196_cover",
+  "tags": "其他,新闻",
+  "purchase_count": 0,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-09-18T02:14:12.715Z",
+  "updated_at": "2026-09-18T02:14:12.715Z",
+  "preview_json_url": "https://templates.nodyhub.com/templates/7/98236315-bc5b-434a-8ab7-c09baa5cb196_preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

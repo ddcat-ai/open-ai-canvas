@@ -53,6 +53,8 @@ import { CanvasNodeLightingPanel } from "@/components/canvas/canvas-node-lightin
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
+import { CanvasTemplateLibraryModal } from "@/components/canvas/canvas-template-library-modal";
+import { CanvasSaveTemplateModal } from "@/components/canvas/canvas-save-template-modal";
 import { CanvasDirectorTemplateModal } from "@/components/canvas/director/canvas-director-template-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
 import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
@@ -94,6 +96,7 @@ import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDra
 import { resolveCanvasEmptyStateKind } from "@/lib/canvas/canvas-starter";
 import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { createCanvasNode, getInputSummary, isHiddenBatchChild } from "@/lib/canvas/canvas-project-domain";
+import { instantiateCanvasTemplate, type CanvasTemplate } from "@/lib/canvas/canvas-templates";
 import { stampCanvasNodeChanges, updateCanvasNode, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff";
 import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
@@ -308,6 +311,8 @@ function InfiniteCanvasPage() {
     const workspaceMode: CanvasWorkspaceMode = "professional";
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
+    const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
     const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -689,6 +694,33 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         setToolbarNodeId,
     });
+
+    const applyCanvasTemplate = useCallback(
+        async (template: CanvasTemplate) => {
+            const graph = instantiateCanvasTemplate(template, getCanvasCenter());
+            const previousNodes = nodesRef.current;
+            const previousConnections = connectionsRef.current;
+            const nextNodes = [...previousNodes, ...graph.nodes];
+            const nextConnections = [...previousConnections, ...graph.connections];
+            nodesRef.current = nextNodes;
+            connectionsRef.current = nextConnections;
+            setNodes(nextNodes);
+            setConnections(nextConnections);
+            setSelectedNodeIds(new Set(graph.nodes.map((node) => node.id)));
+            setSelectedConnectionId(null);
+            const saved = await saveCanvasProject({ requireRemote: false });
+            if (!saved) {
+                nodesRef.current = previousNodes;
+                connectionsRef.current = previousConnections;
+                setNodes(previousNodes);
+                setConnections(previousConnections);
+                setSelectedNodeIds(new Set());
+                throw new Error("画布保存失败，已撤销本次模板导入");
+            }
+            window.requestAnimationFrame(() => fitCanvasSelection());
+        },
+        [connectionsRef, fitCanvasSelection, getCanvasCenter, nodesRef, saveCanvasProject, setConnections, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+    );
 
     useEffect(() => {
         const project = linkedProjectQuery.data?.project;
@@ -2447,6 +2479,7 @@ function InfiniteCanvasPage() {
                                 onSave={() => void saveCanvasProject()}
                                 onForceSave={confirmForceSaveCanvas}
                                 onImportImage={() => handleUploadRequest()}
+                                onOpenTemplates={() => setTemplateLibraryOpen(true)}
                                 onImportLibTV={() => setLibTVImportOpen(true)}
                                 onImportTapNow={() => setTapNowImportOpen(true)}
                                 onUndo={undoCanvas}
@@ -2493,6 +2526,8 @@ function InfiniteCanvasPage() {
                         ) : null}
 
                         <CanvasShareModal projectId={projectId} open={shareModalOpen} onClose={() => setShareModalOpen(false)} beforeCreate={saveCanvasProject} />
+                        <CanvasTemplateLibraryModal open={templateLibraryOpen} mode="insert" onClose={() => setTemplateLibraryOpen(false)} onApply={applyCanvasTemplate} />
+                        <CanvasSaveTemplateModal open={saveTemplateOpen} nodes={nodes.filter((node) => selectedNodeIds.has(node.id))} connections={connections} onClose={() => setSaveTemplateOpen(false)} />
                         <LibTVImportDialog open={libTVImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setLibTVImportOpen(false)} onApply={applyLibTVImport} />
                         <TapNowImportDialog open={tapNowImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setTapNowImportOpen(false)} onApply={applyTapNowImport} />
 
@@ -2800,6 +2835,7 @@ function InfiniteCanvasPage() {
                                 onBatchConnect={() => beginBatchConnectionMode(Array.from(selectedNodeIds))}
                                 onMergeVideos={() => void mergeSelectedVideos()}
                                 onSendSelectionToAgent={() => sendSelectionToAgent()}
+                                onSaveTemplate={() => setSaveTemplateOpen(true)}
                             />
                         ) : null}
 

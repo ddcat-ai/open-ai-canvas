@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Input, Modal } from "antd";
 import { Select } from "@/components/ui/base/select";
-import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowDownAZ, Clock3, Download, FileUp, History, LayoutTemplate, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
@@ -31,6 +31,8 @@ import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { CanvasSyncDraftMenu } from "./canvas-sync-status";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { CanvasTemplateLibraryModal } from "@/components/canvas/canvas-template-library-modal";
+import { instantiateCanvasTemplate, type CanvasTemplate } from "@/lib/canvas/canvas-templates";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
 
@@ -74,6 +76,7 @@ export default function CanvasPage() {
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
     const [associationOpen, setAssociationOpen] = useState(false);
     const [associationProjectId, setAssociationProjectId] = useState("");
     const projectQuery = useQuery({ queryKey: ["projects"], queryFn: () => listProjects() });
@@ -100,6 +103,12 @@ export default function CanvasPage() {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             enterProject(id);
         });
+    };
+    const createFromTemplate = async (template: CanvasTemplate) => {
+        const graph = instantiateCanvasTemplate(template, { x: 0, y: 0 });
+        const { id, syncError } = await createCanvasProjectWithRemoteSync(template.title, undefined, graph);
+        if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
+        enterProject(id);
     };
     const filteredProjects = useMemo(() => {
         if (userId) return projects;
@@ -420,6 +429,9 @@ export default function CanvasPage() {
                             <Button type="primary" disabled={!hydrated} icon={<Plus />} onClick={createAndEnter}>
                                 新建画布
                             </Button>
+                            <Button disabled={!hydrated} icon={<LayoutTemplate />} onClick={() => setTemplateLibraryOpen(true)}>
+                                模板库
+                            </Button>
                             {projects.length ? (
                                 <Dropdown
                                     menu={{
@@ -538,6 +550,7 @@ export default function CanvasPage() {
                 />
             </Modal>
             <CanvasHistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
+            <CanvasTemplateLibraryModal open={templateLibraryOpen} mode="create" onClose={() => setTemplateLibraryOpen(false)} onApply={createFromTemplate} />
             {deleteDialogOpen ? <Suspense fallback={null}><CanvasDeleteProjectsDialog /></Suspense> : null}
         </WorkspacePage>
     );
