@@ -12,11 +12,28 @@ import "./plugins.css";
 type UploadPluginModalProps = {
     open: boolean;
     onClose: () => void;
-    onUpload: (file: File) => void;
+    onUpload: (file: File) => void | Promise<void>;
 };
 
+const MINIMAL_MANIFEST_SNIPPET = `{
+  "apiVersion": "yingce.plugin/v1",
+  "id": "my-custom-plugin",
+  "name": "我的自定义插件",
+  "version": "1.0.0",
+  "author": "Developer",
+  "description": "通过统一清单扩展平台功能",
+  "permissions": ["generation.run", "media.read"],
+  "contributes": {
+    "providers": [],
+    "workflows": []
+  }
+}`;
+
 export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModalProps) {
+    const [activeTab, setActiveTab] = useState<"install" | "guide">("install");
     const [isDraggingPlugin, setIsDraggingPlugin] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [copied, setCopied] = useState(false);
     const dragDepth = useRef(0);
 
     const handlePluginDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
@@ -40,22 +57,74 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
         setIsDraggingPlugin(false);
     };
 
+    const handleExecuteUpload = async (file: File) => {
+        setUploading(true);
+        try {
+            await onUpload(file);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const copySnippet = () => {
+        void navigator.clipboard?.writeText(MINIMAL_MANIFEST_SNIPPET).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    const isCompact = activeTab === "install";
+
     return (
         <Modal
-            className="workspace-modal workspace-modal-wide plugin-upload-modal"
+            className={`workspace-modal plugin-upload-modal ${isCompact ? "plugin-upload-modal-compact" : "workspace-modal-wide"}`}
             title="上传插件"
             open={open}
             centered
             footer={null}
             destroyOnHidden
-            onCancel={onClose}
-            styles={{ body: { maxHeight: "min(82vh, 900px)", overflowY: "auto", overscrollBehavior: "contain" } }}
+            mask={{ closable: !uploading }}
+            onCancel={uploading ? undefined : onClose}
+            styles={{ body: { maxHeight: "min(84vh, 900px)", overflowY: "auto", overscrollBehavior: "contain", padding: "16px 20px 24px" } }}
         >
-            <div className="plugin-upload-layout">
-                <section className="plugin-upload-guide">
-                    <PluginMarkdown source={pluginDevelopmentGuideMarkdown} />
-                </section>
-                <aside className="plugin-upload-panel">
+            <div className="plugin-upload-tabs-bar">
+                <div className="plugin-upload-tabs-nav">
+                    <button
+                        type="button"
+                        className={`plugin-upload-tab-btn ${activeTab === "install" ? "is-active" : ""}`}
+                        onClick={() => setActiveTab("install")}
+                    >
+                        <CloudUpload className="size-4" />
+                        <span>安装插件包</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`plugin-upload-tab-btn ${activeTab === "guide" ? "is-active" : ""}`}
+                        onClick={() => setActiveTab("guide")}
+                    >
+                        <FileText className="size-4" />
+                        <span>开发规范与示例</span>
+                    </button>
+                </div>
+                {activeTab === "guide" ? (
+                    <button
+                        type="button"
+                        className="plugin-upload-copy-btn"
+                        onClick={copySnippet}
+                        title="复制最小 manifest.json 配置模板"
+                    >
+                        <span>{copied ? "已复制清单" : "复制最小清单"}</span>
+                    </button>
+                ) : (
+                    <div className="plugin-upload-badge">
+                        <ShieldCheck className="size-3.5 text-status-success" />
+                        <span>沙箱受控隔离</span>
+                    </div>
+                )}
+            </div>
+
+            {activeTab === "install" ? (
+                <div className="plugin-upload-install-view">
                     <div className="plugin-upload-panel-heading">
                         <span className="plugin-upload-panel-icon"><CloudUpload className="size-5" /></span>
                         <div>
@@ -63,8 +132,9 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                             <p>选择统一站点插件包，安装后会立即进入插件中心。</p>
                         </div>
                     </div>
+
                     <div
-                        className={`plugin-upload-dropzone-shell${isDraggingPlugin ? " is-dragging" : ""}`}
+                        className={`plugin-upload-dropzone-shell${isDraggingPlugin ? " is-dragging" : ""}${uploading ? " is-uploading" : ""}`}
                         onDragEnter={handlePluginDragEnter}
                         onDragLeave={handlePluginDragLeave}
                         onDragOver={(event) => event.preventDefault()}
@@ -72,25 +142,54 @@ export function UploadPluginModal({ open, onClose, onUpload }: UploadPluginModal
                     >
                         <Upload.Dragger
                             className="plugin-upload-dropzone"
-                            accept=".yingce-plugin,application/zip"
+                            accept=".yingce-plugin,.zip"
                             maxCount={1}
+                            disabled={uploading}
                             showUploadList={false}
                             beforeUpload={(file) => {
-                                onUpload(file);
+                                void handleExecuteUpload(file);
                                 return false;
                             }}
                         >
-                            <CloudUpload className="plugin-upload-dropzone-icon" />
-                            <p className="ant-upload-text">{isDraggingPlugin ? "释放文件以上传插件" : "点击选择插件文件，也可拖拽到此处"}</p>
-                            <p className="ant-upload-hint">支持 .yingce-plugin 包 · 大小不超过 48 MiB</p>
+                            {uploading ? (
+                                <div className="py-6 flex flex-col items-center justify-center gap-3">
+                                    <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                    <p className="ant-upload-text">正在安装插件包，请稍候...</p>
+                                    <p className="ant-upload-hint">正在解压、校验清单合法性与版本声明</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <CloudUpload className="plugin-upload-dropzone-icon" />
+                                    <p className="ant-upload-text">{isDraggingPlugin ? "释放文件以上传插件" : "点击选择插件文件，也可拖拽到此处"}</p>
+                                    <p className="ant-upload-hint">支持 .yingce-plugin 包 · 大小不超过 48 MiB</p>
+                                </>
+                            )}
                         </Upload.Dragger>
                     </div>
+
                     <div className="plugin-upload-notice">
-                        <ShieldCheck className="size-4" />
+                        <ShieldCheck className="size-4 shrink-0 text-status-success" />
                         <span>上传前请确认插件来源可信。Web 入口只能进入声明的隔离运行时，不会获得主页面权限；密钥也不会从清单读取。</span>
                     </div>
-                </aside>
-            </div>
+
+                    <div className="plugin-upload-switch-guide-hint">
+                        <span>初次制作插件？</span>
+                        <button type="button" onClick={() => setActiveTab("guide")} className="plugin-upload-link-btn">
+                            查看《开发与打包规范说明》
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="plugin-upload-guide-view">
+                    <div className="plugin-upload-guide-banner">
+                        <ShieldCheck className="size-4 shrink-0 text-primary" />
+                        <span>以下为开发者技术规范与清单编写参考（只读文档）。安装插件请切换至「安装插件包」。</span>
+                    </div>
+                    <section className="plugin-upload-guide">
+                        <PluginMarkdown source={pluginDevelopmentGuideMarkdown} />
+                    </section>
+                </div>
+            )}
         </Modal>
     );
 }

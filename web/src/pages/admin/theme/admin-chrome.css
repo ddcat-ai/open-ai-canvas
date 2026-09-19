@@ -974,7 +974,9 @@
 @media (prefers-reduced-motion: reduce) {
     [data-admin-root] *,
     body.admin-overlays * {
-        transition: none !important;
-        animation: none !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
     }
 }
+
