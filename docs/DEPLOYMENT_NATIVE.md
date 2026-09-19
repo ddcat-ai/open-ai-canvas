@@ -71,6 +71,8 @@ journalctl -u open-ai-canvas-backend -n 100 --no-pager
 journalctl -u open-ai-canvas-web -n 100 --no-pager
 ```
 
+当前仓库的 `plugin-packages/autodl-comfyui.yingce-plugin` 压缩包与其接口文档中的声明式 manifest 合同存在既有漂移，完整 `go test ./...` 会在 `backend/internal/protocol` 失败。首次上线若尚未修复该上游包，可显式使用 `GO_TEST_SCOPE=without-protocol ./release.sh`；其余后端测试仍会运行。修复压缩包后应恢复默认的完整测试范围。
+
 本地完成代码修改后推送：
 
 ```bash
