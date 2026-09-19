@@ -84,6 +84,19 @@
     white-space: nowrap;
 }
 
+/* 风格工具弹层外壳：cover 卡片网格自定义渲染，视觉与 split 弹层一致；
+   固定宽度避免 truncate 标签的 max-content 把弹层撑宽；
+   背景对齐九宫格菜单：spatial 页用 --workspace-overlay-bg-strong（antd 菜单
+   被 body.app-spatial-overlays 全局覆盖为同一 token），画布编辑器等非 spatial
+   页回退 --popover（皮肤注入，与 antd colorBgElevated 同源） */
+.canvas-node-toolbar-menu-style .canvas-node-toolbar-menu-stack {
+    width:  40rem ;
+    overflow: hidden;
+    border: 1px solid var(--workspace-overlay-border, var(--dock-border));
+    border-radius: 8px;
+    background: var(--workspace-overlay-bg-strong, var(--popover));
+}
+
 .canvas-grid-split-menu-item.is-open {
     background: var(--workspace-overlay-hover, color-mix(in srgb, var(--popover-foreground) 6%, var(--popover)));
 }

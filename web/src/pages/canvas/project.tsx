@@ -2143,7 +2143,6 @@ function InfiniteCanvasPage() {
                         setNodeImageSettingsOpen(open);
                         if (open) setToolbarNodeId(null);
                     }}
-                    onChooseStyle={() => setStylePickerOpen(true)}
                     onChooseEffect={() => setSidebarActiveTab("tools")}
                     onChooseMotion={() => setSidebarActiveTab("tools")}
                 />

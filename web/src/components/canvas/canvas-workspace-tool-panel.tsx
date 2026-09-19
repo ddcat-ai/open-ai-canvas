@@ -21,7 +21,7 @@ const TOOL_SUB_TABS: Array<{ id: ToolSubTab; type: ToolType; label: string }> = 
 ];
 
 // 各子 Tab 的独立标签集，与 backend internal/tools/seed/tools.json 的 tags 对齐
-const SUB_TAB_TAGS: Record<Exclude<ToolSubTab, "effect">, Array<{ id: string; label: string }>> = {
+export const SUB_TAB_TAGS: Record<Exclude<ToolSubTab, "effect">, Array<{ id: string; label: string }>> = {
     style: [
         { id: "period", label: "古装" },
         { id: "city", label: "都市" },
@@ -45,7 +45,7 @@ const SUB_TAB_TAGS: Record<Exclude<ToolSubTab, "effect">, Array<{ id: string; la
 
 type FeedTab = ToolScope;
 
-const FEED_TABS: Array<{ id: FeedTab; label: string }> = [
+export const FEED_TABS: Array<{ id: FeedTab; label: string }> = [
     { id: "public", label: "公共" },
     { id: "favorites", label: "收藏" },
     { id: "recent", label: "最近" },
@@ -83,7 +83,7 @@ export type CanvasWorkspaceToolPanelProps = {
 
 // 种子数据的 mediaUrl 多为相对路径（如 "period_idol/cover.webp"），无法直接预览；
 // 绝对 http(s) URL 原样保留，站内资源路径（/api/resources/…）按当前 origin 绝对化。
-function toAbsoluteUrl(value?: string) {
+export function toAbsoluteUrl(value?: string) {
     const text = (value || "").trim();
     if (/^https?:\/\//i.test(text)) return text;
     if (text.startsWith("/")) return new URL(text, window.location.origin).href;

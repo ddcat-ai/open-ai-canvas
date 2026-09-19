@@ -1,7 +1,7 @@
 import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Palette, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -23,6 +23,7 @@ import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
 import { CanvasNineGridPicker } from "./canvas-nine-grid-picker";
+import { CanvasChooseImageStylePicker } from "./canvas-choose-image-style-picker";
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasPromptOptimizerDrawer } from "./canvas-prompt-optimizer-drawer";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
@@ -51,7 +52,6 @@ type CanvasNodePromptPanelProps = {
     onClose?: () => void;
     onNodeMouseDown?: (event: ReactPointerEvent, nodeId: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
-    onChooseStyle?: () => void;
     onChooseEffect?: () => void;
     onChooseMotion?: () => void;
     workspaceMode?: CanvasWorkspaceMode;
@@ -73,7 +73,7 @@ const PROMPT_EDITOR_MODAL_WIDTH = "min(1200px, 92vw)";
 const PROMPT_EDITOR_MODAL_DEFAULT_WIDTH = 1200;
 const PROMPT_EDITOR_MODAL_DEFAULT_HEIGHT = 420;
 
-export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, onChooseStyle, onChooseEffect, onChooseMotion, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, onChooseEffect, onChooseMotion, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const themeName = useActiveTheme();
     const theme = canvasThemes[themeName];
@@ -90,6 +90,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [nineGridOpen, setNineGridOpen] = useState(false);
     const [expandedNineGridOpen, setExpandedNineGridOpen] = useState(false);
+    const [styleToolOpen, setStyleToolOpen] = useState(false);
+    const [expandedStyleToolOpen, setExpandedStyleToolOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
     const [expandedModalSize, setExpandedModalSize] = useState<{ width: number; height: number } | null>(null);
     const expandedModalRef = useRef<HTMLDivElement>(null);
@@ -102,6 +104,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
     // 当前提示词持有的九宫格工具图标，用于触发按钮回显已选工具。
     const activeNineGridIcon = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "nine_grid")?.icon ?? "Grid3x3", [prompt]);
+    // 当前提示词持有的风格工具标签，用于风格按钮回显与原位替换。
+    const activeStyleTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "style"), [prompt]);
     const normalizedSavedPrompt = useMemo(() => normalizeCanvasNodeMentionTokens(savedPrompt, mentionReferences), [mentionReferences, savedPrompt]);
     const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const requirements: ModelRequirements = {
@@ -261,6 +265,13 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         }
         const trimmedBase = basePrompt.replace(/\s*$/, "");
         updatePrompt(trimmedBase ? `${trimmedBase} ${insertText}` : insertText);
+    };
+
+    // 移除提示词中的 style 工具标签（连同其后一个空白），用于风格 chip 的关闭操作。
+    const removeStyleToolMention = () => {
+        if (!activeStyleTool) return;
+        const styleMentionRe = new RegExp(`\\s*@\\[tool:style:${activeStyleTool.toolId}:[^\\]]*\\](\\s|$)`, "g");
+        updatePrompt(prompt.replace(styleMentionRe, "").replace(/\s{2,}/g, " ").trim());
     };
 
     const submit = () => {
@@ -485,7 +496,12 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         onReorder={onReorderReferences ? (orderedNodeIds) => onReorderReferences(node.id, orderedNodeIds) : undefined}
                         onReplaceReference={onReplaceReference ? (oldReference, sourceNodeId) => onReplaceReference(node.id, oldReference, sourceNodeId) : undefined}
                         onReplaceReferenceFiles={onReplaceReferenceFiles ? (oldReference, files) => onReplaceReferenceFiles(node.id, oldReference, files) : undefined}
-                        onChooseStyle={onChooseStyle}
+                        onStyleToolOpenChange={expanded ? setExpandedStyleToolOpen : setStyleToolOpen}
+                        styleToolOpen={expanded ? expandedStyleToolOpen : styleToolOpen}
+                        activeStyleToolId={activeStyleTool?.toolId}
+                        activeStyleToolLabel={activeStyleTool?.label}
+                        onStyleToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "style", "Palette"))}
+                        onClearStyleTool={removeStyleToolMention}
                         onNineGridOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen}
                         nineGridOpen={expanded ? expandedNineGridOpen : nineGridOpen}
                         nineGridIcon={activeNineGridIcon}
@@ -693,7 +709,12 @@ function ConnectedReferenceShelf({
     onReorder,
     onReplaceReference,
     onReplaceReferenceFiles,
-    onChooseStyle,
+    onStyleToolOpenChange,
+    styleToolOpen,
+    activeStyleToolId,
+    activeStyleToolLabel,
+    onStyleToolItem,
+    onClearStyleTool,
     onNineGridOpenChange,
     nineGridOpen,
     nineGridIcon = "Grid3x3",
@@ -710,7 +731,15 @@ function ConnectedReferenceShelf({
     onReorder?: (orderedNodeIds: string[]) => void;
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (oldReference: CanvasResourceReference, files: File[]) => void;
-    onChooseStyle?: () => void;
+    onStyleToolOpenChange?: (open: boolean) => void;
+    styleToolOpen?: boolean;
+    /** 当前提示词中 style 工具标签的 toolId，未选择时为 undefined。 */
+    activeStyleToolId?: number;
+    /** 当前 style 标签的 label 段，列表未加载或查不到时用于按钮回显。 */
+    activeStyleToolLabel?: string;
+    onStyleToolItem?: (toolId: number, label: string) => void;
+    /** 关闭已选风格：从提示词移除 style 工具标签。 */
+    onClearStyleTool?: () => void;
     onNineGridOpenChange?: (open: boolean) => void;
     nineGridOpen?: boolean;
     /** 当前已选九宫格工具的 lucide 图标名，无选择时回退 Grid3x3。 */
@@ -746,18 +775,15 @@ function ConnectedReferenceShelf({
         <>
             <div className="canvas-node-composer-references" role="group" aria-label="已连接素材">
                 <div className="canvas-node-composer-references-track thin-scrollbar">
-                    {mode === "image" && onChooseStyle ? (
-                        <button
-                            type="button"
-                            className="canvas-node-fixed-chip"
-                            title="选择风格"
-                            aria-label="选择风格"
-                            onClick={onChooseStyle}
-                            onPointerDown={(event) => event.stopPropagation()}
-                        >
-                            <Palette className="size-4" />
-                            <span className="truncate">风格</span>
-                        </button>
+                    {mode === "image" && onStyleToolItem ? (
+                        <CanvasChooseImageStylePicker
+                            open={styleToolOpen}
+                            onOpenChange={onStyleToolOpenChange}
+                            activeToolId={activeStyleToolId}
+                            activeLabel={activeStyleToolLabel}
+                            onSelect={onStyleToolItem}
+                            onClear={onClearStyleTool}
+                        />
                     ) : null}
                     {mode === "image" && onNineGridItem ? (
                         <CanvasNineGridPicker
