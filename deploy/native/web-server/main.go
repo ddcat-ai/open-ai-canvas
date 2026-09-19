@@ -62,8 +62,8 @@ func spaHandler(root string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		fallback := r.Clone(r.Context())
-		fallback.URL.Path = "/index.html"
-		files.ServeHTTP(w, fallback)
+		// Serve the SPA entry directly. Rewriting the request path to
+		// /index.html makes http.FileServer redirect back to ./ forever.
+		http.ServeFile(w, r, filepath.Join(root, "index.html"))
 	})
 }
