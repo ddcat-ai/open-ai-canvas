@@ -28,6 +28,23 @@ func RegisterCanvasTemplateRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+	r.GET("/canvas-templates/:id/media/:mediaId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		path, mimeType, err := svc.CanvasTemplateMediaPath(user.ID, c.Param("id"), c.Param("mediaId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if mimeType != "" {
+			c.Header("Content-Type", mimeType)
+		}
+		c.Header("Cache-Control", "private, max-age=3600")
+		c.File(path)
+	})
 	r.GET("/canvas-templates/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

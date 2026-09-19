@@ -63,19 +63,20 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 ## 画布模板库
 
-以下接口需要登录；管理员接口还需要管理员权限。模板正文使用 `yingce.canvas-template` schema，服务端会校验节点 ID、连线端点和运行时媒体字段。
+以下接口需要登录；管理员接口还需要管理员权限。模板正文使用 `yingce.canvas-template` schema，服务端会校验节点 ID、连线端点和运行时媒体字段。模板预览媒体只读，不能作为用户素材或生成任务结果使用。
 
 | 接口 | 行为 |
 | --- | --- |
 | `GET /canvas-templates` | 按 `q`、`category` 分页返回当前用户模板和已发布公共模板，并附当前版本正文 |
 | `GET /canvas-templates/:id` | 读取当前用户拥有或已公开的模板 |
+| `GET /canvas-templates/:id/media/:mediaId` | 读取模板文档声明的图片或视频预览媒体 |
 | `POST /canvas-templates` | 创建个人模板，正文限制 2MB、最多 200 个节点 |
 | `POST /canvas-templates/:id/versions` | 为本人模板创建下一不可变版本 |
 | `DELETE /canvas-templates/:id` | 删除本人模板及其版本 |
 | `GET /admin/canvas-templates` | 管理员按 `q`、`status` 分页查看全部模板 |
 | `PATCH /admin/canvas-templates/:id` | 管理员设置 `status` 为 `draft` / `published`，并同步 `visibility` |
 
-模板接口只保存工作流结构，不接受 `storageKey`、`assetId`、`taskId` 或媒体预览内容；导入 NodyHub 公共预览时，外部媒体会转换为空输入节点。
+模板接口不接受 `storageKey`、`assetId`、`taskId` 等运行时引用；导入 NodyHub 公共预览时，外部媒体会转换为空输入节点，同时把离线预览媒体保存为模板预览资源。模板预览资源必须位于服务端模板媒体目录，不能通过文档路径访问其他数据目录。
 
 ## 欢迎页开放配置
 

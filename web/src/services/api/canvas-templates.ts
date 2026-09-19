@@ -1,5 +1,5 @@
 import type { CanvasTemplateDocument } from "@/lib/canvas/canvas-templates";
-import { compactApiParams, http } from "@/services/api/request";
+import { apiBaseURL, compactApiParams, http } from "@/services/api/request";
 
 export type { CanvasTemplateDocument };
 
@@ -39,6 +39,10 @@ export function listCanvasTemplates(options: { page?: number; pageSize?: number;
 
 export function getCanvasTemplate(id: string) {
     return http.get<{ template: CanvasTemplateRecord }>(`/canvas-templates/${encodeURIComponent(id)}`);
+}
+
+export function canvasTemplateMediaURL(templateId: string, mediaId: string) {
+    return `${String(apiBaseURL).replace(/\/+$/, "")}/canvas-templates/${encodeURIComponent(templateId)}/media/${encodeURIComponent(mediaId)}`;
 }
 
 export function createCanvasTemplate(input: SaveCanvasTemplateInput) {

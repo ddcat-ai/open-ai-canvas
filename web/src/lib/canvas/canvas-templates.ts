@@ -12,9 +12,20 @@ export type CanvasTemplateGraph = {
 
 export type CanvasTemplateDocument = {
     schema: "yingce.canvas-template";
-    schemaVersion: 1;
+    schemaVersion: 1 | 2;
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
+    media?: CanvasTemplateMedia[];
+};
+
+export type CanvasTemplateMedia = {
+    id: string;
+    nodeId?: string;
+    kind: "image" | "video";
+    role?: "node" | "cover";
+    path?: string;
+    mimeType?: string;
+    bytes?: number;
 };
 
 export type CanvasTemplate = {

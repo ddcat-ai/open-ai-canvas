@@ -6,10 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { canvasTemplateCategoryLabel, canvasTemplateDocumentForExport, canvasTemplateFromDocument, CANVAS_BUILTIN_TEMPLATES, type CanvasTemplate, type CanvasTemplateCategory } from "@/lib/canvas/canvas-templates";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { createCanvasTemplate, deleteCanvasTemplate, listCanvasTemplates, type SaveCanvasTemplateInput } from "@/services/api/canvas-templates";
+import { canvasTemplateMediaURL, createCanvasTemplate, deleteCanvasTemplate, listCanvasTemplates, type SaveCanvasTemplateInput } from "@/services/api/canvas-templates";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { CanvasNodeType } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 type CanvasTemplateLibraryModalProps = {
     open: boolean;
@@ -32,6 +32,11 @@ function categoryIcon(category: CanvasTemplateCategory) {
 
 function nodeLabel(type: string) {
     return type === CanvasNodeType.Image ? "图片" : type === CanvasNodeType.Video ? "视频" : type === CanvasNodeType.Text ? "文字" : type;
+}
+
+function templateMediaIds(node: CanvasNodeData) {
+    const metadata = node.metadata as Record<string, unknown> | undefined;
+    return Array.isArray(metadata?.templateMediaIds) ? metadata.templateMediaIds.filter((value): value is string => typeof value === "string") : [];
 }
 
 export function CanvasTemplateLibraryModal({ open, mode, onClose, onApply }: CanvasTemplateLibraryModalProps) {
@@ -99,7 +104,7 @@ export function CanvasTemplateLibraryModal({ open, mode, onClose, onApply }: Can
         try {
             const parsed = JSON.parse(await file.text()) as Partial<SaveCanvasTemplateInput> & { document?: SaveCanvasTemplateInput["document"] };
             const document = parsed.document || (parsed as unknown as SaveCanvasTemplateInput["document"]);
-            if (document?.schema !== "yingce.canvas-template" || document.schemaVersion !== 1 || !Array.isArray(document.nodes) || !Array.isArray(document.connections)) throw new Error("不是有效的影策模板 JSON");
+            if (document?.schema !== "yingce.canvas-template" || (document.schemaVersion !== 1 && document.schemaVersion !== 2) || !Array.isArray(document.nodes) || !Array.isArray(document.connections)) throw new Error("不是有效的影策模板 JSON");
             await createCanvasTemplate({
                 title: String(parsed.title || file.name.replace(/\.json$/i, "") || "导入模板").slice(0, 160),
                 description: String(parsed.description || "从 JSON 导入的画布工作流").slice(0, 500),
@@ -272,9 +277,25 @@ export function CanvasTemplateLibraryModal({ open, mode, onClose, onApply }: Can
                                         {preview.nodes.map((node, index) => (
                                             <div key={node.id} className="flex items-center gap-3">
                                                 <div className="flex min-w-[110px] flex-col items-center gap-2 rounded-xl border px-3 py-3 text-center" style={{ borderColor: theme.toolbar.border, background: theme.canvas.background }}>
-                                                    <span className="grid size-8 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
-                                                        {node.type === CanvasNodeType.Image ? <ImageIcon className="size-4" /> : node.type === CanvasNodeType.Video ? <Video className="size-4" /> : <Clapperboard className="size-4" />}
-                                                    </span>
+                                                    {selectedTemplate.remoteId && selectedTemplate.document ? (
+                                                        <div className="flex max-w-[120px] flex-wrap justify-center gap-1">
+                                                            {templateMediaIds(node).slice(0, 2).map((mediaId) => {
+                                                                const media = selectedTemplate.document?.media?.find((item) => item.id === mediaId);
+                                                                if (!media) return null;
+                                                                const source = canvasTemplateMediaURL(selectedTemplate.remoteId!, media.id);
+                                                                return media.kind === "video" ? (
+                                                                    <video key={media.id} src={source} className="h-14 w-14 rounded-md object-cover" muted playsInline preload="metadata" controls />
+                                                                ) : (
+                                                                    <img key={media.id} src={source} alt="" className="h-14 w-14 rounded-md object-cover" loading="lazy" />
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : null}
+                                                    {!templateMediaIds(node).length ? (
+                                                        <span className="grid size-8 place-items-center rounded-lg" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
+                                                            {node.type === CanvasNodeType.Image ? <ImageIcon className="size-4" /> : node.type === CanvasNodeType.Video ? <Video className="size-4" /> : <Clapperboard className="size-4" />}
+                                                        </span>
+                                                    ) : null}
                                                     <span className="max-w-[120px] truncate text-xs font-medium">{node.title}</span>
                                                     <span className="text-[10px]" style={{ color: theme.node.muted }}>
                                                         {nodeLabel(node.type)}

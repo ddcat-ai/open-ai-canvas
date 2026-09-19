@@ -280,6 +280,23 @@ paths:
         "200": { $ref: "#/components/responses/Envelope" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+  /canvas-templates/{id}/media/{mediaId}:
+    get:
+      tags: [canvas]
+      summary: 读取画布模板预览媒体
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: mediaId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: 图片或视频二进制内容 }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /canvas-templates/{id}:
     get:
       tags: [canvas]

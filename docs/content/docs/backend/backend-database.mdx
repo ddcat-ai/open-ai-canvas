@@ -50,9 +50,9 @@ description: 影策后端核心持久化表与状态边界
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
 | `canvas_templates` | 保存模板名称、分类、标签、归属、发布状态和当前版本 | 用户模板默认私有；公共模板必须由管理员发布并设置为 public；读取、更新和删除均校验归属或管理员权限 |
-| `canvas_template_versions` | 保存不可变的模板节点图版本 | `(template_id, version)` 唯一；正文限制为 `yingce.canvas-template` schema；节点图不能包含 `storageKey`、`assetId`、`taskId` 或媒体预览字段 |
+| `canvas_template_versions` | 保存不可变的模板节点图版本 | `(template_id, version)` 唯一；正文限制为 `yingce.canvas-template` schema；节点图不能包含 `storageKey`、`assetId`、`taskId` 或运行时媒体引用 |
 
-模板版本只保存可重新生成的工作流结构和提示词草稿，不复制 NodyHub 或画布中的媒体文件。仓库内的 NodyHub 公共预览包通过 `backend/cmd/import-nody-templates` 导入，外部媒体会转换为空输入节点；重复执行按稳定模板 ID 替换导入版本。
+模板版本保存可重新生成的工作流结构、提示词草稿和可选的模板预览媒体清单。预览媒体不属于用户素材，也不会作为任务结果写入画布；文件由导入命令安装到 `CANVAS_BACKEND_DATA_DIR/template-media`，通过模板媒体接口按模板可见性读取。NodyHub 公共预览包通过 `backend/cmd/import-nody-templates` 导入，命令优先读取带本地引用的 `offline-preview.json`，将外部媒体转换为空输入节点；重复执行按稳定模板 ID 替换导入版本和对应媒体目录。
 
 ## 已部署 PostgreSQL 的素材 bytes 修复
 

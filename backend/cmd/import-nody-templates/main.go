@@ -5,8 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"mime"
+	"os"
+	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -65,10 +70,21 @@ type canvasConnection struct {
 }
 
 type canvasDocument struct {
-	Schema        string             `json:"schema"`
-	SchemaVersion int                `json:"schemaVersion"`
-	Nodes         []canvasNode       `json:"nodes"`
-	Connections   []canvasConnection `json:"connections"`
+	Schema        string                `json:"schema"`
+	SchemaVersion int                   `json:"schemaVersion"`
+	Nodes         []canvasNode          `json:"nodes"`
+	Connections   []canvasConnection    `json:"connections"`
+	Media         []canvasTemplateMedia `json:"media,omitempty"`
+}
+
+type canvasTemplateMedia struct {
+	ID       string `json:"id"`
+	NodeID   string `json:"nodeId,omitempty"`
+	Kind     string `json:"kind"`
+	Role     string `json:"role,omitempty"`
+	Path     string `json:"path,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+	Bytes    int64  `json:"bytes,omitempty"`
 }
 
 func main() {
@@ -94,19 +110,30 @@ func main() {
 	}
 
 	summaries := readSummaries(archive)
+	previews := selectedPreviewFiles(archive)
 	count := 0
-	for _, file := range archive.File {
-		if !strings.HasSuffix(file.Name, "/preview.json") || !strings.Contains(file.Name, "/previews/") {
-			continue
-		}
+	ids := make([]string, 0, len(previews))
+	for id := range previews {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	mediaCount := 0
+	for _, id := range ids {
+		file := previews[id]
 		var preview nodyPreview
 		if err := readJSON(file, &preview); err != nil {
 			log.Printf("跳过 %s：%v", file.Name, err)
 			continue
 		}
-		id := filepath.Base(filepath.Dir(file.Name))
 		summary := summaries[id]
-		document := convertPreview(preview)
+		media, mediaByName, err := installTemplateMedia(archive, id, *dataDir)
+		if err != nil {
+			log.Printf("跳过 %s：安装模板媒体失败：%v", id, err)
+			continue
+		}
+		document := convertPreview(preview, mediaByName)
+		document.Media = media
+		assignMediaNodes(&document)
 		documentJSON, err := json.Marshal(document)
 		if err != nil {
 			log.Printf("跳过 %s：序列化失败：%v", id, err)
@@ -122,7 +149,7 @@ func main() {
 			ID:             id,
 			OwnerID:        "nodyhub-import",
 			Title:          title,
-			Description:    "从 NodyHub 公共预览包导入的画布工作流；媒体预览已转换为空输入节点。",
+			Description:    "从 NodyHub 公共预览包导入的画布工作流；模板节点保留为空输入，图片和视频作为模板预览媒体提供。",
 			Category:       categoryForTags(summary.Tags),
 			TagsJSON:       string(tags),
 			Status:         "published",
@@ -136,13 +163,32 @@ func main() {
 		}
 		// Reuse the stable template UUID for its first version. The version table has
 		// its own primary key, so this stays within the model's 36-character limit.
-		version := model.CanvasTemplateVersion{ID: id, TemplateID: id, Version: 1, SchemaVersion: 1, DocumentJSON: string(documentJSON), CreatedBy: "nodyhub-import", CreatedAt: now}
+		version := model.CanvasTemplateVersion{ID: id, TemplateID: id, Version: 1, SchemaVersion: document.SchemaVersion, DocumentJSON: string(documentJSON), CreatedBy: "nodyhub-import", CreatedAt: now}
 		if err := upsert(db, &template, &version); err != nil {
 			log.Fatal(err)
 		}
 		count++
+		mediaCount += len(media)
 	}
-	log.Printf("已导入 %d 个 NodyHub 公共预览模板", count)
+	log.Printf("已导入 %d 个 NodyHub 公共预览模板，安装 %d 个模板媒体文件", count, mediaCount)
+}
+
+func selectedPreviewFiles(archive *zip.ReadCloser) map[string]*zip.File {
+	result := map[string]*zip.File{}
+	for _, file := range archive.File {
+		if !strings.Contains(file.Name, "/previews/") {
+			continue
+		}
+		name := path.Base(file.Name)
+		if name != "preview.json" && name != "offline-preview.json" {
+			continue
+		}
+		id := path.Base(path.Dir(file.Name))
+		if name == "offline-preview.json" || result[id] == nil {
+			result[id] = file
+		}
+	}
+	return result
 }
 
 func readSummaries(archive *zip.ReadCloser) map[string]nodyTemplateSummary {
@@ -172,7 +218,7 @@ func readJSON(file *zip.File, target any) error {
 	return json.NewDecoder(reader).Decode(target)
 }
 
-func convertPreview(preview nodyPreview) canvasDocument {
+func convertPreview(preview nodyPreview, mediaByName map[string]string) canvasDocument {
 	supported := map[string]bool{}
 	nodes := make([]canvasNode, 0, len(preview.Nodes))
 	for _, node := range preview.Nodes {
@@ -214,6 +260,9 @@ func convertPreview(preview nodyPreview) canvasDocument {
 					metadata["seconds"] = strconv.FormatFloat(seconds, 'f', -1, 64)
 				}
 			}
+			if mediaIDs := mediaIDsForNode(node.Data, mediaByName); len(mediaIDs) > 0 {
+				metadata["templateMediaIds"] = mediaIDs
+			}
 		}
 		if canvasType == "frame" {
 			metadata = map[string]any{"frame": map[string]any{"collapsed": false, "expandedWidth": width, "expandedHeight": height}}
@@ -228,7 +277,177 @@ func convertPreview(preview nodyPreview) canvasDocument {
 		}
 		connections = append(connections, canvasConnection{ID: fmt.Sprintf("nody-edge-%d", index), FromNodeID: edge.Source, ToNodeID: edge.Target})
 	}
-	return canvasDocument{Schema: "yingce.canvas-template", SchemaVersion: 1, Nodes: nodes, Connections: connections}
+	return canvasDocument{Schema: "yingce.canvas-template", SchemaVersion: 2, Nodes: nodes, Connections: connections}
+}
+
+func installTemplateMedia(archive *zip.ReadCloser, templateID string, dataDir string) ([]canvasTemplateMedia, map[string]string, error) {
+	entries := make([]*zip.File, 0)
+	for _, file := range archive.File {
+		parts := strings.Split(strings.TrimSuffix(file.Name, "/"), "/")
+		assetsIndex := -1
+		for index, part := range parts {
+			if part == "assets" {
+				assetsIndex = index
+				break
+			}
+		}
+		if assetsIndex < 0 || assetsIndex+1 >= len(parts) || parts[assetsIndex+1] != templateID || len(parts) != assetsIndex+3 || file.FileInfo().IsDir() {
+			continue
+		}
+		if mediaKind(path.Ext(file.Name)) == "" {
+			continue
+		}
+		entries = append(entries, file)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+
+	mediaRoot := filepath.Join(dataDir, "template-media")
+	if err := os.MkdirAll(mediaRoot, 0o750); err != nil {
+		return nil, nil, err
+	}
+	finalDir := filepath.Join(mediaRoot, templateID)
+	stageDir := filepath.Join(mediaRoot, "."+templateID+".importing")
+	if err := os.RemoveAll(stageDir); err != nil {
+		return nil, nil, err
+	}
+	if err := os.MkdirAll(stageDir, 0o750); err != nil {
+		return nil, nil, err
+	}
+	defer os.RemoveAll(stageDir)
+
+	media := make([]canvasTemplateMedia, 0, len(entries))
+	mediaByName := make(map[string]string, len(entries))
+	for _, file := range entries {
+		name := path.Base(file.Name)
+		if _, exists := mediaByName[name]; exists {
+			return nil, nil, fmt.Errorf("模板媒体文件名重复：%s", name)
+		}
+		kind := mediaKind(path.Ext(name))
+		mimeType := mime.TypeByExtension(strings.ToLower(path.Ext(name)))
+		item := canvasTemplateMedia{
+			ID:       name,
+			Kind:     kind,
+			Role:     mediaRole(name),
+			Path:     filepath.ToSlash(filepath.Join("template-media", templateID, name)),
+			MimeType: mimeType,
+			Bytes:    int64(file.UncompressedSize64),
+		}
+		reader, err := file.Open()
+		if err != nil {
+			return nil, nil, err
+		}
+		output, err := os.OpenFile(filepath.Join(stageDir, name), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+		if err != nil {
+			reader.Close()
+			return nil, nil, err
+		}
+		_, copyErr := io.Copy(output, reader)
+		closeErr := output.Close()
+		readerErr := reader.Close()
+		if copyErr != nil {
+			return nil, nil, copyErr
+		}
+		if closeErr != nil {
+			return nil, nil, closeErr
+		}
+		if readerErr != nil {
+			return nil, nil, readerErr
+		}
+		media = append(media, item)
+		mediaByName[name] = name
+	}
+	if err := os.RemoveAll(finalDir); err != nil {
+		return nil, nil, err
+	}
+	if err := os.Rename(stageDir, finalDir); err != nil {
+		return nil, nil, err
+	}
+	return media, mediaByName, nil
+}
+
+func mediaKind(extension string) string {
+	switch strings.ToLower(extension) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif":
+		return "image"
+	case ".mp4", ".webm", ".mov":
+		return "video"
+	default:
+		return ""
+	}
+}
+
+func mediaRole(name string) string {
+	if strings.Contains(strings.ToLower(name), "_cover_") {
+		return "cover"
+	}
+	return "node"
+}
+
+func mediaIDsForNode(data map[string]any, mediaByName map[string]string) []string {
+	values := make([]string, 0)
+	collectMediaReferences(data, &values)
+	seen := map[string]bool{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		name := path.Base(strings.TrimSpace(value))
+		id, ok := mediaByName[name]
+		if !ok || seen[id] {
+			continue
+		}
+		seen[id] = true
+		result = append(result, id)
+	}
+	return result
+}
+
+func collectMediaReferences(value any, result *[]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if key == "template_demo_url" || key == "template_demo_urls" || key == "template_demo_video_urls" {
+				collectMediaStrings(child, result)
+				continue
+			}
+			collectMediaReferences(child, result)
+		}
+	case []any:
+		for _, child := range typed {
+			collectMediaReferences(child, result)
+		}
+	}
+}
+
+func collectMediaStrings(value any, result *[]string) {
+	switch typed := value.(type) {
+	case string:
+		if strings.TrimSpace(typed) != "" {
+			*result = append(*result, typed)
+		}
+	case []any:
+		for _, child := range typed {
+			collectMediaStrings(child, result)
+		}
+	}
+}
+
+func assignMediaNodes(document *canvasDocument) {
+	for index := range document.Media {
+		for _, node := range document.Nodes {
+			values, ok := node.Metadata["templateMediaIds"].([]string)
+			if !ok {
+				continue
+			}
+			for _, mediaID := range values {
+				if mediaID == document.Media[index].ID {
+					document.Media[index].NodeID = node.ID
+					break
+				}
+			}
+			if document.Media[index].NodeID != "" {
+				break
+			}
+		}
+	}
 }
 
 func nodyNodeType(value string) string {

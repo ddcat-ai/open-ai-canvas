@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 
 const (
 	canvasTemplateSchema            = "yingce.canvas-template"
-	canvasTemplateSchemaVersion     = 1
+	canvasTemplateSchemaVersion     = 2
 	canvasTemplateStatusDraft       = "draft"
 	canvasTemplateStatusPublished   = "published"
 	canvasTemplateVisibilityPrivate = "private"
@@ -23,10 +25,23 @@ const (
 )
 
 type CanvasTemplateDocument struct {
-	Schema        string            `json:"schema"`
-	SchemaVersion int               `json:"schemaVersion"`
-	Nodes         []json.RawMessage `json:"nodes"`
-	Connections   []json.RawMessage `json:"connections"`
+	Schema        string                `json:"schema"`
+	SchemaVersion int                   `json:"schemaVersion"`
+	Nodes         []json.RawMessage     `json:"nodes"`
+	Connections   []json.RawMessage     `json:"connections"`
+	Media         []CanvasTemplateMedia `json:"media,omitempty"`
+}
+
+// CanvasTemplateMedia is a server-managed preview file. It is intentionally
+// separate from runtime resource references such as assetId or storageKey.
+type CanvasTemplateMedia struct {
+	ID       string `json:"id"`
+	NodeID   string `json:"nodeId,omitempty"`
+	Kind     string `json:"kind"`
+	Role     string `json:"role,omitempty"`
+	Path     string `json:"path,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+	Bytes    int64  `json:"bytes,omitempty"`
 }
 
 type CanvasTemplateRequest struct {
@@ -120,7 +135,7 @@ func (s *Service) CreateCanvasTemplate(userID string, req CanvasTemplateRequest)
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	version := &model.CanvasTemplateVersion{ID: newID(), TemplateID: template.ID, Version: 1, SchemaVersion: canvasTemplateSchemaVersion, DocumentJSON: string(document), CreatedBy: userID, CreatedAt: now}
+	version := &model.CanvasTemplateVersion{ID: newID(), TemplateID: template.ID, Version: 1, SchemaVersion: metadata.schemaVersion, DocumentJSON: string(document), CreatedBy: userID, CreatedAt: now}
 	if err := s.repo.CreateCanvasTemplate(template, version); err != nil {
 		return CanvasTemplateView{}, err
 	}
@@ -143,7 +158,7 @@ func (s *Service) CreateCanvasTemplateVersion(userID string, id string, req Canv
 		return CanvasTemplateView{}, err
 	}
 	now := time.Now()
-	version := &model.CanvasTemplateVersion{ID: newID(), TemplateID: template.ID, Version: template.CurrentVersion + 1, SchemaVersion: canvasTemplateSchemaVersion, DocumentJSON: string(document), CreatedBy: userID, CreatedAt: now}
+	version := &model.CanvasTemplateVersion{ID: newID(), TemplateID: template.ID, Version: template.CurrentVersion + 1, SchemaVersion: metadata.schemaVersion, DocumentJSON: string(document), CreatedBy: userID, CreatedAt: now}
 	if err := s.repo.CreateCanvasTemplateVersion(template, version); err != nil {
 		return CanvasTemplateView{}, err
 	}
@@ -218,10 +233,11 @@ func (s *Service) AdminUpdateCanvasTemplate(actor *model.User, id string, req Ca
 }
 
 type canvasTemplateMetadata struct {
-	title       string
-	description string
-	category    string
-	tagsJSON    string
+	title         string
+	description   string
+	category      string
+	tagsJSON      string
+	schemaVersion int
 }
 
 func normalizeCanvasTemplateRequest(req CanvasTemplateRequest) (canvasTemplateMetadata, []byte, error) {
@@ -258,7 +274,7 @@ func normalizeCanvasTemplateRequest(req CanvasTemplateRequest) (canvasTemplateMe
 	if err := json.Unmarshal(req.Document, &document); err != nil {
 		return canvasTemplateMetadata{}, nil, BadAuthRequest("模板文档格式无效")
 	}
-	if document.Schema != canvasTemplateSchema || document.SchemaVersion != canvasTemplateSchemaVersion || len(document.Nodes) == 0 || len(document.Nodes) > 200 {
+	if document.Schema != canvasTemplateSchema || (document.SchemaVersion != 1 && document.SchemaVersion != canvasTemplateSchemaVersion) || len(document.Nodes) == 0 || len(document.Nodes) > 200 {
 		return canvasTemplateMetadata{}, nil, BadAuthRequest("不支持的模板文档版本或节点数量")
 	}
 	ids := make(map[string]bool, len(document.Nodes))
@@ -278,6 +294,24 @@ func normalizeCanvasTemplateRequest(req CanvasTemplateRequest) (canvasTemplateMe
 			}
 		}
 	}
+	mediaIDs := make(map[string]bool, len(document.Media))
+	for _, media := range document.Media {
+		media.ID = strings.TrimSpace(media.ID)
+		media.NodeID = strings.TrimSpace(media.NodeID)
+		media.Kind = strings.TrimSpace(media.Kind)
+		media.Role = strings.TrimSpace(media.Role)
+		media.Path = strings.TrimSpace(strings.ReplaceAll(media.Path, "\\", "/"))
+		if media.ID == "" || mediaIDs[media.ID] || (media.Kind != "image" && media.Kind != "video") || (media.Role != "" && media.Role != "node" && media.Role != "cover") || media.Bytes < 0 || media.Bytes > 128<<20 {
+			return canvasTemplateMetadata{}, nil, BadAuthRequest("模板预览媒体数据无效")
+		}
+		if media.NodeID != "" && !ids[media.NodeID] {
+			return canvasTemplateMetadata{}, nil, BadAuthRequest("模板预览媒体节点不存在")
+		}
+		if media.Path != "" && !safeCanvasTemplateMediaPath(media.Path) {
+			return canvasTemplateMetadata{}, nil, BadAuthRequest("模板预览媒体路径无效")
+		}
+		mediaIDs[media.ID] = true
+	}
 	for _, rawConnection := range document.Connections {
 		var connection struct {
 			FromNodeID string `json:"fromNodeId"`
@@ -291,7 +325,70 @@ func normalizeCanvasTemplateRequest(req CanvasTemplateRequest) (canvasTemplateMe
 	if err != nil {
 		return canvasTemplateMetadata{}, nil, fmt.Errorf("marshal template document: %w", err)
 	}
-	return canvasTemplateMetadata{title: title, description: description, category: category, tagsJSON: string(tagsJSON)}, canonical, nil
+	return canvasTemplateMetadata{title: title, description: description, category: category, tagsJSON: string(tagsJSON), schemaVersion: document.SchemaVersion}, canonical, nil
+}
+
+func safeCanvasTemplateMediaPath(value string) bool {
+	clean := filepath.ToSlash(filepath.Clean(value))
+	if clean == "." || filepath.IsAbs(value) || clean != value || !strings.HasPrefix(clean, "template-media/") {
+		return false
+	}
+	for _, part := range strings.Split(clean, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// CanvasTemplateMediaPath resolves only files under the template-media data
+// directory after checking the template's visibility for the current user.
+func (s *Service) CanvasTemplateMediaPath(userID string, id string, mediaID string) (string, string, error) {
+	template, err := s.repo.CanvasTemplate(strings.TrimSpace(id))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", "", NotFound("模板不存在")
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if template.OwnerID != userID && !(template.Status == canvasTemplateStatusPublished && template.Visibility == canvasTemplateVisibilityPublic) {
+		return "", "", NotFound("模板不存在")
+	}
+	version, err := s.repo.CanvasTemplateVersion(template.ID, template.CurrentVersion)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", "", NotFound("模板版本不存在")
+	}
+	if err != nil {
+		return "", "", err
+	}
+	var document CanvasTemplateDocument
+	if err := json.Unmarshal([]byte(version.DocumentJSON), &document); err != nil {
+		return "", "", err
+	}
+	for _, media := range document.Media {
+		if media.ID != mediaID || media.Path == "" || !safeCanvasTemplateMediaPath(media.Path) {
+			continue
+		}
+		root, err := filepath.Abs(filepath.Join(s.dataDir, "template-media"))
+		if err != nil {
+			return "", "", err
+		}
+		path, err := filepath.Abs(filepath.Join(s.dataDir, filepath.FromSlash(media.Path)))
+		if err != nil {
+			return "", "", err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return "", "", Forbidden("模板预览媒体路径无效")
+		}
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			return "", "", NotFound("模板预览媒体不存在")
+		} else if err != nil {
+			return "", "", err
+		}
+		return path, media.MimeType, nil
+	}
+	return "", "", NotFound("模板预览媒体不存在")
 }
 
 func (s *Service) canvasTemplatePage(result repository.CanvasTemplatePage, page int, pageSize int, userID string, admin bool) (CanvasTemplatePage, error) {

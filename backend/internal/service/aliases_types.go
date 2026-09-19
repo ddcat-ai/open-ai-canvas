@@ -88,6 +88,7 @@ type (
 	CanvasLibraryPage                      = app.CanvasLibraryPage
 	CanvasLibrarySummary                   = app.CanvasLibrarySummary
 	CanvasTemplateDocument                 = app.CanvasTemplateDocument
+	CanvasTemplateMedia                    = app.CanvasTemplateMedia
 	CanvasTemplatePage                     = app.CanvasTemplatePage
 	CanvasTemplateRequest                  = app.CanvasTemplateRequest
 	CanvasTemplateAdminUpdateRequest       = app.CanvasTemplateAdminUpdateRequest
