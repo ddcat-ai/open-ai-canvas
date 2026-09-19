@@ -1,0 +1,18 @@
+{
+  "id": "8ffaeae2-0435-438f-997e-d9a214d7bc0a",
+  "seller_id": 169,
+  "library_key": "",
+  "title": "亚马逊一键生成主副图和A+套图",
+  "description": "上传一张产品图，一键生成标准白底、主副图、A+整套图片",
+  "price": 500000,
+  "cover_image_url": "../../assets/8ffaeae2-0435-438f-997e-d9a214d7bc0a/074_cover_74.jpg",
+  "tags": "电商,亚马逊,电商主图,电商详情页,A+",
+  "purchase_count": 9,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-08-01T02:17:34.085Z",
+  "updated_at": "2026-09-12T08:51:24.66Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

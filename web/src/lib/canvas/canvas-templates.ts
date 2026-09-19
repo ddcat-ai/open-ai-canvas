@@ -148,6 +148,8 @@ export function canvasTemplateDocumentFromSelection(nodes: CanvasNodeData[], con
                 "assetId",
                 "taskId",
                 "previewContent",
+                "templateMediaURL",
+                "templateMediaKind",
                 "videoPreview",
                 "fileUpload",
                 "fileUploadProgress",
@@ -176,7 +178,7 @@ export function canvasTemplateDocumentFromSelection(nodes: CanvasNodeData[], con
     };
 }
 
-export function canvasTemplateFromDocument(input: { id: string; title: string; description: string; category: string; tags: string[]; document: CanvasTemplateDocument; source: "user" | "published"; version: number }): CanvasTemplate {
+export function canvasTemplateFromDocument(input: { id: string; title: string; description: string; category: string; tags: string[]; document: CanvasTemplateDocument; source: "user" | "published"; version: number; mediaURL?: (mediaId: string) => string }): CanvasTemplate {
     const category = ["image", "video", "storyboard", "commerce"].includes(input.category) ? (input.category as CanvasTemplateCategory) : "image";
     return {
         id: `remote:${input.id}`,
@@ -189,7 +191,7 @@ export function canvasTemplateFromDocument(input: { id: string; title: string; d
         source: input.source,
         version: input.version,
         document: input.document,
-        createGraph: (center) => normalizeTemplateGraph(input.document, center),
+        createGraph: (center) => normalizeTemplateGraph(input.document, center, input.mediaURL),
     };
 }
 
@@ -199,7 +201,7 @@ export function canvasTemplateDocumentForExport(template: CanvasTemplate): Canva
     return canvasTemplateDocumentFromSelection(graph.nodes, graph.connections);
 }
 
-function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Position): CanvasTemplateGraph {
+function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Position, mediaURL?: (mediaId: string) => string): CanvasTemplateGraph {
     const nodes = document.nodes;
     if (!nodes.length) return { nodes: [], connections: [...document.connections] };
     const minX = Math.min(...nodes.map((node) => node.position.x));
@@ -208,8 +210,14 @@ function normalizeTemplateGraph(document: CanvasTemplateDocument, center: Positi
     const maxY = Math.max(...nodes.map((node) => node.position.y + node.height));
     const offsetX = center.x - (minX + maxX) / 2;
     const offsetY = center.y - (minY + maxY) / 2;
+    const mediaById = new Map((document.media || []).map((media) => [media.id, media]));
     return {
-        nodes: nodes.map((node) => ({ ...node, position: { x: node.position.x + offsetX, y: node.position.y + offsetY } })),
+        nodes: nodes.map((node) => {
+            const mediaIds = node.metadata?.templateMediaIds || [];
+            const media = mediaIds.map((mediaId) => mediaById.get(mediaId)).find((item) => item && mediaURL?.(item.id));
+            const metadata = media && mediaURL ? { ...node.metadata, templateMediaURL: mediaURL(media.id), templateMediaKind: media.kind } : node.metadata;
+            return { ...node, metadata, position: { x: node.position.x + offsetX, y: node.position.y + offsetY } };
+        }),
         connections: [...document.connections],
     };
 }

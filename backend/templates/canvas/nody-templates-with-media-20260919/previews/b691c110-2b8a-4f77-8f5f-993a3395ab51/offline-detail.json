@@ -1,0 +1,18 @@
+{
+  "id": "b691c110-2b8a-4f77-8f5f-993a3395ab51",
+  "seller_id": 7,
+  "library_key": "",
+  "title": "真人感照片",
+  "description": "通过简单的描述，自动补齐提示词，生成较为写实的真人感图片，可以学习SKILL里的规则进行提示词优化。",
+  "price": 500000,
+  "cover_image_url": "../../assets/b691c110-2b8a-4f77-8f5f-993a3395ab51/017_cover_17.jpg",
+  "tags": "设计,写真,自拍,写实",
+  "purchase_count": 13,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-07-22T02:32:53.445Z",
+  "updated_at": "2026-09-14T12:02:30.604Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

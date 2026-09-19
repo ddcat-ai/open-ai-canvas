@@ -1,0 +1,18 @@
+{
+  "id": "35de3074-3277-4c64-8561-0b6aa8ba3715",
+  "seller_id": 1,
+  "library_key": "",
+  "title": "杂志感电商详情页示例",
+  "description": "带转化分析的杂志感电商详情页工作流示例",
+  "price": 0,
+  "cover_image_url": "../../assets/35de3074-3277-4c64-8561-0b6aa8ba3715/005_cover_5.jpg",
+  "tags": "电商,详情页",
+  "purchase_count": 126,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-06-10T09:25:44.998Z",
+  "updated_at": "2026-09-15T15:51:45.618Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

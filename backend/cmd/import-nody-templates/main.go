@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"mime"
 	"os"
@@ -87,19 +88,80 @@ type canvasTemplateMedia struct {
 	Bytes    int64  `json:"bytes,omitempty"`
 }
 
+type packageFile struct {
+	Name  string
+	Size  int64
+	IsDir bool
+	Open  func() (io.ReadCloser, error)
+}
+
+type multipartReader struct {
+	openers []func() (io.ReadCloser, error)
+	current io.ReadCloser
+	index   int
+}
+
+func (reader *multipartReader) Read(buffer []byte) (int, error) {
+	for reader.index < len(reader.openers) {
+		if reader.current == nil {
+			current, err := reader.openers[reader.index]()
+			if err != nil {
+				return 0, err
+			}
+			reader.current = current
+		}
+		count, err := reader.current.Read(buffer)
+		if err == io.EOF {
+			_ = reader.current.Close()
+			reader.current = nil
+			reader.index++
+			if count > 0 {
+				return count, nil
+			}
+			continue
+		}
+		return count, err
+	}
+	return 0, io.EOF
+}
+
+func (reader *multipartReader) Close() error {
+	if reader.current == nil {
+		return nil
+	}
+	err := reader.current.Close()
+	reader.current = nil
+	return err
+}
+
 func main() {
 	archivePath := flag.String("archive", "", "Nody public previews zip path")
+	packageDir := flag.String("package-dir", "", "已解压的 Nody 公共预览包目录")
 	dataDir := flag.String("data-dir", "", "CANVAS_BACKEND_DATA_DIR")
 	flag.Parse()
-	if strings.TrimSpace(*archivePath) == "" || strings.TrimSpace(*dataDir) == "" {
-		log.Fatal("必须配置 --archive 和 --data-dir")
+	if strings.TrimSpace(*dataDir) == "" || (strings.TrimSpace(*archivePath) == "" && strings.TrimSpace(*packageDir) == "") || (strings.TrimSpace(*archivePath) != "" && strings.TrimSpace(*packageDir) != "") {
+		log.Fatal("必须配置 --data-dir，并且在 --archive 或 --package-dir 中选择一个输入")
 	}
 
-	archive, err := zip.OpenReader(*archivePath)
-	if err != nil {
-		log.Fatal(err)
+	var files []packageFile
+	var closePackage func() error
+	if strings.TrimSpace(*archivePath) != "" {
+		archive, err := zip.OpenReader(*archivePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		files = zipPackageFiles(archive)
+		closePackage = archive.Close
+	} else {
+		var err error
+		files, err = directoryPackageFiles(*packageDir)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	defer archive.Close()
+	if closePackage != nil {
+		defer closePackage()
+	}
 
 	db, err := database.Open(database.Config{Driver: "sqlite", DataDir: *dataDir})
 	if err != nil {
@@ -109,8 +171,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	summaries := readSummaries(archive)
-	previews := selectedPreviewFiles(archive)
+	summaries := readSummaries(files)
+	previews := selectedPreviewFiles(files)
 	count := 0
 	ids := make([]string, 0, len(previews))
 	for id := range previews {
@@ -126,7 +188,7 @@ func main() {
 			continue
 		}
 		summary := summaries[id]
-		media, mediaByName, err := installTemplateMedia(archive, id, *dataDir)
+		media, mediaByName, err := installTemplateMedia(files, id, *dataDir)
 		if err != nil {
 			log.Printf("跳过 %s：安装模板媒体失败：%v", id, err)
 			continue
@@ -173,10 +235,121 @@ func main() {
 	log.Printf("已导入 %d 个 NodyHub 公共预览模板，安装 %d 个模板媒体文件", count, mediaCount)
 }
 
-func selectedPreviewFiles(archive *zip.ReadCloser) map[string]*zip.File {
-	result := map[string]*zip.File{}
-	for _, file := range archive.File {
-		if !strings.Contains(file.Name, "/previews/") {
+func zipPackageFiles(archive *zip.ReadCloser) []packageFile {
+	files := make([]packageFile, 0, len(archive.File))
+	for _, rawFile := range archive.File {
+		file := rawFile
+		files = append(files, packageFile{
+			Name:  file.Name,
+			Size:  int64(file.UncompressedSize64),
+			IsDir: file.FileInfo().IsDir(),
+			Open:  file.Open,
+		})
+	}
+	return files
+}
+
+func directoryPackageFiles(root string) ([]packageFile, error) {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+	if info, err := os.Stat(root); err != nil {
+		return nil, err
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("模板包目录不是目录：%s", root)
+	}
+	files := make([]packageFile, 0)
+	err = filepath.WalkDir(root, func(fullPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		relative, err := filepath.Rel(root, fullPath)
+		if err != nil {
+			return err
+		}
+		filePath := fullPath
+		files = append(files, packageFile{
+			Name: filepath.ToSlash(relative),
+			Size: info.Size(),
+			Open: func() (io.ReadCloser, error) { return os.Open(filePath) },
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return combinePackageParts(files), nil
+}
+
+func combinePackageParts(files []packageFile) []packageFile {
+	regular := make([]packageFile, 0, len(files))
+	parts := map[string][]packageFile{}
+	for _, file := range files {
+		marker := strings.LastIndex(file.Name, ".part-")
+		if marker < 0 || marker+6 >= len(file.Name) || !allDigits(file.Name[marker+6:]) {
+			regular = append(regular, file)
+			continue
+		}
+		base := file.Name[:marker]
+		parts[base] = append(parts[base], file)
+	}
+	for name, chunks := range parts {
+		sort.Slice(chunks, func(left, right int) bool { return chunks[left].Name < chunks[right].Name })
+		size := int64(0)
+		openers := make([]func() (io.ReadCloser, error), 0, len(chunks))
+		for _, chunk := range chunks {
+			size += chunk.Size
+			openers = append(openers, chunk.Open)
+		}
+		partOpeners := openers
+		regular = append(regular, packageFile{Name: name, Size: size, Open: func() (io.ReadCloser, error) {
+			return &multipartReader{openers: partOpeners}, nil
+		}})
+	}
+	return regular
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func hasPathSegment(name string, segment string) bool {
+	clean := "/" + strings.Trim(name, "/") + "/"
+	return strings.Contains(clean, "/"+strings.Trim(segment, "/")+"/")
+}
+
+func hasPathSuffix(name string, suffix string) bool {
+	cleanName := "/" + strings.Trim(name, "/")
+	cleanSuffix := "/" + strings.Trim(suffix, "/")
+	return strings.HasSuffix(cleanName, cleanSuffix)
+}
+
+func selectedPreviewFiles(files []packageFile) map[string]packageFile {
+	result := map[string]packageFile{}
+	for _, file := range files {
+		if !hasPathSegment(file.Name, "previews") {
 			continue
 		}
 		name := path.Base(file.Name)
@@ -184,17 +357,17 @@ func selectedPreviewFiles(archive *zip.ReadCloser) map[string]*zip.File {
 			continue
 		}
 		id := path.Base(path.Dir(file.Name))
-		if name == "offline-preview.json" || result[id] == nil {
+		if name == "offline-preview.json" || result[id].Name == "" {
 			result[id] = file
 		}
 	}
 	return result
 }
 
-func readSummaries(archive *zip.ReadCloser) map[string]nodyTemplateSummary {
+func readSummaries(files []packageFile) map[string]nodyTemplateSummary {
 	result := map[string]nodyTemplateSummary{}
-	for _, file := range archive.File {
-		if !strings.HasSuffix(file.Name, "/metadata/template-summary.json") {
+	for _, file := range files {
+		if !hasPathSuffix(file.Name, "/metadata/template-summary.json") {
 			continue
 		}
 		var summaries []nodyTemplateSummary
@@ -209,7 +382,7 @@ func readSummaries(archive *zip.ReadCloser) map[string]nodyTemplateSummary {
 	return result
 }
 
-func readJSON(file *zip.File, target any) error {
+func readJSON(file packageFile, target any) error {
 	reader, err := file.Open()
 	if err != nil {
 		return err
@@ -280,9 +453,9 @@ func convertPreview(preview nodyPreview, mediaByName map[string]string) canvasDo
 	return canvasDocument{Schema: "yingce.canvas-template", SchemaVersion: 2, Nodes: nodes, Connections: connections}
 }
 
-func installTemplateMedia(archive *zip.ReadCloser, templateID string, dataDir string) ([]canvasTemplateMedia, map[string]string, error) {
-	entries := make([]*zip.File, 0)
-	for _, file := range archive.File {
+func installTemplateMedia(files []packageFile, templateID string, dataDir string) ([]canvasTemplateMedia, map[string]string, error) {
+	entries := make([]packageFile, 0)
+	for _, file := range files {
 		parts := strings.Split(strings.TrimSuffix(file.Name, "/"), "/")
 		assetsIndex := -1
 		for index, part := range parts {
@@ -291,7 +464,7 @@ func installTemplateMedia(archive *zip.ReadCloser, templateID string, dataDir st
 				break
 			}
 		}
-		if assetsIndex < 0 || assetsIndex+1 >= len(parts) || parts[assetsIndex+1] != templateID || len(parts) != assetsIndex+3 || file.FileInfo().IsDir() {
+		if assetsIndex < 0 || assetsIndex+1 >= len(parts) || parts[assetsIndex+1] != templateID || len(parts) != assetsIndex+3 || file.IsDir {
 			continue
 		}
 		if mediaKind(path.Ext(file.Name)) == "" {
@@ -330,7 +503,7 @@ func installTemplateMedia(archive *zip.ReadCloser, templateID string, dataDir st
 			Role:     mediaRole(name),
 			Path:     filepath.ToSlash(filepath.Join("template-media", templateID, name)),
 			MimeType: mimeType,
-			Bytes:    int64(file.UncompressedSize64),
+			Bytes:    file.Size,
 		}
 		reader, err := file.Open()
 		if err != nil {

@@ -396,7 +396,8 @@ function skillOutputModeLabel(mode?: string) {
 }
 
 function ImageNodeContent(props: CanvasNodeContentProps) {
-    if (!props.node.metadata?.content && props.isBatchRoot) {
+    const hasPreview = Boolean(props.node.metadata?.content || props.node.metadata?.templateMediaURL);
+    if (!hasPreview && props.isBatchRoot) {
         const content = props.node.metadata?.status === "loading"
             ? <LoadingContent node={props.node} theme={props.theme} />
             : props.node.metadata?.status === "error"
@@ -404,7 +405,7 @@ function ImageNodeContent(props: CanvasNodeContentProps) {
                 : <EmptyImageContent {...props} isBatchRoot={false} />;
         return <BatchFrame batchPreviewNodes={props.batchPreviewNodes} batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} theme={props.theme} onToggleBatch={props.onToggleBatch}>{content}</BatchFrame>;
     }
-    if (!props.node.metadata?.content) return <EmptyImageContent {...props} />;
+    if (!hasPreview) return <EmptyImageContent {...props} />;
     return <ImageContent batchPreviewNodes={props.batchPreviewNodes} node={props.node} theme={props.theme} isBatchRoot={props.isBatchRoot} batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch} />;
 }
 
@@ -456,7 +457,7 @@ function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest
         };
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
-    if (!node.metadata?.content) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
+    if (!node.metadata?.content && !node.metadata?.templateMediaURL) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
     if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} onPlay={() => onMediaPlayRequest?.(node.id)} />;
     if (!url) return <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />;
 
@@ -548,7 +549,7 @@ function VideoPreviewPlayButton({ title, onPlay }: { title: string; onPlay: () =
 
 function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
     const rawContent = node.metadata?.content || "";
-    const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(rawContent) : rawContent;
+    const fallback = node.metadata?.templateMediaURL || (node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(rawContent) : rawContent);
     const storageKey = node.metadata?.storageKey || "";
     const [url, setUrl] = useState("");
     const [loading, setLoading] = useState(false);
@@ -644,10 +645,10 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
     // `previewContent` is intentionally passive-only.  When a media node is
     // activated, VideoPlayer/Audio must receive the playable asset, never the
     // LibTV OSS snapshot URL stored for the thumbnail.
-    const fallback = node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio
+    const fallback = node.metadata?.templateMediaURL || (node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio
         ? content
         : node.metadata?.previewContent
-            || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
+            || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content));
     const resourceId = resourceIdFromStorageKey(storageKey);
     const isRemoteResource = Boolean(resourceId);
     // 图片内容随资源 ID 不可变且后端允许磁盘强缓存：视口内的远程图片首帧直接上直链，

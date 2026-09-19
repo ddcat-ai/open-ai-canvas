@@ -71,7 +71,7 @@ export function CanvasTemplateLibraryModal({ open, mode, onClose, onApply }: Can
 
     const allTemplates = useMemo(() => {
         const remote = (remoteQuery.data?.templates || []).flatMap((item) =>
-            item.document ? [canvasTemplateFromDocument({ id: item.id, title: item.title, description: item.description, category: item.category, tags: item.tags, source: item.source, version: item.currentVersion, document: item.document })] : [],
+            item.document ? [canvasTemplateFromDocument({ id: item.id, title: item.title, description: item.description, category: item.category, tags: item.tags, source: item.source, version: item.currentVersion, document: item.document, mediaURL: (mediaId) => canvasTemplateMediaURL(item.id, mediaId) })] : [],
         );
         return [...CANVAS_BUILTIN_TEMPLATES, ...remote];
     }, [remoteQuery.data?.templates]);

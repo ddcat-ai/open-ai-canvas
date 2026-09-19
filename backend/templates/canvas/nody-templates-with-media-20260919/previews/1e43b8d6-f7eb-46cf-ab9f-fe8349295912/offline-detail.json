@@ -1,0 +1,18 @@
+{
+  "id": "1e43b8d6-f7eb-46cf-ab9f-fe8349295912",
+  "seller_id": 2,
+  "library_key": "",
+  "title": "抖音产品广告",
+  "description": "Agent复用模板，微调提示词改产品即可",
+  "price": 0,
+  "cover_image_url": "../../assets/1e43b8d6-f7eb-46cf-ab9f-fe8349295912/010_cover_10.jpg",
+  "tags": "广告,抖音产品广告",
+  "purchase_count": 137,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-06-11T04:41:32.557Z",
+  "updated_at": "2026-09-16T09:37:34.888Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}

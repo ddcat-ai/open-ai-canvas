@@ -1,0 +1,18 @@
+{
+  "id": "5f10f75f-cd16-490d-94e3-57f049d40e94",
+  "seller_id": 2,
+  "library_key": "",
+  "title": "电商口播",
+  "description": "一键口播，换产品图，微调提示词，最后剪辑即可",
+  "price": 0,
+  "cover_image_url": "../../assets/5f10f75f-cd16-490d-94e3-57f049d40e94/026_cover_26.jpg",
+  "tags": "电商",
+  "purchase_count": 59,
+  "is_pinned": false,
+  "status": "published",
+  "created_at": "2026-07-22T10:37:39.411Z",
+  "updated_at": "2026-09-15T15:50:53.659Z",
+  "preview_json_url": "preview.json",
+  "has_purchased": false,
+  "is_seller": false
+}
