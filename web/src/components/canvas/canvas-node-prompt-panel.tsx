@@ -1,7 +1,7 @@
-import { Button, Dropdown, Image as AntImage, InputNumber, Modal, Popover, type MenuProps } from "antd";
+import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, Grid3x3, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Palette, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Palette, Pencil, SlidersHorizontal, Sparkles, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -18,13 +18,13 @@ import { useUserStore } from "@/stores/use-user-store";
 import { CanvasCameraControlPopover } from "./canvas-camera-control-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
-import { CanvasResourceMentionTextarea, TOOL_ICON_MAP } from "./canvas-resource-mention-textarea";
+import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
+import { CanvasNineGridPicker } from "./canvas-nine-grid-picker";
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasPromptOptimizerDrawer } from "./canvas-prompt-optimizer-drawer";
-import { getNineGridMenuItems } from "./canvas-image-toolbar-tools";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
 import { autoMentionCanvasResourceReferences, buildToolMentionReference, canvasResourceMentionToken, normalizeCanvasNodeMentionTokens, overwriteSameTypeToolMention, parseToolMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
@@ -486,7 +486,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         onReplaceReference={onReplaceReference ? (oldReference, sourceNodeId) => onReplaceReference(node.id, oldReference, sourceNodeId) : undefined}
                         onReplaceReferenceFiles={onReplaceReferenceFiles ? (oldReference, files) => onReplaceReferenceFiles(node.id, oldReference, files) : undefined}
                         onChooseStyle={onChooseStyle}
-                        onChooseNineGrid={expanded ? () => setExpandedNineGridOpen(true) : () => setNineGridOpen(true)}
                         onNineGridOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen}
                         nineGridOpen={expanded ? expandedNineGridOpen : nineGridOpen}
                         nineGridIcon={activeNineGridIcon}
@@ -684,41 +683,6 @@ function referenceShelfHeading(references: CanvasResourceReference[]) {
     return `${label} · ${references.length}`;
 }
 
-function NineGridToolIcon({ iconName, className = "size-3.5 shrink-0" }: { iconName: string; className?: string }) {
-    const Icon = TOOL_ICON_MAP[iconName] ?? Grid3x3;
-    return <Icon className={className} />;
-}
-
-function buildNineGridMenuItems(onSelect: (toolId: number, label: string, icon: string) => void): MenuProps["items"] {
-    const items = getNineGridMenuItems();
-    const sections = new Map<string, typeof items>();
-    for (const tool of items) {
-        const list = sections.get(tool.section) || [];
-        list.push(tool);
-        sections.set(tool.section, list);
-    }
-    return [...sections].map(([section, entries]) => ({
-        type: "group" as const,
-        key: section,
-        label: section,
-        children: entries.map((tool) => ({
-            key: tool.id,
-            label: (
-                <div>
-                    <span className="inline-flex items-center gap-2">
-                        <NineGridToolIcon iconName={tool.toolIconName} />
-                        {tool.label}
-                    </span>
-                    {tool.description ? <div className="text-[var(--fs-tiny)] opacity-60">{tool.description}</div> : null}
-                </div>
-            ),
-            onClick: () => {
-                onSelect(tool.toolId, tool.label, tool.toolIconName);
-            },
-        })),
-    }));
-}
-
 function ConnectedReferenceShelf({
     targetNodeId,
     references,
@@ -730,7 +694,6 @@ function ConnectedReferenceShelf({
     onReplaceReference,
     onReplaceReferenceFiles,
     onChooseStyle,
-    onChooseNineGrid,
     onNineGridOpenChange,
     nineGridOpen,
     nineGridIcon = "Grid3x3",
@@ -748,7 +711,6 @@ function ConnectedReferenceShelf({
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (oldReference: CanvasResourceReference, files: File[]) => void;
     onChooseStyle?: () => void;
-    onChooseNineGrid?: () => void;
     onNineGridOpenChange?: (open: boolean) => void;
     nineGridOpen?: boolean;
     /** 当前已选九宫格工具的 lucide 图标名，无选择时回退 Grid3x3。 */
@@ -797,38 +759,13 @@ function ConnectedReferenceShelf({
                             <span className="truncate">风格</span>
                         </button>
                     ) : null}
-                    {mode === "image" && onChooseNineGrid ? (
-                        <Dropdown
+                    {mode === "image" && onNineGridItem ? (
+                        <CanvasNineGridPicker
                             open={nineGridOpen}
                             onOpenChange={onNineGridOpenChange}
-                            trigger={["click"]}
-                            menu={{ items: buildNineGridMenuItems((toolId, label, icon) => { onNineGridOpenChange?.(false); onNineGridItem?.(toolId, label, icon); }) }}
-                            popupRender={(menu) => (
-                                <div
-                                    className="canvas-node-toolbar-menu canvas-node-toolbar-menu-nine-grid"
-                                    data-canvas-no-zoom
-                                    data-canvas-wheel-scroll
-                                    onPointerDown={(event) => event.stopPropagation()}
-                                    onMouseDown={(event) => event.stopPropagation()}
-                                    onWheel={(event) => event.stopPropagation()}
-                                    onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                    <div className="canvas-node-toolbar-menu-stack">{menu}</div>
-                                </div>
-                            )}
-                        >
-                            <button
-                                type="button"
-                                className="canvas-node-fixed-chip"                               
-                                aria-expanded={nineGridOpen}
-                                aria-haspopup="menu"
-                                onClick={onChooseNineGrid}
-                                onPointerDown={(event) => event.stopPropagation()}
-                            >
-                                <NineGridToolIcon iconName={nineGridIcon} className="size-4 shrink-0" />
-                                <span className="truncate">预设</span>
-                            </button>
-                        </Dropdown>
+                            icon={nineGridIcon}
+                            onSelect={onNineGridItem}
+                        />
                     ) : null}
                     {mode === "video" && onChooseEffect ? (
                         <button
