@@ -1,16 +1,20 @@
 import { isValidElement, type ReactNode } from "react";
-import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, Sun, Upload, Scaling } from "lucide-react";
+import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Layers3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, Sun, Upload, Scaling, WandSparkles } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 import type { NodeToolbarGroup } from "@/lib/canvas/tool-registry";
 
-type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view" | "multi_camera_nine_grid" | "story_pitch_four_grid" | "character_face_three_view" | "product_three_view" | "storyboard_25_grid" | "character_three_view_generation" | "cinematic_light_correction" | "image_projection_after_3s" | "image_projection_before_5s";
+type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "annotationEdit" | "textEdit" | "maskEdit" | "removeBackground" | "layerDecomposition" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view" | "multi_camera_nine_grid" | "story_pitch_four_grid" | "character_face_three_view" | "product_three_view" | "storyboard_25_grid" | "character_three_view_generation" | "cinematic_light_correction" | "image_projection_after_3s" | "image_projection_before_5s";
 
 type ImageToolHandlers = {
     onUpload: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onAnnotate: (node: CanvasNodeData) => void;
+    onAnnotationEdit: (node: CanvasNodeData) => void;
+    onTextEdit: (node: CanvasNodeData) => void;
     onMaskEdit: (node: CanvasNodeData) => void;
+    onRemoveBackground: (node: CanvasNodeData) => void;
+    onLayerDecomposition: (node: CanvasNodeData) => void;
     onEmotion: (node: CanvasNodeData) => void;
     onPortraitTexture: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
@@ -102,6 +106,16 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         run: (node, handlers) => handlers.onAnnotate(node),
     },
     {
+        id: "annotationEdit",
+        section: "拆分与标记",
+        description: "用画笔标记区域并让模型按标记修改",
+        label: "标注编辑",
+        icon: () => <Brush className="size-3.5" />,
+        group: "process",
+        order: 45,
+        run: (node, handlers) => handlers.onAnnotationEdit(node),
+    },
+    {
         id: "maskEdit",
         label: "局部重绘",
         description: "涂抹要修改的区域，生成新图片",
@@ -109,6 +123,33 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         group: "primary",
         order: 10,
         run: (node, handlers) => handlers.onMaskEdit(node),
+    },
+    {
+        id: "textEdit",
+        label: "文字编辑",
+        description: "识别图片中的文字并逐行修改",
+        icon: () => <FileText className="size-3.5" />,
+        group: "primary",
+        order: 15,
+        run: (node, handlers) => handlers.onTextEdit(node),
+    },
+    {
+        id: "removeBackground",
+        label: "去除背景",
+        description: "保留主体并生成透明背景图片",
+        icon: () => <WandSparkles className="size-3.5" />,
+        group: "process",
+        order: 50,
+        run: (node, handlers) => handlers.onRemoveBackground(node),
+    },
+    {
+        id: "layerDecomposition",
+        label: "AI 图层拆分",
+        description: "识别并拆分为多个可独立编辑的图片图层",
+        icon: () => <Layers3 className="size-3.5" />,
+        group: "process",
+        order: 55,
+        run: (node, handlers) => handlers.onLayerDecomposition(node),
     },
     {
         id: "emotion",

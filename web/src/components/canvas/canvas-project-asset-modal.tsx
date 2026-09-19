@@ -66,7 +66,7 @@ export function CanvasProjectAssetModal({
                     mediaKind,
                     asset: media,
                     imageUrl: coverRepresentation ? resourceFileUrl(coverRepresentation.resourceId) : project?.mediaType === "image" && remoteResourceId ? resourceFileUrl(remoteResourceId) : undefined,
-                    imageStorageKey: coverRepresentation ? `resource:${coverRepresentation.resourceId}` : undefined,
+                    imageStorageKey: coverRepresentation ? `resource:${coverRepresentation.resourceId}` : remoteResourceId ? `resource:${remoteResourceId}` : undefined,
                     imageFit: character ? "contain" : "cover",
                     description: character ? `${character.character?.visualStatus === "ready" ? "形象就绪" : "形象待完善"} · ${character.character?.voiceStatus === "ready" ? "声音已绑定" : "声音未绑定"}` : project?.previewText,
                     searchText: [media?.tags?.join(" ") || "", project?.previewText || ""].join(" "),

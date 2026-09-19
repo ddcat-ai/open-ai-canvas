@@ -99,7 +99,7 @@ export default function LogsPage() {
                 ),
         },
         { title: "耗时", dataIndex: "durationMs", width: 112, render: (value) => <span className="tabular-nums">{formatDuration(value)}</span> },
-        { title: "积分计费", width: 145, render: (_, log) => <BillingSummary log={log} /> },
+        { title: "积分计算", width: 195, render: (_, log) => <BillingSummary log={log} /> },
         {
             title: "Tokens",
             width: 166,
@@ -269,7 +269,8 @@ function BillingSummary({ log }: { log: ApiCallLog }) {
     const statusLabel = ({ settled: "已结算", refunded: "已退回", uncertain: "待核对", running: "运行中", reserved: "已预授权" } as const)[status];
     return (
         <div>
-            <div className="tabular-nums">{formatCredits(log.billingAmountMicrocredits)} 积分</div>
+            <div className="tabular-nums">销售价格：{formatCredits(log.billingAmountMicrocredits)} 积分</div>
+            <div className="tabular-nums text-xs text-foreground/60">成本价格：{log.creditCostMicrocredits !== undefined ? `${formatCredits(log.creditCostMicrocredits)} 积分` : log.creditCostConfigured ? "待核算" : "未配置"}</div>
             <div className="text-xs text-foreground/40">{statusLabel}</div>
         </div>
     );

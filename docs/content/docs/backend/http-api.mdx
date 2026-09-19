@@ -9,6 +9,41 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 站点皮肤主按钮
+
+`GET /public/appearance` 返回当前 `activeSkin`；管理员通过 `GET/PUT /admin/settings/appearance` 读取、保存完整主题库。外观合同版本 8 新增 `tokens.buttons.light/dark`，字段为 `mode`（`solid|gradient`）、整数 `angle`（0–360）、HEX 色值 `start/end`、`hoverStart/hoverEnd`、`activeStart/activeEnd`、`foreground`。纯色模式使用既有主操作颜色，渐变仅用于主按钮。非法模式、角度、色值或修改锁定经典主题均拒绝保存；整块缺失的旧配置按主题身份补齐。此变更不增加数据表迁移。
+
+## 模型规格报价
+
+`GET /model-catalog` 固定返回 `source=system`，直接查询所有启用系统渠道下的渠道模型，目录数据在 `channels[].models[]`，`models` 固定为空数组。不受逻辑模型开关影响，不反查逻辑模型或供应线路。每项的 `modelKey` 是调用标识，`displayName` 是模型展示名，`icon` 是模型图标键，`channelLabel` 是可选的渠道展示名（默认空字符串）。后台渠道模型创建与更新请求使用相同的 `channelLabel` 字段；服务端去除首尾空白并限制为 80 字，空字符串表示使用所属渠道名称。
+
+渠道模型创建、更新、管理列表、公开目录和会话模型价格信息均使用 `description` 表达模型描述。服务端去除首尾空白后限制为 500 字，允许空字符串清除描述；无管理员权限或超长内容拒绝保存。创作端二级选项在悬浮、聚焦或选中时展示该字段，长内容可悬浮查看完整文本；未填写的系统模型不按名称生成宣传文案。描述区域保留固定行高，悬浮不改变菜单项尺寸。
+
+创作端跨渠道按模型 `displayName` 分组为一级菜单，二级菜单使用每条模型的 `channelLabel`，例如 `MiniMax H3 → 秘塔（满血渠道）`。选中值继续使用 `channelId::modelKey`，报价和生成请求保留该渠道身份。展示字段不参与路由、权限及计费。系统渠道的“前台名称/前台显示别名”已移除，管理 API 不再接受或返回 `publicAlias`。
+
+同一产品在不同渠道中使用相同的模型展示名即可归组，`modelKey` 可以不同；相同 `modelKey` 但展示名不同会分为不同组。一级顺序与图标按后台渠道和模型排序首次出现的位置确定，二级保持后台渠道与模型顺序。即使二级展示名相同，也保留独立选项及各自能力、价格，不自动改写历史配置或交换两个展示字段。
+
+以下接口需要登录 Cookie，返回 `data.quote`，仅校验和报价，不创建任务、账单或冻结余额，不调用供应商生成接口。
+
+| 接口 | 请求 |
+| --- | --- |
+| `POST /model-catalog/quote` | `{ channelId, modelKey, intent }`，仅允许启用的系统渠道与可用模型，复用任务准入、默认参数和价格档选择 |
+| `POST /models/:id/quote` | 直接提交 `intent`，按前台逻辑模型当前可用线路和价格策略报价 |
+
+`intent` 包含 `capability`（`text/image/video/audio`）、`operation`、`inputs`（素材类型到数量的映射）和 `options`（请求规格）。素材数量必须为 0–128 的整数，再按模型能力限制校验。视频规格包括 `vquality`、`size`、`videoSeconds`、布尔值 `videoGenerateAudio`，显式 `false` 必须保留。
+
+报价包含 `logicalModelId`（系统渠道直连为空）、`billingMode`、`quantity`、`amountMicrocredits`、`estimated`。视频 Token 报价另有 `videoTokenEstimate`：`formulaTokens`、`reservedTokens`、`outputWidth`、`outputHeight`、`framesPerSecond`、`outputSeconds`、`referenceSeconds`、`referenceDurationEstimated`、`dimensionsEstimated`、`reservationMarginPercent`。
+
+Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考素材数量不包含时长信息，带参考视频时统一按 15 秒估算并返回 `referenceDurationEstimated: true`。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
+
+## 管理员积分成本
+
+`GET/POST /admin/channels/:id/models` 与 `PATCH /admin/channels/:id/models/:modelId` 的 `priceTiers[]` 增加 `costPricing`：`configured`、`unitPriceMicrocredits`、`inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`。成本沿用该价格档的计费方式；按次/秒使用单位价，文本 Token 按输入/输出/缓存分别定价，视频 Token 只使用输出价。价格为整数微积分，范围为 0 到 1000000000000；`configured=false` 表示未配置，`true` 且价格为 0 表示显式零成本。
+
+成本保存到下单时的内部账单快照，不受售价倍率或扣费上限影响，后续改价不重算旧订单。历史逻辑模型任务切换备用线路时，成本更新为实际执行线路的快照，独立于用户售价策略。管理员请求列表、详情与 CSV 同时展示销售金额及成本金额；JSON 增加 `creditCostConfigured` 和可选 `creditCostMicrocredits`。成功结算后按实际计费数量、Token 用量或视频公式快照核算；未结算、已退回、历史无快照或缺少有效用量时不编造成本金额。
+
+成本字段仅通过经过管理员权限校验的接口显式返回；普通用户的模型目录、会话模型信息、报价、任务与账单 JSON 均不包含成本配置、成本快照或成本金额。底层价格档和账单成本字段禁止 JSON 序列化，不以页面隐藏代替接口隔离。
+
 ## 画布保存、历史与恢复
 
 画布内容使用数据库递增的 `revision` 做乐观并发校验；`updatedAt` 仅用于展示，不作为版本依据。新建 `PUT /canvas-projects/:id` 的 `project.revision` 为 0，已有画布必须带上读取到的版本。数据库在同一次条件更新中匹配 ID、用户与版本，成功后返回 `data.project` 摘要及递增后的版本；缺失版本返回 428，陈旧版本返回 409，非法版本返回 400。客户端不能获取新版号后直接重发旧内容。

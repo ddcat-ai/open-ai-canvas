@@ -68,6 +68,8 @@ type (
 	AnnouncementPage                       = app.AnnouncementPage
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
+	AppearanceSkinButtonFill               = app.AppearanceSkinButtonFill
+	AppearanceSkinButtons                  = app.AppearanceSkinButtons
 	AppearanceSkinComponentTokens          = app.AppearanceSkinComponentTokens
 	AppearanceSkinModeTokens               = app.AppearanceSkinModeTokens
 	AppearanceSkinTheme                    = app.AppearanceSkinTheme
@@ -96,6 +98,7 @@ type (
 	ChannelModelCatalogOptions             = app.ChannelModelCatalogOptions
 	ChannelModelPriceTierRequest           = app.ChannelModelPriceTierRequest
 	ChannelModelRequest                    = app.ChannelModelRequest
+	ChannelModelQuoteRequest               = app.ChannelModelQuoteRequest
 	ChannelModelSortRequest                = app.ChannelModelSortRequest
 	ChannelModelsRequest                   = app.ChannelModelsRequest
 	ChannelOrderItem                       = app.ChannelOrderItem

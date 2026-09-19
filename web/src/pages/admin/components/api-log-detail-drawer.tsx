@@ -103,7 +103,8 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
                 <span className="text-foreground/35">未返回</span>
             ),
         ],
-        ["积分计费", billingText(log)],
+        ["销售价格（积分）", billingText(log)],
+        ["成本价格（积分）", log.creditCostMicrocredits !== undefined ? `${formatCredits(log.creditCostMicrocredits)} 积分` : log.creditCostConfigured ? "待核算" : "未配置"],
         ["上游成本", log.costAvailable ? <span className="font-mono tabular-nums">{log.currency || "USD"} {(log.estimatedCostMicros / 1_000_000).toFixed(6)}</span> : <span className="text-foreground/35">未配置成本</span>],
         [
             "错误信息",

@@ -1,6 +1,7 @@
 import { App, Button, Input, Select } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
+import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
 import type { ColumnsType } from "antd/es/table";
 import { CloudUpload, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -347,6 +348,13 @@ function PluginBrandIcon({ pluginId }: { pluginId: string }) {
         return (
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#1677ff]/10 text-[#1677ff]">
                 <AlipayCircleFilled className="text-lg" aria-hidden />
+            </span>
+        );
+    }
+    if (pluginId === "official-payment-zhifufm") {
+        return (
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg overflow-hidden border border-border/40 bg-card shadow-xs">
+                <img src={ZHIFUFM_LOGO_SRC} alt="支付FM" className="size-full object-contain select-none pointer-events-none rounded-lg" />
             </span>
         );
     }

@@ -457,9 +457,7 @@ export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
     const epoch = sessionEpoch;
     const projectIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
     if (!projectIds.length) return;
-    if (incrementalSession) {
-        for (const id of projectIds) await loadCanvasProjectForEditing(id);
-    }
+    // 删除只依赖画布 ID，跳过编辑加载，避免关联素材的合同校验阻塞删除。
     await withRemoteUserDataSyncExclusive(async () => {
         if (epoch !== sessionEpoch) throw new Error("账号已切换，请重新选择要删除的画布");
         if (activeRemoteUserId) requireRemoteUserDataBaseline();

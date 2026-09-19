@@ -848,7 +848,11 @@ func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, requ
 		return RequestSpec{}, fmt.Errorf("evaluate request path: %w", err)
 	}
 	path := strings.ReplaceAll(manifestString(evaluatedPath), "{{taskId}}", url.PathEscape(taskID))
-	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
+	// Model identifiers from async aggregators commonly contain path segments
+	// (for example openai/gpt-image/edit). Escape each segment while preserving
+	// the provider's intentional slash separators in the manifest path.
+	escapedModel := strings.ReplaceAll(url.PathEscape(request.Model), "%2F", "/")
+	path = strings.ReplaceAll(path, "{{model}}", escapedModel)
 	path = interpolateManifestString(path, env)
 	if !isRelativePath(path) {
 		return RequestSpec{}, fmt.Errorf("evaluated request path must be relative: %q", path)

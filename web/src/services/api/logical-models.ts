@@ -132,9 +132,28 @@ export type LogicalModelQuote = {
     quantity: number;
     amountMicrocredits: number;
     estimated: boolean;
+    videoTokenEstimate?: {
+        formulaTokens: number;
+        reservedTokens: number;
+        outputWidth: number;
+        outputHeight: number;
+        framesPerSecond: number;
+        outputSeconds: number;
+        referenceSeconds: number;
+        referenceDurationEstimated: boolean;
+        dimensionsEstimated: boolean;
+        reservationMarginPercent: number;
+    };
 };
 
-export type ModelCatalogSource = "frontend" | "system";
+export type ModelQuoteRequest = {
+    logicalModelID?: string;
+    channelId?: string;
+    modelKey?: string;
+    intent: ModelRequestIntent;
+};
+
+export type ModelCatalogSource = "system";
 
 export type PublicChannelCatalog = {
     id: string;
@@ -148,6 +167,8 @@ export type PublicChannelModel = {
     id: string;
     modelKey: string;
     displayName: string;
+    channelLabel?: string;
+    description?: string;
     sortOrder?: number;
     icon: string;
     capability: string;
@@ -178,13 +199,19 @@ export type ModelCatalogResponse = {
     channels?: PublicChannelCatalog[];
 };
 
-// 统一模型目录接口 - 根据 frontendModelsEnabled 开关返回前台模型或系统渠道模型
+// 创作目录直接读取系统渠道模型，不使用逻辑模型及其功能开关。
 export function getModelCatalog() {
     return http.get<ModelCatalogResponse>("/model-catalog");
 }
 
 export function quoteLogicalModel(id: string, intent: ModelRequestIntent, signal?: AbortSignal) {
     return http.post<{ quote: LogicalModelQuote }>(`/models/${encodeURIComponent(id)}/quote`, intent, { signal });
+}
+
+export function quoteModel(request: ModelQuoteRequest, signal?: AbortSignal) {
+    if (request.logicalModelID) return quoteLogicalModel(request.logicalModelID, request.intent, signal);
+    if (!request.channelId || !request.modelKey) return Promise.reject(new Error("请选择需要报价的系统模型"));
+    return http.post<{ quote: LogicalModelQuote }>("/model-catalog/quote", { channelId: request.channelId, modelKey: request.modelKey, intent: request.intent }, { signal });
 }
 
 export function listAdminLogicalModels() {

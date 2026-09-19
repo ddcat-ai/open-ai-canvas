@@ -4,7 +4,7 @@ import { apiClient } from "../src/services/api/request";
 import { canvasContentHash } from "../src/lib/canvas/canvas-content";
 import { rebaseCanvasProjects, parseCanvasStorageDocument } from "../src/lib/canvas/canvas-storage-revision";
 import { readCanvasSyncDrafts } from "../src/services/canvas-sync-drafts";
-import { applyAgentCanvasPatches, refreshCanvasAfterAgent, initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
+import { applyAgentCanvasPatches, deleteCanvasProjectsWithRemoteSync, refreshCanvasAfterAgent, initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
 import { createAgentCanvasSync } from "../src/services/agent-canvas-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { flushAssetStorePersistence, useAssetStore } from "../src/stores/use-asset-store";
@@ -22,6 +22,7 @@ let autoSave: (() => void) | undefined;
 let remote = new Map<string, CanvasProject>();
 let requests: Array<{ method: string; id: string; project?: CanvasProject }> = [];
 let beforePut: (() => Promise<void>) | undefined;
+let deleteFailureId: string | undefined;
 
 function canvas(id = "canvas"): CanvasProject {
     return {
@@ -52,6 +53,7 @@ beforeEach(async () => {
     requests = [];
     autoSave = undefined;
     beforePut = undefined;
+    deleteFailureId = undefined;
     remote = new Map([
         ["canvas", canvas()],
         ["other", canvas("other")],
@@ -82,7 +84,19 @@ beforeEach(async () => {
         let data: unknown;
         let status = 200;
         if (id === "snapshot") data = { projects: structuredClone([...remote.values()]), assets: [] };
-        else if (id === "restore" && method === "post") {
+        else if (method === "delete") {
+            if (id === deleteFailureId) status = 403;
+            else {
+                remote.delete(id);
+                data = { id };
+            }
+        } else if (id === "batch" && method === "post") {
+            data = { assets: [{
+                id: "invalid-mime-asset", kind: "image", title: "历史素材", coverUrl: "", tags: [],
+                createdAt: "2026-09-01", updatedAt: "2026-09-01",
+                data: { dataUrl: "https://example.com/image.png", width: 100, height: 100, bytes: 1, mimeType: "image/*" },
+            }] };
+        } else if (id === "restore" && method === "post") {
             const current = remote.get("canvas")!;
             if (body.revision !== current.revision) status = 409;
             else {
@@ -117,6 +131,39 @@ afterEach(async () => {
     localforage.setItem = originalSet;
     if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
     else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+});
+
+test("deletion skips editing and invalid MIME assets, including an uncached canvas", async () => {
+    const project = canvas();
+    project.nodes[0].metadata = { assetId: "invalid-mime-asset" };
+    remote.set(project.id, project);
+    await initializeRemoteUserDataSession(scope);
+    await expect(loadCanvasProjectForEditing(project.id)).rejects.toThrow("具体 MIME");
+    useCanvasStore.getState().deleteProjects(["other"]);
+    await flushCanvasStorePersistence();
+    requests = [];
+
+    await deleteCanvasProjectsWithRemoteSync([" canvas ", "canvas", "other"]);
+
+    expect(requests.map(({ method, id }) => ({ method, id }))).toEqual([
+        { method: "delete", id: "canvas" }, { method: "delete", id: "other" },
+    ]);
+    expect(remote.size).toBe(0);
+    expect(useCanvasStore.getState().projects).toEqual([]);
+    await useCanvasStore.persist.rehydrate();
+    expect(useCanvasStore.getState().projects).toEqual([]);
+});
+
+test("batch deletion retains failed canvases and persists successful deletions", async () => {
+    await initializeRemoteUserDataSession(scope);
+    deleteFailureId = "other";
+
+    await expect(deleteCanvasProjectsWithRemoteSync(["canvas", "other"])).rejects.toThrow();
+
+    expect([...remote.keys()]).toEqual(["other"]);
+    expect(useCanvasStore.getState().projects.map((project) => project.id)).toEqual(["other"]);
+    await useCanvasStore.persist.rehydrate();
+    expect(useCanvasStore.getState().projects.map((project) => project.id)).toEqual(["other"]);
 });
 
 test("stale viewport, no-op restore and open do not submit old content", async () => {

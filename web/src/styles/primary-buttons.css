@@ -1,0 +1,14 @@
+/* AntD accepts solid color tokens; button fills also support validated gradients. */
+:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)) {
+    background: var(--button-primary-bg) !important;
+    border-color: transparent !important;
+    color: var(--button-primary-fg) !important;
+}
+
+:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)):hover {
+    background: var(--button-primary-hover-bg) !important;
+}
+
+:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)):active {
+    background: var(--button-primary-active-bg) !important;
+}

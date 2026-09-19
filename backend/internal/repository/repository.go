@@ -708,7 +708,7 @@ func (r *Repository) AdminSystemChannels(keyword string, status string, limit in
 	query := r.db.Model(&model.ModelChannel{}).Where("scope = ?", model.ChannelScopeSystem)
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(name) LIKE ? OR lower(public_alias) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern, pattern)
+		query = query.Where("lower(name) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern)
 	}
 	if status == "enabled" {
 		query = query.Where("enabled = ?", true)

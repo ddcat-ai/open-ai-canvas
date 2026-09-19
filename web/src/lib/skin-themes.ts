@@ -1,6 +1,32 @@
 export type SkinThemeMode = "light" | "dark";
 export type SkinShadowStyle = "none" | "soft" | "strong";
 
+export type SkinButtonFill = {
+    mode: "solid" | "gradient";
+    angle: number;
+    start: string;
+    end: string;
+    hoverStart: string;
+    hoverEnd: string;
+    activeStart: string;
+    activeEnd: string;
+    foreground: string;
+};
+
+export const DEFAULT_BUTTON_GRADIENT: SkinButtonFill = {
+    mode: "gradient", angle: 115,
+    start: "#6554df", end: "#386fbc",
+    hoverStart: "#5744cf", hoverEnd: "#356bbb",
+    activeStart: "#4938b8", activeEnd: "#2c5da5", foreground: "#ffffff",
+};
+
+export const SKIN_BUTTON_COLOR_FIELDS = [
+    { key: "start", label: "渐变起色" }, { key: "end", label: "渐变终色" },
+    { key: "hoverStart", label: "悬停起色" }, { key: "hoverEnd", label: "悬停终色" },
+    { key: "activeStart", label: "按下起色" }, { key: "activeEnd", label: "按下终色" },
+    { key: "foreground", label: "渐变按钮文字" },
+] as const;
+
 export type SkinModeTokens = {
     canvas: string;
     surface: string;
@@ -78,6 +104,7 @@ export type SkinTokens = {
     light: SkinModeTokens;
     dark: SkinModeTokens;
     components: SkinComponentTokens;
+    buttons: Record<SkinThemeMode, SkinButtonFill>;
 };
 
 export type SkinDefinition = {
@@ -197,7 +224,7 @@ export const SKIN_COLOR_GROUPS: readonly SkinColorGroup[] = [
             { key: "switchUnchecked", label: "开关关闭", help: "Switch 关闭轨道" },
             { key: "switchUncheckedHover", label: "关闭悬停", help: "关闭状态 hover 轨道" },
             { key: "switchUncheckedHandle", label: "关闭滑块", help: "关闭状态圆形滑块" },
-            { key: "primary", label: "主操作", help: "主要按钮、链接和开关" },
+            { key: "primary", label: "主操作", help: "纯色主按钮与链接；开关使用独立颜色" },
             { key: "primaryHover", label: "主操作悬停", help: "主要操作 hover" },
             { key: "primaryActive", label: "主操作按下", help: "主要操作 active" },
             { key: "primaryForeground", label: "主操作前景", help: "主按钮上的文字和图标" },
@@ -371,6 +398,7 @@ export const DEFAULT_CLASSIC_SKIN: SkinDefinition = {
             authAccent: "#93c5fd",
             authMuted: "#8a8b91",
         },
+        buttons: { light: { ...DEFAULT_BUTTON_GRADIENT }, dark: { ...DEFAULT_BUTTON_GRADIENT } },
         components: {
             buttonRadius: 6,
             inputRadius: 6,
@@ -395,6 +423,7 @@ export const DEFAULT_CLASSIC_SKIN: SkinDefinition = {
 
 const HEX_COLOR = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
 const MANAGED_VARIABLES = [
+    "--button-primary-bg", "--button-primary-hover-bg", "--button-primary-active-bg", "--button-primary-fg",
     "--background",
     "--foreground",
     "--card",
@@ -504,7 +533,10 @@ export function normalizeSkinDefinition(value: unknown, fallback: SkinDefinition
         name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 40) : fallback.name,
         description: typeof candidate.description === "string" ? candidate.description.trim().slice(0, 100) : fallback.description,
         locked: id === "classic",
-        tokens: { light, dark, components: { ...modes.components } },
+        tokens: { light, dark, components: { ...modes.components }, buttons: {
+            light: normalizeButtonFill(modes.buttons?.light, id),
+            dark: normalizeButtonFill(modes.buttons?.dark, id),
+        } },
     };
 }
 
@@ -662,7 +694,35 @@ export function applySkinTheme(skinValue: unknown, mode: SkinThemeMode, targetDo
         const values = skinCSSVariables(skin, mode);
         for (const [property, value] of Object.entries(values)) root.style.setProperty(property, value);
     }
+    for (const [property, value] of Object.entries(skinButtonCSSVariables(skin, mode))) root.style.setProperty(property, value);
     root.dataset.skin = skin.id;
+}
+
+export function isSkinButtonFill(value: unknown): value is SkinButtonFill {
+    if (!value || typeof value !== "object") return false;
+    const fill = value as SkinButtonFill;
+    return ["solid", "gradient"].includes(fill.mode) && Number.isInteger(fill.angle) && fill.angle >= 0 && fill.angle <= 360
+        && SKIN_BUTTON_COLOR_FIELDS.every(({ key }) => typeof fill[key] === "string" && HEX_COLOR.test(fill[key]));
+}
+
+function normalizeButtonFill(value: unknown, skinID: string): SkinButtonFill {
+    return isSkinButtonFill(value) ? { ...value } : { ...DEFAULT_BUTTON_GRADIENT, mode: skinID === "classic" ? "gradient" : "solid" };
+}
+
+export function getSkinButtonAppearance(skin: SkinDefinition, mode: SkinThemeMode) {
+    const fill = normalizeButtonFill(skin.tokens.buttons?.[mode], skin.id);
+    const color = skin.tokens[mode];
+    const gradient = (start: string, end: string) => `linear-gradient(${fill.angle}deg, ${start}, ${end})`;
+    return fill.mode === "gradient" ? {
+        background: gradient(fill.start, fill.end), hover: gradient(fill.hoverStart, fill.hoverEnd),
+        active: gradient(fill.activeStart, fill.activeEnd), foreground: fill.foreground,
+    } : { background: color.primary, hover: color.primaryHover, active: color.primaryActive, foreground: color.primaryForeground };
+}
+
+function skinButtonCSSVariables(skin: SkinDefinition, mode: SkinThemeMode) {
+    const button = getSkinButtonAppearance(skin, mode);
+    return { "--button-primary-bg": button.background, "--button-primary-hover-bg": button.hover,
+        "--button-primary-active-bg": button.active, "--button-primary-fg": button.foreground };
 }
 
 export function skinCSSVariables(skin: SkinDefinition, mode: SkinThemeMode): Record<string, string> {
@@ -777,7 +837,8 @@ function skinShadowVariables(style: SkinShadowStyle, mode: SkinThemeMode) {
 }
 
 function cloneSkinTokens(tokens: SkinTokens): SkinTokens {
-    return { light: { ...tokens.light }, dark: { ...tokens.dark }, components: { ...tokens.components } };
+    return { light: { ...tokens.light }, dark: { ...tokens.dark }, components: { ...tokens.components },
+        buttons: { light: { ...tokens.buttons.light }, dark: { ...tokens.buttons.dark } } };
 }
 
 function isSkinMode(value: unknown): value is SkinModeTokens {

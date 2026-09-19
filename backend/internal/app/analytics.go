@@ -285,6 +285,14 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 			if order, exists := billingOrderByID[logs[index].BillingOrderID]; exists && order.UserID == logs[index].UserID {
 				logs[index].BillingAvailable = true
 				logs[index].BillingStatus = order.Status
+				if order.ChannelID == logs[index].ChannelID {
+					logs[index].CreditCostConfigured = order.CostPricing.Configured
+					cost, costErr := billingCreditCost(order)
+					if costErr != nil {
+						return costErr
+					}
+					logs[index].CreditCostMicrocredits = cost
+				}
 				if order.Status == model.BillingStatusSettled {
 					logs[index].BillingAmount = order.ActualAmountMicrocredits
 				} else if order.Status != model.BillingStatusRefunded {
@@ -403,7 +411,7 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	var buffer bytes.Buffer
 	buffer.WriteString("\xEF\xBB\xBF")
 	writer := csv.NewWriter(&buffer)
-	_ = writer.Write([]string{"时间", "用户", "用户账号", "渠道", "模型", "能力", "状态", "轮询次数", "耗时毫秒", "输入Token", "输出Token", "缓存Token", "积分计费(微积分)", "积分计费状态", "上游估算费用(微单位)", "币种", "错误码", "错误"})
+	_ = writer.Write([]string{"时间", "用户", "用户账号", "渠道", "模型", "能力", "状态", "轮询次数", "耗时毫秒", "输入Token", "输出Token", "缓存Token", "销售价格(微积分)", "积分计费状态", "成本价格(微积分)", "上游估算费用(微单位)", "币种", "错误码", "错误"})
 	for _, log := range logs {
 		startedAt := log.StartedAt
 		if startedAt.IsZero() {
@@ -415,10 +423,14 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 			billingStatus = string(log.BillingStatus)
 		}
 		upstreamCost := ""
+		creditCost := ""
+		if log.CreditCostMicrocredits != nil {
+			creditCost = strconv.FormatInt(*log.CreditCostMicrocredits, 10)
+		}
 		if log.CostAvailable {
 			upstreamCost = strconv.FormatInt(log.EstimatedCostMicros, 10)
 		}
-		_ = writer.Write([]string{startedAt.UTC().Format(time.RFC3339), log.UserDisplayName, log.UserAccount, log.ChannelName, log.Model, log.Capability, string(log.Status), strconv.Itoa(log.PollCount), strconv.FormatInt(log.DurationMs, 10), strconv.FormatInt(log.InputTokens, 10), strconv.FormatInt(log.OutputTokens, 10), strconv.FormatInt(log.CachedTokens, 10), billingAmount, billingStatus, upstreamCost, log.Currency, log.ErrorCode, log.Error})
+		_ = writer.Write([]string{startedAt.UTC().Format(time.RFC3339), log.UserDisplayName, log.UserAccount, log.ChannelName, log.Model, log.Capability, string(log.Status), strconv.Itoa(log.PollCount), strconv.FormatInt(log.DurationMs, 10), strconv.FormatInt(log.InputTokens, 10), strconv.FormatInt(log.OutputTokens, 10), strconv.FormatInt(log.CachedTokens, 10), billingAmount, billingStatus, creditCost, upstreamCost, log.Currency, log.ErrorCode, log.Error})
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
@@ -1035,8 +1047,12 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 			log.Error = errorMessage
 		}
 	}
+	arkVideo := log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks")
 	usage, _ := payload["usage"].(map[string]any)
-	if usage != nil {
+	if log.Capability == "video" {
+		log.InputTokens, log.CachedTokens = 0, 0
+		log.OutputTokens, log.UsageAvailable = videoCompletionTokens(payload, arkVideo)
+	} else if usage != nil {
 		inputTokens, inputAvailable := firstInt64Value(usage, "input_tokens", "prompt_tokens")
 		outputTokens, outputAvailable := firstInt64Value(usage, "output_tokens", "completion_tokens")
 		if inputAvailable {
@@ -1048,14 +1064,6 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		if inputAvailable || outputAvailable {
 			log.UsageAvailable = true
 		}
-		// 火山方舟视频的输入 Token 恒为 0；查询任务以 completion_tokens 为实际用量，
-		// 兼容只返回 total_tokens 的同协议中转实现。
-		if log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks") {
-			if log.OutputTokens == 0 {
-				log.OutputTokens = firstInt64(usage, "total_tokens")
-			}
-			log.UsageAvailable = log.OutputTokens > 0
-		}
 		if details, ok := usage["input_tokens_details"].(map[string]any); ok {
 			log.CachedTokens = firstInt64(details, "cached_tokens", "cache_read_input_tokens")
 		}
@@ -1066,7 +1074,7 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 			log.CachedTokens = firstInt64(usage, "cached_tokens", "cache_read_input_tokens", "prompt_cache_hit_tokens")
 		}
 	}
-	if usageMetadata, ok := payload["usageMetadata"].(map[string]any); ok {
+	if usageMetadata, ok := payload["usageMetadata"].(map[string]any); ok && log.Capability != "video" {
 		inputTokens, inputAvailable := firstInt64Value(usageMetadata, "promptTokenCount")
 		outputTokens, outputAvailable := firstInt64Value(usageMetadata, "candidatesTokenCount")
 		if inputAvailable {
@@ -1101,12 +1109,40 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 	}
 }
 
+func videoCompletionTokens(payload map[string]any, arkProtocol bool) (int64, bool) {
+	if status, exists := payload["status"]; exists {
+		text, ok := status.(string)
+		status := strings.ToLower(strings.TrimSpace(text))
+		if !ok || (status != "succeeded" && (arkProtocol || (status != "completed" && status != "success"))) {
+			return 0, false
+		}
+	}
+	usage, _ := payload["usage"].(map[string]any)
+	value, exists := usage["completion_tokens"]
+	if !exists && !arkProtocol {
+		value, exists = usage["output_tokens"]
+	}
+	if !exists {
+		value = usage["total_tokens"]
+	}
+	// completion_tokens 一旦返回就是唯一结算依据，非法值不能用 total_tokens 掩盖。
+	// JSON Number 保留整数精度，避免浮点取整把小数或超出 int64 的值变成可计费用量。
+	number, ok := value.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	tokens, err := number.Int64()
+	if err != nil || tokens <= 0 {
+		return 0, false
+	}
+	return tokens, true
+}
+
 func providerResponsePayloads(responseBody []byte) []map[string]any {
 	if len(responseBody) == 0 {
 		return nil
 	}
-	var payload map[string]any
-	if json.Unmarshal(responseBody, &payload) == nil {
+	if payload, ok := decodeProviderResponsePayload(responseBody); ok {
 		return []map[string]any{payload}
 	}
 
@@ -1121,8 +1157,7 @@ func providerResponsePayloads(responseBody []byte) []map[string]any {
 		if raw == "" || raw == "[DONE]" {
 			return
 		}
-		var event map[string]any
-		if json.Unmarshal([]byte(raw), &event) == nil {
+		if event, ok := decodeProviderResponsePayload([]byte(raw)); ok {
 			result = append(result, event)
 		}
 	}
@@ -1138,6 +1173,17 @@ func providerResponsePayloads(responseBody []byte) []map[string]any {
 	}
 	flush()
 	return result
+}
+
+func decodeProviderResponsePayload(data []byte) (map[string]any, bool) {
+	if !json.Valid(data) {
+		return nil, false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var payload map[string]any
+	err := decoder.Decode(&payload)
+	return payload, err == nil && payload != nil
 }
 
 func providerRequestIDFromPath(path string) string {

@@ -118,7 +118,6 @@ export function AgentChatMessage({
                         <ChevronDown className="agent-reasoning-chevron" aria-hidden="true" />
                     </summary>
                     <div className="agent-reasoning-content" data-canvas-wheel-scroll>
-                        <span className="agent-reasoning-rail" aria-hidden="true" />
                         <div className="agent-reasoning-text">{item.text || (item.streaming ? "正在整理思路…" : "暂无可展示的推理摘要")}</div>
                     </div>
                 </details>
@@ -235,7 +234,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
     return (
         <div className="flex items-start gap-3">
             <AgentTimelineMarker theme={theme} tone="approval" icon={<CircleAlert className="size-3.5" />} />
-            <div className="agent-pending-tool min-w-0 flex-1 rounded-r-lg border-l-2 py-1 pl-3 pr-1" style={{ borderColor: "#f97316", background: "rgba(249,115,22,.05)", color: theme.node.text }}>
+            <div className="agent-pending-tool min-w-0 flex-1 rounded-lg border py-2 pl-3 pr-3" style={{ borderColor: "rgba(249,115,22,.22)", background: "rgba(249,115,22,.05)", color: theme.node.text }}>
                 <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold leading-5">
@@ -539,10 +538,10 @@ export function AgentChatComposer({
         setPromptHeight(clampAgentPromptHeight(promptHeight + (event.key === "ArrowUp" ? 20 : -20)));
     };
 
-    // 在输入值末尾检测「/关键词」打开技能候选；选中后写入稳定 token，编辑器再把它渲染为技能 chip。
+    // 在输入值末尾检测「/ 或 、+ 关键词」打开技能候选：中文输入法下 "/" 会打成 "、"，两者等价，且都必须紧跟行首或空白，避免中文顿号误触发。选中后写入稳定 token，编辑器再把它渲染为技能 chip。
     const handlePromptChange = (value: string) => {
         onPromptChange(value);
-        const match = /(^|\s)\/([^\s/]*)$/.exec(value);
+        const match = /(^|\s)[/、]([^\s/、]*)$/.exec(value);
         if (match && availableSlashSkills.length) {
             const next = { start: match.index + match[1].length, query: match[2] };
             setSlash((current) => (current && current.start === next.start && current.query === next.query ? current : next));
@@ -554,6 +553,7 @@ export function AgentChatComposer({
 
     const applySlashSkill = (skill: Skill) => {
         const token = `@[skill:${skill.skillId}] `;
+        // 触发符 "/" 与 "、" 都是单字符，替换长度固定为 1。
         const next = slash ? `${prompt.slice(0, slash.start)}${token}${prompt.slice(slash.start + 1 + slash.query.length)}` : prompt ? `${prompt.replace(/\s+$/u, "")} ${token}` : token;
         setSlash(null);
         setSlashIndex(0);
@@ -674,7 +674,7 @@ export function AgentChatComposer({
                             value={prompt}
                             references={composerReferences}
                             includeAssetLibrary={includeAssetLibrary}
-                            sendOnEnter={false}
+                            sendOnEnter={canSubmit ? "both" : false}
                             disabled={disabled}
                             onChange={handlePromptChange}
                             onSubmit={() => { if (canSubmit) onSubmit(); }}
@@ -741,7 +741,12 @@ export function AgentChatComposer({
                         {left}
                     </div>
                     <div className="agent-composer-submit flex items-center gap-2">
-                        <span className="agent-composer-send-hint">{canStop ? "运行中：发送即插话，下一步生效" : "Enter 换行 · ⌘/Ctrl+Enter 发送"}</span>
+                        {disabled ? null : (
+                            <span className="agent-composer-send-hint">
+                                <span className="agent-composer-send-hint-full">{canStop ? "运行中：发送即插话，下一步生效" : "Enter 发送 · Shift+Enter 换行"}</span>
+                                <span className="agent-composer-send-hint-compact">{canStop ? "运行中可插话" : "Enter 发送"}</span>
+                            </span>
+                        )}
                         {canStop ? <motion.button
                             type="button"
                             disabled={stopping}
@@ -761,7 +766,7 @@ export function AgentChatComposer({
                             type="button"
                             disabled={!canSubmit}
                             aria-label={sending ? "发送中" : canStop ? "插话" : "发送"}
-                            title={canStop ? "插话：Agent 下一次开口时看到它" : "点击发送；⌘/Ctrl+Enter 发送"}
+                            title={canStop ? "插话：Agent 下一次开口时看到它" : "点击发送；Enter 或 ⌘/Ctrl+Enter 发送"}
                             onClick={() => onSubmit()}
                             whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
                             whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
@@ -835,7 +840,6 @@ function AgentTimelineMarker({ theme, tone, icon }: { theme: (typeof canvasTheme
     const color = tone === "error" ? "#ef4444" : tone === "approval" ? "#f97316" : tone === "tool" ? "#4f7cff" : tone === "agent" ? theme.accent.primary : theme.node.muted;
     return (
         <span className="relative flex w-6 shrink-0 self-stretch justify-center" aria-hidden="true">
-            <span className="absolute bottom-[-20px] top-6 w-px opacity-35" style={{ background: theme.toolbar.border }} />
             <span className="relative grid size-6 place-items-center rounded-full" style={{ background: tone === "agent" ? theme.accent.primarySoft : theme.node.fill, color }}>
                 {icon || <span className="size-3 opacity-90" style={{ background: color, WebkitMask: "url(/icons/openai.svg) center / contain no-repeat", mask: "url(/icons/openai.svg) center / contain no-repeat" }} />}
             </span>

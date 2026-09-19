@@ -43,13 +43,22 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     containerClassName?: string;
     highlightLabels?: boolean;
     mentionMenuWidth?: number;
-    sendOnEnter?: boolean;
+    sendOnEnter?: boolean | "both";
     onContentSizeChange?: (height: number) => void;
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
     autoLinkEnabled?: boolean;
 };
+
+// 回车提交语义由调用方决定：false 只在 ⌘/Ctrl+Enter 提交，"both" 两种都提交；Shift+Enter 始终换行。
+function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }, sendOnEnter: boolean | "both") {
+    if (event.key !== "Enter" || event.shiftKey) return false;
+    const modifier = event.ctrlKey || event.metaKey;
+    if (sendOnEnter === false) return modifier;
+    if (sendOnEnter === "both") return true;
+    return !modifier;
+}
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
     { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, ...props },
@@ -354,7 +363,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     spellCheck={props.spellCheck}
                     tabIndex={props.tabIndex}
                     className={`${className || ""} relative z-10 cursor-text select-text whitespace-pre-wrap break-words`}
-                    style={{ ...mergedStyle, color: style?.color || theme.node.text }}
+                    style={{
+                        ...mergedStyle,
+                        color: style?.color || theme.node.text,
+                        height: "100%",
+                        minHeight: 0,
+                        maxHeight: "100%",
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                    }}
                     onInput={syncEditableValue}
                     onCompositionStart={(event) => {
                         composingRef.current = true;
@@ -429,7 +446,7 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                         }
                         if (event.key === "Enter") {
                             event.preventDefault();
-                            const shouldSubmit = sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey;
+                            const shouldSubmit = shouldSubmitOnEnter(event, sendOnEnter);
                             if (onSubmit && shouldSubmit) {
                                 onSubmit();
                                 return;
@@ -493,7 +510,7 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                 }}
                 value={value}
                 className={`${className || ""} relative z-10`}
-                style={mergedStyle}
+                style={{ ...mergedStyle, height: "100%", minHeight: 0, maxHeight: "100%", overflowY: "auto", overflowX: "hidden" }}
                 onChange={(event) => {
                     const next = event.target.value;
                     onChange(next);
@@ -543,7 +560,7 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                             return;
                         }
                     }
-                    const shouldSubmit = event.key === "Enter" && (sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey);
+                    const shouldSubmit = shouldSubmitOnEnter(event, sendOnEnter);
                     if (shouldSubmit && onSubmit) {
                         event.preventDefault();
                         onSubmit();

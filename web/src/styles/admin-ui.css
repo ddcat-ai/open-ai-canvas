@@ -9,9 +9,23 @@
     padding: 14px 16px;
 }
 
-/* Appearance management follows the same full-width settings document used by storage and access pages. */
+/* Appearance categories share one draft and command bar. */
 .admin-appearance-settings {
     padding-bottom: 24px;
+}
+
+.admin-appearance-tabs,
+.admin-appearance-tabs .ant-tabs-content-holder,
+.admin-appearance-tabs .ant-tabs-tabpane {
+    min-width: 0;
+}
+
+.admin-appearance-tabs > .ant-tabs-nav {
+    margin-bottom: var(--space-4);
+}
+
+.admin-appearance-tabs .ant-tabs-tab {
+    padding-block: var(--space-3);
 }
 
 .admin-appearance-settings .admin-settings-section {
@@ -724,7 +738,6 @@
 .admin-skin-card.is-selected {
     border-color: color-mix(in srgb, var(--workspace-accent) 76%, var(--admin-card-border));
     background: color-mix(in srgb, var(--workspace-accent) 5%, var(--admin-layer-2));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 36%, transparent);
 }
 
 .admin-skin-card-select {
@@ -9124,8 +9137,78 @@
 }
 
 .admin-model-editor-references .admin-capability-reference-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
     gap: 10px;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card,
+.admin-model-editor-modal .admin-capability-protocol-card {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading,
+.admin-model-editor-modal .admin-capability-protocol-card-heading {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    padding: 12px;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading h3,
+.admin-model-editor-modal .admin-capability-protocol-card-heading h3 {
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading p,
+.admin-model-editor-modal .admin-capability-protocol-card-heading p {
+    margin: 2px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.admin-model-editor-modal .admin-capability-reference-fields,
+.admin-model-editor-modal .admin-capability-protocol-fields {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    padding: 10px 12px 12px;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-card-heading > span {
+    display: grid;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-card-heading > div {
+    min-width: 0;
 }
 
 .admin-model-editor-references .admin-capability-reference-card {
@@ -9172,6 +9255,10 @@
 
 @media (min-width: 601px) and (max-width: 1000px) {
     .admin-model-editor-references .admin-capability-reference-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-model-editor-modal .admin-capability-protocol-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
@@ -9421,6 +9508,9 @@
         justify-content: flex-end;
     }
     .admin-model-editor-modal .admin-capability-reference-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .admin-model-editor-modal .admin-capability-protocol-grid {
         grid-template-columns: minmax(0, 1fr);
     }
     .admin-price-tier-upstream {
@@ -10853,4 +10943,3 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-banner-type-card[data-banner-type="warning"] .admin-banner-type-card-preview {
     background: var(--notice-banner-surface-warning);
 }
-

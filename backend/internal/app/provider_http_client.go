@@ -271,6 +271,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	client := OutboundHTTPClient(requestTimeout)
 	resp, err := client.Do(req)
 	if err != nil {
+		err = providerConnectionError(err)
 		if runtimeService != nil {
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, !errors.Is(err, context.Canceled))
 		}
@@ -304,6 +305,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			break
 		}
 		if readErr != nil {
+			readErr = providerConnectionError(readErr)
 			recordProviderRequest(req, startedAt, resp.StatusCode, buffered.Bytes(), readErr)
 			return nil, "", readErr
 		}
@@ -327,6 +329,13 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
 	}
 	return data, mimeType, nil
+}
+
+func providerConnectionError(err error) error {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Errorf("模型服务连接提前关闭，未收到完整结果；请先核对中转站任务和扣费记录，再决定是否重试：%w", err)
+	}
+	return err
 }
 
 func parseRetryAfter(value string, now time.Time) time.Duration {

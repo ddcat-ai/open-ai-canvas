@@ -10,6 +10,7 @@ import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
+import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import type { GenerationTask } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ConnectionHandle, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
@@ -430,7 +431,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         if (requestedIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => removedIds.add(childId));
     });
     const remainingNodes = nodes.filter((node) => !removedIds.has(node.id));
-    const nextNodes = remainingNodes.map((node) => {
+    const cleanedNodes = remainingNodes.map((node) => {
         const detached = node.parentId && removedIds.has(node.parentId) ? { ...node, parentId: undefined } : node;
         const storyboard = detached.metadata?.storyboard;
         const cleaned = storyboard
@@ -458,6 +459,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         const batchRoot = { ...cleaned, metadata: { ...cleaned.metadata, batchChildIds: childIds, primaryImageId } };
         return primaryNode ? applyBatchPrimaryImage(batchRoot, primaryNode) : batchRoot;
     });
+    const nextNodes = cleanedNodes.map((node) => reconcileImageBatchRoot(node, cleanedNodes));
     return { removedIds, nodes: nextNodes };
 }
 

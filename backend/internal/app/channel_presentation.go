@@ -1,14 +1,13 @@
 package app
 
 import (
-	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
 )
 
 func (req ChannelRequest) presentationOnly() bool {
-	return (req.PublicAlias != nil || req.SortOrder != nil) && req.Name == "" && req.BaseURL == "" && req.APIKey == "" && req.SecretKey == "" && req.ConcurrencyLimit == nil && req.UseGlobalConcurrency == nil && req.Models == nil && req.Headers == nil && req.Enabled == nil
+	return req.SortOrder != nil && req.Name == "" && req.BaseURL == "" && req.APIKey == "" && req.SecretKey == "" && req.ConcurrencyLimit == nil && req.UseGlobalConcurrency == nil && req.Models == nil && req.Headers == nil && req.Enabled == nil
 }
 
 func (s *Service) updateChannelPresentation(id string, req ChannelRequest) (*PublicModelChannel, error) {
@@ -17,14 +16,7 @@ func (s *Service) updateChannelPresentation(id string, req ChannelRequest) (*Pub
 			return nil, err
 		}
 	}
-	if req.PublicAlias != nil {
-		alias := strings.TrimSpace(*req.PublicAlias)
-		if len([]rune(alias)) > 80 {
-			return nil, BadAuthRequest("前台别名不能超过 80 字")
-		}
-		req.PublicAlias = &alias
-	}
-	if err := s.repo.UpdateSystemChannelPresentation(id, req.PublicAlias, req.SortOrder, time.Now()); err != nil {
+	if err := s.repo.UpdateSystemChannelPresentation(id, req.SortOrder, time.Now()); err != nil {
 		return nil, err
 	}
 	s.invalidateRouteCatalog()

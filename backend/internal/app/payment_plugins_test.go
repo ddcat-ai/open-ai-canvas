@@ -151,3 +151,38 @@ func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
 		t.Fatalf("xunhupay provider type = %T", provider)
 	}
 }
+
+func TestZhiFuFMOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-zhifufm" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-zhifufm is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("zhifufm plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "zhifufm-pay" {
+		t.Fatalf("zhifufm contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("zhifufm-pay")
+	if !ok {
+		t.Fatal("zhifufm-pay provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("zhifufm provider type = %T", provider)
+	}
+}

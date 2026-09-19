@@ -195,7 +195,6 @@
     top: 50%;
     left: calc(var(--admin-sidebar-width) - 11px);
     z-index: 4;
-    display: grid;
     width: 22px;
     height: 36px;
     place-items: center;

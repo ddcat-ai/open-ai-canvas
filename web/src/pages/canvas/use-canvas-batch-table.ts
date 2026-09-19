@@ -123,6 +123,8 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
             navigateToSettings({ continueCreation: true });
             return;
         }
+        const generationConfig = buildGenerationConfig(effectiveConfig, undefined, "image");
+        const imageResolution = /^(1k|2k|4k)$/i.test(generationConfig.quality) ? generationConfig.quality.toUpperCase() : "由尺寸决定";
         const activeNodeIds = new Set((sourceNode.metadata?.generationBatches || []).filter((batch) => batch.mode === "batch_image").flatMap((batch) => batch.items.filter((item) => ["waiting", "submitting", "queued", "running"].includes(item.status)).map((item) => item.nodeId)));
         const requested = requestedRowIds?.length ? new Set(requestedRowIds) : null;
         const rows = table.rows.filter((row) => {
@@ -139,7 +141,15 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
         if (!rows.length) return message.info("没有可提交的未完成任务，请检查参考图和提示词");
         const confirmed = await new Promise<boolean>((resolve) => modal.confirm({
             title: `确认提交 ${rows.length} 个批量图片任务`,
-            content: `模型：${modelDisplayName(effectiveConfig, imageModel)}；并发上限：${table.concurrency}。这些任务可能消耗积分或产生外部模型费用。`,
+            content: [
+                `模型：${modelDisplayName(effectiveConfig, generationConfig.model) || generationConfig.model}`,
+                `出图数量：${rows.length} 张（每行 1 张）`,
+                `尺寸：${generationConfig.size || "默认"}`,
+                `质量：${generationConfig.quality || "默认"}`,
+                `分辨率：${imageResolution}`,
+                `并发：${table.concurrency}`,
+                "这些任务可能消耗积分或产生外部模型费用。",
+            ].join("\n"),
             okText: "确认生成",
             cancelText: "取消",
             centered: true,
@@ -160,7 +170,11 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
                 ...(existingIndex >= 0 ? resetGenerationTaskMetadata(nextNodes[existingIndex].metadata) : {}),
                 prompt,
                 composerContent: prompt,
-                model: buildGenerationConfig(effectiveConfig, undefined, "image").model,
+                model: generationConfig.model,
+                size: generationConfig.size,
+                quality: generationConfig.quality,
+                transparentBackground: generationConfig.transparentBackground,
+                count: 1,
                 generationMode: "image" as const,
                 generationType: "edit" as const,
                 workflowKind: "final" as const,

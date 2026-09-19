@@ -31,7 +31,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 7
+	appearanceSchemaVersion        = 8
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -346,6 +346,9 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 		return nil, AppearanceSetting{}, err
 	}
 	value := defaultAppearanceSetting()
+	// Decode stored themes without reusing built-in slice entries: omitted
+	// fields must be migrated according to each stored theme's identity.
+	value.SkinThemes = nil
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, AppearanceSetting{}, errors.New("外观配置格式无效")
 	}

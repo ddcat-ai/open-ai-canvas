@@ -46,7 +46,6 @@ const NODE_STATUS_SUCCESS = "success" as const;
 const BATCH_UPLOAD_COLUMNS = 3;
 const BATCH_UPLOAD_COLUMN_GAP = 380;
 const BATCH_UPLOAD_ROW_GAP = 300;
-
 const CANVAS_BATCH_TABLE_SELECTOR = "[data-canvas-batch-table]";
 
 function isBatchTableDragEvent(event: DragEvent<HTMLElement>) {
@@ -544,11 +543,13 @@ export function useCanvasUpload({
     const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
         if (isBatchTableDragEvent(event)) {
             event.preventDefault();
+            event.stopPropagation();
             fileDragDepthRef.current = 0;
             setFileDropActive(false);
             return;
         }
         event.preventDefault();
+        event.stopPropagation();
         fileDragDepthRef.current = 0;
         setFileDropActive(false);
         const chapterPayload = parseProjectChapterPayload(event.dataTransfer.getData(CANVAS_PROJECT_CHAPTER_DND_TYPE));
@@ -590,12 +591,14 @@ export function useCanvasUpload({
     const handleFileDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
         if (isBatchTableDragEvent(event)) {
             event.preventDefault();
+            event.stopPropagation();
             fileDragDepthRef.current = 0;
             setFileDropActive(false);
             return;
         }
         if (!hasDraggedFiles(event)) return;
         event.preventDefault();
+        event.stopPropagation();
         fileDragDepthRef.current += 1;
         setFileDropActive(true);
     }, []);
@@ -603,18 +606,21 @@ export function useCanvasUpload({
     const handleFileDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
         if (isBatchTableDragEvent(event)) {
             event.preventDefault();
+            event.stopPropagation();
             fileDragDepthRef.current = 0;
             setFileDropActive(false);
             return;
         }
         if (!hasDraggedFiles(event) && !Array.from(event.dataTransfer.types).includes(CANVAS_PROJECT_CHAPTER_DND_TYPE)) return;
         event.preventDefault();
+        event.stopPropagation();
         event.dataTransfer.dropEffect = "copy";
     }, []);
 
     const handleFileDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
         if (isBatchTableDragEvent(event)) {
             event.preventDefault();
+            event.stopPropagation();
             fileDragDepthRef.current = 0;
             setFileDropActive(false);
             return;
@@ -732,6 +738,7 @@ export function useCanvasUpload({
     return {
         assetPickerOpen,
         closeAssetPicker,
+        createFileNode,
         createVideoNodeFromBlob,
         createAssetPayloadNode,
         createImageAssetNode,
@@ -752,7 +759,6 @@ export function useCanvasUpload({
         pasteAssistantImage,
         pasteSystemClipboard,
         replaceNodeMedia,
-        createFileNode,
         startUploadStatus,
         uploadModalOpen,
         uploadStatus,

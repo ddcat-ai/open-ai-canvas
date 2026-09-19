@@ -277,7 +277,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                                         {readOnly ? "输入 @ 插入参考图" : "输入 @ 插入参考图 · ⌘/Ctrl + Enter 生成此行"}
                                     </div>
                                 </div>
-                                <div className="flex justify-center">
+                                <div className="flex h-16 min-h-16 items-center justify-center">
                                     <ResultThumbnail
                                         output={output}
                                         status={status}
@@ -366,7 +366,7 @@ function ReferenceThumbnail({ node, label, theme, readOnly, rowId, columnIndex, 
                 data-batch-reference-cell
                 data-row-id={rowId}
                 data-column-index={columnIndex}
-                className="relative size-16 overflow-hidden rounded-lg border"
+                className="relative box-border grid size-16 shrink-0 place-items-center overflow-hidden rounded-lg border"
                 style={{ borderColor: filled ? theme.node.stroke : "transparent", opacity: isDraggingCell ? 0.55 : 1 }}
                 disabled={readOnly}
                 onPointerDown={onPointerDown}
@@ -382,7 +382,7 @@ function ReferenceThumbnail({ node, label, theme, readOnly, rowId, columnIndex, 
                     if (file && !readOnly) onUploadFile(file);
                 }}
             >
-                {filled ? <CachedResourceImage eager src={node.metadata?.previewContent || node.metadata?.content} storageKey={node.metadata?.storageKey} alt={node.title || "参考图"} className="size-16 object-cover" fallback={fallback} /> : fallback}
+                {filled ? <CachedResourceImage eager src={node.metadata?.previewContent || node.metadata?.content} storageKey={node.metadata?.storageKey} alt={node.title || "参考图"} className="block size-full max-h-full max-w-full object-cover" fallback={fallback} /> : fallback}
                 <span className="absolute bottom-1 left-1 rounded px-1 py-0.5 text-[8px] font-medium text-white" style={{ background: "rgba(0,0,0,.58)" }}>{label}</span>
             </button>
         </Tooltip>
@@ -399,14 +399,14 @@ function ResultThumbnail({ output, status, theme, onFocus }: { output?: CanvasNo
                 type="button"
                 aria-label={title}
                 disabled={!output}
-                className="relative size-16 overflow-hidden rounded-lg border-2"
+                className="relative box-border grid size-16 shrink-0 place-items-center overflow-hidden rounded-lg border-2"
                 style={{ borderColor: tone, cursor: output ? "pointer" : "default" }}
                 onClick={(event) => {
                     event.stopPropagation();
                     if (output) onFocus();
                 }}
             >
-                {filled && output ? <CachedResourceImage eager src={output.metadata?.previewContent || output.metadata?.content} storageKey={output.metadata?.storageKey} alt="生成结果" className="size-16 object-cover" fallback={<EmptyThumbnail theme={theme} compact />} /> : <EmptyThumbnail theme={theme} compact />}
+                {filled && output ? <CachedResourceImage eager src={output.metadata?.previewContent || output.metadata?.content} storageKey={output.metadata?.storageKey} alt="生成结果" className="block size-full max-h-full max-w-full object-cover" fallback={<EmptyThumbnail theme={theme} compact />} /> : <EmptyThumbnail theme={theme} compact />}
                 {status.loading ? <span className="absolute inset-0 grid place-items-center bg-black/35"><LoaderCircle className="size-4 animate-spin" style={{ color: tone }} /></span> : null}
                 <span className="absolute right-1 top-1 size-2 rounded-full" style={{ background: tone }} />
             </button>
@@ -422,7 +422,7 @@ function statusColor(tone: RowStatusTone, fallback: string) {
 }
 
 function EmptyThumbnail({ theme, compact = false }: { theme: CanvasTheme; compact?: boolean }): ReactNode {
-    const sizeClass = compact ? "size-12" : "size-16";
+    const sizeClass = "size-full";
     return (
         <div
             className={`grid shrink-0 place-items-center rounded-lg border border-dashed ${sizeClass}`}

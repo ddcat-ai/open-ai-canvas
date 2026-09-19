@@ -105,6 +105,7 @@
 - 第三方覆盖限定在具体组件，不新增全局 `.ant-modal-*`、`.dark .ant-switch-*`、`.ant-checkbox-*` 或 Segmented 状态补丁。新增 CSS 前先搜索同名选择器，回到唯一源规则修改。
 - 遵循 `docs/ui-design-system.md` 及项目三层 token：Primitive → Semantic → Component。inline style 优先引用 `var(--token-name)`，不要散落颜色、圆角、阴影和层级字面值。
 - 主操作、普通选中、Checkbox/Radio、Switch 是不同颜色角色；持久切换使用 `aria-pressed`，`type="primary"` 只表示当前主要命令。尊重 `prefers-reduced-motion`，键盘导航保留 `:focus-visible`。
+- 修改既有页面时直接修改真实组件、样式和路由。不得创建独立 HTML 来代替真实页面验证；只有用户明确要求原型或隔离设计稿时才可生成，并放在临时目录或用户指定位置，不得放入 `web/public/` 或产品构建目录。
 
 ## 7. 本地开发、部署和数据目录
 
@@ -124,6 +125,7 @@
 - 云端 Agent：前端事件流和审批路径依赖后端 `/api/agent` 接口；在该接口实现后补充后端冒烟、Worker 运行和 SSE 断线重连验证。
 - 文档站：`cd docs && bun run types:check` 或 `bun run build`。
 - UI 变更能浏览器验证时，检查关键路由、明暗主题、滚动、弹窗、空态和核心交互；不能验证时说明替代依据，不把静态阅读或 `git diff` 写成运行验证。
+- 验证必须针对真实实现：优先专项测试、类型检查、项目 build 或真实路由浏览器验收。独立 HTML、静态仿制页面和脱离应用状态的截图不能作为真实页面通过的证据。
 
 同类失败连续三次时停止盲试，记录现象、已排除项和新假设，再切换路径或请求用户决策。
 

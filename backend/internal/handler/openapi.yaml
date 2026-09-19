@@ -22,9 +22,132 @@ tags:
   - name: resources
   - name: tasks
   - name: assets
+  - name: models
   - name: agent
   - name: admin
 paths:
+  /model-catalog:
+    get:
+      tags: [models]
+      summary: 获取创作端模型目录
+      description: |
+        固定 source=system，channels 直接来自系统渠道下的模型列表，models 为空数组；不反查逻辑模型。
+        一级跨渠道按 displayName 分组，二级显示 channelLabel；模型请求仍使用 channelId + modelKey 定位。
+        channelLabel 是后台渠道模型创建和更新时配置的渠道展示名，去除首尾空白后最多 80 字，空字符串表示使用所属渠道名称。
+        description 是后台渠道模型创建和更新时填写的公开模型描述，去除首尾空白后最多 500 字；空字符串表示未填写。
+        displayName 和 icon 用于一级模型菜单，channelLabel 不参与路由、权限或计费。
+        渠道级 publicAlias 已废弃；成本配置和成本快照仅供管理端，不包含在本接口及用户报价中。
+      responses:
+        "200":
+          description: 当前启用的模型目录
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    enum: [0]
+                  msg:
+                    type: string
+                  data:
+                    type: object
+                    required: [source, models, channels]
+                    properties:
+                      source:
+                        type: string
+                        enum: [system]
+                      models:
+                        type: array
+                        items:
+                          type: object
+                      channels:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            displayName:
+                              type: string
+                            models:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  modelKey:
+                                    type: string
+                                  displayName:
+                                    type: string
+                                  icon:
+                                    type: string
+                                  channelLabel:
+                                    type: string
+                                    maxLength: 80
+                                    default: ""
+                                  description:
+                                    type: string
+                                    maxLength: 500
+                                    default: ""
+        "401":
+          $ref: "#/components/responses/Error"
+  /model-catalog/quote:
+    post:
+      tags: [models]
+      summary: 按当前参数预估系统渠道模型费用
+      description: |
+        需要登录会话 Cookie。仅接受启用的系统渠道和模型，采用服务端能力默认值及价格档选择规则。
+        不创建任务或账单、不冻结或扣除积分，也不调用模型供应商。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId, modelKey, intent]
+              properties:
+                channelId:
+                  type: string
+                  minLength: 1
+                modelKey:
+                  type: string
+                  minLength: 1
+                  description: 系统渠道中配置的模型键
+                intent:
+                  $ref: "#/components/schemas/ModelRequestIntent"
+      responses:
+        "200":
+          $ref: "#/components/responses/ModelQuote"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /models/{id}/quote:
+    post:
+      tags: [models]
+      summary: 按当前参数预估前台模型费用
+      description: |
+        需要登录会话 Cookie。请求正文直接为创作意图，不使用 intent 外层包装。
+        服务端按前台模型能力、默认参数、供应线路和价格策略报价，不创建任务、账单或积分冻结。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: 前台逻辑模型 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelRequestIntent"
+      responses:
+        "200":
+          $ref: "#/components/responses/ModelQuote"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
   /canvas-projects/{id}:
     parameters:
       - in: path
@@ -776,6 +899,119 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ModelRequestIntent:
+      type: object
+      required: [capability]
+      properties:
+        capability:
+          type: string
+          enum: [text, image, video, audio]
+        operation:
+          type: string
+          description: 可选生成操作，必须符合所选模型的能力合同
+        inputs:
+          type: object
+          description: 按素材类型统计的参考数量，如 image、video、audio；另受所选模型的数量上限约束
+          additionalProperties:
+            type: integer
+            minimum: 0
+            maximum: 128
+        options:
+          type: object
+          description: 当前创作规格；未指定的参数使用服务端默认值
+          additionalProperties: true
+          example:
+            vquality: 720p
+            size: "16:9"
+            videoSeconds: 5
+            videoGenerateAudio: true
+    LogicalModelQuote:
+      type: object
+      required: [logicalModelId, billingMode, quantity, amountMicrocredits, estimated]
+      properties:
+        logicalModelId:
+          type: string
+          description: 前台逻辑模型 ID；直接查询系统渠道模型时为空字符串
+        billingMode:
+          type: string
+          enum: [fixed_request, per_second, token]
+        quantity:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量）
+        amountMicrocredits:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 预估预留微积分，1000000 微积分等于 1 积分；明确配置的免费价格返回 0
+        estimated:
+          type: boolean
+          description: Token 计费为 true；优先有效上游 usage，视频无有效用量时按提交的公式快照结算，预留不构成费用上限
+        videoTokenEstimate:
+          $ref: "#/components/schemas/VideoTokenEstimate"
+    VideoTokenEstimate:
+      type: object
+      description: 仅视频 Token 报价返回；将火山公式用量和平台预留余量分开披露
+      required: [formulaTokens, reservedTokens, outputWidth, outputHeight, framesPerSecond, outputSeconds, referenceSeconds, referenceDurationEstimated, dimensionsEstimated, reservationMarginPercent]
+      properties:
+        formulaTokens:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 按（参考视频总秒数 + 输出秒数）× 输出宽 × 输出高 × 帧率 / 1024 向上取整；上游最低计费用量可能更高
+        reservedTokens:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 公式用量叠加平台预留余量后向上取整
+        outputWidth:
+          type: integer
+          format: int64
+          minimum: 1
+        outputHeight:
+          type: integer
+          format: int64
+          minimum: 1
+        framesPerSecond:
+          type: integer
+          format: int64
+          minimum: 1
+        outputSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+        referenceSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: 计入公式的参考视频总秒数；报价仅有参考数量时采用预估时长
+        referenceDurationEstimated:
+          type: boolean
+          description: 参考时长未知、使用预估值时为 true
+        dimensionsEstimated:
+          type: boolean
+          description: 自适应画幅或上游型号无法确定，使用预估像素尺寸时为 true
+        reservationMarginPercent:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 平台预留余量百分比，不属于火山官方计费公式
+    ModelQuoteEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [data]
+          properties:
+            code:
+              type: integer
+              enum: [0]
+            data:
+              type: object
+              required: [quote]
+              properties:
+                quote:
+                  $ref: "#/components/schemas/LogicalModelQuote"
     AgentProfileRequest:
       type: object
       additionalProperties: false
@@ -902,6 +1138,12 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    ModelQuote:
+      description: 当前参数对应的费用报价，位于信封 data.quote
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ModelQuoteEnvelope"
     Envelope:
       description: 业务成功信封
       content:

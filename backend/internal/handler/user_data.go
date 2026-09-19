@@ -295,8 +295,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		if delivery.RedirectURL != "" {
-			// CDN 或对象存储直连地址允许安全短期缓存
-			c.Header("Cache-Control", "private, max-age=86400, stale-while-revalidate=3600")
+			// 签名链接仅有效 5 分钟；重定向缓存必须短于签名 TTL，避免命中过期地址。
+			c.Header("Cache-Control", "private, max-age=240")
 			c.Header("Referrer-Policy", "no-referrer")
 			c.Header("X-Content-Type-Options", "nosniff")
 			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)

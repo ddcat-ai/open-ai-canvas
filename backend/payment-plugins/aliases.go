@@ -25,7 +25,9 @@ const (
 	ProviderWeChatNative = "wechat-native"
 	ProviderAlipayPage   = "alipay-page-pay"
 	ProviderXunHuPay     = "xunhupay-aggregate"
+	ProviderZhiFuFM      = "zhifufm-pay"
 	PluginWeChatNative   = "official-payment-wechat-native"
 	PluginAlipayPage     = "official-payment-alipay-page"
 	PluginXunHuPay       = "official-payment-xunhupay"
+	PluginZhiFuFM        = "official-payment-zhifufm"
 )

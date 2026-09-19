@@ -87,6 +87,8 @@ export type ApiCallLog = {
     videoSeconds: number;
     providerRequestId?: string;
     estimatedCostMicros: number;
+    creditCostConfigured?: boolean;
+    creditCostMicrocredits?: number;
     costAvailable: boolean;
     currency?: string;
     errorCode?: string;

@@ -144,12 +144,15 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 	// Provider callbacks are intentionally unauthenticated at the application
 	// layer. Authenticity is established by the pinned provider config and raw
 	// request signature before any durable event is accepted.
-	r.POST("/payments/notify/:providerId/:configId", func(c *gin.Context) {
+	notifyHandler := func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, paymentNotificationMaxBytes)
 		rawBody, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			writePaymentNotificationFailure(c, svc, c.Param("providerId"), http.StatusBadRequest)
 			return
+		}
+		if len(rawBody) == 0 && c.Request.URL.RawQuery != "" {
+			rawBody = []byte(c.Request.URL.RawQuery)
 		}
 		err = svc.AcceptPaymentNotification(c.Request.Context(), c.Param("providerId"), c.Param("configId"), c.Request.Header.Clone(), rawBody)
 		if err != nil {
@@ -167,7 +170,10 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Status(status)
-	})
+	}
+
+	r.POST("/payments/notify/:providerId/:configId", notifyHandler)
+	r.GET("/payments/notify/:providerId/:configId", notifyHandler)
 	r.GET("/payments/return/:providerId", func(c *gin.Context) {
 		orderID := strings.ToLower(strings.TrimSpace(c.Query("orderId")))
 		if !paymentOrderIDPattern.MatchString(orderID) {

@@ -23,6 +23,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/http-api.mdx
 !docs/content/docs/backend/code-map.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx
+!docs/content/docs/backend/video-token-billing.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx
 # Keep the creative Agent design versioned without unignoring generated docs.
 !docs/content/docs/overview/

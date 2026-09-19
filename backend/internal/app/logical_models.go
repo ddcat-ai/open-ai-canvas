@@ -664,6 +664,11 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "unified" && billingMode == "per_second" && capability != "video" {
 		return nil, nil, nil, false, BadAuthRequest("只有视频前台模型可以按秒计费")
 	}
+	if pricePolicy == "unified" && billingMode == "token" {
+		if err := validateTokenPrices(capability, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits); err != nil {
+			return nil, nil, nil, false, err
+		}
+	}
 	creating := strings.TrimSpace(id) == ""
 	var item *model.LogicalModel
 	if creating {
@@ -756,7 +761,7 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	}
 	if pricePolicy == "unified" && billingMode == "token" {
 		if !supportsLogicalModelTokenBilling(capability, enabledRouteProtocols) {
-			return nil, nil, nil, false, BadAuthRequest("Token 计费仅支持文本前台模型，或全部启用供应线路均为火山方舟视频协议的视频前台模型")
+			return nil, nil, nil, false, BadAuthRequest("Token 计费仅支持文本和视频前台模型")
 		}
 	}
 	// 停用必须始终可执行，便于管理员立即阻止失效线路继续对外服务；重新启用时再强校验结构能力和计费可用性。

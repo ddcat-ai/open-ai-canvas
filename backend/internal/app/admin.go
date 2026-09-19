@@ -88,7 +88,6 @@ type AdminReferenceData struct {
 
 type ChannelRequest struct {
 	Name                 string           `json:"name"`
-	PublicAlias          *string          `json:"publicAlias"`
 	SortOrder            *int             `json:"sortOrder"`
 	BaseURL              string           `json:"baseUrl"`
 	APIKey               string           `json:"apiKey"`
@@ -106,7 +105,6 @@ type PublicModelChannel struct {
 	Scope            model.ChannelScope        `json:"scope"`
 	Enabled          bool                      `json:"enabled"`
 	Name             string                    `json:"name"`
-	PublicAlias      string                    `json:"publicAlias,omitempty"`
 	SortOrder        int                       `json:"sortOrder"`
 	BaseURL          string                    `json:"baseUrl"`
 	APIKey           string                    `json:"apiKey"`
@@ -124,6 +122,8 @@ type PublicModelChannel struct {
 type PublicChannelModelPrice struct {
 	Model                        string                     `json:"model"`
 	DisplayName                  string                     `json:"displayName"`
+	ChannelLabel                 string                     `json:"channelLabel"`
+	Description                  string                     `json:"description"`
 	Icon                         string                     `json:"icon"`
 	Capability                   string                     `json:"capability"`
 	Protocol                     model.ChannelInterfaceType `json:"protocol"`
@@ -878,13 +878,6 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 		return channel, err
 	}
 	channel.Name = name
-	if req.PublicAlias != nil {
-		alias := strings.TrimSpace(*req.PublicAlias)
-		if len([]rune(alias)) > 80 {
-			return channel, BadAuthRequest("前台显示别名不能超过 80 个字符")
-		}
-		channel.PublicAlias = alias
-	}
 	if req.SortOrder != nil {
 		if err := validateChannelSortOrder(*req.SortOrder); err != nil {
 			return channel, err
@@ -949,7 +942,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 					capabilityConfig = normalized
 				}
 			}
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Icon: item.Icon, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, ChannelLabel: item.ChannelLabel, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
 		}
 	}
 	if len(models) == 0 {
@@ -969,17 +962,12 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 	} else if admin {
 		apiKey = channel.APIKey
 	}
-	name, alias := channel.PublicName(), ""
-	if admin {
-		name, alias = channel.Name, channel.PublicAlias
-	}
 	return PublicModelChannel{
 		ID:               channel.ID,
 		UserID:           channel.UserID,
 		Scope:            channel.Scope,
 		Enabled:          channel.Enabled,
-		Name:             name,
-		PublicAlias:      alias,
+		Name:             channel.Name,
 		SortOrder:        channel.SortOrder,
 		BaseURL:          baseURL,
 		APIKey:           apiKey,

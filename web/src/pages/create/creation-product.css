@@ -45,15 +45,15 @@
 .creation-submit-cost svg { width: 14px; height: 14px; }
 @layer utilities {
     .app-product-workspace .creation-home .creation-submit.ant-btn { height: auto; min-height: 40px; padding: 0; border: 0; background: transparent !important; box-shadow: none; border-radius: 999px; opacity: 1; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 8px; width: auto; height: 40px; padding: 0 18px; border-radius: 999px; background: var(--user-action-gradient); color: var(--user-action-foreground); transition: background var(--user-motion), box-shadow var(--user-motion), transform var(--user-motion); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 8px; width: auto; height: 40px; padding: 0 18px; border-radius: 999px; background: var(--button-primary-bg); color: var(--button-primary-fg); transition: background var(--user-motion), box-shadow var(--user-motion), transform var(--user-motion); }
     .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 28%, rgb(255 255 255 / .28) 48%, transparent 68%); transform: translateX(-120%); pointer-events: none; }
     .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action span { font-size: 13px; font-weight: 600; }
     .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action svg { width: 17px; height: 17px; color: currentColor; transition: transform var(--user-motion); }
     .app-product-workspace .creation-home .creation-submit.ant-btn:disabled .creation-submit-action { background: var(--user-surface-hover); color: var(--user-ink-muted); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action { box-shadow: 0 8px 22px color-mix(in srgb, var(--user-accent) 28%, transparent); transform: translateY(-1px); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action { background: var(--button-primary-hover-bg); transform: translateY(-1px); }
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action::after { animation: creation-submit-sheen 640ms cubic-bezier(.16, 1, .3, 1); }
     .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action svg { transform: translateY(-1px); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { transform: scale(.97); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { background: var(--button-primary-active-bg); transform: scale(.97); }
     .app-product-workspace .creation-home .creation-chat-composer.is-thread .creation-submit.ant-btn .creation-submit-action { height: 34px; padding: 0 14px; }
 }
 .creation-inspiration-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }

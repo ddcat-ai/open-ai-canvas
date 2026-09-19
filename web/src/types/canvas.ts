@@ -164,9 +164,28 @@ export type CanvasGenerationBatch = {
 };
 
 export type CanvasBatchOperation = "try_on" | "creative";
-export type CanvasBatchRow = { id: string; enabled: boolean; inputNodeIds: string[]; prompt: string; outputNodeId?: string };
-export type CanvasBatchReferenceColumn = { id: string; label: string };
-export type CanvasBatchTableData = { operation: CanvasBatchOperation; concurrency: number; globalPrompt?: string; referenceColumns?: CanvasBatchReferenceColumn[]; rows: CanvasBatchRow[] };
+export type CanvasBatchRow = {
+    id: string;
+    enabled: boolean;
+    inputNodeIds: string[];
+    /** Text nodes selected for this row; their contents are appended to prompt. */
+    textNodeIds?: string[];
+    prompt: string;
+    outputNodeId?: string;
+};
+export type CanvasBatchReferenceColumn = {
+    id: string;
+    label: string;
+};
+export type CanvasBatchTableData = {
+    operation: CanvasBatchOperation;
+    concurrency: number;
+    /** Optional prompt override applied to every batch row while non-empty. */
+    globalPrompt?: string;
+    referenceColumns?: CanvasBatchReferenceColumn[];
+    textColumns?: CanvasBatchReferenceColumn[];
+    rows: CanvasBatchRow[];
+};
 
 export type CanvasSkillSnapshot = {
     id: string;

@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
-// 只允许按需加载 Mono 组件。这里不能使用 eager glob：模型 Logo 目录有数百个 provider 模块，
+// 优先使用品牌原色，缺少彩色版本时使用 Mono。不能使用 eager glob：目录有数百个模块，
 // eager 会让每次进入工作区都发起数百个开发模块请求，即使用户从未打开 Logo 选择器。
 const iconModules = "Bun" in globalThis ? {} : import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { import: "default" });
+const colorIconModules = "Bun" in globalThis ? {} : import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Color.js", { import: "default" });
 const iconLoaders = Object.fromEntries(
-    Object.entries(iconModules)
-        .map(([path, loader]) => [path.match(/\/([^/]+)\/components\/Mono\.js$/)?.[1], loader])
+    [...Object.entries(iconModules), ...Object.entries(colorIconModules)]
+        .map(([path, loader]) => [path.match(/\/([^/]+)\/components\/(?:Mono|Color)\.js$/)?.[1], loader])
         .filter((entry): entry is [string, () => Promise<LobeIconComponent>] => Boolean(entry[0] && entry[1])),
 ) as Record<string, () => Promise<LobeIconComponent>>;
 const iconRegistry = new Map<string, LobeIconComponent>();

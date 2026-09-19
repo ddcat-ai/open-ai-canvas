@@ -441,9 +441,11 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 	tests := []struct {
 		name    string
 		payload string
+		wantURL string
 	}{
-		{name: "channel result URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","result_url":"https://cdn.example/channel-result.mp4"}}`},
-		{name: "provider nested video URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","data":{"status":"completed","video_url":"https://cdn.example/provider-result.mp4"}}}`},
+		{name: "channel result URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","result_url":"https://cdn.example/channel-result.mp4"}}`, wantURL: "https://cdn.example/channel-result.mp4"},
+		{name: "provider nested video URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","data":{"status":"completed","video_url":"https://cdn.example/provider-result.mp4"}}}`, wantURL: "https://cdn.example/provider-result.mp4"},
+		{name: "provider data array URL", payload: `{"created":1789773326,"data":[{"url":"https://cdn.example/seedance-result.mp4?preview=1"}],"id":"task-upstream","object":"video.generation","status":"completed","usage":{"completion_tokens":108872,"total_tokens":108872}}`, wantURL: "https://cdn.example/seedance-result.mp4?preview=1"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -454,8 +456,8 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 			if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Videos) != 1 {
 				t.Fatalf("state = %#v, want one completed video", state)
 			}
-			if state.Result.Videos[0].URL == "" {
-				t.Fatalf("video = %#v, want a result URL", state.Result.Videos[0])
+			if state.Result.Videos[0].URL != test.wantURL {
+				t.Fatalf("video = %#v, want URL %q", state.Result.Videos[0], test.wantURL)
 			}
 		})
 	}

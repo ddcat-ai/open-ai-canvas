@@ -30,6 +30,7 @@ type InfiniteCanvasProps = {
 
 const CANVAS_WHEEL_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-canvas-wheel-scroll],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
 const CANVAS_POINTER_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-connection-create-menu],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
+const CANVAS_INTERNAL_DRAG_SELECTOR = "[data-canvas-batch-table]";
 const WHEEL_ZOOM_DELTA = 72;
 const TRACKPAD_PINCH_ZOOM_DELTA = 24;
 
@@ -441,13 +442,38 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
                 if (!target?.closest("[data-node-id],[data-connection-id],[data-canvas-no-zoom]")) onCanvasDoubleClick?.(event);
             }}
             onContextMenu={onContextMenu}
-            onDragEnter={onFileDragEnter}
-            onDragLeave={onFileDragLeave}
+            onDragEnter={(event) => {
+                if (isCanvasInternalDragEvent(event)) {
+                    event.preventDefault();
+                    onFileDragEnter?.(event);
+                    return;
+                }
+                onFileDragEnter?.(event);
+            }}
+            onDragLeave={(event) => {
+                if (isCanvasInternalDragEvent(event)) {
+                    event.preventDefault();
+                    onFileDragLeave?.(event);
+                    return;
+                }
+                onFileDragLeave?.(event);
+            }}
             onDragOver={(event) => {
+                if (isCanvasInternalDragEvent(event)) {
+                    event.preventDefault();
+                    onFileDragOver?.(event);
+                    return;
+                }
                 event.preventDefault();
                 onFileDragOver?.(event);
             }}
-            onDrop={onDrop}
+            onDrop={(event) => {
+                if (isCanvasInternalDragEvent(event)) {
+                    event.preventDefault();
+                    return;
+                }
+                onDrop?.(event);
+            }}
         >
             <CanvasGrid appearance={appearance} mode={backgroundMode} />
             {graphicsLayer}
@@ -461,6 +487,11 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             </div>
         </div>
     );
+}
+
+function isCanvasInternalDragEvent(event: React.DragEvent<HTMLDivElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    return Boolean(target?.closest(CANVAS_INTERNAL_DRAG_SELECTOR));
 }
 
 function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {

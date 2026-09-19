@@ -488,7 +488,7 @@ export function AssetLibraryPickerModal({
                     </nav>
                     <div className="asset-picker-grid-wrap">
                         <div className="asset-picker-grid">
-                            {remoteEnabled && remoteQuery.isError ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (useRemoteItems && remoteQuery.isFetching) ? (
+                            {remoteEnabled && remoteQuery.isError && !localItems.length ? <div className="asset-picker-empty" role="alert"><FolderOpen /><strong>素材读取失败</strong><span>服务端暂时不可用，重试不会影响本地已保存素材。</span><Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (useRemoteItems && remoteQuery.isFetching) ? (
                                 <div className="asset-picker-empty">
                                     <LoaderCircle className="animate-spin" />
                                     <strong>正在读取素材</strong>
@@ -519,8 +519,8 @@ export function AssetLibraryPickerModal({
                                 </span>
                             </button>
                         </>
-                    ) : footerNote ? (
-                        <span className="asset-picker-footer-note">{footerNote}</span>
+                    ) : footerNote || (remoteEnabled && remoteQuery.isError) ? (
+                        <span className="asset-picker-footer-note">{remoteEnabled && remoteQuery.isError ? "云端素材暂时不可用，当前显示本地缓存" : footerNote}</span>
                     ) : (
                         <span />
                     )}

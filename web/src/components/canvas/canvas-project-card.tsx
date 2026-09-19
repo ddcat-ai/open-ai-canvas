@@ -1,7 +1,7 @@
 import { Check, Clapperboard, CloudUpload, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Plus, Settings2, Sparkles, Trash2, Video, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Dropdown, Input } from "antd";
+import { App, Dropdown, Input } from "antd";
 
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
@@ -13,6 +13,7 @@ import { CachedResourceImage } from "@/components/cached-resource-image";
 import { MediaPlaceholder } from "@/components/ui/product/media-placeholder";
 import { cn } from "@/lib/utils";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
+import { hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow } from "@/services/user-data-sync";
 
 type ProjectPreviewMedia = { node: CanvasNodeData; url: string; storageKey?: string };
 const projectPreviewMediaCache = new WeakMap<CanvasNodeData[], { first?: ProjectPreviewMedia; latest?: ProjectPreviewMedia }>();
@@ -30,6 +31,7 @@ export function CanvasCreateCard({ disabled, onClick }: { disabled?: boolean; on
 }
 
 export function CanvasProjectCard({ project, projectName, variant = "library", readOnly = false, footer }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent"; readOnly?: boolean; footer?: ReactNode }) {
+    const { message } = App.useApp();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const renameProject = useCanvasStore((state) => state.renameProject);
@@ -44,9 +46,19 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
     const open = () => navigate(`/canvas/${project.id}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`);
-    const saveTitle = () => {
-        renameProject(project.id, editingTitle);
+    const saveTitle = async () => {
         stopEditing();
+        if (!hasRemoteUserDataSyncSession()) {
+            renameProject(project.id, editingTitle);
+            return;
+        }
+        try {
+            await loadCanvasProjectForEditing(project.id);
+            renameProject(project.id, editingTitle);
+            await saveRemoteUserDataNow(project.id);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "重命名失败");
+        }
     };
 
     const compact = variant === "recent";

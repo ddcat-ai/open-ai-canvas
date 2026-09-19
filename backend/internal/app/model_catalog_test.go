@@ -11,16 +11,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// 前台模型目录为空时也必须发 models: []，不能因为 omitempty 丢掉字段：
-// 前端在 source=frontend 时强制校验 models 是数组，缺字段会被判成畸形响应；
-// 而 auth-session-hydrator 会把该异常当成未登录并清掉会话，表现为刷新后跳回登录页。
+// 目录始终来自系统渠道；空目录也要显式返回数组，不能被会话初始化判成畸形响应。
 func TestModelCatalogAlwaysSerializesCollectionsAsArrays(t *testing.T) {
 	for _, test := range []struct {
 		name            string
 		frontendEnabled bool
 		wantSource      string
 	}{
-		{name: "空的前台模型目录", frontendEnabled: true, wantSource: "frontend"},
+		{name: "逻辑模型开关不改变目录来源", frontendEnabled: true, wantSource: "system"},
 		{name: "空的系统渠道目录", frontendEnabled: false, wantSource: "system"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

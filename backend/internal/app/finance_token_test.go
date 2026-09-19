@@ -15,8 +15,8 @@ func TestSupportsTokenBillingForVolcengineArkVideo(t *testing.T) {
 	if !supportsTokenBilling("video", model.ChannelInterfaceVolcengineArkVideo) {
 		t.Fatal("Volcengine Ark video should support Token billing")
 	}
-	if supportsTokenBilling("video", model.ChannelInterfaceNewAPIVideo) {
-		t.Fatal("video protocols without a final usage contract must not support Token billing")
+	if !supportsTokenBilling("video", model.ChannelInterfaceNewAPIVideo) {
+		t.Fatal("all video protocols must support formula-based Token billing")
 	}
 }
 
@@ -26,8 +26,8 @@ func TestEstimateArkVideoTokensUsesPixelFrameEstimate(t *testing.T) {
 			"model": "doubao-seedance-1-5-pro", "videoSeconds": "5", "vquality": "720", "size": "16:9",
 		},
 	})
-	// 1280*720*(5*24+1)/1024 = 108900，预授权再保留 10% 余量。
-	if estimate.InputTokens != 0 || estimate.OutputTokens != 119790 {
+	// 官方公式 1280*720*5*24/1024 = 108000；平台另预留 10%。
+	if estimate.Err != nil || estimate.InputTokens != 0 || estimate.OutputTokens != 118800 {
 		t.Fatalf("estimateArkVideoTokens() = %#v", estimate)
 	}
 }
@@ -39,20 +39,20 @@ func TestEstimateArkVideoTokensIncludesUnknownReferenceVideo(t *testing.T) {
 		},
 		"referenceVideos": []any{map[string]any{"id": "video-1"}},
 	})
-	if estimate.OutputTokens != 477180 {
+	if estimate.Err != nil || estimate.OutputTokens != 475200 || !estimate.Video.ReferenceDurationEstimated {
 		t.Fatalf("estimateArkVideoTokens() = %#v", estimate)
 	}
 }
 
-func TestEstimateArkVideoTokensCapsReferenceDuration(t *testing.T) {
+func TestEstimateVideoTokensIncludesLongReferenceDuration(t *testing.T) {
 	estimate := estimateArkVideoTokens(map[string]any{
 		"config": map[string]any{
 			"model": "doubao-seedance-2-0", "videoSeconds": "5", "vquality": "720p", "size": "16:9",
 		},
 		"referenceVideos": []any{map[string]any{"id": "video-1", "durationMs": int64(60_000)}},
 	})
-	if estimate.OutputTokens != 477180 {
-		t.Fatalf("estimateArkVideoTokens() = %#v", estimate)
+	if estimate.Err != nil || estimate.Video.ReferenceSeconds != 60 || estimate.Video.FormulaTokens != 1_404_000 {
+		t.Fatalf("reference duration must be counted without silent capping: %#v", estimate)
 	}
 }
 

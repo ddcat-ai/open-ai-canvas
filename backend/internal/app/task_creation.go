@@ -230,10 +230,12 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 	nextConfig["channelId"] = routed.ChannelModel.ChannelID
 	nextConfig["model"] = routed.ChannelModel.ModelKey
 	nextConfig["channelModelKey"] = routed.ChannelModel.ModelKey
+	providerModelKey := routed.ChannelModel.ProviderModelKey
 	if routed.PriceTier != nil {
 		nextConfig["priceTierId"] = routed.PriceTier.ID
-		nextConfig["providerModelKey"] = routed.PriceTier.ProviderModelKey
+		providerModelKey = firstNonEmpty(routed.PriceTier.ProviderModelKey, providerModelKey)
 	}
+	nextConfig["providerModelKey"] = firstNonEmpty(providerModelKey, routed.ChannelModel.ModelKey)
 	input["config"] = nextConfig
 	return input
 }

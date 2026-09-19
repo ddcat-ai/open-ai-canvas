@@ -8,14 +8,16 @@ import { imageToDataUrl } from "@/services/image-storage";
 
 type Point = { x: number; y: number };
 type Stroke = { color: string; size: number; erase: boolean; points: Point[] };
+export type CanvasImageAnnotationPayload = { sourceDataUrl: string; annotatedDataUrl: string };
 
 const colors = ["#ef4444", "#f59e0b", "#22c55e", "#14b8a6", "#3b82f6", "#a855f7", "#ffffff", "#111827"];
 
-export function CanvasNodeAnnotationDialog({ image, open, onClose, onConfirm }: {
+export function CanvasNodeAnnotationDialog({ image, open, onClose, onConfirm, editMode = false }: {
     image: { url: string; storageKey?: string };
     open: boolean;
     onClose: () => void;
-    onConfirm: (dataUrl: string) => void;
+    onConfirm: (dataUrl: string | CanvasImageAnnotationPayload) => void;
+    editMode?: boolean;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -99,14 +101,15 @@ export function CanvasNodeAnnotationDialog({ image, open, onClose, onConfirm }: 
         if (!context) return;
         context.drawImage(sourceImage, 0, 0, output.width, output.height);
         context.drawImage(annotation, 0, 0);
-        onConfirm(output.toDataURL("image/png"));
+        const annotatedDataUrl = annotation.toDataURL("image/png");
+        onConfirm(editMode ? { sourceDataUrl: source, annotatedDataUrl } : output.toDataURL("image/png"));
     };
 
     return (
         <Modal title={null} open={open} onCancel={onClose} footer={null} width="min(1120px, calc(100vw - 32px))" centered destroyOnHidden>
             <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2" style={{ borderColor: "rgba(127,127,127,.22)" }}>
-                    <span className="px-1 text-sm font-semibold">标注</span>
+                    <span className="px-1 text-sm font-semibold">{editMode ? "标注编辑" : "标注"}</span>
                     <span className="mx-1 h-6 w-px bg-current opacity-15" />
                     <ToolButton title="画笔" active={mode === "brush"} onClick={() => setMode("brush")}><Brush className="size-4" /></ToolButton>
                     <ToolButton title="橡皮" active={mode === "erase"} onClick={() => setMode("erase")}><Eraser className="size-4" /></ToolButton>
@@ -119,7 +122,7 @@ export function CanvasNodeAnnotationDialog({ image, open, onClose, onConfirm }: 
                     <ToolButton title="重做" disabled={!redoStrokes.length} onClick={redo}><Redo2 className="size-4" /></ToolButton>
                     <ToolButton title="清空" disabled={!strokes.length} onClick={() => { setStrokes([]); setRedoStrokes([]); }}><RotateCcw className="size-4" /></ToolButton>
                     <span className="min-w-0 flex-1" />
-                    <Button type="primary" icon={<Save className="size-4" />} disabled={!strokes.length} onClick={save}>保存为新节点</Button>
+                    <Button type="primary" icon={<Save className="size-4" />} disabled={!strokes.length} onClick={save}>{editMode ? "按标注生成" : "保存为新节点"}</Button>
                 </div>
                 <div className="flex min-h-[360px] items-center justify-center overflow-hidden rounded-lg bg-black/5 dark:bg-white/[0.03]">
                     {source && size.width ? (

@@ -121,6 +121,8 @@ describe("canvas resource mention editor", () => {
         expect(component).toContain("const token = `@[skill:${skill.skillId}] `");
         expect(component).toContain("slash.start + 1 + slash.query.length");
         expect(component).toContain("buildSkillMentionReferences(availableSlashSkills)");
+        expect(component).toContain("[/、]([^\\s/、]*)$");
+        expect(source("../src/components/canvas/canvas-cloud-agent-panel.tsx")).toContain("用 / 或 、 引用 Skills");
     });
 
     test("skill chips use one colored icon instead of exposing the serialized token", () => {
@@ -132,9 +134,11 @@ describe("canvas resource mention editor", () => {
         expect(component).toContain('prefix.textContent = reference.kind === "skill" ? "✦" : "@"');
         expect(component).toContain('if (reference.kind !== "skill") chip.appendChild(createInlinePreview(reference));');
         expect(component).toContain('chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference))');
-        expect(chat).toContain("sendOnEnter={false}");
+        expect(chat).toContain('sendOnEnter={canSubmit ? "both" : false}');
         expect(chat).toContain("agent-composer-resize-handle");
-        expect(chat).toContain("Enter 换行 · ⌘/Ctrl+Enter 发送");
+        expect(chat).toContain("Enter 发送 · Shift+Enter 换行");
+        expect(css).toContain(".agent-composer-send-hint-full");
+        expect(css).toContain(".agent-composer-send-hint-compact");
         expect(css).toContain(".agent-composer-prompt-scroll");
         expect(css).not.toContain(".agent-tool-row:hover");
     });

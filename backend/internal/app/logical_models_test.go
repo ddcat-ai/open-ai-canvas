@@ -279,8 +279,8 @@ func TestSupportsLogicalModelTokenBillingForArkVideoRoutes(t *testing.T) {
 	if supportsLogicalModelTokenBilling("video", nil) {
 		t.Fatal("video logical models without an enabled route must not support Token billing")
 	}
-	if supportsLogicalModelTokenBilling("video", []model.ChannelInterfaceType{model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceNewAPIVideo}) {
-		t.Fatal("mixed video protocols must not support Token billing")
+	if !supportsLogicalModelTokenBilling("video", []model.ChannelInterfaceType{model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceNewAPIVideo}) {
+		t.Fatal("all video protocols must support Token billing")
 	}
 }
 

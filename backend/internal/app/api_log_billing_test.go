@@ -26,7 +26,7 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	}
 
 	orders := []model.BillingOrder{
-		{ID: "settled", UserID: "user-1", IdempotencyKey: "settled", Status: model.BillingStatusSettled, ReservedAmountMicrocredits: 1_000_000, ActualAmountMicrocredits: 780_000},
+		{ID: "settled", UserID: "user-1", IdempotencyKey: "settled", Status: model.BillingStatusSettled, ReservedAmountMicrocredits: 1_000_000, ActualAmountMicrocredits: 780_000, BillingCostSnapshot: model.BillingCostSnapshot{CostBillingMode: "fixed_request", CostQuantity: 1, CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: 456_789}}},
 		{ID: "reserved", UserID: "user-1", IdempotencyKey: "reserved", Status: model.BillingStatusReserved, ReservedAmountMicrocredits: 900_000},
 		{ID: "uncertain", UserID: "user-1", IdempotencyKey: "uncertain", Status: model.BillingStatusUncertain, ReservedAmountMicrocredits: 1_200_000},
 		{ID: "refunded", UserID: "user-1", IdempotencyKey: "refunded", Status: model.BillingStatusRefunded, ReservedAmountMicrocredits: 650_000, RefundedAmountMicrocredits: 650_000},
@@ -58,6 +58,14 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	assertBillingSnapshot(t, logs[4], false, "", 0)
 	assertBillingSnapshot(t, logs[5], false, "", 0)
 	assertBillingSnapshot(t, logs[6], false, "", 0)
+	if !logs[0].CreditCostConfigured || logs[0].CreditCostMicrocredits == nil || *logs[0].CreditCostMicrocredits != 456_789 {
+		t.Fatalf("request cost missing: %#v", logs[0])
+	}
+	for _, log := range logs[1:] {
+		if log.CreditCostConfigured || log.CreditCostMicrocredits != nil {
+			t.Fatalf("fabricated cost for %s", log.ID)
+		}
+	}
 }
 
 func assertBillingSnapshot(t *testing.T, log model.ApiCallLog, available bool, status model.BillingStatus, amount int64) {

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./primary-buttons.css";
 @source "../../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
@@ -2015,7 +2016,7 @@
     .canvas-project-sidebar-search:focus-within {
         border-color: color-mix(in srgb, var(--workspace-accent) 42%, transparent) !important;
         background: var(--background) !important;
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent);
+        box-shadow: none;
     }
 
     .canvas-project-sidebar-chapter-scroll {
@@ -4649,7 +4650,7 @@ html:not(.dark) .creation-studio-control:hover,
     .canvas-library-search:focus-within {
         background: color-mix(in srgb, var(--foreground) 9%, transparent);
         color: var(--workspace-accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent);
+        box-shadow: none;
     }
 
     .canvas-library-search > svg { width: 17px; height: 17px; flex: 0 0 auto; }
@@ -4988,7 +4989,7 @@ html:not(.dark) .creation-studio-control:hover,
 
     .app-user-workspace .library-page .library-toolbar:focus-within {
         border-color: color-mix(in srgb, var(--workspace-accent) 20%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 7%, transparent), 0 8px 24px color-mix(in srgb, var(--foreground) 3%, transparent);
+        box-shadow: none;
     }
 
     .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper,
@@ -4998,9 +4999,9 @@ html:not(.dark) .creation-studio-control:hover,
     }
 
     .app-user-workspace .library-page .library-toolbar .ant-btn:focus-visible,
-    .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:focus-within,
-    .app-user-workspace .library-page .library-toolbar .ant-select-focused .ant-select-selector,
-    .app-user-workspace .library-page .library-toolbar .ant-segmented:focus-within {
+    .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:focus-visible,
+    .app-user-workspace .library-page .library-toolbar .ant-select:focus-visible,
+    .app-user-workspace .library-page .library-toolbar .ant-segmented:focus-visible {
         outline: 2px solid color-mix(in srgb, var(--workspace-accent) 28%, transparent);
         outline-offset: 2px;
     }
@@ -5882,7 +5883,7 @@ html:not(.dark) .creation-studio-control:hover,
 
     .settings-page :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector) {
         border-color: color-mix(in srgb, var(--workspace-accent) 46%, transparent) !important;
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent) !important;
+        box-shadow: none !important;
     }
 
     .settings-page .ant-btn {
@@ -5931,7 +5932,7 @@ html:not(.dark) .creation-studio-control:hover,
     }
 
     .canvas-library-page .canvas-library-search:focus-within {
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent);
+        box-shadow: none;
     }
 
     .canvas-library-page .app-canvas-project-card.is-library {
@@ -6069,7 +6070,7 @@ html:not(.dark) .creation-studio-control:hover,
     .library-toolbar .ant-input,
     .library-toolbar .ant-select { color: var(--foreground) !important; }
     .library-toolbar .ant-segmented { border-radius: var(--r-xl); }
-    .library-toolbar .ant-btn { border: 0; background: transparent; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
+    .library-toolbar .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) { border: 0; background: transparent; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .library-toolbar .ant-btn:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
     .library-grid { display: grid; align-items: start; gap: 26px 18px; }
     .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
@@ -13204,7 +13205,7 @@ html:not(.dark) .creation-history-drawer-root {
 .canvas-shortcuts-search:focus-within {
     border-color: color-mix(in srgb, var(--ring) 48%, transparent);
     background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
+    box-shadow: none;
 }
 .canvas-shortcuts-search > svg {
     width: 15px;
@@ -13512,7 +13513,7 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-picker-source-menu-label { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .asset-picker-source-menu-label em { color: color-mix(in srgb, currentColor 58%, transparent); font-size: var(--fs-micro); font-style: normal; }
 .asset-picker-search { display: flex; height: 38px; min-width: 0; align-items: center; gap: 9px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0 12px; transition: background-color var(--motion-state) ease, box-shadow var(--motion-state) ease; }
-.asset-picker-search:focus-within { background: color-mix(in srgb, var(--foreground) 8%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 54%, transparent); }
+.asset-picker-search:focus-within { background: color-mix(in srgb, var(--foreground) 8%, transparent); box-shadow: none; }
 .asset-picker-search svg { width: 16px; height: 16px; flex-shrink: 0; color: color-mix(in srgb, var(--foreground) 42%, transparent); }
 .asset-picker-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: var(--fs-label); }
 .asset-picker-count { justify-self: end; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-micro); }
@@ -13641,9 +13642,7 @@ html:not(.dark) .creation-history-drawer-root {
 .library-modal :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover) { border-color: color-mix(in srgb, var(--foreground) 26%, transparent) !important; }
 /* 聚焦态：--workspace-accent 暗色下是 #f5f5f5，直接描边会形成刺眼白圈，降到半透明。 */
 .library-modal :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector) { border-color: var(--control-focus-ring) !important; box-shadow: none !important; }
-.library-modal .ant-btn-primary { border: 1px solid var(--btn-outline-border); border-radius: var(--r-md); background: transparent; color: var(--foreground); box-shadow: none; font-weight: 560; }
-.library-modal .ant-btn-primary:not(:disabled):hover { border-color: var(--btn-outline-hover-border); background: var(--btn-outline-hover-bg); color: var(--foreground); }
-.library-modal .ant-btn-primary:not(:disabled):active { background: var(--btn-outline-active-bg); color: var(--foreground); }
+.library-modal .ant-btn-primary { border-radius: var(--r-md); box-shadow: none; font-weight: 560; }
 .library-modal .ant-btn-default { border-color: var(--btn-outline-border); border-radius: var(--r-md); background: transparent; }
 
 /* 短剧创作：AI 创建入口面板与创建弹窗来源/画风选择 */
@@ -14293,12 +14292,12 @@ html:not(.dark) .creation-history-drawer-root {
 .library-drawer .ant-drawer-close { width: 34px; height: 34px; margin-inline-end: 6px; border-radius: var(--r-full); color: color-mix(in srgb, var(--foreground) 42%, transparent); }
 .library-drawer .ant-drawer-close:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
 .library-drawer .ant-drawer-body { padding: 22px 28px 30px; }
-.library-drawer .ant-drawer-extra .ant-btn { border: 1px solid var(--btn-outline-border); border-radius: var(--r-md); background: transparent; color: var(--foreground); font-weight: 560; box-shadow: none; }
-.library-drawer .ant-drawer-extra .ant-btn:not(:disabled):hover { border-color: var(--btn-outline-hover-border); background: var(--btn-outline-hover-bg); color: var(--foreground); }
+.library-drawer .ant-drawer-extra .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) { border: 1px solid var(--btn-outline-border); border-radius: var(--r-md); background: transparent; color: var(--foreground); font-weight: 560; box-shadow: none; }
+.library-drawer .ant-drawer-extra .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):not(:disabled):hover { border-color: var(--btn-outline-hover-border); background: var(--btn-outline-hover-bg); color: var(--foreground); }
 .library-drawer .ant-form-item-label > label { color: color-mix(in srgb, var(--foreground) 68%, transparent); font-size: var(--fs-caption); font-weight: 560; }
 .library-drawer :where(.ant-input, .ant-input-affix-wrapper, .ant-select-selector) { border-color: color-mix(in srgb, var(--foreground) 15%, transparent) !important; border-radius: var(--r-md) !important; background: color-mix(in srgb, var(--foreground) 3%, transparent) !important; box-shadow: none !important; }
 .library-drawer :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover) { border-color: color-mix(in srgb, var(--foreground) 26%, transparent) !important; }
-.library-drawer :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector) { border-color: color-mix(in srgb, var(--workspace-accent) 46%, transparent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent) !important; }
+.library-drawer :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector) { border-color: color-mix(in srgb, var(--workspace-accent) 46%, transparent) !important; box-shadow: none !important; }
 .library-drawer .border-border\/70 { border-color: color-mix(in srgb, var(--foreground) 10%, transparent); }
 .library-drawer .asset-drawer-content { border-color: color-mix(in srgb, var(--foreground) 10%, transparent) !important; background: color-mix(in srgb, var(--foreground) 3%, transparent); }
 
@@ -15131,9 +15130,7 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-archive-section-title { display: block; margin-bottom: 8px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-tiny); font-weight: 560; letter-spacing: .05em; }
 .asset-archive-section-body { margin: 0; color: color-mix(in srgb, var(--foreground) 74%, transparent); font-size: var(--fs-label); line-height: 1.7; white-space: pre-wrap; }
 .asset-archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.library-drawer .ant-btn-primary { border: 1px solid var(--btn-outline-border); background: transparent; color: var(--foreground); box-shadow: none; font-weight: 560; }
-.library-drawer .ant-btn-primary:not(:disabled):hover { border-color: var(--btn-outline-hover-border); background: var(--btn-outline-hover-bg); color: var(--foreground); }
-.library-drawer .ant-btn-primary:not(:disabled):active { background: var(--btn-outline-active-bg); color: var(--foreground); }
+.library-drawer .ant-btn-primary { box-shadow: none; font-weight: 560; }
 
 @media (max-width: 680px) {
     .assets-empty-cards { grid-template-columns: 1fr; }
@@ -17652,7 +17649,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 /* 模型下拉：选中项与当前 hover/focus 项展示说明，其他项保持安静。 */
 .canvas-model-picker-option {
-    transition: min-height 180ms cubic-bezier(.16, 1, .3, 1), background-color 160ms ease, transform 160ms cubic-bezier(.16, 1, .3, 1) !important;
+    transition: background-color 160ms ease !important;
 }
 
 .canvas-model-picker-option.is-previewed:not(:disabled) {
@@ -17660,24 +17657,16 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .canvas-model-picker-description {
-    max-height: 0;
-    margin-top: 0 !important;
+    height: 16px;
+    line-height: 16px;
+    margin-top: 5px !important;
+    visibility: hidden;
     opacity: 0;
-    transform: translateY(-2px);
-    transition: max-height 180ms cubic-bezier(.16, 1, .3, 1), margin-top 180ms cubic-bezier(.16, 1, .3, 1), opacity 130ms ease, transform 180ms cubic-bezier(.16, 1, .3, 1);
 }
 
 .canvas-model-picker-description.is-visible {
-    max-height: 32px;
-    margin-top: 5px !important;
+    visibility: visible;
     opacity: 1;
-    transform: translateY(0);
-}
-
-.creation-model-picker-menu .canvas-model-picker-option.is-previewed,
-.creation-model-picker-menu .canvas-model-picker-option[aria-selected="true"] {
-    min-height: 58px;
-    border-radius: 12px;
 }
 
 /* 顶栏积分中心：真实余额、充值、兑换与流水集中在一个消费型弹窗中。 */
@@ -18490,7 +18479,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper,
 .app-user-workspace .library-page .library-toolbar .ant-select-selector,
-.app-user-workspace .library-page .library-toolbar .ant-btn {
+.app-user-workspace .library-page .library-toolbar .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
     min-height: 38px;
     border-color: transparent !important;
     border-radius: 10px !important;
@@ -18501,9 +18490,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:hover,
 .app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:focus-within,
 .app-user-workspace .library-page .library-toolbar .ant-select-focused .ant-select-selector {
-    border-color: rgba(95, 85, 217, .32) !important;
+    border-color: var(--user-border-strong) !important;
     background: var(--user-surface) !important;
-    box-shadow: 0 0 0 3px rgba(95, 85, 217, .08) !important;
+    box-shadow: none !important;
 }
 
 .app-user-workspace .skills-hero {
@@ -18935,11 +18924,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     --user-ink: #1d1d21;
     --user-ink-muted: #686872;
     --user-ink-soft: #85858e;
-    --user-accent: #695df0;
-    --user-accent-soft: #eeecff;
-    --user-action-gradient: linear-gradient(115deg, #6554df, #386fbc);
-    --user-action-gradient-hover: linear-gradient(115deg, #5744cf, #356bbb);
-    --user-action-foreground: #ffffff;
+    --user-accent: var(--workspace-accent);
+    --user-accent-soft: var(--control-selected-bg);
     --user-shadow-card: none;
     --user-shadow-hover: none;
     --user-radius-card: 16px;
@@ -18966,8 +18952,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     --user-ink: #f3f3f5;
     --user-ink-muted: #b4b4bc;
     --user-ink-soft: #9797a1;
-    --user-accent: #a69cff;
-    --user-accent-soft: rgba(126, 113, 255, .16);
     --user-shadow-card: none;
     --user-shadow-hover: none;
 }
@@ -19240,11 +19224,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brands { display: grid; gap: 5px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-subheading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 5px 8px; color: var(--user-ink); font-size: 12px; font-weight: 650; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-subheading small { color: var(--user-ink-soft); font-size: 10px; font-weight: 500; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--user-ink); text-align: left; transition: background-color 160ms ease, border-color 160ms ease, transform 160ms cubic-bezier(.16,1,.3,1); }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand:hover { border-color: var(--user-border); background: var(--user-surface-hover); transform: translateX(2px); }
+.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--user-ink); text-align: left; transition: background-color 160ms ease, border-color 160ms ease; }
+.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand:hover { border-color: var(--user-border); background: var(--user-surface-hover); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand:nth-child(3n) .canvas-model-picker-brand-icon,
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand:nth-child(4n) .canvas-model-picker-brand-icon { background: var(--user-surface-muted); color: var(--user-ink-muted); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy small { color: var(--user-ink-muted); font-size: 10px; }
@@ -19528,7 +19510,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     box-shadow: none !important;
 }
 .app-user-workspace :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover, .ant-picker:hover) { border-color: var(--user-border-strong) !important; }
-.app-user-workspace :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector, .ant-picker-focused) { border-color: var(--user-accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--user-accent) 14%, transparent) !important; }
+.app-user-workspace :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector, .ant-picker-focused) { border-color: var(--user-border-strong) !important; box-shadow: none !important; }
+.app-user-workspace .ant-select:has(input:focus-visible) {
+    outline: var(--focus-ring-width, 2px) solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
 .creation-model-picker-surface .creation-model-picker-menu {
     max-height: none !important;
     overflow: visible !important;
@@ -19538,12 +19524,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .creation-model-picker-surface .canvas-model-picker-brands { display: grid; gap: 5px; }
 .creation-model-picker-surface .canvas-model-picker-subheading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 5px 8px; color: var(--foreground); font-size: 12px; font-weight: 650; }
 .creation-model-picker-surface .canvas-model-picker-subheading small { color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: 10px; font-weight: 500; }
-.creation-model-picker-surface .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--foreground); text-align: left; transition: background-color 160ms ease, border-color 160ms ease, transform 160ms cubic-bezier(.16,1,.3,1); }
-.creation-model-picker-surface .canvas-model-picker-brand:hover { border-color: var(--workspace-border); background: var(--workspace-surface-hover); transform: translateX(2px); }
-.creation-model-picker-surface .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: linear-gradient(135deg, color-mix(in srgb, var(--workspace-accent) 20%, var(--workspace-surface-strong)), color-mix(in srgb, var(--workspace-accent) 6%, var(--workspace-surface-strong))); color: var(--workspace-accent); }
-.creation-model-picker-surface .canvas-model-picker-brand-icon svg { color: currentColor !important; opacity: 1 !important; }
-.creation-model-picker-surface .canvas-model-picker-brand:nth-child(3n) .canvas-model-picker-brand-icon { color: #d57b16; }
-.creation-model-picker-surface .canvas-model-picker-brand:nth-child(4n) .canvas-model-picker-brand-icon { color: #25845d; }
+.creation-model-picker-surface .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--foreground); text-align: left; transition: background-color 160ms ease, border-color 160ms ease; }
+.creation-model-picker-surface .canvas-model-picker-brand:hover { border-color: var(--workspace-border); background: var(--workspace-surface-hover); }
+.creation-model-picker-surface .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--workspace-surface-hover); color: var(--foreground); }
 .creation-model-picker-surface .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .creation-model-picker-surface .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .creation-model-picker-surface .canvas-model-picker-brand-copy small { color: color-mix(in srgb, var(--foreground) 55%, transparent); font-size: 10px; }

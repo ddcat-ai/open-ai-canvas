@@ -183,6 +183,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     <div className="min-w-0">
                         <div className="truncate font-medium">{item.displayName || item.modelKey}</div>
                         <div className="admin-monospace truncate text-xs text-foreground/45">{item.modelKey}</div>
+                        {item.channelLabel ? <div className="truncate text-xs text-foreground/60">渠道展示名：{item.channelLabel}</div> : null}
                         {item.providerModelKey && item.providerModelKey !== item.modelKey ? <div className="admin-monospace truncate text-xs text-foreground/35">上游：{item.providerModelKey}</div> : null}
                     </div>
                 </div>
@@ -224,7 +225,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const filteredItems = items.filter((item) => {
         const query = keyword.trim().toLowerCase();
-        if (query && !`${item.modelKey} ${item.providerModelKey} ${item.displayName}`.toLowerCase().includes(query)) return false;
+        if (query && !`${item.modelKey} ${item.providerModelKey} ${item.displayName} ${item.channelLabel || ""}`.toLowerCase().includes(query)) return false;
         if (capability !== "all" && item.capability !== capability) return false;
         if (status === "enabled" && !item.enabled) return false;
         if (status === "disabled" && item.enabled) return false;
@@ -473,14 +474,14 @@ function billingSummary(item: ChannelModel) {
     return (
         <div className="space-y-1 text-xs leading-5">
             {tiers.slice(0, 3).map((tier) => (
-                <div key={tier.id}>{priceTierLabel(tier)}</div>
+                <div key={tier.id}>{priceTierLabel(tier, item.capability)}</div>
             ))}
             {tiers.length > 3 ? <div className="text-foreground/45">另有 {tiers.length - 3} 个规格价格档</div> : null}
         </div>
     );
 }
 
-function priceTierLabel(tier: ChannelModelPriceTier) {
+function priceTierLabel(tier: ChannelModelPriceTier, capability: ChannelModel["capability"]) {
     const selector = tier.selector || {};
     const specParts = [
         selector.operation && selector.operation !== "*" ? operationLabel(selector.operation) : "任意生成方式",
@@ -489,9 +490,10 @@ function priceTierLabel(tier: ChannelModelPriceTier) {
         tier.resolution === "*" ? "" : tier.resolution.toUpperCase(),
         tier.videoSeconds ? `${tier.videoSeconds} 秒` : "",
         selector.imageCount && selector.imageCount !== "*" ? `${selector.imageCount} 张参考图` : "",
+        selector.videoGenerateAudio === "true" ? "有声" : selector.videoGenerateAudio === "false" ? "无声" : "",
     ].filter(Boolean);
     const spec = specParts.length ? specParts.join(" / ") : "默认规格";
-    if (tier.billingMode === "token") return `${spec} · ${formatCredits(tier.outputTokenPriceMicrocredits)} / 百万 Token`;
+    if (tier.billingMode === "token") return `${spec} · ${formatCredits(tier.outputTokenPriceMicrocredits)} 积分 / 百万${capability === "video" ? "视频 " : " "}Token`;
     return `${spec} · ${formatCredits(tier.unitPriceMicrocredits)} 积分 / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
 }
 

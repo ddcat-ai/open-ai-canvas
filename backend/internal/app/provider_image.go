@@ -19,6 +19,11 @@ import (
 )
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) {
+		if err := validateOpenAIImageInput(input); err != nil {
+			return nil, err
+		}
+	}
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
 	}
@@ -111,6 +116,30 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+// Validate before selecting the plugin so declarative and handwritten paths share
+// the same write boundary. Invalid explicit sizes must not silently become auto.
+func validateOpenAIImageInput(input canvasGenerationInput) error {
+	if input.Mask != nil && len(input.ReferenceImages) == 0 {
+		return errors.New("蒙版编辑必须提供与蒙版同尺寸的源图片")
+	}
+	raw := strings.TrimSpace(input.Config.Size)
+	if raw == "" || raw == "auto" {
+		return nil
+	}
+	size := normalizePixelSize(raw)
+	widthText, heightText, ok := strings.Cut(size, "x")
+	width, widthErr := strconv.Atoi(widthText)
+	height, heightErr := strconv.Atoi(heightText)
+	if !ok || widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return errors.New("图片尺寸无效：请选择支持的宽高比或填写正整数像素尺寸，如 1024x1024")
+	}
+	base, err := url.Parse(input.Config.BaseURL)
+	if err == nil && strings.EqualFold(base.Hostname(), "api.ddcat.pronhubcn.com") && (width > 4096 || height > 4096) {
+		return errors.New("ddcat 图片尺寸超过上游限制：宽和高均不得超过 4096 像素")
+	}
+	return nil
 }
 
 func runGeminiImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {

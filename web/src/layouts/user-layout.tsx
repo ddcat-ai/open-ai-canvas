@@ -13,13 +13,14 @@ const workspaceTheme = getWorkspaceAntThemeConfig();
 
 export default function UserLayout({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
+    const adminWorkspace = pathname === "/admin" || pathname.startsWith("/admin/");
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
-    const productWorkspace = !/^\/canvas\/[^/]+(?:\/|$)/.test(pathname);
+    const productWorkspace = !adminWorkspace && !/^\/canvas\/[^/]+(?:\/|$)/.test(pathname);
     useWorkspaceButtonFeedback(productWorkspace);
 
     useLayoutEffect(() => {
         // Ant Design 浮层挂载在 body，必须用路由级标记隔离用户工作台与画布编辑器、运营后台。
-        document.body.classList.add("app-user-overlays");
+        document.body.classList.toggle("app-user-overlays", !adminWorkspace);
         document.body.classList.toggle("app-spatial-overlays", spatialWorkbench);
         document.body.classList.toggle("app-product-overlays", productWorkspace);
         return () => {
@@ -27,7 +28,9 @@ export default function UserLayout({ children }: { children: ReactNode }) {
             document.body.classList.remove("app-spatial-overlays");
             document.body.classList.remove("app-product-overlays");
         };
-    }, [spatialWorkbench, productWorkspace]);
+    }, [adminWorkspace, spatialWorkbench, productWorkspace]);
+
+    if (adminWorkspace) return children;
 
     return (
         <ConfigProvider theme={productWorkspace ? workspaceTheme : undefined}>

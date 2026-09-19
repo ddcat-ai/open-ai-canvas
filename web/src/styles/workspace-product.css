@@ -195,13 +195,6 @@
     .app-product-workspace .ant-btn-sm { height: 30px; border-radius: 8px; font-size: 12px; }
     .app-product-workspace .ant-btn > .ant-btn-icon svg,
     .app-product-overlays .ant-btn > .ant-btn-icon svg { width: var(--user-icon-size); height: var(--user-icon-size); stroke-width: 1.7; }
-    .app-product-workspace .ant-btn-primary:not(.ant-btn-dangerous):not([aria-pressed="true"]),
-    .app-product-overlays .ant-btn-primary:not(.ant-btn-dangerous):not([aria-pressed="true"]) {
-        background: var(--user-action-gradient) !important;
-        color: var(--user-action-foreground) !important;
-    }
-    .app-product-workspace .ant-btn-primary:not(.ant-btn-dangerous):not([aria-pressed="true"]):not(:disabled):hover,
-    .app-product-overlays .ant-btn-primary:not(.ant-btn-dangerous):not([aria-pressed="true"]):not(:disabled):hover { background: var(--user-action-gradient-hover) !important; }
     .app-product-workspace .ant-btn:disabled,
     .app-product-overlays .ant-btn:disabled { opacity: .42; }
     .app-user-workspace .collection-toolbar .ant-input-affix-wrapper,
@@ -213,7 +206,6 @@
         background: var(--user-surface-muted) !important;
         box-shadow: none !important;
     }
-    .app-user-workspace .collection-toolbar .ant-input-affix-wrapper:focus-within { outline: 2px solid var(--user-accent-soft); }
     .app-user-workspace .collection-toolbar .ant-input-affix-wrapper svg { width: var(--user-icon-size); height: var(--user-icon-size); color: var(--user-ink-soft); }
 }
 
@@ -269,7 +261,7 @@
     --product-state: 180ms;
     --product-enter: 360ms;
     --product-content-max: 1480px;
-    --product-focus-ring: color-mix(in srgb, var(--user-accent) 22%, transparent);
+    --product-focus-ring: var(--control-focus-ring);
     --product-accent-blue: #4167bf;
     --product-accent-green: #287f65;
     --product-accent-orange: #a46524;
@@ -403,7 +395,7 @@
 
 .app-product-workspace .story-launcher-input.ant-input:focus {
     background: var(--user-surface) !important;
-    box-shadow: 0 0 0 3px var(--product-focus-ring) !important;
+    box-shadow: none !important;
 }
 
 .app-product-workspace .skills-navigation {

@@ -15,6 +15,7 @@ export type PriceTierFormValues = {
     size: string;
     resolution: string;
     videoSeconds: number;
+    videoGenerateAudio: string;
     imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
@@ -22,6 +23,11 @@ export type PriceTierFormValues = {
     inputTokenPrice: number;
     outputTokenPrice: number;
     cachedTokenPrice: number;
+    costConfigured: boolean;
+    costUnitPrice: number;
+    costInputTokenPrice: number;
+    costOutputTokenPrice: number;
+    costCachedTokenPrice: number;
     priceConfigured: boolean;
     enabled: boolean;
 };
@@ -34,6 +40,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         size: "*",
         resolution: "*",
         videoSeconds: 0,
+        videoGenerateAudio: "*",
         imageCount: 0,
         providerModelKey: "",
         billingMode: "fixed_request",
@@ -41,6 +48,11 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         inputTokenPrice: 0,
         outputTokenPrice: 0,
         cachedTokenPrice: 0,
+        costConfigured: false,
+        costUnitPrice: 0,
+        costInputTokenPrice: 0,
+        costOutputTokenPrice: 0,
+        costCachedTokenPrice: 0,
         priceConfigured: true,
         enabled: true,
     };
@@ -56,6 +68,7 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
         size: selector.size || "*",
         resolution: tier.resolution || "*",
         videoSeconds: tier.videoSeconds || 0,
+        videoGenerateAudio: selector.videoGenerateAudio || "*",
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
@@ -63,6 +76,11 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
         inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
+        costConfigured: tier.costPricing?.configured === true,
+        costUnitPrice: (tier.costPricing?.unitPriceMicrocredits ?? 0) / 1_000_000,
+        costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
         priceConfigured: tier.priceConfigured,
         enabled: tier.enabled,
     };
@@ -91,6 +109,7 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
         if (Number(tier.videoSeconds) > 0) selector.videoSeconds = String(Number(tier.videoSeconds));
         if (Number(tier.imageCount) > 0) selector.imageCount = String(Number(tier.imageCount));
+        if (tier.videoGenerateAudio && tier.videoGenerateAudio !== "*") selector.videoGenerateAudio = tier.videoGenerateAudio;
     }
     if (capability === "image") {
         if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
@@ -105,4 +124,28 @@ export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, t
 
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
     return capability === "video" && tier.matchMode === "advanced" ? Number(tier.videoSeconds || 0) : 0;
+}
+
+export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {
+    const videoTokens = capability === "video" && tier.billingMode === "token";
+    return {
+        selector: skuSelectorFromForm(capability, tier),
+        resolution: priceTierResolutionFromForm(capability, tier),
+        videoSeconds: priceTierVideoSecondsFromForm(capability, tier),
+        providerModelKey: tier.providerModelKey?.trim() || upstreamModel,
+        billingMode: tier.billingMode,
+        unitPriceMicrocredits: Math.round((tier.unitPrice || 0) * 1_000_000),
+        inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.inputTokenPrice || 0) * 1_000_000),
+        outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
+        cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
+        costPricing: {
+            configured: tier.costConfigured,
+            unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),
+            inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costInputTokenPrice * 1_000_000),
+            outputTokenPriceMicrocredits: Math.round(tier.costOutputTokenPrice * 1_000_000),
+            cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costCachedTokenPrice * 1_000_000),
+        },
+        priceConfigured: tier.priceConfigured !== false,
+        enabled: tier.enabled !== false,
+    };
 }

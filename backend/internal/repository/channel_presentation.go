@@ -8,11 +8,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *Repository) UpdateSystemChannelPresentation(channelID string, alias *string, sortOrder *int, now time.Time) error {
+func (r *Repository) UpdateSystemChannelPresentation(channelID string, sortOrder *int, now time.Time) error {
 	updates := map[string]any{"updated_at": now}
-	if alias != nil {
-		updates["public_alias"] = *alias
-	}
 	if sortOrder != nil {
 		updates["sort_order"] = *sortOrder
 	}

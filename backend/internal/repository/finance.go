@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -657,6 +658,29 @@ func billingUsage(db *gorm.DB, orderID string) (*BillingUsage, error) {
 	return &BillingUsage{InputTokens: log.InputTokens, OutputTokens: log.OutputTokens, CachedTokens: log.CachedTokens}, nil
 }
 
+const (
+	billingUsageSourceProvider     = "provider"
+	billingUsageSourceVideoFormula = "video_formula"
+)
+
+func tokenSettlementUsage(db *gorm.DB, order model.BillingOrder) (*BillingUsage, string, error) {
+	usage, err := billingUsage(db, order.ID)
+	if err != nil && !errors.Is(err, ErrBillingUsageUnavailable) {
+		return nil, "", err
+	}
+	if order.Capability != "video" {
+		return usage, billingUsageSourceProvider, err
+	}
+	if err == nil && usage.OutputTokens > 0 && usage.InputTokens >= 0 && usage.CachedTokens >= 0 {
+		return &BillingUsage{OutputTokens: usage.OutputTokens}, billingUsageSourceProvider, nil
+	}
+	// 只有提交时明确记录的公式用量可以结算，预授权 Quantity 含余量，不能用作最终用量。
+	if order.VideoFormulaTokens > 0 {
+		return &BillingUsage{OutputTokens: order.VideoFormulaTokens}, billingUsageSourceVideoFormula, nil
+	}
+	return usage, billingUsageSourceProvider, err
+}
+
 func (r *Repository) RecordBillingResolution(id string, actorUserID string, note string) error {
 	return r.db.Model(&model.BillingOrder{}).Where("id = ?", id).Updates(map[string]any{
 		"resolved_by": actorUserID, "resolution_note": note, "updated_at": time.Now(),
@@ -705,6 +729,7 @@ func (r *Repository) MarkBillingUncertain(id string, errorText string) error {
 
 func (r *Repository) SettleBillingOrder(id string, providerRequestID string) error {
 	var observedUsage *BillingUsage
+	var observedUsageSource string
 	var observedActual int64
 	observedActualAvailable := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -719,11 +744,12 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			return errors.New("billing order already refunded")
 		}
 		if order.BillingMode == "token" && !zeroPricedTokenOrder(order) {
-			usage, err := billingUsage(tx, id)
+			usage, usageSource, err := tokenSettlementUsage(tx, order)
 			if err != nil {
 				return err
 			}
 			observedUsage = usage
+			observedUsageSource = usageSource
 			reserved := order.ReservedAmountMicrocredits
 			if reserved <= 0 {
 				reserved = order.AmountMicrocredits
@@ -761,7 +787,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			updates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now,
 				"actual_amount_microcredits": actual, "refunded_amount_microcredits": refund,
 				"input_tokens": usage.InputTokens, "output_tokens": usage.OutputTokens, "cached_tokens": usage.CachedTokens,
-				"usage_available": true}
+				"usage_available": usageSource == billingUsageSourceProvider, "usage_source": usageSource}
 			if providerRequestID != "" {
 				updates["provider_request_id"] = providerRequestID
 			}
@@ -773,6 +799,9 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 				consumeNote = "Token 实际用量超过 Agent 报价，已按本轮硬上限结算"
 			} else if supplement > 0 {
 				consumeNote = "Token 实际用量超过预授权，已补扣差额"
+			}
+			if usageSource == billingUsageSourceVideoFormula {
+				consumeNote = strings.TrimSpace("按提交时的视频 Token 公式快照结算；" + consumeNote)
 			}
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
 				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
@@ -830,10 +859,11 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		}).Error
 	})
 	if err != nil && observedUsage != nil {
-		// usage 是上游已经确认的事实；即使结算因账户状态异常回滚，也要保留给用户和管理员核对。
+		// 即使账户状态异常导致回滚，也保留结算依据并标明来源，供用户和管理员核对。
 		updates := map[string]any{
 			"input_tokens": observedUsage.InputTokens, "output_tokens": observedUsage.OutputTokens,
-			"cached_tokens": observedUsage.CachedTokens, "usage_available": true, "updated_at": time.Now(),
+			"cached_tokens": observedUsage.CachedTokens, "usage_available": observedUsageSource == billingUsageSourceProvider,
+			"usage_source": observedUsageSource, "updated_at": time.Now(),
 		}
 		if observedActualAvailable {
 			updates["actual_amount_microcredits"] = observedActual
@@ -873,12 +903,13 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 
 		actual := order.AmountMicrocredits
 		var usage *BillingUsage
+		var usageSource string
 		if order.BillingMode == "token" {
 			if zeroPricedTokenOrder(order) {
 				actual = 0
 			} else {
 				var err error
-				usage, err = billingUsage(tx, id)
+				usage, usageSource, err = tokenSettlementUsage(tx, order)
 				if err != nil {
 					return err
 				}
@@ -887,6 +918,10 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 					return err
 				}
 			}
+		}
+		chargeCapped := order.BillingMode == "token" && order.ChargeLimitMicrocredits > 0 && actual > order.ChargeLimitMicrocredits
+		if chargeCapped {
+			actual = order.ChargeLimitMicrocredits
 		}
 		if actual < 0 {
 			return errors.New("invalid restored billing amount")
@@ -927,7 +962,8 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			orderUpdates["input_tokens"] = usage.InputTokens
 			orderUpdates["output_tokens"] = usage.OutputTokens
 			orderUpdates["cached_tokens"] = usage.CachedTokens
-			orderUpdates["usage_available"] = true
+			orderUpdates["usage_available"] = usageSource == billingUsageSourceProvider
+			orderUpdates["usage_source"] = usageSource
 		}
 		orderUpdate := tx.Model(&model.BillingOrder{}).
 			Where("id = ? AND status = ?", order.ID, model.BillingStatusRefunded).
@@ -939,6 +975,13 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			return ErrBillingStateConflict
 		}
 
+		consumeNote := "人工查询确认上游成功，退款订单重新扣费"
+		if usageSource == billingUsageSourceVideoFormula {
+			consumeNote += "；按提交时的视频 Token 公式快照结算"
+		}
+		if chargeCapped {
+			consumeNote += "；已按本轮 Agent 硬上限结算"
+		}
 		return tx.Create(&model.CreditLedgerEntry{
 			ID:                         newRepositoryID(),
 			UserID:                     order.UserID,
@@ -951,7 +994,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			Model:                      order.Model,
 			ChannelID:                  order.ChannelID,
 			Scene:                      order.Scene,
-			Note:                       "人工查询确认上游成功，退款订单重新扣费",
+			Note:                       consumeNote,
 		}).Error
 	})
 }
@@ -1020,38 +1063,28 @@ func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, err
 	if usage == nil {
 		return 0, ErrBillingUsageUnavailable
 	}
+	if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.CachedTokens < 0 {
+		return 0, errors.New("invalid token usage amount")
+	}
 	if order.Capability == "video" && usage.OutputTokens <= 0 {
 		return 0, ErrBillingUsageUnavailable
 	}
-	input := usage.InputTokens - usage.CachedTokens
-	if input < 0 {
-		input = 0
+	terms := []kernel.TokenBillingTerm{
+		{Tokens: usage.OutputTokens, PriceMicrocredits: order.OutputTokenPriceMicrocredits},
 	}
-	inputAmount, ok := safeTokenUsageProduct(input, order.InputTokenPriceMicrocredits)
-	if !ok {
+	// 视频 Token 总用量已由供应商 completion_tokens 表达，不再叠加文本输入和缓存费用。
+	if order.Capability != "video" {
+		input := max(usage.InputTokens-usage.CachedTokens, 0)
+		terms = append(terms,
+			kernel.TokenBillingTerm{Tokens: input, PriceMicrocredits: order.InputTokenPriceMicrocredits},
+			kernel.TokenBillingTerm{Tokens: usage.CachedTokens, PriceMicrocredits: order.CachedTokenPriceMicrocredits},
+		)
+	}
+	amount, err := kernel.TokenBillingAmount(order.MultiplierBasisPoints, terms...)
+	if err != nil {
 		return 0, errors.New("invalid token usage amount")
 	}
-	outputAmount, ok := safeTokenUsageProduct(usage.OutputTokens, order.OutputTokenPriceMicrocredits)
-	if !ok || inputAmount > 1<<63-1-outputAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	cachedAmount, ok := safeTokenUsageProduct(usage.CachedTokens, order.CachedTokenPriceMicrocredits)
-	base := inputAmount + outputAmount
-	if !ok || base > 1<<63-1-cachedAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	base += cachedAmount
-	if order.MultiplierBasisPoints <= 0 || base > (1<<63-1-9_999_999_999)/order.MultiplierBasisPoints {
-		return 0, errors.New("invalid token usage amount")
-	}
-	return (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000, nil
-}
-
-func safeTokenUsageProduct(tokens int64, price int64) (int64, bool) {
-	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
-		return 0, false
-	}
-	return tokens * price, true
+	return amount, nil
 }
 
 func (r *Repository) AdjustCredits(userID string, actorUserID string, amount int64, note string) (*model.CreditAccount, error) {

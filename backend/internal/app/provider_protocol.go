@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 
 	"github.com/google/uuid"
@@ -186,6 +187,10 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			resolution = declared
 		}
 	}
+	aspectRatio := input.Config.Size
+	if input.Mode == "image" && strings.TrimSpace(input.Config.InterfaceType) == string(model.ChannelInterfaceOpenAIImage) {
+		aspectRatio = normalizePixelSize(aspectRatio)
+	}
 	request := protocol.GenerationRequest{
 		Capability:    protocol.Capability(input.Mode),
 		Model:         input.Config.Model,
@@ -194,7 +199,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Images:        protocolImageReferences(input),
 		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
 		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
-		AspectRatio:   input.Config.Size,
+		AspectRatio:   aspectRatio,
 		Resolution:    resolution,
 		Quality:       input.Config.Quality,
 		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),

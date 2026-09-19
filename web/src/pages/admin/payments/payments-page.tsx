@@ -1,4 +1,4 @@
-import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
+import { PaymentBrandIcon } from "@/components/payment-brand-icons";
 import { Callout } from "@/pages/admin/ui/controls";
 import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
@@ -910,23 +910,6 @@ export default function AdminPaymentsPage() {
             </Drawer>
         </AdminPageFrame>
     );
-}
-
-function PaymentBrandIcon({ providerId, compact = false }: { providerId: string; compact?: boolean }) {
-    const size = compact ? "size-6" : "size-10";
-    if (providerId === "wechat-native")
-        return (
-            <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#07c160]/10 text-[#07c160]`}>
-                <WechatFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />
-            </span>
-        );
-    if (providerId === "alipay-page-pay")
-        return (
-            <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#1677ff]/10 text-[#1677ff]`}>
-                <AlipayCircleFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />
-            </span>
-        );
-    return <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-muted text-xs`}>PAY</span>;
 }
 
 function formatDateTime(value: string) {

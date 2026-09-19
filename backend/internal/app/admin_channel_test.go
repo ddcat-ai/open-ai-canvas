@@ -141,7 +141,7 @@ func TestDuplicateSystemChannelCopiesSecretsModelsAndPriceTiers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DuplicateSystemChannel() error = %v", err)
 	}
-	if copied.Name != "方舟视频 - 副本" || copied.PublicAlias != source.PublicAlias || copied.Enabled != source.Enabled {
+	if copied.Name != "方舟视频 - 副本" || copied.Enabled != source.Enabled {
 		t.Fatalf("copied channel summary = %#v", copied)
 	}
 	var stored model.ModelChannel

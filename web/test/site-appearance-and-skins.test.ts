@@ -4,7 +4,7 @@ import { applySkinTheme, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, getSkinA
 import { normalizePublicAppearance } from "../src/stores/use-appearance-store";
 
 describe("site appearance and editable skin library", () => {
-    test("classic is immutable and keeps the existing runtime token system unchanged", () => {
+    test("classic preserves foundation tokens and applies only primary button fills", () => {
         expect(DEFAULT_CLASSIC_SKIN.locked).toBe(true);
         expect(getSkinAntOverrides(DEFAULT_CLASSIC_SKIN, "light")).toEqual({});
         expect(getSkinAntOverrides(DEFAULT_CLASSIC_SKIN, "dark")).toEqual({});
@@ -22,7 +22,9 @@ describe("site appearance and editable skin library", () => {
         } as unknown as Document;
         applySkinTheme(DEFAULT_CLASSIC_SKIN, "light", target);
         expect(removed.length).toBeGreaterThan(60);
-        expect(assigned.size).toBe(0);
+        expect(assigned.size).toBe(4);
+        expect(assigned.get("--button-primary-bg")).toBe("linear-gradient(115deg, #6554df, #386fbc)");
+        expect(assigned.has("--background")).toBe(false);
         expect(target.documentElement.dataset.skin).toBe("classic");
     });
 
@@ -142,7 +144,7 @@ describe("site appearance and editable skin library", () => {
         expect(storeSource).toContain('setMeta(targetDocument, "property", "og:title"');
         expect(footerSource).toContain("https://beian.miit.gov.cn/");
         expect(footerSource).toContain('rel="noopener noreferrer"');
-        expect(pageSource).toContain('title="5. 皮肤主题"');
+        expect(pageSource).toContain('title="皮肤主题"');
         expect(editorSource).toContain("从默认新建");
         expect(editorSource).toContain("复制当前");
         expect(editorSource).toContain("删除这套主题");

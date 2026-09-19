@@ -43,7 +43,6 @@ const (
 	FeatureSystemPlugins               = app.FeatureSystemPlugins
 	FeatureTaskCenter                  = app.FeatureTaskCenter
 	FeatureTimelineTranscription       = app.FeatureTimelineTranscription
-	ModelCatalogSourceFrontend         = app.ModelCatalogSourceFrontend
 	ModelCatalogSourceSystem           = app.ModelCatalogSourceSystem
 	PaymentPluginAlipayPage            = app.PaymentPluginAlipayPage
 	PaymentPluginWeChatNative          = app.PaymentPluginWeChatNative

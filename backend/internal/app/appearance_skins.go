@@ -96,6 +96,35 @@ type AppearanceSkinTokens struct {
 	Light      AppearanceSkinModeTokens      `json:"light"`
 	Dark       AppearanceSkinModeTokens      `json:"dark"`
 	Components AppearanceSkinComponentTokens `json:"components"`
+	Buttons    AppearanceSkinButtons         `json:"buttons"`
+}
+
+type AppearanceSkinButtons struct {
+	Light AppearanceSkinButtonFill `json:"light"`
+	Dark  AppearanceSkinButtonFill `json:"dark"`
+}
+
+type AppearanceSkinButtonFill struct {
+	Mode        string `json:"mode"`
+	Angle       int    `json:"angle"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
+	HoverStart  string `json:"hoverStart"`
+	HoverEnd    string `json:"hoverEnd"`
+	ActiveStart string `json:"activeStart"`
+	ActiveEnd   string `json:"activeEnd"`
+	Foreground  string `json:"foreground"`
+}
+
+func defaultAppearanceSkinButtons(gradient bool) AppearanceSkinButtons {
+	fill := AppearanceSkinButtonFill{
+		Mode: "solid", Angle: 115, Start: "#6554df", End: "#386fbc",
+		HoverStart: "#5744cf", HoverEnd: "#356bbb", ActiveStart: "#4938b8", ActiveEnd: "#2c5da5", Foreground: "#ffffff",
+	}
+	if gradient {
+		fill.Mode = "gradient"
+	}
+	return AppearanceSkinButtons{Light: fill, Dark: fill}
 }
 
 type AppearanceSkinTheme struct {
@@ -159,6 +188,9 @@ func defaultAppearanceSkinThemes() []AppearanceSkinTheme {
 	})
 	violet.Tokens.Components = appearanceSkinComponentPreset(7, 7, 12, 14, 9, 4)
 
+	studio.Tokens.Buttons = defaultAppearanceSkinButtons(false)
+	warm.Tokens.Buttons = defaultAppearanceSkinButtons(false)
+	violet.Tokens.Buttons = defaultAppearanceSkinButtons(false)
 	return []AppearanceSkinTheme{classic, studio, warm, violet}
 }
 
@@ -181,6 +213,7 @@ func defaultClassicAppearanceSkin() AppearanceSkinTheme {
 				AdminBackground: "#101010", AdminSurface: "#181818", AdminSubtle: "#202020", AdminStrong: "#2a2a2a", AuthBackground: "#08090c", AuthPanel: "#0b0c10", AuthCard: "#121318", AuthAccent: "#93c5fd", AuthMuted: "#8a8b91",
 			},
 			Components: appearanceSkinComponentPreset(6, 6, 12, 12, 8, 4),
+			Buttons:    defaultAppearanceSkinButtons(true),
 		},
 	}
 }
@@ -234,6 +267,11 @@ func normalizeAppearanceSkinThemes(themes []AppearanceSkinTheme) []AppearanceSki
 		result[index].Name = strings.TrimSpace(result[index].Name)
 		result[index].Description = strings.TrimSpace(result[index].Description)
 		result[index].Locked = result[index].ID == defaultAppearanceSkinID
+		// Only a wholly absent legacy button block is upgraded. Partial or
+		// malformed submitted parameters remain invalid on the write path.
+		if result[index].Tokens.Buttons == (AppearanceSkinButtons{}) {
+			result[index].Tokens.Buttons = defaultAppearanceSkinButtons(result[index].Locked)
+		}
 		var fallback AppearanceSkinTokens
 		for _, builtin := range builtins {
 			if builtin.ID == result[index].ID {
@@ -325,6 +363,11 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 		if err := validateAppearanceSkinComponents(skin.Tokens.Components); err != nil {
 			return err
 		}
+		for _, fill := range []AppearanceSkinButtonFill{skin.Tokens.Buttons.Light, skin.Tokens.Buttons.Dark} {
+			if err := validateAppearanceSkinButtonFill(fill); err != nil {
+				return err
+			}
+		}
 	}
 	if !foundClassic {
 		return BadAuthRequest("经典黑白为系统默认主题，不能修改或删除")
@@ -340,6 +383,21 @@ func validateAppearanceSkinMode(mode AppearanceSkinModeTokens) error {
 	for index := 0; index < value.NumField(); index++ {
 		if !appearanceColorPattern.MatchString(value.Field(index).String()) {
 			return BadAuthRequest("皮肤颜色必须使用 6 或 8 位十六进制颜色")
+		}
+	}
+	return nil
+}
+
+func validateAppearanceSkinButtonFill(fill AppearanceSkinButtonFill) error {
+	if fill.Mode != "solid" && fill.Mode != "gradient" {
+		return BadAuthRequest("主按钮填充模式无效")
+	}
+	if fill.Angle < 0 || fill.Angle > 360 {
+		return BadAuthRequest("主按钮渐变角度必须在 0 到 360 之间")
+	}
+	for _, color := range []string{fill.Start, fill.End, fill.HoverStart, fill.HoverEnd, fill.ActiveStart, fill.ActiveEnd, fill.Foreground} {
+		if !appearanceColorPattern.MatchString(color) {
+			return BadAuthRequest("主按钮颜色必须使用 6 或 8 位十六进制颜色")
 		}
 	}
 	return nil

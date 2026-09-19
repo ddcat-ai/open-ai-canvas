@@ -10,12 +10,12 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-func TestChannelPresentationAliasAndPublicOrder(t *testing.T) {
+func TestChannelPresentationUsesModelLabelsAndPublicOrder(t *testing.T) {
 	svc, db := newChannelModelTestService(t)
 	svc.dataDir = t.TempDir()
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	for i, id := range []string{"first", "second"} {
-		channel := model.ModelChannel{ID: id, Name: "内部" + id, Scope: model.ChannelScopeSystem, Enabled: true, BaseURL: "https://dead.invalid/v1", ModelsJSON: `[]`, CreatedAt: time.Unix(int64(i+1), 0)}
+		channel := model.ModelChannel{ID: id, Name: "渠道" + id, PublicAlias: "已废弃前台名称", Scope: model.ChannelScopeSystem, Enabled: true, BaseURL: "https://dead.invalid/v1", ModelsJSON: `[]`, CreatedAt: time.Unix(int64(i+1), 0)}
 		if err := db.Create(&channel).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -27,13 +27,12 @@ func TestChannelPresentationAliasAndPublicOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	alias := "  创作精选  "
-	updated, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{PublicAlias: &alias})
+	updated, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{SortOrder: intPtr(0)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Name != "内部second" || updated.PublicAlias != "创作精选" {
-		t.Fatalf("admin alias: %#v", updated)
+	if updated.Name != "渠道second" {
+		t.Fatalf("admin name: %#v", updated)
 	}
 	if _, err := svc.UpdateSystemChannel(admin, "first", ChannelRequest{SortOrder: intPtr(20)}); err != nil {
 		t.Fatal(err)
@@ -42,51 +41,46 @@ func TestChannelPresentationAliasAndPublicOrder(t *testing.T) {
 	if err != nil || total != 2 || len(adminRows) != 1 || adminRows[0].ID != "second" {
 		t.Fatalf("pagination before sort: %v %v %v", adminRows, total, err)
 	}
-	search, _, err := svc.repo.AdminSystemChannels("精选", "all", 10, 0)
+	search, _, err := svc.repo.AdminSystemChannels("second", "all", 10, 0)
 	if err != nil || len(search) != 1 {
-		t.Fatalf("alias search: %v %v", search, err)
+		t.Fatalf("name search: %v %v", search, err)
 	}
 	catalog, err := svc.publicSystemChannelCatalog(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog) != 2 || catalog[0].ID != "second" || catalog[0].Name != "创作精选" || catalog[0].DisplayName != "创作精选" {
+	if len(catalog) != 2 || catalog[0].ID != "second" || catalog[0].Name != "渠道second" || catalog[0].DisplayName != "渠道second" {
 		t.Fatalf("public catalog: %#v", catalog)
 	}
 	legacy, err := svc.PublicSystemChannels()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if legacy[0].Name != "创作精选" {
+	if legacy[0].Name != "渠道second" {
 		t.Fatalf("public session: %#v", legacy)
 	}
 	encoded, _ := json.Marshal([]any{catalog[0], legacy[0]})
-	if strings.Contains(string(encoded), "内部second") {
-		t.Fatal("internal channel name leaked into public payload")
+	if strings.Contains(string(encoded), "已废弃前台名称") || strings.Contains(string(encoded), "publicAlias") {
+		t.Fatal("retired alias leaked into public payload")
 	}
 	if _, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{SortOrder: intPtr(5)}); err != nil {
 		t.Fatal(err)
 	}
 	stored, _ := svc.repo.AdminSystemChannel("second")
-	if stored.PublicAlias != "创作精选" {
-		t.Fatal("partial sort patch cleared alias")
+	if stored.Name != "渠道second" {
+		t.Fatal("partial sort patch changed channel name")
 	}
-	alias = "  "
-	if _, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{PublicAlias: &alias, SortOrder: intPtr(0)}); err != nil {
+	if _, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{SortOrder: intPtr(0)}); err != nil {
 		t.Fatal(err)
 	}
 	catalog, err = svc.publicSystemChannelCatalog(nil)
-	if err != nil || catalog[0].Name != "内部second" {
-		t.Fatalf("empty alias fallback: %v %v", catalog, err)
+	if err != nil || catalog[0].Name != "渠道second" {
+		t.Fatalf("channel name: %v %v", catalog, err)
 	}
 	for _, invalid := range []int{-1, 1000000} {
 		if _, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{SortOrder: &invalid}); err == nil {
 			t.Fatal("invalid sort accepted")
 		}
-	}
-	alias = strings.Repeat("字", 81)
-	if _, err := svc.UpdateSystemChannel(admin, "second", ChannelRequest{PublicAlias: &alias}); err == nil {
-		t.Fatal("long alias accepted")
 	}
 }
 

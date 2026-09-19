@@ -19,7 +19,6 @@ import { ChannelOrderDialog } from "../components/channel-order-dialog";
 
 type ChannelFormValues = {
     name: string;
-    publicAlias?: string;
     baseUrl: string;
     apiKey?: string;
     secretKey?: string;
@@ -32,7 +31,6 @@ type ChannelFormValues = {
 export function adminChannelSavePayload(values: ChannelFormValues) {
     return {
         name: values.name.trim(),
-        publicAlias: values.publicAlias?.trim() || "",
         baseUrl: values.baseUrl.trim(),
         apiKey: values.apiKey?.trim() || "",
         secretKey: values.secretKey?.trim() || "",
@@ -122,7 +120,6 @@ export default function ChannelsPage() {
                 : { name: "", baseUrl: "", apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true },
         );
         setDrawerOpen(true);
-        form.setFieldsValue({ publicAlias: channel?.publicAlias || "" });
     };
 
     const closeDrawer = () => {
@@ -208,7 +205,6 @@ export default function ChannelsPage() {
                 </div>
             ),
         },
-        { title: "前台名称", width: 160, render: (_, channel) => <span className={channel.publicAlias ? "" : "text-foreground/45"}>{channel.publicAlias || channel.name}</span> },
         { title: "模型", dataIndex: "models", width: 100, align: "center", render: (models: string[]) => `${models?.length || 0} 个` },
         { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, align: "center", render: (value: number) => (value > 0 ? value : <span className="text-foreground/45">跟随系统</span>) },
         { title: "凭证", width: 130, align: "center", render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
@@ -358,9 +354,6 @@ export default function ChannelsPage() {
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请填写渠道名称" }]}>
                         <Input placeholder="例如：OpenAI 官方渠道" />
-                    </Form.Item>
-                    <Form.Item name="publicAlias" label="前台显示别名" extra="留空时显示渠道名称；填写后用户端只显示此别名，后台仍保留原渠道名称。" rules={[{ max: 80, message: "别名不能超过 80 个字符" }]}>
-                        <Input maxLength={80} placeholder="可选，例如：精选图片" />
                     </Form.Item>
                     <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}>
                         <Input placeholder="填写云端渠道 Base URL" />
