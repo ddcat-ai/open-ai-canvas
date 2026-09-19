@@ -89,6 +89,8 @@ func Models() []any {
 		&model.CanvasSnapshot{},
 		&model.CanvasSnapshotResource{},
 		&model.CanvasShare{},
+		&model.CanvasTemplate{},
+		&model.CanvasTemplateVersion{},
 		&model.PromptTemplate{},
 		&model.UserPromptCustomization{},
 		&model.Announcement{},

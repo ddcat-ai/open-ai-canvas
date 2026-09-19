@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LayoutTemplate, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
@@ -33,6 +33,7 @@ type CanvasTopBarProps = {
     onSave: () => void | Promise<void>;
     onForceSave: () => void;
     onImportImage: () => void;
+    onOpenTemplates: () => void;
     onImportLibTV: () => void;
     onImportTapNow: () => void;
     onUndo: () => void;
@@ -65,6 +66,7 @@ export function CanvasTopBar({
     onSave,
     onForceSave,
     onImportImage,
+    onOpenTemplates,
     onImportLibTV,
     onImportTapNow,
     onUndo,
@@ -120,6 +122,7 @@ export function CanvasTopBar({
                                     { key: "save", icon: <Save className="size-4" />, label: <MenuLabel text="保存" shortcut="⌘ S" />, onClick: () => void onSave() },
                                     { key: "force-save", icon: <CloudUpload className="size-4" />, label: "修复素材关联并保存", onClick: onForceSave },
                                     { type: "divider" },
+                                    { key: "templates", icon: <LayoutTemplate className="size-4" />, label: "打开模板库", onClick: onOpenTemplates },
                                     { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                     { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ F" />, onClick: onOpenSearch },
                                     {
@@ -206,6 +209,11 @@ export function CanvasTopBar({
                             onClick={onOpenSearch}
                             aria-label="搜索画布节点"
                         />
+                    </CanvasTopBarTooltip>
+                    <CanvasTopBarTooltip label="模板库">
+                        <Button type="text" className="canvas-topbar-action !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<LayoutTemplate className="size-4" />} onClick={onOpenTemplates} aria-label="打开模板库">
+                            <span className="hidden lg:inline">模板</span>
+                        </Button>
                     </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="导入第三方画布">
                         <Dropdown

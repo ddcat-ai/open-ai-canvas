@@ -270,6 +270,19 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/lib/canvas/canvas-starter.ts`：空画布起点状态决策。
 - `web/src/stores/canvas/use-canvas-store.ts`：按画布保存自由起点选择。
 
+## 自由画布模板库
+
+自由画布列表页提供模板库入口，画布编辑页顶部也可打开模板库。系统模板可以创建新画布或插入已有画布，保留内部连线并自动重映射节点 ID；导入只写入工作流，不自动执行生成，也不覆盖当前画布。
+
+模板库同时支持系统模板、服务端公共模板和当前用户的个人模板。选中画布节点后，可从多选工具栏保存为个人模板；模板库支持 JSON 导入/导出和删除个人模板。管理员可在 `/admin/canvas-templates` 发布或下架模板，仓库内包含 NodyHub 公共预览数据包；预览包不包含付费模板的完整媒体资源，因此导入后保留工作流结构和提示词，不复制外部媒体。
+
+### 相关实现
+
+- `web/src/lib/canvas/canvas-templates.ts`：系统模板目录、节点图工厂和导入 ID 重映射。
+- `web/src/components/canvas/canvas-template-library-modal.tsx`：搜索、分类、预览、JSON 导入/导出和个人模板管理。
+- `web/src/components/canvas/canvas-save-template-modal.tsx`：将当前选中节点保存为个人模板。
+- `web/src/pages/admin/canvas-templates-page.tsx`：管理员模板筛选、发布/下架和结构查看。
+
 ## 画布手动保存与强制覆盖
 
 画布左上角菜单提供「保存」与「强制覆盖保存」两个手动入口。「保存」与 ⌘/Ctrl+S 等价：先写入浏览器本地缓存，再触发云端同步；云端失败时保留本地结果并排队自动重试，适合平板等无键盘设备手动落盘。

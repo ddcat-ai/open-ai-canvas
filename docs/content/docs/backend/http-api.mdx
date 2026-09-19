@@ -61,6 +61,22 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 云端 Agent 与创作任务的写入共用版本和历史事务；Agent `canvasPatch` 携带 `baseRevision`、`revision`，客户端只接受连续增量，跳过重复事件，缺口或同字段冲突时保留草稿并重新核对。删除、重排或顶层内容变化无法由增量完整表示时，事件携带 `requiresRefresh: true` 且不附 `canvasPatch`，客户端完整核对后才推进基线；撤销事件同样触发核对。保存日志仅记录请求/链路 ID、画布/用户 ID、版本、节点数量变化及 HTTP 状态，不记录正文、提示词或媒体 URL。
 
+## 画布模板库
+
+以下接口需要登录；管理员接口还需要管理员权限。模板正文使用 `yingce.canvas-template` schema，服务端会校验节点 ID、连线端点和运行时媒体字段。
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET /canvas-templates` | 按 `q`、`category` 分页返回当前用户模板和已发布公共模板，并附当前版本正文 |
+| `GET /canvas-templates/:id` | 读取当前用户拥有或已公开的模板 |
+| `POST /canvas-templates` | 创建个人模板，正文限制 2MB、最多 200 个节点 |
+| `POST /canvas-templates/:id/versions` | 为本人模板创建下一不可变版本 |
+| `DELETE /canvas-templates/:id` | 删除本人模板及其版本 |
+| `GET /admin/canvas-templates` | 管理员按 `q`、`status` 分页查看全部模板 |
+| `PATCH /admin/canvas-templates/:id` | 管理员设置 `status` 为 `draft` / `published`，并同步 `visibility` |
+
+模板接口只保存工作流结构，不接受 `storageKey`、`assetId`、`taskId` 或媒体预览内容；导入 NodyHub 公共预览时，外部媒体会转换为空输入节点。
+
 ## 欢迎页开放配置
 
 `GET /public/welcome` 无需登录，信封 `data` 仅包含布尔值 `welcomeEnabled`，响应禁用缓存。读取失败按标准错误信封返回。

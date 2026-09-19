@@ -87,6 +87,11 @@ type (
 	BulkDisableUsersResult                 = app.BulkDisableUsersResult
 	CanvasLibraryPage                      = app.CanvasLibraryPage
 	CanvasLibrarySummary                   = app.CanvasLibrarySummary
+	CanvasTemplateDocument                 = app.CanvasTemplateDocument
+	CanvasTemplatePage                     = app.CanvasTemplatePage
+	CanvasTemplateRequest                  = app.CanvasTemplateRequest
+	CanvasTemplateAdminUpdateRequest       = app.CanvasTemplateAdminUpdateRequest
+	CanvasTemplateView                     = app.CanvasTemplateView
 	CanvasHistoryList                      = app.CanvasHistoryList
 	CanvasShareRequest                     = app.CanvasShareRequest
 	CanvasShareStatus                      = app.CanvasShareStatus

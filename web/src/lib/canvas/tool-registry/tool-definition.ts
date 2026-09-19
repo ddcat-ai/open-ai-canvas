@@ -69,6 +69,7 @@ export type ToolbarHandlers = {
     onBatchConnect: () => void;
     onMergeVideos: () => void;
     onSendSelectionToAgent: () => void;
+    onSaveTemplate: () => void;
     // 节点悬停工具栏——节点操作（均接收当前节点）
     onNodeInfo: (node: CanvasNodeData) => void;
     onNodeDelete: (node: CanvasNodeData) => void;
