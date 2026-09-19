@@ -14,7 +14,8 @@ BUN_VERSION="1.3.9"
 cd "$REPO_DIR"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl gcc git openssl pkg-config postgresql-client-16 unzip xz-utils
+apt-get install -y --no-install-recommends ca-certificates curl gcc git openssl pkg-config postgresql-client-16 redis-server unzip xz-utils
+systemctl enable --now redis-server.service
 
 install -d -m 0755 /opt/open-ai-canvas/toolchains /opt/open-ai-canvas/releases
 go_root="/opt/open-ai-canvas/toolchains/go${GO_VERSION}"
@@ -61,6 +62,7 @@ if [[ ! -f "$env_file" ]]; then
 APP_ENV=prod
 CANVAS_DATABASE_DRIVER=postgres
 DATABASE_URL=postgres://${db_role}:${db_password}@127.0.0.1:5432/${db_name}?sslmode=disable
+REDIS_URL=redis://127.0.0.1:6379/0
 CANVAS_BACKEND_ADDR=127.0.0.1:8080
 CANVAS_BACKEND_DATA_DIR=/var/lib/open-ai-canvas/data
 CANVAS_AUTO_MIGRATE=true

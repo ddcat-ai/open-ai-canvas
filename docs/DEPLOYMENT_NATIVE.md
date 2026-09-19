@@ -18,6 +18,7 @@
 | 配置 | `/etc/open-ai-canvas/production.env`，root:openaicanvas，0640 |
 | 数据目录 | `/var/lib/open-ai-canvas` |
 | 数据库 | PostgreSQL `open_ai_canvas`，只监听本机 |
+| 协调服务 | Redis `redis-server.service`，只监听本机 |
 | 备份目录 | `/var/backups/open-ai-canvas` |
 | 域名 | `canvas.yingpix.com` |
 
@@ -34,7 +35,7 @@ cd /root/open-ai-canvas
 APP_DOMAIN=canvas.yingpix.com bash deploy/native/server-setup.sh
 ```
 
-脚本会安装 Go 1.25.0 和 Bun 1.3.9 到 `/opt/open-ai-canvas/toolchains`，安装或复用 PostgreSQL，创建独立数据库和 `openaicanvas` 用户，写入受保护配置，安装两个 systemd 单元，建立 `/root/open-ai-canvas-ops`，并把独立 Caddy 站点加入现有 Caddyfile。它不会修改 `/root/yingpix` 或 `yingpix.service`。
+脚本会安装 Go 1.25.0 和 Bun 1.3.9 到 `/opt/open-ai-canvas/toolchains`，安装或复用 PostgreSQL 和本机 Redis，创建独立数据库和 `openaicanvas` 用户，写入受保护配置，安装两个 systemd 单元，建立 `/root/open-ai-canvas-ops`，并把独立 Caddy 站点加入现有 Caddyfile。它不会修改 `/root/yingpix` 或 `yingpix.service`。
 
 `CANVAS_REGISTRATION_ENABLED` 首次默认开启，用于注册第一个管理员。完成注册并确认登录后，编辑 `/etc/open-ai-canvas/production.env` 改为 `CANVAS_REGISTRATION_ENABLED=false`，再重启后端：
 
@@ -104,6 +105,6 @@ DNS 未指向服务器或证书尚未签发时，只能确认本机两个健康�
 ## 运行边界
 
 - 后端只绑定 `127.0.0.1:8080`，前端只绑定 `127.0.0.1:3000`，公网入口统一由 Caddy 提供。
-- PostgreSQL 使用独立角色和数据库；当前单实例不配置 Redis，多实例扩展前必须补 Redis 协调配置。
+- PostgreSQL 使用独立角色和数据库；Redis 使用本机 `redis-server.service`，配置为 `redis://127.0.0.1:6379/0`，用于限流、并发和熔断协调。
 - 生产数据、上传目录、认证状态和环境文件均在 Git 与 release 目录之外。
 - 发布会重启后端，正在执行的后台任务应在低峰期发布；发布失败时程序可回滚，数据库迁移不自动回滚。
