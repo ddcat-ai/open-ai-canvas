@@ -1,0 +1,23 @@
+[Unit]
+Description=Open AI Canvas Go backend
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openaicanvas
+Group=openaicanvas
+WorkingDirectory=/var/lib/open-ai-canvas
+EnvironmentFile=/etc/open-ai-canvas/production.env
+ExecStart=/opt/open-ai-canvas/current/open-ai-canvas-backend
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=11min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/open-ai-canvas
+
+[Install]
+WantedBy=multi-user.target

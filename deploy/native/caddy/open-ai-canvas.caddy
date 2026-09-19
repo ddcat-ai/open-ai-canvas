@@ -1,0 +1,20 @@
+canvas.yingpix.com {
+    encode zstd gzip
+
+    @backend path /api/* /oauth/linuxdo/callback
+    handle @backend {
+        reverse_proxy 127.0.0.1:8080 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+}
