@@ -295,7 +295,8 @@ func normalizeCanvasTemplateRequest(req CanvasTemplateRequest) (canvasTemplateMe
 		}
 	}
 	mediaIDs := make(map[string]bool, len(document.Media))
-	for _, media := range document.Media {
+	for index := range document.Media {
+		media := &document.Media[index]
 		media.ID = strings.TrimSpace(media.ID)
 		media.NodeID = strings.TrimSpace(media.NodeID)
 		media.Kind = strings.TrimSpace(media.Kind)
