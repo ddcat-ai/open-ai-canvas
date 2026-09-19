@@ -82,6 +82,7 @@ func TestMigrateSchemaV15UpgradesExistingDatabase(t *testing.T) {
 		t.Fatal("v15 upgrade did not install Agent profile table and scope index")
 	}
 	status, err := ReadSchemaStatus(db)
+	// 该用例验证从 v14 继续升级：补跑 v15 后应一路升到程序支持的最新版本。
 	if err != nil || !status.Ready || status.Current != CurrentSchemaVersion {
 		t.Fatalf("unexpected upgraded schema status: %+v, %v", status, err)
 	}

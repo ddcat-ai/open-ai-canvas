@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"log"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/auth"
@@ -125,7 +127,17 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
-	return s.authDomain().Register(req)
+	result, err := s.authDomain().Register(req)
+	if err != nil {
+		return nil, err
+	}
+	// 邀请码绑定失败不能回滚已经成功的注册；记录日志便于人工补绑，避免用户白注册。
+	if result != nil && strings.TrimSpace(req.InviteCode) != "" && strings.TrimSpace(result.User.ID) != "" {
+		if bindErr := s.BindInvitation(result.User.ID, req.InviteCode, "code"); bindErr != nil {
+			log.Printf("邀请码绑定失败 user=%s code=%s: %v", result.User.ID, req.InviteCode, bindErr)
+		}
+	}
+	return result, nil
 }
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {

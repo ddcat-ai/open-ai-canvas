@@ -51,7 +51,12 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
         },
         {
             heading: "资源与工具",
-            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled || isAdmin ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
+            items: [
+                { ...toolItem("assets", "/assets"), title: "资产" },
+                { ...toolItem("skills", "/skills"), title: "技能" },
+                ...(features.pluginCenterEnabled || isAdmin ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
+                ...(features.promotionEnabled ? [{ ...toolItem("promotion", "/promotion"), title: "推广中心" }] : []),
+            ],
         },
         ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
     ];
@@ -70,11 +75,24 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
     useEffect(() => setFailed(false), [avatarUrl]);
 
     if (!user) {
-        return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span>登录</span></Link>;
+        return (
+            <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录">
+                <CircleUserRound className="size-5" />
+                <span>登录</span>
+            </Link>
+        );
     }
 
     const avatar = avatarUrl && !failed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <CircleUserRound aria-hidden />;
-    const content = <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onWallet={() => { setMenuOpen(false); openWorkspaceWallet(); }} />;
+    const content = (
+        <WorkspaceAccountCard
+            onNavigate={() => setMenuOpen(false)}
+            onWallet={() => {
+                setMenuOpen(false);
+                openWorkspaceWallet();
+            }}
+        />
+    );
 
     return (
         <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
@@ -84,7 +102,12 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
                 <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" rootClassName="workspace-account-popover" content={content}>
                     <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" title={profileName}>
                         <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
-                        {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
+                        {!collapsed ? (
+                            <span className="app-workspace-sidebar-profile-copy">
+                                <strong>{profileName}</strong>
+                                <span>创作工作台</span>
+                            </span>
+                        ) : null}
                     </button>
                 </Popover>
                 {!collapsed ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-sidebar-notification" /> : <span className="app-workspace-sidebar-notification-spacer" aria-hidden />}
@@ -110,7 +133,12 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
             <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
                 <span className="flex min-w-0 items-center gap-2">
-                    <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />} />
+                    <BrandLogoFrame
+                        className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm"
+                        logoClassName="size-5 object-contain"
+                        alt=""
+                        fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />}
+                    />
                     <span className="flex min-w-0 flex-col">
                         <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
                         <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/60">创作工作台</span>
@@ -154,7 +182,8 @@ function NavItem({
     const Icon = item.icon;
     const rowStyle = collapsed ? undefined : ({ paddingLeft: `${level * 12 + 10}px` } as CSSProperties);
 
-    const collapsedTitle = item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
+    const collapsedTitle =
+        item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
@@ -168,9 +197,7 @@ function NavItem({
                 <span className="app-workspace-nav-title truncate">{collapsed ? collapsedTitle : item.title}</span>
             </span>
             <span className="app-workspace-nav-meta flex shrink-0 items-center gap-2">
-                {item.shortcut ? (
-                    <Kbd className="hidden group-hover:inline-flex">{item.shortcut}</Kbd>
-                ) : null}
+                {item.shortcut ? <Kbd className="hidden group-hover:inline-flex">{item.shortcut}</Kbd> : null}
                 {item.badge !== undefined ? <span className="flex min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium tabular-nums text-primary">{item.badge}</span> : null}
                 {hasChildren ? <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/40 transition-transform duration-200", isOpen && "rotate-90")} strokeWidth={2} /> : null}
             </span>
@@ -182,14 +209,7 @@ function NavItem({
         collapsed && "is-collapsed",
         isActive ? "is-active font-medium" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
     );
-    const activePill = isActive ? (
-        <motion.span
-            layoutId="workspace-nav-active-pill"
-            className="app-workspace-nav-active-pill"
-            aria-hidden
-            transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock}
-        />
-    ) : null;
+    const activePill = isActive ? <motion.span layoutId="workspace-nav-active-pill" className="app-workspace-nav-active-pill" aria-hidden transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock} /> : null;
 
     const handleClick = () => {
         if (item.action === "search") {
@@ -229,7 +249,16 @@ function NavItem({
                     {rowContent}
                 </Link>
             ) : (
-                <button type="button" className={rowClassName} data-nav-id={item.id} style={rowStyle} aria-label={collapsed ? item.title : undefined} title={collapsed ? item.title : undefined} onClick={handleClick} aria-expanded={hasChildren ? isOpen : undefined}>
+                <button
+                    type="button"
+                    className={rowClassName}
+                    data-nav-id={item.id}
+                    style={rowStyle}
+                    aria-label={collapsed ? item.title : undefined}
+                    title={collapsed ? item.title : undefined}
+                    onClick={handleClick}
+                    aria-expanded={hasChildren ? isOpen : undefined}
+                >
                     {activePill}
                     {rowContent}
                 </button>
@@ -268,7 +297,11 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
 
     // 无标题分组（核心导航入口）常驻展示，不做折叠。
     if (!group.heading || collapsed) {
-        return <div className="app-workspace-nav-group flex shrink-0 flex-col" data-nav-group-heading={group.heading || ""}>{content}</div>;
+        return (
+            <div className="app-workspace-nav-group flex shrink-0 flex-col" data-nav-group-heading={group.heading || ""}>
+                {content}
+            </div>
+        );
     }
 
     return (
@@ -316,24 +349,31 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             <WorkspaceSwitcher collapsed={collapsed} onNavigate={onNavigate} onExpand={onExpand} onCollapse={onCollapse} />
 
             <LayoutGroup id="workspace-sidebar-nav">
-            <div
-                ref={scrollRef}
-                onScroll={handleScroll}
-                className={cn("app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-3 pt-7", collapsed && "is-collapsed", scrollState.hasTopFade && "has-top-fade", scrollState.hasBottomFade && "has-bottom-fade")}
-            >
-                {groups.map((group, index) => (
-                    <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
-                ))}
-            </div>
+                <div
+                    ref={scrollRef}
+                    onScroll={handleScroll}
+                    className={cn(
+                        "app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-3 pt-7",
+                        collapsed && "is-collapsed",
+                        scrollState.hasTopFade && "has-top-fade",
+                        scrollState.hasBottomFade && "has-bottom-fade",
+                    )}
+                >
+                    {groups.map((group, index) => (
+                        <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                    ))}
+                </div>
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
                 <WorkspaceSidebarProfile collapsed={collapsed} user={user} />
-                {footer.length ? <div className="mt-2 flex flex-col gap-0.5">
-                    {footer.map((item) => (
-                        <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
-                    ))}
-                </div> : null}
+                {footer.length ? (
+                    <div className="mt-2 flex flex-col gap-0.5">
+                        {footer.map((item) => (
+                            <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                        ))}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

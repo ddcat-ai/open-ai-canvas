@@ -872,11 +872,20 @@ func (s *Service) applyPaymentResult(providerID string, result payment.Result) (
 		if result.AmountFen != order.AmountFen || result.Currency != order.Currency {
 			return nil, repository.ErrPaymentEvidenceMismatch
 		}
-		completed, _, err := s.repo.CompletePaymentOrder(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
+		completed, granted, err := s.repo.CompletePaymentOrder(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: result.ProviderTradeNo, ProviderStatus: result.ProviderStatus,
 			AmountFen: result.AmountFen, Currency: result.Currency, PaidAt: result.PaidAt,
 		})
-		return completed, err
+		if err != nil {
+			return nil, err
+		}
+		if granted {
+			// 返佣结算失败不阻断充值入账：订单已入账，返佣可由幂等键在后续回调中补齐。
+			if commissionErr := s.SettlePaymentCommission(completed); commissionErr != nil {
+				log.Printf("推广返佣结算失败 order=%s: %v", completed.ID, commissionErr)
+			}
+		}
+		return completed, nil
 	}
 	if result.Closed {
 		if err := s.repo.MarkPaymentOrderClosed(order.ID, result.ProviderStatus); err != nil {

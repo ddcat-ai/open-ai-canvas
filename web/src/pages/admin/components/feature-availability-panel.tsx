@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, Share2, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { refreshFeatureAvailability } from "@/lib/user-session";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "promotionEnabled";
 type FeatureRow = {
     key: FeatureKey;
     title: string;
@@ -17,7 +18,7 @@ type FeatureRow = {
     dependsOn?: FeatureKey;
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers", "promotionEnabled"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -43,6 +44,12 @@ const workspaceFeatureRows: FeatureRow[] = [
         title: "自定义渠道",
         description: "允许用户配置并使用自己的模型渠道。",
         icon: <RadioTower className="size-4" aria-hidden="true" />,
+    },
+    {
+        key: "promotionEnabled",
+        title: "推广中心",
+        description: "开放邀请返佣与提现入口。关闭后前台不展示推广中心，邀请绑定与返佣结算一并停止。",
+        icon: <Share2 className="size-4" aria-hidden="true" />,
     },
 ];
 
@@ -137,6 +144,8 @@ export default function FeatureAvailabilityPanel() {
             setSavedFeatures(value);
             setDraftFeatures(value);
             setGlobalFeatures(value);
+            // 特性开关同时控制侧边栏入口与路由准入，保存后立即刷新会话态，避免还要手动刷新页面。
+            await refreshFeatureAvailability();
             message.success(`${featureByKey.get(key)?.title || "功能"}已${enabled ? "开启" : "关闭"}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "保存功能开放配置失败";
@@ -354,6 +363,7 @@ function toEditablePayload(features: FeatureAvailability) {
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
+        promotionEnabled: features.promotionEnabled,
     };
 }
 
@@ -376,6 +386,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
+        promotionEnabled: record.promotionEnabled as boolean,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,
         updatedBy: typeof record.updatedBy === "string" ? record.updatedBy : undefined,
         updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,
