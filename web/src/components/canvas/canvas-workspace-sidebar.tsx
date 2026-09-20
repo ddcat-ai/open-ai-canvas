@@ -40,7 +40,7 @@ const RAIL_ITEMS: Array<{ id: RailTab; label: string; icon: ComponentType<{ clas
 
 export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets = [], onInsertAssetImage, onRefreshAssets, onAssetAction, onActiveTabChange, tasks = [], historyTasks = [], tasksRefreshing, onRefreshTasks, onCancelTask }: CanvasWorkspaceSidebarProps) {
     const [activeTab, setActiveTab] = useState<RailTab>("nodes");
-    const [panelCollapsed, setPanelCollapsed] = useState(false);
+    const [panelCollapsed, setPanelCollapsed] = useState(true);
     const [query, setQuery] = useState("");
     const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase("zh-CN"));
     const results = useMemo(() => searchCanvasNodes(nodes, deferredQuery), [nodes, deferredQuery]);
@@ -79,7 +79,7 @@ export function CanvasWorkspaceSidebar({ nodes, selectedNodeIds, onFocus, assets
                 <span className="rail-grow" />
             </nav>
             {!panelCollapsed ? (
-                <aside className="canvas-workspace-panel border-r border-border bg-background/94 backdrop-blur-xl">
+                <aside className="canvas-workspace-panel  border-r border-border bg-background/94 backdrop-blur-xl">
                     {activeTab === "nodes" ? (
                         <CanvasWorkspaceNodeListPanel
                             nodes={nodes}
