@@ -183,6 +183,25 @@ git status --short
 - 是否需要更新其他文档或配置：是；已更新 `.gitignore`，并在 `docs/index.md` 增加手册入口。
 - 关联项目更新记录：`CHANGELOG.md` 的 `Unreleased` 条目。
 
+### RB-20260920-06：个人镜像仓库没有 Fork 关系，无法创建跨仓库 PR
+
+- 日期：2026-09-20
+- 现象：分支已成功推送，创建上游 PR 却返回 Head sha/Head repository 为空、No commits 或 refs 不可读。
+- 影响范围：从独立镜像向开源上游贡献代码；不影响已推送的 Git 分支。
+- 根因：个人仓库的 fork=false、parent 为空，共有 Git 历史不等于 GitHub Fork 网络关系。
+- 失败路线：仅重试 owner:branch 形式的 PR 创建，或认为有共同提交即可自动识别跨仓库来源。
+- 成功路线：保留原个人仓库，用不同名称创建上游 Fork，确认 parent 后将同一贡献提交推送过去，再创建 PR；不推送定制分支整段历史。
+- 可复制命令（替换占位符后执行）：
+
+  ```bash
+  gh repo fork UPSTREAM_OWNER/REPOSITORY --fork-name REPOSITORY-contrib --clone=false
+  git remote add github-contrib https://github.com/YOUR_USER/REPOSITORY-contrib.git
+  git push -u github-contrib CONTRIBUTION_BRANCH
+  ```
+
+- 避免操作：不删除/改名已有个人仓库，不覆盖默认分支，不重复推送本地备份分支；gh repo fork 带仓库参数时不同时传 --remote=false。
+- 同步要求：交付中记录 PR 实际 head 仓库、分支、基线和验证状态；CHANGELOG、待测试及梳理报告保持一致。
+
 ## 数据库
 
 ### 故障记录
