@@ -4,6 +4,14 @@ import test from "node:test";
 // Bun 直接执行 TypeScript 测试时需要保留扩展名；生产 tsconfig 不包含 test/。
 import { DEFAULT_VIDEO_PROMPT_MAX_CHARS, defaultModelCapabilityConfig, normalizeVideoValue } from "../src/lib/model-capabilities.ts";
 
+test("text multimodal capability is not guessed from a model name", () => {
+    for (const model of ["gpt-4o", "gemini-2.5-pro", "doubao-seed"]) {
+        const text = defaultModelCapabilityConfig(undefined, model).text!;
+        assert.equal(text.references.maxImages, 0);
+        assert.equal(text.references.maxVideos, 0);
+    }
+});
+
 test("switching to MiniMax H3 replaces an unsupported 720p value with 768P", () => {
     const profile = defaultModelCapabilityConfig("minimax-video", "MiniMax-H3").video!;
 

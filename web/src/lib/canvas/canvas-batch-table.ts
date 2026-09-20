@@ -9,7 +9,7 @@ export const BATCH_REFERENCE_HANDLE_PREFIX = "batch-reference:";
 export const BATCH_REFERENCE_HANDLE_TOP = 102;
 export const BATCH_REFERENCE_HANDLE_GAP = 40;
 export const MIN_BATCH_REFERENCE_COLUMNS = 1;
-export const MAX_BATCH_REFERENCE_COLUMNS = 6;
+export const MAX_BATCH_REFERENCE_COLUMNS = 10;
 const LEGACY_BATCH_TABLE_WIDTH = 900;
 
 /** 旧默认 900 宽的批量创作表升级到当前默认尺寸，已经手动改过宽度的节点保持原样。 */
@@ -34,6 +34,16 @@ export function batchReferenceColumns(table?: CanvasBatchTableData) {
 
 export function batchReferenceHandleId(columnId: string) {
     return `${BATCH_REFERENCE_HANDLE_PREFIX}${columnId}`;
+}
+
+export function batchTextColumns(table?: CanvasBatchTableData) {
+    return table?.textColumns || [];
+}
+
+export function batchTextInputColumns(node: CanvasNodeData, connections: CanvasConnection[]) {
+    return batchTextColumns(node.metadata?.batchTable).map((column) =>
+        Array.from(new Set(connections.filter((connection) => connection.toNodeId === node.id && connection.toHandleId === `batch-text:${column.id}` && connection.relation !== "batch-output").map((connection) => connection.fromNodeId))),
+    );
 }
 
 export function batchReferenceMentionToken(index: number) {
@@ -122,11 +132,35 @@ export function batchPromptForRow(table: CanvasBatchTableData, row: CanvasBatchR
     return table.globalPrompt?.trim() || row.prompt;
 }
 
+export function batchRowReady(row: CanvasBatchRow, table: CanvasBatchTableData, nodes: Map<string, CanvasNodeData>) {
+    if (!row.enabled || !batchPromptForRow(table, row).trim()) return false;
+    const inputs = row.inputNodeIds.filter(Boolean);
+    if (inputs.length < (table.operation === "try_on" ? 2 : 1)) return false;
+    return inputs.every((id) => {
+        const node = nodes.get(id);
+        return node?.type === "image" && Boolean(node.metadata?.content || node.metadata?.storageKey);
+    });
+}
+
+export function batchGenerationRows(source: CanvasNodeData, nodes: CanvasNodeData[], requestedRowIds?: string[]) {
+    const table = source.metadata?.batchTable;
+    if (!table) return [];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const active = new Set((source.metadata?.generationBatches || []).filter((batch) => batch.mode === "batch_image").flatMap((batch) => batch.items.filter((item) => ["waiting", "submitting", "queued", "running"].includes(item.status)).map((item) => item.nodeId)));
+    const requested = requestedRowIds ? new Set(requestedRowIds) : null;
+    return table.rows.filter((row) => {
+        if ((requested && !requested.has(row.id)) || !batchRowReady(row, table, byId)) return false;
+        const output = byId.get(row.outputNodeId || "");
+        if (output && active.has(output.id)) return false;
+        return Boolean(requested) || !Boolean(output?.metadata?.content || output?.metadata?.storageKey);
+    });
+}
+
 export function batchInputColumns(node: CanvasNodeData, connections: CanvasConnection[]) {
     const columns = batchReferenceColumns(node.metadata?.batchTable);
     const indexById = new Map(columns.map((column, index) => [column.id, index]));
     const result = columns.map(() => [] as string[]);
-    connections.filter((connection) => connection.toNodeId === node.id && connection.relation !== "batch-output").forEach((connection) => {
+    connections.filter((connection) => connection.toNodeId === node.id && connection.relation !== "batch-output" && !connection.toHandleId?.startsWith("batch-text:")).forEach((connection) => {
         const columnId = batchReferenceColumnId(connection.toHandleId);
         const index = columnId ? indexById.get(columnId) : 0;
         if (index === undefined || result[index].includes(connection.fromNodeId)) return;
@@ -180,7 +214,7 @@ export function createBatchRowsFromColumns(operation: CanvasBatchOperation, colu
         const inputsUnchanged = previous && previous.inputNodeIds.length === inputNodeIds.length && previous.inputNodeIds.every((id, index) => id === inputNodeIds[index]);
         return {
             ...createBatchRow(operation, inputNodeIds),
-            ...(previous ? { id: previous.id, enabled: previous.enabled, prompt: previous.prompt } : {}),
+            ...(previous ? { id: previous.id, enabled: previous.enabled, prompt: previous.prompt, cells: previous.cells, textNodeIds: previous.textNodeIds } : {}),
             ...(inputsUnchanged && previous?.outputNodeId ? { outputNodeId: previous.outputNodeId } : {}),
             inputNodeIds,
         };

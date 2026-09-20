@@ -29,10 +29,11 @@ export function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string, opti
     const promptTemplateMetadata = clearPromptTemplate
         ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
         : {};
-    return synchronizeGenerationSpec({
-        ...node,
-        metadata: canvasNodeHasCommittedContent(node)
-            ? { ...metadata, ...promptTemplateMetadata, composerContent: prompt }
-            : { ...metadata, ...promptTemplateMetadata, prompt, composerContent: prompt },
-    });
+    // 显式提交草稿补丁，否则已有 generationSpec 会把旧提示词投影回编辑框。
+    return synchronizeGenerationSpec(
+        { ...node, metadata },
+        canvasNodeHasCommittedContent(node)
+            ? { ...promptTemplateMetadata, composerContent: prompt }
+            : { ...promptTemplateMetadata, prompt, composerContent: prompt },
+    );
 }

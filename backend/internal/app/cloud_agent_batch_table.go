@@ -12,7 +12,7 @@ import (
 
 const (
 	maxCloudAgentBatchRows        = 500
-	maxCloudAgentBatchReferences  = 6
+	maxCloudAgentBatchReferences  = 10
 	maxCloudAgentBatchPromptRunes = 20000
 )
 
@@ -96,7 +96,7 @@ func batchTableNodeFromDocument(doc map[string]any, nodeID string) (map[string]a
 		}
 		columns := creationMaps(table["referenceColumns"])
 		if len(columns) < 1 || len(columns) > maxCloudAgentBatchReferences {
-			return nil, nil, nil, nil, BadAuthRequest("批量创作表必须包含 1 到 6 个参考图列")
+			return nil, nil, nil, nil, BadAuthRequest("批量创作表必须包含 1 到 10 个参考图列")
 		}
 		columnIDs := map[string]bool{}
 		for _, column := range columns {
@@ -299,7 +299,7 @@ func prepareCloudAgentBatchTableEdit(repo *repository.Repository, userID, canvas
 		fields = []string{"并发数"}
 	case "add_reference_column":
 		if len(columns) >= maxCloudAgentBatchReferences {
-			return nil, BadAuthRequest("批量创作表最多支持6组参考图")
+			return nil, BadAuthRequest("批量创作表最多支持10组参考图")
 		}
 		if args.RowID != "" || len(args.Patch) != 0 || args.Operation != "" || args.Concurrency != 0 {
 			return nil, BadAuthRequest("新增参考图列不接受其他修改参数")

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+    batchGenerationRows,
+    batchRowReady,
     batchPromptForRow,
     batchReferenceColumns,
     batchReferenceHandleAtY,
@@ -21,6 +23,32 @@ import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { CanvasNodeType } from "@/types/canvas";
 
 describe("batch creation table", () => {
+    test("bulk skips persisted results while explicit regeneration remains available", () => {
+        const input = createCanvasNode(CanvasNodeType.Image, { x: 0, y: 0 }, { storageKey: "input" });
+        const output = createCanvasNode(CanvasNodeType.Image, { x: 0, y: 0 }, { storageKey: "output" });
+        const row = { id: "row", enabled: true, inputNodeIds: [input.id, ""], prompt: "create", outputNodeId: output.id };
+        const table = { operation: "creative" as const, concurrency: 1, rows: [row] };
+        const source = createCanvasNode(CanvasNodeType.BatchTable, { x: 0, y: 0 }, { batchTable: table });
+        const nodes = [source, input, output];
+        expect(batchGenerationRows(source, nodes)).toEqual([]);
+        expect(batchGenerationRows(source, nodes, [row.id])).toEqual([row]);
+        expect(batchGenerationRows(source, nodes, [])).toEqual([]);
+        expect(batchGenerationRows(source, [source, output], [row.id])).toEqual([]);
+        expect(batchRowReady({ ...row, enabled: false }, table, new Map(nodes.map((node) => [node.id, node])))).toBe(false);
+        expect(batchGenerationRows(source, nodes.map((node) => node.id === input.id ? { ...node, type: CanvasNodeType.Video } : node), [row.id])).toEqual([]);
+        source.metadata!.generationBatches = [{ id: "batch", projectId: "project", sourceNodeId: source.id, mode: "batch_image", status: "running", createdAt: "", updatedAt: "", items: [{ id: "item", rowId: row.id, nodeId: output.id, retryCount: 0, status: "running" }] }];
+        expect(batchGenerationRows(source, nodes, [row.id])).toEqual([]);
+    });
+
+    test("sync preserves dynamic cells, text references and distinct manual row identities", () => {
+        const first = { id: "first", enabled: true, inputNodeIds: ["image", "old"], prompt: "first", cells: { detail: "edited" }, textNodeIds: ["text"] };
+        const second = { ...first, id: "second", prompt: "manual" };
+        const rows = createBatchRowsFromColumns("creative", [["image"], ["new"]], [first, second]);
+        expect(rows.map((row) => row.id)).toEqual(["first", "second"]);
+        expect(rows[0].cells).toEqual(first.cells);
+        expect(rows[0].textNodeIds).toEqual(first.textNodeIds);
+        expect(rows[1]).toEqual(second);
+    });
     test("creates one try-on row per person with the final image as the shared garment", () => {
         const rows = createBatchRowsFromInputs("try_on", ["person-1", "person-2", "person-3", "garment"]);
 

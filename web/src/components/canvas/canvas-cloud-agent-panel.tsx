@@ -32,6 +32,7 @@ import { AgentChatComposer, AgentChatMessage, AgentPlanBar, AgentQuestionBar, Ag
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
+import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { AgentWelcome } from "./canvas-agent-welcome";
 import "./canvas-cloud-agent.css";
 
@@ -797,17 +798,18 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
 }
 
 function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; onOpen: () => void }) {
+    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen);
     return (
         <motion.button
             type="button"
             aria-label="打开云端 Agent"
-            title={approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"}
-            className="canvas-agent-launcher fixed bottom-5 right-5 z-[var(--z-modal-overlay)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35"
-            style={{ color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
+            title={`${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
+            className={cn("canvas-agent-launcher fixed z-[var(--z-modal-overlay)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging")}
+            style={{ ...position, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
             data-canvas-no-zoom
-            onClick={onOpen}
-            whileHover={reducedMotion ? undefined : { y: -3, scale: 1.035 }}
-            whileTap={reducedMotion ? undefined : { scale: 0.96 }}
+            {...handlers}
+            whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
+            whileTap={reducedMotion || dragging ? undefined : { scale: 0.96 }}
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
             <FluidOrb size={62} color="#7164f6" />

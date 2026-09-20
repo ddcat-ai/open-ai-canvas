@@ -95,7 +95,11 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
     if (!input) return "";
 
     if (capability === "text") {
-        return input.audioCount > 0 ? "文本模型不支持参考音频" : "";
+        const text = modelCapabilityConfigFor(config, model).text;
+        if (input.imageCount > (text?.references.maxImages ?? 0)) return `最多支持 ${(text?.references.maxImages ?? 0)} 张参考图`;
+        if (input.videoCount > (text?.references.maxVideos ?? 0)) return `最多支持 ${(text?.references.maxVideos ?? 0)} 个参考视频`;
+        if (input.audioCount > 0) return "文本模型不支持参考音频";
+        return "";
     }
 
     if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";

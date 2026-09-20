@@ -13,12 +13,14 @@ import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { ChannelOrderDialog } from "./channel-order-dialog";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
+import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
 
 export function ChannelModelManager({ channel, onChanged }: { channel: ModelChannel; onChanged: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
     const [items, setItems] = useState<ChannelModel[]>([]);
     const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
     const [deletingSelected, setDeletingSelected] = useState(false);
+    const [repriceItems, setRepriceItems] = useState<ChannelModel[]>([]);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -70,6 +72,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
         setEditing(null);
         setEditorOpen(false);
         setSelectedModelIds([]);
+        setRepriceItems([]);
         resetFetchPreview();
         setKeyword("");
         setCapability("all");
@@ -209,7 +212,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     <AdminStatusBadge label="待配置" tone="warning" />
                 ),
         },
-        { title: "规格成本价", width: 290, render: (_, item) => <ChannelModelCostSummary item={item} /> },
+        { title: "规格成本价 / 销售价 / 利润率", width: 310, render: (_, item) => <ChannelModelCostSummary item={item} /> },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
@@ -264,7 +267,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     <h3 className="admin-channel-model-heading">
                         模型管理 <span className="admin-channel-count">{items.length}</span>
                     </h3>
-                    <p className="admin-channel-model-hint">规格展示上游成本，不影响用户售价</p>
+                    <p className="admin-channel-model-hint">规格展示成本价 / 销售价及利润率，勾选模型可统一调价</p>
                 </div>
                 <Space wrap>
                     <ChannelOrderDialog
@@ -382,6 +385,9 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 }}
                 batchActions={
                     <AdminBatchBar count={selectedModelIds.length} onClear={() => setSelectedModelIds([])}>
+                        <Button size="small" disabled={deletingSelected || loading || Boolean(loadError)} onClick={() => setRepriceItems(items.filter((item) => selectedModelIds.includes(item.id)))}>
+                            统一调价
+                        </Button>
                         <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deletingSelected} onClick={confirmBatchRemove}>
                             批量删除
                         </Button>
@@ -419,6 +425,11 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     />
                 }
             />
+            {repriceItems.length > 0 && <ChannelModelRepriceDialog channelId={channel.id} channelName={channel.name} items={repriceItems} onClose={() => setRepriceItems([])} onSaved={async () => {
+                setSelectedModelIds([]);
+                await reload();
+                await onChanged();
+            }} />}
             <Modal
                 title="选择要导入的模型"
                 open={fetchPreviewOpen}

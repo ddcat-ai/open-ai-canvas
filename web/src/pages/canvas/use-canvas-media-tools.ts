@@ -37,7 +37,7 @@ import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size"
 import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { IMAGE_PROMPT_REVERSE } from "@/lib/prompts";
-import { createPortraitTextureNode } from "@/lib/canvas/canvas-image-source";
+import { createPortraitTextureNode, createNineGridNode } from "@/lib/canvas/canvas-image-source";
 import { captureVideoFrames } from "@/lib/canvas/canvas-video-frame";
 import { buildVideoFrameNodes } from "@/lib/canvas/canvas-video-frame-nodes";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
@@ -47,6 +47,7 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { defaultImageParamsForModel } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { storeGeneratedVideo } from "@/services/api/video";
+import { getTool } from "@/services/api/tools";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
@@ -262,9 +263,9 @@ export function useCanvasMediaTools({
         setFrameDialogNodeId(null);
     }, []);
 
-    const extractVideoFrames = useCallback(async (node: CanvasNodeData, params: CanvasVideoFrameParams) => {
+    const extractVideoFrames = useCallback(async (node: CanvasNodeData, params: CanvasVideoFrameParams): Promise<CanvasNodeData[]> => {
         const content = node.metadata?.content;
-        if (!content || extractingVideoFramesNodeIdRef.current || !params.timesMs.length) return;
+        if (!content || extractingVideoFramesNodeIdRef.current || !params.timesMs.length) return [];
         const progress = startUploadStatus("提取视频画面", "读取视频资源", params.timesMs.length + 2);
         extractingVideoFramesNodeIdRef.current = node.id;
         setExtractingVideoFramesNodeId(node.id);
@@ -301,10 +302,12 @@ export function useCanvasMediaTools({
             const failedCount = captured.failures.length + uploadFailures.length;
             progress.done(failedCount ? `已提取 ${frameNodes.length} 帧，${failedCount} 帧失败` : `已提取 ${frameNodes.length} 帧并创建图片节点`);
             if (failedCount) message.warning(`${failedCount} 个时间点提取失败，其余画面已创建`);
+            return frameNodes;
         } catch (error) {
             const details = error instanceof Error ? error.message : "视频画面提取失败";
             progress.fail(details);
             message.error(details);
+            return [];
         } finally {
             extractingVideoFramesNodeIdRef.current = null;
             setExtractingVideoFramesNodeId(null);
@@ -1100,6 +1103,21 @@ export function useCanvasMediaTools({
         }
     }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, nodesRef, persistMediaNodes, projectId, resolveImageEditStyle, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, startGenerationRequest]);
 
+    const generateNineGridNode = useCallback(async (node: CanvasNodeData, toolId: number, label: string, icon: string) => {
+        if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
+            message.warning("图片节点为空，无法执行九宫格工具");
+            return;
+        }
+        const child = createNineGridNode(node, nanoid(), toolId, label, "nine_grid",icon);
+        setHoveredNodeId(null);
+        setToolbarNodeId(null);
+        setNodes((current) => [...current, child]);
+        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: child.id }]);
+        setSelectedNodeIds(new Set([child.id]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(child.id);
+    }, [message, setConnections, setDialogNodeId, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
+
     const generateLightingNode = useCallback((node: CanvasNodeData, options: CanvasImageLightingOptions, prompt: string) => {
         if (!node.metadata?.content) return;
         const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1" };
@@ -1211,6 +1229,7 @@ export function useCanvasMediaTools({
         frameDialogNodeId,
         handleSegmentConfirm,
         generateAngleNode,
+        generateNineGridNode,
         generateLightingNode,
         openPanoramaConfig,
         createPanoramaViewerWithConfig,

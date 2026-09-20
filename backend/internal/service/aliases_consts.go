@@ -65,6 +65,7 @@ const (
 	PluginScopeSystem                  = app.PluginScopeSystem
 	PluginScopeUser                    = app.PluginScopeUser
 	ReasonBadGateway                   = app.ReasonBadGateway
+	ReasonUpstreamDNSFailed            = app.ReasonUpstreamDNSFailed
 	ReasonConflict                     = app.ReasonConflict
 	ReasonFailedPrecondition           = app.ReasonFailedPrecondition
 	ReasonForbidden                    = app.ReasonForbidden

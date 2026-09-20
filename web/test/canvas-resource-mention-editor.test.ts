@@ -130,9 +130,11 @@ describe("canvas resource mention editor", () => {
         const chat = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
         const css = source("../src/components/canvas/canvas-cloud-agent.css");
 
-        expect(component).toContain('chip.className = `canvas-resource-inline-mention ${reference.kind === "skill" ? "is-skill" : ""}`');
-        expect(component).toContain('prefix.textContent = reference.kind === "skill" ? "✦" : "@"');
-        expect(component).toContain('if (reference.kind !== "skill") chip.appendChild(createInlinePreview(reference));');
+        expect(component).toContain('const isDecorated = reference.kind === "skill" || reference.kind === "tool"');
+        expect(component).toContain('chip.className = `canvas-resource-inline-mention ${isDecorated ? `is-${reference.kind}` : ""}`');
+        expect(component).toMatch(/if \(reference.kind === "skill"\)\s*\{\s*prefix.textContent = "✦"/);
+        expect(component).toContain('prefix.textContent = "@"');
+        expect(component).toContain("if (!isDecorated) chip.appendChild(createInlinePreview(reference));");
         expect(component).toContain('chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference))');
         expect(chat).toContain('sendOnEnter={canSubmit ? "both" : false}');
         expect(chat).toContain("agent-composer-resize-handle");

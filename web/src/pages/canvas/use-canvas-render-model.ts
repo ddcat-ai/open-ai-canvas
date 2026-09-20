@@ -4,7 +4,7 @@ import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/component
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
-import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
+import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
 import type { Skill } from "@/services/api/skills";
@@ -353,12 +353,32 @@ export function useCanvasRenderModel({
     );
     const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
     const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
+    const toolMentionReferencesByNodeId = useMemo(() => {
+        const map = new Map<string, ReturnType<typeof buildToolMentionReference>[]>();
+        for (const node of semanticNodes) {
+            const text = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
+            const tokens = parseToolMentionTokens(text);
+            if (!tokens.length) continue;
+            const seen = new Set<number>();
+            const refs: ReturnType<typeof buildToolMentionReference>[] = [];
+            for (const { type, toolId, label, icon } of tokens) {
+                if (seen.has(toolId)) continue;
+                seen.add(toolId);
+                refs.push(buildToolMentionReference(toolId, label, type, icon));
+            }
+            if (refs.length) map.set(node.id, refs);
+        }
+        return map;
+    }, [semanticNodes]);
     const mentionReferencesByNodeId = useMemo(() => {
         const map = buildCanvasNodeMentionReferenceMap(semanticNodes, connections, visibleNodes);
-        if (!skillMentionReferences.length) return map;
-        map.forEach((references, nodeId) => map.set(nodeId, [...references, ...skillMentionReferences]));
+        if (!skillMentionReferences.length && toolMentionReferencesByNodeId.size === 0) return map;
+        map.forEach((references, nodeId) => {
+            const extras = [...skillMentionReferences, ...(toolMentionReferencesByNodeId.get(nodeId) ?? [])];
+            if (extras.length) map.set(nodeId, [...references, ...extras]);
+        });
         return map;
-    }, [connections, semanticNodes, skillMentionReferences, visibleNodes]);
+    }, [connections, semanticNodes, skillMentionReferences, toolMentionReferencesByNodeId, visibleNodes]);
 
     return {
         activeDirectorNode,

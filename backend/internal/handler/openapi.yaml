@@ -26,6 +26,62 @@ tags:
   - name: agent
   - name: admin
 paths:
+  /tools:
+    get:
+      tags: [canvas]
+      summary: 列出可见且启用的生成工具
+      parameters:
+        - {in: query, name: scope, schema: {type: string, enum: [public, favorites, custom], default: public}}
+        - {in: query, name: type, schema: {type: string, enum: [style, motion, nine_grid, effect]}}
+        - {in: query, name: tag, schema: {type: string}}
+        - {in: query, name: search, schema: {type: string}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 80, default: 20}}
+      responses:
+        "200": {description: "标准信封 data 为 tools（摘要不含 prompt/extraInfo）、totalCount、page、pageSize、hasMore"}
+        "401": {description: 未登录}
+    post:
+      tags: [canvas]
+      summary: 创建当前用户的工具
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ToolMutation'}
+      responses:
+        "200": {description: 标准信封 data 为完整工具}
+        "400": {description: 参数无效或预览资源不符合要求}
+        "401": {description: 未登录}
+  /tools/{id}:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      tags: [canvas]
+      summary: 查询可见且启用工具的完整详情
+      responses:
+        "200": {description: 标准信封 data 为完整工具，包含 prompt 和 extraInfo}
+        "404": {description: 工具不存在或不可见}
+    delete:
+      tags: [canvas]
+      summary: 删除自己的用户工具及关联收藏，不删除预览文件
+      responses:
+        "200": {description: "标准信封 data 为 {deleted: true}"}
+        "404": {description: 工具不存在或不能删除}
+  /tools/{id}/favorite:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    post:
+      tags: [canvas]
+      summary: 幂等收藏可见工具
+      responses:
+        "200": {description: 标准信封 data 为完整工具和收藏状态}
+        "404": {description: 工具不存在或不可见}
+    delete:
+      tags: [canvas]
+      summary: 幂等取消收藏可见工具
+      responses:
+        "200": {description: 标准信封 data 为完整工具和收藏状态}
+        "404": {description: 工具不存在或不可见}
   /model-catalog:
     get:
       tags: [models]
@@ -721,6 +777,78 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /admin/channels/{id}/models/batch-reprice:
+    post:
+      tags: [admin]
+      summary: 批量保存系统渠道模型最终销售价
+      description: |
+        仅管理员可用。接收浏览器计算或手工修改后的最终售价及原始价格版本，不在服务端重算。
+        前端按成本/(1−利润率)计算，支持0–6位积分小数四舍五入及重新计算。
+        必须提交所选模型全部已启用规格，不改变成本、规格启停或模型启停。
+        当前计费方式的价格字段必须完整且不能多余，价格为非负整数微积分，null无效。
+        缺少成本/售价配置、重复或失效 ID、越权、超限价格、过期版本或并发版本冲突均整批拒绝。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [models]
+              properties:
+                models:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [modelId, priceVersion, priceTiers]
+                    properties:
+                      modelId: { type: string, minLength: 1 }
+                      priceVersion: { type: integer, format: int64, minimum: 1 }
+                      priceTiers:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: object
+                          required: [id, priceVersion, prices]
+                          properties:
+                            id: { type: string, minLength: 1 }
+                            priceVersion: { type: integer, format: int64, minimum: 1 }
+                            prices:
+                              type: object
+                              additionalProperties: false
+                              description: 按次/秒仅unit字段；文本Token为输入、输出、缓存；视频Token仅输出。必须完整提交对应字段。
+                              properties:
+                                unitPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+                                inputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+                                outputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+                                cachedTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+            example: { models: [{ modelId: MODEL001, priceVersion: 4, priceTiers: [{ id: TIER001, priceVersion: 8, prices: { unitPriceMicrocredits: 1370000 } }] }] }
+      responses:
+        "200":
+          description: 更新成功，data.updated 为更新的模型数量
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /admin/agent-lessons:
     get:
       tags: [admin]
@@ -899,6 +1027,20 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ToolMutation:
+      type: object
+      required: [type, label, prompt]
+      properties:
+        type: {type: string, enum: [style, motion, nine_grid, effect]}
+        label: {type: string, description: 名称最多 120 字节}
+        prompt: {type: string, description: 最多 8000 字节，不允许嵌套工具标签}
+        visibility: {type: string, enum: [private, public], default: private}
+        desc: {type: string}
+        tag: {type: string}
+        cover: {type: string, description: 本人已上传完成的资源 URL，仅限私有工具}
+        mediaUrl: {type: string, description: 本人已上传完成的资源 URL，仅限私有工具}
+        extraInfo: {type: array, items: {type: string}}
+        ratio: {type: string}
     ModelRequestIntent:
       type: object
       required: [capability]
@@ -1131,6 +1273,7 @@ components:
                 - timeout
                 - internal
                 - bad_gateway
+                - upstream_dns_failed
                 - model_capability_not_supported
                 - model_price_not_configured
                 - model_route_unavailable

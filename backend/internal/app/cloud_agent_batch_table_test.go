@@ -2,11 +2,28 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
 )
+
+func TestCloudAgentBatchTableReferenceLimit(t *testing.T) {
+	for _, count := range []int{10, 11} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			columns := make([]any, count)
+			for i := range columns {
+				columns[i] = map[string]any{"id": fmt.Sprintf("reference-%d", i+1), "label": fmt.Sprintf("参考图 %d", i+1)}
+			}
+			doc := map[string]any{"nodes": []any{map[string]any{"id": "batch", "type": "batch-table", "metadata": map[string]any{"batchTable": map[string]any{"operation": "creative", "concurrency": float64(1), "referenceColumns": columns, "rows": []any{}}}}}}
+			_, _, _, _, err := batchTableNodeFromDocument(doc, "batch")
+			if (err == nil) != (count == 10) {
+				t.Fatalf("reference count %d: unexpected validation result %v", count, err)
+			}
+		})
+	}
+}
 
 func cloudAgentBatchTableCall(t *testing.T, name, callID string, args any) cloudAgentCall {
 	t.Helper()

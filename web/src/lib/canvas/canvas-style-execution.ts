@@ -1,6 +1,7 @@
 import { applyStyleExecutionPlan, createStyleProfileSnapshot, parseStyleProfile, resolveStyleExecutionPlan, serializeStyleProfile, type StyleExecutionPlan, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
 import { logicalModelIDForConfig, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData } from "@/types/canvas";
+import { parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 
 export type CanvasStyleExecutionRuntime = {
     profile: StyleProfileSnapshot;
@@ -10,6 +11,7 @@ export type CanvasStyleExecutionRuntime = {
 };
 
 export function resolveCanvasStyleExecution(nodes: CanvasNodeData[], sourceNode: CanvasNodeData | undefined, prompt: string, config: AiConfig, mode: "image" | "video"): CanvasStyleExecutionRuntime | null {
+    if (mode === "image" && parseToolMentionTokens(prompt).some((tool) => tool.type === "style")) return null;
     const styleNode = nodes.find((node) => node.metadata?.workflowKind === "styleboard");
     if (!styleNode || sourceNode?.metadata?.workflowKind === "styleboard") return null;
     const profile = parseStyleProfile(styleNode.metadata?.styleProfileJson) || legacyStyleNodeProfile(styleNode);

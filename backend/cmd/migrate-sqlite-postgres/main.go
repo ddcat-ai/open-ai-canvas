@@ -218,6 +218,8 @@ func verifyMigrationCoverage(db *gorm.DB) error {
 
 func migrations() []tableMigration {
 	return []tableMigration{
+		migrateTable[model.Tool]("tools"),
+		migrateTable[model.ToolFavorite]("tool_favorites"),
 		migrateTable[model.User]("users"),
 		migrateTable[model.AuthSession]("auth_sessions"),
 		migrateTable[model.UserIdentity]("user_identities"),

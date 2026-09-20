@@ -347,6 +347,12 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("prompt is required")
 	}
+	// 将 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本
+	resolved, err := s.ResolveToolMentionTokens(userID, input.Mode, input.Prompt)
+	if err != nil {
+		return nil, err
+	}
+	input.Prompt = resolved
 	config, err := s.resolveProviderConfig(input.Config)
 	if err != nil {
 		return nil, err

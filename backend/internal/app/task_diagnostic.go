@@ -84,7 +84,13 @@ func taskExecutionDiagnostic(task *model.Task) *model.TaskExecutionDiagnostic {
 	if json.Unmarshal([]byte(task.ExecutionDiagnosticJSON), &diagnostic) != nil {
 		return nil
 	}
-	diagnostic.SafeMessage = safeTaskDiagnosticMessage(diagnostic.SafeMessage)
+	// Execution success and writeback failure are separate facts. A successful
+	// task has no execution error; writeback errors remain in WritebackMessage.
+	if task.Status == model.TaskStatusSucceeded {
+		diagnostic.SafeMessage = ""
+	} else if diagnostic.SafeMessage != "" || task.Status == model.TaskStatusFailed || task.Status == model.TaskStatusCancelled {
+		diagnostic.SafeMessage = safeTaskDiagnosticMessage(diagnostic.SafeMessage)
+	}
 	return &diagnostic
 }
 

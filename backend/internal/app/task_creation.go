@@ -44,6 +44,24 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+	// Fail admission before queueing or charging; the worker validates again in
+	// case a tool is deleted or its visibility changes while queued.
+	toolMode, _ := normalizedInput["mode"].(string)
+	if toolMode == "" {
+		if strings.HasPrefix(taskType, "video_") || taskType == "canvas_video" {
+			toolMode = "video"
+		} else if taskType == "canvas_image" {
+			toolMode = "image"
+		}
+	}
+	if _, err := s.ResolveToolMentionTokens(userID, toolMode, prompt); err != nil {
+		return nil, err
+	}
+	if inputPrompt, ok := normalizedInput["prompt"].(string); ok && inputPrompt != prompt {
+		if _, err := s.ResolveToolMentionTokens(userID, toolMode, inputPrompt); err != nil {
+			return nil, err
+		}
+	}
 
 	var routed *RoutedModel
 	logicalModelID := strings.TrimSpace(req.LogicalModelID)

@@ -847,6 +847,9 @@ func failCloudAgentAdmission(current *model.CloudAgentExecution, state *cloudAge
 // Only expose known failure categories; raw provider errors can contain URLs and credentials.
 func cloudAgentModelFailure(task *model.Task) (string, string) {
 	detail, reason := "模型任务未成功", "model_task_failed"
+	if diagnostic := taskExecutionDiagnostic(task); diagnostic != nil && diagnostic.Code == string(ReasonUpstreamDNSFailed) {
+		return "模型服务域名解析失败，请检查渠道域名和后端 DNS 配置；本轮已停止。请在任务中心检查模型任务 " + task.ID, string(ReasonUpstreamDNSFailed)
+	}
 	raw := strings.ToLower(task.Error)
 	switch {
 	case strings.Contains(raw, "connection reset by peer"):

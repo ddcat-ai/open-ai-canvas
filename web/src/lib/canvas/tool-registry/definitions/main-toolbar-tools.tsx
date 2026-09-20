@@ -1,4 +1,4 @@
-import { Eraser, FolderOpen, Hand, MousePointer2, Palette, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
+import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import type { CanvasToolMode } from "@/types/canvas";
@@ -9,6 +9,7 @@ const canvasModeOptions = [
 ];
 
 export const mainToolbarTools: ToolDefinition[] = [
+    { id: "tool-workspace", toolbar: "main", category: "navigation", label: "工作区", icon: <PanelsTopLeft />, defaultVisible: true, defaultOrder: 65, run: ctx => ctx.handlers.onOpenWorkspace?.() },
     {
         id: "tool-canvas-mode",
         toolbar: "main",

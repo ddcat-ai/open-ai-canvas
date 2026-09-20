@@ -908,6 +908,51 @@ add({
   response: { status: "succeeded", images: coalesce(ref("response.data"), ref("response.images")), errorPaths: ["error.code"], messagePaths: ["error.message", "message"] }
 });
 
+const wan3MediaType = coalesce(
+  ref("media.role"),
+  conditional(eq(ref("media.kind"), "image"), "reference_image", conditional(
+    eq(ref("media.kind"), "video"), "reference_video", conditional(
+      eq(ref("media.kind"), "audio"), "reference_audio", ref("media.kind")
+    )
+  ))
+);
+
+add({
+  id: "dashscope-wan3-video", providerId: "dashscope-wan3-video", name: "DashScope Wan 3.0 Video", vendor: "Alibaba Cloud", capability: "video",
+  baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
+  validations: [
+    { assert: { $in: [lower(ref("request.model")), ["wan3.0-video-prime", "wan3.0-video"]] }, message: "Wan 3.0 Video 仅支持 wan3.0-video-prime 或 wan3.0-video" },
+    { assert: { $lte: [len(mediaWithRoles("request.images", ["first_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 first_frame" },
+    { assert: { $lte: [len(mediaWithRoles("request.images", ["last_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 last_frame" }
+  ],
+  create: jsonCreate("/api/v1/services/aigc/video-generation/video-synthesis", {
+    model: ref("request.model"),
+    input: {
+      prompt: omit(ref("request.prompt")),
+      media: omit(coalesce(
+        ref("request.providerOptions.dashscope-wan3-video.media"),
+        map(sorted(ref("request.inputs")), "media", { type: wan3MediaType, url: ref("media.value") })
+      ))
+    },
+    parameters: {
+      resolution: omit(ref("request.resolution")),
+      ratio: omit(ref("request.aspectRatio")),
+      duration: omit(ref("request.duration")),
+      audio: coalesce(ref("request.providerOptions.dashscope-wan3-video.audio"), ref("request.generateAudio")),
+      seed: omit(ref("request.providerOptions.dashscope-wan3-video.seed")),
+      prompt_extend: coalesce(ref("request.providerOptions.dashscope-wan3-video.prompt_extend"), true),
+      watermark: ref("request.watermark")
+    }
+  }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
+  poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.output.task_id"), ref("response.task_id"), ref("taskId")),
+    status: conditional(eq(lower(ref("response.output.task_status")), "unknown"), "failed", coalesce(ref("response.output.task_status"), ref("response.status"), "pending")),
+    videos: ref("response.output.video_url"),
+    usage: ref("response.usage"), errorPaths: ["code", "output.code"], messagePaths: ["message", "output.message"]
+  })
+});
+
 add({
   id: "dashscope-wan-video", providerId: "dashscope-wan-video", name: "DashScope Wan Video", vendor: "Alibaba Cloud", capability: "video",
   baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,

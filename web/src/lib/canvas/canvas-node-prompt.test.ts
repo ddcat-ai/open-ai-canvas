@@ -4,6 +4,7 @@ import test from "node:test";
 import "./node-registry/definitions/index.ts";
 // @ts-expect-error -- Node 原生 TypeScript 测试运行器需要保留扩展名。
 import { canvasNodeHasCommittedContent, writeCanvasNodePrompt } from "./canvas-node-prompt.ts";
+import { canonicalGenerationMetadata } from "./generation-contract";
 // @ts-expect-error -- Node 原生 TypeScript 测试运行器需要保留扩展名。
 import { CanvasNodeType, type CanvasNodeData } from "../../types/canvas.ts";
 
@@ -47,6 +48,28 @@ test("空媒体草稿同时初始化提交提示词和编辑提示词", () => {
     assert.equal(metadata?.prompt, "第一版提示词");
     assert.equal(metadata?.composerContent, "第一版提示词");
     assert.equal(metadata?.generationSpec?.prompt, "第一版提示词");
+});
+
+test("模板提示词清空后重新读取和保存重载均保持为空", () => {
+    for (const type of [CanvasNodeType.Image, CanvasNodeType.Video, CanvasNodeType.Audio]) {
+        for (const content of [undefined, `https://example.com/${type}`]) {
+            const current = node(type, { content, prompt: "已提交提示词" });
+            const applied = writeCanvasNodePrompt(current, "模板预设文字");
+            const cleared = writeCanvasNodePrompt(applied, "");
+            assert.equal(cleared.metadata?.composerContent, "");
+            assert.equal(cleared.metadata?.generationSpec?.prompt, "");
+            assert.equal(cleared.metadata?.prompt, content ? "已提交提示词" : "");
+            const reloaded = JSON.parse(JSON.stringify(cleared)) as CanvasNodeData;
+            assert.equal(canonicalGenerationMetadata(reloaded, type).composerContent, "");
+        }
+    }
+});
+
+test("已有生成合同的提示词支持连续编辑而不回填旧模板", () => {
+    const applied = writeCanvasNodePrompt(node(CanvasNodeType.Image), "模板预设文字");
+    const edited = writeCanvasNodePrompt(applied, "修改后的文字");
+    assert.equal(edited.metadata?.generationSpec?.prompt, "修改后的文字");
+    assert.equal(canonicalGenerationMetadata(edited, "image").composerContent, "修改后的文字");
 });
 
 test("图片仅保留 storageKey 时仍视为已有媒体结果", () => {

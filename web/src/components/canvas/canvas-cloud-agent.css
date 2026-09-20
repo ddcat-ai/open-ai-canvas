@@ -522,8 +522,14 @@
     background: transparent;
     padding: 7px;
     box-shadow: 0 16px 38px color-mix(in srgb, var(--canvas-agent-launcher-shadow) 64%, transparent);
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
     isolation: isolate;
+}
+
+.canvas-agent-launcher.is-dragging {
+    cursor: grabbing;
 }
 
 .canvas-agent-launcher::before {

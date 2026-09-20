@@ -26,7 +26,7 @@ type cloudAgentFieldArgumentError struct {
 
 func (e *cloudAgentFieldArgumentError) Unwrap() error { return e.error }
 
-func cloudAgentCanvasFieldError(field, issue, message string) error {
+func cloudAgentFieldError(field, issue, message string) error {
 	return &cloudAgentFieldArgumentError{
 		error: &cloudAgentArgumentError{BadAuthRequest(message)}, Field: field, Issue: issue,
 	}
@@ -45,10 +45,10 @@ func decodeCloudAgentCanvasArgs(raw string) (agentCanvasArgs, error) {
 		return args, cloudAgentJSONArgumentError(err)
 	}
 	if envelope.SnapshotHash == "" {
-		return args, cloudAgentCanvasFieldError("snapshotHash", "required", "画布参数 snapshotHash 不能为空，请先读取画布")
+		return args, cloudAgentFieldError("snapshotHash", "required", "画布参数 snapshotHash 不能为空，请先读取画布")
 	}
 	if len(envelope.Ops) < 1 || len(envelope.Ops) > 20 {
-		return args, cloudAgentCanvasFieldError("ops", "item_count", "画布参数 ops 必须包含1到20项操作")
+		return args, cloudAgentFieldError("ops", "item_count", "画布参数 ops 必须包含1到20项操作")
 	}
 	args.SnapshotHash = envelope.SnapshotHash
 	for i, rawOp := range envelope.Ops {
@@ -74,7 +74,7 @@ func decodeCloudAgentCanvasArgs(raw string) (agentCanvasArgs, error) {
 					}
 				}
 			}
-			return args, cloudAgentCanvasFieldError(field, issue, fmt.Sprintf("画布参数 %s 无效：%s", field, cloudAgentSafeToolError(cloudAgentJSONArgumentError(err))))
+			return args, cloudAgentFieldError(field, issue, fmt.Sprintf("画布参数 %s 无效：%s", field, cloudAgentSafeToolError(cloudAgentJSONArgumentError(err))))
 		}
 		required := ""
 		switch {
@@ -93,7 +93,7 @@ func decodeCloudAgentCanvasArgs(raw string) (agentCanvasArgs, error) {
 		}
 		if required != "" {
 			field := path + "." + required
-			return args, cloudAgentCanvasFieldError(field, "required", fmt.Sprintf("画布参数 %s 不能为空", field))
+			return args, cloudAgentFieldError(field, "required", fmt.Sprintf("画布参数 %s 不能为空", field))
 		}
 		args.Ops = append(args.Ops, op)
 	}

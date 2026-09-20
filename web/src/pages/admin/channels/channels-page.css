@@ -218,6 +218,145 @@
     line-height: 1.6;
 }
 
+.admin-model-reprice {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    gap: 16px;
+    padding-block: 8px;
+}
+
+.admin-model-reprice > :not(.admin-model-reprice-table) {
+    flex-shrink: 0;
+}
+
+.admin-model-reprice-controls {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 24px;
+    padding: 24px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+
+.admin-model-reprice-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 190px;
+    max-width: 100%;
+}
+
+.admin-model-reprice-field > .ant-input-number {
+    width: 100%;
+}
+
+.admin-model-reprice-formula,
+.admin-model-reprice-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-wrap: anywhere;
+}
+
+.admin-model-reprice-sale {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-model-reprice-sale > .ant-input-number {
+    flex: 0 0 120px;
+    width: 120px;
+}
+
+.admin-model-reprice-sale > small {
+    white-space: nowrap;
+}
+
+.admin-model-reprice-formula {
+    padding-block: 4px;
+    gap: 8px;
+}
+
+.admin-model-reprice-note,
+.admin-model-reprice-formula span,
+.admin-model-reprice-identity small,
+.admin-model-reprice-sale small,
+.admin-model-reprice-list-heading > span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.admin-model-reprice-note {
+    margin: 0;
+}
+
+.admin-model-reprice-list-heading {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-model-reprice-table {
+    flex: 1;
+    min-height: 160px;
+    overflow: auto;
+}
+
+.admin-model-reprice-table .ant-table-tbody > tr > td {
+    padding: 6px 16px;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+}
+
+.admin-model-reprice-table .ant-table-tbody > tr > td.admin-model-reprice-spec-cell {
+    padding: 0;
+}
+
+.admin-model-reprice-spec-row {
+    display: grid;
+    grid-template-columns: minmax(0, 140fr) minmax(0, 160fr) minmax(0, 340fr);
+    align-items: center;
+}
+
+.admin-model-reprice-spec-row > div {
+    min-width: 0;
+    padding: 6px 16px;
+}
+
+.admin-model-reprice-spec-row + .admin-model-reprice-spec-row {
+    border-top: 1px solid var(--admin-divider);
+}
+
+.admin-model-reprice-no-spec {
+    padding: 6px 16px;
+    color: var(--admin-text-muted);
+}
+
+.admin-model-reprice-modal .ant-modal-container {
+    display: flex;
+    flex-direction: column;
+    height: min(900px, calc(100dvh - 48px));
+}
+
+.admin-model-reprice-modal .ant-modal-header,
+.admin-model-reprice-modal .ant-modal-footer {
+    flex-shrink: 0;
+}
+
+.admin-model-reprice-modal .ant-modal-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
 .admin-model-cost-tier + .admin-model-cost-tier {
     margin-top: 8px;
     padding-top: 8px;

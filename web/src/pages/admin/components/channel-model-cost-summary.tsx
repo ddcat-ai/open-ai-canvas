@@ -1,14 +1,14 @@
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 import { AdminStatusBadge } from "./admin-ui";
+import { formatModelMargin, formatModelPrice, modelPriceFields } from "./channel-model-pricing";
 
 export function ChannelModelCostSummary({ item }: { item: ChannelModel }) {
-    // Cost configuration is independent of the user-facing sale price.
     const tiers = item.priceTiers?.filter((tier) => tier.enabled) || [];
-    if (!tiers.length) return <AdminStatusBadge label="未配置成本" tone="warning" />;
+    if (!tiers.length) return <AdminStatusBadge label="无已启用规格" tone="warning" />;
     const renderTier = (tier: ChannelModelPriceTier) => (
         <div className="admin-model-cost-tier" key={tier.id}>
             <div className="admin-model-cost-spec">{specificationLabel(tier)}</div>
-            <div className="admin-model-cost-value">{costLabel(tier, item.capability)}</div>
+            <div className="admin-model-cost-value">{priceLabel(tier, item.capability)}</div>
         </div>
     );
     return (
@@ -16,7 +16,7 @@ export function ChannelModelCostSummary({ item }: { item: ChannelModel }) {
             {tiers.slice(0, 3).map(renderTier)}
             {tiers.length > 3 ? (
                 <details className="admin-model-cost-more">
-                    <summary>其余 {tiers.length - 3} 个规格成本</summary>
+                    <summary>其余 {tiers.length - 3} 个规格价格</summary>
                     {tiers.slice(3).map(renderTier)}
                 </details>
             ) : null}
@@ -24,25 +24,20 @@ export function ChannelModelCostSummary({ item }: { item: ChannelModel }) {
     );
 }
 
-function costLabel(tier: ChannelModelPriceTier, capability: ChannelModel["capability"]) {
-    const cost = tier.costPricing;
-    if (!cost?.configured) return <span className="admin-model-cost-missing">未配置成本</span>;
-    const format = (value: number) => (Number.isFinite(value) && value >= 0 ? (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 }) : "—");
-    if (tier.billingMode === "token") {
-        if (capability === "video") return `${format(cost.outputTokenPriceMicrocredits)} 积分 / 百万视频 Token`;
+function priceLabel(tier: ChannelModelPriceTier, capability: ChannelModel["capability"]) {
+    return modelPriceFields(tier, capability).map(({ key, label, unit }) => {
+        const cost = tier.costPricing?.configured ? tier.costPricing[key] : undefined;
+        const sale = tier.priceConfigured ? tier[key] : undefined;
         return (
-            <>
-                <span>
-                    输入 {format(cost.inputTokenPriceMicrocredits)} · 输出 {format(cost.outputTokenPriceMicrocredits)} · 缓存 {format(cost.cachedTokenPriceMicrocredits)}
-                </span>
-                <span className="admin-model-cost-unit">积分 / 百万 Token</span>
-            </>
+            <div key={key}>
+                <span>{label ? `${label} ` : ""}{tier.costPricing?.configured ? formatModelPrice(cost) : "未配置成本"} / {tier.priceConfigured ? formatModelPrice(sale) : "未配置售价"}</span>
+                <span className="admin-model-cost-unit">积分 / {unit} · 利润率 {formatModelMargin(cost, sale)}</span>
+            </div>
         );
-    }
-    return `${format(cost.unitPriceMicrocredits)} 积分 / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
+    });
 }
 
-function specificationLabel(tier: ChannelModelPriceTier) {
+export function specificationLabel(tier: ChannelModelPriceTier) {
     const selector = tier.selector || {};
     const specific = (value?: string) => (value && value !== "*" ? value : "");
     const operation = specific(selector.operation);

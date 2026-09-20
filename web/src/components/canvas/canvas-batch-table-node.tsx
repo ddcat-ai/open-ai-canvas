@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Button, Switch, Tooltip } from "antd";
-import { Image as ImageIcon, LoaderCircle, Minus, Play, Plus, Rows3, Trash2, Upload } from "lucide-react";
+import { Film, Image as ImageIcon, LoaderCircle, Minus, Play, Plus, Rows3, Trash2, Upload } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
@@ -13,6 +13,8 @@ import {
     batchReferenceColumns,
     batchReferenceHandleId,
     batchReferenceMentionToken,
+    batchTextColumns,
+    batchRowReady as rowReady,
 } from "@/lib/canvas/canvas-batch-table";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
@@ -32,6 +34,7 @@ type Props = {
     onUpdateRow: (rowId: string, patch: Partial<CanvasBatchRow>) => void;
     onFillRows: () => void;
     onGenerate: (rowIds?: string[]) => void;
+    onCreateStoryboard?: () => void;
     onRetryItem: (batchId: string, itemId: string) => void;
     onAddReferenceColumn: () => void;
     onRemoveReferenceColumn?: () => void;
@@ -51,9 +54,10 @@ const OPERATION_OPTIONS = [
 
 const CONCURRENCY_OPTIONS = [1, 5, 10] as const;
 
-export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, theme, onPatchTable, onAddRow, onRemoveRow, onUpdateRow, onFillRows, onGenerate, onRetryItem, onAddReferenceColumn, onRemoveReferenceColumn, onReorderReferenceColumns, onMoveReferenceCell, onUploadReference, onFocusOutput, onConnectStart, onConnectDrop, readOnly = false }: Props) {
+export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, theme, onPatchTable, onAddRow, onRemoveRow, onUpdateRow, onFillRows, onGenerate, onCreateStoryboard, onRetryItem, onAddReferenceColumn, onRemoveReferenceColumn, onReorderReferenceColumns, onMoveReferenceCell, onUploadReference, onFocusOutput, onConnectStart, onConnectDrop, readOnly = false }: Props) {
     const table = node.metadata?.batchTable || { operation: "try_on" as const, concurrency: 10, rows: [] };
     const referenceColumns = batchReferenceColumns(table);
+    const textColumns = batchTextColumns(table);
     const globalPrompt = table.globalPrompt || "";
     const hasGlobalPrompt = Boolean(globalPrompt.trim());
     const nodeById = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes]);
@@ -61,7 +65,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
     const connectedImageCount = useMemo(() => new Set(connections.filter((connection) => connection.toNodeId === node.id && connection.relation !== "batch-output").map((connection) => connection.fromNodeId)).size, [connections, node.id]);
     const completed = table.rows.filter((row) => hasNodeMedia(row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined)).length;
     const unfinishedReadyCount = table.rows.filter((row) => rowReady(row, table, nodeById) && !hasNodeMedia(row.outputNodeId ? nodeById.get(row.outputNodeId) : undefined)).length;
-    const gridTemplateColumns = `64px repeat(${referenceColumns.length}, 88px) minmax(280px, 1fr) 88px 80px`;
+    const gridTemplateColumns = `64px repeat(${referenceColumns.length}, 88px) ${textColumns.length ? `repeat(${textColumns.length}, minmax(168px, 0.75fr)) ` : ""}minmax(280px, 1fr) 88px 80px`;
     const subtleSurface = `color-mix(in srgb, ${theme.node.text} 4%, transparent)`;
     const inputSurface = theme.node.panel;
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,7 +169,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                                             <Minus className="size-3.5" />
                                         </button>
                                     </Tooltip>
-                                    <Tooltip title={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS ? "最多支持 6 组参考图" : `新增参考图 ${referenceColumns.length + 1}`}>
+                                    <Tooltip title={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS ? `最多支持 ${MAX_BATCH_REFERENCE_COLUMNS} 组参考图` : `新增参考图 ${referenceColumns.length + 1}`}>
                                         <button type="button" aria-label={`新增参考图 ${referenceColumns.length + 1}`} className="grid size-5 place-items-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/10" style={{ color: theme.node.text }} disabled={referenceColumns.length >= MAX_BATCH_REFERENCE_COLUMNS} onClick={onAddReferenceColumn}>
                                             <Plus className="size-3.5" />
                                         </button>
@@ -181,6 +185,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                                 <Button size="small" type="text" icon={<Rows3 className="size-3.5" />} onClick={onFillRows}>同步连线</Button>
                             </Tooltip>
                             <Button size="small" type="text" icon={<Plus className="size-3.5" />} onClick={onAddRow}>添加任务</Button>
+                            {table.contentKind === "storyboard" && onCreateStoryboard ? <Button size="small" icon={<Film className="size-3.5" />} onClick={onCreateStoryboard}>创建视频脚本</Button> : null}
                             <Button size="small" type="primary" icon={<Play className="size-3.5" />} disabled={!unfinishedReadyCount} onClick={() => onGenerate()}>
                                 生成未完成项{unfinishedReadyCount ? ` · ${unfinishedReadyCount}` : ""}
                             </Button>
@@ -219,6 +224,7 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                             {column.label}
                         </span>
                     ))}
+                    {textColumns.map((column) => <span key={column.id} className="min-w-0 truncate px-1" title={column.label}>{column.label}</span>)}
                     <span className="min-w-0 truncate px-1">任务提示词</span>
                     <span className="min-w-0 truncate px-1">生成结果</span>
                     <span className="min-w-0 truncate px-1">操作</span>
@@ -254,6 +260,18 @@ export function CanvasBatchTableNodeContent({ node, nodes, connections, batch, t
                                             onUploadFile={(file) => onUploadReference?.(row.id, columnIndex, file)}
                                             onPointerDown={(event) => startCellDrag(event, row.id, columnIndex)}
                                         />
+                                    </div>
+                                ))}
+                                {textColumns.map((column, columnIndex) => (
+                                    <div key={column.id} className="min-w-0 px-2">
+                                        {table.aiGenerated ? <textarea
+                                            aria-label={`任务 ${index + 1} ${column.label}`}
+                                            value={row.cells?.[column.id] || ""}
+                                            readOnly={readOnly}
+                                            className="thin-scrollbar h-[108px] w-full resize-none rounded-lg border px-2 py-2 text-xs outline-none focus-visible:ring-2"
+                                            style={{ background: inputSurface, borderColor: theme.node.stroke, color: theme.node.text }}
+                                            onChange={(event) => onUpdateRow(row.id, { cells: { ...row.cells, [column.id]: event.target.value } })}
+                                        /> : <span>{nodeById.get(row.textNodeIds?.[columnIndex] || "")?.metadata?.content || ""}</span>}
                                     </div>
                                 ))}
                                 <div className="min-w-0 pr-3">
@@ -436,14 +454,6 @@ function EmptyThumbnail({ theme, compact = false }: { theme: CanvasTheme; compac
             )}
         </div>
     );
-}
-
-function rowReady(row: CanvasBatchRow, table: CanvasBatchTableData, nodeById: Map<string, CanvasNodeData>) {
-    if (!row.enabled || !batchPromptForRow(table, row).trim()) return false;
-    const inputNodeIds = row.inputNodeIds.filter(Boolean);
-    if (table.operation === "try_on" && inputNodeIds.length < 2) return false;
-    if (!inputNodeIds.length) return false;
-    return inputNodeIds.every((id) => hasNodeMedia(nodeById.get(id)));
 }
 
 function hasNodeMedia(node?: CanvasNodeData) {
