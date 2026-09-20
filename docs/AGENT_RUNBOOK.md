@@ -213,10 +213,24 @@ git status --short
 - 根因：画布成员权限与私有资源读取分别鉴权；对象存储设置还必须使用资源所有者身份。旧协作操作没有在提交媒体引用时建立可信授权。
 - 失败路线：只放开画布 JSON，或将成员 ID 替换成画布 owner，不能覆盖编辑者贡献的资源；仅凭 JSON 包含资源 ID 授权会允许编辑者注入未共享的私有资源。向成员返回长期 CDN 地址也无法在后续请求检查撤权。将浏览器上传的 Asset/Resource 配对要求套到所有内部保存，会拦截 Agent 尚未入素材库的合法输出；内部路径仍校验资源归属，普通浏览器同步另保留素材配对要求。
 - 成功路线：新增 v32 `canvas_media_grants`，保存/协作/分支/合并在事务内校验媒体归属或来源授权后记账；读取时实时联查当前画布成员。共用文件出口保留 Range/播放副本，跨所有者强制代理并 `private, no-store`，按资源 owner 解析 OSS。当前跨所有者引用参与删除保护；删除画布先校验 owner，再清理授权和成员。
+- 媒体使用补齐：成员外部地址通过应用签名绑定 reader，并在每次下载重验权限；生成输入使用同一读权，任务/计费属于调用者。个人管理先通过 `/resources/:id/copy` 复制资源，不代所有者操作原资源；自动恢复和归档先校验任务为当前账号所有，受邀成员不回写所有者业务项目。已验证签名篡改、撤权后的旧地址、Range、幂等副本和副本撤权后保留。
 - 验证：领域回归与实际 HTTP 测试通过，覆盖 image/video/audio、素材按需读取、编辑者贡献、伪造引用拒绝、撤权后的旧 ETag、分支/合并/恢复、Range 与播放副本；本机模拟 OSS 测试确认使用 owner 配置且成员不收到 CDN 重定向。迁移测试覆盖历史、分支、非所有者引用排除和重复执行。
 - 可复制命令：在 backend 执行 `go test ./internal/canvas ./internal/database ./internal/handler ./internal/app -run TestCanvasMedia -count=1`；相邻流程执行 `go test ./internal/app -run 'Canvas|UserData|Resource|Asset' -timeout 10m`。
 - 避免操作：不放宽私人素材列表、资源管理或其他人的任务/账单权限；不根据任意客户端引用授予读权；不将自动化测试当作真实双账号浏览器、真实 OSS 或 PostgreSQL 并发验收。历史授权与独立方案按各自画布成员关系保留，已下载的本机内容不能撤回。
 - 同步要求：CHANGELOG、协作专题、HTTP API、数据库 schema32/导入表、功能清单和待测试；升级先执行迁移，本次未运行生产迁移。
+
+### RB-20260920-09：协作通知漏达与删除撤销生命周期错配
+
+- 日期：2026-09-20
+- 现象：不同后端实例的正文 Hub 互不通知；节点被远端修改后整条撤销历史失效，恢复旧节点后重做可能携带旧 incarnation。共享页面还可能自动恢复其他成员任务并尝试归档其素材。
+- 影响范围：跨实例实时协作、metadata/连线并发、删除撤销/重做、共享画布生成恢复。
+- 根因：presence Redis 没有覆盖正文事件；快照级撤销缺少字段条件和恢复身份回执处理；共享节点的 taskId 不代表当前账号拥有任务。
+- 失败路线：只接 Redis Pub/Sub 不能补偿提交后崩溃和断线漏消息；恢复时信任客户端节点/连线可篡改历史；仅按 edge ID 校验不足以防止替换连线内容。只在纯历史函数中验证撤销，无法覆盖同步队列的 restore_nodes 和回执身份更新。
+- 成功路线：提交后发布带来源的 Redis 通知，重连触发 resync，WebSocket 每 5 秒检查数据库 revision/访问权；metadata 叶级条件合并，连线按 ID/字段合并；删除撤销以本人 durable deletion 为准，逐节点推进 incarnation，连线正文与端点生命周期都校验。回执更新本机历史身份，重做只记录实际撤销内容；任务恢复先调用本人任务读取接口，403/404 跳过，网络失败保留原节点状态。
+- 验证：真实临时 Redis 广播、房间隔离、订阅重连和幂等关闭测试通过；canvas 包通过。前端覆盖删除→撤销→回执→重做→再次撤销及尚未发出的删除撤销；后端覆盖伪造连线被拒绝、事务回滚、真实恢复幂等、旧 incarnation 被拒绝。
+- 可复制命令：backend 执行 `go test ./internal/canvas -count=1`；web 执行 `bun test test/canvas-collaboration-history.test.ts test/canvas-collaboration-operations.test.ts test/canvas-conflicts.test.ts test/canvas-generation-access.test.ts`。Redis 专项需安装 `redis-server`，使用独立临时 Unix socket，不连接开发或生产实例。
+- 避免操作：不将 Redis 当作正文持久存储，不通过旧客户端快照恢复媒体/连线，不放开他人任务私有日志，不把专项测试描述为 PostgreSQL 并发或真实浏览器验收。
+- 同步要求：CHANGELOG、协作/实时对照/演进专题、HTTP API、功能/代码地图/待测试及 PR 正文；本轮未新增数据库迁移，schema 仍为 32。
 
 ### 故障记录
 

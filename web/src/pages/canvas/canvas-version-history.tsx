@@ -8,6 +8,7 @@ import { getCanvasHistoryEntry, listCanvasHistory, listRemoteCanvasProjects, typ
 import { archiveCanvasBranch, createCanvasBranch, getCanvasBranchContext, listCanvasBranches, previewCanvasBranchMerge, type CanvasBranchContext, type CanvasBranchMergePreview, type CanvasBranchSummary } from "@/services/api/canvas-collaboration";
 import { readCanvasSyncDrafts, type CanvasSyncDraft } from "@/services/canvas-sync-drafts";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
+import { setCollaborationField } from "@/lib/canvas/canvas-collaboration-rebase";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { mergeCanvasBranchWithSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -975,22 +976,9 @@ function applyBranchMergeChoices(preview: CanvasBranchMergePreview, choices: Rec
         }
         if (itemIndex < 0) throw new Error("合并内容已发生变化，请重新打开合并");
         const item = collection[itemIndex] as unknown as Record<string, unknown>;
-        setNestedMergeValue(item, parts.slice(2), value);
+        setCollaborationField(item, parts.slice(2), value);
     }
     const nodeIds = new Set(project.nodes.map((node) => node.id));
     project.connections = project.connections.filter((connection) => nodeIds.has(connection.fromNodeId) && nodeIds.has(connection.toNodeId));
     return project;
-}
-
-function setNestedMergeValue(target: Record<string, unknown>, path: string[], value: unknown) {
-    if (!path.length) return;
-    let cursor = target;
-    for (const key of path.slice(0, -1)) {
-        const current = cursor[key];
-        if (!current || typeof current !== "object" || Array.isArray(current)) cursor[key] = {};
-        cursor = cursor[key] as Record<string, unknown>;
-    }
-    const leaf = path[path.length - 1];
-    if (value === undefined) delete cursor[leaf];
-    else cursor[leaf] = structuredClone(value);
 }

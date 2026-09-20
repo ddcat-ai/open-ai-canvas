@@ -51,6 +51,7 @@ type CanvasCollaborationOperationRequest struct {
 	DeletionID           string                       `json:"deletionId,omitempty"`
 	RestoreConnectionIDs []string                     `json:"restoreConnectionIds,omitempty"`
 	SnapshotID           string                       `json:"snapshotId,omitempty"`
+	EndpointIncarnations map[string]int64             `json:"endpointIncarnations,omitempty"`
 }
 
 type CanvasCollaborationOperationResult struct {
@@ -170,7 +171,8 @@ func canvasCollaborationOperationDelta(req CanvasCollaborationOperationRequest, 
 		for _, key := range []string{"title", "projectId"} {
 			delta.RootPatch[key] = root[key]
 		}
-	case "create_nodes":
+	case "create_nodes", "restore_nodes":
+		delta.Kind = "create_nodes"
 		for _, node := range req.Nodes {
 			index := canvasNodeIndex(nodes, rawString(node["id"]))
 			if index < 0 {
@@ -598,6 +600,7 @@ func ensureCanvasCollaborationNodes(tx *gorm.DB, canvasID string, nodes []map[st
 		var state model.CanvasCollaborationNode
 		err := tx.Where("canvas_id = ? AND node_id = ?", canvasID, nodeID).First(&state).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			setNodeIncarnation(&node, 1)
 			encoded, _ := json.Marshal(node)
 			state = model.CanvasCollaborationNode{ID: canvasNodeStateID(canvasID, nodeID), CanvasID: canvasID, NodeID: nodeID, Incarnation: 1, Status: canvasCollabNodeActive, NodeJSON: string(encoded), CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&state).Error; err != nil {
@@ -609,6 +612,7 @@ func ensureCanvasCollaborationNodes(tx *gorm.DB, canvasID string, nodes []map[st
 			return err
 		}
 		if state.Status == canvasCollabNodeActive {
+			setNodeIncarnation(&node, state.Incarnation)
 			encoded, _ := json.Marshal(node)
 			if err := tx.Model(&state).Updates(map[string]any{"node_json": string(encoded), "updated_at": now}).Error; err != nil {
 				return err
@@ -657,6 +661,8 @@ func (s *Service) applyCanvasCollaborationRequest(tx *gorm.DB, project *model.Ca
 		return applyCanvasCollaborationConnections(tx, project, nodes, connections, req)
 	case "restore_delete":
 		return applyCanvasCollaborationNodeRestore(tx, project, nodes, connections, actorID, req, result)
+	case "restore_nodes":
+		return applyCanvasCollaborationHistoryRestore(tx, project, nodes, connections, actorID, req)
 	case "restore_snapshot":
 		return applyCanvasCollaborationSnapshotRestore(tx, project, root, nodes, connections, actorID, req, result)
 	default:
@@ -743,22 +749,55 @@ func optionalCanvasProjectID(value json.RawMessage) (*int64, error) {
 }
 
 func applyCanvasCollaborationConnections(tx *gorm.DB, project *model.CanvasProject, nodes *[]map[string]json.RawMessage, connections *[]map[string]json.RawMessage, req CanvasCollaborationOperationRequest) error {
-	if len(req.ExpectedConnections) > 0 {
-		if !connectionMapsEqual(*connections, req.ExpectedConnections) {
-			return kernel.NewAppError(http.StatusConflict, "画布连线内容已被其他成员修改，请重新同步")
-		}
-	} else if len(req.ExpectedConnectionIDs) == 0 && len(*connections) > 0 {
+	if req.ExpectedConnections == nil && len(*connections) > 0 {
 		return kernel.BadAuthRequest("连线修改需要完整的当前连线基线")
-	} else {
-		actual := make([]string, 0, len(*connections))
-		for _, connection := range *connections {
-			actual = append(actual, rawString(connection["id"]))
+	}
+	base, desired := map[string]json.RawMessage{}, map[string]json.RawMessage{}
+	for _, pair := range []struct {
+		items []map[string]json.RawMessage
+		dst   map[string]json.RawMessage
+	}{{req.ExpectedConnections, base}, {req.Connections, desired}} {
+		for _, item := range pair.items {
+			id := rawString(item["id"])
+			if id == "" || pair.dst[id] != nil {
+				return kernel.BadAuthRequest("连线 ID 为空或重复")
+			}
+			pair.dst[id], _ = json.Marshal(item)
 		}
-		expected := append([]string(nil), req.ExpectedConnectionIDs...)
-		sort.Strings(actual)
-		sort.Strings(expected)
-		if !slicesEqual(actual, expected) {
-			return kernel.NewAppError(http.StatusConflict, "画布连线已被其他成员修改，请重新同步")
+	}
+	current := map[string]json.RawMessage{}
+	order := []string{}
+	for _, item := range *connections {
+		id := rawString(item["id"])
+		current[id], _ = json.Marshal(item)
+		order = append(order, id)
+	}
+	for _, item := range req.Connections {
+		id := rawString(item["id"])
+		if current[id] == nil {
+			order = append(order, id)
+		}
+	}
+	keys := map[string]bool{}
+	for id := range base {
+		keys[id] = true
+	}
+	for id := range desired {
+		keys[id] = true
+	}
+	conflicted := false
+	for id := range keys {
+		current[id] = mergeCanvasValue(base[id], desired[id], current[id], "connections."+id, base[id] != nil && desired[id] != nil && current[id] != nil, func(CanvasBranchConflict) { conflicted = true })
+	}
+	if conflicted {
+		return kernel.NewAppError(http.StatusConflict, "同一连线已被其他成员修改，请重新同步")
+	}
+	merged := make([]map[string]json.RawMessage, 0, len(current))
+	for _, id := range order {
+		if current[id] != nil {
+			var item map[string]json.RawMessage
+			_ = json.Unmarshal(current[id], &item)
+			merged = append(merged, item)
 		}
 	}
 	knownNodes := make(map[string]bool, len(*nodes))
@@ -766,15 +805,20 @@ func applyCanvasCollaborationConnections(tx *gorm.DB, project *model.CanvasProje
 		knownNodes[rawString(node["id"])] = true
 	}
 	seen := make(map[string]bool, len(req.Connections))
-	for _, connection := range req.Connections {
+	for _, connection := range merged {
 		id := rawString(connection["id"])
 		fromID, toID := rawString(connection["fromNodeId"]), rawString(connection["toNodeId"])
 		if id == "" || seen[id] || !knownNodes[fromID] || !knownNodes[toID] || fromID == toID {
 			return kernel.NewAppError(http.StatusConflict, "连线端点或身份已失效")
 		}
 		seen[id] = true
+		if !rawEqual(base[id], desired[id]) && desired[id] != nil {
+			if err := validateCanvasConnectionLifecycles(tx, project.ID, connection, req.EndpointIncarnations); err != nil {
+				return err
+			}
+		}
 	}
-	*connections = req.Connections
+	*connections = merged
 	_ = tx
 	return nil
 }
@@ -807,19 +851,25 @@ func applyCanvasCollaborationNodeUpdate(tx *gorm.DB, project *model.CanvasProjec
 		}
 	}
 	conflicts := make([]string, 0)
+	mergedPatch := make(map[string]json.RawMessage, len(req.Patch))
 	for key, before := range req.Before {
 		currentValue := current[key]
 		patchValue, changedByRequest := req.Patch[key]
-		if rawEqual(currentValue, before) || (!changedByRequest || rawEqual(currentValue, patchValue)) {
+		if !changedByRequest {
 			continue
 		}
-		conflicts = append(conflicts, key)
+		if key == "metadata" {
+			before = canvasEditableMetadata(before)
+			patchValue = canvasEditableMetadata(patchValue)
+			currentValue = canvasEditableMetadata(currentValue)
+		}
+		mergedPatch[key] = mergeCanvasValue(before, patchValue, currentValue, key, key == "metadata", func(c CanvasBranchConflict) { conflicts = append(conflicts, c.Path) })
 	}
 	if len(conflicts) > 0 {
 		sort.Strings(conflicts)
 		return kernel.NewAppError(http.StatusConflict, fmt.Sprintf("成员“%s”修改了节点“%s”的字段：%s", canvasCollaborationRecentActorLabel(tx, project.ID, req.NodeID, actorID), rawString((*nodes)[index]["title"]), strings.Join(conflicts, ",")))
 	}
-	for key, value := range req.Patch {
+	for key, value := range mergedPatch {
 		current[key] = value
 	}
 	// Lifecycle identity belongs to the server even when metadata is replaced.
@@ -829,6 +879,38 @@ func applyCanvasCollaborationNodeUpdate(tx *gorm.DB, project *model.CanvasProjec
 		return err
 	}
 	_ = actorID
+	return nil
+}
+
+func canvasEditableMetadata(raw json.RawMessage) json.RawMessage {
+	var metadata map[string]json.RawMessage
+	if json.Unmarshal(raw, &metadata) != nil || metadata == nil {
+		return raw
+	}
+	delete(metadata, "collaborationIncarnation")
+	delete(metadata, "collaborationRestoreIncarnation")
+	if len(metadata) == 0 {
+		return nil
+	}
+	value, _ := json.Marshal(metadata)
+	return value
+}
+
+func validateCanvasConnectionLifecycles(tx *gorm.DB, canvasID string, connection map[string]json.RawMessage, expected map[string]int64) error {
+	for _, key := range []string{"fromNodeId", "toNodeId"} {
+		id := rawString(connection[key])
+		state, err := canvasCollaborationNode(tx, canvasID, id)
+		if err != nil {
+			return err
+		}
+		incarnation := expected[id]
+		if incarnation == 0 {
+			incarnation = 1
+		}
+		if state.Status != canvasCollabNodeActive || state.Incarnation != incarnation {
+			return kernel.NewAppError(http.StatusConflict, "连线端点已删除或恢复，请重新同步")
+		}
+	}
 	return nil
 }
 
@@ -914,7 +996,7 @@ func applyCanvasCollaborationNodeCreate(tx *gorm.DB, project *model.CanvasProjec
 	if len(req.Nodes) == 0 {
 		return kernel.BadAuthRequest("批量创建至少需要一个节点")
 	}
-	if req.ExpectedConnections != nil && !connectionMapsEqual(*connections, req.ExpectedConnections) {
+	if req.EndpointIncarnations == nil && req.ExpectedConnections != nil && !connectionMapsEqual(*connections, req.ExpectedConnections) {
 		return kernel.NewAppError(http.StatusConflict, "画布连线刚刚有变化，新增节点组已保留为待处理草稿")
 	}
 	known := make(map[string]bool, len(*nodes)+len(req.Nodes))
@@ -952,6 +1034,22 @@ func applyCanvasCollaborationNodeCreate(tx *gorm.DB, project *model.CanvasProjec
 		fromID, toID := rawString(connection["fromNodeId"]), rawString(connection["toNodeId"])
 		if !known[fromID] || !known[toID] || fromID == toID {
 			return kernel.NewAppError(http.StatusConflict, "新增连线的端点已失效")
+		}
+		for _, endpointID := range []string{fromID, toID} {
+			if canvasNodeIndex(*nodes, endpointID) < 0 {
+				continue
+			}
+			state, err := canvasCollaborationNode(tx, project.ID, endpointID)
+			if err != nil {
+				return err
+			}
+			expected := req.EndpointIncarnations[endpointID]
+			if expected == 0 {
+				expected = 1
+			}
+			if state.Status != canvasCollabNodeActive || state.Incarnation != expected {
+				return kernel.NewAppError(http.StatusConflict, "新增连线端点已恢复为新的存续版本")
+			}
 		}
 		connectionIDs[connectionID] = true
 	}
@@ -1017,7 +1115,7 @@ func applyCanvasCollaborationNodeRestore(tx *gorm.DB, project *model.CanvasProje
 			continue
 		}
 		fromID, toID := rawString(connection["fromNodeId"]), rawString(connection["toNodeId"])
-		if canvasNodeIndex(*nodes, fromID) < 0 || canvasNodeIndex(*nodes, toID) < 0 {
+		if (fromID != nodeID && canvasNodeIndex(*nodes, fromID) < 0) || (toID != nodeID && canvasNodeIndex(*nodes, toID) < 0) {
 			return kernel.NewAppError(http.StatusConflict, "选择恢复的连线端点已变化")
 		}
 		for _, endpointID := range []string{fromID, toID} {
@@ -1174,6 +1272,7 @@ func setNodeIncarnation(node *map[string]json.RawMessage, incarnation int64) {
 		metadata = map[string]json.RawMessage{}
 	}
 	metadata["collaborationIncarnation"], _ = json.Marshal(incarnation)
+	delete(metadata, "collaborationRestoreIncarnation")
 	(*node)["metadata"], _ = json.Marshal(metadata)
 }
 

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { applyCanvasCollaborationOperation } from "../src/lib/canvas/canvas-collaboration-operations";
 import type { CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType } from "../src/types/canvas";
-import { rebaseCanvasCollaborationProject } from "../src/lib/canvas/canvas-collaboration-rebase";
+import { mergeCollaborationValue, rebaseCanvasCollaborationProject, setCollaborationField } from "../src/lib/canvas/canvas-collaboration-rebase";
 
 function project(revision = 4): CanvasProject {
     const nodes = [
@@ -26,6 +26,53 @@ function project(revision = 4): CanvasProject {
         directorScenes: [],
     };
 }
+
+test("ambiguous and prototype keys remain atomic and cannot mutate object prototypes", () => {
+    for (const key of ["plugin.key", "__proto__", "constructor", "prototype"]) {
+        const value = (n: number) => JSON.parse(`{"${key}":{"value":${n}}}`);
+        const paths: string[] = [];
+        const merged = mergeCollaborationValue(value(1), value(2), value(3), "metadata", true, (conflict) => {
+            paths.push(conflict.path);
+            return conflict.latest;
+        });
+        expect(paths).toEqual(["metadata"]);
+        expect(merged).toEqual(value(3));
+    }
+    const object = {};
+    setCollaborationField(object, ["__proto__", "canvasPolluted"], true);
+    setCollaborationField(object, ["constructor", "prototype", "canvasPolluted"], true);
+    expect(Object.prototype).not.toHaveProperty("canvasPolluted");
+    expect(object).toEqual({});
+});
+
+test("metadata merges nested independent fields while reporting only competing leaves", () => {
+    const base = project();
+    base.nodes[0].metadata = { pluginData: { seed: 1, style: "old" }, prompt: "old" };
+    const local = structuredClone(base);
+    local.nodes[0].metadata!.pluginData!.seed = 2;
+    const remote = structuredClone(base);
+    remote.nodes[0].metadata!.pluginData!.style = "new";
+    const merged = rebaseCanvasCollaborationProject(base, local, remote);
+    expect(merged.conflicts).toEqual([]);
+    expect(merged.project.nodes[0].metadata!.pluginData).toEqual({ seed: 2, style: "new" });
+    remote.nodes[0].metadata!.pluginData!.seed = 3;
+    expect(rebaseCanvasCollaborationProject(base, local, remote).conflicts).toEqual(["nodes.a.metadata.pluginData.seed"]);
+});
+
+test("deletion inverse projects a fresh lifecycle before subsequent queued operations", () => {
+    const base = project();
+    base.nodes = base.nodes.slice(1);
+    base.connections = [];
+    const restored = applyCanvasCollaborationOperation(base, {
+        opId: "undo",
+        kind: "restore_nodes",
+        revision: 5,
+        nodes: [{ ...project().nodes[0], metadata: { collaborationIncarnation: 1, collaborationRestoreIncarnation: 1 } }],
+        connections: project().connections,
+    });
+    expect(restored.applied).toBe(true);
+    expect(restored.project.nodes.find((n) => n.id === "a")?.metadata).toEqual({ collaborationIncarnation: 2 });
+});
 
 test("applies a node field delta without changing the viewport", () => {
     const before = project();

@@ -5,11 +5,110 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
+
+func TestCanvasMediaGenerationCopyAndRevocableURL(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_PUBLIC_BASE_URL", "https://127.0.0.1")
+	svc, db, dir := newResourceDeletionTestService(t)
+	t.Cleanup(func() { _ = svc.Close() })
+	for _, id := range []string{"owner", "editor", "viewer"} {
+		if err := db.Create(&model.User{ID: id, Username: id, Status: model.UserStatusActive, Role: model.UserRoleUser}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "resources"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "resources", "original.txt"), []byte("shared data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range []any{
+		&model.Resource{ID: "media", UserID: "owner", Kind: "file", Provider: "local", ObjectKey: "original.txt", Size: 11, MimeType: "text/plain", Status: model.ResourceStatusReady},
+		&model.CanvasProject{ID: "canvas", UserID: "owner", Revision: 1, CollaborationEnabled: true, PayloadJSON: `{"nodes":[]}`},
+		&model.CanvasCollaborator{ID: "editor", CanvasID: "canvas", UserID: "editor", Role: "editor"},
+		&model.CanvasCollaborator{ID: "viewer", CanvasID: "canvas", UserID: "viewer", Role: "viewer"},
+		&model.CanvasMediaGrant{CanvasID: "canvas", Kind: model.CanvasMediaResource, ObjectID: "media", Current: true},
+	} {
+		if err := db.Create(record).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	media := providerMedia{StorageKey: "resource:media"}
+	if err := svc.hydrateProviderMedia("editor", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+		t.Fatal(err)
+	}
+	signed, err := url.Parse(media.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := signed.Query()
+	if query.Get("reader") != "editor" {
+		t.Fatalf("provider received owner URL: %s", media.URL)
+	}
+	stream, err := svc.OpenReaderResourceRange("media", "editor", query.Get("expires"), query.Get("signature"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := io.ReadAll(stream.Body)
+	_ = stream.Body.Close()
+	if string(data) != "shared data" {
+		t.Fatal(string(data))
+	}
+	copy, err := svc.CopyReadableResource("editor", "media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copy.UserID != "editor" || copy.ID == "media" || copy.ObjectKey == "original.txt" {
+		t.Fatalf("copy ownership: %#v", copy)
+	}
+	again, err := svc.CopyReadableResource("editor", "media")
+	if err != nil || again.ID != copy.ID {
+		t.Fatalf("copy retry: %#v %v", again, err)
+	}
+	if err := svc.ensureTaskProjectActive("editor", "canvas"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ensureTaskProjectActive("viewer", "canvas"); err == nil {
+		t.Fatal("viewer can generate into shared canvas")
+	}
+	input := map[string]any{"mode": "image", "config": map[string]any{"channelId": "", "baseUrl": "https://images.example.com/v1", "apiKey": "test-key", "interfaceType": "openai-image", "model": "gpt-image-1"}, "referenceImages": []any{map[string]any{"storageKey": "resource:media"}}}
+	if err := svc.validateTaskMediaReferences("editor", input); err != nil {
+		t.Fatal(err)
+	}
+	task, err := svc.CreateTask("editor", CreateTaskRequest{ProjectID: "canvas", Type: "canvas_image", Operation: "image", Prompt: "test", Input: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.UserID != "editor" || task.ProjectID != "canvas" {
+		t.Fatalf("task borrowed owner identity: %#v", task)
+	}
+	if _, err := svc.CreateTask("viewer", CreateTaskRequest{ProjectID: "canvas", Type: "canvas_image", Operation: "image", Prompt: "test", Input: input}); err == nil {
+		t.Fatal("viewer task admitted")
+	}
+	if err := db.Where("canvas_id = ? AND user_id = ?", "canvas", "editor").Delete(&model.CanvasCollaborator{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.OpenReaderResourceRange("media", "editor", query.Get("expires"), query.Get("signature"), ""); err == nil {
+		t.Fatal("revoked provider URL still works")
+	}
+	if err := svc.hydrateProviderMedia("editor", &providerMedia{StorageKey: "resource:media"}, providerMediaHydrationPolicy{requireURL: true}); err == nil {
+		t.Fatal("revoked task reference still hydrates")
+	}
+	if _, err := svc.ReadResource("editor", copy.ID); err != nil {
+		t.Fatalf("personal copy lost after revocation: %v", err)
+	}
+	if _, err := svc.Resource("editor", "media"); err == nil {
+		t.Fatal("shared usage gave original resource management")
+	}
+}
 
 func TestCanvasMediaUsesOwnerStorageAndProxy(t *testing.T) {
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")

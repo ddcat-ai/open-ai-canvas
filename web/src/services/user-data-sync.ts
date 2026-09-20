@@ -834,7 +834,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     if (dirtyProjects.length) void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
 }
 
-async function buildCollaborativeOperations(initial: CanvasProject, remotePayload: CanvasProject) {
+export async function buildCollaborativeOperations(initial: CanvasProject, remotePayload: CanvasProject) {
     if (!initial || !Number.isSafeInteger(initial.revision)) {
         throw new ApiError("多人协作画布缺少可靠基线，请重新打开画布", { status: 428 });
     }
@@ -929,7 +929,17 @@ async function buildCollaborativeOperations(initial: CanvasProject, remotePayloa
     // New nodes and their new relations are submitted as one atomic batch. If
     // an existing endpoint was deleted by another member, the whole batch is
     // rejected and the new nodes remain in the local conflict draft.
-    const newNodes = localNodes.filter((node) => !baseNodes.has(node.id));
+    const restoredNodes = localNodes.filter((node) => !baseNodes.has(node.id) && typeof node.metadata?.collaborationRestoreIncarnation === "number");
+    if (restoredNodes.length) {
+        const ids = new Set(restoredNodes.map((node) => node.id));
+        await submit({
+            opId: newCanvasCollaborationOperationID(), kind: "restore_nodes",
+            nodes: restoredNodes as unknown as Array<Record<string, unknown>>,
+            connections: (remotePayload.connections || []).filter((edge) => ids.has(edge.fromNodeId) || ids.has(edge.toNodeId)) as unknown as Array<Record<string, unknown>>,
+            endpointIncarnations: Object.fromEntries(remote.nodes.map((node) => [node.id, canvasNodeIncarnation(node)])),
+        });
+    }
+    const newNodes = localNodes.filter((node) => !baseNodes.has(node.id) && !restoredNodes.includes(node));
     if (newNodes.length) {
         const newIDs = new Set(newNodes.map((node) => node.id));
         const newConnections = (remotePayload.connections || []).filter((connection) => {
@@ -938,6 +948,7 @@ async function buildCollaborativeOperations(initial: CanvasProject, remotePayloa
         await submit({
             opId: newCanvasCollaborationOperationID(),
             kind: "create_nodes",
+            endpointIncarnations: Object.fromEntries(remote.nodes.map((node) => [node.id, canvasNodeIncarnation(node)])),
             nodes: newNodes as unknown as Array<Record<string, unknown>>,
             connections: newConnections as unknown as Array<Record<string, unknown>>,
             // The new nodes may connect to existing endpoints. Keep the
@@ -954,6 +965,7 @@ async function buildCollaborativeOperations(initial: CanvasProject, remotePayloa
         await submit({
             opId: newCanvasCollaborationOperationID(),
             kind: "update_connections",
+            endpointIncarnations: Object.fromEntries(remote.nodes.map((node) => [node.id, canvasNodeIncarnation(node)])),
             expectedConnectionIds: [...remoteConnectionIDs].sort(),
             expectedConnections: (remote.connections || []) as unknown as Array<Record<string, unknown>>,
             connections: desiredConnections as unknown as Array<Record<string, unknown>>,

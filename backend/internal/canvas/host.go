@@ -47,11 +47,21 @@ type Service struct {
 	canvasPresenceMu       sync.Mutex
 	canvasPresence         map[string]map[string]CanvasPresence
 	canvasCollaborationHub *canvasCollaborationHub
+	canvasRealtime         *canvasRealtimeBus
 }
 
 func New(repo *repository.Repository, host Host) *Service {
 	if host == nil {
 		host = nopHost{}
 	}
-	return &Service{repo: repo, host: host, canvasCollaborationHub: newCanvasCollaborationHub()}
+	s := &Service{repo: repo, host: host, canvasCollaborationHub: newCanvasCollaborationHub()}
+	s.canvasRealtime = newCanvasRealtimeBus(s.canvasPresenceRedis(), s.canvasCollaborationHub)
+	return s
+}
+
+// Close releases only canvas-owned subscriptions, not the shared Redis client.
+func (s *Service) Close() {
+	if s != nil && s.canvasRealtime != nil {
+		s.canvasRealtime.close()
+	}
 }

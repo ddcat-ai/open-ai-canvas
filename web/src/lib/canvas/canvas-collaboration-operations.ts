@@ -67,8 +67,15 @@ export function applyCanvasCollaborationOperation(snapshot: CanvasProject, opera
         if (!operation.nodeId) return { project: snapshot, applied: false, requiresResync: true };
         next.nodes = next.nodes.filter((node) => node.id !== operation.nodeId);
         next.connections = next.connections.filter((connection) => connection.fromNodeId !== operation.nodeId && connection.toNodeId !== operation.nodeId);
-    } else if (kind === "create_nodes") {
-        const nodes = (operation.nodes || []) as unknown as CanvasNodeData[];
+    } else if (kind === "create_nodes" || kind === "restore_nodes") {
+        const nodes = clone((operation.nodes || []) as unknown as CanvasNodeData[]);
+        if (kind === "restore_nodes")
+            for (const node of nodes) {
+                const restoredFrom = node.metadata?.collaborationRestoreIncarnation;
+                if (typeof restoredFrom !== "number") return { project: snapshot, applied: false, requiresResync: true };
+                node.metadata = { ...node.metadata, collaborationIncarnation: restoredFrom + 1 };
+                delete (node.metadata as Record<string, unknown>).collaborationRestoreIncarnation;
+            }
         const existing = new Set(next.nodes.map((node) => node.id));
         if (!nodes.length || nodes.some((node) => !node.id || existing.has(node.id))) {
             return { project: snapshot, applied: false, requiresResync: true };

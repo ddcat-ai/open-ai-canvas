@@ -323,6 +323,9 @@ func providerPayloadErrorMessage(raw string) string {
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
+	if err := s.ensureTaskProjectActive(userID, taskProjectID); err != nil {
+		return nil, err
+	}
 	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	var input canvasGenerationInput
 	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
@@ -757,7 +760,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return nil
 	}
 	resourceID := strings.TrimPrefix(media.StorageKey, "resource:")
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	resource, err := s.canvasDomain().ResourceForReader(userID, resourceID)
 	if err != nil {
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
@@ -766,7 +769,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	}
 	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
 	if useObjectURL {
-		signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
+		signedURL, err := s.resourceURLForReader(userID, resource, time.Now().Add(providerResourceURLTTL))
 		if err != nil {
 			return fmt.Errorf("生成参考素材地址失败：%w", err)
 		}

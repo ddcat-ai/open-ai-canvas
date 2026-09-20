@@ -774,18 +774,22 @@ func mergeCanvasDocuments(baseRaw, sourceRaw, targetRaw json.RawMessage) (json.R
 				_ = json.Unmarshal(s, &sm)
 				_ = json.Unmarshal(t, &tm)
 				mergedItem := cloneRawMap(tm)
-				for field, sv := range sm {
+				fields := map[string]bool{}
+				for field := range bm {
+					fields[field] = true
+				}
+				for field := range sm {
+					fields[field] = true
+				}
+				for field := range fields {
 					if field == idKey {
 						continue
 					}
-					bv, bok := bm[field]
-					tv, tok := tm[field]
-					if (!bok && !tok) || rawJSONEqual(bv, tv) {
-						if !bok || !rawJSONEqual(bv, sv) {
-							mergedItem[field] = cloneRaw(sv)
-						}
-					} else if !rawJSONEqual(bv, sv) && !rawJSONEqual(sv, tv) {
-						conflicts = append(conflicts, CanvasBranchConflict{Path: key + "." + id + "." + field, Label: field, Base: cloneRaw(bv), Source: cloneRaw(sv), Target: cloneRaw(tv)})
+					value := mergeCanvasValue(bm[field], sm[field], tm[field], key+"."+id+"."+field, field == "metadata", func(c CanvasBranchConflict) { conflicts = append(conflicts, c) })
+					if len(value) == 0 {
+						delete(mergedItem, field)
+					} else {
+						mergedItem[field] = value
 					}
 				}
 				result[id], _ = json.Marshal(mergedItem)

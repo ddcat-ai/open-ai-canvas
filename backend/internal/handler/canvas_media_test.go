@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,8 @@ import (
 )
 
 func TestCanvasMediaHTTPReadRangePlaybackAndRevocation(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_PUBLIC_BASE_URL", "https://127.0.0.1")
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "media.db")), &gorm.Config{})
 	if err != nil {
@@ -99,6 +102,7 @@ func TestCanvasMediaHTTPReadRangePlaybackAndRevocation(t *testing.T) {
 		router.ServeHTTP(w, r)
 		return w
 	}
+	signedURLs := map[string]string{}
 	for _, member := range []string{"editor", "viewer"} {
 		for _, kind := range []string{"image", "video", "audio"} {
 			w := call(member, "/api/resources/"+kind+"/file?direct=1", "", "")
@@ -121,8 +125,28 @@ func TestCanvasMediaHTTPReadRangePlaybackAndRevocation(t *testing.T) {
 		if w := call(member, "/api/resources/private/file", "", ""); w.Code != 404 {
 			t.Fatalf("unshared private = %d", w.Code)
 		}
-		if w := call(member, "/api/resources/image/oss-url", "", ""); w.Code != 404 {
-			t.Fatalf("direct signing = %d", w.Code)
+		w = call(member, "/api/resources/image/oss-url", "", "")
+		if w.Code != 200 {
+			t.Fatalf("shared signing = %d %s", w.Code, w.Body.String())
+		}
+		var response struct {
+			Data struct {
+				URL string `json:"url"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		signed, _ := url.Parse(response.Data.URL)
+		signedURLs[member] = signed.RequestURI()
+		if w := call("", signed.RequestURI(), "bytes=2-5", ""); w.Code != 206 || w.Body.String() != "2345" || w.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatalf("signed range = %d %s", w.Code, w.Body.String())
+		}
+		query := signed.Query()
+		query.Set("reader", "stranger")
+		signed.RawQuery = query.Encode()
+		if w := call("", signed.RequestURI(), "", ""); w.Code != 403 {
+			t.Fatalf("tampered reader = %d", w.Code)
 		}
 	}
 	if w := call("stranger", "/api/resources/image/file", "", ""); w.Code != 404 {
@@ -134,6 +158,9 @@ func TestCanvasMediaHTTPReadRangePlaybackAndRevocation(t *testing.T) {
 	etag := call("viewer", "/api/resources/image/file", "", "").Header().Get("ETag")
 	if err := svc.CanvasCollaboration().RemoveCanvasCollaborator(owner, "shared", "viewer"); err != nil {
 		t.Fatal(err)
+	}
+	if w := call("", signedURLs["viewer"], "", etag); w.Code != 404 {
+		t.Fatalf("revoked signed link = %d", w.Code)
 	}
 	for _, path := range []string{"/api/resources/image/file", "/api/resources/video/file?variant=playback", "/api/resources/video"} {
 		if w := call("viewer", path, "", etag); w.Code != 404 {

@@ -29,6 +29,15 @@ func (s *Service) ResourceForReader(userID, id string) (*model.Resource, error) 
 	return resource, err
 }
 
+// CanvasForEditor authorizes the canvas without lending the owner's identity
+// to task billing, channels, or resources outside the shared document.
+func (s *Service) CanvasForEditor(userID, id string) (*model.CanvasProject, error) {
+	if err := s.requireCanvasCollaborationAccess(&model.User{ID: userID}, id, true); err != nil {
+		return nil, err
+	}
+	return s.repo.CanvasProject(id)
+}
+
 // The caller must hold the target canvas write permission and transaction.
 // Source IDs may only be supplied after checking access to those source canvases.
 func grantCanvasDocumentMedia(repo *repository.Repository, actorID, canvasID, raw string, sourceIDs ...string) error {

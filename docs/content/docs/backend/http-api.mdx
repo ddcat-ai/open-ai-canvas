@@ -38,7 +38,15 @@ description: 信封、错误码与 OpenAPI
 
 旧协作请求和节点生命周期不匹配时保留冲突，不静默覆盖。完整协议与限制见 [共享协作画布](/docs/overview/canvas-collaboration)。邀请授予画布合法引用的媒体读取权，其他项目、任务、账单和未共享素材仍保持私有。
 
-`GET /resources/:id`、`GET /resources/:id/file`（含 Range 与 `variant=playback`）、素材详情及 `POST /assets/batch` 支持按画布媒体授权读取。每次请求检查当前成员关系；资源元数据对非所有者隐藏对象路径、桶、Endpoint 和内部错误。跨所有者文件强制代理并返回 `Cache-Control: private, no-store`，撤权后的旧 ETag 请求也返回 404。`GET /resources/:id/oss-url`、上传/删除/管理接口仍按资源所有者校验；`GET /assets` 仍是个人素材列表。
+`GET /resources/:id`、`GET /resources/:id/file`（含 Range 与 `variant=playback`）、素材详情及 `POST /assets/batch` 支持按画布媒体授权读取。每次请求检查当前成员关系；资源元数据对非所有者隐藏对象路径、桶、Endpoint 和内部错误。跨所有者文件强制代理并返回 `Cache-Control: private, no-store`，撤权后的旧 ETag 请求也返回 404。`GET /assets` 仍是个人素材列表。
+
+`GET /resources/:id/oss-url` 对所有者保留原策略；成员获得带 `reader`、`expires`、`signature` 的应用临时地址，最长 5 分钟，访问时验签并重新校验该成员读权。生成上游输入使用同一协议、4 小时有效期。地址指向 `/public/resources/:id/file/...` 并代理资源所有者的存储，支持 Range，不能改 reader 或替换成普通公开签名；它是可转交外部服务的短期 bearer capability，后续读取随成员撤权失效。
+
+`POST /resources/:id/copy` 无请求体，要求调用者当前可读且资源 ready；复制到本人存储并返回个人资源。上传额度、大小上限与幂等上传沿用既有规则；同一来源使用 `shared-copy:<resourceId>`，调用者独立拥有副本，来源撤权不删除副本。管理、删除原资源仍校验资源所有者。
+
+协作操作新增 `restore_nodes`：`nodes` 每项提供 `id` 和 `metadata.collaborationRestoreIncarnation`；服务端只从该操作者匹配的删除记录读取节点正文。`connections` 只能选择原删除快照中的完整连线，不能更改其内容；整批节点/连线原子恢复并推进生命周期，返回规范化 `create_nodes` 增量。`create_nodes` / `update_connections` 可提交 `endpointIncarnations`（nodeId 到 incarnation 的映射）；新客户端始终携带，端点删除恢复后的旧请求拒绝。连线按 ID 和字段三方合并，metadata 对象按叶合并，数组保持原子。
+
+`POST /tasks` 创建前检查输入的资源读权；共享画布生成要求 editor/owner，执行时重新检查画布编辑权和媒体读权，任务身份、渠道和计费属于调用者。读取共享画布不开放其他成员的任务详情、日志、取消或重试接口。
 
 协作保存中的新媒体必须归发布者所有或已获目标/来源画布授权；伪造他人私有引用返回 403，缺失或未完成同步的媒体返回 400，正文、revision 和授权不部分提交。方案创建和合并只传播所需媒体授权。
 

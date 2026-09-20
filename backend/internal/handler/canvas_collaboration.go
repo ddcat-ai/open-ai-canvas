@@ -111,6 +111,8 @@ func RegisterCanvasCollaborationRoutes(r *gin.RouterGroup, svc *service.Service)
 
 		pingTicker := time.NewTicker(canvasCollaborationWSPingInterval)
 		defer pingTicker.Stop()
+		reconcileTicker := time.NewTicker(5 * time.Second)
+		defer reconcileTicker.Stop()
 		for {
 			select {
 			case <-readDone:
@@ -132,6 +134,28 @@ func RegisterCanvasCollaborationRoutes(r *gin.RouterGroup, svc *service.Service)
 				}
 				if err := conn.WriteJSON(message); err != nil {
 					return
+				}
+				if message.Revision > revision {
+					revision = message.Revision
+				}
+			case <-reconcileTicker.C:
+				// A committed revision may have no Redis notification (process
+				// crash, outage, or a server-side writer). Also enforce revocation
+				// while the document is idle instead of waiting for another edit.
+				user, authErr := currentUser(c, svc)
+				if authErr != nil {
+					return
+				}
+				latest, err := svc.CanvasCollaboration().CanvasCollaborationRevisionForUser(user, canvasID)
+				if err != nil {
+					return
+				}
+				if latest > revision {
+					_ = conn.SetWriteDeadline(time.Now().Add(canvasCollaborationWSWriteWait))
+					if conn.WriteJSON(canvas.CanvasCollaborationRealtimeMessage{Type: "resync", CanvasID: canvasID, Revision: latest}) != nil {
+						return
+					}
+					revision = latest
 				}
 			case <-pingTicker.C:
 				if err := conn.SetWriteDeadline(time.Now().Add(canvasCollaborationWSWriteWait)); err != nil {

@@ -129,4 +129,7 @@ func (s *Service) publishCanvasCollaborationRealtime(message CanvasCollaboration
 		return
 	}
 	s.canvasCollaborationHub.publish(message)
+	if s.canvasRealtime != nil {
+		s.canvasRealtime.publish(message)
+	}
 }

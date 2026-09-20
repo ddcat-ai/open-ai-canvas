@@ -266,7 +266,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		resource, err := svc.Resource(user.ID, c.Param("id"))
+		resource, err := svc.ReadResource(user.ID, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusNotFound, err)
 			return
@@ -280,6 +280,19 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Header("Cache-Control", "private, no-store")
 		c.Header("Referrer-Policy", "no-referrer")
 		ok(c, gin.H{"url": ossURL})
+	})
+	r.POST("/resources/:id/copy", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resource, err := svc.CopyReadableResource(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
 	})
 	r.GET("/resources/:id/file", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -387,7 +400,13 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.DataFromReader(stream.StatusCode, stream.ContentLength, resource.MimeType, stream.Body, nil)
 	})
 	publicResourceHandler := func(c *gin.Context) {
-		stream, err := svc.OpenPublicResourceRange(c.Param("id"), c.Query("expires"), c.Query("signature"), c.GetHeader("Range"))
+		var stream *service.ResourceStream
+		var err error
+		if readerID := c.Query("reader"); readerID != "" {
+			stream, err = svc.OpenReaderResourceRange(c.Param("id"), readerID, c.Query("expires"), c.Query("signature"), c.GetHeader("Range"))
+		} else {
+			stream, err = svc.OpenPublicResourceRange(c.Param("id"), c.Query("expires"), c.Query("signature"), c.GetHeader("Range"))
+		}
 		if err != nil {
 			failService(c, err)
 			return
@@ -398,6 +417,9 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			resource.MimeType = "application/octet-stream"
 		}
 		c.Header("Cache-Control", "public, max-age=0, must-revalidate")
+		if c.Query("reader") != "" {
+			c.Header("Cache-Control", "private, no-store")
+		}
 		c.Header("Accept-Ranges", "bytes")
 		c.Header("Referrer-Policy", "no-referrer")
 		c.Header("X-Content-Type-Options", "nosniff")

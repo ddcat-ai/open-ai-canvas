@@ -111,7 +111,7 @@ test("metadata selection does not resurrect a deleted rich text field", () => {
     remoteNode.metadata = { prompt: "提示词", composerContent: "提示词", style: "云端样式" };
     const local = { ...base, nodes: [localNode] };
     const remote = { ...base, revision: 11, nodes: [remoteNode] };
-    const field = buildCanvasConflictFields(base, local, remote).find((item) => item.key === "metadata");
+    const field = buildCanvasConflictFields(base, local, remote).find((item) => item.key === "metadata.style");
     expect(field).toBeDefined();
     const merged = applyCanvasConflictField(autoMergeIndependentCanvasChanges(base, local, remote), field!, field!.localValue);
     expect(merged.nodes[0].metadata?.richText).toBeUndefined();

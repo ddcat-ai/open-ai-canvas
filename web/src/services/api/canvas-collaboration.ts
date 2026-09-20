@@ -22,7 +22,7 @@ export type CanvasCollaborationUser = {
 export type CanvasCollaborationOperation = {
     opId: string;
     baseRevision?: number;
-    kind: "update_node" | "update_canvas" | "delete_node" | "create_nodes" | "update_connections" | "restore_delete" | "restore_snapshot";
+    kind: "update_node" | "update_canvas" | "delete_node" | "create_nodes" | "update_connections" | "restore_delete" | "restore_nodes" | "restore_snapshot";
     nodeId?: string;
     incarnation?: number;
     fieldGroup?: string;
@@ -38,6 +38,7 @@ export type CanvasCollaborationOperation = {
     deletionId?: string;
     restoreConnectionIds?: string[];
     snapshotId?: string;
+    endpointIncarnations?: Record<string, number>;
 };
 
 export type CanvasCollaborationOperationResult = {

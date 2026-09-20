@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -42,6 +43,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	normalizedInput, err := normalizeTaskInput(req.Input)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.validateTaskMediaReferences(userID, normalizedInput); err != nil {
 		return nil, err
 	}
 
@@ -171,6 +175,27 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	s.recordActivity(userID, "task", 1)
 	_ = s.log(userID, task.ID, "info", "任务已进入队列", "")
 	return taskForOutput(task), nil
+}
+
+func (s *Service) validateTaskMediaReferences(userID string, input map[string]any) error {
+	raw, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	ids := map[string]struct{}{}
+	if err := assets.CollectOwnedDocumentReferences(string(raw), ids); err != nil {
+		return err
+	}
+	for id := range ids {
+		resource, err := s.canvasDomain().ResourceForReader(userID, id)
+		if err != nil {
+			return err
+		}
+		if resource.Status != model.ResourceStatusReady {
+			return BadAuthRequest("任务参考资源尚未就绪")
+		}
+	}
+	return nil
 }
 
 // resolveTaskModelSelection 根据请求实际携带的模型选择决定路由方式。

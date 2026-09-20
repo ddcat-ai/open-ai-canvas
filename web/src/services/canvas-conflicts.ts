@@ -3,6 +3,7 @@ import { canonicalize } from "json-canonicalize";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { getActiveUserScope } from "@/lib/user-scope";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { mergeCollaborationValue, setCollaborationField } from "@/lib/canvas/canvas-collaboration-rebase";
 
 export type CanvasConflictField = {
     id: string;
@@ -96,9 +97,10 @@ export function buildCanvasConflictFields(base: CanvasProject, local: CanvasProj
         const beforeMetadata = withoutPromptMetadata(before.metadata);
         const localMetadata = withoutPromptMetadata(mine.metadata);
         const remoteMetadata = withoutPromptMetadata(latest.metadata);
-        if (!sameValue(beforeMetadata, localMetadata) && !sameValue(beforeMetadata, remoteMetadata) && !sameValue(localMetadata, remoteMetadata)) {
-            fields.push(field("node", nodeId, title, "metadata", "节点配置", "json", beforeMetadata, localMetadata, remoteMetadata));
-        }
+        mergeCollaborationValue(beforeMetadata, localMetadata, remoteMetadata, "metadata", true, ({ path, before, mine, latest }) => {
+            fields.push(field("node", nodeId, title, path, "节点配置 · " + path.replace(/^metadata\.?/, ""), "json", before, mine, latest));
+            return latest;
+        });
     }
 
     const rootKeys: Array<keyof CanvasProject> = ["title", "projectId", "chatSessions", "activeChatId", "starterMode", "appearance", "backgroundMode", "showImageInfo", "directorScenes", "timeline"];
@@ -128,8 +130,11 @@ export function buildCanvasConflictFields(base: CanvasProject, local: CanvasProj
         if (!before && mine && latest && !sameValue(mine, latest)) {
             fields.push(connectionField(connectionId, null, mine, latest));
         }
-        if (before && mine && latest && !sameValue(before, mine) && !sameValue(before, latest) && !sameValue(mine, latest)) {
-            fields.push(connectionField(connectionId, before, mine, latest));
+        if (before && mine && latest) {
+            mergeCollaborationValue(before, mine, latest, "", true, ({ path, before, mine, latest }) => {
+                fields.push({ ...connectionField(connectionId, before, mine, latest), id: JSON.stringify(["connection", connectionId, path]), key: path.slice(1), valueType: "json" });
+                return latest;
+            });
         }
     }
     return fields;
@@ -202,10 +207,12 @@ export function autoMergeIndependentCanvasChanges(base: CanvasProject, local: Ca
         const beforeMetadata = withoutPromptMetadata(before.metadata);
         const localMetadata = withoutPromptMetadata(localNode.metadata);
         const remoteMetadata = withoutPromptMetadata(latest.metadata);
-        if (sameValue(beforeMetadata, remoteMetadata) && !sameValue(beforeMetadata, localMetadata)) {
-            const promptMetadata = mergedNode.metadata || {};
-            mergedNode.metadata = { ...((structuredClone(localMetadata) as Record<string, unknown>) || {}), prompt: promptMetadata.prompt, composerContent: promptMetadata.composerContent };
-        }
+        const promptMetadata = mergedNode.metadata || {};
+        mergedNode.metadata = {
+            ...((mergeCollaborationValue(beforeMetadata, localMetadata, remoteMetadata, "metadata", true, ({ latest }) => latest) as Record<string, unknown>) || {}),
+            prompt: promptMetadata.prompt,
+            composerContent: promptMetadata.composerContent,
+        };
         nextNodes.set(nodeId, mergedNode);
     }
     next.nodes = [...nextNodes.values()];
@@ -219,6 +226,11 @@ export function applyCanvasConflictField(project: CanvasProject, conflict: Canva
         const connectionID = conflict.connectionId;
         if (!connectionID || conflict.key === "connections") {
             next.connections = structuredClone((value || []) as CanvasProject["connections"]);
+            return normalizeCanvasConflictResult(next);
+        }
+        if (conflict.key !== "connection") {
+            const connection = next.connections.find((item) => item.id === connectionID);
+            if (connection) setCollaborationField(connection as unknown as Record<string, unknown>, conflict.key.split("."), value);
             return normalizeCanvasConflictResult(next);
         }
         const retained = next.connections.filter((connection) => connection.id !== connectionID);
@@ -260,6 +272,8 @@ export function applyCanvasConflictField(project: CanvasProject, conflict: Canva
             if (currentMetadata[key] !== undefined) selectedMetadata[key] = currentMetadata[key];
         }
         next.nodes[nodeIndex] = { ...node, metadata: selectedMetadata };
+    } else if (conflict.key.startsWith("metadata.")) {
+        setCollaborationField(next.nodes[nodeIndex] as unknown as Record<string, unknown>, conflict.key.split("."), value);
     } else {
         (next.nodes[nodeIndex] as unknown as Record<string, unknown>)[conflict.key] = structuredClone(value);
     }
@@ -339,6 +353,8 @@ function mergeConnectionsById(base: CanvasProject["connections"], local: CanvasP
             selected = undefined;
         } else if (sameValue(mine, latest)) {
             selected = mine;
+        } else if (before && mine && latest) {
+            selected = mergeCollaborationValue(before, mine, latest, "", true, ({ latest }) => latest) as typeof latest;
         }
         if (selected) merged.push(structuredClone(selected));
     }

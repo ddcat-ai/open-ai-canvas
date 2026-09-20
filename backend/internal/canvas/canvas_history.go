@@ -186,6 +186,21 @@ func canvasProjectPayload(project model.CanvasProject) (json.RawMessage, error) 
 	if payload == nil {
 		return nil, kernel.BadAuthRequest("画布数据格式错误")
 	}
+	if project.CollaborationEnabled {
+		var nodes []map[string]json.RawMessage
+		if json.Unmarshal(payload["nodes"], &nodes) == nil {
+			for _, node := range nodes {
+				var metadata map[string]json.RawMessage
+				_ = json.Unmarshal(node["metadata"], &metadata)
+				var incarnation int64
+				_ = json.Unmarshal(metadata["collaborationIncarnation"], &incarnation)
+				if incarnation <= 0 {
+					setNodeIncarnation(&node, 1)
+				}
+			}
+			payload["nodes"], _ = json.Marshal(nodes)
+		}
+	}
 	for key, value := range map[string]any{"id": project.ID, "title": project.Title, "projectId": project.ProjectID, "revision": project.Revision, "collaborationEnabled": project.CollaborationEnabled, "createdAt": project.CreatedAt, "updatedAt": project.UpdatedAt} {
 		encoded, err := json.Marshal(value)
 		if err != nil {

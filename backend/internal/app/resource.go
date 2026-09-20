@@ -78,13 +78,54 @@ func (s *Service) ReadResource(userID, id string) (*model.Resource, error) {
 	return resource, nil
 }
 
-// DirectResourceURL 先校验资源归属，再按实际存储位置签发短时下载地址。
+// Shared URLs remain revocable at the application boundary, including OSS
+// objects. Never expose an owner's storage signature to another account.
 func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
+	resource, err := s.canvasDomain().ResourceForReader(userID, id)
 	if err != nil {
 		return "", err
 	}
-	return s.directResourceURL(resource, time.Now().Add(directResourceURLTTL))
+	return s.resourceURLForReader(userID, resource, time.Now().Add(directResourceURLTTL))
+}
+
+func (s *Service) resourceURLForReader(userID string, resource *model.Resource, expiresAt time.Time) (string, error) {
+	if resource.UserID == userID {
+		return s.directResourceURL(resource, expiresAt)
+	}
+	if resource.Status != model.ResourceStatusReady {
+		return "", BadAuthRequest("资源尚未上传完成")
+	}
+	address, err := s.signedPublicResourceURL(resource, expiresAt)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	signature, err := s.signPublicResource("reader:"+userID+":"+resource.ID, query.Get("expires"))
+	if err != nil {
+		return "", err
+	}
+	query.Set("reader", userID)
+	query.Set("signature", signature)
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func (s *Service) OpenReaderResourceRange(id, readerID, expires, signature, rangeHeader string) (*ResourceStream, error) {
+	if readerID == "" {
+		return nil, Forbidden("下载授权无效")
+	}
+	if err := s.verifyPublicResourceSignature("reader:"+readerID+":"+id, expires, signature); err != nil {
+		return nil, err
+	}
+	resource, err := s.canvasDomain().ResourceForReader(readerID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
 func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
