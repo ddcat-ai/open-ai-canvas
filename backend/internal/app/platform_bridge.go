@@ -148,6 +148,9 @@ func (s *Service) RecordChannelResult(ctx context.Context, channelID string, fai
 }
 
 func (s *Service) Close() error {
+	if s != nil && s.canvas != nil {
+		s.canvas.Close()
+	}
 	if s == nil || s.coordinator == nil {
 		return nil
 	}

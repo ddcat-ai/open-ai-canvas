@@ -1,7 +1,7 @@
 import { Tooltip } from "@/components/ui/base/tooltip";
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { History, PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Users, PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
 
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -47,9 +47,9 @@ export function CanvasFocusModeBar({ versionsOpen, onToggleVersions, syncStatus,
                     </button>
                 </Tooltip>
                 {syncStatus}
-                <Tooltip title="版本记录与本地草稿">
-                    <button type="button" onClick={onToggleVersions} className="grid size-8 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.itemHover : undefined }} aria-label="版本记录" aria-pressed={versionsOpen}>
-                        <History className="size-4" />
+                <Tooltip title="协作">
+                    <button type="button" onClick={onToggleVersions} className="grid size-8 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.itemHover : undefined }} aria-label="打开协作面板" aria-pressed={versionsOpen}>
+                        <Users className="size-4" />
                     </button>
                 </Tooltip>
                 <span className="mx-0.5 h-4 w-px" style={{ background: theme.toolbar.border }} />

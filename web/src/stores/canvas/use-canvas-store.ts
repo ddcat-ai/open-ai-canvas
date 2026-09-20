@@ -16,6 +16,7 @@ import type { TimelineProject } from "@/types/timeline";
 export type CanvasProject = {
     id: string;
     revision?: number;
+    collaborationEnabled?: boolean;
     remoteContentHash?: string;
     projectId?: string;
     title: string;

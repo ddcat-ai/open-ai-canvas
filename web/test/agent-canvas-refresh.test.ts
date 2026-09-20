@@ -184,7 +184,8 @@ test("reconciliation after a delta gap still protects genuinely conflicting edit
     await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
     expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("conflict");
     expect((await readCanvasSyncDrafts(initial.id))[0].project.title).toBe("未保存标题");
-    await expect(saveRemoteUserDataNow(initial.id)).rejects.toThrow("云端画布已有更新");
+    await expect(saveRemoteUserDataNow(initial.id)).rejects.toThrow("有修改需要确认");
+    expect(useCanvasStore.getState().projects[0].title).toBe("未保存标题");
 });
 
 test("an identical cloud snapshot clears a stale conflict without replaying editor nodes", async () => {

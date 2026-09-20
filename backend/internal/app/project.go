@@ -636,11 +636,14 @@ func (s *Service) ensureTaskProjectActive(userID string, canvasOrProjectID strin
 	if id == "" {
 		return nil
 	}
-	if canvas, err := s.repo.CanvasProjectForUser(userID, id); err == nil {
+	if canvas, err := s.repo.CanvasProject(id); err == nil {
+		if _, err := s.canvasDomain().CanvasForEditor(userID, id); err != nil {
+			return err
+		}
 		if canvas.ProjectID == "" {
 			return nil
 		}
-		project, projectErr := s.repo.ProjectForUser(userID, canvas.ProjectID)
+		project, projectErr := s.repo.ProjectForUser(canvas.UserID, canvas.ProjectID)
 		if projectErr != nil {
 			return projectErr
 		}

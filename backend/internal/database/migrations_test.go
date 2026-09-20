@@ -345,6 +345,49 @@ func TestMigrateSchemaV23BackfillsCanvasRevisions(t *testing.T) {
 	}
 }
 
+func TestCanvasCollaborationMigrationPreservesExistingCanvas(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-canvas-collaboration?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropTable(&model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropColumn(&model.CanvasProject{}, "CollaborationEnabled"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("version >= ?", 30).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO canvas_projects (id, user_id, title, revision, payload_json) VALUES ('legacy-collab', 'owner', 'Existing', 7, '{"nodes":[{"id":"retained"}]}')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := MigrateSchema(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var project model.CanvasProject
+	if err := db.First(&project, "id = ?", "legacy-collab").Error; err != nil {
+		t.Fatal(err)
+	}
+	if project.Revision != 7 || project.CollaborationEnabled || project.PayloadJSON != `{"nodes":[{"id":"retained"}]}` {
+		t.Fatalf("existing canvas changed: %#v", project)
+	}
+	for _, table := range []any{&model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}, &model.CanvasMediaGrant{}} {
+		if !db.Migrator().HasTable(table) {
+			t.Fatalf("missing table %T", table)
+		}
+	}
+	status, err := ReadSchemaStatus(db)
+	if err != nil || !status.Ready || status.Current != 32 {
+		t.Fatalf("schema = %#v, %v", status, err)
+	}
+}
+
 func TestMigrateSchemaV8AllowsReusingArchivedLogicalModelCode(t *testing.T) {
 	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-logical-model-active-code?mode=memory&cache=shared"})
 	if err != nil {

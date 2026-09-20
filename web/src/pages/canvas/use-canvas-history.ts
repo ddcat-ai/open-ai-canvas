@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ContextMenuState } from "@/types/canvas";
+import { collaborationValueEqual, mergeCollaborationValue } from "@/lib/canvas/canvas-collaboration-rebase";
 
 export type CanvasHistorySnapshot = {
     nodes: CanvasNodeData[];
@@ -130,22 +131,50 @@ export function useCanvasHistory({
     }, [applyCanvasAppearance, clearCommitTimer, setActiveChatId, setBackgroundMode, setChatSessions, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo]);
 
     const undoCanvas = useCallback(() => {
-        const patch = historyRef.current.past.pop();
-        const current = lastHistoryRef.current;
-        if (!patch || !current) return;
-        historyRef.current.future.push(patch);
-        applyHistorySnapshot(applyCanvasHistoryPatch(current, patch, "before"));
-    }, [applyHistorySnapshot]);
+        clearCommitTimer();
+        const current = createHistorySnapshot();
+        const pending = lastHistoryRef.current && createCanvasHistoryPatch(lastHistoryRef.current, current);
+        if (pending) historyRef.current.past.push(pending);
+        let patch;
+        while ((patch = historyRef.current.past.pop())) {
+            const next = applyCanvasHistoryPatch(current, patch, "before");
+            const actual = createCanvasHistoryPatch(next, current);
+            if (!actual) continue;
+            historyRef.current.future.push(actual);
+            applyHistorySnapshot(next);
+            return;
+        }
+        setHistoryState({ canUndo: false, canRedo: historyRef.current.future.length > 0 });
+    }, [applyHistorySnapshot, clearCommitTimer, createHistorySnapshot]);
 
     const redoCanvas = useCallback(() => {
-        const patch = historyRef.current.future.pop();
-        const current = lastHistoryRef.current;
-        if (!patch || !current) return;
-        historyRef.current.past.push(patch);
-        applyHistorySnapshot(applyCanvasHistoryPatch(current, patch, "after"));
-    }, [applyHistorySnapshot]);
+        const current = createHistorySnapshot();
+        let patch;
+        while ((patch = historyRef.current.future.pop())) {
+            const next = applyCanvasHistoryPatch(current, patch, "after");
+            const actual = createCanvasHistoryPatch(current, next);
+            if (!actual) continue;
+            historyRef.current.past.push(actual);
+            applyHistorySnapshot(next);
+            return;
+        }
+        setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: false });
+    }, [applyHistorySnapshot, createHistorySnapshot]);
 
     const getHistoryCleanupContext = useCallback(() => ({ history: historyRef.current, lastHistory: lastHistoryRef.current }), []);
+
+    const adoptRemoteHistory = useCallback((before: CanvasHistorySnapshot, next: CanvasHistorySnapshot) => {
+        clearCommitTimer();
+        // Keep local intent. Conditional inverse fields are evaluated against
+        // the latest content at undo time, so a remote position change does
+        // not discard an unrelated prompt edit in the same history entry.
+        const localPatch = lastHistoryRef.current && createCanvasHistoryPatch(lastHistoryRef.current, before);
+        if (localPatch) historyRef.current.past.push(localPatch);
+        reconcileHistoryLifecycles([...historyRef.current.past, ...historyRef.current.future], before.nodes, next.nodes);
+        historyRef.current.past = historyRef.current.past.slice(-50);
+        lastHistoryRef.current = next;
+        setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
+    }, [clearCommitTimer]);
 
     useEffect(() => {
         if (!projectLoaded || applyingHistoryRef.current || historyPausedRef.current) return;
@@ -175,7 +204,7 @@ export function useCanvasHistory({
         if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
     }, [clearCommitTimer]);
 
-    return { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas };
+    return { adoptRemoteHistory, getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas };
 }
 
 function snapshotsShareReferences(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot) {
@@ -188,7 +217,7 @@ function snapshotsShareReferences(before: CanvasHistorySnapshot, after: CanvasHi
         && before.showImageInfo === after.showImageInfo;
 }
 
-function createCanvasHistoryPatch(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot): CanvasHistoryPatch | null {
+export function createCanvasHistoryPatch(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot): CanvasHistoryPatch | null {
     const patch: CanvasHistoryPatch = {};
     patch.nodes = createEntityPatch(before.nodes, after.nodes);
     patch.connections = createEntityPatch(before.connections, after.connections);
@@ -208,7 +237,7 @@ function createEntityPatch<T extends { id: string }>(before: T[], after: T[]): E
     ids.forEach((id) => {
         const beforeItem = beforeById.get(id);
         const afterItem = afterById.get(id);
-        if (beforeItem !== afterItem) changes.push({ id, before: beforeItem, after: afterItem });
+        if (!collaborationValueEqual(beforeItem, afterItem)) changes.push({ id, before: beforeItem, after: afterItem });
     });
 
     const beforeOrder = before.map((item) => item.id);
@@ -222,28 +251,83 @@ function createEntityPatch<T extends { id: string }>(before: T[], after: T[]): E
     };
 }
 
-function applyCanvasHistoryPatch(snapshot: CanvasHistorySnapshot, patch: CanvasHistoryPatch, side: "before" | "after"): CanvasHistorySnapshot {
+export function applyCanvasHistoryPatch(snapshot: CanvasHistorySnapshot, patch: CanvasHistoryPatch, side: "before" | "after"): CanvasHistorySnapshot {
+    const opposite = side === "before" ? "after" : "before";
+    let nodes = patch.nodes ? applyEntityPatch(snapshot.nodes, patch.nodes, side, true) : snapshot.nodes;
+    // Undoing a node creation must not remove relations another member added.
+    const knownEdges = new Set(patch.connections?.changes.filter((c) => c[opposite]).map((c) => c.id) || []);
+    const retained = new Set(nodes.map((n) => n.id));
+    for (const node of snapshot.nodes) {
+        if (!retained.has(node.id) && snapshot.connections.some((edge) => (edge.fromNodeId === node.id || edge.toNodeId === node.id) && !knownEdges.has(edge.id))) nodes = [...nodes, node];
+    }
+    const ids = new Set(nodes.map((node) => node.id));
+    const connections = (patch.connections ? applyEntityPatch(snapshot.connections, patch.connections, side) : snapshot.connections).filter((edge) => ids.has(edge.fromNodeId) && ids.has(edge.toNodeId));
+    const value = <K extends "activeChatId" | "canvasAppearance" | "backgroundMode" | "showImageInfo">(key: K): CanvasHistorySnapshot[K] => {
+        const change = patch[key];
+        return change && collaborationValueEqual(snapshot[key], change[opposite]) ? change[side] as CanvasHistorySnapshot[K] : snapshot[key];
+    };
     return {
-        nodes: patch.nodes ? applyEntityPatch(snapshot.nodes, patch.nodes, side) : snapshot.nodes,
-        connections: patch.connections ? applyEntityPatch(snapshot.connections, patch.connections, side) : snapshot.connections,
+        nodes,
+        connections,
         chatSessions: patch.chatSessions ? applyEntityPatch(snapshot.chatSessions, patch.chatSessions, side) : snapshot.chatSessions,
-        activeChatId: patch.activeChatId ? patch.activeChatId[side] : snapshot.activeChatId,
-        canvasAppearance: patch.canvasAppearance ? patch.canvasAppearance[side] : snapshot.canvasAppearance,
-        backgroundMode: patch.backgroundMode ? patch.backgroundMode[side] : snapshot.backgroundMode,
-        showImageInfo: patch.showImageInfo ? patch.showImageInfo[side] : snapshot.showImageInfo,
+        activeChatId: value("activeChatId"),
+        canvasAppearance: value("canvasAppearance"),
+        backgroundMode: value("backgroundMode"),
+        showImageInfo: value("showImageInfo"),
     };
 }
 
-function applyEntityPatch<T extends { id: string }>(current: T[], patch: EntityPatch<T>, side: "before" | "after") {
+function applyEntityPatch<T extends { id: string }>(current: T[], patch: EntityPatch<T>, side: "before" | "after", node = false) {
     const byId = new Map(current.map((item) => [item.id, item]));
     patch.changes.forEach((change) => {
         const value = change[side];
-        if (value) byId.set(change.id, value);
-        else byId.delete(change.id);
+        const expected = change[side === "before" ? "after" : "before"];
+        const latest = byId.get(change.id);
+        if (node && expected && latest && incarnation(expected) !== incarnation(latest)) return;
+        if (expected && value && latest) {
+            const merged = { ...latest } as Record<string, unknown>;
+            for (const key of new Set([...Object.keys(expected), ...Object.keys(value)])) {
+                if (["id", "createdAt", "updatedAt"].includes(key)) continue;
+                merged[key] = mergeCollaborationValue((expected as Record<string, unknown>)[key], (value as Record<string, unknown>)[key], (latest as Record<string, unknown>)[key], key, key === "metadata", ({ latest }) => latest);
+            }
+            byId.set(change.id, merged as T);
+        } else if (collaborationValueEqual(expected, latest)) {
+            if (value) {
+                const restored = structuredClone(value);
+                const metadata = (restored as unknown as CanvasNodeData).metadata;
+                if (node && typeof metadata?.collaborationIncarnation === "number") {
+                    (restored as unknown as CanvasNodeData).metadata = { ...metadata, collaborationRestoreIncarnation: metadata.collaborationIncarnation };
+                }
+                byId.set(change.id, restored);
+            } else byId.delete(change.id);
+        }
     });
 
     // 成员增删时按补丁记录恢复精确顺序；仅内容变化时保留当前顺序，避免无意义数组抖动。
     const order = side === "before" ? patch.beforeOrder : patch.afterOrder;
-    if (!order) return current.map((item) => byId.get(item.id)).filter((item): item is T => Boolean(item));
-    return order.map((id) => byId.get(id)).filter((item): item is T => Boolean(item));
+    const ids = [...new Set([...(order || current.map((item) => item.id)), ...byId.keys()])];
+    return ids.map((id) => byId.get(id)).filter((item): item is T => Boolean(item));
+}
+
+function incarnation(value: unknown) {
+    return (value as CanvasNodeData)?.metadata?.collaborationIncarnation ?? 1;
+}
+
+export function reconcileHistoryLifecycles(patches: CanvasHistoryPatch[], before: CanvasNodeData[], next: CanvasNodeData[]) {
+    for (const node of next) {
+        const prior = before.find((item) => item.id === node.id);
+        const expected = prior?.metadata?.collaborationRestoreIncarnation;
+        const initial = prior && !prior.metadata?.collaborationIncarnation && incarnation(node) === 1;
+        if (!initial && !(typeof expected === "number" && (incarnation(node) === expected || incarnation(node) === expected + 1))) continue;
+        for (const patch of patches) for (const change of patch.nodes?.changes || []) {
+            if (change.id !== node.id) continue;
+            for (const side of ["before", "after"] as const) {
+                const value = change[side];
+                if (!value) continue;
+                const metadata = { ...value.metadata, collaborationIncarnation: incarnation(node) };
+                delete (metadata as Record<string, unknown>).collaborationRestoreIncarnation;
+                change[side] = { ...value, metadata };
+            }
+        }
+    }
 }

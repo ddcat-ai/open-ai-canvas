@@ -6,6 +6,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/canvas"
 	"infinite-canvas/backend/internal/model"
@@ -27,6 +29,16 @@ type (
 type canvasHost struct {
 	svc *Service
 }
+
+func (h canvasHost) CanvasRedis() *redis.Client {
+	if h.svc == nil || h.svc.coordinator == nil {
+		return nil
+	}
+	return h.svc.coordinator.Redis()
+}
+
+// CanvasCollaboration exposes the canvas domain to authenticated collaboration routes.
+func (s *Service) CanvasCollaboration() *canvas.Service { return s.canvasDomain() }
 
 func (h canvasHost) EncryptSecret(value string) (string, error) {
 	if h.svc == nil {

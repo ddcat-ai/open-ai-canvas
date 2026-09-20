@@ -107,6 +107,20 @@ describe("canvas node generation position mentions", () => {
         expect(context.prompt).toBe("让 @图片1 配合 @音频1");
     });
 
+    test("普通视频保留用户输入的引用编号，只解析结构化参考素材", () => {
+        const target = targetNode();
+        const imageA = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const audioA = node("audio-a", CanvasNodeType.Audio, "data:audio/mpeg;base64,a");
+        const imageB = node("image-b", CanvasNodeType.Image, "data:image/png;base64,b");
+        const connections = [connection(imageA.id), connection(audioA.id), connection(imageB.id)];
+        const prompt = "让 @图片2 配合 @音频1，并保留这段长文本的原始顺序";
+        const context = buildNodeGenerationContext(target.id, [imageA, audioA, imageB, target], connections, prompt, [], true);
+
+        expect(context.referenceImages.map((image) => image.id)).toEqual(["image-a", "image-b"]);
+        expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-a"]);
+        expect(context.prompt).toBe(prompt);
+    });
+
     test("旧节点 token 只做读取迁移，不再进入生成提示词", () => {
         const target = targetNode();
         const image = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");

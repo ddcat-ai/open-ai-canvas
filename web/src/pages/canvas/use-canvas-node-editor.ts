@@ -206,9 +206,9 @@ export function useCanvasNodeEditor({
         if (!node.metadata?.content?.trim()) return message.error("当前节点没有可保存的内容");
         try {
             const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-manual" });
-            setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
+            if (!result.detached) setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
-            message.success(result.linkedToProject ? "已加入项目资产" : "已加入我的素材");
+            message.success(result.detached ? "已复制到我的素材，可独立管理" : result.linkedToProject ? "已加入项目资产" : "已加入我的素材");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "素材保存失败");
         }

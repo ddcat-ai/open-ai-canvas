@@ -201,6 +201,10 @@ export type CanvasSkillSnapshot = {
 };
 
 export type CanvasNodeMetadata = {
+    /** Server-issued lifecycle; stale edits cannot cross deletion/restoration. */
+    collaborationIncarnation?: number;
+    /** Local undo intent, removed by the server when restoring a deletion. */
+    collaborationRestoreIncarnation?: number;
     /** Credential-free editable generation contract; submitted recipes live with tasks. */
     generationSpec?: GenerationSpec;
     /** Namespaced extension ownership for nodes contributed by a unified plugin. */

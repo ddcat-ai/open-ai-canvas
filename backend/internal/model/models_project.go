@@ -369,14 +369,85 @@ type ProductionTaskLink struct {
 }
 
 type CanvasProject struct {
-	ID          string    `json:"id" gorm:"primaryKey;size:80"`
-	UserID      string    `json:"userId" gorm:"index;size:36;index:idx_canvas_projects_user_updated,priority:1;index:idx_canvas_projects_user_project_updated,priority:1"`
-	ProjectID   string    `json:"projectId,omitempty" gorm:"index;size:36;index:idx_canvas_projects_user_project_updated,priority:2"`
-	Title       string    `json:"title" gorm:"size:240"`
-	PayloadJSON string    `json:"payloadJson" gorm:"type:text"`
-	Revision    int64     `json:"revision" gorm:"not null;default:1"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt" gorm:"index:idx_canvas_projects_user_updated,priority:2;index:idx_canvas_projects_user_project_updated,priority:3"`
+	CollaborationEnabled bool      `json:"collaborationEnabled" gorm:"not null;default:false;index"`
+	ID                   string    `json:"id" gorm:"primaryKey;size:80"`
+	UserID               string    `json:"userId" gorm:"index;size:36;index:idx_canvas_projects_user_updated,priority:1;index:idx_canvas_projects_user_project_updated,priority:1"`
+	ProjectID            string    `json:"projectId,omitempty" gorm:"index;size:36;index:idx_canvas_projects_user_project_updated,priority:2"`
+	Title                string    `json:"title" gorm:"size:240"`
+	PayloadJSON          string    `json:"payloadJson" gorm:"type:text"`
+	Revision             int64     `json:"revision" gorm:"not null;default:1"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt" gorm:"index:idx_canvas_projects_user_updated,priority:2;index:idx_canvas_projects_user_project_updated,priority:3"`
+}
+
+// CanvasBranch keeps a durable relationship between an ordinary canvas copy
+// and the canvas it was created from. The branch document itself lives in
+// CanvasProject so it can use the normal editor and collaboration protocol.
+type CanvasBranch struct {
+	ID                  string     `json:"id" gorm:"primaryKey;size:80"`
+	SourceCanvasID      string     `json:"sourceCanvasId" gorm:"index;size:80"`
+	BranchCanvasID      string     `json:"branchCanvasId" gorm:"uniqueIndex;size:80"`
+	OwnerID             string     `json:"ownerId" gorm:"index;size:36"`
+	Name                string     `json:"name" gorm:"size:240"`
+	Status              string     `json:"status" gorm:"index;size:24"`
+	BaseRevision        int64      `json:"baseRevision"`
+	BasePayloadJSON     string     `json:"-" gorm:"type:text;not null"`
+	LastMergedSourceRev int64      `json:"lastMergedSourceRevision"`
+	LastMergedTargetRev int64      `json:"lastMergedTargetRevision"`
+	MergedAt            *time.Time `json:"mergedAt,omitempty"`
+	MergedBy            string     `json:"mergedBy,omitempty" gorm:"size:36"`
+	CreatedBy           string     `json:"createdBy" gorm:"size:36"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
+}
+
+// CanvasCollaborator grants a user access to a shared canvas. The owner is
+// implicit in CanvasProject.UserID and is not duplicated in this table.
+type CanvasCollaborator struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	CanvasID  string    `json:"canvasId" gorm:"index;size:80;uniqueIndex:idx_canvas_collaborator_user,priority:1"`
+	UserID    string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_canvas_collaborator_user,priority:2"`
+	Role      string    `json:"role" gorm:"size:20;not null"`
+	CreatedBy string    `json:"createdBy" gorm:"size:36;not null"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// CanvasCollaborationNode is the server-side lifecycle record for a node.
+// It prevents an old operation from writing into a node that was deleted and
+// later restored with the same logical ID.
+type CanvasCollaborationNode struct {
+	ID          string     `json:"id" gorm:"primaryKey;size:80"`
+	CanvasID    string     `json:"canvasId" gorm:"index;size:80;uniqueIndex:idx_canvas_collab_node,priority:1"`
+	NodeID      string     `json:"nodeId" gorm:"index;size:160;uniqueIndex:idx_canvas_collab_node,priority:2"`
+	Incarnation int64      `json:"incarnation" gorm:"not null"`
+	Status      string     `json:"status" gorm:"size:20;not null;index"`
+	NodeJSON    string     `json:"nodeJson" gorm:"type:text"`
+	DeletedAt   *time.Time `json:"deletedAt,omitempty"`
+	DeletedBy   string     `json:"deletedBy,omitempty" gorm:"size:36"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+// CanvasCollaborationOperation is an immutable operation receipt. RequestJSON
+// is kept so a retry with the same actor/op ID can be compared byte-for-byte;
+// ResultJSON stores deletion snapshots and the resulting document metadata.
+type CanvasCollaborationOperation struct {
+	ID                string    `json:"id" gorm:"primaryKey;size:80"`
+	CanvasID          string    `json:"canvasId" gorm:"index;size:80;uniqueIndex:idx_canvas_collab_operation_identity,priority:1"`
+	ActorID           string    `json:"actorId" gorm:"index;size:36;uniqueIndex:idx_canvas_collab_operation_identity,priority:2"`
+	OpID              string    `json:"opId" gorm:"size:120;not null;uniqueIndex:idx_canvas_collab_operation_identity,priority:3"`
+	Kind              string    `json:"kind" gorm:"size:40;not null"`
+	TargetNodeID      string    `json:"targetNodeId,omitempty" gorm:"size:160;index"`
+	TargetIncarnation int64     `json:"targetIncarnation,omitempty"`
+	BaseRevision      int64     `json:"baseRevision"`
+	Revision          int64     `json:"revision" gorm:"index"`
+	ResultStatus      string    `json:"resultStatus" gorm:"size:32;not null"`
+	RequestJSON       string    `json:"requestJson" gorm:"type:text;not null"`
+	ResultJSON        string    `json:"resultJson" gorm:"type:text"`
+	SnapshotJSON      string    `json:"snapshotJson" gorm:"type:text"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 type CanvasShare struct {

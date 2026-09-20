@@ -1,6 +1,6 @@
 # 影策 · AI 文档索引
 
-面向 AI 的短索引。详细文档维护规则见 [AGENTS.md](../AGENTS.md) 第 10 节「文档同步」。
+面向 AI 的短索引。开始工作前先阅读 [AGENT_RUNBOOK.md](AGENT_RUNBOOK.md) 和 [AGENTS.md](../AGENTS.md)。详细文档维护规则见 `AGENTS.md` 第 9 节「文档与交付」。
 
 ## 设计沉淀
 
@@ -42,12 +42,19 @@
 
 - [beautifului 创作设计](beautifului-creation-design.md)：本地设计参考，未纳入版本控制。
 
+## AI 协作与故障排查
+
+- [AI 故障排查手册](AGENT_RUNBOOK.md)：记录已验证的失败路线、正确路线、可复制命令和回滚边界。
+
 ## 按约定维护的文档（`docs/content/docs/`）
 
 功能、代码地图、待办、待测试分别维护在以下页面；尚未建立的专题会在对应任务中补齐：
 
 - [AI 审美批改画布插件](content/docs/plugins/ai-art-critique.mdx)
 - [功能](content/docs/overview/features.mdx)
+- [共享协作画布与独立方案](content/docs/overview/canvas-collaboration.mdx)：成员、操作、重试、冲突、长期方案、移植边界和已知限制。
+- [Figma、飞书文档与影策实时协作对照](content/docs/overview/canvas-collaboration-realtime.mdx)
+- [面向用户无感的画布协作方案](content/docs/overview/canvas-collaboration-figma-plan.mdx)
 - [本地开发](content/docs/backend/local-development.mdx)
 - [HTTP API 合同](content/docs/backend/http-api.mdx)
 - [后端数据库](content/docs/backend/backend-database.mdx)

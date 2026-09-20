@@ -18,11 +18,12 @@
 
 ## 2. 开始工作前
 
-1. 先读取任务涉及的入口、调用方、配置、锁文件和相邻测试；先理解现状，再决定是否抽象或重构。
-2. 使用 `rg` / `rg --files` 搜索，优先并行读取相关文件。不要为了“统一风格”改动无关模块、依赖、格式或用户已有修改。
-3. 先形成目标边界：页面负责什么、service 负责什么、handler/service/repository 如何分层、数据和错误如何流动。新增 helper 必须消除真实重复或隔离明确协议，不能只透传参数。
-4. 检查 `git status --short`。不覆盖、不回滚、不清理非本次产生的变更；不使用 `git reset --hard`、`git checkout --` 或宽范围删除。
-5. 手工编辑使用 `apply_patch`；默认使用 ASCII，业务中文或已有 Unicode 文件除外。注释只解释非直观算法、核心入口、安全边界和降级原因。
+1. 开始任何开发、部署、测试或排障前，必须先阅读 [`docs/AGENT_RUNBOOK.md`](docs/AGENT_RUNBOOK.md)；遇到相同或相似问题时优先执行其中仍有效的正确路线，并在回复中引用记录编号。
+2. 先读取任务涉及的入口、调用方、配置、锁文件和相邻测试；先理解现状，再决定是否抽象或重构。
+3. 使用 `rg` / `rg --files` 搜索，优先并行读取相关文件。不要为了“统一风格”改动无关模块、依赖、格式或用户已有修改。
+4. 先形成目标边界：页面负责什么、service 负责什么、handler/service/repository 如何分层、数据和错误如何流动。新增 helper 必须消除真实重复或隔离明确协议，不能只透传参数。
+5. 检查 `git status --short`。不覆盖、不回滚、不清理非本次产生的变更；不使用 `git reset --hard`、`git checkout --` 或宽范围删除。
+6. 手工编辑使用 `apply_patch`；默认使用 ASCII，业务中文或已有 Unicode 文件除外。注释只解释非直观算法、核心入口、安全边界和降级原因。
 
 ## 3. 目录职责和依赖方向
 
@@ -53,6 +54,7 @@
 ### Agent、插件和文档
 
 - 修改 `docs/` 前确认内容属于专题文档，而不是把长篇说明重新复制到根 README。目录索引见 `docs/index.md`。
+- 每次修改项目时，必须同时更新 `docs/AGENT_RUNBOOK.md` 与根目录 `CHANGELOG.md`；没有新的可复用故障时，在本次交付中明确说明“无新增故障记录”，遇到新的故障必须追加记录，已有路线失效时更新原记录，不重复新增。
 
 ## 4. 前端 API 和状态合同
 
@@ -133,6 +135,7 @@
 
 - 根 `README.md` 只保留项目定位、能力概览、快速开始、部署、安全和文档入口；详细专题写入 `docs/content/docs/`。
 - 功能、代码地图、待办、待测试分别维护在 `docs/content/docs/overview/features.mdx`、`docs/content/docs/backend/code-map.mdx`、`docs/content/docs/progress/todo.mdx`、`docs/content/docs/progress/pending-test.mdx`。已实现但未由用户确认的变化先写入 `pending-test.mdx`。
+- `docs/AGENT_RUNBOOK.md` 维护长期故障排查经验；每条记录至少包含日期、现象、影响范围、根因、失败路线、成功路线、可复制命令、避免操作和文档/配置同步要求。不得写入 API Key、密码、连接串、Cookie、隐私或其他私密信息。
 - API、数据表、SSE、资源存储、部署或安全边界变化时同步对应专题文档；不要只改代码和根 README。
 - 文档默认中文，不写过期日期，不公开密码、Token、Cookie、真实账号或机器敏感路径。命令、端口、环境变量必须以当前脚本和 Compose 为准。
 - Git 提交说明使用 `<type>(<scope>): <业务模块> - <变更摘要>`，`type` 为 `feat|fix|refactor|perf|docs|test|build|ci|chore|revert`。

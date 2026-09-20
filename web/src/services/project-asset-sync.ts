@@ -15,9 +15,12 @@ import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provi
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import { saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { copyReadableResource, getResource, resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { listCanvasCollaborationMembers } from "@/services/api/canvas-collaboration";
 import { normalizeAssetCategory } from "@/lib/asset-category";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { useAssetStore, type AssetCategory, type AssetStatus, type NewAsset } from "@/stores/use-asset-store";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
 function throwIfAborted(signal?: AbortSignal) {
@@ -39,6 +42,7 @@ export type CanvasNodeAssetResult = {
     assetId: string;
     created: boolean;
     linkedToProject: boolean;
+    detached?: boolean;
 };
 
 const pendingAssetSyncs = new Map<string, Promise<CanvasNodeAssetResult>>();
@@ -97,6 +101,42 @@ export function ensureCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions) {
 
 async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Promise<CanvasNodeAssetResult> {
     throwIfAborted(options.signal);
+    const scope = getActiveUserScope();
+    const resourceID = resourceIdFromStorageKey(options.node.metadata?.storageKey);
+    if (options.domainProjectId && useCanvasStore.getState().projects.find((project) => project.id === options.canvasId)?.collaborationEnabled) {
+        const { members } = await listCanvasCollaborationMembers(options.canvasId);
+        throwIfAborted(options.signal);
+        if (getActiveUserScope() !== scope) throw new Error("账号已切换，请重新保存素材");
+        // A shared canvas does not transfer ownership of its linked project.
+        if (!members.some((member) => member.userId === scope && member.role === "owner")) options = { ...options, domainProjectId: undefined };
+    }
+    if (options.source === "canvas-manual" && resourceID) {
+        const source = await getResource(resourceID);
+        throwIfAborted(options.signal);
+        if (getActiveUserScope() !== scope) throw new Error("账号已切换，请重新保存素材");
+        if (source.userId !== scope) {
+            const copy = await copyReadableResource(resourceID);
+            throwIfAborted(options.signal);
+            if (getActiveUserScope() !== scope) throw new Error("账号已切换，请重新保存素材");
+            // Keep shared node references intact. Personal assets own their
+            // copied resource and can subsequently be renamed or deleted.
+            const node: CanvasNodeData = {
+                ...options.node,
+                metadata: {
+                    content: resourceFileUrl(copy.id),
+                    storageKey: `resource:${copy.id}`,
+                    prompt: options.node.metadata?.prompt,
+                    mimeType: copy.mimeType,
+                    naturalWidth: copy.width,
+                    naturalHeight: copy.height,
+                    durationMs: copy.durationMs,
+                    bytes: copy.size,
+                },
+            };
+            const result = await persistCanvasNodeAsset({ ...options, node, domainProjectId: undefined, taskId: undefined, source: "canvas-upload" });
+            return { ...result, detached: true };
+        }
+    }
     const store = useAssetStore.getState();
     let asset = findCanvasNodeAsset(store.assets, options.node, options.canvasId, options.taskId);
     const declaredCategory = options.category || declaredCanvasNodeAssetCategory(options.node);

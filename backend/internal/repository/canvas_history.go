@@ -35,6 +35,12 @@ func (r *Repository) CanvasSnapshot(userID, canvasID, id string) (*model.CanvasS
 	return &item, err
 }
 
+func (r *Repository) CanvasSnapshotAtRevision(userID, canvasID string, revision int64) (*model.CanvasSnapshot, error) {
+	var item model.CanvasSnapshot
+	err := r.db.Where("user_id = ? AND canvas_id = ? AND revision = ?", userID, canvasID, revision).First(&item).Error
+	return &item, err
+}
+
 // The successful CAS takes the canvas row lock before inspecting the history.
 // Snapshot creation, reference protection and retention commit with the content.
 func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, restoredResourceIDs []string, cutoff time.Time, limit int, force bool) error {
@@ -104,6 +110,12 @@ func (r *Repository) CanvasHistoryReferencesObject(resource *model.Resource) (bo
 	err := r.db.Model(&model.CanvasSnapshotResource{}).
 		Where("resource_id = ? OR resource_id IN (?)", resource.ID, aliases).
 		Count(&count).Error
+	if err != nil || count > 0 {
+		return count > 0, err
+	}
+	err = r.db.Model(&model.CanvasMediaGrant{}).
+		Where("kind = ? AND current = ? AND (object_id = ? OR object_id IN (?))", model.CanvasMediaResource, true, resource.ID, aliases).
+		Count(&count).Error
 	return count > 0, err
 }
 
@@ -146,6 +158,13 @@ func (r *Repository) RequireNoCanvasHistoryReferences(resourceIDs []string) erro
 		return err
 	}
 	if len(refs) > 0 {
+		return ErrCanvasHistoryResourceReferenced
+	}
+	shared, err := r.CurrentCanvasMediaResourceReferences(resourceIDs)
+	if err != nil {
+		return err
+	}
+	if len(shared) > 0 {
 		return ErrCanvasHistoryResourceReferenced
 	}
 	return nil

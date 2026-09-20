@@ -92,6 +92,11 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		return snapshot, err
 	}
 	snapshot.Direct = append(snapshot.Direct, history...)
+	shared, err := r.CurrentCanvasMediaResourceReferences(resourceIDs)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Direct = append(snapshot.Direct, shared...)
 	var leases []model.CloudAgentResourceLease
 	if err := r.db.Where("user_id = ? AND resource_id IN ? AND expires_at > ?", userID, resourceIDs, time.Now()).Find(&leases).Error; err != nil {
 		return snapshot, err
@@ -330,11 +335,25 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 	for _, project := range append(append(projects, shotProjects...), candidateProjects...) {
 		result = append(result, ResourceDirectReference{Kind: "项目", ID: project.ID, Title: project.Title})
 	}
-	return result, nil
+	shared, err := r.CurrentCanvasMediaAssetReferences([]string{assetID})
+	return append(result, shared...), err
 }
 
 func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		txRepo := New(tx)
+		// Use the same asset row lock as canvas publication, including assets
+		// that refer to another owner's resource and have no owned resource IDs.
+		if _, err := txRepo.AssetRecords([]string{assetID}); err != nil {
+			return err
+		}
+		refs, err := txRepo.CurrentCanvasMediaAssetReferences([]string{assetID})
+		if err != nil {
+			return err
+		}
+		if len(refs) > 0 {
+			return ErrCanvasHistoryResourceReferenced
+		}
 		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
 			return err
 		}

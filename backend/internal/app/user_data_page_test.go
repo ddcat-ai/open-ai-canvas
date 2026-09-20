@@ -11,6 +11,9 @@ import (
 
 func TestUserCanvasLibraryPageIsBoundedAndScoped(t *testing.T) {
 	service, db := newProjectWorkbenchReadTestService(t)
+	if err := db.AutoMigrate(&model.CanvasCollaborator{}); err != nil {
+		t.Fatal(err)
+	}
 	for index := 0; index < 55; index++ {
 		project := model.CanvasProject{ID: fmt.Sprintf("canvas-%02d", index), UserID: "owner", Title: fmt.Sprintf("Title %02d", index), PayloadJSON: `{"nodes":[{"id":"image","type":"image","metadata":{"storageKey":"resource:preview","content":"secret-inline-media","prompt":"secret-prompt"}}],"chatSessions":["secret-chat"]}`}
 		if err := db.Create(&project).Error; err != nil {
@@ -46,6 +49,9 @@ func TestUserCanvasLibraryPageIsBoundedAndScoped(t *testing.T) {
 
 func TestUserAssetsBatchIsBoundedAndScoped(t *testing.T) {
 	service, db := newProjectWorkbenchReadTestService(t)
+	if err := db.AutoMigrate(&model.CanvasMediaGrant{}, &model.CanvasCollaborator{}); err != nil {
+		t.Fatal(err)
+	}
 	for _, owner := range []string{"owner", "other"} {
 		if err := db.Create(&model.Asset{ID: owner, UserID: owner, PayloadJSON: fmt.Sprintf(`{"id":%q}`, owner)}).Error; err != nil {
 			t.Fatal(err)

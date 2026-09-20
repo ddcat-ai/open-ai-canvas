@@ -65,13 +65,67 @@ func (s *Service) Resource(userID string, id string) (*model.Resource, error) {
 	return resource, err
 }
 
-// DirectResourceURL 先校验资源归属，再按实际存储位置签发短时下载地址。
+func (s *Service) ReadResource(userID, id string) (*model.Resource, error) {
+	resource, err := s.canvasDomain().ResourceForReader(userID, id)
+	if err != nil {
+		return nil, err
+	}
+	resource.PublicURL = ""
+	if resource.UserID != userID {
+		resource.Endpoint, resource.Bucket, resource.ObjectKey = "", "", ""
+		resource.PlaybackObjectKey, resource.PlaybackError, resource.Error = "", "", ""
+	}
+	return resource, nil
+}
+
+// Shared URLs remain revocable at the application boundary, including OSS
+// objects. Never expose an owner's storage signature to another account.
 func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
+	resource, err := s.canvasDomain().ResourceForReader(userID, id)
 	if err != nil {
 		return "", err
 	}
-	return s.directResourceURL(resource, time.Now().Add(directResourceURLTTL))
+	return s.resourceURLForReader(userID, resource, time.Now().Add(directResourceURLTTL))
+}
+
+func (s *Service) resourceURLForReader(userID string, resource *model.Resource, expiresAt time.Time) (string, error) {
+	if resource.UserID == userID {
+		return s.directResourceURL(resource, expiresAt)
+	}
+	if resource.Status != model.ResourceStatusReady {
+		return "", BadAuthRequest("资源尚未上传完成")
+	}
+	address, err := s.signedPublicResourceURL(resource, expiresAt)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	signature, err := s.signPublicResource("reader:"+userID+":"+resource.ID, query.Get("expires"))
+	if err != nil {
+		return "", err
+	}
+	query.Set("reader", userID)
+	query.Set("signature", signature)
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func (s *Service) OpenReaderResourceRange(id, readerID, expires, signature, rangeHeader string) (*ResourceStream, error) {
+	if readerID == "" {
+		return nil, Forbidden("下载授权无效")
+	}
+	if err := s.verifyPublicResourceSignature("reader:"+readerID+":"+id, expires, signature); err != nil {
+		return nil, err
+	}
+	resource, err := s.canvasDomain().ResourceForReader(readerID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
 func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
@@ -99,14 +153,19 @@ func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Tim
 
 // PrepareResourceDelivery 统一决定浏览器资源出口：配置 CDN 时默认直连 CDN，显式代理仅用于需要同源 Blob 的内部读取。
 func (s *Service) PrepareResourceDelivery(userID string, id string, options ResourceDeliveryOptions) (*ResourceDelivery, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
+	resource, err := s.canvasDomain().ResourceForReader(userID, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, NotFound("资源不存在")
 		}
 		return nil, err
 	}
-	return s.prepareResourceDelivery(userID, resource, options)
+	if resource.UserID != userID {
+		// Keep shared reads behind membership checks; do not issue a CDN URL
+		// that would continue to work after the collaborator is removed.
+		options.ForceDirect, options.ForceProxy = false, true
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options)
 }
 
 func (s *Service) prepareResourceDelivery(userID string, resource *model.Resource, options ResourceDeliveryOptions) (*ResourceDelivery, error) {
@@ -441,11 +500,11 @@ func (s *Service) OpenResource(userID string, id string) (*model.Resource, io.Re
 }
 
 func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string) (*ResourceStream, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
+	resource, err := s.canvasDomain().ResourceForReader(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.openResourceRange(userID, resource, rangeHeader)
+	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
 func (s *Service) OpenPublicResourceRange(id string, expires string, signature string, rangeHeader string) (*ResourceStream, error) {

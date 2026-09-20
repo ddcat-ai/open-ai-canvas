@@ -4,6 +4,7 @@ import (
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
+	"sync"
 )
 
 // Host 由组合根注入，避免 canvas → service 回环。
@@ -41,13 +42,26 @@ func (nopHost) DeleteUserAssetWithResources(string, string) error           { re
 func (nopHost) RecordActivity(string, string, int)                          {}
 
 type Service struct {
-	repo *repository.Repository
-	host Host
+	repo                   *repository.Repository
+	host                   Host
+	canvasPresenceMu       sync.Mutex
+	canvasPresence         map[string]map[string]CanvasPresence
+	canvasCollaborationHub *canvasCollaborationHub
+	canvasRealtime         *canvasRealtimeBus
 }
 
 func New(repo *repository.Repository, host Host) *Service {
 	if host == nil {
 		host = nopHost{}
 	}
-	return &Service{repo: repo, host: host}
+	s := &Service{repo: repo, host: host, canvasCollaborationHub: newCanvasCollaborationHub()}
+	s.canvasRealtime = newCanvasRealtimeBus(s.canvasPresenceRedis(), s.canvasCollaborationHub)
+	return s
+}
+
+// Close releases only canvas-owned subscriptions, not the shared Redis client.
+func (s *Service) Close() {
+	if s != nil && s.canvasRealtime != nil {
+		s.canvasRealtime.close()
+	}
 }

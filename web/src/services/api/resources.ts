@@ -295,6 +295,10 @@ export async function getResourceOSSUrl(storageKey?: string) {
     return request;
 }
 
+export async function copyReadableResource(id: string) {
+    return (await http.post<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(id)}/copy`)).resource;
+}
+
 function resourceCacheKey(id: string) {
     return `${getActiveUserScope()}:${id}`;
 }

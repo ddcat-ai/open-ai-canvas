@@ -51,28 +51,6 @@
     font-size: var(--fs-body);
     font-weight: 600;
 }
-.canvas-version-tabs {
-    display: flex;
-    margin: 0 18px 14px;
-    padding: 3px;
-    gap: 3px;
-    background: var(--muted);
-    border-radius: var(--radius-lg);
-}
-.canvas-version-tabs button {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 9px 4px;
-    color: var(--muted-foreground);
-    border-radius: var(--radius-md);
-}
-.canvas-version-tabs button[aria-selected="true"] {
-    background: var(--background);
-    color: var(--foreground);
-}
 .canvas-version-count,
 .canvas-version-tag {
     font-size: var(--fs-tiny);
@@ -247,4 +225,167 @@
 .canvas-version-panel button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+}
+.canvas-collaboration-home {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.canvas-collaboration-members {
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+}
+.canvas-collaboration-roster {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: var(--space-2);
+}
+.canvas-collaboration-member {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+}
+.canvas-collaboration-member-name {
+    flex: 1;
+    min-width: 0;
+}
+.canvas-collaboration-member-name strong,
+.canvas-collaboration-member-name small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-collaboration-member-name strong {
+    font-weight: 500;
+}
+.canvas-collaboration-member-name small {
+    margin-top: 0;
+}
+.canvas-collaboration-member-role {
+    white-space: nowrap;
+    color: var(--muted-foreground);
+    font-size: var(--fs-tiny);
+}
+.canvas-collaboration-context {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+.canvas-collaboration-context > strong {
+    display: block;
+    margin-top: var(--space-2);
+    overflow-wrap: anywhere;
+}
+.canvas-collaboration-context p,
+.canvas-collaboration-create p {
+    color: var(--muted-foreground);
+    line-height: 1.7;
+    font-size: var(--fs-caption);
+    margin: var(--space-2) 0;
+}
+.canvas-collaboration-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+.canvas-collaboration-section-title h3 {
+    margin: 0;
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+.canvas-collaboration-section-title + .canvas-version-hint {
+    margin-top: 0;
+}
+.canvas-collaboration-create {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+.canvas-collaboration-create label {
+    font-weight: 500;
+}
+.canvas-collaboration-create-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+.canvas-collaboration-empty {
+    color: var(--muted-foreground);
+    line-height: 1.8;
+    margin: 0;
+    padding: var(--space-4) 0;
+}
+.canvas-collaboration-branch {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-2);
+    overflow: hidden;
+}
+.canvas-collaboration-branch-open {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    text-align: left;
+    padding: var(--space-3);
+}
+.canvas-collaboration-branch-open > svg {
+    flex-shrink: 0;
+    margin-top: var(--space-1);
+    color: var(--muted-foreground);
+}
+.canvas-collaboration-branch-open > span {
+    min-width: 0;
+    flex: 1;
+}
+.canvas-collaboration-branch-open strong {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.canvas-collaboration-branch-open:hover {
+    background: var(--accent);
+}
+.canvas-collaboration-branch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-2) var(--space-2);
+}
+.canvas-collaboration-branch-actions > span {
+    margin-right: auto;
+    padding-left: var(--space-1);
+}
+.canvas-collaboration-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.canvas-collaboration-secondary > button {
+    flex: 1;
+}
+.canvas-merge-summary {
+    margin: var(--space-3) 0;
+    padding: var(--space-3);
+    background: var(--muted);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-label);
+}
+.canvas-merge-value {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+    font-size: var(--fs-caption);
+    overflow-wrap: anywhere;
+}
+.canvas-merge-value[data-selected="true"] {
+    border-color: var(--control-focus-ring);
+    background: var(--accent);
 }

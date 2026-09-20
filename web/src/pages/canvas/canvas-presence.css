@@ -1,0 +1,39 @@
+.canvas-remote-cursor {
+    position: absolute;
+    z-index: var(--z-panel-floating);
+    pointer-events: none;
+    width: max-content;
+    transform: scale(var(--canvas-live-inverse-scale, 1));
+    transform-origin: top left;
+}
+.canvas-remote-cursor > svg {
+    display: block;
+    overflow: visible;
+}
+.canvas-remote-cursor-label {
+    position: absolute;
+    top: 19px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: max-content;
+    max-width: 260px;
+    padding: 3px 7px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+.canvas-remote-cursor-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.canvas-remote-cursor-activity {
+    flex-shrink: 0;
+    opacity: 0.85;
+    font-weight: 400;
+}

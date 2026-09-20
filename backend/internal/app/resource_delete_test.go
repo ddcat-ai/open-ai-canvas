@@ -513,6 +513,13 @@ func newResourceDeletionTestService(t *testing.T) (*Service, *gorm.DB, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Serialize shared-memory SQLite queries with the asynchronous outbox worker.
+	// These tests assert deletion semantics, not concurrent database connections.
+	sqlDB.SetMaxOpenConns(1)
 	if err := database.MigrateSchema(db); err != nil {
 		t.Fatal(err)
 	}

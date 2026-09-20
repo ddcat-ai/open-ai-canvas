@@ -19,7 +19,7 @@ func testCanvasHistory(t *testing.T, db *gorm.DB) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.AutoMigrate(&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.CanvasShare{}, &model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.CanvasShare{}, &model.Task{}, &model.CanvasMediaGrant{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := New(db)

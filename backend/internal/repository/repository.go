@@ -60,6 +60,11 @@ func (r *Repository) WithContext(ctx context.Context) *Repository {
 	return &Repository{db: r.db.WithContext(ctx)}
 }
 
+// WithTransaction binds domain validation and dependent writes to one commit.
+func (r *Repository) WithTransaction(fn func(*Repository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error { return fn(New(tx)) })
+}
+
 func (r *Repository) Dialect() string {
 	return r.db.Dialector.Name()
 }
@@ -208,6 +213,30 @@ func (r *Repository) UserByUsername(username string) (*model.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// SearchUsers returns active accounts that can be selected for collaboration.
+// The query is intentionally scoped to the small set of public account fields;
+// callers must enforce the canvas-owner permission before exposing the result.
+func (r *Repository) SearchUsers(keyword, excludeID string, limit int) ([]model.User, error) {
+	keyword = strings.TrimSpace(keyword)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	query := r.db.Model(&model.User{}).Where("status = ?", model.UserStatusActive)
+	if excludeID = strings.TrimSpace(excludeID); excludeID != "" {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if keyword != "" {
+		pattern := "%" + strings.ToLower(keyword) + "%"
+		query = query.Where("lower(username) LIKE ? OR lower(display_name) LIKE ?", pattern, pattern)
+	}
+	var users []model.User
+	err := query.Order("lower(username) asc, id asc").Limit(limit).Find(&users).Error
+	return users, err
 }
 
 func (r *Repository) UserByEmail(email string) (*model.User, error) {
@@ -1189,9 +1218,32 @@ func (r *Repository) CanvasProjects(userID string) ([]model.CanvasProject, error
 	return projects, err
 }
 
+// CanvasProjectsForCollaborator returns shared canvases granted directly to a
+// user. It is intentionally separate from UserDataScope so collaboration does
+// not widen access to the user's other personal data.
+func (r *Repository) CanvasProjectsForCollaborator(userID string) ([]model.CanvasProject, error) {
+	var projects []model.CanvasProject
+	err := r.db.Model(&model.CanvasProject{}).
+		Joins("JOIN canvas_collaborators ON canvas_collaborators.canvas_id = canvas_projects.id").
+		Where("canvas_collaborators.user_id = ?", userID).
+		Order("canvas_projects.updated_at desc").Find(&projects).Error
+	return projects, err
+}
+
 func (r *Repository) CanvasProjectSummaries(userID string) ([]model.CanvasProject, error) {
 	var projects []model.CanvasProject
-	err := r.db.Select("id", "title", "revision", "created_at", "updated_at").Order("updated_at desc").Find(&projects, "user_id = ?", userID).Error
+	query := r.db.Model(&model.CanvasProject{}).Where("canvas_projects.user_id = ?", userID)
+	err := query.Select("canvas_projects.id", "canvas_projects.user_id", "canvas_projects.title", "canvas_projects.revision", "canvas_projects.collaboration_enabled", "canvas_projects.created_at", "canvas_projects.updated_at").Order("canvas_projects.updated_at desc").Find(&projects).Error
+	return projects, err
+}
+
+func (r *Repository) CanvasProjectSummariesForCollaborator(userID string) ([]model.CanvasProject, error) {
+	var projects []model.CanvasProject
+	err := r.db.Model(&model.CanvasProject{}).
+		Select("canvas_projects.id", "canvas_projects.user_id", "canvas_projects.title", "canvas_projects.revision", "canvas_projects.collaboration_enabled", "canvas_projects.created_at", "canvas_projects.updated_at").
+		Joins("JOIN canvas_collaborators ON canvas_collaborators.canvas_id = canvas_projects.id").
+		Where("canvas_collaborators.user_id = ?", userID).
+		Order("canvas_projects.updated_at desc").Find(&projects).Error
 	return projects, err
 }
 
@@ -1201,6 +1253,58 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 		return nil, err
 	}
 	return &project, nil
+}
+
+// CanvasProject is only used after service-level scope checks need to inspect
+// the owning user or linked business project.
+func (r *Repository) CanvasProject(id string) (*model.CanvasProject, error) {
+	var project model.CanvasProject
+	if err := r.db.First(&project, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+// WithCanvasCollaborationTransaction serializes a collaboration operation with
+// all ordinary canvas saves. The callback must update the locked project row
+// and any collaboration records using the supplied transaction.
+func (r *Repository) WithCanvasCollaborationTransaction(canvasID string, fn func(*gorm.DB, *model.CanvasProject) error) error {
+	canvasID = strings.TrimSpace(canvasID)
+	if canvasID == "" || fn == nil {
+		return gorm.ErrInvalidData
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var project model.CanvasProject
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", canvasID).First(&project)
+		if query.Error != nil {
+			return query.Error
+		}
+		return fn(tx, &project)
+	})
+}
+
+func (r *Repository) CanvasCollaboratorForUser(canvasID string, userID string) (*model.CanvasCollaborator, error) {
+	var item model.CanvasCollaborator
+	if err := r.db.Where("canvas_id = ? AND user_id = ?", canvasID, userID).First(&item).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *Repository) CanvasCollaborators(canvasID string) ([]model.CanvasCollaborator, error) {
+	var items []model.CanvasCollaborator
+	err := r.db.Where("canvas_id = ?", canvasID).Order("created_at asc, id asc").Find(&items).Error
+	return items, err
+}
+
+func (r *Repository) CanvasCollaborationOperations(canvasID string, afterRevision int64, limit int) ([]model.CanvasCollaborationOperation, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []model.CanvasCollaborationOperation
+	err := r.db.Where("canvas_id = ? AND result_status = ? AND revision > ?", canvasID, "applied", afterRevision).
+		Order("revision asc, created_at asc, id asc").Limit(limit).Find(&items).Error
+	return items, err
 }
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
@@ -1239,8 +1343,17 @@ func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// Serialize deletion with saves before reading the history IDs to remove.
-		if err := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND id = ?", userID, id).UpdateColumn("revision", gorm.Expr("revision")).Error; err != nil {
-			return err
+		locked := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND id = ?", userID, id).UpdateColumn("revision", gorm.Expr("revision"))
+		if locked.Error != nil {
+			return locked.Error
+		}
+		if locked.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		for _, record := range []any{&model.CanvasMediaGrant{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}} {
+			if err := tx.Where("canvas_id = ?", id).Delete(record).Error; err != nil {
+				return err
+			}
 		}
 		var snapshotIDs []string
 		if err := tx.Model(&model.CanvasSnapshot{}).Where("user_id = ? AND canvas_id = ?", userID, id).Pluck("id", &snapshotIDs).Error; err != nil {
@@ -1254,6 +1367,19 @@ func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 		}
 		if err := tx.Where("canvas_id = ?", id).Delete(&model.CanvasUnitLink{}).Error; err != nil {
 			return err
+		}
+		// A branch document is a real canvas. Older partial test schemas and
+		// rolling deployments may not have the v17 table yet, so keep deletion
+		// compatible with those schemas while the migration is in flight.
+		if tx.Migrator().HasTable(&model.CanvasBranch{}) {
+			// Removing its document removes the relationship; removing the source
+			// archives alternatives so they no longer point at a live source.
+			if err := tx.Where("branch_canvas_id = ?", id).Delete(&model.CanvasBranch{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&model.CanvasBranch{}).Where("source_canvas_id = ?", id).Update("status", "archived").Error; err != nil {
+				return err
+			}
 		}
 		// 任务和会话是审计记录，不随独立画布实体保留归属 ID，避免删除后继续挂住画布上下文。
 		if err := tx.Model(&model.Task{}).Where("user_id = ? AND project_id = ?", userID, id).Update("project_id", "").Error; err != nil {
