@@ -37,6 +37,7 @@ const (
 	ReasonTimeout            ErrorReason = "timeout"
 	ReasonInternal           ErrorReason = "internal"
 	ReasonBadGateway         ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed  ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

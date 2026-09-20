@@ -81,6 +81,86 @@ func TestChannelCostHTTPAuthorizationAndPublicProjection(t *testing.T) {
 			t.Fatalf("admin cost missing: %d %s", w.Code, w.Body.String())
 		}
 	}
+	t.Run("batch repricing HTTP contract", func(t *testing.T) {
+		var item model.ChannelModel
+		if err := db.First(&item, "channel_id = ?", channel.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		path := "/api/admin/channels/channel/models/batch-reprice"
+		makePayload := func(price any) []byte {
+			t.Helper()
+			var latest model.ChannelModel
+			var tier model.ChannelModelPriceTier
+			if err := db.First(&latest, "id = ?", item.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.First(&tier, "channel_model_id = ?", item.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			payload, err := json.Marshal(map[string]any{"models": []any{map[string]any{
+				"modelId": item.ID, "priceVersion": latest.PriceVersion,
+				"priceTiers": []any{map[string]any{"id": tier.ID, "priceVersion": tier.PriceVersion,
+					"prices": map[string]any{"unitPriceMicrocredits": price}}},
+			}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return payload
+		}
+		payload := makePayload(170_000)
+		for _, role := range []string{"", "user"} {
+			w := call(role, http.MethodPost, path, payload)
+			want := http.StatusForbidden
+			if role == "" {
+				want = http.StatusUnauthorized
+			}
+			if w.Code != want {
+				t.Fatalf("role %q: %d %s", role, w.Code, w.Body.String())
+			}
+		}
+		for _, invalid := range []string{
+			`{}`, `{"models":[]}`, `{"models":null}`,
+			`{"models":[{"modelId":"` + item.ID + `","priceVersion":1,"priceTiers":[]}]}`,
+			string(makePayload(nil)), string(makePayload(-1)), string(makePayload(1.5)),
+		} {
+			w := call("admin", http.MethodPost, path, []byte(invalid))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("invalid payload: %d %s", w.Code, w.Body.String())
+			}
+		}
+		w := call("admin", http.MethodPost, path, payload)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"updated":1`) {
+			t.Fatalf("reprice: %d %s", w.Code, w.Body.String())
+		}
+		var tier model.ChannelModelPriceTier
+		if err := db.First(&tier, "channel_model_id = ?", item.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if tier.UnitPriceMicrocredits != 170_000 || tier.CostPricing.UnitPriceMicrocredits != 123_456 {
+			t.Fatalf("unexpected stored tier: %+v", tier)
+		}
+		w = call("admin", http.MethodPost, path, payload)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("stale version: %d %s", w.Code, w.Body.String())
+		}
+		// Explicit zero is a valid final sale price, not a missing field.
+		payload = makePayload(0)
+		w = call("admin", http.MethodPost, path, payload)
+		if w.Code != http.StatusOK {
+			t.Fatalf("zero target: %d %s", w.Code, w.Body.String())
+		}
+		if err := db.First(&tier, "channel_model_id = ?", item.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if tier.UnitPriceMicrocredits != 0 || tier.CostPricing.UnitPriceMicrocredits != 123_456 {
+			t.Fatalf("zero price not preserved: %+v", tier)
+		}
+		payload = makePayload(170_000)
+		w = call("admin", http.MethodPost, path, payload)
+		if w.Code != http.StatusOK {
+			t.Fatalf("restore target: %d %s", w.Code, w.Body.String())
+		}
+	})
 	for _, path := range []string{"/api/model-catalog", "/api/model-catalog/available", "/api/model-catalog/quote"} {
 		method := http.MethodPost
 		payload := []byte(`{"capability":"text"}`)

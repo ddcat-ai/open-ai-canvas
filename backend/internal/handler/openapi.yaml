@@ -721,6 +721,78 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /admin/channels/{id}/models/batch-reprice:
+    post:
+      tags: [admin]
+      summary: 批量保存系统渠道模型最终销售价
+      description: |
+        仅管理员可用。接收浏览器计算或手工修改后的最终售价及原始价格版本，不在服务端重算。
+        前端按成本/(1−利润率)计算，支持0–6位积分小数四舍五入及重新计算。
+        必须提交所选模型全部已启用规格，不改变成本、规格启停或模型启停。
+        当前计费方式的价格字段必须完整且不能多余，价格为非负整数微积分，null无效。
+        缺少成本/售价配置、重复或失效 ID、越权、超限价格、过期版本或并发版本冲突均整批拒绝。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [models]
+              properties:
+                models:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [modelId, priceVersion, priceTiers]
+                    properties:
+                      modelId: { type: string, minLength: 1 }
+                      priceVersion: { type: integer, format: int64, minimum: 1 }
+                      priceTiers:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: object
+                          required: [id, priceVersion, prices]
+                          properties:
+                            id: { type: string, minLength: 1 }
+                            priceVersion: { type: integer, format: int64, minimum: 1 }
+                            prices:
+                              type: object
+                              additionalProperties: false
+                              description: 按次/秒仅unit字段；文本Token为输入、输出、缓存；视频Token仅输出。必须完整提交对应字段。
+                              properties:
+                                unitPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+                                inputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+                                outputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+                                cachedTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+            example: { models: [{ modelId: MODEL001, priceVersion: 4, priceTiers: [{ id: TIER001, priceVersion: 8, prices: { unitPriceMicrocredits: 1370000 } }] }] }
+      responses:
+        "200":
+          description: 更新成功，data.updated 为更新的模型数量
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /admin/agent-lessons:
     get:
       tags: [admin]
@@ -1131,6 +1203,7 @@ components:
                 - timeout
                 - internal
                 - bad_gateway
+                - upstream_dns_failed
                 - model_capability_not_supported
                 - model_price_not_configured
                 - model_route_unavailable

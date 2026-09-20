@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
+
 	"golang.org/x/net/http/httpproxy"
 )
 
@@ -341,10 +343,17 @@ func resolveOutboundHostWithPolicy(ctx context.Context, host string, allowPrivat
 	}
 	addresses, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 	if err != nil {
-		return nil, BadAuthRequest("外部服务域名解析失败")
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		failure := kernel.WrapAppError(http.StatusBadGateway, "外部服务域名解析失败，请检查渠道域名和后端 DNS 配置", err)
+		failure.Reason = kernel.ReasonUpstreamDNSFailed
+		return nil, failure
 	}
 	if len(addresses) == 0 {
-		return nil, BadAuthRequest("外部服务域名没有可用地址")
+		failure := kernel.NewAppError(http.StatusBadGateway, "外部服务域名没有可用地址，请检查渠道域名和后端 DNS 配置")
+		failure.Reason = kernel.ReasonUpstreamDNSFailed
+		return nil, failure
 	}
 	if !allowPrivateHost {
 		for _, ip := range addresses {

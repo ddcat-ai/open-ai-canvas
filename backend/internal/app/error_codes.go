@@ -35,6 +35,7 @@ const (
 	ReasonTimeout            = kernel.ReasonTimeout
 	ReasonInternal           = kernel.ReasonInternal
 	ReasonBadGateway         = kernel.ReasonBadGateway
+	ReasonUpstreamDNSFailed  = kernel.ReasonUpstreamDNSFailed
 )
 
 func ReasonForStatus(status int) ErrorReason {

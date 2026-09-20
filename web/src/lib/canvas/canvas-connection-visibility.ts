@@ -40,11 +40,7 @@ export function filterCanvasDisplayConnections(
     if (options.activeNodeId) focusedNodeIds.add(options.activeNodeId);
     options.selectedNodeIds?.forEach((nodeId) => focusedNodeIds.add(nodeId));
 
-    return connections.filter(({ connection, from, to }) =>
-        connection.id === options.selectedConnectionId
-        || focusedNodeIds.has(connection.fromNodeId)
-        || focusedNodeIds.has(connection.toNodeId)
-        || focusedNodeIds.has(from.id)
-        || focusedNodeIds.has(to.id),
+    return connections.filter(
+        ({ connection, from, to }) => connection.id === options.selectedConnectionId || focusedNodeIds.has(connection.fromNodeId) || focusedNodeIds.has(connection.toNodeId) || focusedNodeIds.has(from.id) || focusedNodeIds.has(to.id),
     );
 }

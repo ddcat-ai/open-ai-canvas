@@ -2,9 +2,7 @@ name: Quality checks
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+  workflow_call:
 
 permissions:
   contents: read
@@ -21,11 +19,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
           cache: true
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Run Go tests
-        run: go test ./...
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+      - name: Upload Go test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-timings
+          path: ${{ runner.temp }}/go-tests.jsonl
+          if-no-files-found: ignore
 
   payment-plugins:
     name: Payment plugin artifacts
@@ -36,15 +45,22 @@ jobs:
         env:
           PAYMENT_PLUGIN_SMOKE_TEST: "1"
         run: sh plugin-packages/verify-payment-packages.sh --all linux amd64
+      # 发布时 backend/Dockerfile 会在两种架构的原生 Runner 上执行 smoke。
+      # PR 仍独立验证双架构，不能因没有发布任务而遗漏 ARM64 验收。
       - uses: docker/setup-qemu-action@v3
+        if: github.event_name == 'pull_request'
       - uses: docker/setup-buildx-action@v3
+        if: github.event_name == 'pull_request'
       - name: Build and execute payment packages for every image platform
-        run: >-
-          docker buildx build
-          --platform linux/amd64,linux/arm64
-          --target payment-package-smoke
-          --file backend/Dockerfile
-          .
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          target: payment-package-smoke
+          file: backend/Dockerfile
+          cache-from: type=gha,scope=payment-smoke
+          cache-to: type=gha,mode=max,scope=payment-smoke
 
   web:
     name: Web checks
@@ -78,30 +94,7 @@ jobs:
       - name: Check formatting
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          changed_files=()
-          repo_prefix="$(git rev-parse --show-prefix)"
-          while IFS= read -r -d '' file; do
-            case "$file" in
-              *.css|*.html|*.json|*.js|*.jsx|*.md|*.mdx|*.mjs|*.cjs|*.ts|*.tsx|*.yaml|*.yml)
-                base_path="${repo_prefix}${file}"
-                if git cat-file -e "$BASE_SHA:$base_path" 2>/dev/null \
-                  && ! diff -q \
-                    <(git show "$BASE_SHA:$base_path") \
-                    <(git show "$BASE_SHA:$base_path" | bunx prettier --ignore-path /dev/null --stdin-filepath "$file") \
-                    >/dev/null; then
-                  echo "Skipping legacy unformatted file: $file"
-                  continue
-                fi
-                changed_files+=("$file")
-                ;;
-            esac
-          done < <(git diff --relative --name-only --diff-filter=ACMR -z "$BASE_SHA" "$GITHUB_SHA" -- .)
-          if (( ${#changed_files[@]} > 0 )); then
-            bunx prettier --check "${changed_files[@]}"
-          else
-            echo "No changed web files require formatting checks."
-          fi
+        run: bun scripts/check-changed-formatting.mjs
       - name: Typecheck
         run: bun run typecheck
       - name: Lint retired Ant Design APIs

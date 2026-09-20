@@ -1,21 +1,19 @@
-import { App, Button, Form, Input, InputNumber, Modal, Select, Switch } from "antd";
-import type { FormInstance } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { Copy, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { App, Button, Form, Input, InputNumber, Modal, Select, Spin, Switch } from "antd";
+import { ChevronRight, Copy, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
-import { PaginationBar } from "@/pages/admin/components/admin-ui";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { refreshSystemChannels } from "@/lib/user-session";
 import { createAdminChannel, deleteAdminChannel, duplicateAdminChannel, listAdminChannels, updateAdminChannel } from "@/services/api/auth";
 import { type ChannelHeader, type ModelChannel } from "@/stores/use-config-store";
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
+import { AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { ChannelModelManager } from "../components/channel-model-manager";
 import { ChannelOrderDialog } from "../components/channel-order-dialog";
+import { selectChannelWorkspace } from "./channel-workspace-state";
+import "./channels-page.css";
 
 type ChannelFormValues = {
     name: string;
@@ -47,43 +45,54 @@ export default function ChannelsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
     const status = normalizeStatus(searchParams.get("status"));
-    const page = positiveInt(searchParams.get("page"), 1);
-    const pageSize = normalizePageSize(searchParams.get("pageSize"));
-    const debouncedKeyword = useDebouncedValue(keyword);
+    const selectedChannelId = searchParams.get("channel");
     const [channels, setChannels] = useState<ModelChannel[]>([]);
-    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [editingChannel, setEditingChannel] = useState<ModelChannel | null>(null);
     const [saving, setSaving] = useState(false);
     const [duplicatingChannelId, setDuplicatingChannelId] = useState<string | null>(null);
-    const [managingChannel, setManagingChannel] = useState<ModelChannel | null>(null);
     const requestSequence = useRef(0);
     const [form] = Form.useForm<ChannelFormValues>();
     const useGlobalConcurrency = Form.useWatch("useGlobalConcurrency", form) !== false;
     const hasFilters = Boolean(keyword || status !== "all");
+    const { visibleChannels, selectedChannel } = selectChannelWorkspace(channels, keyword, status, selectedChannelId);
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
-        const next = new URLSearchParams(searchParams);
-        Object.entries(patch).forEach(([key, value]) => {
-            const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
-            if (isDefault) next.delete(key);
-            else next.set(key, String(value));
-        });
-        setSearchParams(next, { replace });
+        setSearchParams(
+            (current) => {
+                const next = new URLSearchParams(current);
+                next.delete("page");
+                next.delete("pageSize");
+                Object.entries(patch).forEach(([key, value]) => {
+                    if (value === "" || (key === "status" && value === "all")) next.delete(key);
+                    else next.set(key, String(value));
+                });
+                return next;
+            },
+            { replace },
+        );
     };
 
     const reload = async () => {
         const sequence = ++requestSequence.current;
         setLoading(true);
+        setLoadError("");
         try {
-            const result = await listAdminChannels({ keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, pageSize });
+            // The navigation needs every channel, not just the API's default first 20.
+            const result = await listAdminChannels({ page: 1, pageSize: 100 });
+            const nextChannels = [...result.channels];
+            for (let page = 2; nextChannels.length < result.total; page += 1) {
+                if (sequence !== requestSequence.current) return;
+                const next = await listAdminChannels({ page, pageSize: 100 });
+                if (!next.channels.length) throw new Error("渠道列表发生变化，请重新加载");
+                nextChannels.push(...next.channels);
+            }
             if (sequence !== requestSequence.current) return;
-            setChannels(result.channels);
-            setTotal(result.total);
-            if (result.total > 0 && result.channels.length === 0 && page > 1) updateUrl({ page: 1 }, true);
+            setChannels(Array.from(new Map(nextChannels.map((channel) => [channel.id, channel])).values()));
         } catch (error) {
-            if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : "读取渠道列表失败");
+            if (sequence === requestSequence.current) setLoadError(error instanceof Error ? error.message : "读取渠道列表失败");
         } finally {
             if (sequence === requestSequence.current) setLoading(false);
         }
@@ -91,7 +100,10 @@ export default function ChannelsPage() {
 
     useEffect(() => {
         void reload();
-    }, [debouncedKeyword, status, page, pageSize]);
+        return () => {
+            requestSequence.current += 1;
+        };
+    }, []);
 
     const syncChannels = async () => {
         await reloadReferences();
@@ -145,7 +157,9 @@ export default function ChannelsPage() {
         setSaving(true);
         try {
             const payload = adminChannelSavePayload(values);
-            await (editingChannel ? updateAdminChannel(editingChannel.id, payload) : createAdminChannel(payload));
+            const { channel } = await (editingChannel ? updateAdminChannel(editingChannel.id, payload) : createAdminChannel(payload));
+            setChannels((current) => (editingChannel ? current.map((item) => (item.id === channel.id ? channel : item)) : [...current, channel]));
+            updateUrl({ channel: channel.id, filter: "", status: "all" }, true);
             await syncChannels();
             setDrawerOpen(false);
             form.resetFields();
@@ -172,7 +186,9 @@ export default function ChannelsPage() {
     const duplicateChannel = async (channel: ModelChannel) => {
         setDuplicatingChannelId(channel.id);
         try {
-            await duplicateAdminChannel(channel.id);
+            const { channel: duplicated } = await duplicateAdminChannel(channel.id);
+            setChannels((current) => [...current, duplicated]);
+            updateUrl({ channel: duplicated.id, filter: "", status: "all" }, true);
             await syncChannels();
             await reload();
             message.success("系统渠道已复制");
@@ -194,145 +210,147 @@ export default function ChannelsPage() {
         }
     };
 
-    const columns: ColumnsType<ModelChannel> = [
-        {
-            title: "渠道",
-            dataIndex: "name",
-            render: (_, channel) => (
-                <div>
-                    <div className="font-medium">{channel.name}</div>
-                    <div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div>
-                </div>
-            ),
-        },
-        { title: "模型", dataIndex: "models", width: 100, align: "center", render: (models: string[]) => `${models?.length || 0} 个` },
-        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, align: "center", render: (value: number) => (value > 0 ? value : <span className="text-foreground/45">跟随系统</span>) },
-        { title: "凭证", width: 130, align: "center", render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
-        { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (enabled) => <AdminStatusBadge label={enabled !== false ? "已启用" : "已停用"} tone={enabled !== false ? "success" : "neutral"} /> },
-        {
-            title: "操作",
-            width: 250,
-            align: "center",
-            render: (_, channel) => (
-                <AdminRowActions
-                    primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }}
-                    actions={[
-                        { key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) },
-                        { key: "duplicate", label: "复制渠道", icon: <Copy className="size-3.5" />, disabled: Boolean(duplicatingChannelId), onClick: () => duplicateChannel(channel) },
-                        {
-                            key: "toggle",
-                            label: channel.enabled !== false ? "停用渠道" : "启用渠道",
-                            icon: <Power className="size-3.5" />,
-                            danger: channel.enabled !== false,
-                            confirm: {
-                                title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？",
-                                description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。",
-                                okText: channel.enabled !== false ? "确认停用" : "确认启用",
-                            },
-                            onClick: () => toggleChannel(channel),
-                        },
-                        {
-                            key: "delete",
-                            label: "删除渠道",
-                            icon: <Trash2 className="size-3.5" />,
-                            danger: true,
-                            confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" },
-                            onClick: () => removeChannel(channel),
-                        },
-                    ]}
-                />
-            ),
-        },
-    ];
-
-    if (managingChannel) {
-        return (
-            <ChannelModelManager
-                channel={managingChannel}
-                onClose={() => setManagingChannel(null)}
-                onChanged={async () => {
-                    await syncChannels();
-                    await reload();
-                }}
-            />
-        );
-    }
+    const channelActions = (channel: ModelChannel) => (
+        <AdminRowActions
+            primary={{ label: "编辑渠道", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }}
+            actions={[
+                { key: "duplicate", label: "复制渠道", icon: <Copy className="size-3.5" />, disabled: Boolean(duplicatingChannelId), onClick: () => duplicateChannel(channel) },
+                {
+                    key: "toggle",
+                    label: channel.enabled !== false ? "停用渠道" : "启用渠道",
+                    icon: <Power className="size-3.5" />,
+                    danger: channel.enabled !== false,
+                    confirm: {
+                        title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？",
+                        description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。",
+                        okText: channel.enabled !== false ? "确认停用" : "确认启用",
+                    },
+                    onClick: () => toggleChannel(channel),
+                },
+                {
+                    key: "delete",
+                    label: "删除渠道",
+                    icon: <Trash2 className="size-3.5" />,
+                    danger: true,
+                    confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" },
+                    onClick: () => removeChannel(channel),
+                },
+            ]}
+        />
+    );
 
     return (
-        <AdminPageFrame
-            title="系统渠道"
-            description="列表顺序就是用户端展示顺序，点击“设置排序”即可调整。"
-            actions={
-                <div className="flex gap-2">
-                    <ChannelOrderDialog
-                        onSaved={async () => {
-                            await syncChannels();
-                            await reload();
-                        }}
-                    />
-                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
-                        新增系统渠道
-                    </Button>
-                </div>
-            }
-        >
-            <AdminDataTable
-                toolbar={
-                    <Input
-                        id="admin-channel-search"
-                        aria-label="搜索系统渠道"
-                        autoComplete="off"
-                        allowClear
-                        className="app-list-search"
-                        prefix={<Search className="size-4 text-foreground/40" />}
-                        value={keyword}
-                        placeholder="搜索渠道名称、别名或地址"
-                        onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
-                    />
-                }
-                toolbarFilters={
-                    <Select
-                        aria-label="筛选渠道状态"
-                        className="w-32"
-                        value={status}
-                        onChange={(value) => updateUrl({ status: value, page: 1 })}
-                        options={[
-                            { label: "全部状态", value: "all" },
-                            { label: "已启用", value: "enabled" },
-                            { label: "已停用", value: "disabled" },
-                        ]}
-                    />
-                }
-                toolbarActive={hasFilters}
-                onReset={() => updateUrl({ filter: "", status: "all", page: 1 })}
-                skeletonColumns={7}
-                table={{
-                    className: "app-data-table",
-                    size: "small",
-                    rowKey: "id",
-                    loading,
-                    columns,
-                    dataSource: channels,
-                    locale: {
-                        emptyText: (
-                            <AdminTableEmpty
-                                filtered={hasFilters}
-                                title={hasFilters ? undefined : "还没有系统渠道"}
-                                action={
-                                    hasFilters ? undefined : (
-                                        <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
-                                            新增系统渠道
-                                        </Button>
-                                    )
-                                }
+        <AdminPageFrame title="系统模型" description="左侧选择渠道，右侧直接管理模型、协议与售价。">
+            <div className="admin-channel-workspace">
+                <aside className="admin-channel-sidebar" aria-label="系统渠道">
+                    <div className="admin-channel-sidebar-header">
+                        <div className="flex items-center justify-between gap-2">
+                            <h2 className="font-semibold">渠道</h2>
+                            <span className="admin-channel-count">{hasFilters ? `${visibleChannels.length} / ${channels.length}` : channels.length}</span>
+                        </div>
+                        <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                            新增渠道
+                        </Button>
+                        <Input
+                            id="admin-channel-search"
+                            aria-label="搜索系统渠道"
+                            autoComplete="off"
+                            allowClear
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索渠道名称或地址"
+                            onChange={(event) => updateUrl({ filter: event.target.value }, true)}
+                        />
+                        <Select
+                            aria-label="筛选渠道状态"
+                            value={status}
+                            onChange={(value) => updateUrl({ status: value })}
+                            options={[
+                                { label: "全部状态", value: "all" },
+                                { label: "已启用", value: "enabled" },
+                                { label: "已停用", value: "disabled" },
+                            ]}
+                        />
+                    </div>
+                    <div className="admin-channel-list" aria-busy={loading}>
+                        {loadError ? (
+                            <div className="admin-channel-load-error" role="alert">
+                                <p>{loadError}</p>
+                                <Button size="small" onClick={() => void reload()}>
+                                    重新加载渠道
+                                </Button>
+                            </div>
+                        ) : null}
+                        {loading ? (
+                            <div className="admin-channel-loading" role="status" aria-label="正在加载渠道">
+                                <Spin size="small" />
+                            </div>
+                        ) : null}
+                        {visibleChannels.map((channel) => (
+                            <button type="button" key={channel.id} className="admin-channel-item" aria-pressed={selectedChannel?.id === channel.id} aria-controls="admin-channel-models" onClick={() => updateUrl({ channel: channel.id })}>
+                                <span className="admin-channel-item-topline">
+                                    <span className="admin-channel-item-name" title={channel.name}>
+                                        {channel.name}
+                                    </span>
+                                    <ChevronRight className="admin-channel-item-arrow size-3.5" aria-hidden="true" />
+                                </span>
+                                <span className="admin-channel-item-meta">
+                                    <span>{channel.models?.length || 0} 个模型</span>
+                                    <span className="admin-channel-item-status" data-enabled={channel.enabled !== false}>
+                                        {channel.enabled !== false ? "已启用" : "已停用"}
+                                    </span>
+                                </span>
+                            </button>
+                        ))}
+                        {!loading && !loadError && !visibleChannels.length ? (
+                            <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} action={hasFilters ? <Button onClick={() => updateUrl({ filter: "", status: "all" })}>清除筛选</Button> : undefined} />
+                        ) : null}
+                    </div>
+                    <div className="admin-channel-sidebar-footer">
+                        <ChannelOrderDialog
+                            onSaved={async () => {
+                                await syncChannels();
+                                await reload();
+                            }}
+                        />
+                    </div>
+                </aside>
+                <section id="admin-channel-models" className="admin-channel-detail" aria-label={selectedChannel ? `${selectedChannel.name}的模型管理` : "渠道模型管理"}>
+                    {selectedChannel ? (
+                        <>
+                            <header className="admin-channel-detail-header">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h2 className="admin-channel-detail-title">{selectedChannel.name}</h2>
+                                        <AdminStatusBadge label={selectedChannel.enabled !== false ? "已启用" : "已停用"} tone={selectedChannel.enabled !== false ? "success" : "neutral"} />
+                                    </div>
+                                    <p className="admin-channel-detail-url" title={selectedChannel.baseUrl}>
+                                        {selectedChannel.baseUrl}
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/50">
+                                        <span>{selectedChannel.hasApiKey ? (selectedChannel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "凭证未配置"}</span>
+                                        <span>最大并发：{selectedChannel.concurrencyLimit || "跟随系统"}</span>
+                                    </div>
+                                </div>
+                                {channelActions(selectedChannel)}
+                            </header>
+                            <ChannelModelManager
+                                key={selectedChannel.id}
+                                channel={selectedChannel}
+                                onChanged={async () => {
+                                    await syncChannels();
+                                    await reload();
+                                }}
                             />
-                        ),
-                    },
-                    pagination: false,
-                    scroll: { x: 1150 },
-                }}
-                footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
-            />
+                        </>
+                    ) : (
+                        <AdminTableEmpty
+                            title={loading ? "正在加载渠道" : loadError ? "暂时无法读取渠道" : hasFilters ? "没有匹配的渠道" : "添加渠道，开始管理模型"}
+                            description={loading ? "加载完成后将在此显示渠道模型。" : loadError ? "请在左侧重试加载。" : hasFilters ? "调整左侧搜索或状态筛选。" : "在左侧新增渠道，配置连接信息后即可拉取或新增模型。"}
+                        />
+                    )}
+                </section>
+            </div>
             <Modal
                 className="workspace-modal workspace-modal-wide admin-channel-modal"
                 rootClassName="admin-channel-modal-root"
@@ -401,14 +419,6 @@ export default function ChannelsPage() {
     );
 }
 
-function positiveInt(value: string | null, fallback: number) {
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-function normalizePageSize(value: string | null) {
-    const parsed = positiveInt(value, 20);
-    return [20, 50, 100].includes(parsed) ? parsed : 20;
-}
 function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" {
     return value === "enabled" || value === "disabled" ? value : "all";
 }

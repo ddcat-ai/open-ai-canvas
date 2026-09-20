@@ -120,7 +120,11 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 		if required == nil {
 			required = []string{}
 		}
-		tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": name, "description": description, "parameters": map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}}})
+		parameters := map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
+		if name == "generate_media" || name == "image_layer_split" {
+			description += " " + cloudAgentModelSelectionDescription
+		}
+		tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": name, "description": description, "parameters": parameters}})
 	}
 	str := func(description string) map[string]any {
 		return map[string]any{"type": "string", "description": description}

@@ -9,11 +9,39 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会自动重试、切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。
+
 ## 站点皮肤主按钮
 
 `GET /public/appearance` 返回当前 `activeSkin`；管理员通过 `GET/PUT /admin/settings/appearance` 读取、保存完整主题库。外观合同版本 8 新增 `tokens.buttons.light/dark`，字段为 `mode`（`solid|gradient`）、整数 `angle`（0–360）、HEX 色值 `start/end`、`hoverStart/hoverEnd`、`activeStart/activeEnd`、`foreground`。纯色模式使用既有主操作颜色，渐变仅用于主按钮。非法模式、角度、色值或修改锁定经典主题均拒绝保存；整块缺失的旧配置按主题身份补齐。此变更不增加数据表迁移。
 
 ## 模型规格报价
+
+### 管理员批量调价
+
+`POST /admin/channels/:id/models/batch-reprice` 接收最终售价及原始价格版本，返回 `{ code: 0, data: { updated: number }, msg }`。仅管理员可调用；单批 1–100 个模型，空 ID、重复 ID 或不属于当前系统渠道的记录整批拒绝。请求结构如下（价格为整数微积分）：
+
+```json
+{
+  "models": [{
+    "modelId": "MODEL001",
+    "priceVersion": 4,
+    "priceTiers": [{
+      "id": "TIER001",
+      "priceVersion": 8,
+      "prices": { "unitPriceMicrocredits": 1370000 }
+    }]
+  }]
+}
+```
+
+弹窗一行一个模型，列为模型展示名、渠道展示名（上游模型 ID）、规格、成本价和销售价输入框；多个规格在模型行内纵向对齐。利润率沿用财务口径：`(销售价 − 成本价) / 销售价 × 100%`，并非成本加价率。目标利润率为 0–99.99%，最多两位小数；售价按 `成本价 / (1 − 目标利润率)` 计算，按所选 0–6 位积分小数四舍五入（默认 2 位）。成本 1 积分、目标 20%、保留 2 位时售价为 1.25 积分。修改比例或精度实时计算，也可点击「重新计算」按当前参数覆盖全部手动售价；随后允许逐规格手动修改，保存以最终输入值为准。舍入和手动修改可能使实际利润率偏离目标；售价为零时利润率显示 `—`。
+
+每个模型必须提交全部已启用规格（模型本身可停用），且每个规格只提交当前计费方式需要的完整 `prices` 字段：按次/秒为 `unitPriceMicrocredits`；文本 Token 为 `inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`；视频 Token 仅为 `outputTokenPriceMicrocredits`。缺失、多余、重复、停用规格、null、负数或非整数价格均拒绝。成本和售价配置必须已保存；成本及 Token 售价上限为 1,000,000 积分，按次/秒售价不得超出 JavaScript 安全整数微积分范围。
+
+服务端校验最终售价和模型/规格版本，不重新计算覆盖手工价格。价格快照过期必须刷新后重试。所有模型与价格档在单事务中更新，增加价格版本、失效目录缓存；无效配置、归属错误、超限或并发版本冲突均不部分提交。不改变成本、规格、计费方式和启停状态；未启用规格保持原值。此接口不新增数据表或迁移，不追溯修改已下单的计费快照。
+
+### 用户模型目录
 
 `GET /model-catalog` 固定返回 `source=system`，直接查询所有启用系统渠道下的渠道模型，目录数据在 `channels[].models[]`，`models` 固定为空数组。不受逻辑模型开关影响，不反查逻辑模型或供应线路。每项的 `modelKey` 是调用标识，`displayName` 是模型展示名，`icon` 是模型图标键，`channelLabel` 是可选的渠道展示名（默认空字符串）。后台渠道模型创建与更新请求使用相同的 `channelLabel` 字段；服务端去除首尾空白并限制为 80 字，空字符串表示使用所属渠道名称。
 
@@ -106,6 +134,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 - `generate_media.prompt` 使用 `@图片1`、`@视频1`、`@音频1` 引用素材，各类型按 `referenceNodeIds` 的出现顺序独立编号，文本来源不占媒体编号。已有标签保留；遗漏的画布素材以“素材名称：@标签”补入 `【资产参考】`，不推断素材用途。节点入边同步排列，草稿、审批和实际任务保存同一份带标签的提示词。未绑定的媒体编号和补齐后超过16000字符的提示词会在提交前被拒绝，模型自身的提示词长度限制仍由任务准入校验。临时标注图没有持久画布节点，不自动添加无法解析的编辑器标签；历史节点不自动改写。
 - Agent 的 `snapshotHash` 忽略顶层 `viewport`、`updatedAt`。`canvas_get_state` 另返回 `mediaSnapshotHash`，供 `generate_media.snapshotHash` 使用：仅比较节点与连线，节点忽略 `position`、`width`、`height`、`createdAt`、`updatedAt`，保留全部业务字段及未知 metadata。生成草稿审批也固定该哈希，移动、调整显示尺寸、自动补时间戳和保存聊天记录不会使生成审批失效，执行保留最新展示信息；提示词、素材、锁定状态、任务绑定和连线变化仍需重新读取并审批。画布修改与撤销继续使用完整内容哈希，数据库写入保持完整快照 CAS。发布前已按旧算法生成的待审批内容可能要求重新读取和审批，不自动替换旧快照重提任务。
 - `canvas_get_state.nodes[].outputReference` 的 `ready` / `issue` 仅表示该节点产物能否作为其他生成的参考，不诊断本节点的生成输入。`generation` 返回当前画布、当前用户所属任务的 `taskId`、`taskStatus` 和安全的失败 / 取消 `error`；无任务绑定为 `not_submitted`，无法验证归属或读取失败为 `unavailable`。节点无法作为草稿提交时返回 `submitBlockedReason` / `submitBlockedIssue`，与写路径共用节点准入规则；未被阻止不等于已获授权，草稿所属运行和审批仍在提交时校验。`task_get` 同样返回安全错误详情。`generate_media` 准入失败可返回 `snapshot_conflict`、`task_bound`、`target_locked` 等结构化 `reason` 和 `nodeId`，不自动选择新节点或重新生成。
+- `task_get` / `generation` 的执行状态与回写状态分开：`succeeded` 不返回执行 `error`；回写失败仍通过 `writebackOutcome` / `writebackError` 暴露，不能因生成成功而隐藏。失败 / 取消任务保留脱敏错误，缺少详情不能伪装成成功。Agent 文本步骤的持久诊断为 `upstream_dns_failed` 时，`run_failed.reason` 同步该分类并明确提示检查渠道域名及后端 DNS，不自动重跑。
+- `generate_media` / `image_layer_split` 必须将 `model_list.selection` 展开到顶层参数：提供非空 `logicalModelId`，或完整的非空 `channelId` + `channelModelKey`，不得混用；未使用的字段可省略或传空字符串，不能传 `null` 或仅含空白的字符串。后端在读取画布、创建草稿、审批与计费前校验选择结构；返回 `reason: invalid_tool_arguments`、`field`、`issue` 和本轮工具 `parameters`，区分 `required`、`mutually_exclusive`、`type_mismatch`、`invalid_value`。合法结构不代表模型可用，仍须通过目录、能力、权限和价格校验；不猜测模型、不补全选择、不切换渠道，也不吞掉未知字段。
 - `canvas_apply_ops` 创建节点、编辑提示词或连线不会提交生成任务，也不会改变已提交任务的输入；收费生成独立使用 `generate_media`。操作参数错误按数组项返回 `field`（例如 `ops[0].snapshotHash`）和 `issue`（例如 `unexpected_field`、`type_mismatch`、`required`），并附本轮工具 schema；不把未知字段误报成缺少其他必填字段，不回显任意参数键和值。
 - `read_only` 只允许读取；`request_approval` 对写画布和媒体生成暂停为 `waiting_approval`；`auto` 可在预算内执行已授权画布操作，但图片 / 视频生成始终独立审批，不能绕过。`maxGenerationTasks` / `maxVideoSeconds` 为非负整数，0 表示该项不设业务上限，正数按本轮累计执行；不再固定 8 次模型调用、8 个生成任务或 120 秒视频。积分上限仍必填且大于 0，实际报价在任务创建与预留积分前校验，时长必须符合所选模型的实际能力。失败事件保留具体错误和已有任务的 `taskId`、`nodeId`、`status`；媒体结果的 `phase` 区分 `admission` 与 `completion`，`taskSubmitted` 表达是否已提交。已提交的收费生成失败作为工具错误交回模型，整轮保持可继续，不得自动重试收费生成；只有生成结果无法回写画布时才把整轮标为 `failed`。模型应报告错误，不能自行删减提示词。
 - 必须有当前用户已保存的画布。首轮摘要最多取前 80 个节点，并按约 60KB 预算截断；装不下的节点记入 `omittedNodes`，不因摘要过大整轮拒绝。`canvas_get_state` 可按 `offset` 每页读取 40 个节点、资产可引用状态及相关连线，按 `nodeIds` 精读最多 8 个节点（正文每字段最多 16000 字符），通过 `hasMore` / `nextOffset` 和字段 `Truncated` 判断是否完整。分镜表包含镜头、角色节点与资产绑定；摘要每页最多 20 行，精读每次 1 行，可用 `storyboardOffset` 翻页；单行叙事文本累计最多 24000 字符，角色 / 绑定各最多 16 项。上下文不含媒体 URL、任意元数据或未同步修改；节点名称不等于图像视觉识别。普通任务重试接口不能重试 Agent 任务。
