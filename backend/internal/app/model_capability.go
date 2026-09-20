@@ -23,8 +23,13 @@ type ModelCapabilityConfig struct {
 type TextCapabilityConfig struct {
 	// Streaming controls whether this model accepts upstream SSE text responses.
 	// A nil value is treated as true for backwards compatibility with older configs.
-	Streaming  *bool               `json:"streaming,omitempty"`
-	References TextReferenceConfig `json:"references"`
+	Streaming *bool `json:"streaming,omitempty"`
+	// ContextWindowTokens is the provider's total input plus output context window.
+	// It is a model contract, not an application transport ceiling.
+	ContextWindowTokens int `json:"contextWindowTokens"`
+	// MaxOutputTokens is the provider's maximum completion/reasoning budget.
+	MaxOutputTokens int                 `json:"maxOutputTokens"`
+	References      TextReferenceConfig `json:"references"`
 }
 
 type TextReferenceConfig struct {
@@ -209,7 +214,7 @@ func legacyImageSizeValues() []string {
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	streaming := true
-	text := &TextCapabilityConfig{Streaming: &streaming, References: TextReferenceConfig{PromptMaxChars: 32000}}
+	text := &TextCapabilityConfig{Streaming: &streaming, ContextWindowTokens: 128000, MaxOutputTokens: 16384, References: TextReferenceConfig{PromptMaxChars: 32000}}
 	video := &VideoCapabilityConfig{
 		References:        VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
@@ -326,6 +331,12 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if text.Streaming == nil {
 			streaming := true
 			text.Streaming = &streaming
+		}
+		if text.ContextWindowTokens == 0 {
+			text.ContextWindowTokens = 128000
+		}
+		if text.MaxOutputTokens == 0 {
+			text.MaxOutputTokens = 16384
 		}
 		value := &ModelCapabilityConfig{Version: 1, Text: &text}
 		if err := validateTextCapabilityConfig(value.Text); err != nil {
@@ -534,6 +545,12 @@ func addInputConstraint(inputs map[string]InputConstraint, name string, min int,
 }
 
 func validateTextCapabilityConfig(value *TextCapabilityConfig) error {
+	if value.ContextWindowTokens < 4096 || value.ContextWindowTokens > 10000000 {
+		return BadAuthRequest("文本模型上下文窗口必须在 4096-10000000 Token 之间")
+	}
+	if value.MaxOutputTokens < 256 || value.MaxOutputTokens > 1000000 || value.MaxOutputTokens >= value.ContextWindowTokens {
+		return BadAuthRequest("文本模型最大输出 Token 必须小于上下文窗口且在 256-1000000 之间")
+	}
 	if value.References.PromptMaxChars < 1 || value.References.PromptMaxChars > 1000000 {
 		return BadAuthRequest("提示词最大字符数必须在 1-1000000 之间")
 	}

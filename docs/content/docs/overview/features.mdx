@@ -5,6 +5,41 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## 素材库分类与画布媒体链路
+
+素材库支持用户手动新增、重命名和删除分类，也可以按分类或“未分类”筛选素材，并批量移动素材。删除分类不会删除素材，分类内素材会回到“未分类”。
+
+画布中的远程图片、视频和音频展示统一使用资源文件地址，不把浏览器 Blob Object URL 写入节点或预览状态；Blob 缓存只用于导出、抽帧、供应商输入等字节处理。画布生成的视频在进入成功态前会先完成资源 Blob 缓存，缓存失败会保留失败语义，不会显示为已成功。
+
+### 相关实现
+
+- `web/src/pages/assets/index.tsx`：素材库分类筛选、新建、重命名、删除和批量移动入口。
+- `web/src/services/api/user-data.ts`：素材分类及素材移动 API。
+- `web/src/services/file-storage.ts`、`web/src/services/image-storage.ts`：远程资源地址解析。
+- `web/src/services/resource-blob-cache.ts`：按用户 scope 隔离的媒体字节缓存。
+- `web/src/lib/canvas/canvas-generation-task-sync.ts`、`web/src/services/project-asset-sync.ts`：生成视频缓存完成后再写入成功结果。
+
+## 画布连线可读性与底部工作条
+
+画布左下角自动整理节点旁提供“设置隐藏节点连线”开关。开启后默认隐藏连线；鼠标划过、聚焦或选中节点时显示该节点关联的连线，已选中的连线保持可见。设置按浏览器保存，并同时应用于视觉层和连线命中层，避免隐藏连线仍可点击。
+
+底部工作条将素材入口改为“素材 + 数量”标签按钮；手势切换保持纯图标胶囊滑块，使用指针 / 抓手图标和单个圆形选中滑块，保留悬停提示、键盘语义和原有操作。
+
+### 相关实现
+
+- `web/src/lib/canvas/canvas-connection-visibility.ts`：隐藏连线筛选和本地设置。
+- `web/src/pages/canvas/project.tsx`、`web/src/components/canvas/canvas-zoom-controls.tsx`：画布状态、开关和渲染接线。
+- `web/src/components/canvas/canvas-asset-tray.tsx`、`web/src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx`：底部工作条入口。
+
+## 文本节点尺寸联动
+
+文本节点的普通文本、富文本和编辑态输入框共用同一套字号缩放规则。节点尺寸变大时字号随宽高联动增长，并保留最小、最大字号边界，避免极端尺寸造成不可读或失控的排版。
+
+### 相关实现
+
+- `web/src/lib/canvas/canvas-text-scale.ts`：字号缩放和边界规则。
+- `web/src/components/canvas/canvas-node-content.tsx`：文本节点展示与编辑态应用字号。
+
 ## 支付订单与对账导出
 
 管理员在 `/admin/payments` 可按关键词、状态、渠道和创建/支付/入账日期筛选订单，并导出全部匹配记录的 CSV。对账支持按渠道、执行状态和账单日期导出每日汇总；单次对账明细支持按结果或“仅异常”导出。单次最多 10000 行，超限明确提示，不静默截断。文件使用中文表头和北京时间，保留完整订单号、精确金额/积分及失败原因。导出不触发查单或积分补发；对账运行中不能导出明细。具体字段和参数见 [HTTP API 合同](../backend/http-api)。

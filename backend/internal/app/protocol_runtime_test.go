@@ -599,6 +599,60 @@ func TestDeclarativeNewAPIChannel2TaskNotExistExhaustion(t *testing.T) {
 	}
 }
 
+func TestDeclarativeMiniMaxFailureReachesTaskError(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "minimax-hailuo-video-v2.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := protocol.ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapters, err := protocol.LoadInstalledProviders(pkg.ManifestRaw, nil)
+	if err != nil || len(adapters) != 1 {
+		t.Fatalf("load MiniMax adapter: count=%d, error=%v", len(adapters), err)
+	}
+	const message = "content[1].image_url: media dimensions must be between 256 and 5760 pixels"
+	const failedResponse = `{"task":{"id":"video-1","status":"failed","error":{"code":"2013","message":"` + message + `"}}}`
+	for _, phase := range []string{"create", "poll"} {
+		t.Run(phase, func(t *testing.T) {
+			createCalls, pollCalls := 0, 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/v2/video_generation":
+					createCalls++
+					if phase == "create" {
+						_, _ = w.Write([]byte(failedResponse))
+					} else {
+						_, _ = w.Write([]byte(`{"task":{"id":"video-1","status":"pending"}}`))
+					}
+				case "/v2/query/video_generation/video-1":
+					pollCalls++
+					_, _ = w.Write([]byte(failedResponse))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			config := providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "MiniMax-H3", InterfaceType: "minimax-video", VideoSeconds: "12"}
+			result, err := runProtocolAdapterTaskWithPolicy(context.Background(), canvasGenerationInput{Mode: "video", Prompt: "test", Config: config}, adapters[0], fastVideoPollPolicy())
+			want := "声明式协议任务失败（任务 video-1）：" + message
+			if result != nil || err == nil || taskFailureMessage(err) != want {
+				t.Fatalf("result=%#v, error=%v, want task error %q", result, err, want)
+			}
+			wantPollCalls := 0
+			if phase == "poll" {
+				wantPollCalls = 1
+			}
+			if createCalls != 1 || pollCalls != wantPollCalls {
+				t.Fatalf("create calls=%d, poll calls=%d; failed tasks must not be retried", createCalls, pollCalls)
+			}
+		})
+	}
+}
+
 func TestProviderTaskNotReadyStrictClassification(t *testing.T) {
 	tests := []struct {
 		name string

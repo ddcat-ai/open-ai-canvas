@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -564,13 +565,49 @@ func (r *Repository) UpdateTaskTerminalState(id string, owner string, expected m
 	return result.RowsAffected == 1, result.Error
 }
 
-func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model.TaskStatus, now time.Time) (bool, error) {
+func (r *Repository) UpdateTaskTerminalDiagnostic(task *model.Task, completedAt time.Time) (bool, error) {
+	result := taskLeaseWriter(r.db.Model(&model.Task{}), task.LeaseOwner).
+		Where("id = ? AND status = ?", task.ID, model.TaskStatusRunning).
+		Updates(map[string]any{
+			"status": task.Status, "stage": task.Stage, "error": task.Error, "completed_at": &completedAt,
+			"execution_diagnostic_json": task.ExecutionDiagnosticJSON,
+			"cancellation_source":       task.CancellationSource, "cancellation_actor_id": task.CancellationActorID,
+			"cancellation_requested_at": task.CancellationRequestedAt,
+			"lease_owner":               "", "lease_expires_at": nil, "updated_at": completedAt,
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
+func (r *Repository) UpdateTaskExecutionDiagnostic(userID, taskID, diagnosticJSON string) error {
+	result := r.db.Model(&model.Task{}).
+		Where("id = ? AND user_id = ?", taskID, userID).
+		Update("execution_diagnostic_json", diagnosticJSON)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model.TaskStatus, now time.Time, intents ...model.TaskCancellationIntent) (bool, error) {
+	updates := map[string]any{
+		"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
+		"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
+	}
+	if len(intents) > 0 {
+		intent := intents[0]
+		diagnostic, err := json.Marshal(intent.Diagnostic)
+		if err != nil {
+			return false, err
+		}
+		updates["cancellation_source"], updates["cancellation_actor_id"], updates["cancellation_requested_at"] = intent.Source, intent.ActorID, intent.RequestedAt
+		updates["execution_diagnostic_json"] = string(diagnostic)
+	}
 	result := r.db.Model(&model.Task{}).
 		Where("id = ? AND user_id = ? AND status = ?", id, userID, expected).
-		Updates(map[string]any{
-			"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
-			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
-		})
+		Updates(updates)
 	return result.RowsAffected == 1, result.Error
 }
 
@@ -659,7 +696,7 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	query := r.db.Select("id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))

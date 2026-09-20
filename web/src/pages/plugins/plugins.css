@@ -485,7 +485,135 @@
 }
 
 .workspace-modal.plugin-upload-modal {
-    width: min(1480px, calc(100vw - var(--space-4))) !important;
+    width: min(1120px, calc(100vw - var(--space-4))) !important;
+}
+
+.workspace-modal.plugin-upload-modal.plugin-upload-modal-compact {
+    width: min(620px, calc(100vw - var(--space-4))) !important;
+}
+
+.plugin-upload-tabs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--workspace-border);
+}
+
+.plugin-upload-tabs-nav {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    gap: 2px;
+}
+
+.plugin-upload-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 60%, transparent);
+    font-size: var(--fs-label);
+    font-weight: 550;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.plugin-upload-tab-btn:hover {
+    color: var(--foreground);
+}
+
+.plugin-upload-tab-btn.is-active {
+    background: var(--workspace-surface-strong, #ffffff);
+    color: var(--workspace-accent, #1677ff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.plugin-upload-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--fs-caption);
+    color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+.plugin-upload-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 75%, transparent);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.plugin-upload-copy-btn:hover {
+    border-color: var(--workspace-accent);
+    color: var(--workspace-accent);
+}
+
+.plugin-upload-install-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.plugin-upload-dropzone-shell.is-uploading {
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.plugin-upload-switch-guide-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: var(--fs-label);
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    margin-top: var(--space-1);
+}
+
+.plugin-upload-link-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--workspace-accent, #1677ff);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: inherit;
+}
+
+.plugin-upload-link-btn:hover {
+    opacity: 0.8;
+}
+
+.plugin-upload-guide-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.plugin-upload-guide-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-accent) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--workspace-accent) 20%, transparent);
+    font-size: var(--fs-label);
+    color: color-mix(in srgb, var(--foreground) 75%, transparent);
 }
 
 .plugin-upload-layout {

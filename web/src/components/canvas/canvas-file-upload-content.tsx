@@ -4,6 +4,7 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { uploadVeilOpacity } from "@/lib/canvas/canvas-file-upload";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
+import "./canvas-file-upload.css";
 
 export function CanvasFileUploadContent({ node, theme, reduceMotion = false }: { node: CanvasNodeData; theme: CanvasTheme; reduceMotion?: boolean }) {
     const { upload } = useCanvasNodeActions();

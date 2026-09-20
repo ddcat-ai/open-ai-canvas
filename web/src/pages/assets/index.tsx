@@ -1,4 +1,5 @@
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
+import { assetGridCardMinWidth, assetGridDensityOptions, parseAssetGridDensity, type AssetGridDensity } from "./asset-grid-density";
 import { DeleteButton } from "@/components/ui/base/buttons/delete-button";
 import { AlertTriangle, AudioLines, Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, FolderOpen, FolderPlus, Image as ImageIcon, Images, LayoutGrid, Link2, Maximize2, MoreHorizontal, PencilLine, Play, Plus, RotateCcw, Search, Trash2, Upload, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -62,7 +63,6 @@ const categoryOptions = [{ label: "全部分类", value: "all" }, ...ASSET_CATEG
 const ASSET_LIBRARY_QUERY_KEY = ["asset-library"] as const;
 const ASSET_FOLDER_QUERY_KEY = ["asset-folders"] as const;
 const ASSET_GRID_DENSITY_KEY = "infinite-canvas:asset-grid-density";
-type AssetGridDensity = 6 | 8 | 10;
 type AssetFolderFilter = "all" | "uncategorized" | string;
 
 const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
@@ -604,11 +604,12 @@ export default function AssetsPage() {
                             }}
                             />
                             <Select
+                                aria-label="素材显示密度"
                                 value={gridDensity}
                                 className="w-full sm:w-32"
-                                suffixIcon={<LayoutGrid className="size-3.5" />}
-                                options={[{ label: "舒适", value: 6 }, { label: "标准", value: 8 }, { label: "紧凑", value: 10 }]}
-                                onChange={(value) => setGridDensity(value as AssetGridDensity)}
+                                prefix={<LayoutGrid aria-hidden className="size-3.5" />}
+                                options={assetGridDensityOptions}
+                                onChange={(value) => setGridDensity(parseAssetGridDensity(value))}
                             />
                         </CollectionToolbar>
                 </div>
@@ -724,7 +725,7 @@ export default function AssetsPage() {
                                     {visibleAssets.length === 0 ? (
                                         <WorkspaceState icon="assets" compact title="没有匹配的素材" description="调整关键词或左侧分类后再试。" />
                                     ) : (
-                                        <CollectionGrid className="library-grid assets-library-grid" style={{ "--assets-grid-columns": gridDensity } as React.CSSProperties}>
+                                        <CollectionGrid className="library-grid assets-library-grid" style={{ "--collection-grid-min-width": `${assetGridCardMinWidth[gridDensity]}px` } as React.CSSProperties}>
                                             {visibleAssets.map((asset) => (
                                                 <AssetCard
                                                     key={asset.id}
@@ -1495,8 +1496,7 @@ function assetDownloadLabel(asset: LibraryAsset) {
 
 function readAssetGridDensity(): AssetGridDensity {
     if (typeof window === "undefined") return 8;
-    const value = Number(window.localStorage.getItem(ASSET_GRID_DENSITY_KEY));
-    return value === 6 || value === 10 ? value : 8;
+    return parseAssetGridDensity(window.localStorage.getItem(ASSET_GRID_DENSITY_KEY));
 }
 
 function assetCountMap<T extends { label: string; value: string }>(options: T[], remote: Record<string, number> | undefined, fallback: LibraryAsset[], valueOf: (asset: LibraryAsset) => string) {

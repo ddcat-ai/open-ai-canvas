@@ -83,11 +83,12 @@ describe("pricing write validation", () => {
         video.priceTiers[0].outputTokenPrice = 0.000001;
         expect(() => validateChannelModelPrices(video)).not.toThrow();
     });
-    test("accepts audio-only video price conditions and rejects invalid audio selectors", () => {
-        for (const videoGenerateAudio of ["true", "false"]) {
-            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", videoGenerateAudio }] })).not.toThrow();
+    test("rejects removed video conditions and accepts visible operation or resolution matches", () => {
+        for (const hiddenCondition of [{ videoGenerateAudio: "false" }, { videoSeconds: 5 }, { imageCount: 2 }]) {
+            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", ...hiddenCondition }] })).toThrow("匹配条件");
         }
-        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), videoGenerateAudio: "yes" }] })).toThrow("有声或无声");
+        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), operation: "image_to_video" }] })).not.toThrow();
+        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), resolution: "1080p" }] })).not.toThrow();
     });
 });
 

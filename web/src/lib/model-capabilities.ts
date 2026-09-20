@@ -13,6 +13,10 @@ export type TextCapabilityConfig = {
     streaming?: boolean;
     /** Whether the model exposes a user-selectable reasoning/thinking mode. */
     thinking?: boolean;
+    /** Total provider input plus output context window, in tokens. */
+    contextWindowTokens: number;
+    /** Provider completion/reasoning output ceiling, in tokens. */
+    maxOutputTokens: number;
     references: {
         promptMaxChars: number;
         maxImages: number;
@@ -117,7 +121,14 @@ function normalizeCapabilityStrings(values: string[]) {
 export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): ModelCapabilityConfig {
     return {
         ...config,
-        text: config.text ? { ...config.text, streaming: config.text.streaming !== false } : config.text,
+        text: config.text
+            ? {
+                  ...config.text,
+                  streaming: config.text.streaming !== false,
+                  contextWindowTokens: config.text.contextWindowTokens || 128_000,
+                  maxOutputTokens: config.text.maxOutputTokens || 16_384,
+              }
+            : config.text,
         image: config.image
             ? {
                   ...config.image,
@@ -286,6 +297,8 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
+        contextWindowTokens: 128_000,
+        maxOutputTokens: 16_384,
         // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。
         references: { promptMaxChars: 32000, maxImages: 0, maxImageBytes: 0, maxVideos: 0, maxVideoBytes: 0 },
     };

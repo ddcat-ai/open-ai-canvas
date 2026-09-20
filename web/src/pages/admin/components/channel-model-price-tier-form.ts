@@ -5,7 +5,9 @@ export type PriceTierMatchMode = "default" | "advanced";
 
 // 与后端保存口径一致：上游键比较前剥掉一次 models/ 前缀，避免极旧存量行误报差异。
 export function normalizeUpstreamModelKey(value: unknown): string {
-    return String(value || "").trim().replace(/^models\//, "");
+    return String(value || "")
+        .trim()
+        .replace(/^models\//, "");
 }
 
 export type PriceTierFormValues = {
@@ -60,7 +62,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 
 export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
     const selector = tier.selector || {};
-    const hasSpecificMatch = Object.values(selector).some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*") || tier.videoSeconds > 0;
+    const hasSpecificMatch = [selector.operation, selector.quality, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
@@ -107,9 +109,6 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
     if (capability === "video") {
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
-        if (Number(tier.videoSeconds) > 0) selector.videoSeconds = String(Number(tier.videoSeconds));
-        if (Number(tier.imageCount) > 0) selector.imageCount = String(Number(tier.imageCount));
-        if (tier.videoGenerateAudio && tier.videoGenerateAudio !== "*") selector.videoGenerateAudio = tier.videoGenerateAudio;
     }
     if (capability === "image") {
         if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
@@ -123,7 +122,9 @@ export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, t
 }
 
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
-    return capability === "video" && tier.matchMode === "advanced" ? Number(tier.videoSeconds || 0) : 0;
+    void capability;
+    void tier;
+    return 0;
 }
 
 export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {

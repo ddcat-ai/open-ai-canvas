@@ -27,6 +27,7 @@ export function WorkspaceAccountMenu() {
         <><Popover
             trigger="click"
             placement="bottomRight"
+            arrow={false}
             rootClassName="workspace-account-popover"
             open={menuOpen}
             onOpenChange={setMenuOpen}

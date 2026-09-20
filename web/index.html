@@ -7,6 +7,9 @@
         <link rel="icon" href="/logo.svg" type="image/svg+xml" />
         <title>正在加载</title>
         <style>
+            /* Fix layer order before production chunks can register utilities ahead of base. */
+            @layer theme, base, components, utilities;
+
             html,
             body {
                 margin: 0;

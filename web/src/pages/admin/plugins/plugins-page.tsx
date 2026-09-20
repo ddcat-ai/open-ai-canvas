@@ -322,7 +322,7 @@ export default function AdminPluginsPage() {
                     />
                 }
             />
-            <UploadPluginModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={(file) => void upload(file)} />
+            <UploadPluginModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={upload} />
         </AdminPageFrame>
     );
 }

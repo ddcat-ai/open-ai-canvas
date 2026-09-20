@@ -148,7 +148,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                             capability: nextCapability,
                                             billingMode: "fixed_request",
                                             unitPriceMicrocredits: 0,
-                                            capabilityConfig: nextCapability === "image" || nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
+                                            capabilityConfig: nextCapability === "text" || nextCapability === "image" || nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
                                         });
                                     }}
                                 />
@@ -165,7 +165,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         protocol: nextProtocol,
                                         billingMode: "fixed_request",
                                         unitPriceMicrocredits: 0,
-                                        capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
+                                        capabilityConfig: activeCapability === "text" || activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
                                     })}
                                 />
                             </section>
@@ -175,7 +175,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                         key: "capabilities",
                         label: "能力与参数",
                         children: <div inert={Boolean(testingModel)}>
-                            {activeCapability === "image" || activeCapability === "video" ? (
+                            {activeCapability === "text" || activeCapability === "image" || activeCapability === "video" ? (
                                 <ModelCapabilityEditor
                                     capability={activeCapability}
                                     model={activeModel}

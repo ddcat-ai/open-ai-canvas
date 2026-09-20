@@ -1,0 +1,28 @@
+/* Shared React Aria overlay entrance animation used by select and tooltip. */
+@keyframes ra-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-3px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ra-pop-in {
+    transform-origin: var(--ra-pop-origin, top);
+    animation: ra-pop-in var(--ra-pop-duration, 150ms) var(--workspace-ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* React Aria exposes the placement on the floating element. */
+.ra-pop-in[data-placement^="top"] { --ra-pop-origin: bottom center; }
+.ra-pop-in[data-placement^="bottom"] { --ra-pop-origin: top center; }
+.ra-pop-in[data-placement^="left"] { --ra-pop-origin: right center; }
+.ra-pop-in[data-placement^="right"] { --ra-pop-origin: left center; }
+
+@media (prefers-reduced-motion: reduce) {
+    .ra-pop-in {
+        animation: none;
+    }
+}

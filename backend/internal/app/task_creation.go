@@ -13,8 +13,11 @@ import (
 // Internal admission constraints are not JSON fields. Callers cannot select a
 // task ID or bypass the quoted-charge ceiling through the public tasks API.
 type taskAdmission struct {
-	ID        string
-	MaxCharge int64
+	ID           string
+	MaxCharge    int64
+	AgentRunID   string
+	GenerationID string
+	ApprovalID   string
 }
 
 // CreateTask 收敛任务进入系统前的 admission 流程：输入标准化、逻辑模型路由、
@@ -99,6 +102,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
 	if req.admission != nil {
 		task.ID = req.admission.ID
+		task.AgentRunID = req.admission.AgentRunID
+		task.GenerationID = req.admission.GenerationID
+		task.ApprovalID = req.admission.ApprovalID
 	}
 	if routed != nil {
 		task.LogicalModelID = routed.LogicalModel.ID
@@ -121,12 +127,10 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 			return nil, BadAuthRequest("模型调用报价超过本轮 Agent 积分上限，尚未创建任务或扣费")
 		}
 		switch billingOrder.BillingMode {
-		case "fixed_request", "per_second":
-			// 金额已经由服务端价格目录和请求规格确定。
-		case "token":
-			// 普通 Token 任务可在 usage 超过预估时补扣；Agent 必须把服务端报价固化为
-			// 最终扣费上限，使所有已准入任务的报价之和就是可验证的硬预算。
+		case "fixed_request", "per_second", "token":
+			billingOrder.ChargeLimitSet = true
 			billingOrder.ChargeLimitMicrocredits = billingOrder.AmountMicrocredits
+			task.AuthorizedChargeMicrocredits = billingOrder.AmountMicrocredits
 		default:
 			return nil, BadAuthRequest("Agent 暂不支持当前模型计费方式")
 		}

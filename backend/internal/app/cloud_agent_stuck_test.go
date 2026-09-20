@@ -130,7 +130,7 @@ func TestFailCloudAgentPersistsFailureMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const reason = "模型上下文超过 192KB 上限"
+	const reason = "模型输入超过当前能力预算"
 	if err := s.failCloudAgent(run, &state, reason); err != nil {
 		t.Fatal(err)
 	}

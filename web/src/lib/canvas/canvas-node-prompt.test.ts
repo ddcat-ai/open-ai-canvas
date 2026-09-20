@@ -29,12 +29,12 @@ test("媒体节点已有结果时只更新下一版提示词草稿", () => {
         });
 
         assert.equal(canvasNodeHasCommittedContent(current), true);
-        assert.deepEqual(writeCanvasNodePrompt(current, "下一版提示词").metadata, {
-            content: `https://example.com/${type}`,
-            prompt: "已提交提示词",
-            composerContent: "下一版提示词",
-            status: "success",
-        });
+        const metadata = writeCanvasNodePrompt(current, "下一版提示词").metadata;
+        assert.equal(metadata?.content, `https://example.com/${type}`);
+        assert.equal(metadata?.prompt, "已提交提示词");
+        assert.equal(metadata?.composerContent, "下一版提示词");
+        assert.equal(metadata?.status, "success");
+        assert.equal(metadata?.generationSpec?.prompt, "下一版提示词");
     }
 });
 
@@ -42,11 +42,11 @@ test("空媒体草稿同时初始化提交提示词和编辑提示词", () => {
     const current = node(CanvasNodeType.Video, { status: "idle" });
 
     assert.equal(canvasNodeHasCommittedContent(current), false);
-    assert.deepEqual(writeCanvasNodePrompt(current, "第一版提示词").metadata, {
-        status: "idle",
-        prompt: "第一版提示词",
-        composerContent: "第一版提示词",
-    });
+    const metadata = writeCanvasNodePrompt(current, "第一版提示词").metadata;
+    assert.equal(metadata?.status, "idle");
+    assert.equal(metadata?.prompt, "第一版提示词");
+    assert.equal(metadata?.composerContent, "第一版提示词");
+    assert.equal(metadata?.generationSpec?.prompt, "第一版提示词");
 });
 
 test("图片仅保留 storageKey 时仍视为已有媒体结果", () => {

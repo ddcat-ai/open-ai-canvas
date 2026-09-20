@@ -3,7 +3,7 @@ set -eu
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$root_dir/.." && pwd)
-payment_plugins="official-payment-wechat-native official-payment-alipay-page official-payment-xunhupay official-payment-zhifufm"
+payment_plugins="official-payment-wechat-native official-payment-alipay-page official-payment-xunhupay official-payment-zhifufm official-payment-epay"
 payments_only=false
 default_payment_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
 
@@ -119,6 +119,7 @@ for target in $payment_targets; do
   build_payment_provider official-payment-alipay-page ./cmd/payment-alipay "$target_goos" "$target_goarch"
   build_payment_provider official-payment-xunhupay ./cmd/payment-xunhupay "$target_goos" "$target_goarch"
   build_payment_provider official-payment-zhifufm ./cmd/payment-zhifufm "$target_goos" "$target_goarch"
+  build_payment_provider official-payment-epay ./cmd/payment-epay "$target_goos" "$target_goarch"
 done
 
 package_plugin() {

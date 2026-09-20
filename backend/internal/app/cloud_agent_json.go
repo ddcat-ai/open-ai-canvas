@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"reflect"
 	"strings"
 )
 
@@ -16,8 +18,86 @@ type cloudAgentArgumentError struct{ error }
 
 func (e *cloudAgentArgumentError) Unwrap() error { return e.error }
 
-func canvasArgumentError() error {
-	return &cloudAgentArgumentError{BadAuthRequest("画布工具参数无效：仅允许一个 JSON 对象；顶层只含 snapshotHash 和 ops，snapshotHash 不得放入 ops。请按工具 schema 修正后重试")}
+type cloudAgentFieldArgumentError struct {
+	error
+	Field string
+	Issue string
+}
+
+func (e *cloudAgentFieldArgumentError) Unwrap() error { return e.error }
+
+func cloudAgentCanvasFieldError(field, issue, message string) error {
+	return &cloudAgentFieldArgumentError{
+		error: &cloudAgentArgumentError{BadAuthRequest(message)}, Field: field, Issue: issue,
+	}
+}
+
+// Decode operations individually so feedback identifies the failing array item.
+// Only field names declared by our structs are echoed; arbitrary keys/values
+// supplied by a model are never used as diagnostics.
+func decodeCloudAgentCanvasArgs(raw string) (agentCanvasArgs, error) {
+	var envelope struct {
+		SnapshotHash string            `json:"snapshotHash"`
+		Ops          []json.RawMessage `json:"ops"`
+	}
+	args := agentCanvasArgs{}
+	if err := decodeCloudAgentJSONObject(raw, &envelope); err != nil {
+		return args, cloudAgentJSONArgumentError(err)
+	}
+	if envelope.SnapshotHash == "" {
+		return args, cloudAgentCanvasFieldError("snapshotHash", "required", "画布参数 snapshotHash 不能为空，请先读取画布")
+	}
+	if len(envelope.Ops) < 1 || len(envelope.Ops) > 20 {
+		return args, cloudAgentCanvasFieldError("ops", "item_count", "画布参数 ops 必须包含1到20项操作")
+	}
+	args.SnapshotHash = envelope.SnapshotHash
+	for i, rawOp := range envelope.Ops {
+		path := fmt.Sprintf("ops[%d]", i)
+		var op agentCanvasOp
+		if err := decodeCloudAgentJSONObject(string(rawOp), &op); err != nil {
+			field, issue := path, "invalid_value"
+			name := ""
+			var typeErr *json.UnmarshalTypeError
+			if errors.As(err, &typeErr) {
+				issue = "type_mismatch"
+				name = typeErr.Field
+			} else if strings.HasPrefix(err.Error(), "json: unknown field ") {
+				issue = "unexpected_field"
+				name = strings.Trim(strings.TrimPrefix(err.Error(), "json: unknown field "), "\"")
+			}
+		knownField:
+			for _, typ := range []reflect.Type{reflect.TypeOf(agentCanvasArgs{}), reflect.TypeOf(agentCanvasOp{})} {
+				for j := 0; j < typ.NumField(); j++ {
+					if typ.Field(j).Tag.Get("json") == name {
+						field += "." + name
+						break knownField
+					}
+				}
+			}
+			return args, cloudAgentCanvasFieldError(field, issue, fmt.Sprintf("画布参数 %s 无效：%s", field, cloudAgentSafeToolError(cloudAgentJSONArgumentError(err))))
+		}
+		required := ""
+		switch {
+		case op.Type == "":
+			required = "type"
+		case op.ID == "":
+			required = "id"
+		case op.Type == "add_node" && op.NodeType == "":
+			required = "nodeType"
+		case op.Type == "update_node" && len(op.Patch) == 0:
+			required = "patch"
+		case op.Type == "connect_nodes" && op.FromNodeID == "":
+			required = "fromNodeId"
+		case op.Type == "connect_nodes" && op.ToNodeID == "":
+			required = "toNodeId"
+		}
+		if required != "" {
+			field := path + "." + required
+			return args, cloudAgentCanvasFieldError(field, "required", fmt.Sprintf("画布参数 %s 不能为空", field))
+		}
+		args.Ops = append(args.Ops, op)
+	}
+	return args, nil
 }
 
 // Report the failure category without echoing model-controlled keys or values.

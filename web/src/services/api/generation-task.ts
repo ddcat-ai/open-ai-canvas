@@ -129,7 +129,10 @@ type BackendToolGenerationOptions = {
 // 报价和执行复用完全相同的任务协议，准备阶段不提交模型任务。
 export function prepareBackendToolGenerationTask(options: BackendToolGenerationOptions): CreateTaskInput {
     throwIfAborted(options.signal);
-    assertAgentExchangeBudget(options.messages, options.tools, options.config.systemPrompt || "");
+    const logicalModelId = logicalModelIDForConfig(options.config);
+    const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
+    const capability = modelCapabilityConfigFor(options.config, requestConfig.model).text;
+    assertAgentExchangeBudget(options.messages, options.tools, options.config.systemPrompt || "", capability);
     const imageKeys = new Set<string>();
     for (const message of options.messages) {
         if ("type" in message || message.role === "tool" || !Array.isArray(message.content)) continue;
@@ -140,8 +143,6 @@ export function prepareBackendToolGenerationTask(options: BackendToolGenerationO
             imageKeys.add(key);
         }
     }
-    const logicalModelId = logicalModelIDForConfig(options.config);
-    const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
     if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议");
     const task: CreateTaskInput = {
         type: "canvas_text",

@@ -1,5 +1,6 @@
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
+import { synchronizeGenerationSpec } from "@/lib/canvas/generation-contract";
 
 export type WriteCanvasNodePromptOptions = {
     metadata?: CanvasNodeMetadata;
@@ -28,10 +29,10 @@ export function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string, opti
     const promptTemplateMetadata = clearPromptTemplate
         ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
         : {};
-    return {
+    return synchronizeGenerationSpec({
         ...node,
         metadata: canvasNodeHasCommittedContent(node)
             ? { ...metadata, ...promptTemplateMetadata, composerContent: prompt }
             : { ...metadata, ...promptTemplateMetadata, prompt, composerContent: prompt },
-    };
+    });
 }

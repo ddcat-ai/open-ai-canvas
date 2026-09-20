@@ -267,12 +267,12 @@ func TestCloudAgentCanvasReadsFullPromptAssetsAndConnections(t *testing.T) {
 	s, _, _ := agentMediaFixture(t)
 	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
 	doc, _ := creationDocument(canvas.PayloadJSON)
-	result, err := cloudAgentCanvasState(s.repo, "user", doc, 0, []string{"shot-1", "cat"}, 0)
+	result, err := cloudAgentCanvasState(s.repo, "user", "agent-canvas", doc, 0, []string{"shot-1", "cat"}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(result)
-	if strings.Contains(string(raw), "must-not-expose") || strings.Contains(string(raw), "storageKey") || strings.Contains(string(raw), "resource:ref-one") || !strings.Contains(string(raw), `"referenceReady":true`) || !strings.Contains(string(raw), strings.Repeat("镜头完整指令", 500)) {
+	if strings.Contains(string(raw), "must-not-expose") || strings.Contains(string(raw), "storageKey") || strings.Contains(string(raw), "resource:ref-one") || !strings.Contains(string(raw), `"outputReference":{"ready":true}`) || !strings.Contains(string(raw), strings.Repeat("镜头完整指令", 500)) {
 		t.Fatalf("incomplete/unsafe context: %.200s", raw)
 	}
 }
@@ -554,7 +554,7 @@ func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	}
 	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
 	doc, _ := creationDocument(canvas.PayloadJSON)
-	view, err := cloudAgentCanvasState(s.repo, "user", doc, 0, []string{a.NodeID}, 0)
+	view, err := cloudAgentCanvasState(s.repo, "user", "agent-canvas", doc, 0, []string{a.NodeID}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +679,8 @@ func TestCloudAgentAutoMediaDraftRequiresExplicitApproval(t *testing.T) {
 func TestCloudAgentMediaPromptCountsUnicodeCharacters(t *testing.T) {
 	s, _, a := agentMediaFixture(t)
 	run, state := agentMediaRun(t, s, a, "auto")
-	a.Prompt = strings.Repeat("镜", 16000)
+	const mentions = "@图片1 @图片2"
+	a.Prompt = strings.Repeat("镜", 16000-len([]rune(mentions))) + mentions
 	if _, _, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(a)); err != nil {
 		t.Fatal(err)
 	}

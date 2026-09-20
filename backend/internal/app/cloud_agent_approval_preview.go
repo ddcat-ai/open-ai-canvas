@@ -52,12 +52,9 @@ type cloudAgentCanvasMutationPlan struct {
 // Approval previews and the eventual write therefore share the exact same
 // parser, snapshot check and capability validation instead of drifting apart.
 func prepareCloudAgentCanvasMutation(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentCanvasMutationPlan, error) {
-	var args agentCanvasArgs
-	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
-		return nil, canvasArgumentError()
-	}
-	if len(args.Ops) < 1 || len(args.Ops) > 20 || args.SnapshotHash == "" {
-		return nil, BadAuthRequest("画布操作数量或快照无效")
+	args, err := decodeCloudAgentCanvasArgs(call.Function.Arguments)
+	if err != nil {
+		return nil, err
 	}
 	canvas, err := repo.CanvasProjectForUser(userID, canvasID)
 	if err != nil {

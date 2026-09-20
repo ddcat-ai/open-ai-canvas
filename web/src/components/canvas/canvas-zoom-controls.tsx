@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Compass, Focus, HelpCircle, LayoutTemplate, Minus, Plus } from "lucide-react";
+import { Compass, Eye, EyeOff, Focus, HelpCircle, LayoutTemplate, Minus, Plus } from "lucide-react";
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -14,6 +14,8 @@ type CanvasZoomControlsProps = {
     onScaleChange: (scale: number) => void;
     onFitContent: () => void;
     onAutoArrange?: () => void;
+    hideNodeConnections?: boolean;
+    onHideNodeConnectionsChange?: (value: boolean) => void;
     isMiniMapOpen: boolean;
     onToggleMiniMap: () => void;
     onOpenShortcuts: () => void;
@@ -22,7 +24,7 @@ type CanvasZoomControlsProps = {
 
 const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 
-export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
+export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, hideNodeConnections = false, onHideNodeConnectionsChange, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
     const theme = canvasThemes[useActiveTheme()];
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
@@ -73,6 +75,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
         { id: "zoom-minimap", label: isMiniMapOpen ? "关闭小地图" : "打开小地图", icon: <Compass />, active: isMiniMapOpen, onClick: onToggleMiniMap },
         { id: "zoom-fit", label: "适应画布", icon: <Focus />, onClick: onFitContent },
         ...(onAutoArrange ? [{ id: "zoom-auto-arrange", label: "自动整理节点", icon: <LayoutTemplate />, onClick: onAutoArrange }] : []),
+        ...(onHideNodeConnectionsChange ? [{ id: "zoom-hide-node-connections", label: hideNodeConnections ? "显示全部连线" : "设置隐藏节点连线", icon: hideNodeConnections ? <Eye /> : <EyeOff />, active: hideNodeConnections, onClick: () => onHideNodeConnectionsChange(!hideNodeConnections) }] : []),
         { kind: "separator", id: "zoom-separator" },
         { id: "zoom-out", label: "缩小画布", icon: <Minus />, onClick: () => commitScale(liveScaleRef.current - 0.1) },
         {

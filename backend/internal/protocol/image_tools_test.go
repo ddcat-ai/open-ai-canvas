@@ -22,7 +22,7 @@ func TestImageToolsProvidersBuildAsyncImageRequests(t *testing.T) {
 				t.Fatal("image tools must receive hydrated public image URLs")
 			}
 			created, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
-				Model: tc.model,
+				Model:  tc.model,
 				Prompt: "preserve the source image while applying the requested image operation",
 				Images: []MediaReference{{URL: "https://cdn.example/source.png", Role: "edit_source", Order: 0}},
 			}})

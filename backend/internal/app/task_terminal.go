@@ -26,7 +26,7 @@ type taskTerminalCoordinator struct {
 
 type taskTerminalRepository interface {
 	Task(id string) (*model.Task, error)
-	UpdateTaskTerminalState(id string, owner string, expected model.TaskStatus, status model.TaskStatus, stage string, errorText string, completedAt time.Time) (bool, error)
+	UpdateTaskTerminalDiagnostic(task *model.Task, completedAt time.Time) (bool, error)
 }
 
 type taskBillingLifecycle interface {
@@ -73,6 +73,11 @@ func (c *taskTerminalCoordinator) markPreparationFailure(task *model.Task, stage
 	task.Status = model.TaskStatusFailed
 	task.Stage = stage
 	task.Error = c.userFacingMessage(err)
+	outcome, retryClass := "not_submitted", "correct_input"
+	if billingUncertain {
+		outcome, retryClass = "unknown", "reconcile_submission"
+	}
+	recordTaskDiagnostic(task, "preparation", "preparation_failed", outcome, retryClass, err)
 	if terminalErr := c.markTerminalState(task); terminalErr != nil {
 		return errors.Join(err, terminalErr)
 	}
@@ -100,6 +105,9 @@ func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err e
 		task.Status = model.TaskStatusCancelled
 		task.Stage = "任务已取消"
 		task.Error = "任务已取消"
+		now := time.Now()
+		task.CancellationSource, task.CancellationRequestedAt = model.TaskCancellationWorkerContext, &now
+		recordTaskDiagnostic(task, "cancellation", "task_cancelled", taskSubmissionOutcome(task, channelSlotFailedBeforeRequest), "reconcile_cancellation", err)
 		if terminalErr := c.markTerminalState(task); terminalErr != nil {
 			return terminalErr
 		}
@@ -122,6 +130,15 @@ func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err e
 	c.ensureFailedAttemptLogged(task, err)
 	task.Stage = "任务失败"
 	task.Error = c.userFacingMessage(err)
+	outcome := taskSubmissionOutcome(task, channelSlotFailedBeforeRequest)
+	if providerSucceeded {
+		outcome = "accepted"
+	}
+	retryClass := "new_generation_authorization"
+	if outcome == "unknown" {
+		retryClass = "reconcile_submission"
+	}
+	recordTaskDiagnostic(task, "execution", "provider_execution_failed", outcome, retryClass, err)
 	if terminalErr := c.markTerminalState(task); terminalErr != nil {
 		return errors.Join(err, terminalErr)
 	}
@@ -173,6 +190,7 @@ func (c *taskTerminalCoordinator) handleResultPersistenceFailure(task *model.Tas
 	task.Status = model.TaskStatusFailed
 	task.Stage = "任务结果保存失败"
 	task.Error = c.userFacingMessage(saveErr)
+	recordTaskDiagnostic(task, "result_persistence", "result_persistence_failed", "accepted", "recover_result", saveErr)
 	if terminalErr := c.markTerminalState(task); terminalErr != nil {
 		return false, errors.Join(saveErr, terminalErr)
 	}
@@ -222,12 +240,19 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 func (c *taskTerminalCoordinator) markTerminalState(task *model.Task) error {
 	completedAt := time.Now()
 	task.CompletedAt = &completedAt
-	updated, err := c.repo.UpdateTaskTerminalState(task.ID, task.LeaseOwner, model.TaskStatusRunning, task.Status, task.Stage, task.Error, completedAt)
+	updated, err := c.repo.UpdateTaskTerminalDiagnostic(task, completedAt)
 	if err != nil {
 		return fmt.Errorf("写入任务终态失败：%w", err)
 	}
 	if !updated {
 		return repository.ErrTaskStateConflict
+	}
+	if leases, ok := c.repo.(interface {
+		ReleaseCloudAgentResourceLeases(string, string) error
+	}); ok && task.ID != "" {
+		if err := leases.ReleaseCloudAgentResourceLeases(task.UserID, "task:"+task.ID); err != nil {
+			return fmt.Errorf("释放任务资源租约失败：%w", err)
+		}
 	}
 	return nil
 }

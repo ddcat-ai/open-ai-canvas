@@ -35,7 +35,7 @@ func TestCloudAgentMixedCanvasReadsUnsupportedNodesWithoutGrantingCapabilities(t
 		t.Fatalf("mixed summary failed or leaked metadata: %v", err)
 	}
 	for _, ids := range [][]string{nil, {"drawing", "config"}} {
-		view, err := cloudAgentCanvasState(nil, "user", doc, 0, ids, 0)
+		view, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, ids, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,18 +181,18 @@ func TestCloudAgentAnnotationRenderFeedsControlledTransientReference(t *testing.
 	if err := db.Create(canvas).Error; err != nil {
 		t.Fatal(err)
 	}
-	state := &cloudAgentRuntime{Request: CloudAgentRequest{CanvasID: canvas.ID}, TransientReferences: map[string]cloudAgentTransientReference{}}
+	state := &cloudAgentRuntime{RuntimeRunID: "annotation-run", Request: CloudAgentRequest{CanvasID: canvas.ID}, TransientReferences: map[string]cloudAgentTransientReference{}}
 	call := cloudAgentCall{ID: "call-annotation"}
 	call.Function.Name = "image_annotation_render"
 	call.Function.Arguments = `{"nodeId":"image-1","annotations":[{"label":"主体","x":0.5,"y":0.5}]}`
-	result, err := cloudAgentReadTool(s.repo, "user", state, call)
+	result, err := cloudAgentReadTool(s.repo, "user", state, call, s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	view := result.(map[string]any)
 	refID := stringValue(view["referenceTransientId"])
 	ref, ok := state.TransientReferences[refID]
-	if !ok || !strings.HasPrefix(ref.DataURL, "data:image/png;base64,") {
+	if !ok || ref.ResourceID == "" || ref.ExpiresAt.IsZero() {
 		t.Fatalf("annotation transient reference missing or unsafe: %#v", state.TransientReferences)
 	}
 	resultJSON, _ := json.Marshal(result)
@@ -310,7 +310,7 @@ func TestCloudAgentCanvasStateDoesNotForwardUnknownObjectFields(t *testing.T) {
 		"position": map[string]any{"x": 10.0, "y": 20.0, "storageKey": "resource:secret"},
 		"width":    200.0, "metadata": map[string]any{"status": map[string]any{"url": "https://secret.invalid"}, "content": "画面内容"},
 	}}}
-	view, err := cloudAgentCanvasState(nil, "user", doc, 0, nil, 0)
+	view, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

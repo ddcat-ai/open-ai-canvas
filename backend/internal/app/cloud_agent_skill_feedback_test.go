@@ -27,7 +27,7 @@ func TestCloudAgentSkillEmptyDirectoryAndRepeatedRead(t *testing.T) {
 	if data["entryPath"] != cloudAgentSkillEntryPath || strings.Join(data["files"].([]string), ",") != cloudAgentSkillEntryPath || !strings.Contains(data["guidance"].(string), "先读取 SKILL.md") {
 		t.Fatalf("missing empty-directory guidance: %+v", data)
 	}
-	cloudAgentToolResult("run", &state, call, result, nil)
+	cloudAgentToolResult("", &state, call, result, nil)
 	if event := state.Events[0]; event.Type != "tool_completed" || event.Payload["skillName"] != "剧本撰写" || event.Payload["path"] != "" {
 		t.Fatalf("missing tool context: %+v", event)
 	}

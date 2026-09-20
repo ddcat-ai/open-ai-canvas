@@ -161,7 +161,7 @@ describe("site appearance and editable skin library", () => {
         expect(globalStyles).toContain("--ant-tooltip-overlay-color: var(--popover-foreground) !important");
         expect(globalStyles).toContain(":where(.ant-tooltip-container, .ant-tooltip-inner)");
         expect(globalStyles).toContain("color: var(--popover-foreground) !important");
-        expect(adminStyles).toContain("--admin-status-warning: var(--palette-status-warning)");
+        expect(adminStyles).toContain("var(--admin-status-warning)");
         expect(adminStyles).toContain("border-radius: var(--menu-radius);");
     });
 });

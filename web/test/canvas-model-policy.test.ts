@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { canvasConnectionError } from "../src/lib/canvas/canvas-connection-policy";
 import { assertCanvasImageReferenceLimit, buildGenerationConfig, canvasImageReferenceLimitError, resolveCanvasGenerationModel } from "../src/lib/canvas/canvas-project-generation";
+import { readNodeGenerationSpec, synchronizeGenerationSpec } from "../src/lib/canvas/generation-contract";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { groupModelsByDisplayName, inferVideoOperation, modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions } from "../src/lib/model-selection";
 import { defaultConfig, normalizeModelOptionValue, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
@@ -53,6 +54,87 @@ function node(id: string, type: CanvasNodeType, generationMode?: "image" | "vide
 }
 
 describe("逻辑模型选择", () => {
+
+    test("generationSpec 的显式 false 和 0 覆盖陈旧镜像及全局默认", () => {
+        const config = policyConfig();
+        config.videoSeconds = "9";
+        config.videoGenerateAudio = "true";
+        config.videoWatermark = "true";
+        const videoNode: CanvasNodeData = {
+            ...node("video", CanvasNodeType.Video),
+            metadata: {
+                model: "relay::cinema-image",
+                seconds: "15",
+                generateAudio: "true",
+                watermark: "true",
+                generationSpec: {
+                    version: 1,
+                    mode: "video",
+                    prompt: "canonical prompt",
+                    modelSelection: { kind: "channel", channelId: "relay", modelKey: "cinema-text" },
+                    options: { durationSeconds: 0, generateAudio: false, watermark: false },
+                    referenceBindings: [],
+                    textInputMode: "prompt-only",
+                },
+            },
+        };
+
+        const generation = buildGenerationConfig(config, videoNode, "video");
+
+        expect(generation.model).toBe("relay::cinema-text");
+        expect(generation.videoSeconds).toBe("1");
+        expect(generation.videoGenerateAudio).toBe("false");
+        expect(generation.videoWatermark).toBe("false");
+    });
+
+    test("编辑兼容字段时原子更新 canonical 合同和全部镜像", () => {
+        const original: CanvasNodeData = {
+            ...node("video", CanvasNodeType.Video),
+            metadata: {
+                seconds: "6",
+                generateAudio: "false",
+                generationSpec: {
+                    version: 1,
+                    mode: "video",
+                    prompt: "before",
+                    options: { durationSeconds: 6, generateAudio: false },
+                    referenceBindings: [],
+                    textInputMode: "prompt-only",
+                },
+            },
+        };
+
+        const edited = synchronizeGenerationSpec(original, { seconds: "9", generateAudio: "true", composerContent: "after" });
+        const spec = readNodeGenerationSpec(edited);
+
+        expect(spec?.prompt).toBe("after");
+        expect(spec?.options.durationSeconds).toBe(9);
+        expect(spec?.options.generateAudio).toBe(true);
+        expect(edited.metadata?.seconds).toBe("9");
+        expect(edited.metadata?.generateAudio).toBe("true");
+    });
+
+    test("逻辑模型合同不会被旧 metadata.model 覆盖", () => {
+        const config = policyConfig();
+        config.channels[0]!.modelCosts![0]!.logicalModelId = "cinema-logical";
+        const videoNode: CanvasNodeData = {
+            ...node("video", CanvasNodeType.Video),
+            metadata: {
+                model: "relay::cinema-image",
+                generationSpec: {
+                    version: 1,
+                    mode: "video",
+                    prompt: "logical selection",
+                    modelSelection: { kind: "logical", logicalModelId: "cinema-logical" },
+                    options: {},
+                    referenceBindings: [],
+                    textInputMode: "prompt-only",
+                },
+            },
+        };
+
+        expect(buildGenerationConfig(config, videoNode, "video").model).toBe("relay::cinema-text");
+    });
     test("技能上下文展开后按最终视频模型字符上限拒绝提交", () => {
         const config = policyConfig();
         const model = config.videoModels[0]!;

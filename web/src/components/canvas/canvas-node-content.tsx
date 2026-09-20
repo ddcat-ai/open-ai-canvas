@@ -6,6 +6,7 @@ import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerat
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { canvasTextFontSize } from "@/lib/canvas/canvas-text-scale";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
@@ -15,7 +16,7 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
-import { cacheResourceObjectUrl, getCachedResourceObjectUrl, peekCachedResourceObjectUrl, scheduleResourceBlobCache } from "@/services/resource-blob-cache";
+import { scheduleResourceBlobCache } from "@/services/resource-blob-cache";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -306,7 +307,7 @@ function UnknownNodeContent({ theme }: Pick<CanvasNodeContentProps, "theme">) {
 }
 
 function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing }: CanvasNodeContentProps) {
-    const fontSize = node.metadata?.fontSize || 14;
+    const fontSize = canvasTextFontSize(node.width, node.height, node.metadata?.fontSize);
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.65)}px`, color: theme.node.text, boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
 
@@ -650,49 +651,27 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
             || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
     const resourceId = resourceIdFromStorageKey(storageKey);
     const isRemoteResource = Boolean(resourceId);
-    // 图片内容随资源 ID 不可变且后端允许磁盘强缓存：视口内的远程图片首帧直接上直链，
-    // 走浏览器原生解码与磁盘缓存；Blob 缓存就绪后再平滑替换，避免刷新后满屏转圈。
-    const synchronousUrl = eager && isRemoteResource && node.type === CanvasNodeType.Image ? peekCachedResourceObjectUrl(storageKey) || resourceFileUrl(resourceId) : "";
+    // 远程资源展示统一走稳定的云端资源文件地址。Blob 缓存只服务于导出、抽帧和
+    // 供应商输入等字节处理，不再把缓存生成的 blob: URL 写入媒体展示链路。
+    const remoteUrl = isRemoteResource ? resourceFileUrl(resourceId) : "";
     // Inline data URLs are already local, but decoding thousands of them is
     // still expensive. Images must wait for the same viewport gate as remote
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
-    const initialUrl = synchronousUrl || (eager && isLazyVisual && isHttpUrl ? fallback : (isRemoteResource || isLazyVisual ? "" : fallback));
+    const initialUrl = eager && isRemoteResource ? remoteUrl : (eager && isLazyVisual && isHttpUrl ? fallback : (isRemoteResource || isLazyVisual ? "" : fallback));
     const [url, setUrl] = useState(() => initialUrl);
     const [loading, setLoading] = useState(() => !initialUrl && isRemoteResource && eager);
 
     useEffect(() => {
-        let cancelled = false;
         if (!isRemoteResource) {
             setUrl(isLazyVisual && !eager ? "" : fallback);
             setLoading(false);
             return;
         }
-        const cachedSync = peekCachedResourceObjectUrl(storageKey);
-        if (cachedSync) {
-            setUrl(cachedSync);
-            setLoading(false);
-            return;
-        }
-        if (!url && eager && isHttpUrl) {
-            setUrl(fallback);
-            setLoading(false);
-        } else if (!url) {
-            setLoading(eager);
-        }
-        // 只有进入视口或被激活的节点才下载远程媒体；缓存层会复用已有 Blob URL 和 in-flight 请求。
-        const resolve = eager ? cacheResourceObjectUrl(storageKey) : getCachedResourceObjectUrl(storageKey);
-        void resolve.then((cached) => {
-            if (!cancelled && cached) setUrl(cached);
-            else if (!cancelled && eager && fallback) setUrl(fallback);
-        }).catch(() => {
-            if (!cancelled && eager) setUrl(synchronousUrl || fallback);
-        }).finally(() => {
-            if (!cancelled) setLoading(false);
-        });
-        return () => { cancelled = true; };
-    }, [eager, fallback, isHttpUrl, isLazyVisual, isRemoteResource, storageKey]);
+        setUrl(eager ? remoteUrl : "");
+        setLoading(false);
+    }, [eager, fallback, isLazyVisual, isRemoteResource, remoteUrl]);
 
     return { url, loading };
 }

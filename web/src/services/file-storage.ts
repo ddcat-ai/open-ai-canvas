@@ -5,7 +5,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 import { captureVideoPoster, detectVideoAudioTrackFromBlob } from "@/lib/video-poster";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
-import { getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
 
 export type UploadedFile = {
     url: string;
@@ -115,8 +115,8 @@ export async function resolveMediaUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
-        const cached = await getCachedResourceObjectUrl(storageKey).catch(() => "");
-        return cached || resourceFileUrl(resourceId);
+        // 远程资源展示统一走稳定的云端/资源文件地址；Blob 缓存仅服务于字节读取和媒体处理。
+        return resourceFileUrl(resourceId);
     }
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;

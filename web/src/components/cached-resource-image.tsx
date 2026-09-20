@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ImgHTMLAttributes, type ReactNode } from "react";
 
-import { resourceIdFromStorageKey } from "@/services/api/resources";
-import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
+import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveImageUrl } from "@/services/image-storage";
 
 type CachedResourceImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
@@ -13,11 +12,13 @@ type CachedResourceImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src">
 };
 
 /**
- * 资源图片优先读取按用户隔离的本地 Blob 缓存，避免刷新后再次从对象存储下载。
- * 本地 image: 类型的 storageKey 也会自动从 LocalForage 恢复有效的 Object URL。
+ * 远程资源图片统一使用稳定的资源文件地址。
+ * Blob 缓存仍可用于导出、抽帧等字节处理，但不作为媒体展示 src，避免把
+ * `blob:http(s)://...` 泄露到节点、素材库和浏览器媒体链路中。
  */
 export function CachedResourceImage({ storageKey, src = "", fallback = null, loadingFallback = fallback, eager = false, onError, ...props }: CachedResourceImageProps) {
-    const remoteResource = Boolean(resourceIdFromStorageKey(storageKey));
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    const remoteResource = Boolean(resourceId);
     const localImageResource = Boolean(storageKey && storageKey.startsWith("image:"));
     const targetRef = useRef<HTMLSpanElement>(null);
     const [nearViewport, setNearViewport] = useState(eager || !remoteResource);
@@ -51,29 +52,14 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
         let cancelled = false;
         setCacheFailed(false);
 
-        if (remoteResource && storageKey) {
+        if (remoteResource && resourceId) {
             if (!nearViewport) {
                 setCachedSrc("");
                 return () => {
                     cancelled = true;
                 };
             }
-            setCachedSrc("");
-            const resolve = cacheResourceObjectUrl(storageKey);
-            void resolve
-                .then((url) => {
-                    if (!cancelled) {
-                        setCachedSrc(url || src);
-                        setCacheFailed(!url && !src);
-                    }
-                })
-                .catch(() => {
-                    if (!cancelled) {
-                        // 缓存读取失败时仍允许原始地址加载，真正的解码失败再显示占位。
-                        setCacheFailed(!src);
-                        setCachedSrc(src);
-                    }
-                });
+            setCachedSrc(resourceFileUrl(resourceId));
             return () => {
                 cancelled = true;
             };
@@ -96,7 +82,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
         return () => {
             cancelled = true;
         };
-    }, [localImageResource, nearViewport, remoteResource, src, storageKey]);
+    }, [localImageResource, nearViewport, remoteResource, resourceId, src, storageKey]);
 
     const handleImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
         if (localImageResource && storageKey && cachedSrc.startsWith("blob:")) {

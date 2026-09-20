@@ -13,7 +13,7 @@ func TestCloudAgentMediaReadHashSurvivesMoveBeforeDraft(t *testing.T) {
 	s, db, args := agentMediaFixture(t)
 	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
 	doc, _ := creationDocument(canvas.PayloadJSON)
-	view, err := cloudAgentCanvasState(s.repo, "user", doc, 0, nil, 0)
+	view, err := cloudAgentCanvasState(s.repo, "user", "agent-canvas", doc, 0, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestCloudAgentMediaReadHashSurvivesMoveBeforeDraft(t *testing.T) {
 }
 
 func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T) {
-	for _, change := range []string{"move", "prompt", "resource", "connection", "locked"} {
+	for _, change := range []string{"move", "presentation", "prompt", "resource", "connection", "locked", "task", "unknown_metadata"} {
 		t.Run(change, func(t *testing.T) {
 			s, db, a := agentMediaFixture(t)
 			run, _ := agentMediaRun(t, s, a, "auto")
@@ -56,6 +56,10 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 			case "move":
 				nodes["cat"]["position"] = map[string]any{"x": 1234, "y": 567}
 				nodes[a.NodeID]["position"] = map[string]any{"x": 2000, "y": 900}
+			case "presentation":
+				nodes[a.NodeID]["width"], nodes[a.NodeID]["height"] = 500, 600
+				nodes[a.NodeID]["createdAt"], nodes[a.NodeID]["updatedAt"] = "2026-09-19T00:00:00Z", "2026-09-19T00:00:01Z"
+				doc["chatMessages"] = []any{map[string]any{"text": "用户补充消息"}}
 			case "prompt":
 				nodes[a.NodeID]["metadata"].(map[string]any)["composerContent"] = "用户修改的提示词"
 			case "resource":
@@ -64,6 +68,10 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 				doc["connections"] = []any{}
 			case "locked":
 				nodes[a.NodeID]["metadata"].(map[string]any)["locked"] = true
+			case "task":
+				nodes[a.NodeID]["metadata"].(map[string]any)["taskId"] = "another-task"
+			case "unknown_metadata":
+				nodes[a.NodeID]["metadata"].(map[string]any)["futureGenerationInput"] = "changed"
 			}
 			if fullHash == cloudAgentCanvasHash(doc) {
 				t.Fatal("full mutation/undo hash must still detect changes")
@@ -80,7 +88,7 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 			}
 			var count int64
 			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
-			if change != "move" {
+			if change != "move" && change != "presentation" {
 				if count != 0 {
 					t.Fatal("content change submitted generation")
 				}
@@ -92,8 +100,11 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 			canvas, _ = s.repo.CanvasProjectForUser("user", "agent-canvas")
 			doc, _ = creationDocument(canvas.PayloadJSON)
 			nodes, _ = creationObjects(doc["nodes"])
-			if nodes["cat"]["position"].(map[string]any)["x"] != float64(1234) || nodes[a.NodeID]["position"].(map[string]any)["x"] != float64(2000) {
+			if change == "move" && (nodes["cat"]["position"].(map[string]any)["x"] != float64(1234) || nodes[a.NodeID]["position"].(map[string]any)["x"] != float64(2000)) {
 				t.Fatal("generation overwrote user's positions")
+			}
+			if change == "presentation" && (nodes[a.NodeID]["width"] != float64(500) || nodes[a.NodeID]["height"] != float64(600) || nodes[a.NodeID]["createdAt"] != "2026-09-19T00:00:00Z" || nodes[a.NodeID]["updatedAt"] != "2026-09-19T00:00:01Z" || len(doc["chatMessages"].([]any)) != 1) {
+				t.Fatal("generation overwrote presentation autosave")
 			}
 		})
 	}
@@ -123,6 +134,10 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	state, err := cloudAgentDecode(run)
 	if err != nil || state.Approval == nil {
 		t.Fatalf("missing approval: %v", err)
+	}
+	var approvedArgs cloudAgentMediaArgs
+	if err := json.Unmarshal([]byte(state.Approval.Call.Function.Arguments), &approvedArgs); err != nil {
+		t.Fatal(err)
 	}
 	id := state.Approval.ID
 	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "grok-image-alternative", Size: "16:9", Quality: "1k"}
@@ -177,7 +192,7 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
 		t.Fatal(err)
 	}
-	if input.Config.Model != settings.ChannelModelKey || input.Config.Size != settings.Size || input.Config.Quality != settings.Quality || task.Prompt != a.Prompt || len(input.ReferenceImages) != 1 {
+	if input.Config.Model != settings.ChannelModelKey || input.Config.Size != settings.Size || input.Config.Quality != settings.Quality || task.Prompt != approvedArgs.Prompt || len(input.ReferenceImages) != 1 {
 		t.Fatalf("approved inputs were lost: %+v", input.Config)
 	}
 	var count int64

@@ -37,7 +37,11 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 			return err
 		}
 		if task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning {
-			if _, err = s.CancelTask(ctx, run.UserID, id); err != nil {
+			source := model.TaskCancellationParentFailed
+			if run.Status == "cancelled" {
+				source = model.TaskCancellationParentCancelled
+			}
+			if _, err = s.taskLifecycle().cancelTaskWithIntent(ctx, run.UserID, id, model.TaskCancellationIntent{Source: source}); err != nil {
 				// Completion may win the cancellation race. Re-read rather than
 				// treating a truthful terminal result as a permanent cleanup error.
 				latest, readErr := s.repo.TaskForUser(run.UserID, id)
@@ -97,6 +101,9 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 		}
 		current.CleanupPending = false
 		current.ActiveTaskID, current.MediaTaskID = "", ""
+		if err := repo.ReleaseCloudAgentResourceLeasesByRun(run.UserID, run.ID); err != nil {
+			return err
+		}
 		return nil
 	})
 }

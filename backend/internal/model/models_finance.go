@@ -54,7 +54,9 @@ type BillingOrder struct {
 	Quantity                   int64  `json:"quantity"`
 	AmountMicrocredits         int64  `json:"amountMicrocredits"`
 	ReservedAmountMicrocredits int64  `json:"reservedAmountMicrocredits"`
-	// ChargeLimitMicrocredits 非零时限制最终用户扣费；Agent 的 Token 报价用它把预授权金额固化为本轮硬上限。
+	// ChargeLimitSet distinguishes an authorized zero price from an uncapped order.
+	// All Agent prices remain capped across route changes and settlement.
+	ChargeLimitSet               bool  `json:"chargeLimitSet,omitempty" gorm:"not null;default:false"`
 	ChargeLimitMicrocredits      int64 `json:"chargeLimitMicrocredits,omitempty"`
 	ActualAmountMicrocredits     int64 `json:"actualAmountMicrocredits"`
 	RefundedAmountMicrocredits   int64 `json:"refundedAmountMicrocredits"`

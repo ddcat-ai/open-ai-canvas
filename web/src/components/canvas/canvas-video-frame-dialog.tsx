@@ -5,9 +5,7 @@ import { nanoid } from "nanoid";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatVideoFrameTime, normalizeVideoFrameTimes } from "@/lib/canvas/canvas-video-frame";
-import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
@@ -49,22 +47,9 @@ export function CanvasVideoFrameDialog({ node, open, onClose, onConfirm }: Canva
         setFrames([]);
         const storageKey = node.metadata?.storageKey || "";
         const fallback = node.metadata?.content || "";
-        const applyUrl = (url: string) => {
+        void resolveMediaUrl(storageKey, fallback).then((url) => {
             if (!cancelled) setVideoUrl(url);
-        };
-        if (resourceIdFromStorageKey(storageKey)) {
-            void cacheResourceObjectUrl(storageKey)
-                .then((cached) => {
-                    if (cancelled) return;
-                    if (cached) setVideoUrl(cached);
-                    else void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                })
-                .catch(() => {
-                    if (!cancelled) void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                });
-        } else {
-            void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-        }
+        });
         return () => {
             cancelled = true;
         };

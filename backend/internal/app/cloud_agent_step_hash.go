@@ -81,6 +81,42 @@ func (s *Service) cloudAgentRefreshStepSnapshotHash(run *model.CloudAgentExecuti
 	if latest == "" || latest == current.SnapshotHash {
 		return call
 	}
+	latestMutation, err := s.repo.LatestCloudAgentCanvasMutationForCanvas(run.UserID, state.Request.CanvasID)
+	if err != nil || latestMutation.RunID != run.ID || latestMutation.AfterSnapshotHash != latest {
+		return call
+	}
+	chain, err := s.repo.CloudAgentCanvasMutationChain(run.UserID, run.ID, state.Request.CanvasID)
+	if err != nil {
+		return call
+	}
+	stepIDs := map[string]bool{}
+	for _, candidate := range state.Calls {
+		if candidate.ID != "" {
+			stepIDs[candidate.ID] = true
+		}
+	}
+	expected := baseline
+	advanced := false
+	for _, mutation := range chain {
+		if !stepIDs[mutation.StepID] {
+			continue
+		}
+		if !advanced {
+			if mutation.BeforeSnapshotHash != expected {
+				continue
+			}
+			advanced = true
+		} else if mutation.BeforeSnapshotHash != expected {
+			return call
+		}
+		expected = mutation.AfterSnapshotHash
+		if expected == latest {
+			break
+		}
+	}
+	if !advanced || expected != latest {
+		return call
+	}
 	call = cloudAgentRewriteCallSnapshotHash(call, latest)
 	log.Printf("agent step hash refreshed: run=%s step=%d index=%d tool=%s", run.ID, state.Step, state.CallIndex, call.Function.Name)
 	return call

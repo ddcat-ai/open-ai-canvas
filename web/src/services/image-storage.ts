@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { importResourceFromUrl, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
-import { cacheResourceObjectUrl, getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
 
 export type UploadedImage = {
     url: string;
@@ -81,12 +81,7 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
-        const cached = await getCachedResourceObjectUrl(storageKey).catch(() => "");
-        if (cached) return cached;
-        if (options?.cacheMiss) {
-            const populated = await cacheResourceObjectUrl(storageKey).catch(() => "");
-            if (populated) return populated;
-        }
+        // 远程资源展示不返回 blob: URL，确保节点、素材库和弹窗都使用云端稳定地址。
         return resourceFileUrl(resourceId);
     }
     const cached = objectUrls.get(storageKey);

@@ -57,7 +57,7 @@ test("model reference limits use compact rows only inside the admin editor", asy
     expect(numberField).toContain("align-items: center;");
     const switches = sourceSection(css, ".admin-model-editor-references .admin-capability-boolean-field label {", "@media (min-width: 601px)");
     expect(switches).toContain("display: flex;");
-    expect(compactSource(css)).toContain(".admin-model-editor-references .admin-capability-reference-grid { align-items: start;");
+    expect(compactSource(css)).toContain(".admin-model-editor-references .admin-capability-reference-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start;");
     expect(compactSource(css)).toContain(".admin-model-editor-modal .admin-capability-reference-grid { grid-template-columns: minmax(0, 1fr);");
 });
 
@@ -115,33 +115,20 @@ test("channel model manager supports bounded atomic batch deletion", async () =>
     expect(component).toContain("批量删除");
 });
 
-test("analytics keeps fixed range presets distinct and uses enabled channel models for pricing", async () => {
+test("analytics keeps range presets and uses order finances without a separate pricing editor", async () => {
     const source = compactSource(await Bun.file(new URL("../src/pages/admin/components/analytics-panel.tsx", import.meta.url)).text());
 
     expect(source).toContain('type RangePreset = "7d" | "30d" | "60d"');
     expect(source).toContain('["60d", "60 天"]');
     expect(source).toContain('next.set("rangePreset", rangePreset)');
     expect(source).toContain("setRangePreset(undefined)");
-    expect(source).toContain('placeholder={pricingModelOptions.length ? "选择已启用模型" : "暂无已启用模型"}');
-    expect(source).toContain("onValuesChange={handlePricingValuesChange}");
-    expect(source).toContain("onChange={handlePricingModelChange}");
-    expect(source).toContain('hasOwnProperty.call(changedValues, "model")');
-    expect(source).toContain('if (matchingChannels.length) form.setFieldValue("channelId", matchingChannels[0].id)');
-    expect(source).toContain("const sourceChannels = channels.filter(");
-    expect(source).toContain('Form.useWatch("channelId", form)');
-    expect(source).toContain("pricingChannelId");
-    expect(source).toContain("channel.id === pricingChannelId");
-    expect(source).toContain('inputMode="decimal"');
-    expect(source).toContain('className="admin-analytics-price-input"');
-    expect(source).toContain('className="admin-analytics-price-field"');
-    expect(source).toContain('rootClassName="admin-modal-root admin-analytics-pricing-modal"');
-    expect(source).toContain("zIndex={1200}");
-    expect(source).toContain("setPricingWorkspaceOpen(false)");
-    expect(source).toContain("validator: validatePriceInput");
-    expect(source).toContain("请输入非负价格，最多 6 位小数");
-    expect(source).toContain("function formatPriceInput(micros: number)");
-    expect(source).toContain("function toMicros(value?: string | number)");
-    expect(source).not.toContain("<InputNumber");
+    expect(source).not.toContain("模型价格配置");
+    expect(source).not.toContain("listAdminModelPricings");
+    expect(source).toContain("finance.revenueMicrocredits");
+    expect(source).toContain("finance.profitMicrocredits");
+    expect(source).toContain("finance.costedOrders < finance.settledOrders");
+    expect(source).toContain("...analyticsFinanceColumns");
+    expect(source).toContain("后端未返回完整财务统计");
 });
 
 test("storage settings keep generic S3 controls and connection validation", async () => {
@@ -277,17 +264,17 @@ test("request logs display user credit billing independently from upstream cost"
     ]);
 
     const billingSummary = sourceSection(listSource, "function BillingSummary", "function MediaResult");
-    expect(listSource).toContain('title: "积分计费"');
+    expect(listSource).toContain('title: "积分计算"');
     expect(listSource).toContain('title: "请求阶段 / 状态"');
     expect(listSource).toContain('description="模型生成与结果下载记录；仅计费调用扣除积分"');
     expect(billingSummary).toContain("billingAmountMicrocredits");
     expect(billingSummary).toContain("billingAvailable");
     expect(billingSummary).toContain("!log.billable");
-    expect(billingSummary).toContain("不计费");
+    expect(billingSummary).toContain("未扣积分");
     expect(billingSummary).not.toContain("costAvailable");
     expect(detailSource).toContain('["请求阶段", requestKindText(log.requestKind)]');
     expect(detailSource).toContain('["计费属性", log.billable ? "计费调用" : "不计费"]');
-    expect(detailSource).toContain('["积分计费", billingText(log)]');
+    expect(detailSource).toContain('["销售价格（积分）", billingText(log)]');
     expect(detailSource).toContain('["上游成本", log.costAvailable');
     expect(apiSource).toContain("billingAmountMicrocredits: number");
     expect(apiSource).toContain("billingAvailable: boolean");
@@ -356,7 +343,7 @@ test("banner announcement editor keeps title styles through edit, save and statu
 
     // emoji 面板：默认收起（Popover 点击触发），插入后不自动关闭，方便连续插入。
     expect(emojiPickerSource).toContain('trigger="click"');
-    expect(emojiPickerSource).toContain('onPick(item.char)');
+    expect(emojiPickerSource).toContain("onPick(item.char)");
     expect(noticeSource).toContain("BANNER_NOTICE_EMOJI_GROUPS");
     expect(noticeSource).not.toContain("DEFAULT_ICON");
 

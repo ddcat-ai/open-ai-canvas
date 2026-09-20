@@ -420,7 +420,8 @@ const canvasStorage: PersistStorage<CanvasStore> = {
             if (canvasSaveTimers.get(scope) === timer) canvasSaveTimers.delete(scope);
             void writeQueuedCanvasPersist(scope, token).catch((error) => {
                 // 自动保存无法把异常返回给原始状态更新调用方，但失败队列仍会保留给下一次写入或显式 flush 重试。
-                console.error("画布本地持久化失败，已保留待写队列", { scope, error });
+                // 自动保存失败有队列兜底，属可降级场景；在无本地存储的环境（如测试进程）不应升级为错误级日志。
+                console.warn("画布本地持久化失败，已保留待写队列", { scope, error });
             });
         }, 400);
         canvasSaveTimers.set(scope, timer);

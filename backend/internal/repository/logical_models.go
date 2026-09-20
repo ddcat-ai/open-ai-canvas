@@ -310,6 +310,11 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			if replacement.UserID != order.UserID || replacement.TaskID != taskID || replacement.AmountMicrocredits <= 0 {
 				return ErrBillingStateConflict
 			}
+			// The new supplier price cannot expand the user's original authorization.
+			// Keep the existing cap; replacement is a price snapshot, not a new grant.
+			if err := validateBillingChargeLimit(order, replacement.AmountMicrocredits); err != nil {
+				return err
+			}
 			reserved := order.ReservedAmountMicrocredits
 			if reserved <= 0 {
 				reserved = order.AmountMicrocredits

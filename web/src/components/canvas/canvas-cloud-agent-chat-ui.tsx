@@ -163,7 +163,7 @@ export function AgentChatMessage({
     return (
         <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
             {!isUser ? <AgentTimelineMarker theme={theme} tone="agent" /> : null}
-            <div className={`min-w-0 text-sm leading-6 ${isUser ? "max-w-[82%] rounded-2xl rounded-br-md px-3.5 py-2.5 text-right" : "max-w-[calc(100%-36px)] flex-1 text-left"}`} style={{ color, ...(isUser ? { background: theme.node.agentUserMessage } : {}) }}>
+            <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user max-w-[82%] px-4 py-3 text-right" : "max-w-[calc(100%-36px)] flex-1 text-left"}`} style={{ color }}>
                 {item.interjection ? (
                     <span
                         className="mb-1 inline-flex items-center rounded-full px-1.5 py-[1px] text-[var(--fs-label)] leading-4"
@@ -370,7 +370,7 @@ export function AgentPlanBar({ items, theme, minimized, onToggle }: {
     const doneCount = items.filter((entry) => entry.status === "done").length;
     const allDone = doneCount === items.length;
     return (
-        <div className="agent-plan-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ background: theme.node.fill, border: `1px solid ${theme.node.stroke}`, color: theme.node.text }}>
+        <div className="agent-plan-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={!minimized} onClick={onToggle}>
                 <ListChecks className="size-3.5 shrink-0" style={{ color: allDone ? "#429477" : theme.node.muted }} />
                 <span className="text-xs font-semibold">本轮待办</span>
@@ -405,7 +405,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
     disabled?: boolean;
 }) {
     return (
-        <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ background: theme.node.fill, border: `1px solid ${theme.accent.primary}`, color: theme.node.text }}>
+        <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
             <div className="flex items-start gap-2 px-3 pt-2.5">
                 <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
                 <span className="min-w-0 flex-1 text-xs font-semibold leading-5">{question.question}</span>
@@ -417,8 +417,8 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         type="button"
                         disabled={disabled}
                         title={option.detail || option.label}
-                        className="max-w-full rounded-md border px-3 py-1.5 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        style={{ borderColor: theme.node.stroke, background: theme.toolbar.itemHover }}
+                        className="max-w-full rounded-md border-0 px-3 py-1.5 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ background: theme.toolbar.itemHover }}
                         onMouseDown={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -600,13 +600,11 @@ export function AgentChatComposer({
     };
 
     return (
-        <div className="min-w-0 shrink-0 px-3 pb-3 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
+        <div className="agent-composer-wrap min-w-0 shrink-0" onWheelCapture={(event) => event.stopPropagation()}>
             <div
-                className="group/composer relative rounded-2xl px-3 pb-2.5 pt-3 transition-[background-color,box-shadow] duration-200"
+                className="agent-composer-surface group/composer relative transition-[background-color,box-shadow] duration-200"
                 style={{
-                    background: theme.node.fill,
                     color: theme.accent.primary,
-                    boxShadow: `0 16px 40px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,0.045)`,
                 }}
             >
                 {sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
@@ -757,8 +755,8 @@ export function AgentChatComposer({
                             whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
                             animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
                             transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                            className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
-                            style={{ background: theme.accent.danger, color: theme.accent.onPrimary, boxShadow: `0 8px 20px ${theme.accent.danger}45` }}
+                            className="grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                            style={{ background: theme.accent.danger, color: theme.accent.onPrimary }}
                         >
                             {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
                         </motion.button> : null}
@@ -772,11 +770,10 @@ export function AgentChatComposer({
                             whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
                             animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1, rotate: 0 }}
                             transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
-                            className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                            className="agent-composer-send grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
                             style={{
                                 background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
                                 color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
-                                boxShadow: canSubmit || sending ? `0 8px 20px ${theme.accent.primary}45` : "none",
                             }}
                         >
                             <motion.span
@@ -786,7 +783,7 @@ export function AgentChatComposer({
                                 transition={{ duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }}
                                 className="grid place-items-center"
                             >
-                                {sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+                                {sending ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
                             </motion.span>
                         </motion.button>
                     </div>

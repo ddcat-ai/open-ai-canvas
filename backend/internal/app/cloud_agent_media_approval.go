@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 // Only user-editable image options cross the approval boundary. Targets,
@@ -17,7 +18,13 @@ type CloudAgentMediaSettings struct {
 	Quality         string `json:"quality"`
 }
 
-func (s *Service) updateCloudAgentMediaApproval(run *model.CloudAgentExecution, state *cloudAgentRuntime, settings CloudAgentMediaSettings) error {
+// updateCloudAgentMediaApproval rebuilds the complete prepared admission for an
+// edited approval. It is called inside MutateCloudAgent so the new prepared
+// hash, resource lease set and runtime checkpoint commit atomically.
+func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run *model.CloudAgentExecution, state *cloudAgentRuntime, settings CloudAgentMediaSettings) error {
+	if state == nil || state.Approval == nil {
+		return creationConflict("审批不存在或已过期")
+	}
 	call := state.Approval.Call
 	if call.Function.Name != "generate_media" {
 		return BadAuthRequest("当前审批不是图片生成，不能修改生成参数")
@@ -42,7 +49,8 @@ func (s *Service) updateCloudAgentMediaApproval(run *model.CloudAgentExecution, 
 	}
 	// Dry admission uses the same model, ownership and option checks as task
 	// submission, without reserving credits or creating a generation task.
-	req.creationPrepare = &creationTaskPreparation{}
+	preparation := &creationTaskPreparation{}
+	req.creationPrepare = preparation
 	task, err := s.CreateTask(run.UserID, req)
 	if err != nil {
 		return err
@@ -53,11 +61,34 @@ func (s *Service) updateCloudAgentMediaApproval(run *model.CloudAgentExecution, 
 	if err := json.Unmarshal([]byte(task.InputJSON), &resolved); err != nil {
 		return err
 	}
-	if err := validateCloudAgentResolvedMediaOptions(req.Input["config"].(map[string]any), resolved.Config); err != nil {
+	requested, _ := req.Input["config"].(map[string]any)
+	if err := validateCloudAgentResolvedMediaOptions(requested, resolved.Config); err != nil {
 		return err
 	}
 	name, err := s.cloudAgentMediaModelName(args)
 	if err != nil {
+		return err
+	}
+	canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
+	if err != nil {
+		return err
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	prepared, err := prepareCloudAgentMediaApproval(repo, run.UserID, doc, plan, req, task, preparation.Order)
+	if err != nil {
+		return err
+	}
+	// Editing an approval changes the prepared inputs and quote, but it is still
+	// the same user-approved generation intent until the user submits a new
+	// generation from the canvas.
+	if previous := state.Approval.Prepared; previous != nil && previous.GenerationID != "" {
+		prepared.GenerationID = previous.GenerationID
+		prepared.Hash = creationHash(prepared)
+	}
+	if err := replaceCloudAgentPreparedLeases(repo, run.UserID, run.ID, state.Approval.ID, prepared); err != nil {
 		return err
 	}
 	state.Calls[state.CallIndex] = call
@@ -65,7 +96,16 @@ func (s *Service) updateCloudAgentMediaApproval(run *model.CloudAgentExecution, 
 	state.Approval.CallHash = cloudAgentApprovalCallHash(call)
 	state.Approval.ModelName = name
 	state.Approval.Preview = cloudAgentMediaApprovalPreview(plan, name)
+	state.Approval.Prepared = prepared
 	return nil
+}
+
+func replaceCloudAgentPreparedLeases(repo *repository.Repository, userID, runID, approvalID string, prepared *cloudAgentPreparedMedia) error {
+	ids := make([]string, 0, len(prepared.ResourceSignatures))
+	for id := range prepared.ResourceSignatures {
+		ids = append(ids, id)
+	}
+	return repo.ReplaceCloudAgentResourceLeases(userID, runID, approvalID, ids, prepared.Quote.ExpiresAt)
 }
 
 func validateCloudAgentResolvedMediaOptions(requested, resolved map[string]any) error {

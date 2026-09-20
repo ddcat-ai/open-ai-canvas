@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -38,19 +39,19 @@ func cloudAgentCanvasHash(doc map[string]any) string {
 	return creationHash(content)
 }
 
-// Generation does not depend on node positions. Keep the full canvas hash for
-// mutations and undo, which must still detect layout edits before restoring data.
+// Generation uses the graph, not canvas presentation or autosave bookkeeping.
+// Keep all node business fields (including unknown metadata) fail-closed, and
+// keep the full canvas hash for mutations/undo and the database CAS.
 func cloudAgentMediaContentHash(doc map[string]any) string {
-	content := make(map[string]any, len(doc))
-	for key, value := range doc {
-		content[key] = value
-	}
+	content := map[string]any{"connections": doc["connections"]}
 	nodes := creationMaps(doc["nodes"])
 	projected := make([]map[string]any, 0, len(nodes))
 	for _, node := range nodes {
 		item := make(map[string]any, len(node))
 		for key, value := range node {
-			if key != "position" {
+			switch key {
+			case "position", "width", "height", "createdAt", "updatedAt":
+			default:
 				item[key] = value
 			}
 		}
@@ -60,14 +61,35 @@ func cloudAgentMediaContentHash(doc map[string]any) string {
 	return cloudAgentCanvasHash(content)
 }
 
-func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[string]any, offset int, ids []string, storyboardOffset int) (any, error) {
+const cloudAgentReadPageBytes = 64 << 10
+
+func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string, doc map[string]any, offset int, ids []string, storyboardOffset int, connectionOffsets ...int) (any, error) {
 	if offset < 0 || storyboardOffset < 0 || len(ids) > 8 {
 		return nil, BadAuthRequest("画布读取分页参数无效")
 	}
 	all := creationMaps(doc["nodes"])
+	connectionOffset := 0
+	if len(connectionOffsets) > 0 {
+		connectionOffset = connectionOffsets[0]
+	}
+	if connectionOffset < 0 {
+		return nil, BadAuthRequest("连线分页参数无效")
+	}
 	wanted := map[string]bool{}
 	for _, id := range ids {
 		wanted[id] = true
+	}
+	for id := range wanted {
+		found := false
+		for _, node := range all {
+			if stringValue(node["id"]) == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, BadAuthRequest("指定节点不在当前画布")
+		}
 	}
 	limit := 2000
 	if len(ids) > 0 {
@@ -76,7 +98,11 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 	nodes := []any{}
 	included := map[string]bool{}
 	next := 0
+	pageBytes := 1024
 	for index, node := range all {
+		if index < offset {
+			continue
+		}
 		id := stringValue(node["id"])
 		if len(ids) > 0 {
 			if !wanted[id] {
@@ -118,6 +144,12 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 			// Read visibility is not permission to mutate or use a node as a media reference.
 			item["agentSupported"] = false
 			item["agentUnsupportedReason"] = "仅展示基础信息；当前 Agent 不支持操作此类型节点"
+			body, _ := json.Marshal(item)
+			if pageBytes+len(body) > cloudAgentReadPageBytes-(8<<10) {
+				next = index
+				break
+			}
+			pageBytes += len(body)
 			nodes = append(nodes, item)
 			included[id] = true
 			continue
@@ -133,10 +165,31 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 		for key, value := range projected {
 			item[key] = value
 		}
-		if draftRunID := stringValue(meta["agentDraftRunId"]); draftRunID != "" && stringValue(meta["taskId"]) == "" {
+		if capability.GenerationMode != "" {
+			generation := map[string]any{"taskStatus": "not_submitted"}
+			if reason, issue := cloudAgentMediaTargetIssue(node, capability.Type); reason != "" {
+				generation["submitBlockedReason"], generation["submitBlockedIssue"] = reason, issue
+			}
+			taskID := stringValue(meta["taskId"])
+			if taskID == "" {
+				taskID = stringValue(meta["generationTaskId"])
+			}
+			if taskID != "" {
+				// Do not infer success/failure from stale canvas metadata.
+				generation["taskStatus"] = "unavailable"
+				task, err := repo.TaskForUser(userID, taskID)
+				if err == nil && task.ProjectID == canvasID {
+					for key, value := range cloudAgentTaskDiagnostic(repo, task) {
+						generation[key] = value
+					}
+				}
+			}
+			item["generation"] = generation
+		}
+		if draftRunID := stringValue(meta["agentDraftRunId"]); draftRunID != "" && stringValue(meta["taskId"]) == "" && stringValue(meta["generationTaskId"]) == "" {
 			draft := map[string]any{"submitted": false, "requiresApproval": true, "ownerStatus": "unknown"}
 			owner, err := repo.CloudAgent(userID, draftRunID)
-			if err == nil && owner.CanvasID != "" {
+			if err == nil && owner.CanvasID == canvasID {
 				draft["ownerStatus"] = owner.Status
 				draft["cleanupPending"] = owner.CleanupPending
 			}
@@ -144,9 +197,10 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 		}
 		if capability.Connection.CanReference {
 			ref, _, err := cloudAgentReference(repo, userID, node)
-			item["referenceReady"] = err == nil
+			outputReference := map[string]any{"ready": err == nil}
+			item["outputReference"] = outputReference
 			if err != nil {
-				item["referenceIssue"] = err.Error()
+				outputReference["issue"] = cloudAgentSafeToolError(err)
 			} else {
 				// Provider references contain a storage key for task submission.
 				// The model only needs the verified public characteristics; never
@@ -158,23 +212,39 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 				}
 			}
 		}
+		body, err := json.Marshal(item)
+		if err != nil {
+			return nil, err
+		}
+		if pageBytes+len(body) > cloudAgentReadPageBytes-(8<<10) {
+			if len(nodes) == 0 {
+				return nil, BadAuthRequest("节点详情超过单页读取预算，请使用节点对应的结构化分页工具")
+			}
+			next = index
+			break
+		}
+		pageBytes += len(body)
 		nodes = append(nodes, item)
 		included[id] = true
 	}
-	if len(ids) > 0 {
-		for _, id := range ids {
-			if !included[id] {
-				return nil, BadAuthRequest("指定节点不在当前画布")
-			}
-		}
-	}
 	edges := []any{}
-	for _, edge := range creationMaps(doc["connections"]) {
+	nextConnection := 0
+	for index, edge := range creationMaps(doc["connections"]) {
+		if index < connectionOffset {
+			continue
+		}
 		if included[stringValue(edge["fromNodeId"])] || included[stringValue(edge["toNodeId"])] {
-			edges = append(edges, map[string]any{"id": edge["id"], "fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"]})
+			item := map[string]any{"id": edge["id"], "fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"]}
+			body, _ := json.Marshal(item)
+			if pageBytes+len(body) > cloudAgentReadPageBytes {
+				nextConnection = index
+				break
+			}
+			pageBytes += len(body)
+			edges = append(edges, item)
 		}
 	}
-	return map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "mediaSnapshotHash": cloudAgentMediaContentHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0}, nil
+	return map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "mediaSnapshotHash": cloudAgentMediaContentHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0, "nextConnectionOffset": nextConnection, "hasMoreConnections": nextConnection > 0, "pageByteBudget": cloudAgentReadPageBytes}, nil
 }
 
 func cloudAgentSafeNumber(value any) (any, bool) {

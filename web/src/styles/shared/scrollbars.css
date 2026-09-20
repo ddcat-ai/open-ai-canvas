@@ -1,0 +1,114 @@
+@layer utilities {
+    /* Shared scrollbar utilities used by canvas, project, settings and admin surfaces. */
+    .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .thin-scrollbar {
+        scrollbar-color: rgba(120, 113, 108, 0.45) transparent;
+        scrollbar-width: thin;
+    }
+
+    .thin-scrollbar::-webkit-scrollbar {
+        height: 4px;
+        width: 4px;
+    }
+
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(120, 113, 108, 0.45);
+        border-radius: 999px;
+    }
+
+    .storyboard-scrollbar {
+        overscroll-behavior: contain;
+        scrollbar-color: rgba(148, 163, 184, 0.72) rgba(120, 113, 108, 0.14);
+        scrollbar-gutter: stable;
+        scrollbar-width: auto;
+    }
+
+    /* 表头与滚动行区共享同宽 scrollbar gutter，保证列线对齐；滚动条本身透明隐藏 */
+    .storyboard-header-gutter {
+        overflow-x: hidden;
+        overflow-y: scroll;
+        scrollbar-color: transparent transparent;
+        scrollbar-gutter: stable;
+        scrollbar-width: auto;
+    }
+
+    .storyboard-scrollbar::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    .storyboard-scrollbar::-webkit-scrollbar-track {
+        background: rgba(120, 113, 108, 0.14);
+        border-left: 1px solid rgba(120, 113, 108, 0.18);
+    }
+
+    .storyboard-scrollbar::-webkit-scrollbar-thumb {
+        min-height: 40px;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.72);
+        background-clip: content-box;
+    }
+
+    .storyboard-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(186, 196, 210, 0.9);
+        background-clip: content-box;
+    }
+
+    .hover-scrollbar {
+        scrollbar-color: transparent transparent;
+        scrollbar-width: thin;
+    }
+
+    .hover-scrollbar:hover {
+        scrollbar-color: rgba(120, 113, 108, 0.5) transparent;
+    }
+
+    .hover-scrollbar::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+
+    .hover-scrollbar::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 999px;
+    }
+
+    .hover-scrollbar:hover::-webkit-scrollbar-track {
+        background: rgba(120, 113, 108, 0.12);
+        border-radius: 999px;
+    }
+
+    .hover-scrollbar:hover::-webkit-scrollbar-thumb {
+        background: rgba(120, 113, 108, 0.5);
+    }
+
+    .hover-scrollbar-hint {
+        position: relative;
+    }
+
+    .hover-scrollbar-hint::after {
+        background: rgba(120, 113, 108, 0.42);
+        border-radius: 999px;
+        bottom: 4px;
+        content: "";
+        height: 3px;
+        left: 12px;
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        right: 12px;
+        transition: opacity 0.18s ease;
+    }
+
+    .hover-scrollbar-hint:hover::after {
+        opacity: 1;
+    }
+}

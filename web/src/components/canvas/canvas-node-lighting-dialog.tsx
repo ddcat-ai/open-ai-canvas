@@ -301,14 +301,14 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
                     style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover, color: theme.node.text, opacity: options.smartMode ? 1 : 0.55 }}
                 />
                 <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>预设</span>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid shrink-0 auto-rows-[60px] grid-cols-4 gap-1.5">
                     {STYLE_PRESETS.map((preset) => (
                         <button
                             key={preset.id}
                             type="button"
                             aria-pressed={options.stylePreset === preset.id}
                             onClick={() => updateOption("stylePreset", options.stylePreset === preset.id ? "" : preset.id)}
-                            className={`relative h-[60px] overflow-hidden rounded-[var(--r-lg)] text-left transition-[box-shadow,filter,border-color,background-color] duration-150 ${options.stylePreset === preset.id ? "ring-2 ring-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "hover:ring-1 hover:ring-white/30"}`}
+                            className={`relative h-full min-h-0 overflow-hidden rounded-[var(--r-lg)] text-left transition-[box-shadow,filter,border-color,background-color] duration-150 ${options.stylePreset === preset.id ? "ring-2 ring-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "hover:ring-1 hover:ring-white/30"}`}
                             style={{
                                 backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.08)), url(${preset.image})`,
                                 backgroundSize: "cover",

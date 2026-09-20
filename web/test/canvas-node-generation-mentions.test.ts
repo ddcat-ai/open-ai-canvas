@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
+import { buildCanvasResourceReferences } from "../src/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
 function node(id: string, type: CanvasNodeType, content: string): CanvasNodeData {
@@ -32,6 +33,28 @@ function connection(fromNodeId: string): CanvasConnection {
 }
 
 describe("canvas node generation position mentions", () => {
+    test("Agent 保存的素材引用块在编辑器和再次提交时保持相同编号", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Image, "data:image/png;base64,a");
+        const wig = node("wig", CanvasNodeType.Image, "data:image/png;base64,b");
+        const voice = node("voice", CanvasNodeType.Audio, "data:audio/mpeg;base64,c");
+        const note = node("note", CanvasNodeType.Markdown, "导演方案");
+        const prompt = "一镜到底\n\n【资产参考】\n人物：@图片1\n假发：@图片2\n声音：@音频1";
+        target.metadata = { composerContent: prompt, prompt, referenceNodeIds: [character.id, voice.id, wig.id] };
+        const nodes = [target, wig, voice, note, character];
+        const connections = [character, voice, wig, note].map((source) => connection(source.id));
+        const references = buildCanvasResourceReferences(nodes, connections, target.id).filter((reference) => reference.active);
+
+        expect(Object.fromEntries(references.map((reference) => [reference.nodeId, reference.label]))).toEqual({
+            character: "图片1", wig: "图片2", voice: "音频1", note: "文本1",
+        });
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, [], true);
+        expect(context.referenceImages.map((reference) => reference.id)).toEqual([character.id, wig.id]);
+        expect(context.referenceAudios.map((reference) => reference.id)).toEqual([voice.id]);
+        expect(context.prompt).toBe(prompt);
+        expect(context.textCount).toBe(0);
+    });
+
     test("已有图片节点显式引用自身时作为图生图参考图提交", () => {
         const source = node("image-self", CanvasNodeType.Image, "data:image/png;base64,a");
         source.metadata.composerContent = "将 @图片1 图片变清晰";

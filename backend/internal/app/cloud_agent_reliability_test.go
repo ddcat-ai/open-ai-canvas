@@ -88,7 +88,7 @@ func TestCloudAgentReliabilitySchedulerHeadOfLine500(t *testing.T) {
 	}
 }
 
-func TestCloudAgentReliabilityOversizedCheckpoint(t *testing.T) {
+func TestCloudAgentReliabilityLargeJournalDoesNotOverflowCheckpoint(t *testing.T) {
 	s, db, root := reliableAgentRoot(t)
 	run, err := s.repo.CloudAgent("user", root.ID)
 	if err != nil {
@@ -110,22 +110,178 @@ func TestCloudAgentReliabilityOversizedCheckpoint(t *testing.T) {
 	if err = db.Model(&model.Task{}).Where("id = ?", root.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": string(result)}).Error; err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 3; i++ {
-		run, err = s.repo.CloudAgent("user", root.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = s.advanceCloudAgent(run); err != nil {
-			t.Fatal(err)
-		}
+	run, err = s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.advanceCloudAgent(run); err != nil {
+		t.Fatal(err)
 	}
 	run, err = s.repo.CloudAgent("user", root.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("3 deterministic oversized checkpoint failures: run=%s revision=%d bytes=%d", run.Status, run.Revision, len(run.StateJSON))
-	if run.Status != "failed" || run.CleanupPending || run.FailureMessage == "" {
-		t.Fatalf("failed run did not settle: %+v", run)
+	t.Logf("large journal is external to checkpoint: run=%s revision=%d checkpointBytes=%d events=%d", run.Status, run.Revision, len(run.StateJSON), run.EventCount)
+	if run.Status != "completed" || run.CleanupPending || run.FailureMessage != "" || len(run.StateJSON) >= 512<<10 || run.EventCount < 4 {
+		t.Fatalf("large journal should not overflow the bounded checkpoint: %+v", run)
+	}
+}
+
+func TestCloudAgentCheckpointMigratesLegacyStateToJournalAndTranscript(t *testing.T) {
+	s, db, root := reliableAgentRoot(t)
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TextHistory = append(state.TextHistory, providerTextMessage{Role: "user", Content: "legacy history"})
+	state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": "legacy canonical"})
+	state.event(root.ID, "legacy_event", map[string]any{"ok": true})
+	legacyJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("run_id = ?", root.ID).Delete(&model.CloudAgentEventRecord{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("run_id = ?", root.ID).Delete(&model.CloudAgentMessageRecord{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.CloudAgentExecution{}).Where("id = ?", root.ID).Updates(map[string]any{
+			"checkpoint_version": 0,
+			"event_count":        0,
+			"message_count":      0,
+			"state_json":         string(legacyJSON),
+		}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyRun, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.repo.MutateCloudAgent("user", root.ID, legacyRun.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		decoded, decodeErr := cloudAgentDecode(current)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		decoded.event(root.ID, "migrated_event", map[string]any{"ok": true})
+		return cloudAgentSave(current, &decoded)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	migrated, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := cloudAgentDecode(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migrated.CheckpointVersion != 2 || migrated.EventCount != len(decoded.Events) || migrated.MessageCount != len(decoded.Canonical.Messages)+len(decoded.TextHistory) || len(decoded.Events) < 2 {
+		t.Fatalf("legacy checkpoint was not migrated atomically: run=%+v state=%+v", migrated, decoded)
+	}
+	var checkpoint map[string]any
+	if err = json.Unmarshal([]byte(migrated.StateJSON), &checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	canonical, _ := checkpoint["canonical"].(map[string]any)
+	if checkpoint["events"] != nil || checkpoint["textHistory"] != nil || canonical["messages"] != nil {
+		t.Fatalf("large journal or transcript leaked back into StateJSON: %s", migrated.StateJSON)
+	}
+}
+
+func TestCloudAgentJournalIsAppendOnlyAndTranscriptCanCompact(t *testing.T) {
+	s, db, root := reliableAgentRoot(t)
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TextHistory = append(state.TextHistory,
+		providerTextMessage{Role: "user", Content: "one"},
+		providerTextMessage{Role: "assistant", Content: "two"},
+	)
+	state.event(root.ID, "durable_event", map[string]any{"value": 1})
+	if err = s.repo.MutateCloudAgent("user", root.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	run, err = s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := run.Revision
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Events[0].Type = "rewritten"
+	if err = s.repo.MutateCloudAgent("user", root.ID, revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err == nil || !strings.Contains(err.Error(), "append-only") {
+		t.Fatalf("existing journal entry was rewritten: %v", err)
+	}
+	rolledBack, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil || rolledBack.Revision != revision {
+		t.Fatalf("failed journal mutation did not roll back: run=%+v err=%v", rolledBack, err)
+	}
+
+	state, err = cloudAgentDecode(rolledBack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TextHistory = state.TextHistory[:1]
+	if err = s.repo.MutateCloudAgent("user", root.ID, rolledBack.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var historyRows int64
+	if err = db.Model(&model.CloudAgentMessageRecord{}).Where("run_id = ? AND kind = ?", root.ID, "history").Count(&historyRows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if historyRows != 1 {
+		t.Fatalf("compacted transcript retained stale rows: %d", historyRows)
+	}
+}
+
+func TestCloudAgentDecodeRejectsCorruptEventIdentity(t *testing.T) {
+	s, db, root := reliableAgentRoot(t)
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.event(root.ID, "durable_event", map[string]any{"value": 1})
+	if err = s.repo.MutateCloudAgent("user", root.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Model(&model.CloudAgentEventRecord{}).Where("run_id = ? AND sequence = ?", root.ID, 1).Update("event_json", `{"eventId":"wrong:1","runId":"wrong","seq":1,"type":"durable_event","payload":{}}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	corrupt, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = cloudAgentDecode(corrupt); err == nil || !strings.Contains(err.Error(), "event identity") {
+		t.Fatalf("corrupt event identity was accepted: %v", err)
 	}
 }
 

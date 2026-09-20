@@ -4,10 +4,18 @@ import "time"
 
 // CloudAgentExecution checkpoints orchestration independently of billed tasks.
 type CloudAgentExecution struct {
-	ID       string `gorm:"primaryKey;size:80"`
-	UserID   string `gorm:"index;size:36"`
-	Status   string `gorm:"index;size:32"`
-	Revision int64
+	ID                string `gorm:"primaryKey;size:80"`
+	UserID            string `gorm:"index;size:36"`
+	Status            string `gorm:"index;size:32"`
+	Revision          int64
+	CheckpointVersion int    `gorm:"not null;default:0"`
+	ConversationID    string `gorm:"index;size:80"`
+	ParentID          string `gorm:"index;size:80"`
+	Title             string `gorm:"size:240"`
+	EventCount        int
+	MessageCount      int
+	Journal           []CloudAgentEventRecord   `gorm:"foreignKey:RunID;references:ID" json:"-"`
+	Transcript        []CloudAgentMessageRecord `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	// Control fields remain writable even when the transcript cannot be decoded or saved.
 	CanvasID       string `gorm:"size:80"`
 	ActiveTaskID   string `gorm:"size:80"`
@@ -17,6 +25,25 @@ type CloudAgentExecution struct {
 	StateJSON      string `gorm:"type:text"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// Journal rows are append-only and commit in the same transaction as the run.
+type CloudAgentEventRecord struct {
+	RunID     string `gorm:"primaryKey;size:80"`
+	Sequence  int    `gorm:"primaryKey;autoIncrement:false"`
+	UserID    string `gorm:"index;size:36"`
+	EventJSON string `gorm:"type:text;not null"`
+	CreatedAt time.Time
+}
+
+// Transcript bodies do not share the bounded execution checkpoint. Canonical
+// messages may be compacted; the append-only journal retains execution receipts.
+type CloudAgentMessageRecord struct {
+	RunID       string `gorm:"primaryKey;size:80"`
+	Kind        string `gorm:"primaryKey;size:24"`
+	Sequence    int    `gorm:"primaryKey;autoIncrement:false"`
+	UserID      string `gorm:"index;size:36"`
+	MessageJSON string `gorm:"type:text;not null"`
 }
 
 // CloudAgentCanvasMutation records one atomic canvas change made by an Agent.

@@ -207,11 +207,24 @@
         box-shadow: none !important;
     }
     .app-user-workspace .collection-toolbar .ant-input-affix-wrapper svg { width: var(--user-icon-size); height: var(--user-icon-size); color: var(--user-ink-soft); }
+
+    /* Select 的只读 input 在鼠标点击后也可能匹配 :focus-visible；
+       用工具栏的实际输入方式区分，不通过 blur 破坏下拉键盘操作。 */
+    .app-user-workspace .collection-toolbar .ant-select {
+        outline: none !important;
+    }
+    .app-user-workspace .collection-toolbar .ant-select:not(.ant-select-disabled):is(:hover, .ant-select-focused, .ant-select-open) {
+        background: var(--user-surface-hover) !important;
+    }
+    .app-user-workspace .collection-toolbar[data-input-modality="keyboard"] .ant-select:not(.ant-select-disabled):focus-within {
+        outline: 1px solid var(--control-focus-ring) !important;
+        outline-offset: 2px;
+    }
 }
 
 @media (max-width: 720px) {
     .app-product-workspace .library-page > div { width: calc(100% - 32px); }
-    .app-product-workspace .assets-library-page .assets-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+    .app-product-workspace .assets-library-page .assets-library-grid { gap: var(--space-3); }
     .app-product-workspace .app-pagination-bar { flex-wrap: wrap; gap: var(--space-2); padding-inline: 0; }
     .app-product-workspace .app-pagination-pages { justify-content: center; flex: 1 1 100%; }
     .app-user-workspace .studio-collection-page > div { width: calc(100% - 32px); padding-top: 20px; }
@@ -355,7 +368,7 @@
 .app-product-workspace .skill-library-grid,
 .app-product-workspace .plugins-grid,
 .app-product-workspace .task-grid-view {
-    grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr));
     gap: 24px 16px;
 }
 
@@ -668,7 +681,7 @@
     .app-product-workspace .collection-toolbar-controls { flex-basis: 100%; }
     .app-product-workspace .collection-toolbar-actions { width: 100%; justify-content: flex-start; }
     .app-product-workspace .canvas-collection-grid,
-    .app-product-workspace .assets-library-grid,
+    .app-product-workspace .assets-library-grid:not(.assets-library-page .assets-library-grid),
     .app-product-workspace .task-grid-view { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 10px; }
     .app-product-workspace .plugins-grid { grid-template-columns: minmax(0, 1fr); }
     .app-product-workspace .story-launcher-panel { padding: 16px; border-radius: 16px; }
@@ -691,6 +704,11 @@
     padding: 20px 24px 16px;
     border-bottom: 1px solid var(--user-border);
     background: var(--user-surface);
+}
+
+/* 内容区自带内边距（.app-changelog-scroll），弹窗 body 不再叠加，保持产品壳层拥有间距。 */
+.app-changelog-modal .ant-modal-body {
+    padding: 0;
 }
 
 .app-changelog-heading {

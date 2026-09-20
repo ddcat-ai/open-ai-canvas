@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -9,17 +12,51 @@ import (
 )
 
 func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
+	if run.ConversationID == "" {
+		run.ConversationID = run.ID
+		if run.ParentID != "" {
+			var parent model.CloudAgentExecution
+			if err := r.db.Select("id", "conversation_id", "title").First(&parent, "id = ? AND user_id = ?", run.ParentID, run.UserID).Error; err != nil {
+				return err
+			}
+			if parent.ConversationID != "" {
+				run.ConversationID = parent.ConversationID
+			} else {
+				run.ConversationID = parent.ID
+			}
+			run.Title = parent.Title
+		}
+	}
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error
 }
 func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
 	err := r.db.First(&run, "id = ? AND user_id = ?", id, userID).Error
+	if err == nil {
+		err = r.hydrateCloudAgent(&run)
+	}
 	return &run, err
+}
+
+func (r *Repository) hydrateCloudAgent(run *model.CloudAgentExecution) error {
+	if run.CheckpointVersion < 2 {
+		return nil
+	}
+	if err := r.db.Where("run_id = ? AND user_id = ?", run.ID, run.UserID).Order("sequence").Find(&run.Journal).Error; err != nil {
+		return err
+	}
+	if err := r.db.Where("run_id = ? AND user_id = ?", run.ID, run.UserID).Order("kind, sequence").Find(&run.Transcript).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
 	err := r.db.Where("user_id = ? AND active_task_id = ? AND status IN ?", userID, taskID, []string{"running", "queued"}).First(&run).Error
+	if err == nil {
+		err = r.hydrateCloudAgent(&run)
+	}
 	return &run, err
 }
 func (r *Repository) CloudAgentRoots() ([]model.Task, error) {
@@ -35,6 +72,13 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 		limit = 50
 	}
 	err := r.db.Where("(status IN ? OR cleanup_pending = ?) AND id > ?", []string{"running", "queued"}, true, after).Order("id").Limit(limit).Find(&runs).Error
+	if err == nil {
+		for i := range runs {
+			if err = r.hydrateCloudAgent(&runs[i]); err != nil {
+				break
+			}
+		}
+	}
 	return runs, err
 }
 
@@ -63,11 +107,87 @@ func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func
 		if err != nil {
 			return err
 		}
+		previousEvents := run.EventCount
+		previousEventBodies := make(map[int]string, len(run.Journal))
+		for _, event := range run.Journal {
+			previousEventBodies[event.Sequence] = event.EventJSON
+		}
+		previousMessages := make(map[string]string, len(run.Transcript))
+		for _, message := range run.Transcript {
+			previousMessages[fmt.Sprintf("%s:%d", message.Kind, message.Sequence)] = message.MessageJSON
+		}
 		if err = fn(run, New(tx)); err != nil {
 			return err
 		}
-		return tx.Save(run).Error
+		if run.EventCount < previousEvents || len(run.Journal) != run.EventCount {
+			return fmt.Errorf("cloud Agent journal cannot be truncated")
+		}
+		for sequence, body := range previousEventBodies {
+			if sequence > len(run.Journal) || run.Journal[sequence-1].Sequence != sequence || !sameJSONDocument(run.Journal[sequence-1].EventJSON, body) {
+				return fmt.Errorf("cloud Agent journal is append-only")
+			}
+		}
+		if err = tx.Omit("Journal", "Transcript").Save(run).Error; err != nil {
+			return err
+		}
+		for _, event := range run.Journal {
+			if event.Sequence <= previousEvents {
+				continue
+			}
+			if err = tx.Create(&event).Error; err != nil {
+				return err
+			}
+		}
+		for _, message := range run.Transcript {
+			key := fmt.Sprintf("%s:%d", message.Kind, message.Sequence)
+			if previousMessages[key] == message.MessageJSON {
+				continue
+			}
+			if err = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "run_id"}, {Name: "kind"}, {Name: "sequence"}}, DoUpdates: clause.AssignmentColumns([]string{"message_json"})}).Create(&message).Error; err != nil {
+				return err
+			}
+		}
+		for _, kind := range []string{"canonical", "history"} {
+			count := 0
+			for _, message := range run.Transcript {
+				if message.Kind == kind {
+					count++
+				}
+			}
+			if err = tx.Where("run_id = ? AND user_id = ? AND kind = ? AND sequence > ?", run.ID, run.UserID, kind, count).Delete(&model.CloudAgentMessageRecord{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
+}
+
+// sameJSONDocument compares event records by JSON meaning rather than source
+// bytes. Event payloads may contain json.RawMessage (for example tool arguments),
+// so decode/re-encode can legally normalize whitespace or object key order while
+// preserving the immutable event contract.
+func sameJSONDocument(left, right string) bool {
+	decode := func(raw string) (any, error) {
+		decoder := json.NewDecoder(bytes.NewReader([]byte(raw)))
+		decoder.UseNumber()
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err == nil {
+			return nil, fmt.Errorf("multiple JSON documents")
+		}
+		return value, nil
+	}
+	leftValue, leftErr := decode(left)
+	rightValue, rightErr := decode(right)
+	if leftErr != nil || rightErr != nil {
+		return left == right
+	}
+	leftCanonical, leftErr := json.Marshal(leftValue)
+	rightCanonical, rightErr := json.Marshal(rightValue)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftCanonical, rightCanonical)
 }
 
 func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCanvasMutation) error {

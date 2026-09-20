@@ -118,7 +118,7 @@ if [ "$require_all" = true ]; then
   fi
 fi
 
-for package_id in official-payment-wechat-native official-payment-alipay-page official-payment-xunhupay official-payment-zhifufm; do
+for package_id in official-payment-wechat-native official-payment-alipay-page official-payment-xunhupay official-payment-zhifufm official-payment-epay; do
   backend_dir="$root_dir/$package_id/backend"
   provider="$backend_dir/provider"
   package_file="$root_dir/$package_id.yingce-plugin"

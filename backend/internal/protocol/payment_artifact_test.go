@@ -17,6 +17,7 @@ var officialPaymentPackageIDs = []string{
 	"official-payment-alipay-page",
 	"official-payment-xunhupay",
 	"official-payment-zhifufm",
+	"official-payment-epay",
 }
 
 var officialPaymentTaggedArtifacts = []string{

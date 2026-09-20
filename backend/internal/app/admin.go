@@ -75,10 +75,11 @@ type AdminUserReference struct {
 }
 
 type AdminChannelReference struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Enabled bool     `json:"enabled"`
-	Models  []string `json:"models"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Enabled           bool     `json:"enabled"`
+	Models            []string `json:"models"`
+	ModelDisplayNames []string `json:"modelDisplayNames"`
 }
 
 type AdminReferenceData struct {
@@ -194,15 +195,19 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName})
 	}
 	for _, channel := range channels {
-		items, itemErr := s.repo.ChannelModels(channel.ID, false)
+		items, itemErr := s.repo.ChannelModels(channel.ID, true)
 		if itemErr != nil {
 			return nil, itemErr
 		}
 		models := make([]string, 0, len(items))
+		displayNames := make([]string, 0, len(items))
 		for _, item := range items {
-			models = append(models, item.ModelKey)
+			if item.Enabled {
+				models = append(models, item.ModelKey)
+			}
+			displayNames = append(displayNames, firstNonEmpty(strings.TrimSpace(item.DisplayName), item.ModelKey))
 		}
-		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models)})
+		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models), ModelDisplayNames: uniqueNonEmpty(displayNames)})
 	}
 	return result, nil
 }

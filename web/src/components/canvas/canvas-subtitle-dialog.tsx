@@ -9,8 +9,6 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
-import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { parseSrt, serializeSrtEntries } from "@/lib/timeline/srt-parser";
 import { DEFAULT_MAX_CHARS_PER_ENTRY, MAX_CHARS_PER_ENTRY_LIMIT, MIN_CHARS_PER_ENTRY, resegmentSrtEntries, splitLongEntry } from "@/lib/timeline/srt-resegment";
 import { buildFallbackHighlights, remapHighlightsAfterResegment } from "@/lib/timeline/subtitle-highlights";
@@ -62,8 +60,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
         return () => abortRef.current?.abort();
     }, []);
 
-    // 打开弹窗时解析视频地址，用于字幕叠加预览。
-    // 远端资源优先走节点同款缓存下载（对象 URL），失败再退回资源代理地址。
+    // 打开弹窗时解析视频地址，用于字幕叠加预览；远端资源统一走稳定的云端地址。
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
@@ -72,25 +69,9 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
         setVideoError(false);
         const storageKey = node.metadata?.storageKey || "";
         const fallback = node.metadata?.content || "";
-        const applyUrl = (url: string) => {
+        void resolveMediaUrl(storageKey, fallback).then((url) => {
             if (!cancelled) setVideoUrl(url);
-        };
-        if (resourceIdFromStorageKey(storageKey)) {
-            void cacheResourceObjectUrl(storageKey)
-                .then((cached) => {
-                    if (cancelled) return;
-                    if (cached) {
-                        setVideoUrl(cached);
-                    } else {
-                        void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                    }
-                })
-                .catch(() => {
-                    if (!cancelled) void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                });
-        } else {
-            void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-        }
+        });
         return () => {
             cancelled = true;
         };

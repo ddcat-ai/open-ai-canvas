@@ -42,7 +42,7 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	if task.CreationSubmissionID != nil {
 		return nil, creationConflict("智能创作重做需要新的报价批准，请回到创作会话继续")
 	}
-	if strings.HasPrefix(task.Operation, "cloud_agent") {
+	if task.AgentRunID != "" || task.GenerationID != "" || strings.HasPrefix(task.Operation, "cloud_agent") || taskHasAgentOrigin(task.InputJSON) {
 		return nil, BadAuthRequest("Agent 重试需要新的幂等键和预算校验，请回到 Agent 对话重新发送")
 	}
 	if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusCancelled {
@@ -102,8 +102,17 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	return taskForOutput(*task), nil
 }
 
-func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, id string) (*model.Task, error) {
+func (w *taskLifecycleCoordinator) cancelTask(ctx context.Context, userID string, id string) (*model.Task, error) {
+	return w.cancelTaskWithIntent(ctx, userID, id, model.TaskCancellationIntent{Source: model.TaskCancellationUserRequest, ActorID: userID})
+}
+
+func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userID string, id string, intent model.TaskCancellationIntent) (*model.Task, error) {
 	s := w.service
+	switch intent.Source {
+	case model.TaskCancellationUserRequest, model.TaskCancellationParentCancelled, model.TaskCancellationParentFailed, model.TaskCancellationWorkerContext:
+	default:
+		return nil, BadAuthRequest("取消请求缺少有效来源")
+	}
 	task, err := s.repo.TaskForUser(userID, id)
 	if err != nil {
 		return nil, err
@@ -120,7 +129,13 @@ func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, 
 	s.hydrateTaskProviderRequestID(task)
 	originalStatus := task.Status
 	now := time.Now()
-	cancelled, err := s.repo.CancelTaskIfStatus(userID, id, task.Status, now)
+	if intent.RequestedAt.IsZero() {
+		intent.RequestedAt = now
+	}
+	task.Error = "任务已取消"
+	recordTaskDiagnostic(task, "cancellation", "task_cancelled", taskSubmissionOutcome(task, originalStatus == model.TaskStatusQueued), "reconcile_cancellation", nil)
+	intent.Diagnostic = *task.Diagnostic
+	cancelled, err := s.repo.CancelTaskIfStatus(userID, id, task.Status, now, intent)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +154,7 @@ func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, 
 	task.Stage = "任务已取消"
 	task.Error = "任务已取消"
 	task.CompletedAt = &now
+	task.CancellationSource, task.CancellationActorID, task.CancellationRequestedAt = intent.Source, intent.ActorID, &intent.RequestedAt
 	s.cancelActiveTask(task.ID)
 
 	// 这些收尾操作必须幂等；任何单项失败都记录日志，但不能让已经落库的
@@ -146,7 +162,7 @@ func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, 
 	if err := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "取消任务后归并文本回放失败", err.Error())
 	}
-	_ = s.log(task.UserID, task.ID, "warn", "用户主动取消任务", "")
+	_ = s.log(task.UserID, task.ID, "warn", "任务取消请求已保存", task.CancellationSource)
 
 	if task.ProviderRequestID != "" {
 		// 上游取消可能需要轮询确认，不能阻塞取消接口；请求上下文也不能因
@@ -171,11 +187,11 @@ func (w *taskLifecycleCoordinator) cancelTask(_ context.Context, userID string, 
 	} else {
 		var billingErr error
 		if originalStatus == model.TaskStatusQueued {
-			billingErr = s.taskBilling().RefundBilling(task.BillingOrderID, "用户主动取消，且任务尚未开始执行")
+			billingErr = s.taskBilling().RefundBilling(task.BillingOrderID, "任务取消且尚未开始执行；来源："+intent.Source)
 		} else {
 			// running 任务可能已经发起上游调用但尚未把 request ID 写回，不能
 			// 直接退款后放任上游继续生成，先冻结为待核对更安全。
-			billingErr = s.taskBilling().MarkBillingUncertain(task.BillingOrderID, "用户取消时上游请求 ID 尚未确认，费用待核对")
+			billingErr = s.taskBilling().MarkBillingUncertain(task.BillingOrderID, "取消时上游请求 ID 尚未确认，费用待核对；来源："+intent.Source)
 		}
 		if billingErr != nil {
 			_ = s.log(task.UserID, task.ID, "error", "取消任务后处理积分失败，已保留人工核对线索", billingErr.Error())

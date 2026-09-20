@@ -9,6 +9,7 @@ import { EditorAssetIngest } from "./editor-asset-ingest";
 import { EditorTranscription } from "./editor-transcription";
 import { EditorExport } from "./editor-export";
 import { EditorAiAssistant } from "./editor-ai-assistant";
+import "./editor-shell.css";
 
 export const EDITOR_SHELL_PLUGIN_ID = "editor-shell";
 
