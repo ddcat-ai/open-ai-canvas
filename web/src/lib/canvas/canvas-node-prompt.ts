@@ -29,10 +29,11 @@ export function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string, opti
     const promptTemplateMetadata = clearPromptTemplate
         ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
         : {};
-    return synchronizeGenerationSpec({
-        ...node,
-        metadata: canvasNodeHasCommittedContent(node)
-            ? { ...metadata, ...promptTemplateMetadata, composerContent: prompt }
-            : { ...metadata, ...promptTemplateMetadata, prompt, composerContent: prompt },
-    });
+    // Pass prompt fields through the patch so synchronizeGenerationSpec can
+    // propagate composerContent/prompt into generationSpec.prompt and keep the
+    // canonical contract in sync with the editable draft.
+    const promptPatch = canvasNodeHasCommittedContent(node)
+        ? { composerContent: prompt }
+        : { prompt, composerContent: prompt };
+    return synchronizeGenerationSpec({ ...node, metadata: { ...metadata, ...promptTemplateMetadata } }, promptPatch);
 }

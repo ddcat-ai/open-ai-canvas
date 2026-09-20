@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { Camera, LoaderCircle, Wrench, X, XCircle } from "lucide-react";
+import { Camera, LoaderCircle, Wrench, X } from "lucide-react";
 
 import { listTools, type ToolScope, type ToolSummary } from "@/services/api/tools";
 import { FEED_TABS, SUB_TAB_TAGS, toAbsoluteUrl } from "./canvas-workspace-tool-panel";
@@ -149,7 +149,7 @@ export function CanvasChooseMotionPicker({
                                 }}
                                 onPointerDown={(event) => event.stopPropagation()}
                             >
-                                <XCircle className="size-3" />
+                                <X className="size-3" />
                             </button>
                         ) : null}
                     </>
