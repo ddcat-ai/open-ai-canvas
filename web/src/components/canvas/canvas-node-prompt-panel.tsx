@@ -108,6 +108,25 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
+    // 直接从提示词文本构建工具引用，确保 textarea 能即时渲染 chip，不依赖 render model 的异步传播。
+    const promptToolReferences = useMemo(() => {
+        const tokens = parseToolMentionTokens(prompt);
+        if (!tokens.length) return [];
+        const seen = new Set<number>();
+        const refs: CanvasResourceReference[] = [];
+        for (const { type, toolId, label, icon } of tokens) {
+            if (seen.has(toolId)) continue;
+            seen.add(toolId);
+            refs.push(buildToolMentionReference(toolId, label, type, icon));
+        }
+        return refs;
+    }, [prompt]);
+    const textareaReferences = useMemo(() => {
+        if (!promptToolReferences.length) return resolvedMentionReferences;
+        const existingIds = new Set(resolvedMentionReferences.map((r) => r.id));
+        const extras = promptToolReferences.filter((r) => !existingIds.has(r.id));
+        return extras.length ? [...resolvedMentionReferences, ...extras] : resolvedMentionReferences;
+    }, [resolvedMentionReferences, promptToolReferences]);
     // 当前提示词持有的九宫格工具图标，用于触发按钮回显已选工具。
     const activeNineGridIcon = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "nine_grid")?.icon ?? "Grid3x3", [prompt]);
     // 当前节点选中的风格工具，从 metadata 读取（参考 portraitTexture 模式），用于风格按钮回显。
@@ -539,7 +558,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     />
                     <CanvasResourceMentionTextarea
                         value={prompt}
-                        references={resolvedMentionReferences}
+                        references={textareaReferences}
                         onSelectReference={onAddReference ? (reference) => onAddReference(node.id, reference) : undefined}
                         includeAssetLibrary
                         onChange={updatePrompt}
