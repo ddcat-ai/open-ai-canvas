@@ -122,13 +122,15 @@ export function CanvasChooseImageStylePicker({
                 </div>
             )}
         >
-            <button
-                type="button"
-                className="canvas-node-fixed-chip relative overflow-hidden"
+            <div
+                role="button"
+                tabIndex={0}
+                className="canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
                 title={resolvedLabel ? `风格：${resolvedLabel}` : "选择风格"}
                 aria-expanded={actualOpen}
                 aria-haspopup="menu"
                 onClick={() => setOpen(true)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {activeToolId != null && activeCover ? (
@@ -156,7 +158,7 @@ export function CanvasChooseImageStylePicker({
                         <span className="truncate">风格</span>
                     </>
                 )}
-            </button>
+            </div>
         </Dropdown>
     );
 }

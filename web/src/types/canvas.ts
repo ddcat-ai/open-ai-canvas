@@ -457,6 +457,11 @@ export type CanvasNodeMetadata = {
         editMode?: "provider-mask" | "local-composite";
     };
     portraitTexture?: PortraitTextureSettings;
+    /** 风格工具配置，生成时自动拼接对应工具的 prompt。 */
+    styleTool?: {
+        id: number;
+        label: string;
+    };
     /** AI 审美批改节点只保存当前报告和输入指纹，不保存图片二进制。 */
     artCritique?: ArtCritiqueNodeState;
     /** 摄像机控制选项，启用后生成时自动追加摄影机/镜头/焦距/光圈提示词。 */

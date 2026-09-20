@@ -110,8 +110,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
     // 当前提示词持有的九宫格工具图标，用于触发按钮回显已选工具。
     const activeNineGridIcon = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "nine_grid")?.icon ?? "Grid3x3", [prompt]);
-    // 当前提示词持有的风格工具标签，用于风格按钮回显与原位替换。
-    const activeStyleTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "style"), [prompt]);
+    // 当前节点选中的风格工具，从 metadata 读取（参考 portraitTexture 模式），用于风格按钮回显。
+    const activeStyleTool = node.metadata?.styleTool != null ? { toolId: node.metadata.styleTool.id, label: node.metadata.styleTool.label } : undefined;
     // 当前提示词持有的特效工具标签，用于特效按钮回显与原位替换。
     const activeEffectTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "effect"), [prompt]);
     // 当前提示词持有的运镜工具标签（可多个），用于运镜按钮回显与菜单高亮。
@@ -276,13 +276,6 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         }
         const trimmedBase = basePrompt.replace(/\s*$/, "");
         updatePrompt(trimmedBase ? `${trimmedBase} ${insertText}` : insertText);
-    };
-
-    // 移除提示词中的 style 工具标签（连同其后一个空白），用于风格 chip 的关闭操作。
-    const removeStyleToolMention = () => {
-        if (!activeStyleTool) return;
-        const styleMentionRe = new RegExp(`\\s*@\\[tool:style:${activeStyleTool.toolId}:[^\\]]*\\](\\s|$)`, "g");
-        updatePrompt(prompt.replace(styleMentionRe, "").replace(/\s{2,}/g, " ").trim());
     };
 
     // 移除提示词中的 effect 工具标签（连同其后一个空白），用于特效 chip 的关闭操作。
@@ -525,8 +518,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         styleToolOpen={expanded ? expandedStyleToolOpen : styleToolOpen}
                         activeStyleToolId={activeStyleTool?.toolId}
                         activeStyleToolLabel={activeStyleTool?.label}
-                        onStyleToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "style", "Palette"))}
-                        onClearStyleTool={removeStyleToolMention}
+                        onStyleToolItem={(toolId, label) => onConfigChange(node.id, { styleTool: { id: toolId, label } })}
+                        onClearStyleTool={() => onConfigChange(node.id, { styleTool: undefined })}
                         onEffectToolOpenChange={expanded ? setExpandedEffectToolOpen : setEffectToolOpen}
                         effectToolOpen={expanded ? expandedEffectToolOpen : effectToolOpen}
                         activeEffectToolId={activeEffectTool?.toolId}

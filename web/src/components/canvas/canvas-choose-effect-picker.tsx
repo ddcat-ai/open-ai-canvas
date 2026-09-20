@@ -111,13 +111,15 @@ export function CanvasChooseEffectPicker({
                 </div>
             )}
         >
-            <button
-                type="button"
-                className="canvas-node-fixed-chip relative overflow-hidden"
+            <div
+                role="button"
+                tabIndex={0}
+                className="canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
                 title={resolvedLabel ? `特效：${resolvedLabel}` : "选择特效"}
                 aria-expanded={actualOpen}
                 aria-haspopup="menu"
                 onClick={() => setOpen(true)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {activeToolId != null && activeCover ? (
@@ -145,7 +147,7 @@ export function CanvasChooseEffectPicker({
                         <span className="truncate">特效</span>
                     </>
                 )}
-            </button>
+            </div>
         </Dropdown>
     );
 }

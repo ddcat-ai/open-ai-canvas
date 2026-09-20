@@ -137,6 +137,10 @@ export function useCanvasGenerationExecutor({
                     const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
                     const editingTextNode = mode === "text" && Boolean(sourceTextContent);
                     let generationPrompt = mode === "image" && sourceNode?.metadata?.portraitTexture ? buildPortraitTexturePrompt(prompt, sourceNode.metadata.portraitTexture) : prompt;
+                    if (mode === "image" && sourceNode?.metadata?.styleTool?.id != null) {
+                        const styleTool = sourceNode.metadata.styleTool;
+                        generationPrompt = `${generationPrompt}\n@[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
+                    }
                     if (mode === "image" && sourceNode?.metadata?.cameraControl?.enabled) {
                         const cameraControl = sourceNode.metadata.cameraControl;
                         const cameraPrompt = buildCameraPrompt({ cameraId: cameraControl.camera, lensId: cameraControl.lens, focalLengthMm: cameraControl.focalLength, apertureF: cameraControl.aperture });

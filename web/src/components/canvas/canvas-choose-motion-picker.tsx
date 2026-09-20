@@ -123,13 +123,15 @@ export function CanvasChooseMotionPicker({
                 </div>
             )}
         >
-            <button
-                type="button"
-                className="canvas-node-fixed-chip relative overflow-hidden"
+            <div
+                role="button"
+                tabIndex={0}
+                className="canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
                 title={resolvedLabel ? `运镜：${resolvedLabel}` : "选择运镜"}
                 aria-expanded={actualOpen}
                 aria-haspopup="menu"
                 onClick={() => setOpen(true)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {activeIdSet.size > 0 && activeCover ? (
@@ -157,7 +159,7 @@ export function CanvasChooseMotionPicker({
                         <span className="truncate">运镜</span>
                     </>
                 )}
-            </button>
+            </div>
         </Dropdown>
     );
 }
