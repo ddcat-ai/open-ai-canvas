@@ -23,8 +23,8 @@ const (
 // Source=frontend 时读取 Models；Source=system 时读取 Channels。
 type ModelCatalogResponse struct {
 	Source   ModelCatalogSource     `json:"source"`
-	Models   []PublicLogicalModel   `json:"models,omitempty"`
-	Channels []PublicChannelCatalog `json:"channels,omitempty"`
+	Models   []PublicLogicalModel   `json:"models"`
+	Channels []PublicChannelCatalog `json:"channels"`
 }
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）

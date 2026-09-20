@@ -2,6 +2,11 @@ import { http } from "@/services/api/request";
 import type { SkinDefinition } from "@/lib/skin-themes";
 
 export type PublicAppearance = {
+    studioLabel: string;
+    noticeEnabled: boolean;
+    noticeText: string;
+    noticeLinkText: string;
+    noticeLinkUrl: string;
     schemaVersion: number;
     brandName: string;
     brandSlug: string;
@@ -31,6 +36,11 @@ export type PublicAppearance = {
 };
 
 export type AdminAppearance = {
+    studioLabel: string;
+    noticeEnabled: boolean;
+    noticeText: string;
+    noticeLinkText: string;
+    noticeLinkUrl: string;
     schemaVersion: number;
     brandName: string;
     brandSlug: string;
@@ -81,6 +91,11 @@ export async function updateAdminAppearance(
     input: Pick<
         AdminAppearance,
         | "brandName"
+        | "studioLabel"
+        | "noticeEnabled"
+        | "noticeText"
+        | "noticeLinkText"
+        | "noticeLinkUrl"
         | "brandSlug"
         | "authHeroTitle"
         | "authHeroDescription"

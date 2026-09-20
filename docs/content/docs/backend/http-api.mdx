@@ -9,7 +9,18 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+模型目录 `/api/model-catalog` 的当前来源列表为空时仍返回 `[]`，不省略字段，以支持尚未配置渠道的首次登录。
+
 ## 信封
+
+### 站点及外观
+
+- `GET /api/public/appearance`：匿名读取 `data.appearance`，响应 `Cache-Control: no-store`。版本 8 新增 `studioLabel`（最多 60 字）、`noticeEnabled`、`noticeText`（最多 300 字）、`noticeLinkText`（最多 40 字）与 `noticeLinkUrl`（最多 2048 字节）。通知关闭时公开文本与链接为空，草稿仅管理员可读。
+- `GET /api/public/appearance/default-logo/{theme}`：读取本站数据库中的初始 SVG，`theme` 为 `light` 或 `dark`，返回 `image/svg+xml`；不存在时返回 404。
+- `GET/PATCH /api/admin/settings/appearance`：仅管理员读取/保存 `data.setting`；PATCH 保留省略字段。链接文字与地址须同时填写，只接受 HTTPS 或单斜线本站路径。开启通知必须有正文。
+- `DELETE /api/admin/settings/appearance`：仅管理员恢复数据库中的本站初始配置，返回 `data.setting`，不删除上传文件。更新与恢复均记录审计事件。
+
+### 通用响应
 
 成功：
 

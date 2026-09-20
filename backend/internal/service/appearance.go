@@ -31,7 +31,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 7
+	appearanceSchemaVersion        = 8
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -48,6 +48,11 @@ const (
 )
 
 type AppearanceSetting struct {
+	StudioLabel               string                `json:"studioLabel"`
+	NoticeEnabled             bool                  `json:"noticeEnabled"`
+	NoticeText                string                `json:"noticeText"`
+	NoticeLinkText            string                `json:"noticeLinkText"`
+	NoticeLinkURL             string                `json:"noticeLinkUrl"`
 	SchemaVersion             int                   `json:"schemaVersion"`
 	BrandName                 string                `json:"brandName"`
 	BrandSlug                 string                `json:"brandSlug"`
@@ -70,6 +75,11 @@ type AppearanceSetting struct {
 }
 
 type PublicAppearanceSetting struct {
+	StudioLabel               string              `json:"studioLabel"`
+	NoticeEnabled             bool                `json:"noticeEnabled"`
+	NoticeText                string              `json:"noticeText"`
+	NoticeLinkText            string              `json:"noticeLinkText"`
+	NoticeLinkURL             string              `json:"noticeLinkUrl"`
 	SchemaVersion             int                 `json:"schemaVersion"`
 	BrandName                 string              `json:"brandName"`
 	BrandSlug                 string              `json:"brandSlug"`
@@ -112,6 +122,7 @@ func defaultAppearanceSetting() AppearanceSetting {
 		SchemaVersion:     appearanceSchemaVersion,
 		BrandName:         defaultAppearanceBrandName,
 		BrandSlug:         defaultAppearanceBrandSlug,
+		StudioLabel:       "YINGHUI STUDIO",
 		AuthHeroTitle:     defaultAppearanceHeroTitle,
 		AuthVideoAutoplay: true,
 		LogoFrameEnabled:  true,
@@ -139,7 +150,11 @@ func (s *Service) Appearance() (*PublicAppearanceSetting, error) {
 		return nil, err
 	}
 	value = s.resolveAvailableAppearanceAssets(value)
-	return publicAppearanceSetting(setting, value), nil
+	result := publicAppearanceSetting(setting, value)
+	if err := s.projectInstallationAssets(result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) AdminAppearance(actor *model.User) (*AdminAppearanceSetting, error) {
@@ -161,6 +176,9 @@ func (s *Service) AdminAppearance(actor *model.User) (*AdminAppearanceSetting, e
 		result.CreatedAt = setting.CreatedAt
 		result.UpdatedAt = setting.UpdatedAt
 	}
+	if err := s.projectInstallationAssets(&result.Public); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -173,6 +191,10 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	value.BrandSlug = strings.ToLower(strings.TrimSpace(value.BrandSlug))
 	value.AuthHeroTitle = normalizeAppearanceCopy(value.AuthHeroTitle)
 	value.AuthHeroDescription = normalizeAppearanceCopy(value.AuthHeroDescription)
+	value.StudioLabel = normalizeAppearanceSingleLine(value.StudioLabel)
+	value.NoticeText = normalizeAppearanceCopy(value.NoticeText)
+	value.NoticeLinkText = normalizeAppearanceSingleLine(value.NoticeLinkText)
+	value.NoticeLinkURL = strings.TrimSpace(value.NoticeLinkURL)
 	value.LogoResourceID = strings.TrimSpace(value.LogoResourceID)
 	value.DarkLogoResourceID = strings.TrimSpace(value.DarkLogoResourceID)
 	value.AuthVideoResourceID = strings.TrimSpace(value.AuthVideoResourceID)
@@ -235,15 +257,30 @@ func (s *Service) ResetAppearance(actor *model.User) (*AdminAppearanceSetting, e
 
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	_, before, err := s.readAppearance()
+	current, before, err := s.readAppearance()
 	if err != nil {
 		return nil, err
 	}
-	if err := s.repo.DeleteSystemSetting(appearanceSettingKey); err != nil {
+	baseline, err := s.appearanceInstallation()
+	if err != nil {
 		return nil, err
 	}
 	after := defaultAppearanceSetting()
-	if err := s.appendAdminAudit(actor, "appearance.reset", "system_setting", appearanceSettingKey, "恢复影绘默认品牌标识", map[string]any{"before": before, "after": after}); err != nil {
+	if baseline != nil {
+		after = baseline.Setting
+	}
+	encoded, err := json.Marshal(after)
+	if err != nil {
+		return nil, err
+	}
+	setting := model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(encoded), UpdatedBy: actor.ID}
+	if current != nil {
+		setting.CreatedAt = current.CreatedAt
+	}
+	if err := s.repo.SaveSystemSetting(&setting); err != nil {
+		return nil, err
+	}
+	if err := s.appendAdminAudit(actor, "appearance.reset", "system_setting", appearanceSettingKey, "恢复本站初始配置", map[string]any{"before": before, "after": after}); err != nil {
 		return nil, err
 	}
 	return s.AdminAppearance(actor)
@@ -305,6 +342,10 @@ func (s *Service) OpenAppearanceAsset(slot string, rangeHeader string) (*Resourc
 func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string][]AdminResourceReferenceView {
 	result := make(map[string][]AdminResourceReferenceView)
 	_, value, err := s.readAppearance()
+	baseline, baselineErr := s.appearanceInstallation()
+	if baselineErr != nil {
+		err = baselineErr
+	}
 	if err != nil {
 		// Invalid appearance JSON must fail closed for deletion. The caller turns
 		// this sentinel into a visible blocked reference instead of deleting files.
@@ -321,6 +362,11 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.DarkLogoResourceID, title: "深色模式品牌 Logo"},
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
+	}
+	if baseline != nil {
+		for _, resourceID := range []string{baseline.Setting.LogoResourceID, baseline.Setting.DarkLogoResourceID, baseline.Setting.AuthVideoResourceID, baseline.Setting.AuthVideoPosterResourceID} {
+			candidates = append(candidates, struct{ resourceID, title string }{resourceID, "本站初始外观资源"})
+		}
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -340,14 +386,31 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, error) {
 	setting, err := s.repo.SystemSetting(appearanceSettingKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		baseline, baselineErr := s.appearanceInstallation()
+		if baselineErr != nil {
+			return nil, AppearanceSetting{}, baselineErr
+		}
+		if baseline != nil {
+			return nil, baseline.Setting, nil
+		}
 		return nil, defaultAppearanceSetting(), nil
 	}
 	if err != nil {
 		return nil, AppearanceSetting{}, err
 	}
 	value := defaultAppearanceSetting()
+	baseline, err := s.appearanceInstallation()
+	if err != nil {
+		return nil, AppearanceSetting{}, err
+	}
+	if baseline != nil {
+		value = baseline.Setting
+	}
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, AppearanceSetting{}, errors.New("外观配置格式无效")
+	}
+	if baseline == nil && value.SchemaVersion < 8 && value.BrandSlug != defaultAppearanceBrandSlug {
+		value.StudioLabel = strings.ToUpper(strings.ReplaceAll(value.BrandSlug, "-", " "))
 	}
 	value.SchemaVersion = appearanceSchemaVersion
 	value.BrandName = strings.TrimSpace(value.BrandName)
@@ -416,6 +479,30 @@ func (s *Service) appearanceAssetAvailable(slot string, resourceID string) bool 
 }
 
 func validateAppearanceSetting(value AppearanceSetting) error {
+	for _, field := range []struct {
+		value, label string
+		max          int
+	}{
+		{value.StudioLabel, "工作室角标", 60}, {value.NoticeText, "通知文案", 300}, {value.NoticeLinkText, "通知链接文字", 40},
+	} {
+		if err := validateAppearanceCopy(field.value, field.label, field.max, false); err != nil {
+			return err
+		}
+	}
+	if value.NoticeEnabled && value.NoticeText == "" {
+		return BadAuthRequest("开启通知条前请填写通知文案")
+	}
+	if value.NoticeLinkURL != "" {
+		parsed, err := url.Parse(value.NoticeLinkURL)
+		if err != nil || len(value.NoticeLinkURL) > 2048 || strings.ContainsAny(value.NoticeLinkURL, "\\\r\n\t") || parsed.User != nil || !((parsed.Scheme == "https" && parsed.Host != "") || (strings.HasPrefix(value.NoticeLinkURL, "/") && !strings.HasPrefix(value.NoticeLinkURL, "//"))) {
+			return BadAuthRequest("通知链接须为 HTTPS 地址或本站路径")
+		}
+		if value.NoticeLinkText == "" {
+			return BadAuthRequest("请填写通知链接文字")
+		}
+	} else if value.NoticeLinkText != "" {
+		return BadAuthRequest("请填写通知链接地址")
+	}
 	if value.BrandName == "" || utf8.RuneCountInString(value.BrandName) > 40 {
 		return BadAuthRequest("品牌名称必须为 1 到 40 个字符")
 	}
@@ -612,6 +699,8 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
+		StudioLabel:         value.StudioLabel,
+		NoticeEnabled:       value.NoticeEnabled,
 		SchemaVersion:       appearanceSchemaVersion,
 		BrandName:           value.BrandName,
 		BrandSlug:           value.BrandSlug,
@@ -633,6 +722,11 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		ICPFilingNumber:     value.ICPFilingNumber,
 		Configured:          setting != nil,
 		Revision:            revision,
+	}
+	if value.NoticeEnabled {
+		result.NoticeText = value.NoticeText
+		result.NoticeLinkText = value.NoticeLinkText
+		result.NoticeLinkURL = value.NoticeLinkURL
 	}
 	if setting != nil {
 		result.UpdatedAt = setting.UpdatedAt

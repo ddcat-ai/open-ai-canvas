@@ -4,7 +4,12 @@ import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 7,
+    schemaVersion: 8,
+    studioLabel: "YINGHUI STUDIO",
+    noticeEnabled: false,
+    noticeText: "",
+    noticeLinkText: "",
+    noticeLinkUrl: "",
     brandName: "影绘",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -60,7 +65,12 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
-        schemaVersion: 7,
+        schemaVersion: 8,
+        studioLabel: normalizeAppearanceCopy(value?.studioLabel, brandSlug.replace(/-+/g, " ").toLocaleUpperCase(), true),
+        noticeEnabled: value?.noticeEnabled === true && Boolean(value?.noticeText?.trim()),
+        noticeText: normalizeAppearanceCopy(value?.noticeText, "", true),
+        noticeLinkText: normalizeAppearanceCopy(value?.noticeLinkText, "", true),
+        noticeLinkUrl: safeNoticeURL(value?.noticeLinkUrl),
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -155,8 +165,18 @@ export function appearanceLogoURL(appearance: PublicAppearance, theme: "light" |
 }
 
 export function brandStudioLabel(appearance: PublicAppearance) {
-    if (appearance.brandName === DEFAULT_PUBLIC_APPEARANCE.brandName && appearance.brandSlug === DEFAULT_PUBLIC_APPEARANCE.brandSlug) return "YINGCE STUDIO";
-    return appearance.brandSlug.replace(/-+/g, " ").toLocaleUpperCase();
+    return appearance.studioLabel;
+}
+
+export function safeNoticeURL(value: unknown): string {
+    const candidate = typeof value === "string" ? value.trim() : "";
+    if (!candidate || /[\\\r\n\t]/.test(candidate)) return "";
+    if (candidate.startsWith("/") && !candidate.startsWith("//")) return candidate;
+    try {
+        const parsed = new URL(candidate);
+        if (parsed.protocol === "https:" && !parsed.username && !parsed.password) return candidate;
+    } catch { /* Invalid links are not rendered. */ }
+    return "";
 }
 
 function normalizeBrandSlug(value: unknown) {

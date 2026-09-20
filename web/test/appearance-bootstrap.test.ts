@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { appearanceLogoURL, normalizePublicAppearance } from "../src/stores/use-appearance-store";
+import { appearanceLogoURL, brandStudioLabel, normalizePublicAppearance, safeNoticeURL } from "../src/stores/use-appearance-store";
 
 test("initial HTML stays brand neutral until the public appearance is resolved", async () => {
     const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
@@ -119,11 +119,25 @@ test("object storage can adopt the configured English brand identifier without r
     expect(source).toContain("setting.pathPrefix || DEFAULT_OSS_PATH_PREFIX");
 });
 
-test("appearance management exposes a server-side reset to the built-in Yingce brand", async () => {
+test("appearance management restores the installation snapshot", async () => {
     const [pageSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/appearance.ts", import.meta.url)).text()]);
 
-    expect(pageSource).toContain("恢复影绘默认");
+    expect(pageSource).toContain("恢复本站初始配置");
     expect(pageSource).toContain("resetAdminAppearance()");
-    expect(pageSource).toContain("已上传文件仍保留在存储资源中");
+    expect(pageSource).toContain("已上传文件仍保留");
     expect(apiSource).toContain('http.delete<{ setting: AdminAppearance }>("/admin/settings/appearance")');
+});
+
+test("site content preserves saved text, empty studio labels and safe notification links", () => {
+    const saved = normalizePublicAppearance({ studioLabel: "MY STUDIO", noticeEnabled: true, noticeText: "第一行\n第二行", noticeLinkText: "查看", noticeLinkUrl: "/projects" });
+    expect(brandStudioLabel(saved)).toBe("MY STUDIO");
+    expect(saved.noticeEnabled).toBe(true);
+    expect(saved.noticeText).toBe("第一行\n第二行");
+    expect(saved.noticeLinkUrl).toBe("/projects");
+    expect(brandStudioLabel(normalizePublicAppearance({ studioLabel: "" }))).toBe("");
+    expect(normalizePublicAppearance({ noticeEnabled: true, noticeText: "  " }).noticeEnabled).toBe(false);
+    for (const link of ["javascript:alert(1)", "//evil.example", "/\\evil.example", "http://example.com", "https://user:pass@example.com", "https://example.com\n/hello"]) {
+        expect(safeNoticeURL(link)).toBe("");
+    }
+    expect(safeNoticeURL("https://example.com/news")).toBe("https://example.com/news");
 });

@@ -860,6 +860,11 @@ func (r *Repository) SaveSystemSetting(setting *model.SystemSetting) error {
 	return r.db.Save(setting).Error
 }
 
+// CreateSystemSettingIfMissing never overwrites an installation's saved values.
+func (r *Repository) CreateSystemSettingIfMissing(setting *model.SystemSetting) error {
+	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(setting).Error
+}
+
 func (r *Repository) SaveSystemSettings(settings ...*model.SystemSetting) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, setting := range settings {

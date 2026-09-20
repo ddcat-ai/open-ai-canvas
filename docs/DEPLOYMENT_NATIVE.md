@@ -102,6 +102,12 @@ curl -fsS https://canvas.yingpix.com/api/health
 
 DNS 未指向服务器或证书尚未签发时，只能确认本机两个健康接口，不能宣称公网 HTTPS 已上线。现有 `yingpix.com`、`app.yingpix.com`、`img.yingpix.com` 和 `/root/yingpix` 不在本部署范围内。
 
+## 站点品牌与运营文案
+
+管理员在 `https://canvas.yingpix.com/admin/settings/appearance` 修改品牌名称、工作室角标、浅深色 Logo、通知展示条、登录页文案、SEO 和页脚信息，点击“保存修改”后写入数据库。工作台已打开的页面在可见时每分钟更新通知，刷新页面可立即读取。
+
+首次运行此版本会把当前配置和默认 Logo 保存为本站初始快照；后续发布、重启和合并代码不会覆盖已保存的配置。“恢复本站初始配置”从数据库快照恢复。Logo 上传文件位于持久数据目录，数据库保存资源引用；备份和迁移需同时保留 PostgreSQL 与 `/var/lib/open-ai-canvas`。不要通过删除设置记录来重置品牌。
+
 ## 运行边界
 
 - 后端只绑定 `127.0.0.1:8080`，前端只绑定 `127.0.0.1:3000`，公网入口统一由 Caddy 提供。

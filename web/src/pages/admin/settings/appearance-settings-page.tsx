@@ -11,7 +11,7 @@ import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, nor
 import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
-import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
+import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE, safeNoticeURL } from "@/stores/use-appearance-store";
 
 type DraftFiles = Record<AppearanceAssetSlot, File | null>;
 type ResetState = Record<AppearanceAssetSlot, boolean>;
@@ -30,6 +30,11 @@ export default function AppearanceSettingsPage() {
     const [setting, setSetting] = useState<AdminAppearance | null>(null);
     const [brandName, setBrandName] = useState("");
     const [brandSlug, setBrandSlug] = useState("");
+    const [studioLabel, setStudioLabel] = useState("");
+    const [noticeEnabled, setNoticeEnabled] = useState(false);
+    const [noticeText, setNoticeText] = useState("");
+    const [noticeLinkText, setNoticeLinkText] = useState("");
+    const [noticeLinkUrl, setNoticeLinkUrl] = useState("");
     const [authHeroTitle, setAuthHeroTitle] = useState("");
     const [authHeroDescription, setAuthHeroDescription] = useState("");
     const [authVideoAutoplay, setAuthVideoAutoplay] = useState(true);
@@ -60,6 +65,11 @@ export default function AppearanceSettingsPage() {
     const dirty =
         Boolean(setting) &&
         (brandName.trim() !== setting?.brandName ||
+            studioLabel.trim() !== setting?.studioLabel ||
+            noticeEnabled !== setting?.noticeEnabled ||
+            normalizeDraftCopy(noticeText) !== setting?.noticeText ||
+            noticeLinkText.trim() !== setting?.noticeLinkText ||
+            noticeLinkUrl.trim() !== setting?.noticeLinkUrl ||
             brandSlug.trim().toLocaleLowerCase() !== setting?.brandSlug ||
             normalizeDraftCopy(authHeroTitle) !== setting?.authHeroTitle ||
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
@@ -81,6 +91,11 @@ export default function AppearanceSettingsPage() {
         setSetting(value);
         setBrandName(value.brandName);
         setBrandSlug(value.brandSlug);
+        setStudioLabel(value.studioLabel);
+        setNoticeEnabled(value.noticeEnabled);
+        setNoticeText(value.noticeText);
+        setNoticeLinkText(value.noticeLinkText);
+        setNoticeLinkUrl(value.noticeLinkUrl);
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
         setAuthVideoAutoplay(value.authVideoAutoplay);
@@ -191,6 +206,11 @@ export default function AppearanceSettingsPage() {
         if (!setting || saving || restoring) return;
         setBrandName(setting.brandName);
         setBrandSlug(setting.brandSlug);
+        setStudioLabel(setting.studioLabel);
+        setNoticeEnabled(setting.noticeEnabled);
+        setNoticeText(setting.noticeText);
+        setNoticeLinkText(setting.noticeLinkText);
+        setNoticeLinkUrl(setting.noticeLinkUrl);
         setAuthHeroTitle(setting.authHeroTitle);
         setAuthHeroDescription(setting.authHeroDescription);
         setAuthVideoAutoplay(setting.authVideoAutoplay);
@@ -229,8 +249,8 @@ export default function AppearanceSettingsPage() {
     const restoreBuiltInAppearance = () => {
         if (!setting?.configured || saving || refreshing || restoring) return;
         modal.confirm({
-            title: "恢复影绘默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面、SEO、备案和皮肤主题会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            title: "恢复本站初始配置？",
+            content: "品牌、Logo、通知条、登录页文案和皮肤将恢复为本站首次初始化时保存的配置。已上传文件仍保留。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -244,7 +264,7 @@ export default function AppearanceSettingsPage() {
                     Object.values(inputRefs).forEach((ref) => {
                         if (ref.current) ref.current.value = "";
                     });
-                    message.success("已恢复影绘默认品牌标识");
+                    message.success("已恢复本站初始配置");
                 } catch (error) {
                     message.error(error instanceof Error ? error.message : "恢复默认外观失败");
                     throw error;
@@ -266,6 +286,14 @@ export default function AppearanceSettingsPage() {
         const nextSeoKeywords = normalizeSingleLine(seoKeywords);
         const nextFooterCopyright = normalizeSingleLine(footerCopyright);
         const nextIcpFilingNumber = normalizeSingleLine(icpFilingNumber);
+        if (noticeEnabled && !noticeText.trim()) {
+            message.error("开启通知条前请填写通知文案");
+            return;
+        }
+        if ((noticeLinkUrl.trim() && !safeNoticeURL(noticeLinkUrl)) || Boolean(noticeLinkUrl.trim()) !== Boolean(noticeLinkText.trim())) {
+            message.error("通知链接须同时填写文字和 HTTPS 地址或本站路径");
+            return;
+        }
         if (!nextBrandName || Array.from(nextBrandName).length > 40) {
             message.error("品牌名称必须为 1 到 40 个字符");
             return;
@@ -283,6 +311,9 @@ export default function AppearanceSettingsPage() {
             return;
         }
         for (const [value, label, max] of [
+            [studioLabel.trim(), "工作室角标", 60],
+            [normalizeDraftCopy(noticeText), "通知文案", 300],
+            [noticeLinkText.trim(), "通知链接文字", 40],
             [nextSeoTitle, "SEO 标题", 70],
             [nextSeoDescription, "SEO 描述", 200],
             [nextSeoKeywords, "SEO 关键词", 300],
@@ -322,6 +353,11 @@ export default function AppearanceSettingsPage() {
             const updated = await updateAdminAppearance({
                 brandName: nextBrandName,
                 brandSlug: nextBrandSlug,
+                studioLabel: studioLabel.trim(),
+                noticeEnabled,
+                noticeText: normalizeDraftCopy(noticeText),
+                noticeLinkText: noticeLinkText.trim(),
+                noticeLinkUrl: noticeLinkUrl.trim(),
                 authHeroTitle: nextAuthHeroTitle,
                 authHeroDescription: nextAuthHeroDescription,
                 logoResourceId: ids.logo,
@@ -363,7 +399,7 @@ export default function AppearanceSettingsPage() {
     const previews = useAppearancePreviews(setting, files, resets);
     const lightLogoSelected = Boolean(files.logo || (!resets.logo && setting?.logoResourceId));
     const darkLogoSelected = Boolean(files["logo-dark"] || (!resets["logo-dark"] && setting?.darkLogoResourceId));
-    const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
+    const status = setting?.configured ? <AdminStatusBadge label="已保存到数据库" tone="success" /> : <AdminStatusBadge label="待初始化" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
     const draftBrandName = brandName.trim() || "站点名称";
     const selectedSkin = skinThemes.find((skin) => skin.id === skinId) || skinThemes[0] || DEFAULT_CLASSIC_SKIN;
@@ -401,7 +437,7 @@ export default function AppearanceSettingsPage() {
     };
 
     return (
-        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、搜索信息、备案展示与全站皮肤主题" scroll>
+        <AdminPageFrame title="站点及外观" description="管理品牌、Logo、通知条和登录页文案。保存后立即生效，更新代码保留本站配置。" scroll>
             {loading ? (
                 <AppearanceSkeleton />
             ) : loadError || !setting ? (
@@ -438,7 +474,7 @@ export default function AppearanceSettingsPage() {
                                 </Button>
                             ) : null}
                             <Button icon={<RotateCcw className="size-4" />} loading={restoring} disabled={!setting.configured || saving || refreshing} onClick={restoreBuiltInAppearance}>
-                                恢复影绘默认
+                                恢复本站初始配置
                             </Button>
                             <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving || restoring} onClick={requestRefresh}>
                                 刷新状态
@@ -453,13 +489,16 @@ export default function AppearanceSettingsPage() {
                         className="admin-appearance-section admin-appearance-brand-section"
                         icon={<Palette className="size-4" aria-hidden="true" />}
                         title="1. 设置品牌识别"
-                        description="中文品牌名用于主要界面，英文品牌标识用于英文角标和可安全品牌化的路径建议；不会改动代码包、数据库或部署标识。"
+                        description="品牌名和工作室角标用于界面展示，英文品牌标识用于资源路径建议。"
                         status={status}
                     >
                         <div className="admin-appearance-brand-layout">
                             <Form className="admin-appearance-form" layout="vertical" requiredMark={false} disabled={saving || refreshing || restoring}>
                                 <Form.Item label="品牌名称" extra="1–40 个字符。保存后同步到登录页、工作台、管理后台与浏览器标题。">
                                     <Input value={brandName} maxLength={40} showCount placeholder="输入品牌名称" onChange={(event) => setBrandName(event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="工作室角标" extra="登录页等位置的辅助品牌文字，留空不显示。">
+                                    <Input value={studioLabel} maxLength={60} showCount onChange={(event) => setStudioLabel(event.target.value)} />
                                 </Form.Item>
                                 <Form.Item label="英文品牌标识" extra="1–48 位小写字母、数字或连字符，例如 hima-studio。对象存储可一键采用该值作为路径前缀。">
                                     <Input
@@ -485,7 +524,7 @@ export default function AppearanceSettingsPage() {
                                     onSelect={selectFile}
                                     onReset={resetAsset}
                                     disabled={saving || refreshing || restoring}
-                                    emptyLabel={darkLogoSelected ? "将自动复用深色模式 Logo" : "未上传时使用项目原始 Logo"}
+                                    emptyLabel={darkLogoSelected ? "将自动复用深色模式 Logo" : "未上传时使用本站初始 Logo"}
                                 />
                                 <AssetPicker
                                     slot="logo-dark"
@@ -497,7 +536,7 @@ export default function AppearanceSettingsPage() {
                                     onSelect={selectFile}
                                     onReset={resetAsset}
                                     disabled={saving || refreshing || restoring}
-                                    emptyLabel={lightLogoSelected ? "将自动复用浅色模式 Logo" : "未上传时使用项目原始 Logo"}
+                                    emptyLabel={lightLogoSelected ? "将自动复用浅色模式 Logo" : "未上传时使用本站初始 Logo"}
                                 />
                                 <div className="admin-appearance-logo-frame-option">
                                     <div className="admin-appearance-logo-frame-copy">
@@ -519,6 +558,31 @@ export default function AppearanceSettingsPage() {
                                     <LogoThemePreview label="浅色界面" icon={<Sun />} src={previews.logoLight} dark={false} frameEnabled={logoFrameEnabled} />
                                     <LogoThemePreview label="深色界面" icon={<Moon />} src={previews.logoDark} dark frameEnabled={logoFrameEnabled} />
                                 </div>
+                            </div>
+                        </div>
+                    </SettingsSectionCard>
+
+                    <SettingsSectionCard icon={<Type className="size-4" />} title="通知展示条" description="显示在工作台顶部；支持换行和可选链接。关闭后保留草稿内容。">
+                        <div className="space-y-4 p-5">
+                            <Form className="admin-appearance-form" layout="vertical" requiredMark={false} disabled={saving || refreshing || restoring}>
+                                <Form.Item label="显示通知条">
+                                    <Switch checked={noticeEnabled} onChange={setNoticeEnabled} disabled={saving || refreshing || restoring} aria-label="显示通知条" />
+                                </Form.Item>
+                                <Form.Item label="通知文案">
+                                    <Input.TextArea value={noticeText} maxLength={300} showCount autoSize={{ minRows: 2, maxRows: 5 }} placeholder="例如：本周新功能已上线，欢迎体验。" onChange={(event) => setNoticeText(event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="链接文字（可选）">
+                                    <Input value={noticeLinkText} maxLength={40} onChange={(event) => setNoticeLinkText(event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="链接地址（可选）" extra="填写 HTTPS 地址或本站路径，例如 /projects。">
+                                    <Input value={noticeLinkUrl} maxLength={2048} onChange={(event) => setNoticeLinkUrl(event.target.value)} />
+                                </Form.Item>
+                            </Form>
+                            <div className="rounded border border-border p-3 text-sm" aria-label="通知条预览">
+                                <strong>{noticeEnabled ? "展示预览" : "已关闭 · 文案草稿"}</strong>
+                                <p className="mt-2 whitespace-pre-wrap break-words">
+                                    {noticeText || "填写文案后在这里预览"} <span className="underline">{noticeLinkText}</span>
+                                </p>
                             </div>
                         </div>
                     </SettingsSectionCard>
@@ -758,8 +822,8 @@ function useAppearancePreviews(setting: AdminAppearance | null, files: DraftFile
         const lightLogo = logoObjectURL || (!resets.logo && setting.logoResourceId ? setting.public.logoUrl : "");
         const darkLogo = darkLogoObjectURL || (!resets["logo-dark"] && setting.darkLogoResourceId ? setting.public.darkLogoUrl : "");
         return {
-            logoLight: lightLogo || darkLogo || DEFAULT_PUBLIC_APPEARANCE.logoUrl,
-            logoDark: darkLogo || lightLogo || DEFAULT_PUBLIC_APPEARANCE.darkLogoUrl,
+            logoLight: lightLogo || darkLogo || "/api/public/appearance/default-logo/light",
+            logoDark: darkLogo || lightLogo || "/api/public/appearance/default-logo/dark",
             video: videoObjectURL || (resets.video ? DEFAULT_PUBLIC_APPEARANCE.authVideoUrl : setting.public.authVideoUrl),
             poster: posterObjectURL || (resets.poster ? (customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl) : setting.public.authVideoPosterUrl),
         };

@@ -204,6 +204,9 @@ func TestAppearanceReusesSingleLogoAcrossThemes(t *testing.T) {
 
 func TestResetAppearanceRestoresBuiltInBrandWithoutDeletingResources(t *testing.T) {
 	svc, db, _, admin := newAppearanceTestService(t)
+	if err := svc.EnsureAppearance(); err != nil {
+		t.Fatal(err)
+	}
 	resource := model.Resource{ID: "brand-logo", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "brand/logo.png", MimeType: "image/png"}
 	if err := db.Create(&resource).Error; err != nil {
 		t.Fatal(err)
@@ -222,7 +225,7 @@ func TestResetAppearanceRestoresBuiltInBrandWithoutDeletingResources(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reset.Configured || reset.BrandName != defaultAppearanceBrandName || reset.BrandSlug != defaultAppearanceBrandSlug || reset.AuthHeroTitle != defaultAppearanceHeroTitle || reset.LogoResourceID != "" || reset.DarkLogoResourceID != "" || !reset.LogoFrameEnabled || reset.Public.Revision != "builtin" || reset.Public.LogoConfigured || reset.Public.DarkLogoConfigured {
+	if !reset.Configured || reset.BrandName != defaultAppearanceBrandName || reset.BrandSlug != defaultAppearanceBrandSlug || reset.AuthHeroTitle != defaultAppearanceHeroTitle || reset.LogoResourceID != "" || reset.DarkLogoResourceID != "" || !reset.LogoFrameEnabled || reset.Public.Revision == "builtin" || !reset.Public.LogoConfigured || !reset.Public.DarkLogoConfigured {
 		t.Fatalf("ResetAppearance() = %#v", reset)
 	}
 	var resourceCount int64

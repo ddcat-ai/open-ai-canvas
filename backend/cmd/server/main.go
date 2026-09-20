@@ -77,6 +77,9 @@ func run(ctx context.Context) error {
 	if err := svc.ValidateRuntime(); err != nil {
 		return err
 	}
+	if err := svc.EnsureAppearance(); err != nil {
+		return err
+	}
 	if err := svc.EnsureSystemChannelModels(); err != nil {
 		return err
 	}
