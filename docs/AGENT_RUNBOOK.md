@@ -73,21 +73,22 @@ git status --short
 - 状态：Vite 临时服务测试已验证；Nginx 配置已补充，容器运行验收待完成。
 - 问题现象：代码审查发现客户端和后端均已实现协作 WebSocket，但真实 Vite 代理未开启 `ws`，Nginx API 代理未转发升级头。经这些入口访问无法形成预期实时通道，客户端可能仅靠补偿拉取更新。
 - 影响范围：经过 Vite 开发入口或 Nginx 静态入口的画布内容实时通知；普通 REST 保存可以继续成功，容易掩盖问题。
-- 根本原因：WebSocket 的 HTTP Upgrade 不会自动继承普通 API 代理配置。
-- 不足的排查路线：只检查后端健康、REST 成功或 service 广播测试，均不能证明入口会转发升级请求；本轮未把它们作为 WebSocket 成功证据。
+- 根本原因：WebSocket 的 HTTP Upgrade 不会自动继承普通 API 代理配置。另在 CI 的 Bun 1.3.9 中直接运行 Vite，会因缺少 `socket.destroySoon()` 而握手超时；本机 Bun 1.4.0 通过不能替代固定 CI 版本验证。
+- 不足的排查路线：只检查后端健康、REST 成功或 service 广播测试，均不能证明入口会转发升级请求；直接在 Bun 测试进程内启动 Vite 还会混入运行时兼容差异，不能靠延长超时或跳过用例解决。
 - 已验证成功的正确路线：
   1. 为 `/api/canvas-projects/:id/collaboration/ws` 配置专用 Vite `ws: true` 规则。
-  2. 测试启动临时回显上游和真实 Vite 配置，确认握手、消息回传及开发代理 Origin；测试不读写业务数据库。
+  2. 测试启动临时回显上游，在独立 Node 子进程加载真实 Vite 配置，匹配 Vite CLI 的运行时；使用独立缓存和子进程环境，等待就绪端口后确认握手、消息回传及开发代理 Origin。启动有超时，结束时回收子进程；测试不读写业务数据库。已在 Bun 1.3.9 复现旧测试失败、验证修复后通过。
   3. Nginx 为同一路径转发 `Upgrade`、`Connection`，并保留原 Host 与转发头；上线前另做容器和外层代理验收。
 - 可直接复制执行的命令：
 
   ```bash
   cd web
   bun test test/canvas-collaboration-proxy.test.ts
+  npm exec --yes --package=bun@1.3.9 -- bun test test/canvas-collaboration-proxy.test.ts
   ```
 
 - 需要避免的操作：不要以接口 200 或服务健康代替 101 升级验证；不要为所有 API 开启不必要的长连接特殊配置；不要将临时代理测试称为真实账号协作验收。
-- 文档/配置同步：`web/vite.config.ts`、`nginx.conf`、本地开发专题、实时协作调研与待测试清单。
+- 文档/配置同步：`web/vite.config.ts`、`nginx.conf`、代理测试及 Node fixture、本地开发专题、实时协作调研与待测试清单。
 - 关联项目更新记录：`CHANGELOG.md` 的 `Unreleased` 条目。
 
 ## 依赖安装
@@ -209,6 +210,18 @@ git status --short
 暂无已归档的数据库故障。数据库开发数据必须使用 Git 忽略的 `.local/project-workbench-debug`；不要把真实数据库文件、连接串或账号信息提交到仓库。
 
 ## 测试
+
+### RB-20260920-07：素材删除测试与异步 Outbox worker 争用内存 SQLite
+
+- 日期：2026-09-20
+- 现象：CI 的已取消任务产物删除、过期归档素材清理用例在查询 `resource_deletion_jobs` 时偶发 `database table is locked`；应用层测试包正常结束，非超时。
+- 影响范围：`internal/app/resource_delete_test.go` 的共享内存 SQLite 夹具；本次未修改的上游素材删除测试。
+- 根因：删除事务提交后会异步消费 Outbox，夹具允许多个连接，断言查询与 worker 的 claim 事务争用共享缓存表锁。表存在，引用拒绝也已正确发生。
+- 失败路线：单次本地专项可能通过，不能排除竞态；补建协作表或只延长测试时限不解决该锁冲突。
+- 已验证成功的路线：仅在该组测试夹具设置 `SetMaxOpenConns(1)`，串行化断言和 worker 的数据库访问，保留资源引用、事务回滚、物理对象及 Outbox 断言；生产连接池及删除逻辑不改。相关用例连续三轮通过，共 42 条测试/子测试通过结果。
+- 可复制命令：在 backend 目录执行 `go test ./internal/app -run 'Test(Delete.*Asset|ExpiredArchivedAssetCleanup|ResourceDeletionWorker)' -count=3 -timeout 10m`，并检查 PR 的后端全包 CI。
+- 避免操作：不跳过素材保护用例，不吞掉数据库查询错误，不用固定 sleep 等待 worker，不将内存夹具验证描述为 PostgreSQL 并发验收。
+- 同步要求：CHANGELOG、待测试清单、PR 验证说明与本地梳理报告同步实际结果。
 
 ### RB-20260920-03：合并成功后未及时更新接收画布
 
