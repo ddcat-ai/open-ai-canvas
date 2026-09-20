@@ -28,11 +28,11 @@ describe("channel model editor drafts", () => {
     });
     test("capability changes clear old selectors but preserve money and billing units", () => {
         const draft = initialChannelModelValues(null, protocols);
-        const tier = { ...defaultPriceTier("advanced"), billingMode: "per_second" as const, unitPrice: 2.5, operation: "text_to_video", resolution: "1080p", videoSeconds: 5, imageCount: 2 };
+        const tier = { ...defaultPriceTier("advanced"), billingMode: "per_second" as const, unitPrice: 2.5, operation: "text_to_video", resolution: "1080p", videoSeconds: 5, videoGenerateAudio: "false", imageCount: 2 };
         const next = changeChannelModelCapability({ ...draft, capability: "image", protocol: "video", providerModelKey: "gpt-image-2", priceTiers: [tier] }, protocols);
         expect(next.protocol).toBe("image");
         expect(next.capabilityConfig).toEqual(defaultModelCapabilityConfig("image", "gpt-image-2"));
-        expect(next.priceTiers[0]).toMatchObject({ unitPrice: 2.5, billingMode: "per_second", operation: "*", resolution: "*", videoSeconds: 0, imageCount: 0 });
+        expect(next.priceTiers[0]).toMatchObject({ unitPrice: 2.5, billingMode: "per_second", operation: "*", resolution: "*", videoSeconds: 0, videoGenerateAudio: "*", imageCount: 0 });
         expect(tier.operation).toBe("text_to_video");
         expect(() => validateChannelModelPrices(next)).toThrow("按秒");
     });
@@ -63,15 +63,32 @@ describe("pricing write validation", () => {
             expect(() => validateChannelModelPrices({ ...draft, priceTiers: [{ ...defaultPriceTier(), unitPrice: unitPrice as number }] })).toThrow("有效数值");
         }
     });
-    test("a new protocol cannot silently convert Token pricing to per request", () => {
-        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "video", priceTiers: [{ ...defaultPriceTier(), billingMode: "token", outputTokenPrice: 8 }] })).toThrow("不支持 Token");
+    test("saves video Token prices with newapi-channel-2 and other video protocols without changing billing units", () => {
+        for (const protocol of ["newapi-channel-2", "volcengine-jimeng-video", "video"]) {
+            const priceTiers = [{ ...defaultPriceTier(), billingMode: "token" as const, outputTokenPrice: 8 }];
+            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol, priceTiers })).not.toThrow();
+            expect(priceTiers[0].billingMode).toBe("token");
+            expect(priceTiers[0].outputTokenPrice).toBe(8);
+        }
     });
-    test("validates all text Token prices and the video Token minimum", () => {
+    test("rejects Token pricing after switching to image or audio", () => {
+        for (const capability of ["image", "audio"] as const) {
+            expect(() => validateChannelModelPrices({ ...draft, capability, priceTiers: [{ ...defaultPriceTier(), billingMode: "token", outputTokenPrice: 8 }] })).toThrow("不支持 Token");
+        }
+    });
+    test("validates all text Token prices and accepts free video Token pricing", () => {
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [{ ...defaultPriceTier(), billingMode: "token", inputTokenPrice: NaN }] })).toThrow();
         const video = { ...draft, capability: "video" as const, protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier(), billingMode: "token" as const }] };
-        expect(() => validateChannelModelPrices(video)).toThrow("至少为");
+        expect(() => validateChannelModelPrices(video)).not.toThrow();
         video.priceTiers[0].outputTokenPrice = 0.000001;
         expect(() => validateChannelModelPrices(video)).not.toThrow();
+    });
+    test("rejects removed video conditions and accepts visible operation or resolution matches", () => {
+        for (const hiddenCondition of [{ videoGenerateAudio: "false" }, { videoSeconds: 5 }, { imageCount: 2 }]) {
+            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", ...hiddenCondition }] })).toThrow("匹配条件");
+        }
+        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), operation: "image_to_video" }] })).not.toThrow();
+        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), resolution: "1080p" }] })).not.toThrow();
     });
 });
 

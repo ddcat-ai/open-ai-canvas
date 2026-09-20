@@ -54,6 +54,7 @@ export async function executeImageGeneration({
     const count = getGenerationCount(generationConfig.count);
     const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
     const isImageNode = sourceNode?.type === CanvasNodeType.Image;
+    const isExistingImageNode = isImageNode && Boolean(sourceNode?.metadata?.content);
     const reuseSourceNode = canGenerateImageInPlace(sourceNode);
     const retired = reuseSourceNode && sourceNode ? retireImageBatchChildren(sourceNode, canvasNodes, canvasConnections) : { nodes: canvasNodes, connections: canvasConnections, removedIds: [] as string[] };
     const workingNodes = retired.nodes;
@@ -133,9 +134,10 @@ export async function executeImageGeneration({
             failedPromptFingerprint: undefined,
         },
     }));
+    const connectsSelf = !isExistingImageNode || referenceImages.some((img) => img.id === nodeId);
     const batchConnections = [
         ...(reuseSourceNode ? [] : imageGenerationReferenceConnections(nodeId, rootId, workingNodes, workingConnections, nanoid)),
-        ...(reuseSourceNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]),
+        ...(reuseSourceNode || !connectsSelf ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]),
         ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId })),
     ];
 

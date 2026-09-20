@@ -4,7 +4,7 @@ import { CheckCircle2, CloudUpload, Eye, LoaderCircle, RotateCcw, TriangleAlert,
 import type { GenerationTask } from "@/services/api/task-center";
 import type { MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { canvasThemes } from "@/lib/canvas-theme";
-import type { CanvasAgentChange } from "./use-canvas-agent-operations";
+import type { CanvasOperationChange } from "./use-canvas-operation-history";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 
 export type CanvasUploadStatus = {
@@ -113,7 +113,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
     );
 }
 
-export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose }: { change: CanvasAgentChange; theme: CanvasTheme; onView: () => void; onUndo: () => void; onClose: () => void }) {
+export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onClose }: { change: CanvasOperationChange; theme: CanvasTheme; onView: () => void; onUndo: () => void; onClose: () => void }) {
     return (
         <div
             data-canvas-no-zoom

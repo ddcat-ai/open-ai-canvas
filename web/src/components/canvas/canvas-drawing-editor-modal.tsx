@@ -6,7 +6,7 @@ import { Check, Maximize2, X } from "lucide-react";
 import type { CanvasDrawingEditorHandle } from "@/components/canvas/canvas-drawing-editor-types";
 import { drawingEngineForNode, drawingEngineLabel, isDrawingEngineAvailable } from "@/lib/canvas/canvas-drawing-engine";
 import { loadCanvasDrawing, saveCanvasDrawing, type CanvasDrawingSnapshot } from "@/lib/canvas/canvas-drawing-storage";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
@@ -23,7 +23,7 @@ type CanvasDrawingEditorModalProps = {
 
 export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSaved }: CanvasDrawingEditorModalProps) {
     const { message } = App.useApp();
-    const colorScheme = useThemeStore((state) => state.theme);
+    const colorScheme = useActiveTheme();
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const engine = drawingEngineForNode(node);
     const currentRef = useRef<CanvasDrawingSnapshot | null>(null);

@@ -7,11 +7,12 @@ type SpotlightSurfaceProps = Omit<HTMLMotionProps<"div">, "children"> & {
     children?: ReactNode;
     spotlightColor: string;
     spotlightRadius?: number;
+    contentClassName?: string;
 };
 
 // 基于 Aceternity Card Spotlight 改造：只保留中性指针高光，避免高频工具面板持续动画。
 export const SpotlightSurface = forwardRef<HTMLDivElement, SpotlightSurfaceProps>(function SpotlightSurface(
-    { children, className, spotlightColor, spotlightRadius = 220, onPointerEnter, onPointerLeave, onPointerMove, ...props },
+    { children, className, contentClassName, spotlightColor, spotlightRadius = 220, onPointerEnter, onPointerLeave, onPointerMove, ...props },
     ref,
 ) {
     const mouseX = useMotionValue(0);
@@ -45,7 +46,7 @@ export const SpotlightSurface = forwardRef<HTMLDivElement, SpotlightSurfaceProps
                 className="pointer-events-none absolute -inset-px z-0 rounded-[inherit] opacity-0 transition-opacity duration-150 group-hover/spotlight:opacity-100"
                 style={{ backgroundColor: spotlightColor, maskImage, WebkitMaskImage: maskImage, opacity: reducedMotion ? 0 : undefined }}
             />
-            <div className="relative z-[1] flex min-h-0 flex-1 flex-col">{children}</div>
+            <div className={cn(contentClassName ?? "relative z-[1] flex min-h-0 flex-1 flex-col")}>{children}</div>
         </motion.div>
     );
 });

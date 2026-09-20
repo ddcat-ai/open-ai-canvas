@@ -71,7 +71,7 @@ function unwrapTransportError(error: unknown): never {
     if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
         const status = error.response?.status;
         const code = error.response?.data?.code;
-        throw new ApiError(error.response?.data?.msg || error.message || "请求失败", {
+        throw new ApiError(error.response?.data?.msg || transportFailureMessage(status, error.message), {
             status,
             code,
             reason: error.response?.data?.reason,
@@ -81,6 +81,19 @@ function unwrapTransportError(error: unknown): never {
         });
     }
     throw error;
+}
+
+function transportFailureMessage(status?: number, fallback?: string) {
+    switch (status) {
+        case 502:
+            return "后端服务暂时不可用，请稍后重试";
+        case 503:
+            return "服务暂时不可用，请稍后重试";
+        case 504:
+            return "服务响应超时，请稍后重试";
+        default:
+            return fallback || "请求失败";
+    }
 }
 
 function isRetryableStatus(status?: number) {

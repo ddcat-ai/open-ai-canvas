@@ -1,4 +1,4 @@
-import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video, WandSparkles } from "lucide-react";
+import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Table2, Type, Video, WandSparkles } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
@@ -154,6 +154,8 @@ const BUILTIN_NODE_TRAITS = {
         showInCreateMenu: true,
         inputKind: "text",
     },
+    [CanvasNodeType.BatchTable]: { label: "批量创作表", icon: <Table2 />, minSize: { width: 1080, height: 420 }, showInCreateMenu: true, acceptsInputKind: "image", inputKind: "text", resourceKind: () => null },
+    [CanvasNodeType.MediaConversion]: { label: "转换", icon: <WandSparkles />, minSize: { width: 400, height: 360 }, showInCreateMenu: true, resourceKind: (node: CanvasNodeData) => { const c = node.metadata?.mediaConversion; return c?.status === "completed" && c.resultStorageKey ? (c.outputKind === "video" ? "video" : "image") : null; }, acceptsInputKind: ["image", "video"], maxInputCount: 1, inputKind: "image" },
     [CanvasNodeType.ColorGrade]: {
         label: "调色",
         icon: <Palette />,
@@ -163,20 +165,6 @@ const BUILTIN_NODE_TRAITS = {
         // 会让它永远不被当成素材、从而进不了生成输入。没有上游时由
         // readReferenceImage 返回 null 跳过，不需要在这里提前判空。
         resourceKind: () => "image",
-        inputKind: "image",
-    },
-    [CanvasNodeType.MediaConversion]: {
-        label: "转换",
-        icon: <WandSparkles />,
-        minSize: { width: 400, height: 360 },
-        showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => {
-            const conversion = node.metadata?.mediaConversion;
-            if (conversion?.status !== "completed" || !conversion.resultStorageKey) return null;
-            return conversion.outputKind === "video" ? "video" : "image";
-        },
-        acceptsInputKind: ["image", "video"],
-        maxInputCount: 1,
         inputKind: "image",
     },
 } satisfies Record<string, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;

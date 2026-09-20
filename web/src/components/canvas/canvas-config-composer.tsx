@@ -5,7 +5,7 @@ import { FileText, Image as ImageIcon, Music2, Pencil, Sparkles, Video, X } from
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { generationInputMentionLabel, normalizeGenerationNodeMentionTokens, type NodeGenerationInput } from "./canvas-node-generation";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
@@ -45,7 +45,7 @@ type ComposerCandidate =
 export const CONFIG_REFERENCE_PATTERN = /@\[node:([^\]]+)\]|@(图片|视频|音频|文本|角色|绘图)(\d+)/g;
 
 export function CanvasConfigComposer({ value, inputs, skillReferences = [], generationMode, metadata, onChange, onMetadataChange, onClose, workspaceMode = "professional" }: CanvasConfigComposerProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const editorRef = useRef<HTMLDivElement>(null);
     const composingRef = useRef(false);
     const [mention, setMention] = useState<MentionState | null>(null);

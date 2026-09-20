@@ -21,7 +21,7 @@ are preserved in LICENSE.
 Material changes in this repository are maintained by ddcat. They include a
 multi-user Go backend, task processing and analytics, private resource
 storage, canvas sharing, film-production workflows, canvas UI refactoring,
-and Canvas Agent integrations.
+and cloud Agent integrations.
 
 Third-party packages remain subject to the licenses declared by their
 respective authors. Product names and logos under web/public/icons are the

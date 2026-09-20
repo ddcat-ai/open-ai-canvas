@@ -28,11 +28,11 @@ test("Create keeps optimistic messages when the first local task binds immediate
     }));
     const bound = updateCreationConversationSnapshot(optimistic, "conversation-0001", (conversation) => ({
         ...conversation,
-        messages: conversation.messages.map((message) => (message.id === "assistant-0001" ? { ...message, taskIds: ["local:dreamina-cli:task-0001"] } : message)),
+        messages: conversation.messages.map((message) => (message.id === "assistant-0001" ? { ...message, taskIds: ["backend-task-0001"] } : message)),
     }));
 
     expect(bound[0].messages).toHaveLength(2);
-    expect(bound[0].messages[1]).toMatchObject({ id: "assistant-0001", taskIds: ["local:dreamina-cli:task-0001"] });
+    expect(bound[0].messages[1]).toMatchObject({ id: "assistant-0001", taskIds: ["backend-task-0001"] });
 });
 
 test("Create history deletion removes only the selected conversation snapshot", () => {

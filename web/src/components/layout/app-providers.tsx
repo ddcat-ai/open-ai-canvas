@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useLayoutEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { App, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
@@ -9,7 +9,8 @@ import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader"
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { applySkinTheme } from "@/lib/skin-themes";
 import { appQueryClient } from "@/lib/query-client";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -22,11 +23,11 @@ function ClientRootBoundary({ children }: { children: ReactNode }) {
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
-    const theme = useThemeStore((state) => state.theme);
+    const theme = useActiveTheme();
     const dark = theme === "dark";
     const appearance = useAppearanceStore((state) => state.appearance);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = theme;
         applySkinTheme(appearance.activeSkin, theme);
@@ -35,11 +36,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
     // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。
-    // 只精确匹配该路径；生产构建中 import.meta.env.DEV 为 false，本分支被摇树删除。
-    const isolateDevRepro = import.meta.env.DEV && typeof window !== "undefined" && window.location.pathname === "/dev/director-repro";
+    // 与启动入口共用精确路径边界；生产构建中 import.meta.env.DEV 为 false，始终不启用隔离。
+    const isolateDevRepro = typeof window !== "undefined" && isIsolatedDirectorRepro(import.meta.env.DEV, window.location.pathname);
 
     return (
-        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)}>
+        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)} wave={{ disabled: true }}>
             <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (

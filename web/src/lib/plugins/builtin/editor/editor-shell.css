@@ -1,0 +1,73 @@
+@layer utilities {
+    /* Editor workbench scrolling and range controls belong to the editor plugin, not the app shell. */
+    .director-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+    .director-scroll::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .director-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .director-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 9999px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+    .director-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+        background-clip: padding-box;
+        border: 2px solid transparent;
+    }
+    .director-scroll::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    .editor-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        display: block;
+        width: 100%;
+        height: 18px;
+        background: transparent;
+        cursor: pointer;
+    }
+    .editor-slider::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--director-sequencer-border);
+        box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
+    }
+    .editor-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        margin-top: -5px;
+        height: 14px;
+        width: 14px;
+        border-radius: 9999px;
+        background: var(--director-dock-fg-strong);
+        border: 2px solid var(--director-sequencer-surface);
+        box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+        transition: transform 0.12s ease;
+    }
+    .editor-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+    }
+    .editor-slider::-moz-range-track {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--director-sequencer-border);
+        box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
+    }
+    .editor-slider::-moz-range-thumb {
+        height: 14px;
+        width: 14px;
+        border-radius: 9999px;
+        background: var(--director-dock-fg-strong);
+        border: 2px solid var(--director-sequencer-surface);
+        box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+    }
+}

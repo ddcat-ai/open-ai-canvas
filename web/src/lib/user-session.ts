@@ -1,14 +1,15 @@
 import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
-import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
+import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
-import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { CONFIG_STORE_KEY, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { imageSizeConfigWithPresets } from "@/lib/image-size-presets";
 import { useUserStore } from "@/stores/use-user-store";
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
 import { initializeRemoteUserDataSession, installRemoteUserDataAutoSync, resetRemoteUserDataSync, withRemoteUserDataSyncExclusive } from "@/services/user-data-sync";
@@ -89,53 +90,13 @@ export async function refreshSystemChannels() {
     useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
 }
 
-// 模型目录来源决定数据形状；这里统一做运行时收口，避免畸形响应被当成“空目录”写入用户配置。
+// 目录仅接受系统渠道模型，避免畸形响应被当成空目录写入配置。
 function modelCatalogChannels(catalog: ModelCatalogResponse): ModelChannel[] {
-    if (catalog.source === "frontend") {
-        if (!Array.isArray(catalog.models)) throw new Error("模型目录响应缺少前台模型列表");
-        return managedModelChannels(catalog.models);
-    }
     if (catalog.source === "system") {
         if (!Array.isArray(catalog.channels)) throw new Error("模型目录响应缺少系统渠道列表");
         return systemChannelModelChannels(catalog.channels);
     }
     throw new Error("模型目录响应来源无效");
-}
-
-function managedModelChannels(models: PublicLogicalModel[]) {
-    const availableModels = models.filter((item) => item.available);
-    if (!availableModels.length) return [];
-    const managed: ModelChannel = {
-        id: PUBLIC_MODEL_CATALOG_ID,
-        name: "平台模型",
-        baseUrl: "/api",
-        apiKey: "system",
-        apiFormat: "openai",
-        scope: "system",
-        enabled: true,
-        models: availableModels.map((item) => item.id),
-        modelAliases: Object.fromEntries(availableModels.flatMap((item) => (item.legacyModelIds || []).map((legacyID) => [legacyID, item.id]))),
-        modelCosts: availableModels.map((item) => ({
-            model: item.id,
-            displayName: item.name,
-            description: item.description,
-            icon: item.icon,
-            capability: item.capability,
-            pricePolicy: item.pricePolicy,
-            billingMode: item.billingMode,
-            unitPriceMicrocredits: item.unitPriceMicrocredits,
-            inputTokenPriceMicrocredits: item.inputPriceMicrocredits,
-            outputTokenPriceMicrocredits: item.outputPriceMicrocredits,
-            cachedTokenPriceMicrocredits: item.cachedPriceMicrocredits,
-            capabilityConfig: projectLogicalCapability(item.capabilitySpec, item.defaultOptions),
-            logicalModelId: item.id,
-            logicalCapabilitySpec: item.capabilitySpec,
-            logicalCapabilityProfiles: item.capabilityProfiles,
-            logicalPriceTiers: item.priceTiers,
-            defaultOptions: item.defaultOptions,
-        })),
-    };
-    return [managed];
 }
 
 // 系统渠道模型转换为前端配置格式
@@ -177,7 +138,8 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                 return {
                     model: model.modelKey,
                     displayName: model.displayName,
-                    description: "",
+                    channelLabel: model.channelLabel,
+                    description: model.description || "",
                     icon: model.icon || "",
                     capability: model.capability as ModelCapability,
                     protocol: model.protocol as any,
@@ -198,7 +160,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
     });
 }
 
-function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
+export function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
     const projected = defaultModelCapabilityConfig();
     if (spec.capability === "image" && projected.image) {
         projected.image.references.maxImages = spec.inputs?.image?.max ?? 0;
@@ -208,11 +170,13 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
         projected.image.transparentBackground = { supported: false, default: false };
         const sizeOption = spec.options?.size || spec.options?.aspectRatio;
         const sizeValues = stringValues(sizeOption);
-        const sizeAllowsCustom = sizeValues.includes("*");
+        const sizeAllowsCustom = sizeValues.includes("*") || Boolean(spec.imageSize?.allowCustom);
         const concreteSizeValues = sizeValues.filter((value) => value !== "*");
         const sizePresets = concreteSizeValues.length ? concreteSizeValues : sizeAllowsCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
-        if (sizePresets.length || sizeAllowsCustom) {
-            projected.image!.size = { parameter: "size", values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+        if (sizePresets.length || sizeAllowsCustom || spec.imageSize?.presets?.length) {
+            const parameter = spec.imageSize?.parameter === "aspect_ratio" || spec.imageSize?.parameter === "size" ? spec.imageSize.parameter : "size";
+            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+            if (spec.imageSize?.presets?.length) projected.image.size = imageSizeConfigWithPresets(projected.image, spec.imageSize.presets);
         }
         applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {
             projected.image!.quality = { supported: true, values, default: initial };

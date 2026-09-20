@@ -6,7 +6,7 @@ import { applyGenerationConsumerEffect } from "../src/services/generation-consum
 import { createGenerationTaskMaterializer, type GenerationTaskEffectResult, type GenerationTaskEffectStore } from "../src/services/generation-task-materializer";
 import { buildBackendToolRequests } from "../src/services/api/image";
 
-test("managed canvas agent task keeps tool definitions and tool results", () => {
+test("managed cloud agent task keeps tool definitions and tool results", () => {
     const requests = buildBackendToolRequests(
         [
             { role: "user", content: "读取画布" },

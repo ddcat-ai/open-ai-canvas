@@ -18,7 +18,7 @@ import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/gen
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_COMPOSER_MIN_HEIGHT, STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import type {
     CanvasGenerationBatch,
@@ -135,7 +135,7 @@ export function CanvasScriptNodeContent({
     onScrollTopChange: (scrollTop: number) => void;
     workspaceMode?: CanvasWorkspaceMode;
 }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const effectiveConfig = useEffectiveConfig();
     const generationConfig = buildGenerationConfig(effectiveConfig, node, "text");
     const simpleMode = workspaceMode === "simple";

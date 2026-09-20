@@ -7,7 +7,7 @@
         <mxCell id="bg" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F7F8FA;strokeColor=none;" value="" vertex="1">
           <mxGeometry height="1700" width="2400" as="geometry" />
         </mxCell>
-        <mxCell id="title" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#101828;fontSize=28;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=middle;" value="&lt;b&gt;【影绘】底层架构&lt;/b&gt;" vertex="1">
+        <mxCell id="title" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#101828;fontSize=28;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=middle;" value="&lt;b&gt;【影策】底层架构&lt;/b&gt;" vertex="1">
           <mxGeometry height="44" width="1040" x="60" y="24" as="geometry" />
         </mxCell>
         <mxCell id="legend" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D0D5DD;fontColor=#475467;fontSize=11;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="实线：业务顺序　　虚线边框：可选或持续复用能力　　所有生成任务统一进入底部任务与渠道底座" vertex="1">

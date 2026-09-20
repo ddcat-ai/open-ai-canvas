@@ -28,7 +28,7 @@ export async function testChannelModelConnection(channel: ModelChannel, model: s
     };
     const config = {
         ...defaultConfig,
-        channelMode: "local" as const,
+        channelMode: "remote" as const,
         baseUrl: channel.baseUrl,
         apiKey: channel.apiKey,
         apiFormat: channel.apiFormat,

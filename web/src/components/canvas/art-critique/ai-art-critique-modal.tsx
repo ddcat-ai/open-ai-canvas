@@ -30,7 +30,7 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { resolveImageUrl } from "@/services/image-storage";
 import { modelOptionLabel, useEffectiveConfig } from "@/stores/use-config-store";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import { IconButton } from "@/components/ui/base/buttons";
 import { Callout } from "@/components/ui/product/callout";
@@ -63,7 +63,7 @@ type AiArtCritiqueView = "overview" | "detail";
 type ArtCritiquePromptStatus = "ready" | "pending" | "unavailable";
 
 export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdateState, startRequestId, restartRequested, onRunningChange }: AiArtCritiqueModalProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const effectiveConfig = useEffectiveConfig();
     const selectedCritiqueModel = effectiveConfig.textModel.trim();
     const configuredCritiqueModelLabel = selectedCritiqueModel ? modelOptionLabel(effectiveConfig, selectedCritiqueModel) : "未配置文本/视觉理解模型";

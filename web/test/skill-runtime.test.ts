@@ -54,22 +54,15 @@ function file(path: string, content: string, kind: SkillPackageFile["kind"] = "m
 }
 
 describe("skill runtime", () => {
-    test("可检索首屏之外的技能并分页，不暴露未加入技能", async () => {
-        const runtime = createSkillRuntime();
-        const skills = Array.from({ length: 45 }, (_, index) => skill({ skillId: `skill-${index}`, skillName: `技能 ${index}`, description: index === 44 ? "商品构图" : "通用" }));
-        skills.push(skill({ skillId: "hidden", description: "商品构图", isAdded: false }));
-        const first = await runtime.executeAgentTool("onlineAgent", "canvas_list_skills", {}, skills);
-        expect(first?.ok && first.data).toMatchObject({ total: 45, nextOffset: 40 });
-        const found = await runtime.executeAgentTool("onlineAgent", "canvas_list_skills", { query: "商品" }, skills);
-        expect(found?.ok && found.data).toMatchObject({ total: 1, nextOffset: null, items: [{ skillId: "skill-44" }] });
-    });
     test("技能引用解析由统一规则同时支持稳定 token 和自然提及", () => {
         const director = skill();
         const storyboard = skill({ skillId: "storyboard", skillName: "小说转分镜" });
 
         expect(resolveSkillMentions("用 @[skill:director] 处理", [director, storyboard]).map((item) => item.skillId)).toEqual(["director"]);
         expect(resolveSkillMentions("请用 @小说转分镜。", [director, storyboard]).map((item) => item.skillId)).toEqual(["storyboard"]);
+        expect(resolveSkillMentions("请用 /小说转分镜 处理。", [director, storyboard]).map((item) => item.skillId)).toEqual(["storyboard"]);
         expect(resolveSkillMentions("@AI导演增强版", [director])).toEqual([]);
+        expect(resolveSkillMentions("/AI导演增强版", [director])).toEqual([]);
     });
 
     test("普通生成只加载入口和与当前任务最相关的直接引用文本", async () => {
@@ -95,8 +88,6 @@ describe("skill runtime", () => {
                 return { file: file(path, path.includes("prompt_templates") ? "视频提示词模板正文" : "角色资产正文") };
             },
             listFiles: async () => ({ files }),
-            searchFiles: async () => ({ results: [] }),
-            getBundle: async () => { throw new Error("不应读取完整包"); },
         });
 
         const result = await runtime.prepare({ profile: "canvas", prompt: "@[skill:director] 帮我生成视频提示词", skills: [skill()] });
@@ -110,41 +101,15 @@ describe("skill runtime", () => {
         expect(result.metadata.skillIds).toEqual(["director"]);
     });
 
-    test("本地 Agent 通过同一 Runtime 投递完整原生技能包", async () => {
-        const runtime = createSkillRuntime({
-            getFile: async () => { throw new Error("不应读取单文件"); },
-            listFiles: async () => ({ files: [] }),
-            searchFiles: async () => ({ results: [] }),
-            getBundle: async () => ({
-                bundle: {
-                    skillId: "director",
-                    name: "AI导演",
-                    description: "导演工作流",
-                    versionId: "version-2",
-                    version: "2.0.0",
-                    contentHash: "hash",
-                    files: [{ path: "SKILL.md", mimeType: "text/markdown", contentBase64: "IyBBSuWvv+a8lA==" }],
-                },
-            }),
-        });
-
-        const result = await runtime.prepare({ profile: "localAgent", prompt: "@[skill:director] 开始", skills: [skill()] });
-
-        expect(result.prompt).toBe("@AI导演 开始");
-        expect(result.skills).toEqual([{ skillId: "director", name: "AI导演", description: "导演工作流", version: "2.0.0", files: [{ path: "SKILL.md", mimeType: "text/markdown", contentBase64: "IyBBSuWvv+a8lA==" }] }]);
-    });
-
-    test("在线 Agent 的技能工具由 Runtime 注册表统一执行", async () => {
+    test("云端 Agent 只准备已加入技能的上下文并保留来源", async () => {
         const runtime = createSkillRuntime({
             getFile: async () => ({ file: file("SKILL.md", "# AI导演") }),
             listFiles: async () => ({ files: [] }),
-            searchFiles: async () => ({ results: [] }),
-            getBundle: async () => { throw new Error("不应读取完整包"); },
         });
 
-        expect(runtime.agentToolNames("onlineAgent").has("canvas_get_skill")).toBe(true);
-        const result = await runtime.executeAgentTool("onlineAgent", "canvas_get_skill", { skillId: "director" }, [skill()]);
-        expect(result?.ok).toBe(true);
-        expect(result && "data" in result ? result.data : null).toMatchObject({ skillId: "director", version: "2.0.0" });
+        const result = await runtime.prepare({ profile: "canvas", prompt: "@[skill:director] 开始", skills: [skill()] });
+        expect(result.selectedSkills.map((item) => item.skillId)).toEqual(["director"]);
+        expect(result.prompt).toContain('<skill-context skill-id="director"');
+        expect(result.metadata.skillIds).toEqual(["director"]);
     });
 });

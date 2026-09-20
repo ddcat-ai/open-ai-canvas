@@ -9,30 +9,12 @@ import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
+import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import type { GenerationTask } from "@/services/api/task-center";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ConnectionHandle, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
-
-const CANVAS_WORKSPACE_MODE_STORAGE_KEY = "canvas-workspace-mode-v1";
-
-export function readCanvasWorkspaceMode(): CanvasWorkspaceMode {
-    if (typeof window === "undefined") return "professional";
-    try {
-        return scopedLocalStorage.getItem(CANVAS_WORKSPACE_MODE_STORAGE_KEY) === "simple" ? "simple" : "professional";
-    } catch (error) {
-        console.warn("读取画布工作模式失败，已使用专业模式", error);
-        return "professional";
-    }
-}
-
-export function persistCanvasWorkspaceMode(mode: CanvasWorkspaceMode) {
-    try {
-        scopedLocalStorage.setItem(CANVAS_WORKSPACE_MODE_STORAGE_KEY, mode);
-    } catch (error) {
-        console.warn("保存画布工作模式失败", error);
-    }
-}
-
+import { synchronizeGenerationSpec } from "@/lib/canvas/generation-contract";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ConnectionHandle, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
 
 export function createCanvasNode(type: CanvasNodeTypeId, position: Position, metadata?: CanvasNodeMetadata): CanvasNodeData {
     const builtinSpec = type in NODE_DEFAULT_SIZE ? getNodeSpec(type as CanvasNodeType) : undefined;
@@ -119,8 +101,49 @@ export function cinematicStoryboardColumns(columns?: StoryboardColumn[]): Storyb
     ])) as StoryboardColumn[];
 }
 
+// 分镜文本任务的模型侧输出契约，字段与 storyboardRowsFromTask 的解析结构一一对应。
+// 后端只有带 metadata.promptTemplateOperation 的任务才会编译服务端分镜模板（含 JSON 契约），
+// 章节分镜走的是自定义 prompt，缺这段约束时模型会按自然语言习惯返回 Markdown 表格，解析阶段拿不到 rows。
+export function storyboardRowsOutputContract(requirement: string) {
+    return [
+        "【受保护输出契约】",
+        "- 只返回一个 JSON 对象，不要 Markdown、表格、代码块、注释或任何解释文字。",
+        `- 顶层固定为 {"title": string, "rows": object[]}，rows 至少 1 项。${requirement}`,
+        "- rows 每项对应一个镜头，按剧情顺序排列；字段缺失时填空字符串或空数组，不要省略字段：",
+        "  shotNumber（整数，从 1 递增）、durationSeconds（整数，1-60）、plotDescription（本镜可见的剧情与关键动作）、",
+        "  dialogue（本镜实际念出的台词或简短旁白，超长必须拆镜）、characters（本镜出现的角色名数组）、",
+        "  narrativeIntent、viewerPOV、performanceBlocking、shotSize（景别）、emotion、lightingAndAtmosphere、",
+        "  audioEffects、camera、motion、timeBeats、imageGenerationPrompt（首帧画面提示词）、",
+        "  videoMotionPrompt（运镜与结尾状态）、continuityOut、negativePrompt、",
+        "  mustHave（数组，最多 3 项）、optionalDetails（数组）。",
+        "- 镜头数量以完整覆盖剧情因果、人物关系和关键台词为准，不要为压缩数量删减关键情节。",
+    ].join("\n");
+}
+
+// 文本任务的 result_json 外层是 {mode, reasoning, text} 包装，分镜表在 text 字段的内层 JSON 字符串里；
+// 历史模板路径可能直接落 {title, rows}。两种结构都要能解析，内层再做代码块剥离与首尾大括号截取兜底，
+// 模型偶发违反契约（包 ```json 或混入解释文字）时仍能取出分镜表。
+function parseStoryboardRowsPayload(raw: string): { title?: string; rows?: Array<Partial<StoryboardRow>> } {
+    const parsed = JSON.parse(raw) as { title?: string; rows?: Array<Partial<StoryboardRow>>; text?: unknown };
+    if (Array.isArray(parsed.rows)) return parsed;
+    if (typeof parsed.text === "string" && parsed.text.trim()) {
+        const inner = parsed.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+        const start = inner.indexOf("{");
+        const end = inner.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+            try {
+                const innerParsed = JSON.parse(inner.slice(start, end + 1)) as { title?: string; rows?: Array<Partial<StoryboardRow>> };
+                if (Array.isArray(innerParsed.rows)) return innerParsed;
+            } catch {
+                // 内层不是合法 JSON 时落到外层结构，由调用方的缺行校验统一报错。
+            }
+        }
+    }
+    return parsed;
+}
+
 export function storyboardRowsFromTask(task: GenerationTask) {
-    const result = JSON.parse(task.resultJson || "{}") as { title?: string; rows?: Array<Partial<StoryboardRow>> };
+    const result = parseStoryboardRowsPayload(task.resultJson || "{}");
     if (!Array.isArray(result.rows) || !result.rows.length) throw new Error("分镜任务没有返回镜头行");
     return {
         title: result.title?.trim(),
@@ -161,7 +184,7 @@ const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
 export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>) {
     const safePatch = patch || {};
     const nextPatch = resetGenerationParamsOnModelSwitch(node, safePatch);
-    const next = { ...node, metadata: { ...node.metadata, ...nextPatch } };
+    const next = synchronizeGenerationSpec(node, nextPatch);
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     const size = typeof safePatch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
@@ -187,7 +210,7 @@ function resetGenerationParamsOnModelSwitch(node: CanvasNodeData, patch: Partial
 export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0) {
     return {
         x: current.handleType === "source" ? node.position.x : node.position.x + node.width,
-        y: storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
+        y: batchReferenceHandleY(node, handleId) ?? storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
     };
 }
 
@@ -409,7 +432,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         if (requestedIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => removedIds.add(childId));
     });
     const remainingNodes = nodes.filter((node) => !removedIds.has(node.id));
-    const nextNodes = remainingNodes.map((node) => {
+    const cleanedNodes = remainingNodes.map((node) => {
         const detached = node.parentId && removedIds.has(node.parentId) ? { ...node, parentId: undefined } : node;
         const storyboard = detached.metadata?.storyboard;
         const cleaned = storyboard
@@ -437,6 +460,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         const batchRoot = { ...cleaned, metadata: { ...cleaned.metadata, batchChildIds: childIds, primaryImageId } };
         return primaryNode ? applyBatchPrimaryImage(batchRoot, primaryNode) : batchRoot;
     });
+    const nextNodes = cleanedNodes.map((node) => reconcileImageBatchRoot(node, cleanedNodes));
     return { removedIds, nodes: nextNodes };
 }
 

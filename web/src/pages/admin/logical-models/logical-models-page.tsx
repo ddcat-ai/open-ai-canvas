@@ -4,7 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
 import { ChoiceBrowser } from "@/components/choice-browser";
 import { ModelEditorModal } from "@/components/model-editor-modal";

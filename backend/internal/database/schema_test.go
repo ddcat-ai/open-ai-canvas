@@ -60,3 +60,12 @@ func TestPostgresAssetIDMigrationsCoverEveryAssetIDColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestModelsIncludeCloudAgentCanvasMutation(t *testing.T) {
+	for _, item := range Models() {
+		if _, ok := item.(*model.CloudAgentCanvasMutation); ok {
+			return
+		}
+	}
+	t.Fatal("Models must include CloudAgentCanvasMutation")
+}

@@ -122,7 +122,7 @@ func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]mod
 		return nil, 0, err
 	}
 	var tasks []model.Task
-	err := query.Select("id", "user_id", "session_id", "project_id", "type", "status", "stage", "progress", "operation", "provider", "model", "billing_order_id", "provider_request_id", "poll_stage", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	err := query.Select("id", "user_id", "project_id", "type", "status", "stage", "progress", "operation", "provider", "model", "billing_order_id", "provider_request_id", "poll_stage", "attempts", "started_at", "completed_at", "created_at", "updated_at").
 		Order("created_at desc").Limit(limit).Offset(offset).Find(&tasks).Error
 	return tasks, total, err
 }

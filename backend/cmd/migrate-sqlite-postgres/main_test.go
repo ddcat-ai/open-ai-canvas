@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"infinite-canvas/backend/internal/database"
+	"infinite-canvas/backend/internal/model"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
@@ -32,5 +34,32 @@ func TestMigrationListCoversSchemaModels(t *testing.T) {
 		if !covered {
 			t.Errorf("migration list is missing table %q", table)
 		}
+	}
+}
+
+func TestCanvasHistoryCompositeKeyMigration(t *testing.T) {
+	source, err := database.Open(database.Config{Driver: "sqlite", DSN: "file:history-migration-source?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := database.Open(database.Config{Driver: "sqlite", DSN: "file:history-migration-target?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, db := range []*gorm.DB{source, target} {
+		if err := db.AutoMigrate(&model.Resource{}, &model.CanvasSnapshotResource{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&model.Resource{ID: "resource"}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	refs := []model.CanvasSnapshotResource{{SnapshotID: "b", ResourceID: "resource"}, {SnapshotID: "a", ResourceID: "resource"}}
+	if err := source.Create(&refs).Error; err != nil {
+		t.Fatal(err)
+	}
+	count, err := migrateTable[model.CanvasSnapshotResource]("canvas_snapshot_resources").run(source, target, true)
+	if err != nil || count != 2 {
+		t.Fatalf("history refs not copied/verified: %d %v", count, err)
 	}
 }

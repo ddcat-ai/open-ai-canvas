@@ -3,7 +3,7 @@ import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Selec
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";

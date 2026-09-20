@@ -71,7 +71,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         const reason = status === "stale" ? "输入或方式已变化" : status === "processing" ? "仍在处理中" : "尚未完成本地转换";
         throw new Error(`转换节点「${pendingConversion.title || pendingConversion.id}」${reason}，完成后才能执行下游生成`);
     }
-    const connectedInputs = buildNodeGenerationInputs(nodeId, nodes, connections);
+    const connectedInputs = withArkAssetReferenceInputs(buildNodeGenerationInputs(nodeId, nodes, connections), nodes, assets);
     const sourceNode = nodes.find((node) => node.id === nodeId);
     const portraitTextureInput = sourceNode?.type === CanvasNodeType.Image && sourceNode.metadata?.content && sourceNode.metadata?.portraitTexture
         ? (() => {
@@ -81,7 +81,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         : [];
     // 显式 @ 引用必须与提示词面板展示的资源集合一致；默认自动输入仍只取入边，
     // 避免已有图片在没有 @图片N 时被悄悄当作自身参考图。
-    const mentionInputs = mergeGenerationInputs(buildNodeMentionGenerationInputs(nodeId, nodes, connections), portraitTextureInput, buildAssetGenerationInputs(assets));
+    const mentionInputs = withArkAssetReferenceInputs(mergeGenerationInputs(buildNodeMentionGenerationInputs(nodeId, nodes, connections), portraitTextureInput, buildAssetGenerationInputs(assets)), nodes, assets);
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
     assertResolvableGenerationMentions(prompt, mentionInputs);
     const hasExplicitResourceMention = hasResolvableGenerationMention(prompt, mentionInputs);
@@ -128,8 +128,8 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
 }
 
 /**
- * 转换节点允许提前连到下游，但只有已物化的结果才能进入生成请求。
- * 沿上游链路检查也覆盖“生成节点 -> 配置节点 -> 转换节点”的常见接法。
+ * 转换节点允许提前连到下游，但只有与当前唯一媒体输入匹配的已物化结果才能进入生成请求。
+ * 沿上游链路检查也覆盖“生成节点 -> 配置节点 -> 转换节点”的接法。
  */
 export function findPendingMediaConversionInput(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
@@ -229,7 +229,8 @@ function buildComposerGenerationContext(
     }
 
     nextPrompt += normalizedPrompt.slice(lastIndex);
-    if (textBlocks.length && !promptOnly) nextPrompt = `${nextPrompt.trim()}\n\n${textBlocks.join("\n\n")}`;
+    // 显式 @文本 引用是用户写进输入框的内容，必须内联真实文本；promptOnly 只拦自动上游文本。
+    if (textBlocks.length) nextPrompt = `${nextPrompt.trim()}\n\n${textBlocks.join("\n\n")}`;
     if (autoIncludeWorkflowMedia) {
         // RunningHub/ComfyUI 工作流按保存的字段槽位接收图片、视频和音频；
         // 配置节点不能因为提示词里没有逐个 @ 就丢失已连接媒体。
@@ -407,11 +408,25 @@ function buildAssetGenerationInputs(assets: Asset[]): NodeGenerationInput[] {
     return assets.flatMap((asset): NodeGenerationInput[] => {
         const nodeId = `asset:${asset.id}`;
         if (asset.kind === "text") return [{ nodeId, type: "text", title: asset.title, text: asset.data.content }];
-        if (asset.kind === "image") return [{ nodeId, type: "image", title: asset.title, image: { id: asset.id, name: asset.title, type: asset.data.mimeType, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height } }];
+        if (asset.kind === "image") return [{ nodeId, type: "image", title: asset.title, image: { id: asset.id, name: asset.title, type: asset.data.mimeType, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, ...(asset.arkAssetId ? { arkAssetId: asset.arkAssetId } : {}) } }];
         if (asset.kind === "video") return [{ nodeId, type: "video", title: asset.title, previewUrl: canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl), video: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, durationMs: asset.data.durationMs } }];
         if (asset.kind === "audio") return [{ nodeId, type: "audio", title: asset.title, audio: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, durationMs: asset.data.durationMs } }];
         if (asset.kind === "entity" && asset.category === "character") return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
         return [];
+    });
+}
+
+// 图片节点绑定的素材若已录入方舟素材 ID，把 ID 附加到参考图上；是否改用 asset:// 引用
+// 由 generation-task 按视频渠道决定，非方舟渠道与本地回退路径不受影响。
+function withArkAssetReferenceInputs(inputs: NodeGenerationInput[], nodes: CanvasNodeData[], assets: Asset[]): NodeGenerationInput[] {
+    if (!assets.length) return inputs;
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+    return inputs.map((input) => {
+        if (input.type !== "image" || !input.image || input.image.arkAssetId) return input;
+        const boundAssetId = nodeById.get(input.nodeId)?.metadata?.assetId;
+        const arkAssetId = boundAssetId ? assetById.get(boundAssetId)?.arkAssetId : undefined;
+        return arkAssetId ? { ...input, image: { ...input.image, arkAssetId } } : input;
     });
 }
 

@@ -1,3 +1,8 @@
+---
+title: 支付插件运行时
+description: 影策支付插件的运行时协议、原生包边界与安全约束
+---
+
 # 支付插件运行时
 
 支付渠道通过 `.yingce-plugin` 包接入。宿主只负责订单、幂等、配置加密、回调收件箱、积分入账和对账；插件负责渠道协议转换。
@@ -7,12 +12,26 @@
 ```text
 my-payment.yingce-plugin
 ├── manifest.json
-├── backend/provider
+├── backend/provider                  # 规范副本：linux/amd64
+├── backend/provider-linux-amd64
+├── backend/provider-linux-arm64
+├── backend/provider-darwin-amd64
+├── backend/provider-darwin-arm64
+├── backend/provider-windows-amd64.exe
+├── backend/provider-windows-arm64.exe
 ├── assets/icon.svg
 └── docs/README.md
 ```
 
 Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通过 `runtime.backendEntry` 指定后端入口。当前版本首先启用 `rpc`：宿主以一次 JSON 请求启动入口进程，进程返回一次 JSON 响应。WASM 使用相同的 `yingce.payment/v1` 数据契约，运行时启用后即可复用插件实现。
+
+`backendEntry` 仍写 `backend/provider`。宿主按当前 `GOOS/GOARCH` 依次尝试：
+
+1. `backend/provider-{goos}-{goarch}[.exe]`
+2. `backend/{goos}-{goarch}/provider[.exe]`
+3. `backend/provider[.exe]`，再回退到无扩展名的 `backend/provider`
+
+选中文件后会校验 ELF / Mach-O / PE 魔数和 CPU，不兼容的文件会被跳过，不会拿 Linux ELF 在 macOS 或 Windows 上硬启动。
 
 ## 标准操作
 
@@ -27,28 +46,39 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 | `verify_notification` | `Notification`，请求体通过 `bodyBase64` 传入 |
 | `download_trade_bill` | `BillRecord[]` |
 
+`create_order` 的 `Checkout.value` 随 `mode` 含义不同：`qr_code` 可以是待编码载荷（如微信支付 `weixin://...`），也可以是渠道已经画好的二维码图片 URL（如虎皮椒 `url_qrcode`，形如 `https://api.xunhupay.com/qrcode.png`）。钱包识别图片 URL 后直接展示，不会把图片地址再编码成新的二维码。`redirect` 由宿主包装成 `/api/payments/orders/:id/checkout` 跳转。扫码区固定白底深色码点，避免暗色主题反色后难扫。
+
 请求固定带有 `version: "yingce.payment/v1"`。插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
 
 ## 原生包的平台边界
 
-`runtime.backend: "rpc"` 的 `backend/provider` 是原生可执行文件，不是平台无关静态资源。官方 backend 镜像在 Docker 构建中读取 `TARGETOS` 和 `TARGETARCH`，以 `CGO_ENABLED=0` 分别生成目标平台 provider，并在同一阶段重新生成 `.yingce-plugin`；目录文件与包内文件会比较内容，并在目标平台容器中真实执行冒烟请求。因此 Apple Silicon、Intel Mac 或 Windows 上发起的 Docker 构建不会把宿主二进制复制进 Linux 镜像。
+`runtime.backend: "rpc"` 的入口是原生可执行文件，不是平台无关静态资源。仓库中的官方支付包同时包含 macOS、Linux、Windows 的 amd64/arm64 产物；`backend/provider` 固定为 `linux/amd64` 副本，供 Linux CI 和默认冒烟使用。
 
-仓库中保留的官方支付包用于 Linux amd64 源码运行和回归测试，其规范平台固定为 `linux/amd64`。在其他平台直接运行源码时，应先在具有 Node.js 和 `zip` 的 POSIX shell 中执行：
+官方 backend 镜像在 Docker 构建中读取 `TARGETOS` 和 `TARGETARCH`，设置 `PAYMENT_PLUGIN_GOOS` / `PAYMENT_PLUGIN_GOARCH`，只编译镜像目标平台并重新打包 `.yingce-plugin`，避免把 darwin/windows 二进制打进 Linux 镜像。目录文件与包内文件会比较内容，并在目标平台容器中真实执行冒烟请求。
+
+在 POSIX 环境重建官方支付包：
 
 ```bash
-PAYMENT_PLUGIN_GOOS="$(go env GOOS)" \
-PAYMENT_PLUGIN_GOARCH="$(go env GOARCH)" \
 PAYMENT_PLUGIN_CGO_ENABLED=0 \
   ./plugin-packages/build-packages.sh --payments-only
 ```
 
-当前 manifest 尚未声明 native artifact 的 OS/CPU；第三方市场若要分发原生 RPC 插件，应后续在 package index 或 manifest ABI 中增加平台选择信息，不能把单一 native package 视为跨平台包。
+不设置 `PAYMENT_PLUGIN_GOOS` 时会交叉编译全部六个目标。只构建当前镜像平台时：
+
+```bash
+PAYMENT_PLUGIN_GOOS=linux \
+PAYMENT_PLUGIN_GOARCH=amd64 \
+PAYMENT_PLUGIN_CGO_ENABLED=0 \
+  ./plugin-packages/build-packages.sh --payments-only
+```
+
+第三方 RPC 插件至少需要提供当前宿主对应的 tagged 文件；只放 Linux ELF 时，macOS / Windows 会在启动前报格式不兼容，而不是当作脚本解释器缺失。
 
 ## 运行时缓存与诊断
 
-宿主以完整 `.yingce-plugin` 字节的 SHA-256 作为 package 文件名和 `runtime/<digest>` 缓存键。provider 内容变化会产生新 digest 和新运行目录；解包先写临时目录，完成后写入 ready marker 并原子发布，旧目录不会覆盖新包，也不要求升级时手工清空整个数据卷。
+宿主以完整 `.yingce-plugin` 字节的 SHA-256 作为 package 文件名和 `runtime/<digest>` 缓存键。provider 内容变化会产生新 digest 和新运行目录；解包先写临时目录，完成后写入 ready marker 并原子发布，旧目录不会覆盖新包，也不要求升级时手工清空整个数据卷。ready 检查接受任意平台的 RPC 产物，不要求 `backend/provider` 这个规范文件名一定存在。
 
-执行前，Linux 宿主会拒绝 Mach-O、Windows PE、损坏的 ELF 和与当前 CPU 不匹配的 ELF。管理员可区分可执行文件缺失或加载器不可用、权限不足、格式或架构不兼容、进程异常退出、超时和无效 JSON。服务端启动日志只记录插件 ID、provider ID、宿主平台、可执行路径和操作系统错误；不会记录 RPC 请求、支付配置、密钥或插件 stderr。
+执行前，Linux 会拒绝 Mach-O、Windows PE、损坏的 ELF 和与当前 CPU 不匹配的 ELF；macOS 会拒绝 ELF/PE 以及 CPU 不匹配的 Mach-O；Windows 会拒绝 ELF/Mach-O 以及 CPU 不匹配的 PE。管理员可区分可执行文件缺失或加载器不可用、权限不足、格式或架构不兼容、进程异常退出、超时和无效 JSON。服务端启动日志只记录插件 ID、provider ID、宿主平台、可执行路径和操作系统错误；不会记录 RPC 请求、支付配置、密钥或插件 stderr。
 
 ## Manifest 示例
 

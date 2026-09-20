@@ -1,0 +1,71 @@
+/* Canvas file upload placeholder: a local component owns its visual state. */
+.canvas-file-upload {
+    --upload-glow-blue: color-mix(in srgb, var(--status-loading) 22%, transparent);
+    --upload-glow-mint: color-mix(in srgb, var(--status-success) 14%, transparent);
+    --upload-glow-warm: color-mix(in srgb, var(--status-warning) 12%, transparent);
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--upload-surface);
+    color: var(--upload-text);
+}
+
+.canvas-file-upload-glow {
+    transition: opacity 180ms ease-out;
+    position: absolute;
+    inset: -45%;
+    background: radial-gradient(ellipse at 28% 32%, var(--upload-glow-blue), transparent 48%), radial-gradient(ellipse at 75% 64%, var(--upload-glow-mint), transparent 46%), radial-gradient(ellipse at 55% 78%, var(--upload-glow-warm), transparent 42%);
+    animation: canvas-file-upload-drift 5s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+.canvas-file-upload-frost {
+    transition: opacity 180ms ease-out;
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--upload-surface) 24%, transparent);
+    backdrop-filter: blur(20px) saturate(0.8);
+    pointer-events: none;
+}
+
+.canvas-file-upload-frost::after {
+    content: "";
+    position: absolute;
+    inset: -60%;
+    background: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--upload-text) 4%, transparent) 47%, color-mix(in srgb, var(--upload-surface) 40%, transparent) 51%, transparent 65%);
+    animation: canvas-file-upload-sheen 4s ease-in-out infinite;
+}
+
+.canvas-file-upload-copy {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: 100%;
+    padding: var(--space-5);
+    text-align: center;
+}
+
+.canvas-file-upload-copy > svg { color: var(--upload-muted); }
+.canvas-file-upload-label { font-size: var(--fs-caption); font-weight: 500; }
+.canvas-file-upload-detail { max-width: 100%; font-size: var(--fs-tiny); color: var(--upload-muted); overflow-wrap: anywhere; }
+.canvas-file-upload-retry { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--upload-text) 8%, transparent); font-size: var(--fs-caption); cursor: pointer; }
+.canvas-file-upload-retry:hover { background: color-mix(in srgb, var(--upload-text) 12%, transparent); }
+.canvas-file-upload-retry:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
+
+@keyframes canvas-file-upload-drift { from { transform: translate(-8%, -4%) rotate(-8deg); } to { transform: translate(8%, 4%) rotate(12deg); } }
+@keyframes canvas-file-upload-sheen { from { transform: translateX(-35%); } to { transform: translateX(35%); } }
+
+.canvas-file-upload[data-static] .canvas-file-upload-glow,
+.canvas-file-upload[data-static] .canvas-file-upload-frost::after { animation: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-glow,
+.canvas-file-upload[data-static] .canvas-file-upload-frost { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-file-upload-glow, .canvas-file-upload-frost::after { animation: none; }
+    .canvas-file-upload-glow, .canvas-file-upload-frost { transition: none; }
+}

@@ -13,8 +13,8 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 
 ## 安全更新顺序
 
-1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。
-2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。
+1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。`sha-*` 这类非正式镜像标签一律视为低于正式 Release，避免把 `vsha-5509b17` 字典序比较成比 `v1.5.0` 更新。
+2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。当前标签不是 `vX.Y.Z` 时，健康检查只确认服务就绪，不要求构建号和镜像标签逐字相同。
 3. 创建 `backup-YYYYMMDD-HHMMSS.zip.partial`，其中包含 PostgreSQL custom-format dump、后端数据目录 tar 和元数据；写入完成后 `fsync`、原子改名，并复核 ZIP 结构和 SHA-256。
 4. 拉取目标 backend/web 镜像并要求存在仓库 `sha256` 摘要。任何失败都在停服前中止。
 5. 停止 web/backend，等待 Backend 的 SIGTERM drain 完成；PostgreSQL 和 Redis 保持运行。
@@ -47,6 +47,23 @@ sudo docker compose --env-file .env -f docker-compose.deploy.yml up -d --force-r
 ```
 
 脚本会下载与当前 Release 匹配的 Linux amd64/arm64 二进制和 `SHA256SUMS`，生成随机 `CANVAS_UPDATER_TOKEN`，创建 systemd 服务、Socket 目录、状态目录和 `backups/`。Token 只保存在服务器 `.env` 与 root-only 更新器环境文件中。
+
+## 镜像发布与质量门禁
+
+`main` 推送、`v*` 标签和手动发布统一由 `.github/workflows/publish-images.yml` 编排。发布先调用可复用的 `quality.yml`；PR 仍直接运行质量检查。Go 测试、前端格式、类型、Lint、单测和 Chrome E2E 任一失败，都不能进入镜像构建和发布阶段。若仓库规则配置了必需检查，切换后应核对实际 check 名称，避免仍等待旧的独立 push 工作流。
+
+构建和发布分为以下阶段：
+
+1. 校验 `VERSION`；版本标签必须与文件一致，且存在对应 `CHANGELOG.md` 标题。构建时间取提交时间，同一 SHA 不因重跑而改变。
+2. 后端分别在 `ubuntu-24.04`（AMD64）和 `ubuntu-24.04-arm`（ARM64）原生编译，保留 CGO 与三个服务/迁移二进制。支付插件在每个平台的镜像阶段重新打包并执行 smoke；PR 则独立执行双架构 smoke，不依赖发布。
+3. 前端 Bun 构建阶段固定到 `BUILDPLATFORM`，静态资源只生成一次，再放入 AMD64/ARM64 nginx 镜像。Bun 与 `web/package.json`、质量检查保持 `1.3.9` 一致。
+4. 先推送 `sha-<完整提交>-amd64/arm64` 后端镜像及 `sha-<完整提交>-multi` 前端镜像，以摘要 artifact 传递结果。两种后端架构和前端全部成功后，才从摘要合并发布 manifest，不用可变标签作为合并源。
+5. 同一 SHA 的 main/tag 发布串行运行；后到的一轮仍经过质量门禁，然后复用已有 SHA 镜像，不重复编译。只有明确的镜像不存在可以转入构建，鉴权、限流、网络和异常摘要必须报错。
+6. 发布保留完整 SHA 和短 SHA 标签；只有版本 tag 推送写入具体版本标签。`main` 只有在仍是远端最新提交时才更新 `latest`，旧提交的慢任务不能覆盖新版本。正式部署仍应固定版本标签，不依赖 `latest`。
+
+Go 检查显式使用 `backend/go.sum` 作为缓存依赖键，并上传 `go-test-timings`（JSONL），可按 `Test` / `Elapsed` 定位慢测试。Docker 的后端模块下载保留在普通镜像层，编译步骤可以直接读取；支付插件只按实际 import 下载依赖，不重复预取完整后端模块图。版本参数下移到编译入口。GHA 构建缓存按镜像和架构隔离，避免并行任务共用同一 scope。`go-build` cache mount 只用于同一个 builder 内的复用，当前没有额外的跨 Runner mount 导出方案；不能把它当作持久编译缓存。冷缓存首轮和缓存上传仍可能较慢，需要比较连续两轮的实际耗时。
+
+这套发布流程依赖仓库可使用 GitHub 原生 ARM64 Runner、GHCR 写权限以及构建/下载 artifact 能力。首次上线应核对实际 Runner 排队情况、双架构 manifest、main/tag 同 SHA 复用和质量失败阻断；本地测试不能代替这些云端验收。工作流变更不迁移业务数据库，也不修改服务器 Compose 或数据卷。需要回退 CI 时只回退工作流和 Dockerfile 改动；已发布镜像不会自动撤回，线上版本回退仍按本文的备份与迁移约束执行。
 
 ## 运维检查
 

@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
+import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
 
 export const ConnectionPath = React.memo(function ConnectionPath({
@@ -29,7 +30,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     onSelect: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const [hovered, setHovered] = useState(false);
     const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop);
     const emphasized = active || hovered;
@@ -99,9 +100,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showVisual ? <path
                 d={pathD}
                 stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 2.2 : 1.5}
+                strokeWidth={emphasized ? 2.8 : 2}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.9 : 0.72}
+                strokeOpacity={emphasized ? 0.95 : 0.8}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -174,6 +175,8 @@ export function activeConnectionPath(node: CanvasNodeData | undefined, handle: C
  * 垂直中心，避免同一个节点因鼠标落点产生漂移的“伪端口”。
  */
 export function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {
+    const batchY = batchReferenceHandleY(node, handleId);
+    if (batchY !== undefined) return batchY;
     if (handleId === "storyboard:context") return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
     if (!handleId?.startsWith("row:")) return node.position.y + node.height / 2;
     const rowId = handleId.slice(4);

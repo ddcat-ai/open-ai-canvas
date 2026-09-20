@@ -24,7 +24,6 @@ type PolicySectionDefinition = {
 
 const resourceFields: PolicyField[] = [
     { group: "resource", name: "resourceUploadMB", label: "普通资源单文件", extra: "素材上传和远程导入的单文件业务上限。", unit: "MB", max: 999 },
-    { group: "resource", name: "sessionUploadMB", label: "Agent 会话附件", extra: "单个会话附件的大小上限。", unit: "MB", max: 999 },
     { group: "resource", name: "generatedFileMB", label: "单个生成资源", extra: "上游生成响应和落库资源的单文件上限。", unit: "MB", max: 999 },
     { group: "resource", name: "dailyUploadMB", label: "每日上传总量", extra: "按 UTC 自然日累计资源与附件上传。", unit: "MB", max: 999_999 },
     { group: "resource", name: "storedFileGB", label: "账号文件总量", extra: "资源文件与 Agent 会话附件合计。", unit: "GB", max: 999 },
@@ -32,7 +31,6 @@ const resourceFields: PolicyField[] = [
     { group: "resource", name: "taskDataGB", label: "任务数据总量", extra: "任务历史、结果和上游请求日志合计。", unit: "GB", max: 999 },
     { group: "resource", name: "assetCount", label: "素材数量", extra: "单账号可保存的素材记录数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "canvasCount", label: "画布数量", extra: "单账号可保存的画布数量。", unit: "个", max: 999_999_999 },
-    { group: "resource", name: "sessionCount", label: "Agent 会话数量", extra: "单账号可保存的 Agent 会话数量。", unit: "个", max: 999_999_999 },
     { group: "resource", name: "taskCount", label: "任务历史数量", extra: "单账号保留的任务历史记录数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "apiCallLogCount", label: "请求日志数量", extra: "单账号保留的上游请求日志数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "recycleBinRetentionDays", label: "回收站自动清理时间", extra: "素材移入回收站后自动彻底删除的天数，0 表示不自动清理。", unit: "天", min: 0, max: 365 },
@@ -55,10 +53,8 @@ const timeoutFields: PolicyField[] = [
 
 const rateFields: PolicyField[] = [
     { group: "request", name: "taskCreatePerMinute", label: "任务创建", extra: "每账号每分钟允许创建的任务数。", unit: "次/分钟", max: 999_999 },
-    { group: "request", name: "sessionCreatePerMinute", label: "会话创建", extra: "每账号每分钟允许创建的会话数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "resourceUploadPerMinute", label: "资源上传", extra: "每账号每分钟上传资源的次数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "resourceImportPerMinute", label: "资源导入", extra: "每账号每分钟导入远程资源的次数。", unit: "次/分钟", max: 999_999 },
-    { group: "request", name: "sessionFilePerMinute", label: "会话附件", extra: "每账号每分钟上传会话附件的次数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "assetWritePerMinute", label: "素材写入", extra: "每账号每分钟写入素材的次数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "canvasWritePerMinute", label: "画布写入", extra: "每账号每分钟写入画布的次数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "registerPerHour", label: "账号注册", extra: "每 IP 每小时允许的注册请求次数，包含失败尝试；多人共用网络时建议至少 30 次。", unit: "次/小时", max: 999_999 },

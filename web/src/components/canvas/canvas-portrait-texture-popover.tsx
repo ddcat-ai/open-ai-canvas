@@ -8,7 +8,7 @@ import {
     type PortraitTextureSettingKey,
     type PortraitTextureSettings,
 } from "@/lib/canvas/canvas-portrait-texture";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 type CanvasPortraitTexturePopoverProps = {
     value: unknown;
@@ -17,7 +17,7 @@ type CanvasPortraitTexturePopoverProps = {
 };
 
 export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onChange }: CanvasPortraitTexturePopoverProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const settings = normalizePortraitTextureSettings(value);
 
     const updateSetting = (key: PortraitTextureSettingKey, nextValue: string) => {

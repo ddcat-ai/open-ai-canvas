@@ -350,14 +350,36 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
 }
 
 function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: Pick<Props, "value" | "onChange" | "protocol" | "disabled" | "section">) {
-    const profile = value?.text || defaultModelCapabilityConfig(protocol).text!;
+    const profile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol)).text!;
+    const update = (patch: Partial<TextCapabilityConfig>) => {
+        onChange?.({ version: 1, text: { ...profile, ...patch } });
+    };
     const updateReferences = (patch: Partial<TextCapabilityConfig["references"]>) => {
-        onChange?.({ version: 1, text: { references: { ...profile.references, ...patch } } });
+        update({ references: { ...profile.references, ...patch } });
     };
 
+    if (section === "protocol") {
+        return (
+            <div className="admin-capability-editor space-y-3 rounded-md bg-muted/20 p-3">
+                <CapabilityGroup title="输出方式" description="控制向上游文本模型请求的响应方式。">
+                    <ParameterField label="SSE 流式输出" description="启用后发送 stream=true，并实时推送文本增量；关闭时等待完整 JSON 响应。" supported={profile.streaming !== false} disabled={Boolean(disabled)} onChange={(streaming) => update({ streaming })} />
+                </CapabilityGroup>
+            </div>
+        );
+    }
+
     if (section === "references") {
+        const contextWindowFields = (
+            <CapabilityGroup title="上下文能力" description="这是上游文本模型的能力合同，决定 Agent 本轮可保留的输入预算；不会改变运行时 checkpoint 的持久化上限。">
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <NumberField label="上下文窗口 Token" value={profile.contextWindowTokens} min={4_096} max={10_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ contextWindowTokens: next || 4_096 })} />
+                    <NumberField label="最大输出 Token" value={profile.maxOutputTokens} min={256} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ maxOutputTokens: next || 256 })} />
+                </div>
+            </CapabilityGroup>
+        );
         return (
             <div className="admin-capability-reference-editor">
+                {contextWindowFields}
                 <div className="admin-capability-reference-grid is-three">
                     <ReferenceCard title="图片引用" description="文本模型可接收的图片范围">
                         <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
@@ -381,6 +403,12 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
                 <div className="text-sm font-medium">文本理解能力</div>
                 <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">默认不假设支持图片或视频，只有明确配置后相关请求才会进入该模型。</div>
             </div>
+            <CapabilityGroup title="上下文能力" description="这是上游文本模型的能力合同，决定 Agent 本轮可保留的输入预算；不会改变运行时 checkpoint 的持久化上限。">
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <NumberField label="上下文窗口 Token" value={profile.contextWindowTokens} min={4_096} max={10_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ contextWindowTokens: next || 4_096 })} />
+                    <NumberField label="最大输出 Token" value={profile.maxOutputTokens} min={256} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ maxOutputTokens: next || 256 })} />
+                </div>
+            </CapabilityGroup>
             <CapabilityGroup title="图片" description="文本模型可接收的图片参考范围">
                 <div className="grid gap-3 sm:grid-cols-2">
                     <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />

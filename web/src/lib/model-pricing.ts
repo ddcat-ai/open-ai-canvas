@@ -1,7 +1,7 @@
 import { modelRequestOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { buildImageResolutionOptions, imageResolutionOption } from "@/lib/image-resolution-tiers";
-import type { ModelRequestIntent } from "@/services/api/logical-models";
+import type { LogicalModelQuote, ModelQuoteRequest, ModelRequestIntent } from "@/services/api/logical-models";
 import { modelOptionName, resolveModelChannel, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelPriceTier = NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number];
@@ -52,7 +52,7 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
     return matched;
 }
 
-export function priceTierSummaryLabel(tiers: ModelPriceTier[]) {
+export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: ModelCapability) {
     const unitPrices = (billingMode: ModelPriceTier["billingMode"]) =>
         tiers
             .filter((tier) => tier.billingMode === billingMode)
@@ -60,23 +60,41 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[]) {
             .filter((value) => Number.isFinite(value) && value >= 0);
     const fixedRequestValues = unitPrices("fixed_request");
     const perSecondValues = unitPrices("per_second");
-    if (fixedRequestValues.length) return formatPriceRange(fixedRequestValues, "积分");
-    if (perSecondValues.length) return formatPriceRange(perSecondValues, "积分/秒");
-    return tiers.some((tier) => tier.billingMode === "token") ? "按量预估" : "未配置";
+    const tokenValues = tiers.filter((tier) => tier.billingMode === "token").map((tier) => tier.outputTokenPriceMicrocredits / 1_000_000).filter((value) => Number.isFinite(value) && value >= 0);
+    return [
+        fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
+        perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
+        tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}` : "",
+    ].filter(Boolean).join(" · ") || "未配置";
 }
 
 export function formatPriceRange(values: number[], suffix: string) {
     const unique = Array.from(new Set(values)).sort((left, right) => left - right);
-    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
     return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
 }
 
-export function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): { logicalModelID: string; intent: ModelRequestIntent } | undefined {
+export function modelQuoteDescription(quote: LogicalModelQuote) {
+    const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    const descriptions = [`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`];
+    const estimate = quote.videoTokenEstimate;
+    if (estimate) {
+        descriptions.push(`公式预估 ${estimate.formulaTokens.toLocaleString("zh-CN")} 视频 Token，平台额外预留 ${estimate.reservationMarginPercent}%（共 ${estimate.reservedTokens.toLocaleString("zh-CN")} Token）`);
+        if (estimate.referenceDurationEstimated) descriptions.push("未知的参考视频时长按 15 秒估算");
+        if (estimate.dimensionsEstimated) descriptions.push("实际画幅尚未确定，尺寸按当前参数估算");
+    }
+    if (quote.billingMode === "token") descriptions.push(estimate
+        ? "预估金额并非费用上限，成功任务优先按有效的实际用量结算；未返回用量时按火山引擎公式结算，额外预留不计入公式结算，可能补扣或退回差额"
+        : "预估金额并非费用上限，最终以成功任务返回的实际用量结算，可能补扣或退回差额");
+    return descriptions.join("；");
+}
+
+export function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): ModelQuoteRequest | undefined {
     if (!capability || !value) return undefined;
     const channel = resolveModelChannel(config, value);
     if (channel.scope !== "system") return undefined;
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
-    if (!cost?.logicalModelId) return undefined;
+    if (!cost || (!cost.logicalModelId && capability !== "video")) return undefined;
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
@@ -93,7 +111,7 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
             ...(requirements?.imageSize ? { size: requirements.imageSize } : {}),
         },
     };
-    return { logicalModelID: cost.logicalModelId, intent };
+    return cost.logicalModelId ? { logicalModelID: cost.logicalModelId, intent } : { channelId: channel.id, modelKey: modelOptionName(value), intent };
 }
 
 function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number) {
@@ -109,11 +127,14 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
             const imageCount = (input.imageCount || 0) + (input.characterCount || 0);
             requested.operation = input.videoCount > 0 ? "video_to_video" : imageCount > 0 ? "image_to_video" : resolveVideoOperation(input, requirements?.videoOperation);
             if (imageCount > 0) requested.imageCount = String(imageCount);
-        }
-        const resolution = normalizeTierResolution(config.vquality);
+        } else if (requirements?.videoOperation) requested.operation = requirements.videoOperation;
+        const options: Record<string, unknown> = { ...modelRequestOptions(config, "video"), ...requirements?.options, ...(requirements?.videoSeconds ? { videoSeconds: Number(requirements.videoSeconds) } : {}) };
+        const resolution = normalizeTierResolution(String(options.vquality ?? ""));
         if (resolution !== "*") requested.vquality = resolution;
-        const seconds = Math.max(0, Math.floor(Number(config.videoSeconds) || 0));
+        const seconds = Math.max(0, Math.floor(Number(options.videoSeconds) || 0));
         if (seconds > 0) requested.videoSeconds = String(seconds);
+        if (options.videoGenerateAudio === true || options.videoGenerateAudio === "true") requested.videoGenerateAudio = "true";
+        if (options.videoGenerateAudio === false || options.videoGenerateAudio === "false") requested.videoGenerateAudio = "false";
     }
     if (capability === "image") {
         requested.operation = imagePriceOperation(requirements);

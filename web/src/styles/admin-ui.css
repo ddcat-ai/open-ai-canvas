@@ -9,9 +9,23 @@
     padding: 14px 16px;
 }
 
-/* Appearance management follows the same full-width settings document used by storage and access pages. */
+/* Appearance categories share one draft and command bar. */
 .admin-appearance-settings {
     padding-bottom: 24px;
+}
+
+.admin-appearance-tabs,
+.admin-appearance-tabs .ant-tabs-content-holder,
+.admin-appearance-tabs .ant-tabs-tabpane {
+    min-width: 0;
+}
+
+.admin-appearance-tabs > .ant-tabs-nav {
+    margin-bottom: var(--space-4);
+}
+
+.admin-appearance-tabs .ant-tabs-tab {
+    padding-block: var(--space-3);
 }
 
 .admin-appearance-settings .admin-settings-section {
@@ -724,7 +738,6 @@
 .admin-skin-card.is-selected {
     border-color: color-mix(in srgb, var(--workspace-accent) 76%, var(--admin-card-border));
     background: color-mix(in srgb, var(--workspace-accent) 5%, var(--admin-layer-2));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 36%, transparent);
 }
 
 .admin-skin-card-select {
@@ -1339,117 +1352,47 @@
     margin-top: 5px;
 }
 
-/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */
-.admin-shell,
-.admin-drawer,
-.admin-secondary-drawer,
-.admin-modal-root,
-.admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #f5f5f5);
-    --admin-layer-1: var(--skin-admin-layer-1, #ffffff);
-    --admin-layer-2: var(--skin-admin-layer-2, #f6f6f6);
-    --admin-layer-3: var(--skin-admin-layer-3, #ececec);
-    --admin-sidebar: var(--admin-layer-0);
-    --admin-text-primary: var(--foreground);
-    --admin-text-secondary: color-mix(in srgb, var(--foreground) 72%, transparent);
-    --admin-text-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
-    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
-    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
-    --admin-divider: rgba(17, 17, 17, 0.12);
-    --admin-card-border: rgba(17, 17, 17, 0.15);
-    --admin-row-border: rgba(17, 17, 17, 0.09);
-    --admin-row-hover: #f2f2f2;
-    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(17, 17, 17, 0.04));
-    --admin-status-success: var(--palette-status-success);
-    --admin-status-warning: var(--palette-status-warning);
-    --admin-status-error: var(--palette-status-error);
-    --admin-status-info: var(--palette-status-loading);
-    --admin-chart-primary: var(--workspace-accent);
-    --admin-chart-secondary: oklch(0.55 0.11 180);
-    --admin-chart-warning: oklch(0.64 0.14 78);
-    --admin-sidebar-width: 224px;
-}
-
-.dark .admin-shell,
-.dark .admin-drawer,
-.dark .admin-secondary-drawer,
-.dark .admin-modal-root,
-.dark .admin-channel-modal-root {
-    --admin-layer-0: var(--skin-admin-layer-0, #0f0f0f);
-    --admin-layer-1: var(--skin-admin-layer-1, #181818);
-    --admin-layer-2: var(--skin-admin-layer-2, #222222);
-    --admin-layer-3: var(--skin-admin-layer-3, #2a2a2a);
-    --admin-sidebar: var(--admin-layer-0);
-    --admin-text-primary: var(--foreground);
-    --admin-text-secondary: color-mix(in srgb, var(--foreground) 74%, transparent);
-    --admin-text-muted: color-mix(in srgb, var(--foreground) 54%, transparent);
-    --admin-text-placeholder: color-mix(in srgb, var(--foreground) 43%, transparent);
-    --admin-control-border: color-mix(in srgb, var(--foreground) 18%, transparent);
-    --admin-divider: rgba(255, 255, 255, 0.12);
-    --admin-card-border: rgba(255, 255, 255, 0.16);
-    --admin-row-border: rgba(255, 255, 255, 0.085);
-    --admin-row-hover: #242424;
-    --admin-card-shadow: var(--theme-admin-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.32));
-    --admin-status-success: var(--palette-status-success);
-    --admin-status-warning: var(--palette-status-warning);
-    --admin-status-error: var(--palette-status-error);
-    --admin-status-info: var(--palette-status-loading);
-    --admin-chart-secondary: oklch(0.72 0.11 180);
-    --admin-chart-warning: oklch(0.78 0.14 78);
-}
+/* Token source of truth: pages/admin/theme/admin-tokens.css */
 
 .admin-shell {
     position: relative;
 }
 
 .admin-shell .admin-nav-group-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    display: block;
     margin-bottom: 6px !important;
-    padding-inline: 2px !important;
-    color: color-mix(in srgb, var(--foreground) 68%, transparent) !important;
+    padding-inline: 8px !important;
+    color: var(--admin-text-muted) !important;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
     line-height: 16px;
-    transition: color var(--motion-instant) ease-out;
 }
 
-.admin-shell .admin-nav-group-label::before {
-    display: block;
-    width: 5px;
-    height: 5px;
-    flex: 0 0 auto;
-    border: 1px solid color-mix(in srgb, var(--admin-text-muted) 72%, transparent);
-    border-radius: 999px;
-    background: var(--admin-sidebar);
-    content: "";
-    transition:
-        border-color var(--motion-instant) ease-out,
-        background-color var(--motion-instant) ease-out;
-}
-
+.admin-shell .admin-nav-group-label::before,
 .admin-shell .admin-nav-group-label::after {
-    display: block;
-    height: 1px;
-    min-width: 12px;
-    flex: 1 1 auto;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--foreground) 14%, transparent), transparent);
-    content: "";
+    content: none !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    flex: none !important;
+    border: 0 !important;
+    background: none !important;
 }
 
 .admin-shell .admin-nav-group-label span {
-    flex: 0 0 auto;
+    display: block;
 }
 
-.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label {
+.admin-shell .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-group-label {
     color: var(--admin-text-primary) !important;
 }
 
-.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label::before {
-    border-color: var(--admin-text-primary);
-    background: var(--admin-text-primary);
+.admin-shell .admin-nav-group:has(.app-workspace-nav-link.is-active) .admin-nav-group-label::before,
+.admin-shell .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-group-label::before {
+    content: none !important;
+    display: none !important;
 }
 
 .admin-shell .app-workspace-nav-link {
@@ -1654,17 +1597,21 @@
 }
 
 .admin-shell .admin-nav-group + .admin-nav-group {
-    margin-top: 14px;
+    margin-top: 18px;
 }
 
+.admin-shell .admin-nav-group-items,
 .admin-shell .admin-nav-group-items:not(.is-collapsed) {
-    margin-left: 4px;
-    padding-left: 9px;
-    border-left: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
 }
 
 .admin-shell .admin-nav-group-items:not(.is-collapsed) .app-workspace-nav-link {
-    padding-left: 10px !important;
+    padding-left: 8px !important;
 }
 
 .admin-shell .admin-nav-collapsed-separator {
@@ -8538,21 +8485,6 @@
     width: 246px;
 }
 
-.admin-analytics-pricing-modal .admin-analytics-price-field,
-.admin-analytics-pricing-modal .admin-analytics-price-field .ant-form-item-control,
-.admin-analytics-pricing-modal .admin-analytics-price-field .ant-form-item-control-input,
-.admin-analytics-pricing-modal .admin-analytics-price-input,
-.admin-analytics-pricing-modal .admin-analytics-price-input input {
-    width: 100%;
-    min-width: 0;
-    pointer-events: auto;
-    user-select: text;
-}
-
-.admin-analytics-pricing-modal .admin-analytics-price-input {
-    display: block;
-}
-
 .admin-analytics-toolbar .admin-list-toolbar-actions {
     align-items: center;
 }
@@ -8641,6 +8573,33 @@
     color: var(--admin-text-muted);
     font-size: 11px;
     line-height: 16px;
+}
+
+.admin-analytics-finance-values {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+.admin-analytics-finance-values > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+}
+
+.admin-analytics-finance-values dt {
+    color: var(--admin-text-muted);
+    font-weight: 400;
+}
+
+.admin-analytics-finance-values dd {
+    margin: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
 }
 
 .admin-analytics-overview-grid {
@@ -8875,21 +8834,6 @@
 .admin-analytics-tabs .ant-tabs-tab {
     min-height: 42px;
     padding-block: 10px;
-}
-
-.admin-analytics-pricing-description {
-    margin-bottom: 14px;
-    border: 1px solid var(--admin-divider);
-    border-radius: 8px;
-    background: var(--admin-layer-2);
-    padding: 10px 12px;
-    color: var(--admin-text-secondary);
-    font-size: 11px;
-    line-height: 17px;
-}
-
-.admin-analytics-pricing-drawer .admin-table-frame {
-    min-height: min(620px, calc(100vh - 190px));
 }
 
 @media (min-width: 1280px) {
@@ -9190,8 +9134,78 @@
 }
 
 .admin-model-editor-references .admin-capability-reference-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
     gap: 10px;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card,
+.admin-model-editor-modal .admin-capability-protocol-card {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 2.5%, var(--admin-layer-1));
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading,
+.admin-model-editor-modal .admin-capability-protocol-card-heading {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    padding: 12px;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading h3,
+.admin-model-editor-modal .admin-capability-protocol-card-heading h3 {
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.admin-model-editor-modal .admin-capability-reference-card-heading p,
+.admin-model-editor-modal .admin-capability-protocol-card-heading p {
+    margin: 2px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.admin-model-editor-modal .admin-capability-reference-fields,
+.admin-model-editor-modal .admin-capability-protocol-fields {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    padding: 10px 12px 12px;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-card-heading > span {
+    display: grid;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.admin-model-editor-modal .admin-capability-protocol-card-heading > div {
+    min-width: 0;
 }
 
 .admin-model-editor-references .admin-capability-reference-card {
@@ -9240,13 +9254,37 @@
     .admin-model-editor-references .admin-capability-reference-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .admin-model-editor-modal .admin-capability-protocol-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.admin-price-tier-list-shell {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    gap: 10px;
+}
+
+.admin-price-tier-list {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+}
+
+.admin-price-tier-list-footer {
+    display: grid;
+    gap: 8px;
 }
 
 .admin-price-tier-card {
+    min-width: 0;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, var(--admin-card-border));
     border-radius: 8px;
-    background: color-mix(in srgb, var(--foreground) 2%, var(--admin-layer-1));
+    background: var(--admin-layer-1);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 
 .admin-price-tier-card-header {
@@ -9254,86 +9292,274 @@
     min-width: 0;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    gap: 10px;
+    background: color-mix(in srgb, var(--foreground) 1.5%, var(--admin-layer-1));
     padding: 8px 12px;
+}
+
+.admin-price-tier-card-heading,
+.admin-price-tier-card-actions,
+.admin-price-tier-cost-header,
+.admin-price-tier-cost-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+}
+
+.admin-price-tier-card-heading {
+    gap: 8px;
+}
+
+.admin-price-tier-card-index {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--workspace-accent) 10%, var(--admin-layer-2));
+    color: color-mix(in srgb, var(--workspace-accent) 76%, var(--admin-text-primary));
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.admin-price-tier-card-heading-copy {
+    min-width: 0;
+}
+
+.admin-price-tier-card-title {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.admin-price-tier-card-summary {
+    overflow: hidden;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-price-tier-card-actions {
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.admin-price-tier-card-actions > .ant-btn {
+    padding-inline: 5px;
+    font-size: 12px;
 }
 
 .admin-price-tier-card-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    gap: 12px 16px;
-    padding: 12px;
-}
-
-.admin-price-tier-block {
     min-width: 0;
 }
 
-.admin-price-tier-block-title {
-    margin-bottom: 10px;
-    color: color-mix(in srgb, var(--foreground) 48%, transparent);
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: 0.08em;
-}
-
-.admin-price-tier-block-title > span {
-    margin-right: 5px;
-    color: var(--admin-text-muted);
-}
-
-.admin-price-tier-match-grid {
-    grid-column: 1 / -1;
+.admin-price-tier-mode-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    align-items: center;
+    gap: 16px;
+    background: color-mix(in srgb, var(--foreground) 0.8%, transparent);
+    padding: 9px 12px;
 }
 
-.admin-price-tier-upstream {
-    grid-column: span 2;
+.admin-price-tier-mode-row .admin-price-tier-panel-heading {
+    margin-bottom: 0;
 }
 
-.admin-price-tier-billing-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-    gap: 12px;
+.admin-price-tier-mode-row .admin-price-tier-panel-heading > div {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 8px;
 }
 
-.admin-price-tier-token-grid {
-    grid-column: 1 / -1;
+.admin-price-tier-mode-row .admin-price-tier-panel-heading p {
+    margin-top: 0;
 }
 
-.admin-price-tier-token-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+.admin-price-tier-mode-control {
+    min-width: 0;
 }
 
-.admin-price-tier-billing-mode .ant-segmented {
-    border: 1px solid var(--admin-card-border);
+.admin-price-tier-mode-control .ant-segmented {
+    width: 100%;
+    border: 0;
     background: var(--admin-layer-2);
     padding: 2px;
 }
 
-.admin-price-tier-billing-mode .ant-segmented-item {
-    min-height: 28px;
-    border-radius: 5px;
+.admin-price-tier-workspace {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 12px;
+    padding: 10px 12px 12px;
 }
 
-.admin-price-tier-billing-mode .ant-segmented-item-label {
-    min-height: 28px;
-    padding-inline: 12px;
-    line-height: 28px;
+.admin-price-tier-workspace.is-advanced {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.6fr);
 }
 
-.admin-price-tier-billing-mode .ant-segmented-item-selected {
-    background: var(--admin-layer-1);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent);
+.admin-price-tier-workspace.is-default {
+    grid-template-columns: minmax(0, 1fr);
 }
 
-.admin-price-tier-unit-price .ant-input-number {
+.admin-price-tier-panel {
+    min-width: 0;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 1.8%, var(--admin-layer-2));
+    padding: 11px 12px 12px;
+}
+
+.admin-price-tier-panel-heading {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.admin-price-tier-panel-heading > div,
+.admin-price-tier-cost-heading {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 9px;
+}
+
+.admin-price-tier-panel-heading h3,
+.admin-price-tier-cost-title {
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.admin-price-tier-panel-heading p,
+.admin-price-tier-cost-heading p {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.admin-price-tier-match-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 8px 10px;
+}
+
+.admin-price-tier-upstream {
+    grid-column: 1 / -1;
+}
+
+.admin-price-tier-billing-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(190px, 0.85fr);
+    align-items: start;
+    gap: 10px;
+}
+
+.admin-price-tier-token-grid {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-price-tier-cost-panel {
+    min-width: 0;
+    margin-top: 10px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foreground) 2.2%, transparent);
+    padding: 9px 10px 10px;
+}
+
+.admin-price-tier-cost-header {
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.admin-price-tier-cost-heading {
+    min-width: 0;
+}
+
+.admin-price-tier-cost-title {
+    gap: 8px;
+}
+
+.admin-price-tier-cost-badge {
+    border: 1px solid color-mix(in srgb, var(--workspace-accent) 24%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--workspace-accent) 8%, transparent);
+    padding: 2px 7px;
+    color: color-mix(in srgb, var(--workspace-accent) 72%, var(--admin-text-primary));
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.admin-price-tier-cost-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: start;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.admin-price-tier-cost-token-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-price-tier-cost-switch {
+    flex: 0 0 auto;
+}
+
+.admin-price-tier-alert {
+    margin: 0 16px 16px;
+}
+
+.admin-price-tier-helper {
+    display: flex;
+    max-width: none;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    margin-top: 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--workspace-accent) 3.5%, transparent);
+    padding: 6px 8px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.admin-price-tier-helper strong {
+    color: var(--admin-text-secondary);
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.admin-price-tier-helper span {
+    min-width: 240px;
+    flex: 1 1 520px;
+}
+
+.admin-price-tier-unit-price .ant-input-number,
+.admin-price-tier-cost-grid .ant-input-number {
     width: 100% !important;
 }
 
@@ -9345,20 +9571,50 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    gap: 7px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+    padding: 3px 6px 3px 8px;
 }
 
 .admin-price-tier-toggle span {
     overflow-wrap: anywhere;
     color: var(--admin-text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.4;
     white-space: normal;
 }
 
 .admin-model-editor-add-tier.ant-btn {
     min-height: 38px;
+    border-color: color-mix(in srgb, var(--workspace-accent) 28%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--workspace-accent) 4%, transparent);
+}
+
+.admin-price-tier-billing-mode .ant-segmented {
+    border: 0;
+    background: var(--admin-layer-2);
+    padding: 2px;
+}
+
+.admin-price-tier-mode-control .ant-segmented-item,
+.admin-price-tier-billing-mode .ant-segmented-item {
+    min-height: 28px;
+    border-radius: 5px;
+}
+
+.admin-price-tier-mode-control .ant-segmented-item-label,
+.admin-price-tier-billing-mode .ant-segmented-item-label {
+    min-height: 28px;
+    padding-inline: 12px;
+    line-height: 28px;
+}
+
+.admin-price-tier-mode-control .ant-segmented-item-selected,
+.admin-price-tier-billing-mode .ant-segmented-item-selected {
+    background: var(--admin-layer-1);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
 .admin-model-editor-footer-actions {
@@ -9420,14 +9676,19 @@
 :root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
 :root:not(.dark) .admin-model-editor-drawer .admin-capability-protocol-card,
 :root:not(.dark) .admin-price-tier-toggle,
+:root:not(.dark) .admin-price-tier-mode-control .ant-segmented,
 :root:not(.dark) .admin-price-tier-billing-mode .ant-segmented {
     border-color: rgba(17, 17, 17, 0.18);
     background: #ffffff;
 }
 
 :root:not(.dark) .admin-price-tier-card {
-    border-color: rgba(17, 17, 17, 0.18);
-    background: #f7f7f7;
+    border-color: rgba(17, 17, 17, 0.1);
+    background: #ffffff;
+}
+
+:root:not(.dark) .admin-price-tier-panel {
+    background: #f8f8f8;
 }
 
 :root:not(.dark) .admin-model-editor-drawer .admin-capability-reference-card,
@@ -9471,10 +9732,12 @@
     box-shadow: 0 6px 20px rgb(17 17 17 / 0.08);
 }
 
+:root:not(.dark) .admin-price-tier-mode-control .ant-segmented-item-selected,
 :root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
     background: #ececec;
-    box-shadow: inset 0 0 0 1px rgb(17 17 17 / 0.12);
+    box-shadow: 0 1px 2px rgb(17 17 17 / 0.08);
 }
+
 @media (max-width: 600px) {
     .admin-model-editor-modal .ant-modal-container {
         height: calc(100dvh - 24px);
@@ -9489,6 +9752,26 @@
     .admin-model-editor-modal .admin-capability-reference-grid {
         grid-template-columns: minmax(0, 1fr);
     }
+    .admin-model-editor-modal .admin-capability-protocol-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .admin-price-tier-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .admin-price-tier-card-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .admin-price-tier-mode-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 7px;
+        padding: 9px 10px;
+    }
+    .admin-price-tier-workspace {
+        padding: 10px;
+    }
     .admin-price-tier-upstream {
         grid-column: 1 / -1;
     }
@@ -9496,14 +9779,15 @@
     .admin-model-protocol-grid,
     .admin-price-tier-billing-grid,
     .admin-price-tier-match-grid,
-    .admin-price-tier-token-grid {
+    .admin-price-tier-token-grid,
+    .admin-price-tier-cost-token-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 }
 
 @media (max-width: 899px) {
     .admin-model-editor-section,
-    .admin-price-tier-card-body {
+    .admin-price-tier-workspace.is-advanced {
         grid-template-columns: minmax(0, 1fr);
     }
 }
@@ -9704,7 +9988,7 @@
     }
 
     .admin-shell .admin-nav-group + .admin-nav-group {
-        margin-top: 16px;
+        margin-top: 20px;
     }
 
     .admin-shell .admin-sidebar-footer {
@@ -10044,6 +10328,42 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-system-update-progress,
 .admin-system-update-backup {
     padding: 16px;
+}
+
+.admin-system-update-versions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px;
+    padding-bottom: 14px;
+}
+
+.admin-system-update-versions > div {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.admin-system-update-versions span {
+    width: 100%;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.admin-system-update-versions strong {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: clamp(18px, 2.4vw, 26px);
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+}
+
+.admin-system-update-hint {
+    margin: 0 0 14px;
+    color: var(--admin-text-secondary, var(--admin-text-muted));
+    font-size: 12px;
+    line-height: 1.65;
 }
 
 .admin-system-update-version-row {
@@ -10668,4 +10988,251 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
     .admin-performance-facts {
         grid-template-columns: 100px minmax(0, 1fr);
     }
+}
+
+/* 常驻通知标题：富文本编辑区与明暗两态预览。
+ * 预览固定明暗两套底色，编辑时不受当前主题影响，便于同时校验两种主题下的可读性。 */
+.admin-banner-title-editor {
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+    padding: 8px 12px;
+    transition: border-color 160ms ease;
+}
+
+.admin-banner-title-editor:focus-within {
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--admin-card-border));
+}
+
+.admin-banner-title-editor .ProseMirror {
+    min-height: 26px;
+    outline: none;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.admin-banner-title-editor .ProseMirror p {
+    margin: 0;
+}
+
+.admin-banner-title-editor .ProseMirror p.is-editor-empty:first-child::before {
+    float: left;
+    height: 0;
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    content: attr(data-placeholder);
+    pointer-events: none;
+}
+
+/* 预览容器强制指定四种通知类型的明 / 暗底色，不依赖页面当前主题。 */
+.admin-banner-title-preview-light {
+    --notice-banner-surface-notice: var(--palette-banner-notice-500);
+    --notice-banner-surface-activity: var(--palette-banner-activity-500);
+    --notice-banner-surface-update: var(--palette-banner-update-500);
+    --notice-banner-surface-warning: var(--palette-banner-warning-500);
+}
+
+.admin-banner-title-preview-dark {
+    --notice-banner-surface-notice: var(--palette-banner-notice-700);
+    --notice-banner-surface-activity: var(--palette-banner-activity-700);
+    --notice-banner-surface-update: var(--palette-banner-update-700);
+    --notice-banner-surface-warning: var(--palette-banner-warning-700);
+}
+
+/* 常驻通知标题图标选择器 */
+.admin-banner-icon-picker {
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+}
+
+.admin-banner-icon-picker-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: var(--admin-layer-1);
+}
+
+.admin-banner-icon-picker-body {
+    max-height: 208px;
+    overflow-y: auto;
+    padding: 2px 8px 8px;
+}
+
+.admin-banner-icon-picker-group-label {
+    display: block;
+    padding: 8px 2px 4px;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+}
+
+.admin-banner-icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+    gap: 4px;
+}
+
+.admin-banner-icon-picker-option {
+    display: grid;
+    height: 34px;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease;
+}
+
+.admin-banner-icon-picker-option:hover {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: var(--foreground);
+}
+
+/* emoji 素材项：emoji 是文本字符，用原生字号渲染（彩色字形不受 color 影响） */
+.admin-banner-icon-picker-option-emoji {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.admin-banner-icon-picker-option.is-active {
+    border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+    background: var(--control-selected-bg);
+    color: var(--foreground);
+}
+
+.admin-banner-icon-picker-option:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-banner-icon-picker-empty {
+    padding: 14px 2px;
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+
+/* 通知类型选择：卡片直接铺出该类型的真实底色，比文字描述颜色更直观。 */
+.admin-banner-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.admin-banner-type-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+    padding: 8px 10px 10px;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 160ms ease,
+        background-color 160ms ease;
+}
+
+.admin-banner-type-card:hover {
+    background: color-mix(in srgb, var(--foreground) 4%, var(--admin-layer-1));
+}
+
+.admin-banner-type-card.is-active {
+    border-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+    background: var(--control-selected-bg);
+}
+
+.admin-banner-type-card:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-banner-type-card-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--foreground);
+    font-size: var(--fs-label);
+    font-weight: 600;
+}
+
+.admin-banner-type-card-check {
+    margin-left: auto;
+    color: var(--foreground);
+}
+
+.admin-banner-type-card-hint {
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+
+/* 类型卡片上的真实底色条；颜色由卡片的 data-banner-type 选中对应 token。 */
+.admin-banner-type-card-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #ffffff;
+    font-size: var(--fs-micro);
+    line-height: 1.4;
+}
+
+.admin-banner-type-card[data-banner-type="notice"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-notice);
+}
+
+.admin-banner-type-card[data-banner-type="activity"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-activity);
+}
+
+.admin-banner-type-card[data-banner-type="update"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-update);
+}
+
+.admin-banner-type-card[data-banner-type="warning"] .admin-banner-type-card-preview {
+    background: var(--notice-banner-surface-warning);
+}
+
+/* 模型定价编辑器：弹窗内只保留一个滚动区域。 */
+.admin-model-editor-modal .ant-modal-body {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.admin-model-editor-modal .admin-model-editor-form {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+
+.admin-model-editor-modal .admin-model-editor-form > .ant-tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder > .ant-tabs-content,
+.admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder > .ant-tabs-content > .ant-tabs-tabpane {
+    min-height: 100%;
 }

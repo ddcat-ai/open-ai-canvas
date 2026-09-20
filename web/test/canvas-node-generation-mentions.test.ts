@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
+import { buildCanvasResourceReferences } from "../src/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
 function node(id: string, type: CanvasNodeType, content: string): CanvasNodeData {
@@ -32,6 +33,28 @@ function connection(fromNodeId: string): CanvasConnection {
 }
 
 describe("canvas node generation position mentions", () => {
+    test("Agent 保存的素材引用块在编辑器和再次提交时保持相同编号", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Image, "data:image/png;base64,a");
+        const wig = node("wig", CanvasNodeType.Image, "data:image/png;base64,b");
+        const voice = node("voice", CanvasNodeType.Audio, "data:audio/mpeg;base64,c");
+        const note = node("note", CanvasNodeType.Markdown, "导演方案");
+        const prompt = "一镜到底\n\n【资产参考】\n人物：@图片1\n假发：@图片2\n声音：@音频1";
+        target.metadata = { composerContent: prompt, prompt, referenceNodeIds: [character.id, voice.id, wig.id] };
+        const nodes = [target, wig, voice, note, character];
+        const connections = [character, voice, wig, note].map((source) => connection(source.id));
+        const references = buildCanvasResourceReferences(nodes, connections, target.id).filter((reference) => reference.active);
+
+        expect(Object.fromEntries(references.map((reference) => [reference.nodeId, reference.label]))).toEqual({
+            character: "图片1", wig: "图片2", voice: "音频1", note: "文本1",
+        });
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, [], true);
+        expect(context.referenceImages.map((reference) => reference.id)).toEqual([character.id, wig.id]);
+        expect(context.referenceAudios.map((reference) => reference.id)).toEqual([voice.id]);
+        expect(context.prompt).toBe(prompt);
+        expect(context.textCount).toBe(0);
+    });
+
     test("已有图片节点显式引用自身时作为图生图参考图提交", () => {
         const source = node("image-self", CanvasNodeType.Image, "data:image/png;base64,a");
         source.metadata.composerContent = "将 @图片1 图片变清晰";
@@ -104,5 +127,40 @@ describe("canvas node generation position mentions", () => {
         expect(nextTarget.metadata?.composerContent).toBe("让 进入画面");
         expect(context.referenceImages).toEqual([]);
         expect(context.prompt).toBe("让 进入画面");
+    });
+});
+
+describe("canvas node generation video text references", () => {
+    test("视频 promptOnly 下显式 @文本 引用仍内联真实内容，图片保持结构化引用", () => {
+        const target = targetNode();
+        const image = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const note = node("note", CanvasNodeType.Text, "角色设定：禾禾\n光影氛围：暗调");
+        const context = buildNodeGenerationContext(target.id, [image, note, target], [connection(image.id), connection(note.id)], "参考图：@图片1\n任务要求：@文本1", [], true);
+
+        expect(context.prompt).toBe("参考图：@图片1\n任务要求：【文本1】\n\n【文本1】\n角色设定：禾禾\n光影氛围：暗调");
+        expect(context.referenceImages.map((item) => item.id)).toEqual(["image-a"]);
+        expect(context.textCount).toBe(1);
+        expect(context.imageCount).toBe(1);
+    });
+
+    test("视频 promptOnly 下未显式引用的连线文本不会自动拼进提示词", () => {
+        const target = targetNode();
+        const image = node("image-a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const note = node("note", CanvasNodeType.Text, "角色设定：禾禾");
+        const context = buildNodeGenerationContext(target.id, [image, note, target], [connection(image.id), connection(note.id)], "生成一段暗调舞蹈视频", [], true);
+
+        expect(context.prompt).toBe("生成一段暗调舞蹈视频");
+        expect(context.referenceImages.map((item) => item.id)).toEqual(["image-a"]);
+        expect(context.textCount).toBe(0);
+    });
+
+    test("视频 promptOnly 非显式引用路径仍丢弃上游文本，关闭后恢复自动拼接", () => {
+        const target = targetNode();
+        const note = node("note", CanvasNodeType.Text, "角色设定：禾禾");
+        const nodes = [note, target];
+        const connections = [connection(note.id)];
+
+        expect(buildNodeGenerationContext(target.id, nodes, connections, "跳舞", [], true).prompt).toBe("跳舞");
+        expect(buildNodeGenerationContext(target.id, nodes, connections, "跳舞", [], false).prompt).toBe("跳舞\n\n角色设定：禾禾");
     });
 });

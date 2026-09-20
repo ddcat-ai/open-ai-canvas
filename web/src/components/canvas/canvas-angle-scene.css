@@ -1,0 +1,500 @@
+/* CSS 3D orbit/skybox preview reconstructed from recombyn AngleEditorScene, scoped to canvas-angle-*. */
+.canvas-angle-scene {
+    --mae-face-bg: color-mix(in srgb, var(--fg) 8%, var(--bg));
+    --mae-face-edge: color-mix(in srgb, var(--fg) 28%, transparent);
+    --mae-face-edge-soft: color-mix(in srgb, var(--fg) 12%, transparent);
+    --mae-face-label: color-mix(in srgb, var(--fg) 38%, transparent);
+    --mae-wire: color-mix(in srgb, var(--fg) 28%, transparent);
+    --mae-wire-axis: color-mix(in srgb, var(--fg) 32%, transparent);
+    --mae-arrow: color-mix(in srgb, var(--fg) 55%, transparent);
+    --mae-arrow-hover-bg: color-mix(in srgb, var(--fg) 10%, transparent);
+    --mae-subject-border: color-mix(in srgb, var(--fg) 16%, transparent);
+    --mae-subject-bg: color-mix(in srgb, var(--fg) 6%, var(--bg));
+    --mae-subject-shadow: 0 1px 8px color-mix(in srgb, var(--fg) 18%, transparent);
+    --mae-cam-front: color-mix(in srgb, var(--fg) 10%, var(--bg));
+    --mae-cam-body: color-mix(in srgb, var(--fg) 16%, var(--bg));
+    --mae-cam-side: color-mix(in srgb, var(--fg) 22%, var(--bg));
+    --mae-cam-lens: color-mix(in srgb, var(--fg) 42%, var(--bg));
+    --mae-cam-lens-core: var(--fg);
+    --mae-cam-edge: color-mix(in srgb, var(--fg) 14%, transparent);
+    --mae-globe-size: 150px;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+    overflow: hidden;
+    user-select: none;
+    background: var(--bg);
+}
+
+.canvas-angle-scene .canvas-angle-unified {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    perspective: 1200px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.canvas-angle-scene .canvas-angle-unified.is-camera {
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-unified.is-dragging {
+    cursor: grabbing;
+}
+
+.canvas-angle-scene .canvas-angle-subject-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-skybox-space {
+    perspective: 1200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.canvas-angle-scene .canvas-angle-cube-wrap {
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-cube {
+    position: relative;
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-cube-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: var(--r-xs, 2px);
+    border: 1px solid var(--mae-face-edge-soft);
+    background: var(--mae-face-bg);
+    color: var(--mae-face-label);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    backface-visibility: hidden;
+}
+
+.canvas-angle-scene .is-skybox .canvas-angle-cube-face {
+    border: none;
+    box-shadow:
+        inset 0 0 0 1px var(--mae-face-edge),
+        0 0 0 0.5px var(--mae-face-edge-soft);
+    background: var(--mae-face-bg);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    color: var(--mae-face-label);
+    backface-visibility: visible;
+}
+
+.canvas-angle-scene .is-skybox .canvas-angle-cube-face.has-image img {
+    width: 72%;
+    height: 72%;
+    object-fit: contain;
+    border-radius: var(--r-xs, 2px);
+    pointer-events: none;
+    user-select: none;
+}
+
+.canvas-angle-scene .canvas-angle-subject {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    max-width: 64px;
+    max-height: 64px;
+    transform-style: flat;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-subject img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    border-radius: var(--r-xs, 2px);
+    border: 1px solid var(--mae-subject-border);
+    background: var(--mae-subject-bg);
+    box-shadow: var(--mae-subject-shadow);
+    user-select: none;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-cube-face.is-front { transform: translateZ(var(--angle-cube-half, 50px)); }
+.canvas-angle-scene .canvas-angle-cube-face.is-back { transform: rotateY(180deg) translateZ(var(--angle-cube-half, 50px)); }
+.canvas-angle-scene .canvas-angle-cube-face.is-right { transform: rotateY(90deg) translateZ(var(--angle-cube-half, 50px)); }
+.canvas-angle-scene .canvas-angle-cube-face.is-left { transform: rotateY(-90deg) translateZ(var(--angle-cube-half, 50px)); }
+.canvas-angle-scene .canvas-angle-cube-face.is-top { transform: rotateX(90deg) translateZ(var(--angle-cube-half, 50px)); }
+.canvas-angle-scene .canvas-angle-cube-face.is-bottom { transform: rotateX(-90deg) translateZ(var(--angle-cube-half, 50px)); }
+
+.canvas-angle-scene .canvas-angle-orbit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-orbit-core {
+    position: relative;
+    width: var(--mae-globe-size);
+    height: var(--mae-globe-size);
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-orbit-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--mae-globe-size);
+    height: var(--mae-globe-size);
+    margin-left: calc(var(--mae-globe-size) / -2);
+    margin-top: calc(var(--mae-globe-size) / -2);
+    box-sizing: border-box;
+    border: 1px solid var(--mae-wire);
+    border-radius: 50%;
+    opacity: 0.55;
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+}
+
+.canvas-angle-scene .canvas-angle-orbit-axis {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    height: var(--mae-globe-size);
+    transform: translate(-50%, -50%);
+    background: var(--mae-wire-axis);
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-orbit-nav {
+    --mae-orbit-arrow-size: 18px;
+    --mae-orbit-arrow-gap: 10px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--mae-globe-size) + 2 * (var(--mae-orbit-arrow-gap) + var(--mae-orbit-arrow-size)));
+    height: calc(var(--mae-globe-size) + 2 * (var(--mae-orbit-arrow-gap) + var(--mae-orbit-arrow-size)));
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-camera-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-cam-pivot {
+    position: relative;
+    width: 1px;
+    height: 1px;
+    transform-style: preserve-3d;
+    pointer-events: none;
+}
+
+.canvas-angle-scene .canvas-angle-cam-pos {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-cam-body {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    box-sizing: border-box;
+    background: var(--mae-cam-body);
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-cam-body.is-front,
+.canvas-angle-scene .canvas-angle-cam-body.is-back {
+    width: 22px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.canvas-angle-scene .canvas-angle-cam-body.is-front {
+    background: var(--mae-cam-front);
+    box-shadow: 0 0 0 1px var(--mae-cam-edge);
+}
+
+.canvas-angle-scene .canvas-angle-cam-body.is-back {
+    background: var(--mae-cam-body);
+    box-shadow: 0 0 0 1px var(--mae-cam-edge);
+}
+
+.canvas-angle-scene .canvas-angle-cam-lens {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    margin: 3px auto 0;
+    border-radius: 50%;
+    background: var(--mae-cam-lens);
+}
+
+.canvas-angle-scene .canvas-angle-cam-lens span {
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: var(--mae-cam-lens-core);
+}
+
+.canvas-angle-scene .canvas-angle-cam-screen {
+    position: absolute;
+    inset: 2px;
+    border-radius: var(--r-xs, 2px);
+    background-color: color-mix(in srgb, var(--fg) 88%, var(--bg));
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.canvas-angle-scene .canvas-angle-cam-body.is-top,
+.canvas-angle-scene .canvas-angle-cam-body.is-bottom {
+    width: 22px;
+    height: 16px;
+    border-radius: var(--r-xs, 2px);
+    background: var(--mae-cam-body);
+}
+
+.canvas-angle-scene .canvas-angle-cam-body.is-side {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--r-xs, 2px);
+    background: var(--mae-cam-side);
+}
+
+.canvas-angle-scene .canvas-angle-cam-shutter {
+    display: block;
+    width: 6px;
+    height: 6px;
+    margin: 4px auto 0;
+    border-radius: 50%;
+    background: var(--mae-cam-lens);
+}
+
+.canvas-angle-scene .canvas-angle-cam-hotshoe {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    height: 1px;
+    transform-style: preserve-3d;
+}
+
+.canvas-angle-scene .canvas-angle-cam-hotshoe-body {
+    width: 10px;
+    height: 4px;
+    margin-left: -5px;
+    border-radius: 1px;
+    background: var(--mae-cam-side);
+}
+
+.canvas-angle-scene .canvas-angle-cam-hotshoe-body span {
+    display: block;
+    width: 6px;
+    height: 2px;
+    margin: 1px auto 0;
+    border-radius: 1px;
+    background: var(--mae-cam-lens);
+}
+
+.canvas-angle-scene .canvas-angle-cam-line {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    background: var(--mae-cam-lens);
+    opacity: 0.75;
+    transform-origin: top center;
+}
+
+.canvas-angle-scene .canvas-angle-dir {
+    position: absolute;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--mae-arrow);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.canvas-angle-scene .canvas-angle-dir:hover {
+    color: var(--fg);
+    background: var(--mae-arrow-hover-bg);
+}
+
+.canvas-angle-scene .canvas-angle-orbit-nav .canvas-angle-dir.is-up {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.canvas-angle-scene .canvas-angle-orbit-nav .canvas-angle-dir.is-down {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.canvas-angle-scene .canvas-angle-orbit-nav .canvas-angle-dir.is-left {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.canvas-angle-scene .canvas-angle-orbit-nav .canvas-angle-dir.is-right {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.canvas-angle-scene .is-skybox .canvas-angle-skybox-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: inherit;
+    pointer-events: none;
+}
+
+.canvas-angle-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    color: var(--fg);
+}
+
+.canvas-angle-body {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+    min-height: 0;
+    flex: 1;
+}
+
+.canvas-angle-seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 4px;
+    padding: 3px;
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.canvas-angle-seg button {
+    height: 28px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: inherit;
+    font-size: var(--fs-label);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.canvas-angle-seg button[aria-pressed="true"] {
+    background: var(--fg);
+    color: var(--bg);
+}
+
+.canvas-angle-tab {
+    height: 28px;
+    flex-shrink: 0;
+    padding: 0 10px;
+    border: var(--stroke-1) solid var(--dock-border);
+    border-radius: var(--r-md);
+    background: transparent;
+    color: inherit;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.canvas-angle-tab:hover {
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.canvas-angle-tab[aria-pressed="true"] {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+}
+
+.canvas-angle-preset {
+    height: 32px;
+    border: 0;
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--fg) 7%, transparent);
+    color: inherit;
+    font-size: var(--fs-label);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.canvas-angle-preset:hover {
+    background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.canvas-angle-preset[aria-pressed="true"] {
+    background: var(--fg);
+    color: var(--bg);
+}
+
+.canvas-angle-generate {
+    border: 0;
+}
+
+.canvas-angle-slider.ant-slider .ant-slider-rail {
+    background: color-mix(in srgb, var(--fg) 16%, transparent) !important;
+}
+
+.canvas-angle-slider.ant-slider .ant-slider-track {
+    background: var(--fg) !important;
+}
+
+.canvas-angle-slider.ant-slider .ant-slider-handle::after {
+    box-shadow: 0 0 0 2px var(--fg) !important;
+    background: var(--bg) !important;
+}
+
+.canvas-angle-stage {
+    position: relative;
+    min-height: 280px;
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--bg);
+}

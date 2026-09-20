@@ -1,4 +1,5 @@
 import { Streamdown, type Components } from "streamdown";
+import { memo } from "react";
 import { AiMessageCodeBlock } from "./ai-message-code-block";
 
 import "streamdown/styles.css";
@@ -32,11 +33,14 @@ function buildComponents(isStreaming: boolean): Components {
 }
 
 
-export function AIMessageMarkdown({ children, isStreaming = false, className = "" }: AIMessageMarkdownProps) {
+const staticComponents = buildComponents(false);
+const streamingComponents = buildComponents(true);
+
+export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isStreaming = false, className = "" }: AIMessageMarkdownProps) {
     if (!children.trim()) return null;
     return (
         <Streamdown
-            className={`ai-message-markdown ${className}`.trim()}
+            className={`ai-message-markdown ${isStreaming ? "ai-message-markdown-streaming" : ""} ${className}`.trim()}
             mode="streaming"
             dir="auto"
             isAnimating={isStreaming}
@@ -44,9 +48,9 @@ export function AIMessageMarkdown({ children, isStreaming = false, className = "
             parseIncompleteMarkdown
             skipHtml
             lineNumbers={false}
-            components={buildComponents(isStreaming)}
+            components={isStreaming ? streamingComponents : staticComponents}
         >
             {children}
         </Streamdown>
     );
-}
+});

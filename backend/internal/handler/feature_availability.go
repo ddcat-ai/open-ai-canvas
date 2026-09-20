@@ -9,6 +9,16 @@ import (
 )
 
 func RegisterFeatureAvailabilityRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/public/welcome", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		setting, err := svc.FeatureAvailability()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"welcomeEnabled": setting.WelcomeEnabled})
+	})
+
 	r.GET("/features", func(c *gin.Context) {
 		if _, err := currentUser(c, svc); err != nil {
 			failService(c, err)

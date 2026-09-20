@@ -1,0 +1,44 @@
+/* Rare UI Fluid Orb inspired launcher: isolated from canvas wheel/pointer gestures. */
+.fluid-orb {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--fluid-orb-color, #7164f6) 18%, white);
+    border-radius: 999px;
+    background:
+        radial-gradient(circle at 34% 20%, rgba(255, 255, 255, .96) 0 9%, rgba(255, 255, 255, .48) 18%, transparent 42%),
+        var(--fluid-orb-color, #7164f6);
+    box-shadow:
+        0 14px 32px color-mix(in srgb, var(--fluid-orb-color, #7164f6) 27%, transparent),
+        inset 0 1px 1px rgba(255, 255, 255, .82);
+    isolation: isolate;
+}
+
+.fluid-orb::after {
+    position: absolute;
+    inset: 5%;
+    border: 1px solid rgba(255, 255, 255, .28);
+    border-radius: inherit;
+    content: "";
+    pointer-events: none;
+}
+
+.fluid-orb canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.fluid-orb-fallback {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+        radial-gradient(circle at 30% 22%, #fff 0 9%, transparent 27%),
+        radial-gradient(circle at 60% 78%, color-mix(in srgb, var(--fluid-orb-color, #7164f6) 82%, white), transparent 60%),
+        linear-gradient(145deg, color-mix(in srgb, var(--fluid-orb-color, #7164f6) 70%, #b7e8ff), var(--fluid-orb-color, #7164f6));
+}
+
+
+@media (prefers-reduced-motion: reduce) { .fluid-orb { transition: none !important; } }

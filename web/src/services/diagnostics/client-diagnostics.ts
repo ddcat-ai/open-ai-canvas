@@ -52,7 +52,7 @@ export function initializeClientDiagnostics() {
     apiClient.interceptors.request.use(
         (config) => {
             const route = normalizeRoute(config.url);
-            if (config.method?.toLowerCase() === "post" && (route === "/tasks" || route === "/sessions")) {
+            if (config.method?.toLowerCase() === "post" && route === "/tasks") {
                 activeTraceId = createDiagnosticId("trace");
             }
             const traceId = activeTraceId;

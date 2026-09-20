@@ -1,3 +1,4 @@
+import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { App, Button, Dropdown, Input, Select } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
@@ -5,7 +6,7 @@ import { Boxes, Check, Clapperboard, Heart, Library, LoaderCircle, Megaphone, Mo
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { ListToolbar, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { fallbackSkillCategories, formatSkillCount, groupSkills, skillCategoryLabel } from "@/pages/skills/skill-catalog";
@@ -205,17 +206,19 @@ export default function SkillsPage() {
     return (
         <>
             <WorkspacePage className="library-page skills-library-page" grid>
-                <section className="skills-hero" aria-labelledby="skills-hero-title">
-                    <div className="skills-hero-inner">
-                        <span className="skills-hero-badge"><Sparkles className="size-3.5" />技能广场</span>
-                        <h1 id="skills-hero-title" className="skills-hero-title">技能库</h1>
-                        <p className="skills-hero-description">把常用的提示词、角色设定和创作方法收进自己的工具架。</p>
-                        <span className="skills-hero-meta">{total} 个技能</span>
-                    </div>
-                </section>
+                <PageHeader title="技能库" description="把提示词、角色设定和创作方法，变成随时可用的能力。" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>} />
 
-                <ListToolbar className="library-toolbar skills-toolbar mt-7" active={filtersActive} onReset={resetFilters}>
-                    <div className="skills-tabs" ref={tabsRef} role="tablist" aria-label="技能库范围">
+                <div className="skills-browse-bar">
+                <div className="skills-navigation">
+                    <div className="skills-tabs" ref={tabsRef} role="tablist" aria-label="技能库范围" onKeyDown={(event) => {
+                        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                        event.preventDefault();
+                        const current = scopeOptions.findIndex((option) => option.value === scope);
+                        const next = event.key === "Home" ? 0 : event.key === "End" ? scopeOptions.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + scopeOptions.length) % scopeOptions.length;
+                        setScope(scopeOptions[next].value as SkillScope);
+                        setPage(1);
+                        tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+                    }}>
                         <span className="skills-tabs-indicator" ref={indicatorRef} aria-hidden="true" />
                         {scopeOptions.map((option) => {
                             const Icon = option.icon;
@@ -226,6 +229,7 @@ export default function SkillsPage() {
                                     key={option.value}
                                     type="button"
                                     role="tab"
+                                    tabIndex={active ? 0 : -1}
                                     aria-selected={active}
                                     className={`skills-tab${active ? " is-active" : ""}`}
                                     onClick={() => { setScope(option.value as SkillScope); setPage(1); }}
@@ -237,19 +241,21 @@ export default function SkillsPage() {
                             );
                         })}
                     </div>
-
+                </div>
+                <CollectionToolbar active={filtersActive} onReset={resetFilters}>
                         <Input className="min-w-0 sm:!w-56" prefix={<Search className="size-4 text-foreground/38" />} value={search} allowClear placeholder="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
-                        <Select className="w-28" value={tag} options={[{ value: "all", label: "全部分类" }, ...categories]} onChange={(value) => { setTag(value); setPage(1); }} />
-                        <Select className="w-24" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
-                </ListToolbar>
+                        <Select aria-label="技能分类" className="w-28" value={tag} options={[{ value: "all", label: "全部分类" }, ...categories]} onChange={(value) => { setTag(value); setPage(1); }} />
+                        <Select aria-label="技能排序" className="w-24" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
+                </CollectionToolbar>
+                </div>
 
                 {loading && !skills.length ? <SkillSkeleton /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : groupedSkills.length ? (
-                    <div key={`${scope}-${page}`} className="skills-scope-panel space-y-9 py-6">
+                    <div key={`${scope}-${page}`} className="skills-scope-panel">
                         {groupedSkills.map((group) => {
                             const GroupIcon = categoryIconOf(group.value);
                             return (
-                                <section key={group.value} aria-labelledby={`skill-category-${group.value}`}>
-                                    <div className="mb-3 flex items-center justify-between px-0.5">
+                                <section key={group.value} data-category={group.value} aria-labelledby={`skill-category-${group.value}`}>
+                                    <div className="skill-section-heading">
                                         <h2 id={`skill-category-${group.value}`} className="flex items-center gap-2 text-base font-semibold text-foreground/75">
                                             <span className="skill-group-icon"><GroupIcon /></span>
                                             {group.label}
@@ -257,8 +263,7 @@ export default function SkillsPage() {
                                         <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
                                     </div>
                                     <div className="library-grid skill-library-grid">
-                                        {groupedSkills[0] === group ? <button type="button" className="library-create-card" onClick={() => setInstallOpen(true)}><span className="library-create-cover"><Plus className="size-8" /></span><span className="library-create-title">安装技能</span><span className="library-create-meta">上传 MD / ZIP 或连接 GitHub</span></button> : null}
-                                        {group.skills.map((skill, index) => <SkillCard key={skill.skillId} skill={skill} categories={categories} loading={mutatingID === skill.skillId} style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
+                                        {group.skills.map((skill, index) => <SkillCard key={skill.skillId} skill={skill} categories={categories} loading={mutatingID === skill.skillId} style={{ animationDelay: `${Math.min(index, 5) * 30}ms` }} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
                                     </div>
                                 </section>
                             );
@@ -292,9 +297,9 @@ export default function SkillsPage() {
 function SkillCard({ skill, categories, loading, style, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; categories: SkillCategory[]; loading: boolean; style?: CSSProperties; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
     const CategoryIcon = categoryIconOf(skill.tag);
     return (
-        <article style={style} className={`library-card library-card-surface skill-library-card group${skill.isAdded ? " is-selected is-added" : ""}`}>
-            <span className="library-icon-tile skill-card-icon" aria-hidden="true"><CategoryIcon /></span>
+        <article style={style} className={`product-collection-card library-card library-card-surface skill-library-card group${skill.isAdded ? " is-added" : ""}`}>
             <div className="skill-card-top">
+                <span className="library-icon-tile skill-card-icon" aria-hidden="true"><CategoryIcon /></span>
                 <button type="button" className="skill-card-title-button" onClick={onOpen}>
                     <h3>{skill.skillName}</h3>
                 </button>
@@ -332,10 +337,9 @@ function SkillCard({ skill, categories, loading, style, onOpen, onAdd, onLike, o
                 ? <div className="skill-card-action"><span className="skill-card-owner-flag">我创建的</span><span className="skill-card-added-count">{formatSkillCount(skill.addedCount)} 人已加入</span></div>
                 : (
                     <div className="skill-card-action">
-                        <button type="button" disabled={loading} aria-pressed={skill.isAdded} className={`skill-card-join${skill.isAdded ? " is-added" : ""}`} onClick={onAdd}>
-                            {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : skill.isAdded ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
-                            <span>{skill.isAdded ? "已加入" : "加入我的技能库"}</span>
-                        </button>
+                        <Button loading={loading} aria-pressed={skill.isAdded} icon={skill.isAdded ? <Check /> : <Plus />} onClick={onAdd}>
+                            {skill.isAdded ? "已加入" : "加入技能库"}
+                        </Button>
                         <Tooltip title={`${formatSkillCount(skill.addedCount)} 人已加入`}><span className="skill-card-added-count">{formatSkillCount(skill.addedCount)}</span></Tooltip>
                     </div>
                 )}

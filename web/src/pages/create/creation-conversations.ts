@@ -117,8 +117,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 return { ...message, status: "done" as const, content, resultUrls, error: undefined, taskIds: nextTaskIds };
             }
             if (matches.every((task) => task.status === "cancelled")) {
-                const localOnly = matches.find(runtime.isLocalDreaminaWaitStopped);
-                return { ...message, status: "cancelled" as const, content: localOnly ? runtime.localDreaminaCancellationMessage(localOnly) : "已停止", error: undefined, taskIds: nextTaskIds };
+                return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };
             }
             const failed = matches.find((task) => task.status === "failed" || task.creationError);
             return { ...message, status: "error" as const, content: "生成失败", error: generationErrorMessage(failed?.creationError || failed?.error || "任务已结束，但生成结果暂时无法读取"), taskIds: nextTaskIds };

@@ -3,8 +3,6 @@ import { Pause, Play } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
-import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import type { TimelineClip } from "@/types/timeline";
@@ -57,28 +55,12 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
         setVideoSize(null);
         if (!node && !media) return;
         let cancelled = false;
-        // 直连媒体片段（directMedia，不落画布）与画布节点走同一套缓存/回退解析策略
+        // 直连媒体片段（directMedia，不落画布）与画布节点走同一套稳定资源地址解析策略。
         const storageKey = node?.metadata?.storageKey || media?.storageKey || "";
         const fallback = node?.metadata?.content || media?.url || "";
-        const applyUrl = (url: string) => {
+        void resolveMediaUrl(storageKey, fallback).then((url) => {
             if (!cancelled) setVideoUrl(url);
-        };
-        if (resourceIdFromStorageKey(storageKey)) {
-            void cacheResourceObjectUrl(storageKey)
-                .then((cached) => {
-                    if (cancelled) return;
-                    if (cached) {
-                        setVideoUrl(cached);
-                    } else {
-                        void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                    }
-                })
-                .catch(() => {
-                    if (!cancelled) void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-                });
-        } else {
-            void resolveMediaUrl(storageKey, fallback).then(applyUrl);
-        }
+        });
         return () => {
             cancelled = true;
         };

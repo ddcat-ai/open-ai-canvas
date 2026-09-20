@@ -1,20 +1,23 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, Outlet } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
+import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage } from "@/lib/workspace-route-modules";
+import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
+const BannerAnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
 const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
 const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
 const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
 const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
 const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
+const AgentLessonsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AgentLessonsPage })));
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
@@ -45,7 +48,6 @@ const SkillsPage = lazy(() => import("@/pages/skills"));
 const PluginsPage = lazy(() => import("@/pages/plugins"));
 const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
-const WalletPage = lazy(loadWalletPage);
 const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(loadProjectDetailPage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
@@ -62,7 +64,10 @@ function fullScreenDeferred(element: ReactNode) {
 }
 
 function AuthenticatedWorkspaceLayout() {
-    return <RequireAuth>{fullScreenDeferred(<UserLayout><Outlet /></UserLayout>)}</RequireAuth>;
+    const { pathname } = useLocation();
+    const isCanvasProjectRoute = pathname.startsWith("/canvas/");
+    const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
+    return <RequireAuth><Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense></RequireAuth>;
 }
 
 /**
@@ -128,11 +133,7 @@ export const router = createBrowserRouter([
             },
             {
                 path: "/wallet",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="creditsEnabled">{deferred(<WalletPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
+                element: <RequireAuth>{null}</RequireAuth>,
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
             { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
@@ -177,7 +178,7 @@ export const router = createBrowserRouter([
                 ),
             },
             { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
-            { path: "/canvas/:id", element: <RequireAuth>{deferred(<CanvasProjectPage />)}</RequireAuth> },
+            { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
             {
                 path: "/admin",
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
@@ -191,6 +192,8 @@ export const router = createBrowserRouter([
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: <AnnouncementsPage /> },
+                    { path: "banner-announcements", element: <BannerAnnouncementsPage /> },
+                    { path: "agent-lessons", element: <AgentLessonsPage /> },
                     { path: "resources", element: <StorageResourcesPage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },

@@ -1,17 +1,17 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { App, Button, Dropdown, Modal } from "antd";
+import { App, Button, Dropdown, Input, Modal } from "antd";
 import { Select } from "@/components/ui/base/select";
-import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
+import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 
 import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
-import { CanvasCreateCard } from "@/components/canvas/canvas-project-card";
 import { CanvasFolderCard } from "@/components/canvas/canvas-folder-card";
 import { CanvasHistoryDrawer } from "@/components/canvas/canvas-history-drawer";
 import type { CanvasExportFile } from "@/types/canvas-export";
@@ -29,6 +29,7 @@ import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/servi
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { CanvasSyncDraftMenu } from "./canvas-sync-status";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
@@ -80,7 +81,7 @@ export default function CanvasPage() {
     const mode = searchParams.get("mode");
     const agentMode = mode === "new" || mode === "recent" || mode === "choose";
     const handoffMode = mode === "handoff";
-    const forwardedQuery = agentMode || handoffMode ? `?${searchParams.toString()}` : "";
+    const forwardedQuery = agentMode || handoffMode || searchParams.get("agent") === "1" ? `?${searchParams.toString()}` : "";
     const preloadProject = useCallback(() => {
         void loadCanvasProjectPage();
     }, []);
@@ -111,7 +112,6 @@ export default function CanvasPage() {
     const projectNames = useMemo(() => new Map((projectQuery.data?.projects || []).map(({ project }) => [project.id, project.name])), [projectQuery.data]);
     const visibleProjects = userId ? filteredProjects : filteredProjects.slice(0, loadedProjectCount);
     const hasMore = userId ? libraryQuery.hasNextPage : visibleProjects.length < filteredProjects.length;
-    const showCreateCard = !keyword.trim() && projectFilter === "all";
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const projectFilterLabel = projectFilter === "all" ? "全部画布" : projectFilter === "independent" ? "自由画布" : projectNames.get(projectFilter) || "项目画布";
     const sortLabel = sort === "name" ? "按名称" : sort === "nodes" ? "按节点" : "最近更新";
@@ -359,15 +359,21 @@ export default function CanvasPage() {
                     await flushCanvasStorePersistence();
                     if (remoteSyncEnabled) {
                         try {
-                            await saveRemoteUserDataNow();
+                            await saveRemoteUserDataNow(importedProjectId);
                         } catch (syncError) {
                             remoteSyncWarning ||= syncError;
                             scheduleRemoteUserDataSync();
                             console.warn("导入画布云端同步失败，等待自动重试", syncError);
                         }
                     }
+                } catch (error) {
+                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, {
+                        phase: "error",
+                        message: error instanceof Error ? error.message : "画布导入未完成",
+                    });
+                    throw error;
                 } finally {
-                    useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
+                    if (!remoteSyncEnabled) useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
                 }
             }
 
@@ -402,15 +408,16 @@ export default function CanvasPage() {
     if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
 
     return (
-        <WorkspacePage grid className="canvas-library-page">
+        <WorkspacePage className="studio-collection-page">
             <div className="studio-band">
                 <PageHeader
-                    title="画布"
+                    title="我的画布"
                     description="把镜头、素材和想法留在同一张画布里。"
                     meta={<span className="app-projects-header-meta">{totalProjects} 个</span>}
                     actions={
-                        <div className="canvas-library-header-actions">
-                            <Button className="canvas-library-header-action is-primary library-primary-action" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>
+                        <div className="collection-header-actions">
+                            <CanvasSyncDraftMenu />
+                            <Button type="primary" disabled={!hydrated} icon={<Plus />} onClick={createAndEnter}>
                                 新建画布
                             </Button>
                             {projects.length ? (
@@ -423,100 +430,35 @@ export default function CanvasPage() {
                                     placement="bottomRight"
                                     trigger={["click"]}
                                 >
-                                    <Button className="canvas-library-header-action is-icon" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
+                                    <Button type="text" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal />} />
                                 </Dropdown>
                             ) : null}
-                            <Button className="canvas-library-header-action" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>
+                            <Button disabled={!hydrated} icon={<FileUp />} onClick={() => inputRef.current?.click()}>
                                 导入
                             </Button>
                         </div>
                     }
                 />
 
-                <section className="canvas-library-discovery" aria-label="画布浏览工具">
-                    <div className="canvas-library-search">
-                        <Search aria-hidden="true" />
-                        <input
-                            value={keyword}
-                            placeholder="搜索画布"
-                            aria-label="搜索画布"
-                            onChange={(event) => {
-                                setKeyword(event.target.value);
-                            }}
-                        />
-                        {keyword ? (
-                            <button
-                                type="button"
-                                aria-label="清除搜索"
-                                onClick={() => {
-                                    setKeyword("");
-                                }}
-                            >
-                                <X />
-                            </button>
-                        ) : null}
-                    </div>
-                    <div className="canvas-library-filters">
-                        <Dropdown
-                            trigger={["click"]}
-                            placement="bottomLeft"
-                            menu={{
-                                items: projectFilterItems,
-                                selectedKeys: [projectFilter],
-                                onClick: ({ key }) => {
-                                    setProjectFilter(String(key));
-                                },
-                            }}
-                        >
-                            <button type="button" className={`canvas-library-filter${projectFilter !== "all" ? " is-active" : ""}`} aria-label="按所属项目筛选">
-                                <SlidersHorizontal />
-                                <span>{projectFilterLabel}</span>
-                            </button>
-                        </Dropdown>
-                        <Dropdown
-                            trigger={["click"]}
-                            placement="bottomLeft"
-                            menu={{
-                                items: sortItems,
-                                selectedKeys: [sort],
-                                onClick: ({ key }) => {
-                                    setSort(key as typeof sort);
-                                },
-                            }}
-                        >
-                            <button type="button" className={`canvas-library-filter${sort !== "updated" ? " is-active" : ""}`} aria-label="画布排序">
-                                {sort === "updated" ? <Clock3 /> : sort === "name" ? <ArrowDownAZ /> : <ListFilter />}
-                                <span>{sortLabel}</span>
-                            </button>
-                        </Dropdown>
-                        <button type="button" className="canvas-library-filter flex items-center gap-1.5" onClick={() => setHistoryOpen(true)} aria-label="查看画布创建与变更历史时间线" title="查看画布创建与变更历史时间线">
-                            <History className="size-3.5 text-[var(--workspace-accent)]" />
-                            <span>历史</span>
-                        </button>
-                        {keyword || projectFilter !== "all" || sort !== "updated" ? (
-                            <button
-                                type="button"
-                                className="canvas-library-reset"
-                                onClick={() => {
-                                    setKeyword("");
-                                    setProjectFilter("all");
-                                    setSort("updated");
-                                }}
-                            >
-                                重置
-                            </button>
-                        ) : null}
-                    </div>
-                    <span className="canvas-library-count">
-                        <strong>{String(filteredProjects.length).padStart(2, "0")}</strong>
-                        <span>/ {String(totalProjects).padStart(2, "0")} 画布</span>
-                    </span>
-                </section>
+                <CollectionToolbar
+                    label="画布浏览工具"
+                    active={Boolean(keyword || projectFilter !== "all" || sort !== "updated")}
+                    onReset={() => { setKeyword(""); setProjectFilter("all"); setSort("updated"); }}
+                    trailing={<Button type="text" icon={<History />} onClick={() => setHistoryOpen(true)}>创作历史</Button>}
+                >
+                    <Input prefix={<Search />} value={keyword} allowClear placeholder="搜索画布" aria-label="搜索画布" onChange={(event) => setKeyword(event.target.value)} />
+                    <Dropdown trigger={["click"]} placement="bottomLeft" menu={{ items: projectFilterItems, selectedKeys: [projectFilter], onClick: ({ key }) => setProjectFilter(String(key)) }}>
+                        <Button icon={<SlidersHorizontal />} aria-label="按所属项目筛选">{projectFilterLabel}</Button>
+                    </Dropdown>
+                    <Dropdown trigger={["click"]} placement="bottomLeft" menu={{ items: sortItems, selectedKeys: [sort], onClick: ({ key }) => setSort(key as typeof sort) }}>
+                        <Button icon={sort === "updated" ? <Clock3 /> : sort === "name" ? <ArrowDownAZ /> : <ListFilter />} aria-label="画布排序">{sortLabel}</Button>
+                    </Dropdown>
+                </CollectionToolbar>
             </div>
 
-            <div className="canvas-library-frame">
+            <div className="collection-content">
                 {selectedIds.length ? (
-                    <div className="app-canvas-selection-toolbar mt-2 flex min-h-10 flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                    <div className="collection-selection-bar">
                         <strong className="mr-auto font-medium">已选 {selectedIds.length} 个画布</strong>
                         <Button
                             size="small"
@@ -553,9 +495,8 @@ export default function CanvasPage() {
                     <div role="alert">画布列表读取失败<Button onClick={() => void libraryQuery.refetch()}>重试</Button></div>
                 ) : !hydrated || (userId && libraryQuery.isPending) ? (
                     <WorkspaceLoadingState label="正在恢复画布" detail="读取本地缓存与账号同步状态" />
-                ) : showCreateCard || visibleProjects.length ? (
-                    <CollectionGrid className="canvas-library-grid">
-                        {showCreateCard ? <CanvasCreateCard disabled={!hydrated} onClick={createAndEnter} /> : null}
+                ) : visibleProjects.length ? (
+                    <CollectionGrid className="canvas-collection-grid">
                         {visibleProjects.map((project) => (
                             <CanvasFolderCard
                                 key={project.id}
@@ -568,7 +509,7 @@ export default function CanvasPage() {
                         ))}
                     </CollectionGrid>
                 ) : (
-                    <WorkspaceState icon="canvas" title="没有匹配的画布" description="换一个画布名称或重置筛选条件。" />
+                    <WorkspaceState icon="canvas" title={keyword || projectFilter !== "all" ? "没有匹配的画布" : "让第一个想法落在画布上"} description={keyword || projectFilter !== "all" ? "换一个画布名称或重置筛选条件。" : "图片、分镜和灵感，都可以在这里自由组织。"} action={!keyword && projectFilter === "all" ? <Button type="primary" icon={<Plus />} disabled={!hydrated} onClick={createAndEnter}>新建画布</Button> : undefined} />
                 )}
                 {hydrated && visibleProjects.length ? (
                     <div ref={loadMoreRef} className="library-load-more" aria-live="polite">

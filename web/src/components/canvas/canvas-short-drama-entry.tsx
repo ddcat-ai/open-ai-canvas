@@ -5,11 +5,11 @@ import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronUp, Clapperboard
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
 export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFirstChapter, onOpenAssets, onAddText }: { projectName: string; hasChapter: boolean; onAddFirstChapter: () => void; onOpenAssets: () => void; onAddText: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     return (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-16 pt-20">
             <div className="pointer-events-auto w-full max-w-[440px] rounded-lg border p-3 shadow-sm backdrop-blur" data-canvas-no-zoom style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
@@ -32,7 +32,7 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onSt
     onAddText: () => void;
     onAddScript: () => void;
 }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const focusStyle = { "--tw-ring-color": theme.accent.primary } as CSSProperties;
     return (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-20 pt-24">
@@ -95,7 +95,7 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onSt
 }
 
 export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateCommand[] }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const [createOpen, setCreateOpen] = useState(false);
     const createCommands = commands.map((command) => ({
         ...command,
@@ -161,7 +161,7 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
     onSkip: () => void;
     onStepClick: (stepId: CanvasShortDramaStepId) => void;
 }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     if (!progress.active || collapsed) return null;
     return (
         <div data-canvas-no-zoom className="absolute left-1/2 top-[var(--canvas-topbar-offset)] z-[var(--z-toolbar)] flex max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
@@ -216,7 +216,7 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
 }
 
 export function CanvasStylePlaceholderNodeContent({ onChoose }: { onChoose: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     return (
         <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center" style={{ color: theme.node.text }}>
             <span className="grid size-10 place-items-center rounded-md" style={{ background: `${theme.accent.primary}16`, color: theme.accent.primary }}><Palette className="size-5" /></span>
@@ -228,7 +228,7 @@ export function CanvasStylePlaceholderNodeContent({ onChoose }: { onChoose: () =
 }
 
 export function CanvasStoryInputNodeContent({ node, onEdit }: { node: CanvasNodeData; onEdit: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const content = (node.metadata?.content || "").replace(/\s+/g, " ").trim();
     return (
         <div className="flex h-full w-full flex-col overflow-hidden p-4" style={{ color: theme.node.text }}>

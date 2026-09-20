@@ -82,7 +82,7 @@ export function formatModelName(config: AiConfig, task: GenerationTask) {
     const model = raw.includes("::") ? raw.split("::").pop()?.trim() || raw : raw;
 
     // 工作流名称是任务快照，不属于模型渠道，不能交给模型展示名解析器再次映射成“系统模型”。
-    if (task.provider === "runninghub" || task.provider === "comfyui-bridge") return raw || "工作流";
+    if (task.provider === "runninghub") return raw || "工作流";
     if (!model) return "工作流";
     if (model === "version-router") return "版本对比工作流";
     if (model === "workflow-router") return "工作流路由";

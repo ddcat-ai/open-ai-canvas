@@ -1,13 +1,11 @@
 import { App, Button, Form, Input, Popconfirm, Select, Tabs } from "antd";
-import { StatusBadge } from "@/components/ui/base/badges";
-import { Callout } from "@/components/ui/product/callout";
+import { Callout } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import { Braces, Copy, FileJson, FileText, Plus, Power, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
-import { AppDrawer } from "@/components/ui/product/app-drawer/app-drawer";
+import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { PromptCodeEditor, type PromptCodeEditorHandle } from "@/components/prompt/prompt-code-editor";
 import {
     createAdminPromptTemplate,
@@ -18,7 +16,7 @@ import {
     type PromptTemplate,
 } from "@/services/api/auth";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
+import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
 
 type PromptFormValues = { name: string; enabled?: boolean };
 type DraftBaseline = { operation: string; name: string; enabled: boolean; content: string };
@@ -188,7 +186,7 @@ export default function StoryboardPromptsPage() {
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={filtered.length} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
             />
 
-            <AppDrawer
+            <AdminDrawer
                 flush
                 title={baseTemplate ? `基于 v${baseTemplate.version} 新建版本` : "新建提示词版本"}
                 open={drawerOpen}
@@ -220,7 +218,7 @@ export default function StoryboardPromptsPage() {
                     <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-3">
                         <section className="flex min-h-0 flex-col border-b border-border p-4 lg:col-span-2 lg:border-b-0 lg:border-r">
                             <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
-                                <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">模板内容</h3>{dirty ? <StatusBadge variant="filled" tone="warning" label="未保存" /> : null}</div>
+                                <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">模板内容</h3>{dirty ? <AdminStatusBadge variant="filled" tone="warning" label="未保存" /> : null}</div>
                                 <div className="flex flex-wrap justify-end gap-2">
                                     {selectedDefinition?.variables.map((variable) => (
                                         <Button key={variable.placeholder} size="small" icon={<Braces className="size-3.5" />} onClick={() => editorRef.current?.insertText(variable.placeholder)}>
@@ -253,7 +251,7 @@ export default function StoryboardPromptsPage() {
                         </aside>
                     </div>
                 </Form>
-            </AppDrawer>
+            </AdminDrawer>
         </AdminPageFrame>
     );
 }

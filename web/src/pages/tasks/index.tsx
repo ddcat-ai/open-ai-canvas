@@ -1,3 +1,4 @@
+import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { App, Button, Drawer, Form, Input, Modal, Select, Typography } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
@@ -6,14 +7,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { MediaPreview } from "@/components/media-preview";
-import { ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
-import { formatTaskKind, isGenerationTaskSubmissionUncertain, operationOptions, statusLabel } from "@/lib/generation-task-display";
+import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-task-display";
 import { buildVideoOperationPrompt } from "@/lib/prompts";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
-import { createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import { createGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -299,10 +300,6 @@ export default function TasksPage() {
 
     const runAction = async (id: string) => {
         const currentTask = tasksRef.current.find((task) => task.id === id);
-        if (currentTask && isGenerationTaskSubmissionUncertain(currentTask)) {
-            message.warning("提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。");
-            return;
-        }
         setActingId(id);
         try {
             const next = await retryGenerationTask(id);
@@ -313,47 +310,6 @@ export default function TasksPage() {
             message.success("任务已重新入队");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败");
-        } finally {
-            setActingId("");
-        }
-    };
-
-    const deleteLocalTask = (task: GenerationTask) => {
-        if (task.status === "queued" || task.status === "running") {
-            message.warning("任务正在执行，不能删除本机记录；请等待任务完成");
-            return;
-        }
-        modal.confirm({
-            title: "删除本机任务记录？",
-            content: "这只会删除本机任务记录，不会删除已生成的素材。",
-            okText: "删除本机记录",
-            okButtonProps: { danger: true },
-            cancelText: "保留",
-            onOk: async () => {
-                setActingId(task.id);
-                try {
-                    await deleteGenerationTask(task.id);
-                    setTasks((items) => items.filter((item) => item.id !== task.id));
-                    if (detailTask?.id === task.id) setDetailTask(null);
-                    message.success("本机任务记录已删除");
-                } catch (error) {
-                    message.error(error instanceof Error ? error.message : "删除失败");
-                } finally {
-                    setActingId("");
-                }
-            },
-        });
-    };
-
-    const refreshLocalTaskStatus = async (task: GenerationTask) => {
-        setActingId(task.id);
-        try {
-            const next = await refreshGenerationTaskStatus(task.id);
-            setTasks((items) => items.map((item) => (item.id === task.id ? { ...item, ...next } : item)));
-            setDetailTask((current) => (current?.id === task.id ? { ...current, ...next } : current));
-            message.success(next.officialStatus ? `官方返回状态：${next.officialStatus}` : "状态已更新");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新状态失败");
         } finally {
             setActingId("");
         }
@@ -387,16 +343,7 @@ export default function TasksPage() {
         const values = await form.validateFields();
         setCreating(true);
         try {
-            if (values.operation === "agent_session") {
-                const textModel = values.model?.trim() || effectiveConfig.textModel || effectiveConfig.model;
-                if (!isAiConfigReady(effectiveConfig, textModel)) {
-                    message.error("请先在设置里配置可用的文本模型、Base URL 和 API Key");
-                    return;
-                }
-                const requestConfig = resolveModelRequestConfig(effectiveConfig, textModel);
-                const detail = await createAgentSession({ projectId: values.projectId, prompt: values.prompt, config: backendProviderConfig(requestConfig), ...(logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}) });
-                setTasks((items) => [...detail.tasks, ...items]);
-            } else {
+            {
                 const videoModel = values.model?.trim() || effectiveConfig.videoModel || effectiveConfig.model;
                 if (values.operation !== "compare_versions" && !isAiConfigReady(effectiveConfig, videoModel)) {
                     message.error("请先在设置里配置可用的视频模型、Base URL 和 API Key");
@@ -437,8 +384,17 @@ export default function TasksPage() {
         <>
             <WorkspacePage grid className="library-page task-library-page">
                 <div className="studio-band">
-                    <ListToolbar
-                        className="library-toolbar task-library-toolbar"
+                    <PageHeader
+                        title="创作历史"
+                        description="查看文本、图片和视频生成任务，跟踪进度并处理失败任务。"
+                        meta={<span className="app-projects-header-meta">{taskStats.total} 个任务</span>}
+                        actions={
+                            <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                新建任务
+                            </Button>
+                        }
+                    />
+                    <CollectionToolbar
                         active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}
                         onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}
                         trailing={(
@@ -469,10 +425,10 @@ export default function TasksPage() {
                         <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
                         <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: "全部类型", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }]} />
                         <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
-                    </ListToolbar>
+                    </CollectionToolbar>
                 </div>
 
-                <div className="canvas-library-frame task-library-frame">
+                <div className="collection-content task-collection-content">
                     {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
                     {!loading || tasks.length ? (
                         visibleTasks.length ? (
@@ -507,7 +463,7 @@ export default function TasksPage() {
                 </div>
             </WorkspacePage>
             <Modal className="library-modal" title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
-                <Form form={form} layout="vertical" initialValues={{ operation: "agent_session" }}>
+                <Form form={form} layout="vertical" initialValues={{ operation: "text_to_video" }}>
                     <Form.Item name="operation" label="任务类型" rules={[{ required: true, message: "请选择任务类型" }]}>
                         <Select options={operationOptions} />
                     </Form.Item>
@@ -538,18 +494,7 @@ export default function TasksPage() {
                             {detailTask.providerCancelStatus ? <InfoItem label="上游取消" value={providerCancelStatusLabel(detailTask)} /> : null}
                             {detailTask.providerCancelRequestedAt ? <InfoItem label="请求取消时间" value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
                         </div>
-                        {detailTask.provider === "dreamina-cli" ? <p className="text-xs leading-5 text-foreground/60">官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。</p> : null}
                         <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? (
-                                <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>
-                                    更新官方状态
-                                </Button>
-                            ) : null}
-                            {detailTask.provider === "dreamina-cli" ? (
-                                <Button danger aria-label="删除本机记录" icon={<Trash2 className="size-4" />} loading={actingId === detailTask.id} onClick={() => deleteLocalTask(detailTask)}>
-                                    删除本机记录
-                                </Button>
-                            ) : null}
                             {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
                             {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>导出诊断包</Button> : null}
                         </div>

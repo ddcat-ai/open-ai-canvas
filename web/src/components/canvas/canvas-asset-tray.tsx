@@ -10,7 +10,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { cn } from "@/lib/utils";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ImageAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -51,7 +51,7 @@ type CanvasAssetTrayProps = {
 };
 
 export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true, activeNodeId, onInsertAssetImage, onFocusCanvasImage }: CanvasAssetTrayProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const reducedMotion = useReducedMotion();
     const { bringToFront, zIndex } = useCanvasOverlayLayer("asset-tray", "var(--z-panel)");
     const rootRef = useRef<HTMLDivElement>(null);
@@ -166,7 +166,9 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
         {
             id: "asset-tray-toggle",
             label: open ? "收起素材空间" : `打开素材空间，共 ${(showLibrary ? assetImages.length : 0) + canvasImages.length} 项`,
-            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[var(--fs-nano)] font-bold leading-3" style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
+            displayLabel: "素材",
+            badge: (showLibrary ? assetImages.length : 0) + canvasImages.length,
+            icon: <Images />,
             active: open,
             onClick: () => {
                 bringToFront();
@@ -248,7 +250,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                 ) : null}
             </AnimatePresence>
 
-            <FloatingDock items={dockItems} className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="素材空间" />
+            <FloatingDock items={dockItems} showLabels className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="素材空间" />
         </div>
     );
 }
@@ -265,7 +267,7 @@ function TrayTabButton({ active, label, theme, onClick }: { active: boolean; lab
 }
 
 function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, draggable = false, motionEnabled, onClick, onDragStart }: { title: string; imageUrl: string; storageKey?: string; icon: ReactNode; active?: boolean; draggable?: boolean; motionEnabled: boolean; onClick: () => void; onDragStart?: (event: DragEvent<HTMLElement>) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const location = resourceStorageLocation(storageKey);
     return (
         <motion.button

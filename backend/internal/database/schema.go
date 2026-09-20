@@ -16,6 +16,14 @@ import (
 // Models 是应用持久化表的唯一清单，服务启动和跨数据库迁移必须共用它。
 func Models() []any {
 	return []any{
+		&model.CloudAgentExecution{},
+		&model.CloudAgentEventRecord{},
+		&model.CloudAgentMessageRecord{},
+		&model.CloudAgentCanvasMutation{},
+		&model.CloudAgentResourceLease{},
+		&model.AgentProfile{},
+		&model.AgentLesson{},
+		&model.AgentMemorySetting{},
 		&model.User{},
 		&model.AuthSession{},
 		&model.UserIdentity{},
@@ -81,22 +89,20 @@ func Models() []any {
 		&model.WorkflowStepTask{},
 		&model.ProductionTaskLink{},
 		&model.CanvasProject{},
+		&model.CanvasSnapshot{},
+		&model.CanvasSnapshotResource{},
 		&model.CanvasShare{},
 		&model.PromptTemplate{},
 		&model.UserPromptCustomization{},
 		&model.Announcement{},
 		&model.UserAnnouncementRead{},
+		&model.BannerAnnouncement{},
 		&model.Task{},
 		&model.CreationRun{},
 		&model.CreationSubmission{},
 		&model.TaskTextDelta{},
-		&model.Session{},
-		&model.Message{},
 		&model.TaskLog{},
-		&model.SessionFile{},
 		&model.Result{},
-		&model.ComfyBridge{},
-		&model.ComfyBridgeRequest{},
 	}
 }
 

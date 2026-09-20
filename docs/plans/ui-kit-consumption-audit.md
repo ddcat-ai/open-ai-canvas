@@ -89,7 +89,7 @@
 
 ### 2. Tooltip — 29 处（ui tooltip 仅 3 文件消费）
 
-- 画布组件 16：`components/canvas/canvas-agent-chat-ui.tsx`、`canvas-config-node-panel.tsx`、`canvas-toolbar.tsx` 系列、`director/*` 等；
+- 画布组件 16：`components/canvas/canvas-cloud-agent-chat-ui.tsx`、`canvas-config-node-panel.tsx`、`canvas-toolbar.tsx` 系列、`director/*` 等；
 - 主界面页面 7：`pages/create/index.tsx`、`pages/projects/detail.tsx`、`pages/projects/detail/canvases.tsx`、`pages/projects/detail/chapters.tsx`、`pages/settings/channel-settings-pane.tsx`、`pages/skills/index.tsx`、`pages/skills/skill-detail-drawer.tsx`；
 - 共享组件 4：`channel-headers-editor.tsx`、`conversation/voice-recording-*.tsx`×2、`workflow-field-mapping-editor.tsx`；
 - 后台 2：`pages/admin/components/admin-shell.tsx`、`analytics-panel.tsx`。
@@ -97,13 +97,13 @@
 
 ### 3. Segmented — 11 处，全部在画布组件树
 
-`canvas-appearance-controls.tsx`、`canvas-assistant-panel.tsx`、`canvas-config-node-panel.tsx`、`canvas-local-agent-panel.tsx`、`canvas-node-angle-dialog.tsx`、`canvas-node-upscale-dialog.tsx`、`canvas-script-node.tsx`、`canvas-subtitle-dialog.tsx`、`canvas-video-segment-dialog.tsx`、`portrait-clearance/portrait-clearance-modal.tsx`、`style-profile-editor-modal.tsx`。
+`canvas-appearance-controls.tsx`、`canvas-cloud-agent-panel.tsx`、`canvas-config-node-panel.tsx`、`canvas-node-angle-dialog.tsx`、`canvas-node-upscale-dialog.tsx`、`canvas-script-node.tsx`、`canvas-subtitle-dialog.tsx`、`canvas-video-segment-dialog.tsx`、`style-profile-editor-modal.tsx`。
 
 - 同一角色：用户设置页与后台已用 ui `SegmentedControl`（14 文件）。**画布面板控件是"两套分段控件观感"最集中的区域。**
 
 ### 4. Switch — 10 处，全部在 pages 树外
 
-画布 8：`canvas-agent-panel-chrome.tsx`、`canvas-config-node-panel.tsx`、`canvas-subtitle-dialog.tsx`、`canvas-toolbar.tsx`、`director/canvas-director-workbench.tsx`、`portrait-clearance/portrait-clearance-modal.tsx`、`style-asset-binding-modal.tsx`、`toolbars/toolbar-settings-modal.tsx`；
+画布 6：`canvas-config-node-panel.tsx`、`canvas-subtitle-dialog.tsx`、`canvas-toolbar.tsx`、`director/canvas-director-workbench.tsx`、`style-asset-binding-modal.tsx`、`toolbars/toolbar-settings-modal.tsx`；
 共享 2：`components/image-settings-panel.tsx`、`components/video-settings-panel.tsx`。
 
 - 同一角色：ui `switch` 已消费 29 文件（后台 15、主界面 8、共享 6）。开关控件同页面混用观感差异集中在画布浮层/设置面板。

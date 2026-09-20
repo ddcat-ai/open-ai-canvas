@@ -6,7 +6,6 @@ import (
 
 type TaskStatus string
 type ProviderCancelStatus string
-type SessionStatus string
 type UserRole string
 type UserStatus string
 type ChannelScope string
@@ -50,10 +49,6 @@ const (
 	// 完成后调用 /tasks/:id/text-replay-complete 归并为最终正文。
 	TaskStatusTextReplay TaskStatus = "text_replay"
 
-	SessionStatusActive    SessionStatus = "active"
-	SessionStatusCompleted SessionStatus = "completed"
-	SessionStatusFailed    SessionStatus = "failed"
-
 	UserRoleAdmin UserRole = "admin"
 	UserRoleUser  UserRole = "user"
 
@@ -63,32 +58,31 @@ const (
 	ChannelScopeSystem ChannelScope = "system"
 	ChannelScopeUser   ChannelScope = "user"
 
-	ChannelInterfaceChatCompletion        ChannelInterfaceType = "chat-completion"
-	ChannelInterfaceOpenAIResponse        ChannelInterfaceType = "openai-response"
-	ChannelInterfaceClaudeAPI             ChannelInterfaceType = "claude-api"
-	ChannelInterfaceOpenAIImage           ChannelInterfaceType = "openai-image"
-	ChannelInterfaceGrokImage             ChannelInterfaceType = "grok-image"
-	ChannelInterfaceVolcengineArkImage    ChannelInterfaceType = "volcengine-ark-image"
-	ChannelInterfaceVolcengineJiMengImage ChannelInterfaceType = "volcengine-jimeng-image"
-	ChannelInterfaceGeminiImage           ChannelInterfaceType = "gemini-image"
-	ChannelInterfaceOpenAIAudio           ChannelInterfaceType = "openai-audio"
-	ChannelInterfaceAsyncAudio            ChannelInterfaceType = "async-audio"
-	ChannelInterfaceNewAPIVideo           ChannelInterfaceType = "newapi"
-	ChannelInterfaceNewAPIChannel1        ChannelInterfaceType = "newapi-channel-1"
-	ChannelInterfaceNewAPIChannel2        ChannelInterfaceType = "newapi-channel-2"
-	ChannelInterfaceXAIVideo              ChannelInterfaceType = "xai-video"
-	ChannelInterfaceVolcengineArkVideo    ChannelInterfaceType = "volcengine-ark-video"
-	ChannelInterfaceVolcengineJiMengVideo ChannelInterfaceType = "volcengine-jimeng-video"
-	ChannelInterfaceGeminiVeo             ChannelInterfaceType = "gemini-veo"
-	ChannelInterfaceNovitaVideo           ChannelInterfaceType = "novita-video"
-	ChannelInterfaceMiniMaxVideo          ChannelInterfaceType = "minimax-video"
-	ChannelInterfaceAgnesVideo            ChannelInterfaceType = "agnes-video"
-	ChannelInterfaceRunningHubImage       ChannelInterfaceType = "runninghub-workflow-image"
-	ChannelInterfaceRunningHubVideo       ChannelInterfaceType = "runninghub-workflow-video"
-	ChannelInterfaceRunningHubAudio       ChannelInterfaceType = "runninghub-workflow-audio"
-	ChannelInterfaceComfyBridgeImage      ChannelInterfaceType = "comfyui-bridge-image"
-	ChannelInterfaceComfyBridgeVideo      ChannelInterfaceType = "comfyui-bridge-video"
-	ChannelInterfaceComfyBridgeAudio      ChannelInterfaceType = "comfyui-bridge-audio"
+	ChannelInterfaceChatCompletion              ChannelInterfaceType = "chat-completion"
+	ChannelInterfaceOpenAIResponse              ChannelInterfaceType = "openai-response"
+	ChannelInterfaceClaudeAPI                   ChannelInterfaceType = "claude-api"
+	ChannelInterfaceOpenAIImage                 ChannelInterfaceType = "openai-image"
+	ChannelInterfaceGrokImage                   ChannelInterfaceType = "grok-image"
+	ChannelInterfaceVolcengineArkImage          ChannelInterfaceType = "volcengine-ark-image"
+	ChannelInterfaceVolcengineArkAgentPlanImage ChannelInterfaceType = "volcengine-ark-agent-plan-image"
+	ChannelInterfaceVolcengineJiMengImage       ChannelInterfaceType = "volcengine-jimeng-image"
+	ChannelInterfaceGeminiImage                 ChannelInterfaceType = "gemini-image"
+	ChannelInterfaceOpenAIAudio                 ChannelInterfaceType = "openai-audio"
+	ChannelInterfaceAsyncAudio                  ChannelInterfaceType = "async-audio"
+	ChannelInterfaceNewAPIVideo                 ChannelInterfaceType = "newapi"
+	ChannelInterfaceNewAPIChannel1              ChannelInterfaceType = "newapi-channel-1"
+	ChannelInterfaceNewAPIChannel2              ChannelInterfaceType = "newapi-channel-2"
+	ChannelInterfaceXAIVideo                    ChannelInterfaceType = "xai-video"
+	ChannelInterfaceVolcengineArkVideo          ChannelInterfaceType = "volcengine-ark-video"
+	ChannelInterfaceVolcengineArkAgentPlanVideo ChannelInterfaceType = "volcengine-ark-agent-plan-video"
+	ChannelInterfaceVolcengineJiMengVideo       ChannelInterfaceType = "volcengine-jimeng-video"
+	ChannelInterfaceGeminiVeo                   ChannelInterfaceType = "gemini-veo"
+	ChannelInterfaceNovitaVideo                 ChannelInterfaceType = "novita-video"
+	ChannelInterfaceMiniMaxVideo                ChannelInterfaceType = "minimax-video"
+	ChannelInterfaceAgnesVideo                  ChannelInterfaceType = "agnes-video"
+	ChannelInterfaceRunningHubImage             ChannelInterfaceType = "runninghub-workflow-image"
+	ChannelInterfaceRunningHubVideo             ChannelInterfaceType = "runninghub-workflow-video"
+	ChannelInterfaceRunningHubAudio             ChannelInterfaceType = "runninghub-workflow-audio"
 
 	ApiCallStatusSucceeded ApiCallStatus = "succeeded"
 	ApiCallStatusFailed    ApiCallStatus = "failed"

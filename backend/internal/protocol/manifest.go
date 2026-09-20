@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,15 +45,18 @@ type ManifestResponse struct {
 	ResultPaths     []string `json:"resultPaths,omitempty"`
 	ResultKind      string   `json:"resultKind,omitempty"`
 	ResultEphemeral bool     `json:"resultEphemeral,omitempty"`
-	TaskID          any      `json:"taskId,omitempty"`
-	Status          any      `json:"status,omitempty"`
-	Message         any      `json:"message,omitempty"`
-	Text            any      `json:"text,omitempty"`
-	Reasoning       any      `json:"reasoning,omitempty"`
-	Images          any      `json:"images,omitempty"`
-	Videos          any      `json:"videos,omitempty"`
-	Audios          any      `json:"audios,omitempty"`
-	Usage           any      `json:"usage,omitempty"`
+	// BinaryPayload 表示 create 同步返回二进制媒体（如 /audio/speech 的音频流）。
+	// 声明式解析会把整个响应体包装为对应能力的单个媒体结果，不做 JSON 路径提取。
+	BinaryPayload bool `json:"binaryPayload,omitempty"`
+	TaskID        any  `json:"taskId,omitempty"`
+	Status        any  `json:"status,omitempty"`
+	Message       any  `json:"message,omitempty"`
+	Text          any  `json:"text,omitempty"`
+	Reasoning     any  `json:"reasoning,omitempty"`
+	Images        any  `json:"images,omitempty"`
+	Videos        any  `json:"videos,omitempty"`
+	Audios        any  `json:"audios,omitempty"`
+	Usage         any  `json:"usage,omitempty"`
 }
 
 // ManifestAgentResponse describes the provider response shape for a
@@ -501,11 +505,36 @@ func syntheticAgentToolCallID(body []byte, index int) string {
 	return fmt.Sprintf("call_%x", sum[:8])
 }
 func (a manifestAdapter) ParseCreate(_ context.Context, body []byte) (CreateResult, error) {
+	if a.manifest.Response.BinaryPayload {
+		return binaryPayloadCreateResult(a.manifest.Response.ResultKind, body)
+	}
 	payload, err := decodeObject(body)
 	if err != nil {
 		return CreateResult{}, err
 	}
 	return a.parse(payload, PollContext{}), nil
+}
+
+// binaryPayloadCreateResult 把同步二进制响应包装为单个媒体结果。MIME 以响应内容探测为准，
+// 空响应必须失败，不能把空内容伪装成生成成功。
+func binaryPayloadCreateResult(resultKind string, body []byte) (CreateResult, error) {
+	if len(body) == 0 {
+		return CreateResult{}, fmt.Errorf("binary payload response is empty")
+	}
+	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(body), ";")[0]))
+	reference := MediaReference{DataURL: "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(body), MIMEType: mimeType}
+	result := &Result{}
+	switch resultKind {
+	case "audio":
+		result.Audios = []MediaReference{reference}
+	case "image":
+		result.Images = []MediaReference{reference}
+	case "video":
+		result.Videos = []MediaReference{reference}
+	default:
+		return CreateResult{}, fmt.Errorf("binary payload response requires resultKind image, video or audio, got %q", resultKind)
+	}
+	return CreateResult{Status: StatusSucceeded, Result: result}, nil
 }
 func (a manifestAdapter) BuildPoll(_ context.Context, c PollContext) (RequestSpec, error) {
 	if a.manifest.Poll == nil {
@@ -682,12 +711,58 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			if reference.DataURL == "" {
 				reference.DataURL = firstString(typed, "data_url", "b64_json")
 			}
+			// OpenAI / Ark 等渠道常直接返回裸 b64_json；声明式结果下载要求 data URL。
+			reference.DataURL = normalizeManifestInlineDataURL(reference.DataURL, reference.Kind, firstString(typed, "output_format", "mime_type", "mimeType"))
 			if reference.URL != "" || reference.DataURL != "" {
 				result = append(result, reference)
 			}
 		}
 	}
 	return result
+}
+
+func normalizeManifestInlineDataURL(value, kind, formatHint string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.HasPrefix(value, "data:") {
+		return value
+	}
+	return "data:" + manifestInlineMediaMIME(kind, formatHint) + ";base64," + value
+}
+
+func manifestInlineMediaMIME(kind, formatHint string) string {
+	hint := strings.ToLower(strings.TrimSpace(formatHint))
+	switch hint {
+	case "image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/ogg", "video/mp4", "video/webm":
+		return hint
+	case "image/jpg":
+		return "image/jpeg"
+	case "audio/mp3":
+		return "audio/mpeg"
+	case "png":
+		return "image/png"
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "webp":
+		return "image/webp"
+	case "gif":
+		return "image/gif"
+	case "mp3", "mpeg":
+		return "audio/mpeg"
+	case "wav":
+		return "audio/wav"
+	case "mp4":
+		return "video/mp4"
+	case "webm":
+		return "video/webm"
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "audio":
+		return "audio/mpeg"
+	case "video":
+		return "video/mp4"
+	default:
+		return "image/png"
+	}
 }
 
 var (
@@ -773,7 +848,11 @@ func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, requ
 		return RequestSpec{}, fmt.Errorf("evaluate request path: %w", err)
 	}
 	path := strings.ReplaceAll(manifestString(evaluatedPath), "{{taskId}}", url.PathEscape(taskID))
-	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
+	// Model identifiers from async aggregators commonly contain path segments
+	// (for example openai/gpt-image/edit). Escape each segment while preserving
+	// the provider's intentional slash separators in the manifest path.
+	escapedModel := strings.ReplaceAll(url.PathEscape(request.Model), "%2F", "/")
+	path = strings.ReplaceAll(path, "{{model}}", escapedModel)
 	path = interpolateManifestString(path, env)
 	if !isRelativePath(path) {
 		return RequestSpec{}, fmt.Errorf("evaluated request path must be relative: %q", path)

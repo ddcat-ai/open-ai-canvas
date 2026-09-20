@@ -31,6 +31,18 @@ describe("backend API request error semantics", () => {
         expect(thrown.cause).toBe(axiosError);
     });
 
+    test("replaces a bare proxy 502 with a user-facing retry message", async () => {
+        const axiosError = {
+            isAxiosError: true,
+            message: "Request failed with status code 502",
+            response: { status: 502, data: "Bad Gateway", headers: {} },
+        };
+        const thrown = await request(Promise.reject(axiosError)).catch((error) => error);
+
+        expect(thrown).toBeInstanceOf(ApiError);
+        expect(thrown).toMatchObject({ status: 502, message: "后端服务暂时不可用，请稍后重试", retryable: true });
+    });
+
     test("http.get unwraps the same backend envelope", async () => {
         const original = apiClient.request;
         apiClient.request = (async () => ({

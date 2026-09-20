@@ -8,27 +8,19 @@ export const statusLabel: Record<TaskStatus, string> = {
     cancelled: "已取消",
 };
 
-type GenerationTaskDisplayTarget = Pick<GenerationTask, "provider" | "status" | "stage" | "officialStatus"> & Partial<Pick<GenerationTask, "errorCode">>;
+type GenerationTaskDisplayTarget = Pick<GenerationTask, "status" | "stage">;
 
 export function isGenerationTaskSubmissionUncertain(task: GenerationTaskDisplayTarget) {
-    return task.provider === "dreamina-cli" && (task.stage === "submission_unknown" || task.errorCode === "dreamina_submission_unknown");
+    return task.stage === "submission_unknown";
 }
 
 export function generationTaskStatusLabel(task: GenerationTaskDisplayTarget) {
     if (isGenerationTaskSubmissionUncertain(task)) return "提交结果待确认";
-    if (task.provider === "dreamina-cli" && task.stage === "submitting") return "正在提交";
-    if (task.provider === "dreamina-cli" && task.officialStatus === "pending") return "官方排队中";
-    if (task.provider === "dreamina-cli" && task.officialStatus === "processing") return "生成中";
-    if (task.provider === "dreamina-cli" && task.officialStatus === "completed") return "官方已完成";
-    if (task.provider === "dreamina-cli" && task.status === "running" && task.stage === "submitted") return "状态待更新";
     return statusLabel[task.status];
 }
 
 export function generationTaskStageLabel(task: GenerationTaskDisplayTarget) {
     if (isGenerationTaskSubmissionUncertain(task)) return "为避免重复扣费，未自动重试";
-    if (task.provider === "dreamina-cli" && task.stage === "submitting") return "正在提交，等待官方确认";
-    if (task.provider === "dreamina-cli" && task.officialStatus) return `官方返回状态：${task.officialStatus}`;
-    if (task.provider === "dreamina-cli" && task.status === "running" && task.stage === "submitted") return "已提交，等待状态更新";
     if (task.stage === "generating") return "生成中";
     if (task.stage === "queued") return "排队中";
     return task.stage || generationTaskStatusLabel(task);
@@ -39,11 +31,10 @@ export function generationTaskShowsProgress(task: GenerationTaskDisplayTarget) {
     // 排队、后端接管和连接供应商都没有真实百分比。只有上游状态响应
     // 已经写回任务后才显示进度，避免所有图片/视频长期停在同一个假数值。
     if (["等待队列调度", "后端接管任务", "正在连接上游", "调用生成模型"].includes(task.stage || "")) return false;
-    return !(task.provider === "dreamina-cli" && task.status === "running" && (task.stage === "submitting" || task.stage === "submitted"));
+    return true;
 }
 
 export const operationOptions = [
-    { label: "Agent 会话：拆解影视工作流", value: "agent_session" },
     { label: "文生视频", value: "text_to_video" },
     { label: "图生视频", value: "image_to_video" },
     { label: "全模态参考", value: "reference_to_video" },
@@ -59,9 +50,6 @@ export const operationOptions = [
 export const operationLabelByValue = new Map(operationOptions.map((item) => [item.value, item.label]));
 
 export const taskTypeLabel: Record<string, string> = {
-    agent_session: "Agent 会话",
-    agent_storyboard: "Agent 分镜",
-    agent_storyboard_rows: "分镜脚本",
     canvas_image: "画布生图",
     canvas_video: "画布视频",
     canvas_audio: "画布音频",
@@ -69,8 +57,6 @@ export const taskTypeLabel: Record<string, string> = {
 };
 
 export function formatTaskKind(task: GenerationTask) {
-    if (task.type === "agent_session" || task.operation === "agent_session") return "Agent 会话";
-
     const typeLabel = taskTypeLabel[task.type];
     const operationLabel = task.operation ? operationLabelByValue.get(task.operation) : "";
 

@@ -4,18 +4,18 @@
 
 ## 背景
 
-编辑器需要与 AI 交互：用户用自然语言表达剪辑意图，AI 直接驱动时间线。Concat 没有对话式 AI 编辑（桌面引擎，AI 只能模拟 UI 操作，脆弱且不可测试）；影绘因两个既有决策天然支持：
+编辑器需要与 AI 交互：用户用自然语言表达剪辑意图，AI 直接驱动时间线。Concat 没有对话式 AI 编辑（桌面引擎，AI 只能模拟 UI 操作，脆弱且不可测试）；影策因两个既有决策天然支持：
 
 - **命令协议（ADR-0002）**：时间线唯一修改入口是 `{op, payload}` 序列化命令，单队列 apply、可撤销、可重放——AI 只需输出命令 JSON 即可驱动时间线，与人手势编辑完全同构。
 - **插件化（ADR-0005）**：AI 交互能力可作为预设插件注册（对话面板插槽 + 权限），不动核心。
-- **既有资产**：模型渠道已统一中转（`custom-channel-relay.ts` / `/api/ai/custom`）；画布侧已有成熟的 AI 聊天 UI（`canvas-agent-chat-ui.tsx`、`canvas-assistant-panel.tsx`、`canvas-prompt-optimizer-drawer.tsx`）；AI 字幕高亮纯函数层已存在（`subtitle-highlight-*`）。
+- **既有资产**：模型渠道已统一中转（`custom-channel-relay.ts` / `/api/ai/custom`）；画布侧已有云端 Agent 聊天 UI（`canvas-cloud-agent-chat-ui.tsx`、`canvas-cloud-agent-panel.tsx`、`canvas-prompt-optimizer-drawer.tsx`）；AI 字幕高亮纯函数层已存在（`subtitle-highlight-*`）。
 
 ## 决策
 
 ### AI 编辑交互 = 预设插件 `editor-ai-assistant`
 
 - 新增 `ai-assistant` 贡献类型与 `ai.text` / `timeline.command` / `timeline.read` 权限；插件注册对话面板插槽（right 或弹层）。
-- **对话面板复用画布 agent 聊天 UI 的交互模式**（流式输出、上下文面板、可停止），复用现有组件或同构实现，不复制不移植画布会话协议；编辑器上下文（时间线摘要）由本插件构造。
+- **对话面板复用云端 Agent 聊天 UI 的交互模式**（流式输出、上下文面板、可停止），复用现有组件或同构实现，不复制不移植画布运行协议；编辑器上下文（时间线摘要）由本插件构造。
 - AI 是时间线的**一等公民编辑者**：AI 命令与手势命令同构、同队列、同撤销栈。
 
 ### AI 命令协议（受约束命令 JSON）

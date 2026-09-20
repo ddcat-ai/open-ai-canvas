@@ -5,7 +5,7 @@ import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasNo
 import type { PluginCanvasNodeContribution } from "@/lib/plugins/plugin-types";
 
 /** 作为上游输入被容量校验计数时归入的类别 */
-export type CanvasNodeInputKind = "image" | "video" | "audio" | "text";
+export type CanvasNodeInputKind = "image" | "video" | "audio" | "text" | "table_data";
 
 /**
  * 节点定义——注册表的基本单元。

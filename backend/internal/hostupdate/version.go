@@ -10,12 +10,28 @@ type versionPart struct {
 	pre                 []string
 }
 
+func IsReleaseVersion(raw string) bool {
+	_, ok := parseVersion(raw)
+	return ok
+}
+
 func CompareVersions(left, right string) int {
 	a, aok := parseVersion(left)
 	b, bok := parseVersion(right)
-	if !aok || !bok {
-		return strings.Compare(strings.TrimSpace(left), strings.TrimSpace(right))
+	if aok && bok {
+		return compareParsedVersions(a, b)
 	}
+	// sha-5509b17、latest 等非正式标签不能按字典序和 v1.5.0 比，否则会被当成更新而不让升级。
+	if !aok && bok {
+		return -1
+	}
+	if aok && !bok {
+		return 1
+	}
+	return strings.Compare(strings.TrimSpace(left), strings.TrimSpace(right))
+}
+
+func compareParsedVersions(a, b versionPart) int {
 	for _, pair := range [][2]int{{a.major, b.major}, {a.minor, b.minor}, {a.patch, b.patch}} {
 		if pair[0] < pair[1] {
 			return -1

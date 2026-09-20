@@ -1,0 +1,107 @@
+{
+  "apiVersion": "yingce.plugin/v1",
+  "id": "official-payment-zhifufm",
+  "name": "支付FM",
+  "version": "1.0.0",
+  "author": "支付FM",
+  "description": "支付FM个人免签/签约聚合支付适配器，支持微信/支付宝扫码或收银台跳转。",
+  "enabled": true,
+  "installable": true,
+  "runtime": {
+    "backend": "rpc",
+    "backendEntry": "backend/provider"
+  },
+  "surfaces": [
+    "wallet",
+    "settings"
+  ],
+  "permissions": [
+    "payment.create",
+    "payment.query",
+    "payment.close",
+    "payment.reconcile"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "publicBaseUrl",
+        "type": "url",
+        "label": "服务器公网地址",
+        "required": true,
+        "description": "用于生成异步通知 notifyUrl 地址，必须可被支付FM外网服务器访问回调。"
+      },
+      {
+        "name": "merchantNum",
+        "type": "string",
+        "label": "商户号 (merchantNum)",
+        "required": true,
+        "description": "支付FM商户后台【用户中心】查看的商户号（8-18位数字）。"
+      },
+      {
+        "name": "secretKey",
+        "type": "password",
+        "label": "接入密钥 (secretKey)",
+        "required": true,
+        "secret": true,
+        "description": "支付FM商户后台【用户中心】查看的接口接入密钥。"
+      },
+      {
+        "name": "gateway",
+        "type": "url",
+        "label": "接口根地址",
+        "required": true,
+        "default": "https://api-5a0zvlcbi80.zhifu.fm.it88168.com/api",
+        "description": "支付FM分配的接口根地址，如 https://api-5a0zvlcbi80.zhifu.fm.it88168.com/api。"
+      },
+      {
+        "name": "payType",
+        "type": "string",
+        "label": "默认支付通道 (payType)",
+        "required": false,
+        "default": "alipay",
+        "description": "支付产品通道：alipay(支付宝)、wechat(微信)、aloop(支付宝轮询池)、tloop(微信轮询池)等。"
+      },
+      {
+        "name": "checkoutMode",
+        "type": "string",
+        "label": "收银方式",
+        "required": false,
+        "default": "redirect",
+        "values": [
+          "redirect",
+          "qr_code"
+        ],
+        "description": "redirect 跳转支付FM收银页；qr_code 在钱包中直接将 payUrl 渲染为二维码扫码。"
+      }
+    ]
+  },
+  "contributes": {
+    "paymentProviders": [
+      {
+        "id": "zhifufm-pay",
+        "label": "支付FM",
+        "icon": "assets/icon.svg",
+        "checkoutMode": "redirect",
+        "identityFields": [
+          "merchantNum"
+        ],
+        "expiryPolicy": {
+          "defaultMinutes": 10,
+          "minMinutes": 3,
+          "maxMinutes": 15
+        },
+        "notificationSuccess": {
+          "status": 200,
+          "contentType": "text/plain; charset=utf-8",
+          "body": "success"
+        },
+        "notificationFailure": {
+          "status": 400,
+          "contentType": "text/plain; charset=utf-8",
+          "body": "fail"
+        }
+      }
+    ]
+  },
+  "documentation": "# 支付FM 聚合支付插件\n\n支持对接支付FM免签个人收款码与签约支付通道，支持支付宝/微信扫码及收银台跳转。\n\n### 插件配置参数\n- **服务器公网地址**: 本站对外公网地址，用于接收 `notifyUrl` 异步回调通知。\n- **商户号 (merchantNum)**: 支付FM商户后台【用户中心】查看的商户号。\n- **接入密钥 (secretKey)**: 支付FM商户后台【用户中心】查看的接口接入密钥。\n- **接口根地址**: 支付FM后台显示的专属根地址，例如 `https://api-5a0zvlcbi80.zhifu.fm.it88168.com/api`。\n- **默认支付通道 (payType)**: 推荐使用 `aloop` / `tloop` 或 `alipay` / `wechat`。\n- **收银方式**: 默认为 `redirect` 跳转模式。\n\n---\n\n# 支付FM 接口协议说明\n\n遵循 `yingce.payment/v1` 标准，自动转换影策系统订单至支付FM `/startOrder` 接口，并在收到通知时按 MD5 规则完成异步验签。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v1\",\n  \"id\": \"official-payment-zhifufm\",\n  \"name\": \"支付FM\",\n  \"version\": \"1.0.0\",\n  \"author\": \"支付FM\",\n  \"description\": \"支付FM个人免签/签约聚合支付适配器，支持微信/支付宝扫码或收银台跳转。\",\n  \"enabled\": true,\n  \"installable\": true,\n  \"runtime\": {\n    \"backend\": \"rpc\",\n    \"backendEntry\": \"backend/provider\"\n  },\n  \"surfaces\": [\n    \"wallet\",\n    \"settings\"\n  ],\n  \"permissions\": [\n    \"payment.create\",\n    \"payment.query\",\n    \"payment.close\",\n    \"payment.reconcile\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"publicBaseUrl\",\n        \"type\": \"url\",\n        \"label\": \"服务器公网地址\",\n        \"required\": true,\n        \"description\": \"用于生成异步通知 notifyUrl 地址，必须可被支付FM外网服务器访问回调。\"\n      },\n      {\n        \"name\": \"merchantNum\",\n        \"type\": \"string\",\n        \"label\": \"商户号 (merchantNum)\",\n        \"required\": true,\n        \"description\": \"支付FM商户后台【用户中心】查看的商户号（8-18位数字）。\"\n      },\n      {\n        \"name\": \"secretKey\",\n        \"type\": \"password\",\n        \"label\": \"接入密钥 (secretKey)\",\n        \"required\": true,\n        \"secret\": true,\n        \"description\": \"支付FM商户后台【用户中心】查看的接口接入密钥。\"\n      },\n      {\n        \"name\": \"gateway\",\n        \"type\": \"url\",\n        \"label\": \"接口根地址\",\n        \"required\": true,\n        \"default\": \"https://api-5a0zvlcbi80.zhifu.fm.it88168.com/api\",\n        \"description\": \"支付FM分配的接口根地址，如 https://api-5a0zvlcbi80.zhifu.fm.it88168.com/api。\"\n      },\n      {\n        \"name\": \"payType\",\n        \"type\": \"string\",\n        \"label\": \"默认支付通道 (payType)\",\n        \"required\": false,\n        \"default\": \"alipay\",\n        \"description\": \"支付产品通道：alipay(支付宝)、wechat(微信)、aloop(支付宝轮询池)、tloop(微信轮询池)等。\"\n      },\n      {\n        \"name\": \"checkoutMode\",\n        \"type\": \"string\",\n        \"label\": \"收银方式\",\n        \"required\": false,\n        \"default\": \"redirect\",\n        \"values\": [\n          \"redirect\",\n          \"qr_code\"\n        ],\n        \"description\": \"redirect 跳转支付FM收银页；qr_code 在钱包中直接将 payUrl 渲染为二维码扫码。\"\n      }\n    ]\n  },\n  \"contributes\": {\n    \"paymentProviders\": [\n      {\n        \"id\": \"zhifufm-pay\",\n        \"label\": \"支付FM\",\n        \"icon\": \"assets/icon.svg\",\n        \"checkoutMode\": \"redirect\",\n        \"identityFields\": [\n          \"merchantNum\"\n        ],\n        \"expiryPolicy\": {\n          \"defaultMinutes\": 10,\n          \"minMinutes\": 3,\n          \"maxMinutes\": 15\n        },\n        \"notificationSuccess\": {\n          \"status\": 200,\n          \"contentType\": \"text/plain; charset=utf-8\",\n          \"body\": \"success\"\n        },\n        \"notificationFailure\": {\n          \"status\": 400,\n          \"contentType\": \"text/plain; charset=utf-8\",\n          \"body\": \"fail\"\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

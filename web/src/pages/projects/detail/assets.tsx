@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Dropdown, Form, Input, Modal, Popconfirm, Tabs, type FormInstance } from "antd";
 import { Box, Check, ChevronDown, Download, FileText, FolderOpen, FolderPlus, Image as ImageIcon, Link2, MoreHorizontal, MoveRight, Music2, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload, UserRound, Video, VolumeX } from "lucide-react";
 
@@ -90,6 +90,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const [voicePickerOpen, setVoicePickerOpen] = useState(false);
     const [voiceInstructions, setVoiceInstructions] = useState("");
     const [form] = Form.useForm<CharacterForm>();
+    const queryClient = useQueryClient();
 
     const assetsQuery = useQuery({
         queryKey: ["project", detail.project.id, "assets", page, pageSize, category, folderId, debouncedKeyword],
@@ -100,12 +101,26 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             folderId: folderId === ALL_FOLDERS ? undefined : folderId,
             query: debouncedKeyword || undefined,
         }),
+        placeholderData: keepPreviousData,
     });
     const foldersQuery = useQuery({ queryKey: ["project", detail.project.id, "asset-folders"], queryFn: () => listProjectAssetFolders(detail.project.id) });
-    const showPendingCandidates = folderId === ALL_FOLDERS && (category === "all" || category === "character");
+    // 左侧分类计数不能依赖跟随当前 tab 的候选查询，否则"角色"的数字会随所在 tab 的待确认数漂移；
+    // 这里独立取"全部待确认"和"角色待确认"两个总数，计数与当前所处分类解耦。
+    const pendingCountQuery = useQuery({
+        queryKey: ["project", detail.project.id, "asset-candidates", "pending-count"],
+        queryFn: () => listProjectAssetCandidates(detail.project.id, { page: 1, pageSize: 1, status: "pending_confirmation" }),
+    });
+    const characterPendingCountQuery = useQuery({
+        queryKey: ["project", detail.project.id, "asset-candidates", "character-pending-count"],
+        queryFn: () => listProjectAssetCandidates(detail.project.id, { page: 1, pageSize: 1, category: "character", status: "pending_confirmation" }),
+    });
+    // 章节提取会产出角色、场景和道具三类候选；待确认列表必须跟随当前分类，否则非角色候选永远无法确认。
+    const candidateCategory = category === "all" ? undefined : category;
+    const candidateLabel = category === "all" ? "资产" : categoryLabel(category);
+    const showPendingCandidates = folderId === ALL_FOLDERS;
     const candidatesQuery = useQuery({
-        queryKey: ["project", detail.project.id, "asset-candidates", candidatePage, candidatePageSize, "character", "pending_confirmation", debouncedKeyword],
-        queryFn: () => listProjectAssetCandidates(detail.project.id, { page: candidatePage, pageSize: candidatePageSize, category: "character", status: "pending_confirmation", query: debouncedKeyword || undefined }),
+        queryKey: ["project", detail.project.id, "asset-candidates", candidatePage, candidatePageSize, candidateCategory || "all", "pending_confirmation", debouncedKeyword],
+        queryFn: () => listProjectAssetCandidates(detail.project.id, { page: candidatePage, pageSize: candidatePageSize, category: candidateCategory, status: "pending_confirmation", query: debouncedKeyword || undefined }),
     });
     const assets = assetsQuery.data?.assets || [];
     const assetFolders = foldersQuery.data?.folders || [];
@@ -140,6 +155,8 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
         setCategory(nextCategory);
         setFolderId(ALL_FOLDERS);
         setPage(1);
+        // 待确认列表跟随分类后，不同分类的候选数量不同，切分类必须回到第 1 页。
+        setCandidatePage(1);
     };
 
     const projectAssetIds = new Set(assets.map((asset) => asset.id));
@@ -180,8 +197,8 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const categoryCounts = categories.map((value) => ({
         value,
         count: value === "all"
-            ? totalAssetCount + (candidatesQuery.data?.total || 0)
-            : (categoryCountMap[value] || 0) + (value === "character" ? candidatesQuery.data?.total || 0 : 0),
+            ? totalAssetCount + (pendingCountQuery.data?.total || 0)
+            : (categoryCountMap[value] || 0) + (value === "character" ? characterPendingCountQuery.data?.total || 0 : 0),
     }));
     const audioPickerItems = useMemo<AssetLibraryPickerItem[]>(() => {
         const localItems = personalAssets.flatMap((asset) => {
@@ -282,10 +299,16 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const confirmMutation = useMutation({
         mutationFn: ({ candidateId, targetAssetId }: { candidateId: string; targetAssetId?: string }) => confirmProjectAssetCandidate(detail.project.id, candidateId, targetAssetId),
         onSuccess: ({ asset }, variables) => {
-            syncPersonalCharacterProjection(asset);
-            done(variables.targetAssetId ? "候选信息已归并到角色新版本" : "角色卡已创建");
+            if (asset.category === "character") syncPersonalCharacterProjection(asset);
+            const label = asset.category === "character" ? "角色卡" : categoryLabel(asset.category);
+            // 确认会改变候选、资产列表和左侧计数三处数据，必须一并失效缓存，否则计数与列表滞后。
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["project", detail.project.id, "asset-candidates"] }),
+                queryClient.invalidateQueries({ queryKey: ["project", detail.project.id, "assets"] }),
+            ]);
+            done(variables.targetAssetId ? `候选信息已归并到${label}新版本` : `${label}已创建`);
         },
-        onError: failed("角色确认失败"),
+        onError: failed("资产确认失败"),
     });
     const confirmingCandidateId = confirmMutation.isPending ? confirmMutation.variables?.candidateId || "" : "";
     const saveCharacter = useMutation({
@@ -407,24 +430,25 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
                         </div>
                     </div>
                     {childFolders.length ? <div className="project-asset-folder-grid mb-5">{childFolders.map((folder) => <ProjectAssetFolderCard key={folder.id} folder={folder} folders={assetFolders} assets={assets} folderCounts={folderCountMap} personalAssets={personalAssets} onOpen={() => selectFolder(folder.id)} onRename={() => openFolderEditor(folder)} onMove={(parentId) => moveFolderMutation.mutate({ id: folder.id, parentId })} onStyle={(style) => styleFolderMutation.mutate({ id: folder.id, style })} onTheme={(theme) => themeFolderMutation.mutate({ id: folder.id, theme })} onDelete={() => modal.confirm({ title: `删除文件夹“${folder.name}”？`, content: "仅空文件夹可以删除，素材和子文件夹不会被级联删除。", okText: "删除", okButtonProps: { danger: true }, cancelText: "取消", onOk: () => deleteFolderMutation.mutateAsync(folder.id) })} deleting={(deleteFolderMutation.isPending && deleteFolderMutation.variables === folder.id) || (moveFolderMutation.isPending && moveFolderMutation.variables?.id === folder.id) || (styleFolderMutation.isPending && styleFolderMutation.variables?.id === folder.id) || (themeFolderMutation.isPending && themeFolderMutation.variables?.id === folder.id)} />)}</div> : null}
-                    {folderId === ALL_FOLDERS && (category === "all" || category === "character") && pendingCandidates.length ? (
-                        <section className="mb-4" aria-label="待确认角色">
+                    {showPendingCandidates && pendingCandidates.length ? (
+                        <section className="mb-4" aria-label={`待确认${candidateLabel}`}>
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 text-xs font-medium"><Sparkles className="size-3.5 text-foreground/50" />剧情识别出的角色</div>
+                                <div className="flex items-center gap-1.5 text-xs font-medium"><Sparkles className="size-3.5 text-foreground/50" />剧情识别出的{candidateLabel}</div>
                                 <span className="text-[var(--fs-tiny)] tabular-nums text-foreground/42">剩余 {candidatesQuery.data?.total || 0} 个待确认</span>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {pendingCandidates.map((candidate) => {
                                     const confirming = confirmingCandidateId === candidate.id;
+                                    const isCharacter = candidate.category === "character";
                                     return (
                                         <article key={candidate.id} className="flex min-h-28 items-center gap-3 rounded-lg bg-surface-active p-3">
-                                            <span className="grid size-12 shrink-0 place-items-center rounded-md bg-foreground/[.045] text-foreground/25"><UserRound className="size-5" /></span>
+                                            <span className="grid size-12 shrink-0 place-items-center rounded-md bg-foreground/[.045] text-foreground/25">{isCharacter ? <UserRound className="size-5" /> : <Box className="size-5" />}</span>
                                             <div className="min-w-0 flex-1">
                                                 <div className="truncate text-xs font-semibold">{candidate.name}</div>
-                                                <div className="mt-1 text-[var(--fs-tiny)] text-foreground/42">待确认角色卡 · 来自章节分析</div>
+                                                <div className="mt-1 text-[var(--fs-tiny)] text-foreground/42">待确认{categoryLabel(candidate.category)} · 来自章节分析</div>
                                                 <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1">
-                                                    <Button type="text" size="small" icon={<Check className="size-3.5" />} loading={confirming} disabled={Boolean(confirmingCandidateId) && !confirming} onClick={() => confirmMutation.mutate({ candidateId: candidate.id })}>确认新角色</Button>
-                                                    {characterAssets.length ? <Dropdown trigger={["click"]} menu={{ items: characterAssets.map((asset) => ({ key: asset.id, label: asset.title })), onClick: ({ key }) => confirmMutation.mutate({ candidateId: candidate.id, targetAssetId: key }) }}><Button type="text" size="small" disabled={Boolean(confirmingCandidateId)}>归并到角色<ChevronDown className="size-3" /></Button></Dropdown> : null}
+                                                    <Button type="text" size="small" icon={<Check className="size-3.5" />} loading={confirming} disabled={Boolean(confirmingCandidateId) && !confirming} onClick={() => confirmMutation.mutate({ candidateId: candidate.id })}>{isCharacter ? "确认新角色" : "确认新增"}</Button>
+                                                    {isCharacter && characterAssets.length ? <Dropdown trigger={["click"]} menu={{ items: characterAssets.map((asset) => ({ key: asset.id, label: asset.title })), onClick: ({ key }) => confirmMutation.mutate({ candidateId: candidate.id, targetAssetId: key }) }}><Button type="text" size="small" disabled={Boolean(confirmingCandidateId)}>归并到角色<ChevronDown className="size-3" /></Button></Dropdown> : null}
                                                 </div>
                                             </div>
                                         </article>

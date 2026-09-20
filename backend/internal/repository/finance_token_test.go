@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -154,6 +155,58 @@ func TestSettleArkVideoTokenOrderSupplementsUnderreservation(t *testing.T) {
 	}
 	if entry.AmountMicrocredits != -actual || entry.AvailableDeltaMicrocredits != -supplement || entry.ReservedDeltaMicrocredits != -reserved {
 		t.Fatalf("consume entry = %#v", entry)
+	}
+}
+
+func TestSettleAgentTokenOrderCapsChargeAtQuotedLimit(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:finance-token-agent-cap?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.ApiCallLog{}, &model.CreditLedgerEntry{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.CreditAccount{UserID: "user-1", AvailableMicrocredits: 500, ReservedMicrocredits: 100}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.BillingOrder{
+		ID: "agent-order", UserID: "user-1", IdempotencyKey: "task:agent-task", Capability: "text", BillingMode: "token",
+		AmountMicrocredits: 100, ReservedAmountMicrocredits: 100, ChargeLimitMicrocredits: 100,
+		OutputTokenPriceMicrocredits: 1_000_000, MultiplierBasisPoints: 10_000, Status: model.BillingStatusRunning,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ApiCallLog{
+		ID: "agent-log", BillingOrderID: "agent-order", RequestKind: "generate", Billable: true,
+		Status: model.ApiCallStatusSucceeded, UsageAvailable: true, OutputTokens: 200,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	repo := &Repository{db: db}
+	if err := repo.SettleBillingOrder("agent-order", "provider-request"); err != nil {
+		t.Fatalf("SettleBillingOrder() error = %v", err)
+	}
+	var order model.BillingOrder
+	if err := db.First(&order, "id = ?", "agent-order").Error; err != nil {
+		t.Fatal(err)
+	}
+	if order.ActualAmountMicrocredits != 100 || order.OutputTokens != 200 || !order.UsageAvailable {
+		t.Fatalf("capped Agent order = %#v", order)
+	}
+	var account model.CreditAccount
+	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if account.AvailableMicrocredits != 500 || account.ReservedMicrocredits != 0 {
+		t.Fatalf("capped Agent account = %#v", account)
+	}
+	var entry model.CreditLedgerEntry
+	if err := db.First(&entry, "billing_order_id = ? AND type = ?", "agent-order", model.CreditLedgerConsume).Error; err != nil {
+		t.Fatal(err)
+	}
+	if entry.AmountMicrocredits != -100 || !strings.Contains(entry.Note, "硬上限") {
+		t.Fatalf("capped Agent ledger entry = %#v", entry)
 	}
 }
 

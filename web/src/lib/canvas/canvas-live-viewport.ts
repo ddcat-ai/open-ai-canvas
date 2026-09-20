@@ -14,6 +14,7 @@ export type CanvasNodeDragPreview = {
 type NodeDragPreviewDomState = {
     elementsById: Map<string, HTMLElement>;
     previousIds: Set<string>;
+    selectionBounds: HTMLElement | null;
 };
 
 type NodeSelectionPreviewDomState = {
@@ -78,16 +79,19 @@ export function subscribeCanvasViewportPreview(container: HTMLDivElement, listen
  */
 export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, preview: CanvasNodeDragPreview | null) {
     if (!container) return;
+    if (preview) container.dataset.canvasNodeDragging = "true";
+    else delete container.dataset.canvasNodeDragging;
 
     let state = nodeDragPreviewDomStates.get(container);
     if (!state) {
-        state = { elementsById: new Map(), previousIds: new Set() };
+        state = { elementsById: new Map(), previousIds: new Set(), selectionBounds: null };
         nodeDragPreviewDomStates.set(container, state);
     }
 
     for (const nodeId of state.previousIds) {
         state.elementsById.get(nodeId)?.style.removeProperty("translate");
     }
+    state.selectionBounds?.style.removeProperty("translate");
 
     state.previousIds.clear();
     if (preview) {
@@ -98,6 +102,7 @@ export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, pre
                 const nodeId = element.dataset.nodeId;
                 if (nodeId) state?.elementsById.set(nodeId, element);
             });
+            state.selectionBounds = container.querySelector<HTMLElement>("[data-canvas-selection-bounds]");
         }
         for (const nodeId of preview.nodeIds) {
             const element = state.elementsById.get(nodeId);
@@ -105,8 +110,13 @@ export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, pre
             element.style.setProperty("translate", `${preview.x}px ${preview.y}px`);
             state.previousIds.add(nodeId);
         }
+        if (!state.selectionBounds?.isConnected) {
+            state.selectionBounds = container.querySelector<HTMLElement>("[data-canvas-selection-bounds]");
+        }
+        state.selectionBounds?.style.setProperty("translate", `${preview.x}px ${preview.y}px`);
     } else {
         state.elementsById.clear();
+        state.selectionBounds = null;
     }
 
     container.dispatchEvent(new CustomEvent<CanvasNodeDragPreview | null>(CANVAS_NODE_DRAG_PREVIEW_EVENT, { detail: preview }));

@@ -146,7 +146,6 @@ export function AssetLibraryPickerModal({
         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本", searchText: (asset.tags ?? []).join(" "),
         ...(items.find((item) => item.id === asset.id) || { disabledReason: "此素材不适用于当前操作" }),
     })), [remoteQuery.data, items]);
-    const effectivePagination = remoteEnabled ? { current: remotePage, pageSize: remotePageSize, total: remoteQuery.data?.total || 0, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const initialSelectedIdsRef = useRef(initialSelectedIds);
     const itemsRef = useRef(items);
@@ -157,20 +156,28 @@ export function AssetLibraryPickerModal({
     }, [items, uploadedItems]);
     itemsRef.current = allItems;
     const localItems = useMemo(() => allItems.filter((item) => !item.external), [allItems]);
+    // 远端成功且有可展示素材时用远端。真正的空结果保持空列表。
+    // 仅在远端空而本地仍有素材、或远端总数>0 但本页全被排除时回退本地，避免合法空搜索被缓存铺满。
+    const remoteTotal = remoteQuery.data?.total ?? 0;
+    const remoteReady = remoteEnabled && remoteQuery.isSuccess;
+    const preferLocalUnsynced = remoteReady && remoteTotal === 0 && localItems.length > 0;
+    const remoteEntityOnlyPage = remoteReady && remoteItems.length === 0 && remoteTotal > 0;
+    const useRemoteItems = remoteReady && !preferLocalUnsynced && !remoteEntityOnlyPage && (remoteItems.length > 0 || remoteTotal === 0);
+    const effectivePagination = useRemoteItems ? { current: remotePage, pageSize: remotePageSize, total: remoteTotal, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
     const pluginItems = useMemo(() => allItems.filter((item) => Boolean(item.external)), [allItems]);
     const hasPluginSource = useMemo(() => Object.keys(categoryLabels).some((value) => value.startsWith("external:")) || pluginItems.some((item) => item.category.startsWith("external:")), [categoryLabels, pluginItems]);
     // 媒体类型在分类之前收窄数据源，让左侧分类计数、网格和分页始终描述同一批素材。
     const sourceItems = useMemo(() => {
-        const base = source === "plugin" ? pluginItems : remoteEnabled ? remoteItems : localItems;
+        const base = source === "plugin" ? pluginItems : useRemoteItems ? remoteItems : localItems;
         if (mediaKind === "all") return base;
         return base.filter((item) => pickerItemMediaKind(item) === mediaKind);
-    }, [localItems, mediaKind, pluginItems, remoteEnabled, remoteItems, source]);
+    }, [localItems, mediaKind, pluginItems, useRemoteItems, remoteItems, source]);
     const activeSourceItems = useMemo(() => sourceItems.filter((item) => !item.archived), [sourceItems]);
     const archivedItems = useMemo(() => sourceItems.filter((item) => item.archived), [sourceItems]);
     const mediaKindOptions = useMemo(() => (remoteKind ? [] : Array.from(new Set(mediaKinds))), [mediaKinds, remoteKind]);
     const sourceFolders = source === "plugin" ? folders : [];
     const showCategories = source === "local" || !sourceFolders.length;
-    const normalCategories = useMemo(() => remoteEnabled ? Object.keys(categoryLabels).filter((value) => value !== "archived" && !value.startsWith("external:")) : ["all", ...Array.from(new Set(activeSourceItems.map((item) => item.category || "other"))).filter((value) => value !== "all")], [activeSourceItems, categoryLabels, remoteEnabled]);
+    const normalCategories = useMemo(() => useRemoteItems ? Object.keys(categoryLabels).filter((value) => value !== "archived" && !value.startsWith("external:")) : ["all", ...Array.from(new Set(activeSourceItems.map((item) => item.category || "other"))).filter((value) => value !== "all")], [activeSourceItems, categoryLabels, useRemoteItems]);
     const archivedCount = archivedItems.length;
     const isRecycleBin = category === "archived";
 
@@ -183,9 +190,9 @@ export function AssetLibraryPickerModal({
                 return false;
             }
             if (folderId !== "all" && (item.folderId || "") !== folderId) return false;
-            return remoteEnabled || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
+            return useRemoteItems || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
-    }, [category, folderId, keyword, sourceItems, remoteEnabled]);
+    }, [category, folderId, keyword, sourceItems, useRemoteItems]);
     const selectedIds = useMemo(
         () =>
             Array.from(selected).filter((id) => {
@@ -481,7 +488,7 @@ export function AssetLibraryPickerModal({
                     </nav>
                     <div className="asset-picker-grid-wrap">
                         <div className="asset-picker-grid">
-                            {remoteEnabled && remoteQuery.isError ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (remoteEnabled && remoteQuery.isFetching) ? (
+                            {remoteEnabled && remoteQuery.isError && !localItems.length ? <div className="asset-picker-empty" role="alert"><FolderOpen /><strong>素材读取失败</strong><span>服务端暂时不可用，重试不会影响本地已保存素材。</span><Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (useRemoteItems && remoteQuery.isFetching) ? (
                                 <div className="asset-picker-empty">
                                     <LoaderCircle className="animate-spin" />
                                     <strong>正在读取素材</strong>
@@ -512,8 +519,8 @@ export function AssetLibraryPickerModal({
                                 </span>
                             </button>
                         </>
-                    ) : footerNote ? (
-                        <span className="asset-picker-footer-note">{footerNote}</span>
+                    ) : footerNote || (remoteEnabled && remoteQuery.isError) ? (
+                        <span className="asset-picker-footer-note">{remoteEnabled && remoteQuery.isError ? "云端素材暂时不可用，当前显示本地缓存" : footerNote}</span>
                     ) : (
                         <span />
                     )}

@@ -1,4 +1,4 @@
-import type { CanvasWorkflowInput } from "../canvas/canvas-agent-workflow";
+import type { CanvasWorkflowInput } from "../canvas/canvas-workflow-builder";
 import { CREATIVE_SCENARIOS, type CreativeScenarioId } from "./creative-scenarios";
 export { CREATIVE_SCENARIOS, type CreativeScenario, type CreativeScenarioId } from "./creative-scenarios";
 

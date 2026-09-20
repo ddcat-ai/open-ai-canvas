@@ -3,10 +3,10 @@ import type { MediaConversionNodeState } from "@/lib/media-conversion/contracts"
 import type { AssetCategory } from "@/lib/asset-category";
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
-import type { PortraitClearanceNodeState } from "@/lib/portrait-clearance/contracts";
 import type { ArtCritiqueNodeState } from "@/lib/art-critique/contracts";
 import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
+import type { GenerationSpec } from "@/lib/canvas/generation-contract.generated";
 
 export type Position = {
     x: number;
@@ -37,6 +37,7 @@ export enum CanvasNodeType {
     Chart = "chart",
     ColorGrade = "colorgrade",
     MediaConversion = "media-conversion",
+    BatchTable = "batch-table",
 }
 
 /** Runtime IDs contributed by plugins share the persisted node type field. */
@@ -57,7 +58,7 @@ export type StoryboardShotDuration = "auto" | "5" | "10" | "15" | "30";
 export type StoryboardShotCount = "auto" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type StoryboardVideoInputMode = "direct" | "keyframe";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
-export type CanvasGenerationBatchMode = "storyboard_image" | "storyboard_video" | "action_board";
+export type CanvasGenerationBatchMode = "storyboard_image" | "storyboard_video" | "action_board" | "batch_image";
 export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed" | "completed" | "cancelled";
 export type CanvasGenerationBatchItemStatus = "waiting" | "submitting" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type CanvasImageGenerationType = "generation" | "edit";
@@ -158,8 +159,33 @@ export type CanvasGenerationBatch = {
     mode: CanvasGenerationBatchMode;
     status: CanvasGenerationBatchStatus;
     items: CanvasGenerationBatchItem[];
+    concurrency?: number;
     createdAt: string;
     updatedAt: string;
+};
+
+export type CanvasBatchOperation = "try_on" | "creative";
+export type CanvasBatchRow = {
+    id: string;
+    enabled: boolean;
+    inputNodeIds: string[];
+    /** Text nodes selected for this row; their contents are appended to prompt. */
+    textNodeIds?: string[];
+    prompt: string;
+    outputNodeId?: string;
+};
+export type CanvasBatchReferenceColumn = {
+    id: string;
+    label: string;
+};
+export type CanvasBatchTableData = {
+    operation: CanvasBatchOperation;
+    concurrency: number;
+    /** Optional prompt override applied to every batch row while non-empty. */
+    globalPrompt?: string;
+    referenceColumns?: CanvasBatchReferenceColumn[];
+    textColumns?: CanvasBatchReferenceColumn[];
+    rows: CanvasBatchRow[];
 };
 
 export type CanvasSkillSnapshot = {
@@ -175,6 +201,8 @@ export type CanvasSkillSnapshot = {
 };
 
 export type CanvasNodeMetadata = {
+    /** Credential-free editable generation contract; submitted recipes live with tasks. */
+    generationSpec?: GenerationSpec;
     /** Namespaced extension ownership for nodes contributed by a unified plugin. */
     pluginId?: string;
     pluginNodeId?: string;
@@ -226,10 +254,9 @@ export type CanvasNodeMetadata = {
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;
     model?: string;
-    workflowProvider?: "model" | "runninghub" | "comfyui";
+    workflowProvider?: "model" | "runninghub";
     runningHubWorkflowId?: string;
     runningHubWorkflowKind?: "workflow" | "app";
-    comfyBridgeWorkflowId?: string;
     /** 当前画布节点覆盖的工作流动态字段，键为 source:* 或 field:nodeId:fieldName。 */
     workflowParameters?: Record<string, unknown>;
     size?: string;
@@ -365,7 +392,6 @@ export type CanvasNodeMetadata = {
     chartKind?: "bar" | "line";
     /** 调色节点的参数；缺省视为未调色。 */
     colorGrade?: CanvasColorGrade;
-    /** 本地图片/视频转换节点的参数、来源指纹和结果状态。 */
     mediaConversion?: MediaConversionNodeState;
     /** 用户手动拉伸过尺寸；图片按真实比例自动适配时避让它。 */
     manualSize?: boolean;
@@ -375,6 +401,11 @@ export type CanvasNodeMetadata = {
     storyboardVideoInputMode?: StoryboardVideoInputMode;
     storyboardComposerHeight?: number;
     generationBatches?: CanvasGenerationBatch[];
+    batchTable?: CanvasBatchTableData;
+    batchSourceNodeId?: string;
+    batchRowId?: string;
+    batchOperation?: CanvasBatchOperation;
+    batchInputNodeIds?: string[];
     frame?: {
         collapsed: boolean;
         expandedWidth: number;
@@ -426,12 +457,17 @@ export type CanvasNodeMetadata = {
         editMode?: "provider-mask" | "local-composite";
     };
     portraitTexture?: PortraitTextureSettings;
-    /** 肖像排查节点只保存可恢复的 UI 状态，不保存图片、embedding 或完整结果。 */
-    portraitClearance?: PortraitClearanceNodeState;
     /** AI 审美批改节点只保存当前报告和输入指纹，不保存图片二进制。 */
     artCritique?: ArtCritiqueNodeState;
     /** 摄像机控制选项，启用后生成时自动追加摄影机/镜头/焦距/光圈提示词。 */
     cameraControl?: CameraControlOptions;
+    /** 全景节点配置：投影方式、生成方式和比例兜底开关。 */
+    panoramaConfig?: {
+        projection: "spherical" | "cylindrical";
+        sourceMode: "ai" | "image";
+        smartBase: boolean;
+        directImageUrl?: string | null;
+    };
 };
 
 export type CanvasNodeData = {
@@ -455,7 +491,7 @@ export type CanvasConnection = {
     toHandleId?: string;
     fromAnchorRatio?: number;
     toAnchorRatio?: number;
-    relation?: "storyboard-output" | "storyboard-asset-reference";
+    relation?: "storyboard-output" | "storyboard-asset-reference" | "batch-output";
     storyboardRowId?: string;
 };
 

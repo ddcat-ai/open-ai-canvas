@@ -264,18 +264,27 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 }
 
 func taskTextEventCursor(c *gin.Context) (int64, error) {
-	raw := c.Query("after")
-	if raw == "" {
-		raw = c.GetHeader("Last-Event-ID")
+	queryRaw, headerRaw := c.Query("after"), c.GetHeader("Last-Event-ID")
+	var cursor int64
+	for _, item := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "after", raw: queryRaw},
+		{name: "Last-Event-ID", raw: headerRaw},
+	} {
+		if item.raw == "" {
+			continue
+		}
+		value, err := strconv.ParseInt(item.raw, 10, 64)
+		if err != nil || value < 0 {
+			return 0, errors.New("after 或 Last-Event-ID 必须是非负整数")
+		}
+		if value > cursor {
+			cursor = value
+		}
 	}
-	if raw == "" {
-		return 0, nil
-	}
-	after, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || after < 0 {
-		return 0, errors.New("after 或 Last-Event-ID 必须是非负整数")
-	}
-	return after, nil
+	return cursor, nil
 }
 
 func streamTaskTextEvents(c *gin.Context, svc *service.Service, userID string, taskID string, after int64, replay *service.TextReplayResult) {
@@ -339,85 +348,4 @@ func writeTaskTextSSE(c *gin.Context, event string, id int64, value any) {
 	}
 	_, _ = fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, data)
 	c.Writer.Flush()
-}
-
-func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
-	createSession := func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		policy, available := loadRuntimePolicy(c, svc)
-		if !available || !enforceRateLimit(c, "sessions:"+user.ID, policy.Request.SessionCreatePerMinute, time.Minute) {
-			return
-		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<20)
-		var req service.CreateSessionRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			fail(c, http.StatusBadRequest, err)
-			return
-		}
-		req.TraceID = TraceID(c)
-		req.RequestID = RequestID(c)
-		detail, err := svc.CreateSession(user.ID, req)
-		if err != nil {
-			fail(c, http.StatusBadRequest, err)
-			return
-		}
-		ok(c, detail)
-	}
-	querySession := func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		detail, err := svc.SessionDetail(user.ID, c.Param("id"))
-		if err != nil {
-			fail(c, http.StatusNotFound, err)
-			return
-		}
-		ok(c, detail)
-	}
-	uploadFile := func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		policy, available := loadRuntimePolicy(c, svc)
-		if !available || !enforceRateLimit(c, "session-files:"+user.ID, policy.Request.SessionFilePerMinute, time.Minute) {
-			return
-		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (policy.Resource.SessionUploadMB<<20)+(1<<20))
-		file, err := c.FormFile("file")
-		if err != nil {
-			fail(c, http.StatusBadRequest, err)
-			return
-		}
-		item, err := svc.StoreUpload(user.ID, c.PostForm("sessionId"), file)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, item)
-	}
-	downloadResults := func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		detail, err := svc.SessionDetail(user.ID, c.Param("id"))
-		if err != nil {
-			fail(c, http.StatusNotFound, err)
-			return
-		}
-		ok(c, detail.Results)
-	}
-	r.POST("/sessions", createSession)
-	r.GET("/sessions/:id", querySession)
-	r.POST("/files", uploadFile)
-	r.GET("/sessions/:id/results", downloadResults)
 }

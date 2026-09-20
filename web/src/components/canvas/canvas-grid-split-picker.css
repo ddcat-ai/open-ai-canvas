@@ -1,0 +1,207 @@
+.canvas-node-toolbar-menu-split {
+    position: relative;
+    display: block;
+    overflow: visible;
+}
+
+.canvas-node-toolbar-menu-stack {
+    display: flex;
+    flex-direction: column;
+}
+
+.canvas-node-toolbar-menu-split .canvas-node-toolbar-menu-stack {
+    min-width: 13.5rem;
+    overflow: hidden;
+    border: 1px solid var(--workspace-overlay-border, var(--dock-border));
+    border-radius: 8px;
+    background: var(--workspace-overlay-bg-strong, var(--dock-surface));
+}
+
+/* 子面板脱离父菜单的布局流，避免打开二/三级菜单时 rc-trigger 重新测量
+   整个 popup，导致一级菜单向左跳动。 */
+.canvas-node-toolbar-menu-split > .canvas-grid-split-picker {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: calc(100% + var(--space-1));
+    transform-origin: top left;
+    animation: canvas-grid-split-picker-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes canvas-grid-split-picker-in {
+    from {
+        opacity: 0;
+        transform: translateX(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-node-toolbar-menu-split > .canvas-grid-split-picker {
+        animation: none;
+    }
+}
+
+.canvas-node-toolbar-menu-split .ant-dropdown-menu {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.canvas-node-toolbar-menu .ant-dropdown-menu-item,
+.canvas-node-toolbar-menu .ant-dropdown-menu-submenu-title {
+    align-items: center;
+}
+
+.canvas-node-toolbar-menu .ant-dropdown-menu-item-icon {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+}
+
+.canvas-node-toolbar-menu .ant-dropdown-menu-item-icon svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+}
+
+.canvas-grid-split-menu-item.is-open {
+    background: var(--workspace-overlay-hover, color-mix(in srgb, var(--popover-foreground) 6%, var(--popover)));
+}
+
+.canvas-grid-split-menu-label {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+}
+
+.canvas-grid-split-menu-label > div:first-child {
+    min-width: 0;
+    flex: 1;
+}
+
+.canvas-grid-split-item .canvas-grid-split-icon {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    align-items: center;
+    justify-content: center;
+}
+
+.canvas-grid-split-chevron {
+    display: block;
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+    opacity: 0.45;
+}
+
+.canvas-grid-split-picker {
+    display: flex;
+    align-items: stretch;
+    overflow: visible;
+    border: var(--stroke-1) solid var(--dock-border);
+    border-radius: var(--dock-radius);
+    background: var(--dock-surface);
+    color: var(--fg);
+    box-shadow: var(--elevation-overlay);
+}
+
+.canvas-grid-split-presets {
+    display: flex;
+    width: 11.25rem;
+    flex-direction: column;
+    padding: var(--space-1) 0;
+}
+
+.canvas-grid-split-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+}
+
+.canvas-grid-split-item:hover,
+.canvas-grid-split-item.is-active {
+    background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.canvas-grid-split-item-label {
+    min-width: 0;
+    flex: 1;
+}
+
+.canvas-grid-split-mini {
+    display: grid;
+    width: 12px;
+    height: 12px;
+    gap: 1px;
+}
+
+.canvas-grid-split-mini span {
+    border-radius: 1px;
+    background: currentColor;
+    opacity: 0.72;
+}
+
+.canvas-grid-split-custom {
+    display: flex;
+    width: 9.75rem;
+    flex-direction: column;
+    gap: var(--space-2);
+    border-left: var(--stroke-1) solid var(--dock-border);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.canvas-grid-split-custom-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+
+.canvas-grid-split-custom-size {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+}
+
+.canvas-grid-split-board {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.canvas-grid-split-cell {
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--fg) 14%, var(--bg));
+    box-shadow: inset 0 0 0 var(--stroke-1) color-mix(in srgb, var(--fg) 22%, transparent);
+}
+
+.canvas-grid-split-cell.is-active {
+    background: var(--fg);
+    box-shadow: none;
+}

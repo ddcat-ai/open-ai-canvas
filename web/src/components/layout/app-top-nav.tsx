@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 
+import { BannerAnnouncementsSlider } from "@/components/layout/banner-announcements-slider";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
-import { SiteNoticeBar } from "@/components/layout/site-notice-bar";
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
 import { readWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
+import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 
@@ -43,6 +44,11 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
         writeWorkspaceSidebarCollapsed(false);
     };
 
+    const collapseDesktopSidebar = () => {
+        setDesktopSidebarCollapsed(true);
+        writeWorkspaceSidebarCollapsed(true);
+    };
+
     const handleNavClick = () => {
         if (isMobileViewport()) setMobileSidebarExpanded(false);
     };
@@ -76,6 +82,8 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                 <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full flex-col overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
                     {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
 
+                    {showGlobalTopBar ? <BannerAnnouncementsSlider /> : null}
+
                     <div className="app-workspace-main-row flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         {!hideChrome ? (
                             <aside
@@ -90,12 +98,12 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                     onNavigate={handleNavClick}
                                     onOpenSearch={() => setPaletteOpen(true)}
                                     onExpand={expandDesktopSidebar}
+                                    onCollapse={collapseDesktopSidebar}
                                 />
                             </aside>
                         ) : null}
 
                         <div className="app-workspace-stage relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                            <SiteNoticeBar />
                             {showGlobalTopBar ? <WorkspaceTopBar sidebarOpen={isMobileViewport() ? mobileSidebarExpanded : !desktopSidebarCollapsed} onToggleSidebar={toggleSidebar} /> : null}
                             <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
                         </div>
@@ -104,6 +112,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                     {paletteOpen ? <Suspense fallback={null}><WorkspaceCommandPalette open onClose={() => setPaletteOpen(false)} /></Suspense> : null}
                 </div>
             </WorkspaceTopBarExtensionProvider>
+            <WorkspaceWalletHost />
             <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
     );

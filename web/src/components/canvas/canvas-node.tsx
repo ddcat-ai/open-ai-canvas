@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video, WandSparkles } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, GripVertical, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video, WandSparkles } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
@@ -8,11 +8,9 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasConnectionTilt } from "@/lib/canvas/canvas-connection-tilt";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { PortraitClearanceIcon } from "@/components/canvas/portrait-clearance/portrait-clearance-icon";
-import { PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { getNodeDefinition, getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
 import { CanvasNodeContent, CanvasNodeImageInfo } from "./canvas-node-content";
@@ -114,7 +112,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onMediaPlayRequest,
     onContextMenu,
 }: CanvasNodeProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -131,7 +129,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const showStatusTrack = Boolean(resourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly));
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const nodeState = isFocusRelated ? "focus" : isConnectionTarget ? "target" : isSelected ? "selected" : isRelated && !isBatchChild ? "related" : "idle";
-    const showOutputConnection = data.type !== PORTRAIT_CLEARANCE_NODE_TYPE && getNodeDefinition(data.type)?.showOutputConnection !== false;
+    const showOutputConnection = getNodeDefinition(data.type)?.showOutputConnection !== false;
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -301,6 +299,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 draft={titleDraft}
                 theme={theme}
                 onDraftChange={setTitleDraft}
+                onDragStart={readOnly ? undefined : (event) => onMouseDown(event, data.id)}
                 onEdit={() => setIsEditingTitle(true)}
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
@@ -352,7 +351,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 }}
             >
                 <div
-                    className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot || data.type === CanvasNodeType.Script ? "overflow-visible" : "overflow-hidden"}`}
+                    className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot || data.type === CanvasNodeType.Script || data.type === CanvasNodeType.BatchTable || isComposerNode ? "overflow-visible" : "overflow-hidden"}`}
                     style={
                         {
                             background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
@@ -480,7 +479,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </> : null}
             </div>
 
-            {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionSideRail side="left" scale={scale} theme={theme} visible={hovered || forceInputVisible} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
+            {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.BatchTable ? <ConnectionSideRail side="left" scale={scale} theme={theme} visible={hovered || forceInputVisible} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
             {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config && showOutputConnection ? <ConnectionSideRail side="right" scale={scale} theme={theme} visible={hovered} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
 
         </div>
@@ -634,7 +633,7 @@ function formatMediaDimensionLabel(node: CanvasNodeData, hasVisualMediaContent: 
     return `${Math.round(width)}*${Math.round(height)}`;
 }
 
-function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
+function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDragStart, onDraftChange, onEdit, onCommit, onCancel }: {
     node: CanvasNodeData;
     scale: number;
     dimensionLabel: string | null;
@@ -644,6 +643,7 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
     draft: string;
     theme: CanvasTheme;
     onDraftChange: (value: string) => void;
+    onDragStart?: (event: React.MouseEvent) => void;
     onEdit: () => void;
     onCommit: () => void;
     onCancel: () => void;
@@ -672,6 +672,23 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
             onPointerDown={(event) => event.stopPropagation()}
         >
             <div className="flex min-w-0 items-center gap-1" style={{ maxWidth: maxHeaderWidth }}>
+                <button
+                    type="button"
+                    className="flex size-6 shrink-0 touch-none items-center justify-center rounded cursor-grab active:cursor-grabbing disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1"
+                    aria-label={node.metadata?.locked ? "节点已锁定" : `拖动节点：${node.title}`}
+                    title={node.metadata?.locked ? "节点已锁定，请先解锁" : "拖动此处移动节点；点击名称可重命名"}
+                    disabled={!onDragStart || Boolean(node.metadata?.locked)}
+                    onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        // HTML / SVG 正文在跨源沙箱中；捕获指针，避免经过 iframe 后丢失 move / up。
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        onDragStart?.(event);
+                    }}
+                >
+                    {node.metadata?.locked ? <Lock className="size-3" /> : <GripVertical className="size-3" strokeWidth={1.8} />}
+                </button>
                 <Icon className="size-3 shrink-0" strokeWidth={1.8} />
                 {editing ? (
                     <input
@@ -709,9 +726,7 @@ function nodeTypeIcon(type: CanvasNodeTypeId) {
     if (type === CanvasNodeType.Drawing) return Pencil;
     if (type === CanvasNodeType.Script) return Clapperboard;
     if (type === CanvasNodeType.Config) return Settings2;
-    if (type === CanvasNodeType.MediaConversion) return WandSparkles;
     if (type === CanvasNodeType.Skill) return BookOpenCheck;
-    if (type === PORTRAIT_CLEARANCE_NODE_TYPE) return PortraitClearanceIcon;
     if (type === ART_CRITIQUE_NODE_TYPE) return ScanSearch;
     return Type;
 }

@@ -1,4 +1,4 @@
-import { http, apiBaseURL, compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
+import { ApiError, http, apiBaseURL, compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
 import { getActiveUserScope } from "@/lib/user-scope";
 
 
@@ -147,7 +147,7 @@ export function listAddedSkills() {
     const now = Date.now();
     if (addedSkillsCache?.scope === scope && addedSkillsCache.expiresAt > now) return Promise.resolve(addedSkillsCache.value);
     if (addedSkillsRequest?.scope === scope) return addedSkillsRequest.promise;
-    const promise = http.get<{ skills: Skill[] }>("/skills/added")
+    const promise = readAddedSkillsWithRetry()
         .then((value) => {
             addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
             return value;
@@ -159,8 +159,21 @@ export function listAddedSkills() {
     return promise;
 }
 
+async function readAddedSkillsWithRetry() {
+    const retryDelays = [300, 900, 1800];
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await http.get<{ skills: Skill[] }>("/skills/added");
+        } catch (cause) {
+            if (!(cause instanceof ApiError) || !cause.retryable || attempt >= retryDelays.length) throw cause;
+            await new Promise<void>((resolve) => globalThis.setTimeout(resolve, retryDelays[attempt]));
+        }
+    }
+}
+
 function invalidateAddedSkillsCache() {
     addedSkillsCache = null;
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("canvas-skills-changed"));
 }
 
 export function createSkill(input: SkillMutationInput) {

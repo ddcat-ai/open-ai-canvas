@@ -1,6 +1,6 @@
 ---
 title: 后端数据库
-description: 影绘后端核心持久化表与状态边界
+description: 影策后端核心持久化表与状态边界
 ---
 
 # 后端数据库
@@ -9,13 +9,23 @@ description: 影绘后端核心持久化表与状态边界
 
 ## 结构迁移与版本
 
+### 云端 Agent 运行时
+
+每轮 Agent 存为 `tasks` 中 `operation = cloud_agent` 的 `canvas_text` 任务，任务 `input_json.cloudAgent` 保存版本 1 的已校验请求、父轮 ID、请求指纹和技能快照；历史从服务端父轮结果构造。任务 ID 由用户与幂等键确定，利用现有主键、任务 admission 和积分预留事务防止重复提交重复扣费。Agent 的模型循环、工具调用、审批、子任务和事件写入 `cloud_agent_executions.state_json`，任务 Worker 只负责推进状态，不依赖浏览器连接。公共任务创建与重试接口禁止绕过 Agent admission；删除任务会影响该轮继续对话与回放。
+
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
 | `schema_migrations` | 保存已成功应用的结构版本、名称、校验和与时间 | 已应用版本的校验和发生变化时拒绝启动；数据库版本高于当前二进制支持版本时拒绝旧程序连接 |
+| `cloud_agent_executions` | 保存 Agent 每轮的持久化执行状态、修订号和运行状态 | `(id, user_id)` 归属受服务端校验；状态通过 revision CAS 更新；`state_json` 包含技能快照、工具调用、审批、活动子任务和事件，不保存浏览器密钥 |
+| `agent_profiles` | 保存用户、项目和画布层的 Agent 常驻偏好、哈希和独立 revision | `(user_id, scope, project_id, canvas_id)` 唯一；归属由 service 校验，写入使用 revision CAS；正文不能授权新能力 |
+| `agent_lessons` | 用户私有的 Agent 记忆。Agent 写入待审，用户自己批准后才会注入该用户的会话 | 按 `author_user_id` 隔离；写入机械脱敏；`steps_json` 存路线；`hits` 是主动查阅、`injected` 是自动注入；管理员可按用户查看和删除，不能代批 |
+| `agent_memory_settings` | 用户私有的记忆压缩周期、文本模型和最近一次压缩任务状态 | 主键 `user_id`；压缩结果只在 `compact_task_id` 匹配时应用到该用户已批准记忆 |
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 10。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用。
+当前结构版本为 27。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。版本 24 `channel_model_label` 为渠道模型增加 `channel_label`（最长 80 字、非空、默认空字符串），不重写模型标识、上游 ID、价格或能力；版本 25 `video_token_formula_snapshot` 为账单增加视频公式用量及用量来源快照。版本 26 `channel_model_description` 为渠道模型增加 `description`（最长 500 字、非空、默认空字符串），供二级选项展示使用说明，不重写身份或价格。版本 27 `channel_credit_cost` 为价格档添加管理员积分成本，并在账单保存执行线路的成本快照；成本不进入普通用户 API。已发布版本的实现和校验和不得修改。
+
+渠道模型的文本能力 JSON 还可声明 `contextWindowTokens` 与 `maxOutputTokens`。这两个字段是模型能力合同，不是数据库或 Agent checkpoint 的容量配置；旧记录读取时补 128K / 16K 默认值。运行状态、journal 和 transcript 的持久化边界仍由既有 runtime 表及其 512KB checkpoint 校验负责，本阶段没有通过扩大 checkpoint 绕过模型上下文限制。
 
 历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
 
@@ -23,9 +33,64 @@ description: 影绘后端核心持久化表与状态边界
 
 版本 3 会将 `wardrobe`、`weapon`、`accessory` 迁移为 `prop`，将 `style` 迁移为 `material`，并把原先归入 `other` 的图片、视频、音频和 3D 模型迁移为 `material`。迁移只合并重复的待确认候选：保留最早记录，其余标记为 `ignored`；已经确认的资产不会被自动删除或归并。
 
+## 画布版本与快照
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `canvas_projects` | 当前画布内容及递增 `revision`（非空，默认 1） | 客户端新建传 0；后续写入按用户、ID、原版本原子校验，成功才加 1 |
+| `canvas_snapshots` | 结构 JSON、版本、标题、节点/连线数、字节数、内容时间和备份时间 | `(canvas_id, revision)` 唯一；列表只读摘要，正文按需加载；不复制媒体文件 |
+| `canvas_snapshot_resources` | 历史快照引用的资源 | `(snapshot_id, resource_id)` 联合主键；资源外键禁止删除被引用记录 |
+
+浏览器、云端 Agent 和创作任务共用保存事务。内容变化时备份旧内容，普通备份最短间隔 5 分钟，每画布最多保留 20 份；恢复前强制备份当前内容。版本号每次成功写入递增，快照按间隔采样，两者不是一一对应。画布关联项目或解除关联同样推进版本，使旧页面的全量保存失效。
+
+恢复历史保留当前画布 ID、归属和项目关联，按当前版本做 CAS 后形成新版本；不会把 revision 改回历史值。快照写入、引用保护、恢复和保留数量清理在同一事务内完成。资源删除检查与异步物理删除任务均检查历史引用（包括同对象的资源别名），仍被历史引用的媒体延后回收；删除画布时清理该画布快照及引用。
+
+升级不改变已有画布正文，也不会凭空产生升级前历史。前后端应一起升级：旧客户端缺少 revision 的保存返回 428，需刷新客户端。
+
+## 已部署 PostgreSQL 的素材 bytes 修复
+
+升级到包含修复工具的镜像后，由部署管理员执行一次，无需终端用户修改数据库、清缓存或重建画布。旧镜像不支持以下子命令；请先将部署配置中的镜像版本更新为实际发布的修复版本。此操作不增加表或改变 schema 版本，也不会在启动时静默修改素材。
+
+`migrate-schema repair-asset-bytes` 默认只检查，`--apply` 才写入。它按 100 条分批扫描媒体素材，只修复无效的 `data.bytes`，从明确的 `resource:` 引用取得同用户、同类型、就绪且大小为正的资源 `size`。JSON 其他字段、素材 ID、文件和项目引用保留，仅同步推进素材及 JSON 的 `updatedAt`。没有可靠资源或存在其他合同错误的素材保持原样并列入 `unresolved`；存在未解决记录时命令非零退出，即使其他可修复记录已成功提交，也不代表全部修复。
+
+在原部署目录使用原来的环境文件执行；若部署使用了额外 Compose 文件，所有命令必须沿用相同参数。下面对应仓库标准 PostgreSQL Compose：
+
+```bash
+# 先下载实际发布的修复版本，再只读检查；不会启动后端。
+docker compose -f docker-compose.deploy.yml pull migrate backend web
+docker compose -f docker-compose.deploy.yml run --rm --no-deps migrate repair-asset-bytes
+```
+
+审阅报告，确认可修复范围后再进入维护窗口。多副本/独立 worker 也必须全部停止写入。备份或校验失败时停止操作，不能继续执行修复：
+
+```bash
+docker compose -f docker-compose.deploy.yml stop backend
+
+# 备份必须成功才可继续。备份含用户数据，限制权限，不上传或提交仓库。
+umask 077
+backup="asset-bytes-before-$(date +%Y%m%d-%H%M%S).dump"
+docker compose -f docker-compose.deploy.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup" || exit 1
+docker compose -f docker-compose.deploy.yml exec -T postgres pg_restore --list < "$backup" > /dev/null || exit 1
+```
+
+确认备份和检查均成功后执行写入，保留 JSON 报告：
+
+```bash
+docker compose -f docker-compose.deploy.yml run --rm --no-deps migrate repair-asset-bytes --apply
+docker compose -f docker-compose.deploy.yml run --rm --no-deps migrate repair-asset-bytes
+
+# 核查 repaired / unresolved，再恢复服务。
+docker compose -f docker-compose.deploy.yml up -d backend web
+```
+
+若报告仍有 `unresolved`，需按素材 ID 核查实际文件大小及引用；不要批量填零，也不要把未解决记录删除。工具不访问外部 URL，不下载媒体。应用后让用户重新加载素材库验证；不会要求清空本地存储。若数据库更新失败或检测到并发修改，整批写入事务回滚，`repaired` 为零。已成功提交后的回滚应在隔离数据库恢复备份并核查，再选择性恢复相关记录；不要在恢复写入后直接覆盖整库，以免丢失后续数据。
+
 ## 平台外观配置
 
-平台外观复用 `system_settings` 表，不新增结构迁移。键 `appearance` 保存版本 8 的 JSON：品牌名称、英文标识、工作室角标、通知展示开关/文案/链接、登录文案、浅深色 Logo 与媒体资源 ID、SEO、版权备案与皮肤主题。键 `appearance_installation` 保存本站初始化快照，以及默认浅深色 Logo SVG 和媒体 URL。启动只插入缺失记录，不覆盖已保存值；恢复初始配置从快照写回 `appearance`，不再删除记录或回退到新版代码默认值。快照引用的上传资源同样受删除保护。上传文件仍由持久资源存储承担，数据库备份需与资源目录一起保留。
+当前外观 JSON 合同版本为 8，主题参数新增 `skinThemes[].tokens.buttons.light/dark`：填充模式、角度、常态/悬停/按下双色和文字色。经典主题默认为紫蓝渐变，其余旧主题缺少此块时保持纯色；公开 `activeSkin` 使用相同结构。无表结构迁移，读取补齐只在内存执行，管理员保存时写回。回退应用版本前保留外观 JSON 备份，旧版本不支持新按钮填充参数。
+
+平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 的 JSON 值使用版本化合同；版本 3 保存品牌名称、英文品牌标识、登录页主标题与可选说明文案、浅色与可选深色 Logo 资源 ID、Logo 外框开关、登录页视频资源 ID、可选封面资源 ID 和预留皮肤 ID。只配置一套 Logo 时，公开投影会在浅色和深色主题复用同一资源；旧版本缺少深色 Logo 与外框字段时分别回退到单 Logo 和启用外框，不改变既有视觉。资源元数据和文件仍分别由 `resources` 表与当前资源存储承担。恢复默认外观时删除这条设置记录并回到内置值，不级联删除已经上传的资源。
 
 公开接口只投影品牌名、英文品牌标识、登录页公开文案、深浅主题使用的稳定 slot 资源 URL、Logo 外框状态、配置状态和修订标识，不返回内部资源 ID、对象路径或存储凭据。管理员保存新配置前，服务层会校验文本长度与安全字符、资源为就绪状态、类型与 slot 匹配，且新绑定资源由当前管理员上传；两套 Logo、视频和封面中任何正在使用的资源都会进入管理员删除保护。品牌变更同时写入 `admin_audit_events`。
 
@@ -125,10 +190,16 @@ description: 影绘后端核心持久化表与状态边界
 
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
-| `model_channels` | 保存系统渠道与用户渠道的连接配置，以及系统渠道前台别名和排序 | 系统渠道密钥不进入公开目录；公开名称优先使用 `public_alias`，为空时使用原名；按 `sort_order, created_at, id` 升序展示 |
-| `channel_models` | 保存系统渠道中的产品模型标识、上游模型 ID、显示名称、模型 Logo、排序、能力、协议和版本状态 | 模型排序独立保存，不递增价格或能力版本；能力、协议、启用状态和价格仍由 service 强校验 |
-| `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录 |
-| `logical_models` | 保存前台模型的公开名称、Logo、能力类型和归档状态 | 前台模型与系统渠道模型分别维护展示信息；供应线路通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一，归档后可用同 code 重建目录项 |
+| `model_channels` | 保存系统渠道与用户渠道的连接配置和排序 | 系统渠道密钥不进入公开目录；废弃渠道级前台名称，历史 `public_alias` 列保留但不再用于取名或 API 返回；按 `sort_order, created_at, id` 升序展示 |
+| `channel_models` | 保存系统渠道中的调用标识、上游模型 ID、模型展示名、渠道展示名、描述、Logo、排序、能力、协议和版本状态 | 创作目录跨渠道按 `display_name` 分组一级，`channel_label` 为二级、最长 80 字、空值使用所属渠道名称；`description` 最长 500 字、非空、默认空字符串；同一渠道内调用标识唯一，跨渠道归组不依赖调用标识；模型排序不递增价格或能力版本 |
+| `channel_model_price_tiers` | 保存系统模型按规格匹配的上游 SKU 与价格 | 价格档与渠道模型同事务保存；未启用或未完成定价的规格不进入普通用户目录。档位 `provider_model_key` 非空时优先于渠道模型上游键发往供应商；管理端修改模型级上游 ID 时，与旧值相同的档位键自动级联跟随，其余显式 SKU 保持不变 |
+| `logical_models` | 保存逻辑模型的名称、Logo、能力类型和归档状态 | 不再作为创作端模型选择目录的数据源；既有任务与供应线路仍通过 revision 和 route 关联；`code` 仅在 `archived_at IS NULL` 的活动记录中唯一 |
+
+schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_configured`（非空、默认 false）及 `cost_unit_price_microcredits`、`cost_input_token_price_microcredits`、`cost_output_token_price_microcredits`、`cost_cached_token_price_microcredits`（非空整数、默认 0）。账单另外保存 `cost_billing_mode`（默认空字符串）、`cost_quantity`、`cost_video_formula_tokens`（默认 0），构成下单时不可变成本快照。请求日志成本从内部账单快照计算，非持久字段 `creditCostMicrocredits` 仅供管理端投影；旧订单不反查新价格，不回填假零成本。已有售价、余额和结算金额不变。
+
+部署需前后端与 schema v27 一起升级；关闭自动迁移时执行 `migrate-schema up`、`migrate-schema verify`。迁移只新增列，不删除旧数据，可重复校验；没有降级迁移，回滚使用匹配的数据库备份和程序版本，旧程序不记录成本快照。
+
+所有视频协议开放 Token 定价。`channel_model_price_tiers.selector_json` 支持 `videoGenerateAudio: "true" | "false"`，省略表示任意音频；参考视频仍匹配 `operation: "video_to_video"`。视频仅使用输出 Token 单价，输入和缓存价必须为 0，明确配置的零价表示免费。schema v25 为 `billing_orders` 新增 `video_formula_tokens`（非空、默认 0，提交时固化不含余量的公式用量）及 `usage_source`（非空、默认空字符串，`provider` 或 `video_formula`）。缺少有效上游用量的新视频订单按公式快照结算并记录 `usage_available=false`，不伪造上游用量；历史快照为 0 的订单保持旧规则。价格档、费率、倍率、预留金额和既有账单不被迁移重算。前后端和 schema 一起升级，旧程序不支持新公式结算及非 Ark Token 配置，回滚需匹配数据库备份与二进制版本。完整算法见[视频 Token 计费](/docs/backend/video-token-billing)。
 
 图片分档尺寸保存在现有模型能力 JSON 的 `image.size.presets` 中，不新增表、列或 SQL 迁移。每项结构为 `{ tier, ratio, size, width, height }`，例如 `{ "tier": "1k", "ratio": "16:9", "size": "1824x1024", "width": 1824, "height": 1024 }`。
 
@@ -147,17 +218,6 @@ description: 影绘后端核心持久化表与状态边界
 
 有效状态由服务端计算为 `platform_available AND user_enabled`。官方应用插件没有平台状态记录时默认可用；用户没有个人记录时默认停用，历史上全局启用的工作流插件在用户首次保存个人选择前沿用旧状态。管理员上传包的来源和作用域由宿主覆盖，不能通过 Manifest 提权。
 
-## ComfyUI Bridge
-
-| 表 | 用途 | 关键边界 |
-| --- | --- | --- |
-| `comfy_bridges` | 保存用户注册的 Bridge 身份、Token 摘要、启用状态和心跳能力 | Token 明文只在注册时返回一次；查询和日志只使用摘要 |
-| `comfy_bridge_requests` | 保存云端任务交给本地 Bridge 的请求、领取状态和完成结果 | `id` 同时作为任务的 `provider_request_id`；状态按 `queued -> claimed -> succeeded/failed/cancelled` 单向流转 |
-
-`comfy_bridge_requests` 是 Bridge 交接的真相源。后端进程重启后，未领取请求继续从数据库投递；已领取请求的迟到结果先落库，任务 worker 恢复后使用原请求 ID 读取结果，不会创建第二次本地工作流执行。请求有效期当前为两小时，过期的排队或执行记录会转为失败。
-
-请求表保存工作流执行 payload 和结果，但不保存 Bridge Token。任务取消时，未领取请求可以确定取消；已经领取的本机工作流无法可靠中止，迟到结果会被丢弃并进入费用核对流程。
-
 ## 系统公告
 
 | 表 | 用途 | 关键边界 |
@@ -165,8 +225,17 @@ description: 影绘后端核心持久化表与状态边界
 | `announcements` | 保存管理员发布的系统公告 | `pinned` 只改变排序；`image_resource_id` 只能绑定由当前管理员上传并在发布事务中消费的公告配图草稿 |
 | `announcement_image_drafts` | 标记尚未发布的公告配图资源 | 发布/更新事务消费草稿；取消编辑显式回收，超过 24 小时的异常遗留草稿由后台清理 |
 | `user_announcement_reads` | 保存用户已读状态 | 同一用户和公告唯一；公告重新发布时清除旧已读记录 |
+| `banner_announcements` | 保存首页顶部常驻展示的滚动通知条 | 与系统公告完全独立：只有标题、图标与跳转链接，无正文、无配图、无已读状态；`link` 仅接受 `http(s)` 外链或 `/` 开头的站内路径；`status` 为 `active` / `disabled`，`starts_at` / `ends_at` 构成生效窗口（可预约未来开始）；`title_runs` 以 JSON 文本保存标题的样式分段；`notice_type` 决定通知条底色，`icon` 是标题前的图标键 |
 
 活动公告按置顶状态优先、发布时间倒序返回；置顶不会绕过关闭状态或用户登录校验。公告只要求标题，正文和配图均可为空。用户首次进入工作区时会自动看到未读公告，可以只关闭本次或选择今日不再提醒；主动打开公告中心后才会写入服务端已读状态。替换或移除配图时，公告更新、旧资源记录删除和物理删除任务入队在同一数据库事务完成。
+
+常驻通知的标题支持按分段设置样式：`title_runs` 是可选的 JSON 数组，每项为 `{ text, fontSize?, fontWeight?, fontFamily?, color? }`，只在有分段时写入，历史数据与纯文本标题保持为空。后端在写入前统一收口取值——字号 10-20、字重 400/500/600/700、字体 `sans` / `serif` / `mono`、颜色 `#RRGGBB`，并合并相邻同样式分段；标题总字数上限 120 与纯文本标题一致。`title` 列始终保存由分段拼接出的纯文本，列表展示与关键字检索不受样式影响，通知条渲染分段时也不依赖该列。
+
+常驻通知的通知类型与标题图标同样是白名单枚举。`notice_type` 取 `notice`（公告）/ `activity`（活动）/ `update`（更新）/ `warning`（警告），决定通知条底色——四种类型在 `globals.css` 里各有一组明暗两档色值，浅色档按白字 4.5:1 反推，深色档统一压到 7:1 以上。`icon` 取前端 `lib/announcements/banner-notice` 图标库里的键（kebab-case，当前 42 个），前端按下标取 lucide 组件渲染。两个字段都允许为空，后端在写入时补齐默认值（`notice` / `megaphone`），保证行数据始终是可直接渲染的具体取值；白名单在 `backend/internal/app/announcement.go`，与前端注册表的一致性由 `web/test/banner-notice.test.ts` 双向校验，改任一侧都会让测试失败。
+
+常驻通知由管理后台「运营 → 常驻通知」维护，公开接口 `GET /api/banner-announcements` 按生效窗口返回 `active` 条目（`starts_at <= now <= ends_at`，空窗口视为长期有效），前台工作台顶部布局层轮播展示；点击按 `link` 跳转：外链新窗口打开，站内路径前端路由跳转，无链接则不可点击。
+
+后台编辑弹窗可选中通知类型（卡片上直接铺出该类型的真实底色）、选中标题文字直接调整样式，并通过工具栏「图标」按钮在光标处插入 emoji 素材（可插入多个、任意位置），全部实时联动到深浅两套主题的预览（含文字对比度提示）。预览与前台通知条共用 `components/layout/banner-announcement-content.tsx` 的展示单元，因此「预览即前台结果」；标题在通知条内固定单行展示，超长按可用宽度裁切。通知条默认不显示任何图标，是否带图标完全由标题内容决定。
 
 ## 资源存储
 
@@ -182,6 +251,6 @@ description: 影绘后端核心持久化表与状态边界
 
 个人画布中的图片、视频和音频采用 `Asset -> Resource` 所有权约束：前端先提交素材，再提交带 `assetId` 的画布节点或时间线直连媒体；后端保存画布前校验资源属于当前用户、状态为 `ready`、素材存在且引用同一资源。素材更新、全量替换和删除也会反向检查已有画布，不能把仍在使用的资源从素材库中移除或替换成其他资源。登录历史账号时，前端会按资源键补建缺失素材并回写 `assetId`。这项修复复用现有表和 Outbox，不新增结构迁移。
 
-账号文件容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重；上传中或失败记录不占用已存储容量，`session_files` 仍按实际大小计入。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
+账号文件容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重。上传中或失败记录不占用已存储容量。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
 
 素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。自动清理与用户手动彻底删除复用同一 service 引用校验和 `resource_deletion_jobs` Outbox，仍被画布、项目、任务或其他业务记录引用的素材不会被删除。

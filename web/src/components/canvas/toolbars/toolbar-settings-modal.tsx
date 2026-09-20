@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, getToolbarTools, persistToolbarPrefs, readToolbarPrefs, type ToolbarId, type ToolbarPrefs, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 type ToolbarSettingsModalProps = {
     open: boolean;
@@ -42,7 +42,7 @@ type SettingsItem = {
 };
 
 export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettingsModalProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const reducedMotion = useReducedMotion();
     const [items, setItems] = useState<SettingsItem[]>([]);
     const [toolbarId, setToolbarId] = useState<ToolbarId>(toolbar);

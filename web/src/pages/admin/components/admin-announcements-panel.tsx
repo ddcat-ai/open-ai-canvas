@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { App, Button, Form, Input, Modal, Select } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PencilLine, Pin, Plus, RefreshCw, Search, Send, Upload, X } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";

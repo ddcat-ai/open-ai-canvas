@@ -1,16 +1,16 @@
 import { App, Button, Input, Select } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
+import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
 import type { ColumnsType } from "antd/es/table";
 import { CloudUpload, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
-import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
-import { COMFYUI_PLUGIN_ID, RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
-import { MEDIA_CONVERSION_PLUGIN_ID } from "@/lib/plugins/builtin/media-conversion";
+import { RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
+import { isOfficialApplicationPluginId } from "@/lib/plugins/official-applications";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import type { PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import { fetchAdminPlugins, setPluginPlatformAvailability, uninstallPlugin, uploadPlugin, type AdminPluginState, type BackendPlugin, type PluginManagement } from "@/services/api/plugins";
@@ -26,8 +26,6 @@ type AdminPluginItem = {
     status?: string;
     error?: string;
 };
-
-const officialApplicationIds = new Set([RUNNINGHUB_PLUGIN_ID, COMFYUI_PLUGIN_ID, EAGLE_PLUGIN_ID, PROMPT_OPTIMIZER_PLUGIN_ID, "portrait-clearance", MEDIA_CONVERSION_PLUGIN_ID]);
 
 export default function AdminPluginsPage() {
     const { message, modal } = App.useApp();
@@ -324,7 +322,7 @@ export default function AdminPluginsPage() {
                     />
                 }
             />
-            <UploadPluginModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={(file) => void upload(file)} />
+            <UploadPluginModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={upload} />
         </AdminPageFrame>
     );
 }
@@ -353,6 +351,13 @@ function PluginBrandIcon({ pluginId }: { pluginId: string }) {
             </span>
         );
     }
+    if (pluginId === "official-payment-zhifufm") {
+        return (
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg overflow-hidden border border-border/40 bg-card shadow-xs">
+                <img src={ZHIFUFM_LOGO_SRC} alt="支付FM" className="size-full object-contain select-none pointer-events-none rounded-lg" />
+            </span>
+        );
+    }
     return (
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground/65">
             <PlugZap className="size-4" aria-hidden="true" />
@@ -363,7 +368,7 @@ function PluginBrandIcon({ pluginId }: { pluginId: string }) {
 function mergePlugins(remote: BackendPlugin[]): AdminPluginItem[] {
     const byId = new Map<string, AdminPluginItem>();
     for (const plugin of listRegisteredPlugins()) {
-        const application = officialApplicationIds.has(plugin.manifest.id);
+        const application = isOfficialApplicationPluginId(plugin.manifest.id);
         byId.set(plugin.manifest.id, {
             manifest: plugin.manifest,
             source: plugin.source || "bundled",
@@ -371,7 +376,7 @@ function mergePlugins(remote: BackendPlugin[]): AdminPluginItem[] {
                 origin: "official",
                 kind: application ? "application" : "protocol",
                 activationScope: application ? "user" : "system",
-                configurationScope: application ? (plugin.manifest.id === EAGLE_PLUGIN_ID || plugin.manifest.id === RUNNINGHUB_PLUGIN_ID || plugin.manifest.id === COMFYUI_PLUGIN_ID ? "user" : "none") : "system",
+                configurationScope: application ? (plugin.manifest.id === EAGLE_PLUGIN_ID || plugin.manifest.id === RUNNINGHUB_PLUGIN_ID ? "user" : "none") : "system",
             },
         });
     }

@@ -16,7 +16,7 @@
 
 **dbx**（shadcn-vue/reka-nova 风格，Vue SFC）：优秀项 = 目录即组件族 + `index.ts` barrel 导出 variants、cva 变体即公共 API、紧凑桌面密度档位、复合模式件下沉、语义状态色与自定义 radius。不足 = 目录半迁移（19 个组件目录旁仍散落 CustomContextMenu/ErrorBanner/LightDropdown 等 8 个顶层扁平遗留件）、token 粒度粗（单角色色值、交互态散在组件内）、无统一排版梯度、图标尺寸由调用方传 class、动效无统一纪律、无 agentic 界面沉淀。
 
-**BoardUI**（`components/{base,application,foundations}`，agentic interfaces 设计系统）：用 React 19 + Tailwind v4 + `react-aria-components` + remixicon + motion 构建，语义 token 做"状态位 × 前景/文本/背景/边框"矩阵与复合排版工具类（`text-body-medium`、`text-caption-1-semibold`…），kbd/segmented/status-dot 等全部消费专用语义 token；基础组件族目录平铺（`buttons/` 内含 button/icon-button/close-button/button-group），每组件头部注释 Figma 源节点与明暗差异；`application/` 沉淀 agent-chat（composer/history/message）、agent-thinking、notification-center、app-shell、data-table 等 agentic 产品块；动效抽 `button-press-motion` 等工具类并统一尊重 reduced-motion；accent 支持运行时整体换肤，chart/status 各自成组。与影绘"AI 影视短剧创作工作台 + canvas-agent"定位高度同构。
+**BoardUI**（`components/{base,application,foundations}`，agentic interfaces 设计系统）：用 React 19 + Tailwind v4 + `react-aria-components` + remixicon + motion 构建，语义 token 做"状态位 × 前景/文本/背景/边框"矩阵与复合排版工具类（`text-body-medium`、`text-caption-1-semibold`…），kbd/segmented/status-dot 等全部消费专用语义 token；基础组件族目录平铺（`buttons/` 内含 button/icon-button/close-button/button-group），每组件头部注释 Figma 源节点与明暗差异；`application/` 沉淀 agent-chat（composer/history/message）、agent-thinking、notification-center、app-shell、data-table 等 agentic 产品块；动效抽 `button-press-motion` 等工具类并统一尊重 reduced-motion；accent 支持运行时整体换肤，chart/status 各自成组。与影策"AI 影视短剧创作工作台 + 云端 Agent"定位高度同构。
 
 **composio-brand-package**（设计 token 权威包，**直接采用**）：`DESIGN.md`（角色化语义 token 表 + 组件配方 + Do/Don'ts）＋ `tokens.json`（W3C DTCG 机器可读）＋ `variables.css`/`theme.css`（CSS 变量 + Tailwind v4 @theme 落地）＋ `preview.html`。**本项目配色/字体/间距/圆角的数值一律以它为准**（近黑 #0f0f0f 底、电蓝 #0007cd 主色、hairline 分隔、Inter/等宽字体、完整字号与间距梯度），翻译进 globals.css 三层 token；品牌名/Logo/营销文案/abcDiatype 字体（无授权）不采用。
 
@@ -86,7 +86,7 @@ components/ui/base/buttons/
 - **一步全量替换 AntD**：180 文件一次性重写，不可回滚；否决，改 B1–B5 批次。
 - **仅规范化不动代码**：解决不了页面私有重复与观感不可控；目录规范并入 D4。
 - **引入 Radix 全家桶套皮**：与自研目标不符；否决全家桶，仅对复杂控件采纳 RAC（BoardUI 已验证路径）作无障碍地基。
-- **照搬 BoardUI 或 dbx 代码/清单**：两套均无 AntD 语境且技术栈不同；否决照搬，仅吸收形态与纪律。BoardUI 的 application 产品块映射到影绘 AI 工作台场景按需立项（P3），不整层照搬。
+- **照搬 BoardUI 或 dbx 代码/清单**：两套均无 AntD 语境且技术栈不同；否决照搬，仅吸收形态与纪律。BoardUI 的 application 产品块映射到影策 AI 工作台场景按需立项（P3），不整层照搬。
 - **沿用既有中性色视觉（初版方向，后被推翻）**：原计划沿用旧中性+状态色 token，不换视觉语言；因配色/字体/间距混乱且无权威数值规范，用户 2026-09-05 决策改为**直接采用 composio-brand-package 视觉**（近黑底 + 电蓝 #0007cd + hairline 分隔 + Inter/等宽），数值全部以该包为准。
 
 ## 后果

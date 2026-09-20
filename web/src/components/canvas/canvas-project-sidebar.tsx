@@ -102,11 +102,11 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
 
     if (collapsed) {
         return (
-            <aside className="relative z-[var(--z-panel)] hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
+            <aside className="canvas-project-sidebar is-collapsed relative z-[var(--z-panel)] hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
                 <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-surface-hover" title="展开项目侧栏" aria-label="展开项目侧栏" onClick={() => setCollapsed(false)}>
                     <ChevronRight className="size-4" />
                 </button>
-                <Link to={`/projects/${projectId}/canvases`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-surface-hover" title="返回项目画布列表">
+                <Link to={`/projects/${projectId}/canvases`} className="canvas-project-sidebar-back-link mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-surface-hover" title="返回项目画布列表">
                     <FolderKanban className="size-4" />
                 </Link>
             </aside>
@@ -114,8 +114,8 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
     }
 
     return (
-        <aside className="relative z-[var(--z-panel)] hidden w-[var(--canvas-sidebar-width)] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
-            <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
+        <aside className="canvas-project-sidebar relative z-[var(--z-panel)] hidden w-[var(--canvas-sidebar-width)] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
+            <header className="canvas-project-sidebar-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
                 <Link to={`/projects/${projectId}/canvases`} className="flex min-w-0 items-center gap-2 text-xs font-semibold" title="返回项目画布列表">
                     <FolderKanban className="size-3.5 shrink-0" />
                     <span className="truncate">{projectDetail?.project.name || "项目空间"}</span>
@@ -125,7 +125,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                 </button>
             </header>
 
-            <section className="shrink-0 border-b border-border/70 p-2">
+            <section className="canvas-project-sidebar-style shrink-0 border-b border-border/70 p-2">
                 <div className="mb-1.5 flex h-5 items-center justify-between px-1 text-[var(--fs-label)] font-medium text-foreground/48">
                     <span className="flex items-center gap-1.5">
                         <Palette className="size-3.5" />
@@ -139,7 +139,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     type="button"
                     disabled={!style}
                     onClick={onLocateStyle}
-                    className="group flex h-11 w-full items-center gap-2 rounded-md px-1.5 text-left hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
+                    className="canvas-project-sidebar-style-button group flex h-11 w-full items-center gap-2 rounded-md px-1.5 text-left hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
                     title={style ? "定位画布中的项目画风节点" : "项目尚未设置画风"}
                 >
                     {style ? (
@@ -157,8 +157,8 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                 </button>
             </section>
 
-            <section className="flex min-h-0 flex-1 flex-col">
-                <div className="flex h-9 shrink-0 items-center justify-between px-3">
+            <section className="canvas-project-sidebar-chapters flex min-h-0 flex-1 flex-col">
+                <div className="canvas-project-sidebar-section-heading flex h-9 shrink-0 items-center justify-between px-3">
                     <span className="flex items-center gap-1.5 text-[var(--fs-label)] font-medium text-foreground/48">
                         <BookOpenText className="size-3.5" />
                         剧情章节 <span className="tabular-nums text-foreground/32">{orderedUnits.length.toLocaleString("zh-CN")}</span>
@@ -170,7 +170,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     ) : null}
                 </div>
                 <div className="shrink-0 px-2 pb-2">
-                    <label className="flex h-8 items-center gap-1.5 rounded-md border border-border/75 bg-foreground/[.025] px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
+                    <label className="canvas-project-sidebar-search flex h-8 items-center gap-1.5 rounded-md border border-border/75 bg-foreground/[.025] px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
                         <Search className="size-3.5 shrink-0 text-foreground/32" />
                         <input
                             value={query}
@@ -191,7 +191,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     {deferredQuery ? <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">找到 {visibleUnits.length.toLocaleString("zh-CN")} 章</div> : null}
                 </div>
 
-                <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5" aria-label="项目章节列表">
+                <div ref={scrollRef} className="canvas-project-sidebar-chapter-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5" aria-label="项目章节列表">
                     {visibleUnits.length ? (
                         <div className="relative w-full" style={{ height: chapterVirtualizer.getTotalSize() }}>
                             {chapterVirtualizer.getVirtualItems().map((virtualItem) => {
@@ -208,7 +208,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                                                 event.dataTransfer.setData(CANVAS_PROJECT_CHAPTER_DND_TYPE, JSON.stringify(payload));
                                                 event.dataTransfer.effectAllowed = "copy";
                                             }}
-                                            className={`group flex h-9 cursor-grab items-center gap-1 rounded-md px-1 text-xs active:cursor-grabbing ${active ? "bg-surface-active" : "hover:bg-surface-hover"}`}
+                                            className={`canvas-project-sidebar-chapter-row group flex h-9 cursor-grab items-center gap-1 rounded-md px-1 text-xs active:cursor-grabbing ${active ? "bg-surface-active" : "hover:bg-surface-hover"}`}
                                         >
                                             <GripVertical className="size-3.5 shrink-0 text-foreground/22" />
                                             <button
@@ -241,8 +241,8 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                 </div>
             </section>
 
-            <section className="shrink-0 border-t border-border/70 p-2">
-                <button type="button" onClick={onOpenAssets} className="flex h-9 w-full items-center gap-2 rounded-md border border-border/45 px-2 text-xs text-foreground/65 hover:border-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)]">
+            <section className="canvas-project-sidebar-assets shrink-0 border-t border-border/70 p-2">
+                <button type="button" onClick={onOpenAssets} className="canvas-project-sidebar-assets-button flex h-9 w-full items-center gap-2 rounded-md border border-border/45 px-2 text-xs text-foreground/65 hover:border-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)]">
                     <Images className="size-3.5 text-foreground/42" />
                     <span className="flex-1 text-left">引用项目资产</span>
                     <span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/45">{mediaAssetCount.toLocaleString("zh-CN")}</span>

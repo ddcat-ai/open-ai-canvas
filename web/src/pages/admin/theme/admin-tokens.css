@@ -1,0 +1,144 @@
+/* Admin console tokens. Scoped only to admin roots.
+ * Never alias --workspace-*, --user-*, or --skin-* from the product UI.
+ * Light/dark follow the page theme class; product skins are ignored. */
+
+:is(
+    [data-admin-root],
+    body.admin-overlays,
+    .admin-drawer,
+    .admin-secondary-drawer,
+    .admin-modal-root,
+    .admin-channel-modal-root,
+    .admin-mobile-navigation-menu
+) {
+    --admin-font: ui-sans-serif, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+    --admin-font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --admin-space: 8px;
+    --admin-radius-sm: 4px;
+    --admin-radius: 6px;
+    --admin-radius-lg: 8px;
+    --admin-control-h: 32px;
+    --admin-control-h-sm: 28px;
+    --admin-row-h: 40px;
+    --admin-head-h: 36px;
+    --admin-sidebar-width: 224px;
+    --admin-sidebar-collapsed: 64px;
+    --admin-motion: 120ms ease;
+    --admin-shadow-overlay: 0 16px 40px rgba(15, 23, 42, 0.16);
+
+    --admin-canvas: #f5f5f5;
+    --admin-sidebar: #f5f5f5;
+    --admin-surface: #ffffff;
+    --admin-surface-2: #f6f6f6;
+    --admin-surface-3: #ececec;
+    --admin-text: #111111;
+    --admin-text-secondary: #525252;
+    --admin-text-muted: #737373;
+    --admin-text-placeholder: #a3a3a3;
+    --admin-border: rgba(17, 17, 17, 0.1);
+    --admin-border-strong: rgba(17, 17, 17, 0.16);
+    --admin-divider: rgba(17, 17, 17, 0.08);
+    --admin-row-border: rgba(17, 17, 17, 0.06);
+    --admin-row-hover: #f0f0f0;
+    --admin-nav-hover: rgba(17, 17, 17, 0.05);
+    --admin-nav-active: #ececec;
+    --admin-nav-active-border: transparent;
+    --admin-accent: #111111;
+    --admin-accent-fg: #ffffff;
+    --admin-focus: rgba(17, 17, 17, 0.28);
+    --admin-status-success: #15803d;
+    --admin-status-warning: #b45309;
+    --admin-status-error: #dc2626;
+    --admin-status-info: #2563eb;
+    --admin-switch-on: #16a34a;
+    --admin-chart-primary: #0f172a;
+    --admin-chart-secondary: #0f766e;
+    --admin-chart-warning: #b45309;
+    --admin-card-shadow: none;
+
+    /* Compatibility aliases used by existing admin-ui.css. Independent values, not workspace skins. */
+    --admin-layer-0: var(--admin-canvas);
+    --admin-layer-1: var(--admin-surface);
+    --admin-layer-2: var(--admin-surface-2);
+    --admin-layer-3: var(--admin-surface-3);
+    --admin-text-primary: var(--admin-text);
+    --admin-control-border: var(--admin-border-strong);
+    --admin-card-border: var(--admin-border);
+
+    /* Firewall: leftover product/skin variables must resolve to admin values inside this tree. */
+    --background: var(--admin-canvas);
+    --foreground: var(--admin-text);
+    --color-surface: var(--admin-surface);
+    --color-border: var(--admin-border);
+    --border: var(--admin-border);
+    --muted: var(--admin-surface-2);
+    --popover: var(--admin-surface);
+    --ring: var(--admin-focus);
+    --font-sans: var(--admin-font);
+    --workspace-content: var(--admin-canvas);
+    --workspace-surface: var(--admin-surface);
+    --workspace-navigation: var(--admin-sidebar);
+    --workspace-page: var(--admin-canvas);
+    --workspace-accent: var(--admin-accent);
+    --workspace-nav-active-bg: var(--admin-nav-active);
+    --workspace-sidebar-width: var(--admin-sidebar-width);
+    --skin-admin-layer-0: var(--admin-canvas);
+    --skin-admin-layer-1: var(--admin-surface);
+    --skin-admin-layer-2: var(--admin-surface-2);
+    --skin-admin-layer-3: var(--admin-surface-3);
+    --theme-admin-card-shadow: none;
+    --r-sm: var(--admin-radius-sm);
+    --r-md: var(--admin-radius);
+    --r-lg: var(--admin-radius-lg);
+    --r-xl: var(--admin-radius-lg);
+    --r-2xl: var(--admin-radius-lg);
+    --motion-instant: var(--admin-motion);
+    --motion-state: var(--admin-motion);
+    --motion-ease-out: ease;
+
+    color: var(--admin-text);
+    font-family: var(--admin-font);
+    font-size: 13px;
+    line-height: 1.45;
+    font-feature-settings: "ss01" 0, "cv11" 0;
+}
+
+.dark :is(
+    [data-admin-root],
+    .admin-drawer,
+    .admin-secondary-drawer,
+    .admin-modal-root,
+    .admin-channel-modal-root,
+    .admin-mobile-navigation-menu
+),
+.dark body.admin-overlays {
+    --admin-canvas: #0f0f0f;
+    --admin-sidebar: #0f0f0f;
+    --admin-surface: #181818;
+    --admin-surface-2: #222222;
+    --admin-surface-3: #2a2a2a;
+    --admin-text: #f5f5f5;
+    --admin-text-secondary: #c4c4c4;
+    --admin-text-muted: #8a8a8a;
+    --admin-text-placeholder: #737373;
+    --admin-border: rgba(245, 245, 245, 0.1);
+    --admin-border-strong: rgba(245, 245, 245, 0.16);
+    --admin-divider: rgba(245, 245, 245, 0.08);
+    --admin-row-border: rgba(245, 245, 245, 0.06);
+    --admin-row-hover: #1c1c1c;
+    --admin-nav-hover: rgba(245, 245, 245, 0.05);
+    --admin-nav-active: #222222;
+    --admin-nav-active-border: transparent;
+    --admin-accent: #f5f5f5;
+    --admin-accent-fg: #0f0f0f;
+    --admin-focus: rgba(245, 245, 245, 0.28);
+    --admin-status-success: #4ade80;
+    --admin-status-warning: #fbbf24;
+    --admin-status-error: #f87171;
+    --admin-status-info: #60a5fa;
+    --admin-switch-on: #22c55e;
+    --admin-chart-primary: #e8eef6;
+    --admin-chart-secondary: #2dd4bf;
+    --admin-chart-warning: #fbbf24;
+    --admin-shadow-overlay: 0 22px 56px rgba(0, 0, 0, 0.48);
+}

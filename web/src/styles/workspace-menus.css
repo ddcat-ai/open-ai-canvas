@@ -1,0 +1,46 @@
+/* Same layer as the legacy overlay rules; explicit component classes keep
+   menus quiet without changing dialogs, notifications or the canvas editor. */
+@layer utilities {
+    .workspace-quiet-popup.ant-select-dropdown,
+    .workspace-quiet-popup .ant-dropdown-menu,
+    .workspace-quiet-popup .ant-popover-container,
+    .workspace-account-popover .ant-popover-container {
+        border: 0 !important;
+        border-radius: var(--user-radius-card) !important;
+        background: var(--user-surface-raised) !important;
+        background-image: none !important;
+        box-shadow: none !important;
+    }
+
+    .workspace-quiet-popup.ant-select-dropdown,
+    .workspace-quiet-popup .ant-dropdown-menu {
+        padding: var(--space-2);
+    }
+
+    .workspace-quiet-popup :where(.ant-select-item-option, .ant-dropdown-menu-item, .ant-dropdown-menu-submenu-title) {
+        border-radius: var(--user-radius-control) !important;
+        color: var(--user-ink) !important;
+    }
+
+    .workspace-quiet-popup .ant-dropdown-menu-item-danger {
+        color: var(--destructive) !important;
+    }
+
+    .workspace-quiet-popup .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+    .workspace-quiet-popup .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover,
+    .workspace-quiet-popup .ant-dropdown-menu-submenu-title:not(.ant-dropdown-menu-item-disabled):hover {
+        background: var(--user-surface-muted) !important;
+    }
+
+    .workspace-quiet-popup .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+    .workspace-quiet-popup .ant-dropdown-menu-item-selected {
+        background: var(--user-surface-hover) !important;
+        color: var(--user-ink) !important;
+        font-weight: 600;
+    }
+
+    .workspace-quiet-popup .ant-dropdown-menu-item-disabled,
+    .workspace-quiet-popup .ant-select-item-option-disabled {
+        color: var(--user-ink-soft) !important;
+    }
+}

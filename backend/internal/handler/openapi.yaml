@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: 影绘 HTTP API
+  title: 影策 HTTP API
   version: "1.0.0"
   description: |
     路径前缀是 `/api`。前后端一起发布，不按路径做 API 版本。
@@ -18,10 +18,679 @@ tags:
   - name: meta
   - name: auth
   - name: projects
+  - name: canvas
   - name: resources
   - name: tasks
   - name: assets
+  - name: models
+  - name: agent
+  - name: admin
 paths:
+  /model-catalog:
+    get:
+      tags: [models]
+      summary: 获取创作端模型目录
+      description: |
+        固定 source=system，channels 直接来自系统渠道下的模型列表，models 为空数组；不反查逻辑模型。
+        一级跨渠道按 displayName 分组，二级显示 channelLabel；模型请求仍使用 channelId + modelKey 定位。
+        channelLabel 是后台渠道模型创建和更新时配置的渠道展示名，去除首尾空白后最多 80 字，空字符串表示使用所属渠道名称。
+        description 是后台渠道模型创建和更新时填写的公开模型描述，去除首尾空白后最多 500 字；空字符串表示未填写。
+        displayName 和 icon 用于一级模型菜单，channelLabel 不参与路由、权限或计费。
+        渠道级 publicAlias 已废弃；成本配置和成本快照仅供管理端，不包含在本接口及用户报价中。
+      responses:
+        "200":
+          description: 当前启用的模型目录
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    enum: [0]
+                  msg:
+                    type: string
+                  data:
+                    type: object
+                    required: [source, models, channels]
+                    properties:
+                      source:
+                        type: string
+                        enum: [system]
+                      models:
+                        type: array
+                        items:
+                          type: object
+                      channels:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            displayName:
+                              type: string
+                            models:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  modelKey:
+                                    type: string
+                                  displayName:
+                                    type: string
+                                  icon:
+                                    type: string
+                                  channelLabel:
+                                    type: string
+                                    maxLength: 80
+                                    default: ""
+                                  description:
+                                    type: string
+                                    maxLength: 500
+                                    default: ""
+        "401":
+          $ref: "#/components/responses/Error"
+  /model-catalog/quote:
+    post:
+      tags: [models]
+      summary: 按当前参数预估系统渠道模型费用
+      description: |
+        需要登录会话 Cookie。仅接受启用的系统渠道和模型，采用服务端能力默认值及价格档选择规则。
+        不创建任务或账单、不冻结或扣除积分，也不调用模型供应商。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId, modelKey, intent]
+              properties:
+                channelId:
+                  type: string
+                  minLength: 1
+                modelKey:
+                  type: string
+                  minLength: 1
+                  description: 系统渠道中配置的模型键
+                intent:
+                  $ref: "#/components/schemas/ModelRequestIntent"
+      responses:
+        "200":
+          $ref: "#/components/responses/ModelQuote"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /models/{id}/quote:
+    post:
+      tags: [models]
+      summary: 按当前参数预估前台模型费用
+      description: |
+        需要登录会话 Cookie。请求正文直接为创作意图，不使用 intent 外层包装。
+        服务端按前台模型能力、默认参数、供应线路和价格策略报价，不创建任务、账单或积分冻结。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: 前台逻辑模型 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelRequestIntent"
+      responses:
+        "200":
+          $ref: "#/components/responses/ModelQuote"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /canvas-projects/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [canvas]
+      summary: 读取当前用户画布内容和 revision
+      responses:
+        "200":
+          description: 信封 data.project 包含完整画布及服务端 revision
+        "404":
+          description: 画布不存在或不属于当前用户
+    put:
+      tags: [canvas]
+      summary: 按 revision 保存画布内容
+      description: 新建传 revision 0，更新传读取到的版本；成功原子加 1。忽略客户端 viewport 和 remoteContentHash，updatedAt 由服务端生成。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project]
+              properties:
+                project:
+                  type: object
+                  required: [id, revision]
+                  properties:
+                    id: { type: string }
+                    revision: { type: integer, format: int64, minimum: 0 }
+                  additionalProperties: true
+      responses:
+        "200":
+          description: 信封 data.project 返回摘要及递增后的 revision
+        "400":
+          description: 请求、版本或素材引用不合法
+        "409":
+          description: 版本或资源状态冲突，原内容未被覆盖；保留草稿后加载最新版
+        "428":
+          description: 缺少 revision，需刷新客户端并重新读取
+  /canvas-projects/{id}/history:
+    get:
+      tags: [canvas]
+      summary: 读取当前画布版本与最近 20 份历史摘要
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 currentRevision 和 snapshots；每项含 id、revision、title、nodeCount、connectionCount、payloadBytes、reason、contentUpdatedAt、createdAt，不含正文
+        "404":
+          description: 画布不存在或无权访问
+  /canvas-projects/{id}/history/{snapshotId}:
+    get:
+      tags: [canvas]
+      summary: 按需读取历史正文
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 snapshot 摘要和 project 正文
+        "404":
+          description: 画布或快照不存在、已过期或无权访问
+  /canvas-projects/{id}/history/{snapshotId}/restore:
+    post:
+      tags: [canvas]
+      summary: 备份当前内容并将历史内容恢复为新版本
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "200":
+          description: 信封 data.project 返回恢复后的摘要及新 revision；当前 ID、归属与项目关联保留
+        "404":
+          description: 画布或快照不存在、已过期或无权访问
+        "409":
+          description: 当前版本或素材状态已变化，恢复未执行
+        "428":
+          description: 缺少当前 revision
+  /public/welcome:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取欢迎页开放状态
+      responses:
+        "200":
+          description: 信封 data 仅包含 welcomeEnabled 布尔值，默认 true；Cache-Control 为 no-store
+        "500":
+          description: 配置读取失败
+  /agent/capabilities:
+    get:
+      tags: [agent]
+      summary: 读取云端 Agent 能力
+      responses:
+        "200":
+          description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
+  /agent/profile:
+    get:
+      tags: [agent]
+      summary: 读取生效的用户、项目、画布 Agent 偏好层
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            type: string
+            enum: [user, project, canvas]
+        - in: query
+          name: projectId
+          schema:
+            type: string
+        - in: query
+          name: canvasId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 信封 data 为合并 revision、hash 和按 user/project/canvas 顺序排列的 layers；每层含独立数字 revision
+        "403":
+          description: 项目或画布不属于当前用户
+    patch:
+      tags: [agent]
+      summary: 使用单层 revision CAS 更新 Agent 偏好
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentProfileRequest"
+      responses:
+        "200":
+          description: 返回更新后的生效偏好视图
+        "409":
+          description: 偏好 revision 已变化，须重新读取后保存
+  /agent/memories:
+    get:
+      tags: [agent]
+      summary: 列出当前用户的 Agent 记忆
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: 信封 data.memories
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [agent]
+      summary: 手动添加一条个人记忆（直接批准）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic, category, situation]
+              properties:
+                topic: { type: string }
+                category: { type: string }
+                situation: { type: string }
+                lesson: { type: string }
+                source: { type: string }
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      tool: { type: string }
+                      action: { type: string }
+                      note: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/export:
+    get:
+      tags: [agent]
+      summary: 导出当前用户的 Agent 记忆
+      responses:
+        "200":
+          description: 信封 data 为 version/kind/exportedAt/memories
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/import:
+    post:
+      tags: [agent]
+      summary: 导入 Agent 记忆 JSON
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: integer }
+                kind: { type: string }
+                memories: { type: array }
+      responses:
+        "200":
+          description: 信封 data 含 imported、merged、skipped
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/settings:
+    get:
+      tags: [agent]
+      summary: 读取当前用户的记忆压缩设置与最近一次压缩状态
+      responses:
+        "200":
+          description: 信封 data 含 compactInterval、模型字段、lastStatus、summary
+        "401":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [agent]
+      summary: 更新记忆压缩周期和文本模型
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                compactInterval:
+                  type: string
+                  enum: [off, daily, weekly, monthly]
+                logicalModelId: { type: string }
+                channelId: { type: string }
+                channelModelKey: { type: string }
+                model: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/compact:
+    post:
+      tags: [agent]
+      summary: 提交一次个人记忆压缩任务（走用户文本模型计费）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logicalModelId: { type: string }
+                channelId: { type: string }
+                channelModelKey: { type: string }
+                model: { type: string }
+      responses:
+        "200":
+          description: 信封 data 为压缩设置视图，lastStatus 为 queued
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [agent]
+      summary: 更新一条属于当前用户的记忆
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [agent]
+      summary: 删除一条属于当前用户的记忆
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /agent/memories/{id}/decide:
+    post:
+      tags: [agent]
+      summary: 批准或拒绝一条属于当前用户的待审记忆
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, reject]
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /agent/runs:
+    post:
+      tags: [agent]
+      summary: 创建一轮云端 Agent 任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloudAgentRequest"
+      responses:
+        "200":
+          description: 信封 data.run，包含新一轮 id、canvasId、status、permissionMode、model 及时间
+        "400":
+          description: 参数、能力、模型或预算不符合要求，未创建任务
+        "409":
+          description: 幂等键已用于不同请求
+  /agent/runs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    get:
+      tags: [agent]
+      summary: 读取当前用户的 Agent 轮次
+      responses:
+        "200":
+          description: 信封 data.run
+        "404":
+          description: 轮次不存在或不属于当前用户
+  /agent/runs/{id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 从服务端父轮历史创建新轮次
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloudAgentRequest"
+      responses:
+        "200":
+          description: 信封 data.run（新的 ID）
+        "409":
+          description: 父轮仍在执行或幂等键冲突
+  /agent/runs/{id}/interjections:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 向正在运行的 Agent 轮次插入一句话
+      description: 不新建轮次、不产生新的扣费身份。插话排进当前运行，在下一次模型调用前送达；运行已结束返回 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text, messageId]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                messageId:
+                  type: string
+                  maxLength: 160
+      responses:
+        "200":
+          description: 信封 data.accepted 与 data.pending
+        "409":
+          description: 本轮已结束，应改为新一轮发送
+  /agent/runs/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 取消当前用户的 Agent 轮次
+      responses:
+        "200":
+          description: 信封 data.accepted
+  /agent/runs/{id}/undo:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 撤销当前 Agent 运行产生的最新画布变更
+      description: 仅撤销仍是最新快照、且未提交生成任务的画布变更；不会取消任务或退款。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshotHash]
+              properties:
+                stepId:
+                  type: string
+                  maxLength: 160
+                expectedSnapshotHash:
+                  type: string
+                  minLength: 64
+                  maxLength: 64
+                  pattern: '^[0-9a-fA-F]{64}$'
+                reason:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "200":
+          description: 信封 data.accepted 与当前快照哈希
+        "400":
+          description: 请求无效、快照不可撤销或已提交任务不能撤销
+        "409":
+          description: 画布已发生后续变化、操作已处理或 stepId 不匹配
+  /agent/runs/{id}/approvals/{approvalId}/decision:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+      - name: approvalId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: 提交 Agent 工具审批决定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, reject]
+                reason:
+                  type: string
+                  maxLength: 2000
+                mediaSettings:
+                  type: object
+                  additionalProperties: false
+                  description: 仅 approve 图片生成审批可传；替换本次模型、画幅和质量，重新强校验，不修改提示词、引用或目标。logicalModelId 与 channelId + channelModelKey 二选一。
+                  required: [size, quality]
+                  properties:
+                    logicalModelId:
+                      type: string
+                    channelId:
+                      type: string
+                    channelModelKey:
+                      type: string
+                    size:
+                      type: string
+                    quality:
+                      type: string
+      responses:
+        "200":
+          description: 信封 data.accepted
+        "409":
+          description: 审批不存在、已过期或决定冲突
+  /agent/runs/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    get:
+      tags: [agent]
+      summary: Agent 运行事件回放与持续订阅
+      parameters:
+        - name: after
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: Last-Event-ID
+          in: header
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: 首次及 revision 变化时发送紧凑 run_snapshot；无变化时 heartbeat；agent_event.seq 为递增游标，cleanupPending 期间持续发送
+          content:
+            text/event-stream:
+              schema:
+                type: string
   /openapi.yaml:
     get:
       tags: [meta]
@@ -34,6 +703,73 @@ paths:
             application/yaml:
               schema:
                 type: string
+  /admin/channels/{id}/duplicate:
+    post:
+      tags: [admin]
+      summary: 复制系统渠道
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /admin/agent-lessons:
+    get:
+      tags: [admin]
+      summary: 按用户筛选查看个人 Agent 记忆
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - in: query
+          name: userId
+          schema:
+            type: string
+        - in: query
+          name: keyword
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: 信封 data.lessons 含解析后的 steps、authorUserId、authorUsername、authorDisplayName
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/agent-lessons/{id}:
+    delete:
+      tags: [admin]
+      summary: 删除一条用户的 Agent 记忆
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /auth/session:
     get:
       tags: [auth]
@@ -150,12 +886,213 @@ paths:
         "200":
           $ref: "#/components/responses/Envelope"
 components:
+  parameters:
+    AgentRunID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   securitySchemes:
     sessionCookie:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ModelRequestIntent:
+      type: object
+      required: [capability]
+      properties:
+        capability:
+          type: string
+          enum: [text, image, video, audio]
+        operation:
+          type: string
+          description: 可选生成操作，必须符合所选模型的能力合同
+        inputs:
+          type: object
+          description: 按素材类型统计的参考数量，如 image、video、audio；另受所选模型的数量上限约束
+          additionalProperties:
+            type: integer
+            minimum: 0
+            maximum: 128
+        options:
+          type: object
+          description: 当前创作规格；未指定的参数使用服务端默认值
+          additionalProperties: true
+          example:
+            vquality: 720p
+            size: "16:9"
+            videoSeconds: 5
+            videoGenerateAudio: true
+    LogicalModelQuote:
+      type: object
+      required: [logicalModelId, billingMode, quantity, amountMicrocredits, estimated]
+      properties:
+        logicalModelId:
+          type: string
+          description: 前台逻辑模型 ID；直接查询系统渠道模型时为空字符串
+        billingMode:
+          type: string
+          enum: [fixed_request, per_second, token]
+        quantity:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量）
+        amountMicrocredits:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 预估预留微积分，1000000 微积分等于 1 积分；明确配置的免费价格返回 0
+        estimated:
+          type: boolean
+          description: Token 计费为 true；优先有效上游 usage，视频无有效用量时按提交的公式快照结算，预留不构成费用上限
+        videoTokenEstimate:
+          $ref: "#/components/schemas/VideoTokenEstimate"
+    VideoTokenEstimate:
+      type: object
+      description: 仅视频 Token 报价返回；将火山公式用量和平台预留余量分开披露
+      required: [formulaTokens, reservedTokens, outputWidth, outputHeight, framesPerSecond, outputSeconds, referenceSeconds, referenceDurationEstimated, dimensionsEstimated, reservationMarginPercent]
+      properties:
+        formulaTokens:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 按（参考视频总秒数 + 输出秒数）× 输出宽 × 输出高 × 帧率 / 1024 向上取整；上游最低计费用量可能更高
+        reservedTokens:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 公式用量叠加平台预留余量后向上取整
+        outputWidth:
+          type: integer
+          format: int64
+          minimum: 1
+        outputHeight:
+          type: integer
+          format: int64
+          minimum: 1
+        framesPerSecond:
+          type: integer
+          format: int64
+          minimum: 1
+        outputSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+        referenceSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: 计入公式的参考视频总秒数；报价仅有参考数量时采用预估时长
+        referenceDurationEstimated:
+          type: boolean
+          description: 参考时长未知、使用预估值时为 true
+        dimensionsEstimated:
+          type: boolean
+          description: 自适应画幅或上游型号无法确定，使用预估像素尺寸时为 true
+        reservationMarginPercent:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 平台预留余量百分比，不属于火山官方计费公式
+    ModelQuoteEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [data]
+          properties:
+            code:
+              type: integer
+              enum: [0]
+            data:
+              type: object
+              required: [quote]
+              properties:
+                quote:
+                  $ref: "#/components/schemas/LogicalModelQuote"
+    AgentProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [scope, content, revision]
+      properties:
+        scope:
+          type: string
+          enum: [user, project, canvas]
+        projectId:
+          type: string
+        canvasId:
+          type: string
+        content:
+          type: string
+          description: 常驻偏好文档，最多 12000 个 Unicode 字符；不能授权节点、工具、预算或绕过审批
+        revision:
+          type: integer
+          minimum: 0
+          description: 待更新层的数字 revision；首次创建为 0
+    CloudAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [canvasId, prompt, permissionMode, contextScope, budget, idempotencyKey]
+      properties:
+        canvasId:
+          type: string
+          maxLength: 80
+        prompt:
+          type: string
+          description: 非空，最多 16000 字节
+        logicalModelId:
+          type: string
+        model:
+          type: string
+        channelId:
+          type: string
+        channelModelKey:
+          type: string
+        permissionMode:
+          type: string
+          enum: [read_only, request_approval, auto]
+        reasoningMode:
+          type: string
+          enum: [off, auto, deep]
+          description: 本轮推理策略；供应商是否支持由后端校验
+        profileRevision:
+          type: string
+          description: GET /agent/profile 的生效合并 revision；变化时拒绝创建新轮次
+        skillIds:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+        contextScope:
+          type: array
+          maxItems: 1
+          items:
+            type: string
+            enum: [canvas]
+        budget:
+          type: object
+          additionalProperties: false
+          required: [maxCredits]
+          properties:
+            maxCredits:
+              type: number
+              minimum: 0
+              exclusiveMinimum: true
+              maximum: 1000000
+            maxGenerationTasks:
+              type: integer
+              minimum: 0
+              maximum: 8
+            maxVideoSeconds:
+              type: integer
+              minimum: 0
+              maximum: 120
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 128
     Envelope:
       type: object
       required: [code, msg]
@@ -201,6 +1138,12 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    ModelQuote:
+      description: 当前参数对应的费用报价，位于信封 data.quote
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ModelQuoteEnvelope"
     Envelope:
       description: 业务成功信封
       content:

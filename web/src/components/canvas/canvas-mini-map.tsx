@@ -6,7 +6,7 @@ import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-f
 import { buildLibTVImagePreviewUrl } from "@/lib/canvas/libtv-import";
 import { getNodeLabel } from "@/lib/canvas/node-registry/node-registry";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
 
 const MINIMAP_WIDTH = 240;
@@ -14,7 +14,7 @@ const MINIMAP_HEIGHT = 160;
 const MINIMAP_IMAGE_PREVIEW_LIMIT = 24;
 
 export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onViewportPreviewChange, onViewportChange }: { nodes: CanvasNodeData[]; viewport: ViewportTransform; viewportSize: { width: number; height: number }; canvasContainerRef?: RefObject<HTMLDivElement | null>; onViewportPreviewChange?: (viewport: ViewportTransform) => void; onViewportChange: (viewport: ViewportTransform) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const containerRef = useRef<HTMLDivElement>(null);
     const viewportRectRef = useRef<HTMLDivElement>(null);
     const liveViewportRef = useRef(viewport);

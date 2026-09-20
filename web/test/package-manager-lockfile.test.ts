@@ -2,14 +2,11 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-test("web and canvas-agent do not keep a second package manager lockfile", () => {
+test("web does not keep a second package manager lockfile", () => {
     const leftover = [
         resolve(import.meta.dir, "../pnpm-lock.yaml"),
         resolve(import.meta.dir, "../package-lock.json"),
         resolve(import.meta.dir, "../yarn.lock"),
-        resolve(import.meta.dir, "../../canvas-agent/pnpm-lock.yaml"),
-        resolve(import.meta.dir, "../../canvas-agent/package-lock.json"),
-        resolve(import.meta.dir, "../../canvas-agent/yarn.lock"),
     ].filter((path) => existsSync(path));
     expect(leftover).toEqual([]);
 });

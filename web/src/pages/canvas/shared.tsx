@@ -8,6 +8,7 @@ import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import { CanvasBatchTableNodeContent } from "@/components/canvas/canvas-batch-table-node";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
@@ -17,17 +18,19 @@ import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BAC
 import { canvasThemes } from "@/lib/canvas-theme";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, isCanvasFolderNode, isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
+import { getContextResourceNodes } from "@/lib/canvas/canvas-resource-references";
 import { getPublicCanvasShare } from "@/services/api/canvas-share";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type Position, type ViewportTransform } from "@/types/canvas";
 
 type ContextMenu = { x: number; y: number; world: Position; nodeId?: string };
 type DragState = { primaryId: string; nodeIds: string[]; startX: number; startY: number; origins: Map<string, Position>; moved: boolean };
 
 export default function SharedCanvasPage() {
+    useCanvasThemeScope();
     const { token = "" } = useParams();
     const { message } = App.useApp();
-    const colorTheme = useThemeStore((state) => state.theme);
+    const colorTheme = useCanvasThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const containerRef = useRef<HTMLDivElement>(null);
     const viewportRef = useRef<ViewportTransform>({ x: 0, y: 0, k: 1 });
@@ -77,10 +80,10 @@ export default function SharedCanvasPage() {
 
     useEffect(() => {
         let active = true;
-        const themeBeforeShare = useThemeStore.getState().theme;
+        const themeBeforeShare = useCanvasThemeStore.getState().theme;
         let appliedShareTheme: typeof themeBeforeShare | null = null;
         let themeChangedAfterApply = false;
-        const unsubscribeTheme = useThemeStore.subscribe((state, previous) => {
+        const unsubscribeTheme = useCanvasThemeStore.subscribe((state, previous) => {
             if (appliedShareTheme && state.theme !== previous.theme && state.theme !== appliedShareTheme) themeChangedAfterApply = true;
         });
         setLoading(true);
@@ -92,7 +95,7 @@ export default function SharedCanvasPage() {
             const nextAppearance = project.appearance ? normalizeCanvasAppearance(project.appearance, themeBeforeShare) : canvasAppearanceForTheme(themeBeforeShare);
             setAppearance(nextAppearance);
             appliedShareTheme = canvasAppearanceBaseTheme(nextAppearance, themeBeforeShare);
-            useThemeStore.getState().setTheme(appliedShareTheme);
+            useCanvasThemeStore.getState().setTheme(appliedShareTheme);
             setBackgroundMode(project.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE);
             const initial = project.viewport || { x: 0, y: 0, k: 1 };
             viewportRef.current = initial;
@@ -105,8 +108,8 @@ export default function SharedCanvasPage() {
         return () => {
             active = false;
             unsubscribeTheme();
-            if (appliedShareTheme && !themeChangedAfterApply && useThemeStore.getState().theme === appliedShareTheme) {
-                useThemeStore.getState().setTheme(themeBeforeShare);
+            if (appliedShareTheme && !themeChangedAfterApply && useCanvasThemeStore.getState().theme === appliedShareTheme) {
+                useCanvasThemeStore.getState().setTheme(themeBeforeShare);
             }
         };
     }, [token]);
@@ -233,7 +236,11 @@ export default function SharedCanvasPage() {
             metadata: { ...node.metadata, frame: { collapsed, expandedWidth: collapsed ? node.width : frame?.expandedWidth || node.width, expandedHeight: collapsed ? node.height : frame?.expandedHeight || node.height } },
         };
     }));
-    const renderSharedNode = useCallback((node: CanvasNodeData): ReactNode => node.type === CanvasNodeType.Script ? <SharedScriptNode node={node} onUnauthorized={unauthorized} /> : <SharedConfigNode node={node} onUnauthorized={unauthorized} />, [unauthorized]);
+    const renderSharedNode = useCallback((node: CanvasNodeData): ReactNode => {
+        if (node.type === CanvasNodeType.Script) return <SharedScriptNode node={node} onUnauthorized={unauthorized} />;
+        if (node.type === CanvasNodeType.BatchTable) return <CanvasBatchTableNodeContent node={node} nodes={nodes} connections={connections} batch={node.metadata?.generationBatches?.at(-1)} theme={theme} readOnly onPatchTable={() => {}} onAddRow={() => {}} onRemoveRow={() => {}} onUpdateRow={() => {}} onFillRows={() => {}} onGenerate={() => {}} onRetryItem={() => {}} onAddReferenceColumn={() => {}} onReorderReferenceColumns={() => {}} onMoveReferenceCell={() => {}} onUploadReference={() => {}} onConnectStart={() => {}} />;
+        return <SharedConfigNode node={node} onUnauthorized={unauthorized} />;
+    }, [connections, nodes, theme, unauthorized]);
     const toolbarNodeKey = selectedNodeId;
     const toolbarNode = toolbarNodeKey ? nodeById.get(toolbarNodeKey) || null : null;
 
@@ -275,7 +282,7 @@ export default function SharedCanvasPage() {
                 }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onOpenTaskDetails={unauthorized} onViewImage={(target) => setInfoNodeId(target.id)} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
             </InfiniteCanvas>
 
-            <CanvasNodeToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onEmotion={unauthorized} onPortraitTexture={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onLighting={unauthorized} onViewImage={unauthorized} onExtractVideoFrames={unauthorized} onExtractAudioFromVideo={unauthorized} onTrimVideoSegments={unauthorized} extractingVideoFrames={false} extractingAudio={false} trimmingVideo={false} onSubtitles={unauthorized} onTimeline={unauthorized} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
+            <CanvasNodeToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onAnnotationEdit={unauthorized} onTextEdit={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onRemoveBackground={unauthorized} onLayerDecomposition={unauthorized} onEmotion={unauthorized} onPortraitTexture={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onLighting={unauthorized} onPanorama={unauthorized} onViewImage={unauthorized} onExtractVideoFrames={unauthorized} onExtractAudioFromVideo={unauthorized} onTrimVideoSegments={unauthorized} extractingVideoFrames={false} extractingAudio={false} trimmingVideo={false} onSubtitles={unauthorized} onTimeline={unauthorized} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
 
             <div className="absolute bottom-5 left-5 z-[var(--z-panel-floating)]"><CanvasZoomControls scale={viewport.k} containerRef={containerRef} onScaleChange={setZoom} onFitContent={resetViewport} isMiniMapOpen={false} onToggleMiniMap={unauthorized} onOpenShortcuts={unauthorized} /></div>
             <div className="pointer-events-none absolute bottom-5 right-5 z-[var(--z-panel-floating)] max-w-[340px] text-right text-xs leading-5" style={{ color: theme.node.muted }}>访客操作仅在当前页面临时生效</div>
@@ -287,7 +294,7 @@ export default function SharedCanvasPage() {
 }
 
 function SharedContextMenu({ menu, onAdd, onInfo, onUnauthorized }: { menu: ContextMenu; onAdd: (type: CanvasNodeType) => void; onInfo: () => void; onUnauthorized: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     return <div data-canvas-no-zoom className="absolute z-[var(--z-modal)] min-w-48 rounded-lg border p-1.5 shadow-xl" style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
         {menu.nodeId ? <><MenuButton icon={<Eye />} label="查看节点信息" onClick={onInfo} /><MenuButton icon={<LockKeyhole />} label="编辑或生成" onClick={onUnauthorized} /></> : <>
             <div className="px-2 py-1.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>添加临时节点</div>
@@ -304,7 +311,7 @@ function MenuButton({ icon, label, onClick }: { icon: ReactNode; label: string; 
 }
 
 function SharedConfigNode({ node, onUnauthorized }: { node: CanvasNodeData; onUnauthorized: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     return <div className="flex h-full w-full flex-col overflow-hidden rounded-[var(--panel-radius)]">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b px-4" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}><ImageIcon className="size-4" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title}</span></div>
         <div className="min-h-0 flex-1 whitespace-pre-wrap break-words p-4 text-sm leading-6" style={{ color: theme.node.muted }}>{node.metadata?.composerContent || node.metadata?.prompt || "未填写提示词"}</div>
@@ -313,7 +320,7 @@ function SharedConfigNode({ node, onUnauthorized }: { node: CanvasNodeData; onUn
 }
 
 function SharedScriptNode({ node, onUnauthorized }: { node: CanvasNodeData; onUnauthorized: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     const rows = node.metadata?.storyboard?.rows || [];
     return <div className="flex h-full w-full flex-col overflow-hidden rounded-[var(--panel-radius)]">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b px-4" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}><Clapperboard className="size-4" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title}</span><span className="text-xs" style={{ color: theme.node.muted }}>{rows.length} 镜</span><button type="button" className="grid size-7 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onUnauthorized(); }} aria-label="一键创建视频节点"><Video className="size-3.5" /></button></div>

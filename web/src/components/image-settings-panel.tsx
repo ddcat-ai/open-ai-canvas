@@ -105,7 +105,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         />
                     </span>
                 </div> : null}
-                {showSize ? <ImageSizePicker profile={profile} size={activeSize} quality={quality} onChange={(size) => onConfigChange("size", size)} /> : null}
+                {showSize ? <ImageSizePicker profile={profile} size={activeSize} quality={quality} onChange={(size, nextQuality) => applyImageSizeSelection(onConfigChange, size, nextQuality)} /> : null}
                 {showCount && effectiveMaxCount > 1 ? (
                     <div className="space-y-2">
                         <SettingTitle color={theme.node.muted}>生成张数</SettingTitle>
@@ -122,6 +122,11 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
             </div>
         </ImageSettingsTheme>
     );
+}
+
+export function applyImageSizeSelection(onConfigChange: ImageSettingsPanelProps["onConfigChange"], size: string, quality?: string) {
+    onConfigChange("size", size);
+    if (quality) onConfigChange("quality", quality);
 }
 
 export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; children: ReactNode }) {

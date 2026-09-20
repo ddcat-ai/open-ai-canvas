@@ -12,7 +12,7 @@ import { cinematicStoryboardColumns, storyboardRowsFromTask } from "@/lib/canvas
 import { generationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { generationFailureMetadata } from "@/lib/generation-error";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
-import { consumeCanvasAgentGenerationContinuation } from "./use-canvas-agent-operations";
+import { consumeCanvasGenerationContinuation } from "./use-canvas-operation-history";
 
 type CanvasGenerationRequest = {
     targetNodeId: string;
@@ -94,11 +94,11 @@ export async function recoverCanvasGenerationTaskNode(input: {
     applyGenerationTaskResult: (nodeId: string, task: GenerationTask) => Promise<void>;
     signal: AbortSignal;
     isCurrentProject?: () => boolean;
-    consumeContinuation?: typeof consumeCanvasAgentGenerationContinuation;
+    consumeContinuation?: typeof consumeCanvasGenerationContinuation;
 }) {
     const isCurrentProject = () => !input.signal.aborted && (input.isCurrentProject?.() ?? true);
     if (!isCurrentProject()) return;
-    const consumeContinuation = input.consumeContinuation ?? consumeCanvasAgentGenerationContinuation;
+    const consumeContinuation = input.consumeContinuation ?? consumeCanvasGenerationContinuation;
     const recoveryBaseNodes = useCanvasStore.getState().projects.find((project) => project.id === input.projectId)?.nodes ?? input.nodesRef.current;
     try {
         if (input.completed.projectId && input.completed.projectId !== input.projectId) throw new Error("生成任务不属于当前画布");
@@ -107,7 +107,7 @@ export async function recoverCanvasGenerationTaskNode(input: {
             throw new Error(input.completed.error || (input.completed.status === "cancelled" ? "任务已取消" : "任务失败"));
         }
         if (!input.continuationOnly) {
-            if (input.node.type === CanvasNodeType.Script && input.completed.type === "agent_storyboard_rows") {
+            if (input.node.type === CanvasNodeType.Script && input.completed.type === "canvas_text" && input.completed.operation === "storyboard") {
                 const result = storyboardRowsFromTask(input.completed);
                 const recoveredNodes = input.nodesRef.current.map((item) =>
                     item.id === input.node.id
@@ -381,7 +381,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                           if (!isCurrentProject()) throw error;
                           return [];
                       })
-                  ).filter((task) => task.projectId === startedProjectId && (task.type.startsWith("canvas_") || task.type === "agent_storyboard_rows"))
+                  ).filter((task) => task.projectId === startedProjectId && task.type.startsWith("canvas_"))
                 : [];
             if (!isCurrentProject()) return;
             await Promise.all(
@@ -521,10 +521,14 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             }).catch((error) => {
                 autoSavedTaskIdsRef.current.delete(saveKey);
                 if (error instanceof Error && error.name === "AbortError") return;
-                message.warning(error instanceof Error ? `生成结果已保留，但项目资产同步失败：${error.message}` : "生成结果已保留，但项目资产同步失败");
+                message.warning({
+                    key: `canvas-asset-sync:${projectId}`,
+                    content: error instanceof Error ? `生成结果已保留，但项目资产同步失败：${error.message}` : "生成结果已保留，但项目资产同步失败",
+                    duration: 4,
+                });
             });
         });
-    }, [domainProjectId, message, nodes, projectLoaded, saveGeneratedAsset]);
+    }, [domainProjectId, message, nodes, projectId, projectLoaded, saveGeneratedAsset]);
 
     return {
         applyGenerationTaskResult,

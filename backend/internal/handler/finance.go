@@ -205,7 +205,11 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"models": items})
+		models := make([]adminChannelModelResponse, 0, len(items))
+		for _, item := range items {
+			models = append(models, adminChannelModel(item))
+		}
+		ok(c, gin.H{"models": models})
 	})
 	r.POST("/admin/channels/:id/models/fetch", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -501,5 +505,5 @@ func saveChannelModel(c *gin.Context, svc *service.Service, id string) {
 		failService(c, err)
 		return
 	}
-	ok(c, gin.H{"model": item})
+	ok(c, gin.H{"model": adminChannelModel(*item)})
 }

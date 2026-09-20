@@ -15,7 +15,7 @@
 
 主界面（Canvas 工作台 `web/src/pages/canvas/` 与 `web/src/components/canvas/`）自研组件消费处于**扩散中**：114 个 tsx 中 35 个已引用 `@/components/ui`（约 31%），但画布 AI 助手等高阶场景仍大量直接使用 AntD 原子或裸 Tailwind，应用层组件缺位。后台管理区（`web/src/pages/admin/`）是另一主要消费方，与画布主界面的「AI 优先」场景仍有落差。
 
-**结论**：基础能力已可用，短板在「应用层组件」与「主界面消费率」。BoardUI 恰以 AI/agent 界面应用层组件见长，与影绘画布 AI 助手场景天然互补，不是重复造轮子。
+**结论**：基础能力已可用，短板在「应用层组件」与「主界面消费率」。BoardUI 恰以 AI/agent 界面应用层组件见长，与影策画布 AI 助手场景天然互补，不是重复造轮子。
 
 ## 2. BoardUI 可吸收清单（不只 UI）
 
@@ -26,7 +26,7 @@ BoardUI 是面向 AI/agent 界面的 React 组件库（62+ 源码组件、400+ �
 | 资产 | 吸收方式 | 消费点 |
 |---|---|---|
 | `hooks/use-count-up.ts`（数字滚动） | 抄写至 `web/src/hooks/use-count-up.ts`，保留 easeOutCubic/取消动画语义；适配项目规范：尊重 `prefers-reduced-motion`、暴露 `from` 参数 | 后台运营健康卡（活跃用户 / 生成任务 / 服务质量）数值滚动 |
-| agent-thinking（wave 点阵指示器形态） | 形态吸收至 `canvas-agent-chat-ui.tsx`：3×3 对角波光点阵 + `role="status"` + 秒数计时 + reduced-motion 静态降级（不引 UI 资产与 motion 依赖） | Canvas AI 助手工作状态 `AgentWorkingMessage` |
+| agent-thinking（wave 点阵指示器形态） | 形态吸收至 `canvas-cloud-agent-chat-ui.tsx`：3×3 对角波光点阵 + `role="status"` + 秒数计时 + reduced-motion 静态降级（不引 UI 资产与 motion 依赖） | 云端 Canvas Agent 工作状态 `AgentWorkingMessage` |
 | composer-loader（发送态点亮语义） | 语义吸收：发送中胶囊加主题色呼吸光环（1.6s 周期，reduced-motion 关闭） | Canvas AI 助手输入胶囊 |
 | agent-log（WorkingRow：工作行与计划分离、真实事件驱动、树线连接） | 语义吸收至创建页分镜 pending：胶囊改纯计划路线（去伪当前步高亮），新增独立活动行 `storyboard-workbench-activity`（真实状态文案 + WorkingDots + `role="status"`，复用共享组件） | 创建页 Storyboard 镜头生成中卡片 |
 
@@ -52,13 +52,13 @@ BoardUI 最典型消费场景是「数据变化时数字平滑滚动」。已在
 
 - `web/src/hooks/use-count-up.ts`：新 hook（吸收自 BoardUI，MIT）。
 - `web/src/pages/admin/components/analytics-panel.tsx`：新增 `AnimatedHealthValue`，活跃用户/生成任务/服务质量 3 张卡 value 改为滚动呈现；估算费用卡金额含币种分支保持静态，避免逐帧金额抖动。
-- `web/src/components/canvas/canvas-agent-chat-ui.tsx`（第二阶段落地，2026-09-06）：`AgentWorkingMessage` 由打字机替换为 3×3 对角波点阵 + 计时（吸收 agent-thinking wave 形态，`role="status"`/aria-live 保持）；发送中输入胶囊加呼吸光环（吸收 composer-loader 发送态语义）。两处消费点（本地 Agent 面板 / 云端助手面板）经同一组件自动生效。
-- 验证：`tsc --noEmit` 零错误；Vite dev 模块编译 200（canvas-agent-chat-ui / 两个消费面板 / hooks / analytics-panel）。
+- `web/src/components/canvas/canvas-cloud-agent-chat-ui.tsx`（第二阶段落地，2026-09-06）：`AgentWorkingMessage` 由打字机替换为 3×3 对角波点阵 + 计时（吸收 agent-thinking wave 形态，`role="status"`/aria-live 保持）；发送中输入胶囊加呼吸光环（吸收 composer-loader 发送态语义）。云端助手面板经同一组件生效。
+- 验证：`tsc --noEmit` 零错误；Vite dev 模块编译 200（canvas-cloud-agent-chat-ui / 云端助手面板 / hooks / analytics-panel）。
 - 验证：`tsc --noEmit` 无新错误。
 
 ## 4. 下一步（建议顺序）
 
-1. ✅ **Canvas AI 助手应用层**（已完成 2026-09-06）：agent-thinking / composer-loader 形态落地于 `canvas-agent-chat-ui` 工作态与发送态；待浏览器视觉验收。
+1. ✅ **Canvas 云端 Agent 应用层**（已完成 2026-09-06）：agent-thinking / composer-loader 形态落地于 `canvas-cloud-agent-chat-ui` 工作态与发送态；待浏览器视觉验收。
 2. **Typography 复合类**：吸收 boardui 排版节奏到 globals.css 的 `@theme`（font-size/weight/leading 映射），供主界面使用。
 3. ~~通知中心~~：~~把 agent-log/notification-center 形态用于任务完成/失败推送浮层。~~（🚫 已禁用，见 §2.2）
 4. 每步遵循 rollout 计划阶段门：先建组件 → 单页替换样板 → 批量消费审计。
@@ -77,7 +77,7 @@ BoardUI 最典型消费场景是「数据变化时数字平滑滚动」。已在
 | 页面/模块 | 我方现状（文件证据） | boardui 参照 | 结论 |
 | --- | --- | --- | --- |
 | create 创作工作台 | 消息组件齐（用户/助手头已对称化、复制/编辑回填、MediaResult、GenerationToolCard、MessageReasoning+流式计时）；空态 CreationEmptySuggest（hero 大卡含 rays + 3 网格卡，index.tsx 1825）；历史行更多菜单已含导出 | agent-chat 消息/actions/history | **C1 已覆盖 / C2 已实施** |
-| canvas 画布 | canvas-agent-chat-ui 双套主题化消息 + 阶段日志；reasoning 用原生 details 折叠 | agent-thinking | 已吸收形态；消息视觉与 create 页不同源（已知结构差异，非本轮消） |
+| canvas 画布 | canvas-cloud-agent-chat-ui 双套主题化消息 + 阶段日志；reasoning 用原生 details 折叠 | agent-thinking | 已吸收形态；消息视觉与 create 页不同源（已知结构差异，非本轮消） |
 | assets 素材库 | 分类/筛选/密度/回收站/批量/编辑抽屉，强于参照 | — | 无吸收项 |
 | projects 项目 | 列表/详情/多 Tab/分镜工作流 | dashboard-sidebar 菜单 | 无吸收项 |
 | tasks 任务中心 | 状态/模型筛选、按画布分组、批量重试、详情抽屉 | — | 无吸收项 |

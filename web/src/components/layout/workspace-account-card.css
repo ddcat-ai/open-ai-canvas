@@ -1,0 +1,25 @@
+.workspace-account-popover .ant-popover-container { padding: var(--space-2); }
+.workspace-account-popover .workspace-topbar-account-menu { width: auto; min-width: 0; padding: 0; }
+.workspace-account-card { width: min(304px, calc(100vw - 48px)); color: var(--user-ink); padding: 12px; }
+.workspace-account-card-identity { display: flex; align-items: center; gap: 12px; padding: 4px 0 16px; }
+.workspace-account-card-avatar { width: 42px; height: 42px; border-radius: 14px; background: var(--user-accent-soft); color: var(--user-accent); padding: 8px; }
+.workspace-account-card-identity > div { flex: 1; min-width: 0; }
+.workspace-account-card-identity strong, .workspace-account-card-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-account-card-identity strong { font-size: 15px; line-height: 24px; }
+.workspace-account-card-identity span { color: var(--user-ink-muted); font-size: 12px; }
+.workspace-account-card-identity em { font-style: normal; font-size: 10px; padding: 4px 8px; border-radius: 999px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
+.workspace-account-card-wallet { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 16px; margin-bottom: 12px; border-radius: var(--user-radius-card); background: var(--user-surface-muted); }
+.workspace-account-card-balance > span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--user-ink-muted); }
+.workspace-account-card-balance strong { display: block; margin-top: 4px; font-size: 26px; font-weight: 650; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.workspace-account-card-wallet > button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--user-accent); white-space: nowrap; padding: 6px 0; }
+.workspace-account-card svg { width: 17px; height: 17px; flex-shrink: 0; stroke-width: 1.7; }
+.workspace-account-card-avatar svg { width: 100%; height: 100%; }
+.workspace-account-card-actions { display: grid; gap: 4px; }
+.workspace-account-card-actions > a, .workspace-account-card-actions > button { display: flex; align-items: center; gap: 10px; min-height: 40px; height: auto; width: 100%; padding: 10px; border: 0; border-radius: 12px; font-size: 13px; text-align: left; justify-content: flex-start; transition: background var(--user-motion), transform var(--user-motion); }
+.workspace-account-card-actions > a { color: var(--user-ink); }
+.workspace-account-card-actions > a > span { flex: 1; }
+.workspace-account-card-actions > a > svg:last-child { color: var(--user-ink-soft); width: 14px; }
+.workspace-account-card-actions > a:hover { background: var(--user-surface-muted); }
+.workspace-account-card-actions > a:active { transform: scale(.98); }
+.workspace-account-card-actions > a:focus-visible, .workspace-account-card-wallet > button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .workspace-account-card-actions > a:active { transform: none; } }

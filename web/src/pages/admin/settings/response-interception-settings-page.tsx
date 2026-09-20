@@ -1,5 +1,5 @@
 import { App, Button, Input, Skeleton } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Eye, ListOrdered, Plus, RefreshCw, RotateCcw, Save, Search, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router";

@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
-import { Switch } from "@/components/ui/base/switch";
+import { Switch } from "@/pages/admin/ui/controls";
 import { AlertTriangle, CloudUpload, KeyRound, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router";
@@ -285,8 +285,8 @@ export default function ArkPrivateAssetsSettingsPage() {
                             status={<AdminStatusBadge label={prerequisitesReady ? "已配置" : "待配置"} tone={prerequisitesReady ? "success" : "neutral"} />}
                         >
                             <div className="admin-ark-form-grid">
-                                <Form.Item name="region" label="Region">
-                                    <Input autoComplete="off" placeholder="例如：cn-beijing" />
+                                <Form.Item name="region" label="Region" extra="方舟控制面当前仅 cn-beijing 区域开放，其他区域连接会被直接重置。">
+                                    <Input autoComplete="off" placeholder="cn-beijing" />
                                 </Form.Item>
                                 <Form.Item name="projectName" label="Ark ProjectName">
                                     <Input autoComplete="off" placeholder="方舟项目名称" />

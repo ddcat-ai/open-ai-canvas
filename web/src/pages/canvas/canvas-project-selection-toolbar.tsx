@@ -6,7 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarEntries, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import type { CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 
 type CanvasProjectSelectionToolbarProps = {
     anchorRef: RefObject<HTMLDivElement | null>;
@@ -20,13 +20,14 @@ type CanvasProjectSelectionToolbarProps = {
     onCreateReferenceGroup: () => void;
     onBatchConnect: () => void;
     onMergeVideos: () => void;
+    onSendSelectionToAgent: () => void;
 };
 
-export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos }: CanvasProjectSelectionToolbarProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent }: CanvasProjectSelectionToolbarProps) {
+    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
 
     const handlers = {
-        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos,
+        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
     const ctx: ToolContext = {

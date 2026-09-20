@@ -131,3 +131,28 @@ export function resolveCanvasSelectionPreviewDelta(initialSelection: ReadonlySet
     }
     return { includeNodeIds, removeNodeIds };
 }
+
+export type SelectedNodeBounds = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    count: number;
+};
+
+export function selectedNodesWorldBounds(
+    nodes: Array<{ id: string; position: { x: number; y: number }; width: number; height: number }>,
+    preview?: { x: number; y: number; nodeIds: ReadonlySet<string> } | null,
+): SelectedNodeBounds | null {
+    if (nodes.length < 2) return null;
+    const left = Math.min(...nodes.map((node) => node.position.x + (preview?.nodeIds.has(node.id) ? preview.x : 0)));
+    const top = Math.min(...nodes.map((node) => node.position.y + (preview?.nodeIds.has(node.id) ? preview.y : 0)));
+    const right = Math.max(...nodes.map((node) => node.position.x + (preview?.nodeIds.has(node.id) ? preview.x : 0) + node.width));
+    const bottom = Math.max(...nodes.map((node) => node.position.y + (preview?.nodeIds.has(node.id) ? preview.y : 0) + node.height));
+    return { left, top, width: right - left, height: bottom - top, count: nodes.length };
+}
+
+export function offsetSelectedNodeBounds(bounds: SelectedNodeBounds, preview: { x: number; y: number } | null | undefined): SelectedNodeBounds {
+    if (!preview || (preview.x === 0 && preview.y === 0)) return bounds;
+    return { ...bounds, left: bounds.left + preview.x, top: bounds.top + preview.y };
+}

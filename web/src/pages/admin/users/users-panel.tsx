@@ -1,9 +1,9 @@
 import { App, Button, Dropdown, Input, Select } from "antd";
-import { Checkbox } from "@/components/ui/base/checkbox";
+import { Checkbox } from "@/pages/admin/ui/controls";
 import { Ban, Search, Settings2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";

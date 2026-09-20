@@ -27,6 +27,24 @@ function createMainContext(canvasTool: "move" | "box-select" = "box-select"): To
 }
 
 describe("canvas toolbar mode switch", () => {
+    test.each(["default", "compact"] as const)("renders %s canvas modes as an icon-only sliding switch", (size) => {
+        const entries = resolveToolbarEntries("main", createMainContext(), null);
+        const modeSwitch = entries.find((entry) => entry.kind === "switch");
+        if (!modeSwitch) throw new Error("Missing canvas mode switch");
+        const html = renderToStaticMarkup(<FloatingDock size={size} items={[modeSwitch]} />);
+        const diameter = size === "compact" ? 24 : 26;
+
+        expect(html).toContain(`width:${diameter}px;height:${diameter}px`);
+        expect(html.match(/aceternity-dock-switch-thumb/g)).toHaveLength(1);
+        expect(html).toContain("absolute top-1/2 rounded-full");
+        expect(html).toContain("grid size-4 shrink-0 place-items-center");
+        expect(html).not.toContain("is-labeled");
+        expect(html).not.toContain("选择</span>");
+        expect(html).not.toContain("移动</span>");
+        expect(html).toContain('aria-label="区域选择"');
+        expect(html).toContain('aria-label="抓手工具"');
+    });
+
     test("renders grab and box-select as one dock switch", () => {
         const entries = resolveToolbarEntries("main", createMainContext("box-select"), null);
         const modeSwitch = entries.find((entry) => entry.kind === "switch" && entry.id === CANVAS_MODE_TOOL_ID);

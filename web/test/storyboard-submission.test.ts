@@ -3,7 +3,7 @@ import { submitStoryboardTask } from "../src/services/storyboard-submission";
 import { creationRuns, type CreationSubmission } from "../src/services/api/creation-runs";
 import type { CreateTaskInput } from "../src/services/api/task-center";
 
-const request = { type: "agent_storyboard_rows", projectId: "canvas", prompt: "剧本" } as CreateTaskInput;
+const request = { type: "canvas_text", operation: "storyboard", projectId: "canvas", prompt: "剧本" } as CreateTaskInput;
 function harness(expiresAt = "2099-01-01") {
     const calls: string[] = [];
     const run = { id: "run", executionEpoch: 1, executionOwner: "owner" };

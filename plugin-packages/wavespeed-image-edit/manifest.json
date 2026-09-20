@@ -1,0 +1,206 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "wavespeed-image-edit",
+  "name": "WaveSpeed Image Edit",
+  "version": "1.0.0",
+  "author": "WaveSpeed / 影策",
+  "description": "WaveSpeed 图片编辑协议插件：GPT Image 2.5 / Seedream 5.0 Pro / Nano Banana 的 Image to Image 编辑与图层分解、去背景。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "WaveSpeed API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "wavespeed-image-edit",
+        "label": "WaveSpeed Image Edit",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://api.wavespeed.ai/api/v3",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "WaveSpeed 图片编辑模型端点 ID，如 openai/gpt-image-2.5-sunburst/edit、bytedance/seedream-v5.0-pro/edit、google/nano-banana-2/edit。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "编辑提示词，描述对源图的修改。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "provider image/reference fields",
+            "description": "编辑源图或参考图，role 由业务层确定；按数组顺序作为 images 入参。"
+          },
+          {
+            "name": "imageCount",
+            "type": "integer",
+            "required": false,
+            "mapping": "n/sample_count",
+            "description": "输出数量。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "size/aspect_ratio",
+            "description": "比例或尺寸，如 1:1、16:9、9:16、4:3、3:4。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "resolution/imageSize",
+            "description": "分辨率档位。"
+          },
+          {
+            "name": "quality",
+            "type": "string",
+            "required": false,
+            "mapping": "quality",
+            "description": "质量档位：low/medium/high。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/{{model}}",
+          "contentType": "application/json",
+          "body": {
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$ref": "request.images"
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "aspect_ratio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "quality": {
+              "$omitEmpty": {
+                "$ref": "request.quality"
+              }
+            },
+            "output_format": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.wavespeed-image-edit.output_format"
+                  },
+                  "png"
+                ]
+              }
+            },
+            "enable_base64_output": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.wavespeed-image-edit.enable_base64_output"
+              }
+            },
+            "enable_sync_mode": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.wavespeed-image-edit.enable_sync_mode"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/predictions/{{taskId}}/result"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "response.id"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.status"
+              },
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.error"
+              },
+              {
+                "$ref": "response.data.message"
+              },
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "images": {
+            "$ref": "response.data.outputs"
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# WaveSpeed Image Edit\n\nWaveSpeed 图片编辑协议插件（异步任务式）：把 WaveSpeed 平台的图片编辑模型以 provider 形式接入影策画布，现有画布与已接入渠道可直接调用。\n\n## 接入的模型端点（编辑类）\n\n| 端点 ID | 模型 | 说明 |\n| --- | --- | --- |\n| `openai/gpt-image-2.5-sunburst/edit` | GPT Image 2.5 Sunburst | 高质量编辑，支持多图参考（≤16） |\n| `openai/gpt-image-2.5-flare/edit` | GPT Image 2.5 Flare | 快速编辑，支持多图参考（≤16） |\n| `bytedance/seedream-v5.0-pro/edit` | Seedream 5.0 Pro | 编辑与图层分解（≤10 图） |\n| `google/nano-banana-2/edit` | Nano Banana 2 | 编辑（≤10 图） |\n| `google/nano-banana-2-lite/edit` | Nano Banana 2 Lite | 轻量编辑 |\n| `google/nano-banana-pro/edit` | Nano Banana Pro | 编辑 |\n\n## 接入的模型端点（工具类）\n\n| 端点 ID | 模型 | 说明 |\n| --- | --- | --- |\n| `bria/remove-background` | BRIA | 去背景 |\n| `bytedance/seedream-v5.0-pro/layer-decomposition` | Seedream 5.0 Pro | 图层拆分 |\n\n## 使用方式\n\n1. 在画布设置中安装本插件，填入 WaveSpeed API Key。\n2. 创建图片节点时选择「WaveSpeed Image Edit」渠道，模型选上述端点 ID。\n3. 提供编辑提示词与源图，等待异步任务完成即可。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# WaveSpeed Image Edit 接口字段\n\n## 协议身份\n\n- 插件 ID：`wavespeed-image-edit`。\n- Provider ID：`wavespeed-image-edit`。\n- 能力：`image`。\n- 默认 Base URL：`https://api.wavespeed.ai/api/v3`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /{{model}}`（model 为 WaveSpeed 图片编辑端点，如 `openai/gpt-image-2.5-sunburst/edit`）。\n- 生命周期：异步任务（create 返回 task id，poll 轮询结果）。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | WaveSpeed API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | WaveSpeed 图片编辑模型端点 ID。 |\n| `prompt` | string | 是 | `prompt` | 编辑提示词。 |\n| `images` | media[] | 否 | `images` | 编辑源图或参考图，按数组顺序透传 URL。 |\n| `imageCount` | integer | 否 | `n/sample_count` | 输出数量（WaveSpeed 多数编辑模型不支持，留空）。 |\n| `aspectRatio` | string | 否 | `aspect_ratio` | 比例或尺寸，如 `1:1`、`16:9`。 |\n| `resolution` | string | 否 | `resolution/imageSize` | 分辨率档位（编辑模型一般不支持，留空）。 |\n| `quality` | string | 否 | `quality` | 质量档位：`low` / `medium` / `high`。 |\n| `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/{{model}}\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.prompt` | `{\"$ref\":\"request.prompt\"}` |\n| `create.body.images` | `{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}}` |\n| `create.body.aspect_ratio` | `{\"$omitEmpty\":{\"$ref\":\"request.aspectRatio\"}}` |\n| `create.body.quality` | `{\"$omitEmpty\":{\"$ref\":\"request.quality\"}}` |\n| `create.body.output_format` | `{\"$omitEmpty\":{\"$coalesce\":[{\"$ref\":\"request.providerOptions.wavespeed-image-edit.output_format\"},\"png\"]}}` |\n| `create.body.enable_base64_output` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.wavespeed-image-edit.enable_base64_output\"}}` |\n| `create.body.enable_sync_mode` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.wavespeed-image-edit.enable_sync_mode\"}}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/predictions/{{taskId}}/result\"`（taskId 来自 create 响应 `data.id`） |\n| `poll.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- `providerOptions.wavespeed-image-edit.output_format`\n- `providerOptions.wavespeed-image-edit.enable_base64_output`\n- `providerOptions.wavespeed-image-edit.enable_sync_mode`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.data.id\"},{\"$ref\":\"response.id\"}]}` |\n| `response.status` | `{\"$coalesce\":[{\"$ref\":\"response.data.status\"},{\"$ref\":\"response.status\"},\"pending\"]}` |\n| `response.message` | `{\"$coalesce\":[{\"$ref\":\"response.data.error\"},{\"$ref\":\"response.data.message\"},{\"$ref\":\"response.error.message\"},{\"$ref\":\"response.message\"}]}` |\n| `response.images` | `{\"$ref\":\"response.data.outputs\"}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.resultEphemeral` | `true` |\n\nWaveSpeed 异步任务响应结构：\n\n- create 成功：`{\"code\":200,\"data\":{\"id\":\"<taskId>\"}}`\n- poll 进行中：`{\"code\":200,\"data\":{\"id\":\"<taskId>\",\"status\":\"processing\",\"outputs\":null}}`\n- poll 完成：`{\"code\":200,\"data\":{\"id\":\"<taskId>\",\"status\":\"completed\",\"outputs\":[\"https://cdn.wavespeed.ai/...\"]}}`\n- poll 失败：`{\"code\":200,\"data\":{\"id\":\"<taskId>\",\"status\":\"failed\",\"error\":\"...\"}}`\n\n`images` 直接透传 `data.outputs` 字符串数组；宿主把每个字符串识别为结果媒体 URL（同时兼容对象数组取 `url` 字段的写法）。`resultEphemeral` 标记临时媒体 URL，由宿主立即下载持久化。\n\n## 兼容边界\n\n模型字段由所选端点决定：编辑类端点接受 `prompt + images[]`；图层分解端点（`bytedance/seedream-v5.0-pro/layer-decomposition`）接受 `image + prompt`（用 `providerOptions` 传额外字段）；去背景端点（`bria/remove-background`）接受 `image`。宿主通过 `request.images` 统一提供源图，模型字段差异由调用方通过 providerOptions 补充。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"wavespeed-image-edit\",\n  \"name\": \"WaveSpeed Image Edit\",\n  \"version\": \"1.0.0\",\n  \"author\": \"WaveSpeed / 影策\",\n  \"description\": \"WaveSpeed 图片编辑协议插件：GPT Image 2.5 / Seedream 5.0 Pro / Nano Banana 的 Image to Image 编辑与图层分解、去背景。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"WaveSpeed API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"wavespeed-image-edit\",\n        \"label\": \"WaveSpeed Image Edit\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://api.wavespeed.ai/api/v3\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"WaveSpeed 图片编辑模型端点 ID，如 openai/gpt-image-2.5-sunburst/edit、bytedance/seedream-v5.0-pro/edit、google/nano-banana-2/edit。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"编辑提示词，描述对源图的修改。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"provider image/reference fields\",\n            \"description\": \"编辑源图或参考图，role 由业务层确定；按数组顺序作为 images 入参。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"n/sample_count\",\n            \"description\": \"输出数量。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"size/aspect_ratio\",\n            \"description\": \"比例或尺寸，如 1:1、16:9、9:16、4:3、3:4。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution/imageSize\",\n            \"description\": \"分辨率档位。\"\n          },\n          {\n            \"name\": \"quality\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"quality\",\n            \"description\": \"质量档位：low/medium/high。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/{{model}}\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"images\": {\n              \"$map\": {\n                \"from\": {\n                  \"$ref\": \"request.images\"\n                },\n                \"as\": \"media\",\n                \"in\": {\n                  \"$ref\": \"media.value\"\n                }\n              }\n            },\n            \"aspect_ratio\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.aspectRatio\"\n              }\n            },\n            \"quality\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.quality\"\n              }\n            },\n            \"output_format\": {\n              \"$omitEmpty\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.wavespeed-image-edit.output_format\"\n                  },\n                  \"png\"\n                ]\n              }\n            },\n            \"enable_base64_output\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.wavespeed-image-edit.enable_base64_output\"\n              }\n            },\n            \"enable_sync_mode\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.wavespeed-image-edit.enable_sync_mode\"\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/predictions/{{taskId}}/result\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"response.id\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              {\n                \"$ref\": \"response.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.error\"\n              },\n              {\n                \"$ref\": \"response.data.message\"\n              },\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              }\n            ]\n          },\n          \"images\": {\n            \"$ref\": \"response.data.outputs\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

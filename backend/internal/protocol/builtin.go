@@ -73,9 +73,8 @@ func Builtins() *Registry {
 	}
 	registry, err := NewRegistry(
 		openAIChatAdapter(), openAIResponsesAdapter(), claudeAdapter(),
-		openAIImagesAdapter(), grokImagesAdapter(), arkImagesAdapter(), jimengImagesAdapter(), geminiImagesAdapter(),
 		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(),
-		openAIAudioAdapter(), asyncAudioAdapter(), agnesAdapter(),
+		agnesAdapter(),
 	)
 	if err != nil {
 		panic(err)
@@ -178,102 +177,6 @@ func claudeAdapter() Adapter {
 			return spec, nil
 		},
 		parseCreate: parseClaudeResponse,
-	}
-}
-
-func openAIImagesAdapter() Adapter {
-	info := metadata("openai-image", "OpenAI Images", "OpenAI", CapabilityImage, "POST /v1/images/generations", "", "application/json or multipart/form-data")
-	info.Parameters = mediaParams()
-	return builtinAdapter{info: info,
-		create: func(r GenerationRequest) (RequestSpec, error) {
-			body := map[string]any{"model": r.Model, "prompt": r.Prompt}
-			if r.ImageCount > 0 {
-				body["n"] = r.ImageCount
-			}
-			copyIf(body, "size", r.AspectRatio)
-			copyIf(body, "quality", r.Quality)
-			mergeExtra(body, r.Extra, "size", "quality", "background", "response_format", "output_format", "style", "n")
-			return jsonSpec(http.MethodPost, "/v1/images/generations", body), nil
-		},
-		parseCreate: parseImageResponse,
-	}
-}
-
-func grokImagesAdapter() Adapter {
-	info := metadata("grok-image", "Grok Images", "xAI", CapabilityImage, "POST /v1/images/generations", "", "application/json")
-	info.Parameters = mediaParams()
-	return builtinAdapter{info: info,
-		create: func(r GenerationRequest) (RequestSpec, error) {
-			body := map[string]any{"model": r.Model, "prompt": r.Prompt, "aspect_ratio": defaultValue(r.AspectRatio, "1:1"), "resolution": defaultValue(r.Quality, "2k")}
-			if len(r.Images) > 0 {
-				body["image"] = mediaValue(r.Images[0])
-			}
-			return jsonSpec(http.MethodPost, "/v1/images/generations", body), nil
-		},
-		parseCreate: parseImageResponse,
-	}
-}
-
-func arkImagesAdapter() Adapter {
-	info := metadata("volcengine-ark-image", "火山方舟图片", "Volcengine Ark", CapabilityImage, "POST /api/v3/images/generations", "", "application/json")
-	info.Parameters = mediaParams()
-	return builtinAdapter{info: info,
-		create: func(r GenerationRequest) (RequestSpec, error) {
-			body := map[string]any{"model": r.Model, "prompt": r.Prompt}
-			if size := strings.TrimSpace(r.AspectRatio); size != "" {
-				body["size"] = size
-			}
-			if len(r.Images) > 0 {
-				body["image"] = mediaValues(r.Images)
-			}
-			mergeExtra(body, r.Extra, "size", "sequential_image_generation", "sequential_image_generation_options", "watermark")
-			return jsonSpec(http.MethodPost, "/api/v3/images/generations", body), nil
-		},
-		parseCreate: parseImageResponse,
-	}
-}
-
-func jimengImagesAdapter() Adapter {
-	info := metadata("volcengine-jimeng-image", "即梦官方图片", "Volcengine Jimeng", CapabilityImage, "POST CVSync2AsyncSubmitTask", "POST CVSync2AsyncGetResult", "application/json + AK/SK signature")
-	info.Parameters = mediaParams()
-	return builtinAdapter{info: info,
-		create: func(r GenerationRequest) (RequestSpec, error) {
-			body := map[string]any{"req_key": r.Model, "prompt": r.Prompt}
-			if len(r.Images) > 0 {
-				body["image_urls"] = mediaValues(r.Images)
-			}
-			mergeExtra(body, r.Extra, "req_key", "prompt", "image_urls", "seed", "width", "height")
-			return jsonSpec(http.MethodPost, "/CVSync2AsyncSubmitTask", body), nil
-		},
-		parseCreate: parseJiMengCreate,
-		poll: func(c PollContext) (RequestSpec, error) {
-			return jsonSpec(http.MethodPost, "/CVSync2AsyncGetResult", map[string]any{"req_key": c.Model, "task_id": c.TaskID}), nil
-		},
-		parsePoll: parseJiMengPoll,
-	}
-}
-
-func geminiImagesAdapter() Adapter {
-	info := metadata("gemini-image", "Gemini Images", "Google", CapabilityImage, "POST /v1beta/models/{model}:generateContent", "", "application/json")
-	info.Parameters = mediaParams()
-	return builtinAdapter{info: info,
-		create: func(r GenerationRequest) (RequestSpec, error) {
-			parts := []any{map[string]any{"text": r.Prompt}}
-			for _, image := range r.Images {
-				if image.DataURL != "" {
-					parts = append(parts, map[string]any{"inline_data": map[string]any{"mime_type": dataMIME(image.DataURL), "data": dataPayload(image.DataURL)}})
-				} else if image.URL != "" {
-					parts = append(parts, map[string]any{"file_data": map[string]any{"file_uri": image.URL}})
-				}
-			}
-			body := map[string]any{"contents": []any{map[string]any{"role": "user", "parts": parts}}}
-			if r.AspectRatio != "" || r.Quality != "" {
-				body["generationConfig"] = map[string]any{"imageConfig": compactMap(map[string]any{"aspectRatio": r.AspectRatio, "imageSize": r.Quality})}
-			}
-			mergeExtra(body, r.Extra, "generationConfig", "safetySettings", "systemInstruction")
-			return jsonSpec(http.MethodPost, "/v1beta/models/"+url.PathEscape(r.Model)+":generateContent", body), nil
-		},
-		parseCreate: parseGeminiImageResponse,
 	}
 }
 
@@ -496,20 +399,6 @@ func miniMaxVideosAdapter() Adapter {
 		body := map[string]any{"model": r.Model, "prompt": r.Prompt, "duration": defaultInt(r.Duration, 6), "content": content}
 		mergeExtra(body, r.Extra, "model", "prompt", "duration", "content", "resolution", "aspect_ratio")
 		return jsonSpec(http.MethodPost, "/v2/video_generation", body), nil
-	})
-}
-
-func openAIAudioAdapter() Adapter {
-	info := metadata("openai-audio", "OpenAI Audio", "OpenAI", CapabilityAudio, "POST /v1/audio/speech", "", "application/json")
-	return builtinAdapter{info: info, create: func(r GenerationRequest) (RequestSpec, error) {
-		return jsonSpec(http.MethodPost, "/v1/audio/speech", map[string]any{"model": r.Model, "input": r.Prompt}), nil
-	}, parseCreate: parseAudioResponse}
-}
-
-func asyncAudioAdapter() Adapter {
-	info := metadata("async-audio", "异步音频任务", "OpenAI compatible", CapabilityAudio, "POST /v1/audio/tasks", "GET /v1/audio/tasks/{task_id}", "application/json")
-	return asyncMediaAdapter(info, CapabilityAudio, func(r GenerationRequest) (RequestSpec, error) {
-		return jsonSpec(http.MethodPost, "/v1/audio/tasks", map[string]any{"model": r.Model, "prompt": r.Prompt}), nil
 	})
 }
 
@@ -904,33 +793,6 @@ func parseImageResponse(payload map[string]any) (CreateResult, error) {
 	}
 	if len(images) == 0 {
 		return CreateResult{}, fmt.Errorf("image response has no image data")
-	}
-	return CreateResult{Status: StatusSucceeded, Result: &Result{Images: images}}, nil
-}
-
-func parseGeminiImageResponse(payload map[string]any) (CreateResult, error) {
-	images := make([]MediaReference, 0)
-	if candidates, ok := payload["candidates"].([]any); ok {
-		for _, candidate := range candidates {
-			if c, ok := candidate.(map[string]any); ok {
-				content, _ := c["content"].(map[string]any)
-				parts, _ := content["parts"].([]any)
-				for _, part := range parts {
-					if p, ok := part.(map[string]any); ok {
-						data, _ := p["inlineData"].(map[string]any)
-						if data == nil {
-							data, _ = p["inline_data"].(map[string]any)
-						}
-						if data != nil {
-							images = append(images, MediaReference{DataURL: "data:" + firstString(data, "mimeType", "mime_type") + ";base64," + firstString(data, "data")})
-						}
-					}
-				}
-			}
-		}
-	}
-	if len(images) == 0 {
-		return CreateResult{}, fmt.Errorf("Gemini response has no inline image data")
 	}
 	return CreateResult{Status: StatusSucceeded, Result: &Result{Images: images}}, nil
 }

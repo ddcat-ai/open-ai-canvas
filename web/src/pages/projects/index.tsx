@@ -1,10 +1,14 @@
+import { CollectionToolbar } from "@/components/layout/collection-toolbar";
+import { DeleteButton } from "@/components/ui/base/buttons/delete-button";
+import { CachedResourceImage } from "@/components/cached-resource-image";
+import { MediaPlaceholder } from "@/components/ui/product/media-placeholder";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Form, Input, Modal, Select } from "antd";
-import { ArrowRight, BookOpenText, FileText, FolderKanban, Images, LayoutGrid, Palette, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, BookOpenText, FileText, FolderKanban, Images, LayoutGrid, Palette, Plus, Search, Sparkles } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import { CollectionGrid, ListToolbar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
+import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 import { CanvasStylePickerModal, resolveCanvasStylePreset, resolveProjectCanvasStyle, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { resourceFileUrl } from "@/services/api/resources";
@@ -152,16 +156,6 @@ export default function ProjectsPage() {
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "项目删除失败"),
     });
-    const confirmDeleteProject = (projectId: string, name: string) => {
-        modal.confirm({
-            title: "删除项目",
-            content: `确定删除「${name}」吗？项目章节、画布关联和素材归属将一并移除；独立画布与素材库原始素材会保留。此操作不可撤销。`,
-            okText: "删除",
-            okButtonProps: { danger: true, loading: deleteMutation.isPending },
-            cancelText: "取消",
-            onOk: () => deleteMutation.mutate(projectId),
-        });
-    };
     const allProjects = useMemo(() => query.data?.pages.flatMap((page) => page.projects) || [], [query.data]);
     const rows = useMemo(() => {
         const normalizedKeyword = keyword.trim().toLowerCase();
@@ -189,20 +183,36 @@ export default function ProjectsPage() {
     }, [query.fetchNextPage, query.hasNextPage, query.isError, query.isFetchingNextPage]);
     const hasInitialError = query.isError && !query.data;
     return (
-        <WorkspacePage className="library-page" grid>
-            <section className="app-story-create-panel mt-4" aria-label="开始一部新短剧">
-                <div className="app-story-create-head">
-                    <div className="app-story-create-title">
-                        <span className="app-story-create-mark"><Sparkles className="size-4" /></span>
+        <WorkspacePage className="library-page project-library-page" grid>
+            <details className="story-launcher-panel" aria-label="开始一部新短剧">
+                <summary className="story-launcher-head">
+                    <div className="story-launcher-title">
+                        <span className="story-launcher-mark"><Sparkles className="size-4" /></span>
                         <div>
                             <h2>开始一部新短剧</h2>
-                            <p>写下一句话故事，或选择一个创建方式。</p>
+                            <p>一句话生成章节，也可以导入小说或从空白开始</p>
                         </div>
                     </div>
-                    <div className="app-story-create-actions">
-                        <button type="button" className="app-story-create-shortcut" onClick={() => openCreate("blank")}><FolderKanban className="size-4" />空白项目</button>
-                        <button type="button" className="app-story-create-shortcut" onClick={() => openCreate("novel")}><FileText className="size-4" />导入小说</button>
-                        <button type="button" className="app-story-create-shortcut" onClick={() => setStylePickerOpen(true)}><Palette className="size-4" />{selectedStyle ? "更换画风" : "选画风"}</button>
+                    <span className="story-launcher-expand"><Plus className="size-4" /><span>展开创作</span></span>
+                </summary>
+                <div className="story-launcher-main">
+                    <Input.TextArea
+                        className="story-launcher-input"
+                        value={storyDraft}
+                        onChange={(event) => setStoryDraft(event.target.value)}
+                        placeholder="例如：一个失忆的快递员，每天收到十年前寄出的信件……"
+                        autoSize={{ minRows: 2, maxRows: 5 }}
+                        aria-label="一句话故事"
+                    />
+                    {selectedStyle ? <button type="button" className="story-launcher-style-chip" onClick={() => setStylePickerOpen(true)} title={selectedStyle.title}>
+                        <img src={selectedStyle.imageUrl} alt="" />
+                        <span>{selectedStyle.title}</span>
+                    </button> : null}
+                </div>
+                    <div className="story-launcher-actions">
+                        <Button icon={<FolderKanban />} onClick={() => openCreate("blank")}>空白项目</Button>
+                        <Button icon={<FileText />} onClick={() => openCreate("novel")}>导入小说</Button>
+                        <Button icon={<Palette />} onClick={() => setStylePickerOpen(true)}>{selectedStyle ? "更换画风" : "选画风"}</Button>
                         <ModelPicker
                             config={effectiveConfig}
                             value={generateModel || effectiveConfig.textModel}
@@ -211,26 +221,15 @@ export default function ProjectsPage() {
                             variant="creation"
                             placeholder="选择文本模型"
                             showSelectedPrice={false}
+                            showOptionPrices
+                            popoverClassName="agent-model-picker-popover"
                         />
                         <Button type="default" icon={<Sparkles className="size-3.5" />} disabled={!storyDraft.trim() || generating} loading={generating} onClick={() => void generateStory()}>AI 生成章节</Button>
                         <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => openCreate(createSource)}>开始创作</Button>
                     </div>
-                </div>
-                <div className="app-story-create-main">
-                    <Input.TextArea
-                        className="app-story-create-input"
-                        value={storyDraft}
-                        onChange={(event) => setStoryDraft(event.target.value)}
-                        placeholder="例如：一个失忆的快递员，每天收到十年前寄出的信件……"
-                        autoSize={{ minRows: 1, maxRows: 3 }}
-                        aria-label="一句话故事"
-                    />
-                    {selectedStyle ? <button type="button" className="app-story-create-style-chip" onClick={() => setStylePickerOpen(true)} title={selectedStyle.title}>
-                        <img src={selectedStyle.imageUrl} alt="" />
-                        <span>{selectedStyle.title}</span>
-                    </button> : null}
-                </div>
-                <div className="app-story-create-controls">
+                <details className="story-launcher-options">
+                    <summary>故事设置 · {generateChapterCount} 章 · {generatePerspective} · {generateTone}</summary>
+                <div className="story-launcher-controls">
                     <label><span>章节数量</span><Select size="small" className="min-w-28" value={generateChapterCount} onChange={setGenerateChapterCount} options={[{ label: "3 章", value: "3" }, { label: "5 章", value: "5" }, { label: "8 章", value: "8" }, { label: "10 章", value: "10" }]} /></label>
                     <label><span>叙事结构</span><Select size="small" className="min-w-32" value={generateStructure} onChange={setGenerateStructure} options={[{ label: "单线推进", value: "单线推进" }, { label: "双线并行", value: "双线并行" }, { label: "群像多线", value: "群像多线" }, { label: "反转嵌套", value: "反转嵌套" }]} /></label>
                     <label><span>章节篇幅</span><Select size="small" className="min-w-28" value={generateChapterLength} onChange={setGenerateChapterLength} options={[{ label: "精炼", value: "短" }, { label: "均衡", value: "中" }, { label: "丰满", value: "长" }]} /></label>
@@ -239,18 +238,19 @@ export default function ProjectsPage() {
                     <label><span>故事基调</span><Select size="small" className="min-w-32" value={generateTone} onChange={setGenerateTone} options={[{ label: "平稳叙事", value: "平稳叙事" }, { label: "轻松喜剧", value: "轻松喜剧" }, { label: "紧张悬疑", value: "紧张悬疑" }, { label: "热血成长", value: "热血成长" }, { label: "甜宠治愈", value: "甜宠治愈" }]} /></label>
                     <label><span>角色规模</span><Select size="small" className="min-w-28" value={generateCharacterScale} onChange={setGenerateCharacterScale} options={[{ label: "2 个", value: "2 个" }, { label: "3-4 个", value: "3-4 个" }, { label: "5-6 个", value: "5-6 个" }]} /></label>
                 </div>
-            </section>
-            <ListToolbar className="library-toolbar" active={Boolean(keyword || status !== "all" || sort !== "updated")} onReset={() => { setKeyword(""); setStatus("all"); setSort("updated"); }}>
+                </details>
+            </details>
+            <CollectionToolbar active={Boolean(keyword || status !== "all" || sort !== "updated")} onReset={() => { setKeyword(""); setStatus("all"); setSort("updated"); }}>
                 <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索项目、简介或画风" onChange={(event) => setKeyword(event.target.value)} />
                 <Select className="w-32" value={status} onChange={setStatus} options={[{ label: "全部状态", value: "all" }, { label: "进行中", value: "active" }, { label: "已归档", value: "archived" }]} />
                 <Select className="w-32" value={sort} onChange={setSort} options={[{ label: "最近更新", value: "updated" }, { label: "章节进度", value: "progress" }, { label: "项目名称", value: "name" }]} />
-            </ListToolbar>
+            </CollectionToolbar>
 
             {hasInitialError ? <WorkspaceErrorState description={query.error instanceof Error ? query.error.message : "项目列表加载失败"} onRetry={() => void query.refetch()} /> : null}
             {query.isLoading ? <WorkspaceLoadingState label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             {!query.isLoading && !hasInitialError && rows.length ? (
                 <CollectionGrid className="library-grid project-library-grid">
-                    {rows.map((row) => <ProjectRow key={row.project.id} row={row} onDelete={() => confirmDeleteProject(row.project.id, row.project.name)} />)}
+                    {rows.map((row) => <ProjectRow key={row.project.id} row={row} onDelete={() => deleteMutation.mutateAsync(row.project.id)} />)}
                 </CollectionGrid>
             ) : null}
             {!query.isLoading && !hasInitialError ? <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
@@ -358,32 +358,20 @@ function generationStepDone(label: string, status: string) {
     return false;
 }
 
-function ProjectRow({ row, onDelete }: { row: ProjectSummary; onDelete: () => void }) {
+function ProjectRow({ row, onDelete }: { row: ProjectSummary; onDelete: () => Promise<unknown> }) {
     const completion = projectSummaryCompletion(row);
     const stage = projectSummaryStage(row);
     const projectStyle = resolveProjectCanvasStyle(row.project.stylePresetId, row.project.styleProfileJson);
     const styleTitle = projectStyle?.title || parseStyleProfile(row.project.styleProfileJson)?.title || resolveCanvasStylePreset(row.project.stylePresetId)?.title || (row.project.stylePresetId ? "自定义画风" : "未设置画风");
     const coverUrl = row.project.coverResourceId ? resourceFileUrl(row.project.coverResourceId) : projectStyle?.imageUrl;
     return (
-        <Link to={`/projects/${row.project.id}/overview`} className="library-card project-library-card group">
+        <Link to={`/projects/${row.project.id}/overview`} className="product-collection-card library-card project-library-card group">
             <span className="project-library-cover">
-                {coverUrl ? <img className="project-library-cover-art" src={coverUrl} alt="" /> : <span className="project-library-cover-icon"><FolderKanban className="size-7" /></span>}
+                {coverUrl ? <CachedResourceImage className="project-library-cover-art" src={coverUrl} alt="" fallback={<MediaPlaceholder failed />} /> : <MediaPlaceholder label="故事由此开始" />}
                 <span className="project-library-cover-scrim" />
                 <span className="project-library-cover-ratio">{row.project.aspectRatio}</span>
                 <span className="project-library-cover-stage">{stage.label}</span>
-                <button
-                    type="button"
-                    className="project-library-cover-delete"
-                    title="删除项目"
-                    aria-label={`删除项目 ${row.project.name}`}
-                    onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onDelete();
-                    }}
-                >
-                    <Trash2 className="size-3.5" />
-                </button>
+                <span className="project-collection-delete"><DeleteButton label={`删除项目 ${row.project.name}`} description="项目章节、画布关联和素材归属将一并移除；独立画布与素材库原始素材会保留。此操作不可撤销。" onConfirm={onDelete} /></span>
             </span>
             <span className="project-library-body">
                 <span className="project-library-heading"><strong title={row.project.name}>{row.project.name}</strong>{row.project.status === "archived" ? <em>已归档</em> : null}<ArrowRight className="project-library-arrow size-4" /></span>

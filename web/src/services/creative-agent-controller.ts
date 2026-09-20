@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
-import { applyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import { buildCanvasAgentContext } from "@/lib/canvas/canvas-agent-context";
+import { applyCanvasOperations, type CanvasOperation, type CanvasSnapshot } from "@/lib/canvas/canvas-operation-contract";
+import { buildCanvasContext } from "@/lib/canvas/canvas-context-discovery";
 import { applyCreativeAnswers, creativeScenarioPrompt, normalizeCreativeQuestions, CREATIVE_SCENARIOS, type CreativeAnswers, type CreativeQuote } from "@/lib/creation/creative-agent-contract";
 import { assertCreativeBriefSpecifications, creativeNodeId, creativeProposalOps, initialCreativeState, mergeCreativeBrief, normalizeCreativeProposal, readCreativeState, type CreativeAgentState, type CreativeMediaState } from "@/lib/creation/creative-agent-state";
 import { CREATIVE_AGENT_SYSTEM_PROMPT, CREATIVE_AGENT_TOOLS, parseCreativeToolArguments } from "@/lib/creation/creative-agent-tools";
@@ -20,7 +20,7 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { creativeVideoSpecificationError } from "@/lib/creation/creative-agent-state";
 import { updateCreativePlan } from "@/lib/creation/creative-plan";
 
-export type CreativeCanvasAdapter = { canvasId: string; read: () => CanvasAgentSnapshot; apply: (ops: CanvasAgentOp[]) => Promise<CanvasAgentSnapshot> };
+export type CreativeCanvasAdapter = { canvasId: string; read: () => CanvasSnapshot; apply: (ops: CanvasOperation[]) => Promise<CanvasSnapshot> };
 export type CreativeControllerView = { run?: CreationRun; state: CreativeAgentState; busy: boolean; hasControl: boolean; error?: string; quote?: CreativeQuote };
 type ControllerOptions = { clientKey?: string; config: () => AiConfig; canvas: () => CreativeCanvasAdapter | undefined; onChange: (view: CreativeControllerView) => void; onOpenCanvas: (canvasId: string, runId: string) => void; api?: typeof creationRuns; waitTask?: typeof waitForGenerationTask; queryTask?: typeof queryGenerationTask; ensureAsset?: typeof ensureCanvasNodeAsset };
 
@@ -204,7 +204,7 @@ export class CreativeAgentController {
         const protocol: ResponseInputMessage[] = [
             { role: "system", content: `${CREATIVE_AGENT_SYSTEM_PROMPT}\n${creativeScenarioPrompt(this.state.scene)}\n用户系统提示：${config.systemPrompt || ""}` },
             ...this.state.messages.slice(-20).map((message) => ({ role: message.role, content: message.text })),
-            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: this.state.brief, proposal: this.state.proposal, availableModels: catalogue, references: this.state.references, canvas: canvas ? buildCanvasAgentContext(canvas.read()) : { available: false, instruction: "首页不能操作画布" }, currentRequest: prepared.prompt }) }, ...imageReferences.map((reference) => ({ type: "image_url" as const, image_url: { url: reference.storageKey! } }))] },
+            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: this.state.brief, proposal: this.state.proposal, availableModels: catalogue, references: this.state.references, canvas: canvas ? buildCanvasContext(canvas.read()) : { available: false, instruction: "首页不能操作画布" }, currentRequest: prepared.prompt }) }, ...imageReferences.map((reference) => ({ type: "image_url" as const, image_url: { url: reference.storageKey! } }))] },
         ];
         const itemKey = `planning:${nanoid()}`;
         this.state = { ...this.state, planning: { itemKey, protocol, model: config.model, prompt }, pendingPayment: undefined };
@@ -337,7 +337,7 @@ export class CreativeAgentController {
             const canvas = this.options.canvas();
             if (!canvas) throw new Error("请进入画布后再调整节点");
             const current = canvas.read();
-            const ops: CanvasAgentOp[] = data.edits.map((raw) => {
+            const ops: CanvasOperation[] = data.edits.map((raw) => {
                 const edit = raw as Record<string, unknown>;
                 const id = typeof edit.nodeId === "string" ? edit.nodeId : "";
                 if (!current.nodes.some((node) => node.id === id)) throw new Error("助手建议修改的节点不存在");
@@ -385,10 +385,10 @@ export class CreativeAgentController {
         await this.save("running");
         await this.prepareMediaBatch();
     }
-    private async commitOps(ops: CanvasAgentOp[]) {
+    private async commitOps(ops: CanvasOperation[]) {
         return withRemoteUserDataSyncExclusive(() => this.commitOpsExclusive(ops));
     }
-    private async commitOpsExclusive(ops: CanvasAgentOp[]) {
+    private async commitOpsExclusive(ops: CanvasOperation[]) {
         const adapter = this.options.canvas();
         if (!adapter || adapter.canvasId !== this.run?.canvasId) throw new Error("对应画布尚未加载，不能执行画布操作");
         this.guard();
@@ -396,7 +396,7 @@ export class CreativeAgentController {
         const remoteSnapshot = { ...adapter.read(), projectId: remote.document.id, nodes: remote.document.nodes, connections: remote.document.connections };
         const missing = reconcileOps(ops, remoteSnapshot);
         if (missing.length) {
-            const next = applyCanvasAgentOps(remoteSnapshot, missing);
+            const next = applyCanvasOperations(remoteSnapshot, missing);
             await this.api.commitCanvas(this.run.id, { ...this.guard(), expectedSnapshotHash: remote.snapshotHash, document: { ...remote.document, nodes: next.nodes, connections: next.connections } }, this.abort.signal);
         }
         this.guard();
@@ -525,7 +525,7 @@ export class CreativeAgentController {
             if (!node) throw new Error("目标节点已删除，不能自动重建");
             const version = Math.max(proposal.version, this.run!.approvedProposalVersion || 0) + 1;
             const nodeIds = (proposal.extra as { nodeIds?: Record<string, string> } | undefined)?.nodeIds || Object.fromEntries(proposal.workflow.nodes.map((node) => [node.ref, creativeNodeId(this.run!.id, proposal.version, node.ref)]));
-            const operations: CanvasAgentOp[] = Object.values(nodeIds).map((id) => { const current = snapshot.nodes.find((node) => node.id === id); if (!current) throw new Error("原方案节点已被删除，请核对方案后继续"); return { type: "update_node", id, metadata: { ...current.metadata } }; });
+            const operations: CanvasOperation[] = Object.values(nodeIds).map((id) => { const current = snapshot.nodes.find((node) => node.id === id); if (!current) throw new Error("原方案节点已被删除，请核对方案后继续"); return { type: "update_node", id, metadata: { ...current.metadata } }; });
             const nextProposal = { ...proposal, version, extra: { ...(proposal.extra as Record<string, unknown> || {}), nodeIds }, generationItems: proposal.generationItems.map((item) => item.ref === ref ? { ...item, model: String(node.metadata?.model || item.model), size: node.metadata?.size || item.size, seconds: node.metadata?.seconds ? Number(node.metadata.seconds) : item.seconds, quality: (item.mode === "video" ? node.metadata?.vquality : node.metadata?.quality) || item.quality } : item) };
             assertCreativeBriefSpecifications(nextProposal, this.state.brief);
             this.state = { ...this.state, proposal: nextProposal, operations, pendingPayment: undefined, planning: undefined, pendingRedo: { ref, attempt: media.attempt + 1, proposalVersion: version } };
@@ -547,7 +547,7 @@ export class CreativeAgentController {
     }
 }
 
-function reconcileOps(ops: CanvasAgentOp[], snapshot: CanvasAgentSnapshot): CanvasAgentOp[] {
+function reconcileOps(ops: CanvasOperation[], snapshot: CanvasSnapshot): CanvasOperation[] {
     return ops.filter((op) => {
         if (op.type === "add_node") return !snapshot.nodes.some((node) => node.id === op.id);
         if (op.type === "connect_nodes") return !snapshot.connections.some((edge) => edge.id === op.id || edge.fromNodeId === op.fromNodeId && edge.toNodeId === op.toNodeId);

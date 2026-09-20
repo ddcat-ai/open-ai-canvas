@@ -1,5 +1,5 @@
 import { http } from "./request";
-import type { CanvasAgentOp } from "@/lib/canvas/canvas-agent-ops";
+import type { CanvasOperation } from "@/lib/canvas/canvas-operation-contract";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CreateTaskInput, GenerationTask } from "./task-center";
 
@@ -28,7 +28,7 @@ export const creationRuns = {
     claim: (id: string, input: { expectedEpoch: number; owner: string }, signal?: AbortSignal) => http.post<CreationRun>(`${path(id)}/claim`, input, { signal }),
     heartbeat: (id: string, guard: CreationGuard, signal?: AbortSignal) => http.post<{ leaseExpiresAt: string }>(`${path(id)}/heartbeat`, guard, { signal }),
     release: (id: string, guard: CreationGuard) => http.post<{ released: boolean }>(`${path(id)}/release`, guard),
-    approveProposal: (id: string, input: CreationGuard & { revision: number; proposalVersion: number; proposal: unknown; ops: CanvasAgentOp[] }, signal?: AbortSignal) => http.post<CreationRun>(`${path(id)}/proposal-approve`, input, { signal }),
+    approveProposal: (id: string, input: CreationGuard & { revision: number; proposalVersion: number; proposal: unknown; ops: CanvasOperation[] }, signal?: AbortSignal) => http.post<CreationRun>(`${path(id)}/proposal-approve`, input, { signal }),
     invalidateProposal: (id: string, input: CreationGuard & { revision: number }, signal?: AbortSignal) => http.post<CreationRun>(`${path(id)}/proposal-invalidate`, input, { signal }),
     canvas: (id: string, guard: CreationGuard, signal?: AbortSignal) => http.post<{ run: CreationRun; canvasId: string }>(`${path(id)}/canvas`, guard, { signal }),
     prepare: (id: string, input: CreationGuard & { itemKey: string; proposalVersion?: number; request: CreateTaskInput }, signal?: AbortSignal) => http.post<CreationSubmission>(`${path(id)}/submissions/prepare`, input, { signal }),

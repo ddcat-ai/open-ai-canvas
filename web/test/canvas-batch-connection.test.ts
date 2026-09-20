@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { buildBatchConnectionCreateRequest, hasBatchConnectionCandidate, planBatchConnections } from "@/lib/canvas/canvas-batch-connection";
+import { canvasConnectionError } from "@/lib/canvas/canvas-connection-policy";
 import { canvasConnectionPath } from "@/components/canvas/canvas-connections";
 import { defaultConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -13,11 +14,17 @@ const nodes: CanvasNodeData[] = [
     { id: "script", type: CanvasNodeType.Script, title: "分镜脚本", position: { x: 520, y: 0 }, width: 640, height: 520, metadata: { storyboard: { rows: [{ id: "row-1", shotNumber: 1, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], narrativeIntent: "", viewerPOV: "", performanceBlocking: "", shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", mustHave: [], optionalDetails: [], continuityOut: "", negativePrompt: "", assetBindings: [], status: "idle" }] } } },
     { id: "config", type: CanvasNodeType.Config, title: "图片配置", position: { x: 520, y: 560 }, width: 360, height: 420, metadata: { generationMode: "image" } },
     { id: "frame", type: CanvasNodeType.Frame, title: "背板", position: { x: 0, y: 680 }, width: 500, height: 500 },
+    { id: "batch-table", type: CanvasNodeType.BatchTable, title: "批量创作表", position: { x: 1000, y: 0 }, width: 900, height: 520 },
 ];
 
 const baseConfig = { ...defaultConfig };
 
 describe("planBatchConnections", () => {
+    it("only accepts image inputs for the batch creation table", () => {
+        expect(canvasConnectionError(baseConfig, nodes, [], { fromNodeId: "image-a", toNodeId: "batch-table" })).toBe("");
+        expect(canvasConnectionError(baseConfig, nodes, [], { fromNodeId: "text-a", toNodeId: "batch-table" })).toContain("批量创作表节点只接受图片输入");
+    });
+
     it("plans all legal source nodes and preserves the target handle", () => {
         const result = planBatchConnections({
             sourceNodeIds: ["text-a", "text-b"],
@@ -90,6 +97,35 @@ describe("planBatchConnections", () => {
         });
         expect(result.connected).toEqual(["image-a", "image-b"]);
         expect(result.connections).toHaveLength(2);
+    });
+
+    it("connects every selected image to a newly created batch table", () => {
+        const result = planBatchConnections({
+            sourceNodeIds: ["image-a", "image-b"],
+            targetNodeId: "batch-table",
+            nodes,
+            connections: [],
+            config: baseConfig,
+            allowCapacityOverflow: true,
+        });
+
+        expect(result.connected).toEqual(["image-a", "image-b"]);
+        expect(result.connections.every((connection) => connection.toNodeId === "batch-table")).toBe(true);
+        expect(result.skipped).toEqual([]);
+    });
+
+    it("preserves a batch table reference-column target handle", () => {
+        const result = planBatchConnections({
+            sourceNodeIds: ["image-a"],
+            targetNodeId: "batch-table",
+            targetHandleId: "batch-reference:reference-2",
+            nodes,
+            connections: [],
+            config: baseConfig,
+            allowCapacityOverflow: true,
+        });
+
+        expect(result.connections[0]?.toHandleId).toBe("batch-reference:reference-2");
     });
 });
 

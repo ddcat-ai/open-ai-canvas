@@ -250,6 +250,18 @@ func (r *Repository) CreateRouteAttempt(item *model.RouteAttempt) error {
 }
 func (r *Repository) SaveRouteAttempt(item *model.RouteAttempt) error { return r.db.Save(item).Error }
 
+func (r *Repository) MarkRouteAttemptDispatching(id string) error {
+	result := r.db.Model(&model.RouteAttempt{}).Where("id = ? AND dispatch_state = ?", id, "not_sent").
+		Updates(map[string]any{"status": "dispatching", "dispatch_state": "submission_unknown"})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrCreationConflict
+	}
+	return nil
+}
+
 func (r *Repository) LatestRouteAttempt(taskID string) (*model.RouteAttempt, error) {
 	var item model.RouteAttempt
 	if err := r.db.Where("task_id = ?", taskID).Order("route_run desc, attempt_number desc").First(&item).Error; err != nil {
@@ -266,7 +278,7 @@ func (r *Repository) RouteAttempts(taskID string, routeRun int) ([]model.RouteAt
 
 // SwitchTaskLogicalRoute 同时更新任务执行目标和账单。跟随供应价格时会原子调整预留积分，
 // 保证明确未创建上游任务后的故障切线不会沿用上一条线路的价格快照。
-func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder) error {
+func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder, cost model.BillingCostSnapshot) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updated := tx.Model(&model.Task{}).
 			Where("id = ? AND status = ? AND route_id = ?", taskID, model.TaskStatusRunning, expectedRouteID).
@@ -286,9 +298,22 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 		}
 		now := time.Now()
 		updates := map[string]any{"channel_id": channelID, "channel_model_id": channelModelID, "updated_at": now}
+		updates["cost_configured"] = cost.CostPricing.Configured
+		updates["cost_unit_price_microcredits"] = cost.CostPricing.UnitPriceMicrocredits
+		updates["cost_input_token_price_microcredits"] = cost.CostPricing.InputTokenPriceMicrocredits
+		updates["cost_output_token_price_microcredits"] = cost.CostPricing.OutputTokenPriceMicrocredits
+		updates["cost_cached_token_price_microcredits"] = cost.CostPricing.CachedTokenPriceMicrocredits
+		updates["cost_billing_mode"] = cost.CostBillingMode
+		updates["cost_quantity"] = cost.CostQuantity
+		updates["cost_video_formula_tokens"] = cost.CostVideoFormulaTokens
 		if replacement != nil {
 			if replacement.UserID != order.UserID || replacement.TaskID != taskID || replacement.AmountMicrocredits <= 0 {
 				return ErrBillingStateConflict
+			}
+			// The new supplier price cannot expand the user's original authorization.
+			// Keep the existing cap; replacement is a price snapshot, not a new grant.
+			if err := validateBillingChargeLimit(order, replacement.AmountMicrocredits); err != nil {
+				return err
 			}
 			reserved := order.ReservedAmountMicrocredits
 			if reserved <= 0 {

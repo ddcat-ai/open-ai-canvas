@@ -7,18 +7,19 @@ import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
-import { isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
+import { isTaskFailed, statusDotClassName, taskAttentionReason, TaskDate } from "./task-shared";
 import { TaskVideoThumbnail } from "./task-video-thumbnail";
 
 export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void }) {
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
+    const retryDisabled = task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error);
     const isVideo = task.previewKind === "video";
     const thumbnailUrl = isVideo ? task.previewPosterUrl : task.previewUrl;
     const fallbackVideo = task.type.includes("video");
     const Icon = fallbackVideo ? Video : task.type.includes("image") ? ImageIcon : FileText;
     return (
-        <article className={`task-grid-card${isFailed ? " is-attention" : ""}`}>
+        <article className={`product-collection-card task-grid-card${isFailed ? " is-attention" : ""}`}>
             <div className="task-grid-thumb">
                 {thumbnailUrl ? (
                     <MediaPreview src={thumbnailUrl} kind="image" loading="lazy" className="h-full w-full object-cover" />
@@ -32,14 +33,14 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
                         <IconButton size="sm" variant="ghost" icon={Eye} aria-label="查看详情" onClick={onOpen} />
                     </Tooltip>
                     {isFailed ? (
-                        <Tooltip title="重试任务">
+                        <Tooltip title={retryDisabled ? "内容审核失败，无法自动重试" : "重试任务"}>
                             <Button
                                 type="text"
                                 size="small"
                                 icon={<RotateCcw className="size-3.5" />}
                                 aria-label="重试任务"
                                 loading={actingId === task.id}
-                                disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)}
+                                disabled={retryDisabled}
                                 onClick={onRetry}
                             />
                         </Tooltip>
@@ -59,6 +60,14 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
                         <TaskDate value={task.createdAt} />
                     </span>
                 </div>
+                {isActive ? (
+                    <div className="task-grid-progress" role="progressbar" aria-label={task.stage || "任务生成进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
+                        <span>{task.stage || "正在生成"}</span>
+                        <strong>{task.progress || 0}%</strong>
+                        <i><b style={{ width: `${task.progress || 0}%` }} /></i>
+                    </div>
+                ) : null}
+                {isFailed ? <p className="task-grid-error" title={task.error || undefined}>{taskAttentionReason(task)}</p> : null}
             </div>
         </article>
     );

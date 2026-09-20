@@ -68,16 +68,12 @@ func run(ctx context.Context) error {
 
 	repo := repository.New(db)
 	addr := env("CANVAS_BACKEND_ADDR", ":8080")
-	capabilities := service.RuntimeCapabilitiesForDeployment(addr, os.Getenv("CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED"))
-	svc := service.NewWithRuntimeCapabilities(repo, dataDir, capabilities)
+	svc := service.New(repo, dataDir)
 	if updaterToken := strings.TrimSpace(os.Getenv("CANVAS_UPDATER_TOKEN")); updaterToken != "" {
 		svc.ConfigureUpdateManager(updaterclient.New(env("CANVAS_UPDATER_SOCKET", "/run/open-ai-canvas-updater/updater.sock"), updaterToken))
 	}
 	defer svc.Close()
 	if err := svc.ValidateRuntime(); err != nil {
-		return err
-	}
-	if err := svc.EnsureAppearance(); err != nil {
 		return err
 	}
 	if err := svc.EnsureSystemChannelModels(); err != nil {
@@ -212,7 +208,7 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 	return parsed, nil
 }
 
-const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Trace-ID, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Allow-Local-Channel, X-Canvas-Upstream-Base-URL"
+const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Trace-ID, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Upstream-Base-URL"
 
 const corsAllowedMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 
@@ -237,7 +233,7 @@ func cors() (gin.HandlerFunc, error) {
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
 		}
-		c.Header("Access-Control-Allow-Headers", corsAllowedHeaders+", X-Canvas-Comfy-Bridge-Token, X-Canvas-Bridge-Token")
+		c.Header("Access-Control-Allow-Headers", corsAllowedHeaders)
 		c.Header("Access-Control-Expose-Headers", "X-Request-ID, X-Canvas-Trace-ID, X-Diagnostic-Bundle-ID, X-Diagnostic-Schema-Version")
 		c.Header("Access-Control-Allow-Methods", corsAllowedMethods)
 		c.Header("Access-Control-Max-Age", "86400")

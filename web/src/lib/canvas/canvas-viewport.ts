@@ -12,6 +12,28 @@ export type CanvasViewportSize = {
     height: number;
 };
 
+// 在浮窗四周选择最大的完整矩形；坐标均相对画布容器。
+export function unobscuredCanvasArea(size: CanvasViewportSize, overlay?: CanvasBounds): CanvasBounds {
+    const full = { left: 0, top: 0, right: size.width, bottom: size.height };
+    if (!overlay || overlay.right <= 0 || overlay.bottom <= 0 || overlay.left >= size.width || overlay.top >= size.height) return full;
+    const left = Math.max(0, overlay.left);
+    const top = Math.max(0, overlay.top);
+    const right = Math.min(size.width, overlay.right);
+    const bottom = Math.min(size.height, overlay.bottom);
+    const candidates = [
+        { ...full, right: left }, { ...full, left: right },
+        { ...full, bottom: top }, { ...full, top: bottom },
+    ].filter((area) => area.right - area.left >= 160 && area.bottom - area.top >= 160);
+    return candidates.sort((a, b) => (b.right - b.left) * (b.bottom - b.top) - (a.right - a.left) * (a.bottom - a.top))[0] ?? full;
+}
+
+export function viewportForAgentNodes(nodes: CanvasNodeData[], current: ViewportTransform, area: CanvasBounds): ViewportTransform | null {
+    const bounds = getCanvasNodesBounds(nodes);
+    if (!bounds) return null;
+    const next = viewportForBounds(bounds, { width: area.right - area.left, height: area.bottom - area.top }, { padding: 56, maxScale: current.k });
+    return { ...next, x: next.x + area.left, y: next.y + area.top };
+}
+
 export function getCanvasNodesBounds(nodes: CanvasNodeData[]): CanvasBounds | null {
     if (!nodes.length) return null;
     let left = Number.POSITIVE_INFINITY;

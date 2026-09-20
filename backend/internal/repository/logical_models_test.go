@@ -11,6 +11,47 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestSwitchTaskLogicalRouteUpdatesCostWithoutChangingUnifiedSales(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Task{}, &model.BillingOrder{}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "task", UserID: "user", Status: model.TaskStatusRunning, RouteID: "old-route"}
+	order := model.BillingOrder{ID: "order", TaskID: task.ID, UserID: task.UserID, Status: model.BillingStatusRunning, ChannelID: "old-channel", AmountMicrocredits: 900_000, ReservedAmountMicrocredits: 900_000, UnitPriceMicrocredits: 900_000,
+		BillingCostSnapshot: model.BillingCostSnapshot{CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: 500_000}, CostBillingMode: "fixed_request", CostQuantity: 1}}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	cost := model.BillingCostSnapshot{CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: 123_456}, CostBillingMode: "per_second", CostQuantity: 15}
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "old-route", "new-route", "{}", order.ID, "new-channel", "new-model", nil, cost); err != nil {
+		t.Fatal(err)
+	}
+	var saved model.BillingOrder
+	if err := db.First(&saved, "id = ?", order.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.BillingCostSnapshot != cost || saved.ChannelID != "new-channel" || saved.AmountMicrocredits != 900_000 || saved.ReservedAmountMicrocredits != 900_000 || saved.UnitPriceMicrocredits != 900_000 {
+		t.Fatalf("wrong route snapshot: %#v", saved)
+	}
+	// A route without configured costs must clear the previous route's snapshot.
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "new-route", "unknown-cost-route", "{}", order.ID, "third-channel", "third-model", nil, model.BillingCostSnapshot{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&saved, "id = ?", order.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.BillingCostSnapshot != (model.BillingCostSnapshot{}) || saved.AmountMicrocredits != 900_000 {
+		t.Fatalf("stale cost after route switch: %#v", saved)
+	}
+}
+
 func TestSaveLogicalModelBundleAllocatesMonotonicRevisionSequence(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:logical-model-revision-sequence?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

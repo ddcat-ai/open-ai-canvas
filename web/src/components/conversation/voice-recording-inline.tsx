@@ -8,7 +8,7 @@ import { AudioWaveform } from "./audio-waveform";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 type VoiceRecordingInlineProps = {
     /** 转写完成回调，返回转写文本 */
@@ -24,7 +24,7 @@ type TranscribeState = "idle" | "transcribing" | "done" | "error";
  * 挂载后自动开始录音，显示波形动画；点击停止后自动转写为文字（浏览器 Web Speech API，无需后端与 API Key）
  */
 export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecordingInlineProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const {
         state,
         waveform,

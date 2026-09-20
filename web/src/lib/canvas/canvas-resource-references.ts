@@ -1,5 +1,6 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { Skill } from "@/services/api/skills";
@@ -20,6 +21,9 @@ export type CanvasResourceReference = {
     storageKey?: string;
     /** 视频首帧是独立的图片资源，不能用视频 storageKey 解析。 */
     previewStorageKey?: string;
+    /** 绘图预览保存在按项目隔离的本地绘图仓库，不复用普通图片 storageKey。 */
+    drawingId?: string;
+    drawingRevision?: number;
     text?: string;
     active: boolean;
     sourceType?: CanvasNodeTypeId;
@@ -212,24 +216,11 @@ function canvasReferenceIdentityChanged(previousReferences: CanvasResourceRefere
     return previousReferences.some((reference) => nextLabelByNodeId.get(reference.nodeId) !== reference.label);
 }
 
-function writeCanvasNodePrompt(node: CanvasNodeData, prompt: string) {
-    const hasExistingContent = (node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim())) || (node.type === CanvasNodeType.Image && Boolean(node.metadata?.content));
-    const promptTemplateMetadata = node.metadata?.promptTemplateOperation
-        ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
-        : {};
-    return {
-        ...node,
-        metadata: hasExistingContent
-            ? { ...node.metadata, ...promptTemplateMetadata, composerContent: prompt }
-            : { ...node.metadata, ...promptTemplateMetadata, prompt, composerContent: prompt },
-    };
-}
-
 function removeCanvasMentionToken(value: string, token: string) {
     return replaceCanvasMentionToken(value, token, "");
 }
 
-function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
+export function replaceCanvasMentionToken(value: string, token: string, replacement: string) {
     if (!token) return value;
     const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Numbered media mentions can touch Chinese prose or another mention, but not a longer number.
@@ -237,6 +228,34 @@ function replaceCanvasMentionToken(value: string, token: string, replacement: st
         ? "(?![0-9])"
         : token.startsWith("@[node:") ? "" : `(?=${CANVAS_RESOURCE_MENTION_BOUNDARY.source})`;
     return value.replace(new RegExp(`${escapedToken}${boundary}`, "gu"), replacement);
+}
+
+/**
+ * 替换提示词中针对某参考对象的所有引用（包含 @图片1、@原标题、@[node:xxx]）。
+ * 只要提示词中存在指向该对象的标记，同步全部替换为新标记。
+ */
+export function replaceCanvasReferenceMentions(
+    prompt: string,
+    oldReference: { label?: string; title?: string; nodeId?: string },
+    replacementToken: string,
+    replacementTitle?: string,
+): string {
+    let result = prompt;
+    const cleanToken = replacementToken.startsWith("@") ? replacementToken : `@${replacementToken}`;
+    const cleanOldLabel = oldReference.label?.replace(/^@/, "");
+    if (cleanOldLabel) {
+        result = replaceCanvasMentionToken(result, `@${cleanOldLabel}`, cleanToken);
+    }
+    const cleanOldTitle = oldReference.title?.replace(/^@/, "");
+    if (cleanOldTitle && cleanOldTitle !== cleanOldLabel) {
+        const cleanRepTitle = replacementTitle?.replace(/^@/, "");
+        const targetTitleToken = cleanRepTitle ? `@${cleanRepTitle}` : cleanToken;
+        result = replaceCanvasMentionToken(result, `@${cleanOldTitle}`, targetTitleToken);
+    }
+    if (oldReference.nodeId) {
+        result = replaceCanvasMentionToken(result, canvasNodeMentionToken(oldReference.nodeId), cleanToken);
+    }
+    return result;
 }
 
 function compactRemovedCanvasMentionPrompt(value: string) {
@@ -277,6 +296,36 @@ export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connectio
     const globalReferences = labelResourceNodes(sourceNodes.filter(isResourceNode), false);
     const activeByNodeId = new Map(labelResourceNodes(contextNodes, true).map((reference) => [reference.nodeId, reference]));
     return globalReferences.map((reference) => activeByNodeId.get(reference.nodeId) || reference);
+}
+
+/** Agent 的 @ 菜单覆盖整个画布，而不是只覆盖可作为生成输入的资源节点。 */
+export function buildCanvasAgentMentionReferences(nodes: CanvasNodeData[]): CanvasResourceReference[] {
+    return nodes.map((node, index) => {
+        const kind = resourceKind(node) || "text";
+        const fallbackTitle = `节点 ${index + 1}`;
+        return {
+            id: node.id,
+            nodeId: node.id,
+            kind,
+            label: node.title?.trim() || fallbackTitle,
+            title: node.title?.trim() || fallbackTitle,
+            previewUrl: node.metadata?.workflowKind === "character"
+                ? node.metadata.characterCoverUrl
+                : node.type === CanvasNodeType.Drawing
+                  ? node.metadata?.drawingPreviewUrl
+                  : node.type === CanvasNodeType.Video
+                    ? canvasNodeVideoPreviewUrl(node)
+                    : node.metadata?.previewContent || node.metadata?.content,
+            storageKey: node.metadata?.storageKey,
+            previewStorageKey: node.type === CanvasNodeType.Video ? node.metadata?.videoPreview?.storageKey : undefined,
+            drawingId: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingId : undefined,
+            drawingRevision: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingRevision : undefined,
+            text: node.metadata?.content || node.metadata?.composerContent || node.metadata?.prompt || node.title,
+            active: true,
+            sourceType: node.type,
+            mentionToken: canvasNodeMentionToken(node.id),
+        };
+    });
 }
 
 function uniqueCanvasNodes(nodes: CanvasNodeData[]) {
@@ -379,6 +428,32 @@ export function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[],
         .filter((node): node is CanvasNodeData => Boolean(node && isResourceNode(node)));
 }
 
+/**
+ * 调整目标节点的素材输入边顺序。连接数组是引用编号的唯一顺序源；只替换相关
+ * 输入边所在槽位，避免改变主链和其他节点的连线顺序。
+ */
+export function reorderCanvasResourceConnections(targetNodeId: string, orderedNodeIds: string[], nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const uniqueOrder = [...new Set(orderedNodeIds.filter(Boolean))];
+    if (uniqueOrder.length < 2) return connections;
+    const configNodeId = connections.find((connection) => connection.fromNodeId === targetNodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config)?.toNodeId;
+    const configInputs = configNodeId ? getContextResourceNodes(configNodeId, nodes, connections).filter((node) => node.id !== targetNodeId) : [];
+    const receiverId = configInputs.length ? configNodeId! : targetNodeId;
+    const orderSet = new Set(uniqueOrder);
+    const slots = connections
+        .map((connection, index) => ({ connection, index }))
+        .filter(({ connection }) => connection.toNodeId === receiverId && orderSet.has(connection.fromNodeId));
+    if (slots.length !== uniqueOrder.length) return connections;
+    const connectionBySource = new Map(slots.map(({ connection }) => [connection.fromNodeId, connection]));
+    if (uniqueOrder.some((nodeId) => !connectionBySource.has(nodeId))) return connections;
+    const reordered = uniqueOrder.map((nodeId) => connectionBySource.get(nodeId)!);
+    if (slots.every(({ connection }, index) => connection === reordered[index])) return connections;
+    const next = [...connections];
+    slots.forEach(({ index }, orderIndex) => {
+        next[index] = reordered[orderIndex];
+    });
+    return next;
+}
+
 function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const configConnection = connections.find((connection) => connection.fromNodeId === nodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config);
     if (!configConnection) return [];
@@ -409,6 +484,8 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
                         : node.metadata?.previewContent || node.metadata?.content,
                 storageKey: node.metadata?.storageKey,
                 previewStorageKey: node.type === CanvasNodeType.Video ? node.metadata?.videoPreview?.storageKey : undefined,
+                drawingId: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingId : undefined,
+                drawingRevision: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingRevision : undefined,
                 text: node.metadata?.workflowKind === "character" ? node.metadata.characterPrompt : node.type === CanvasNodeType.Text ? node.metadata?.content || node.metadata?.prompt : node.type === CanvasNodeType.Skill ? skillResourceText(node) : undefined,
                 active,
                 sourceType: node.type,

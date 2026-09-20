@@ -22,7 +22,7 @@ describe("canvas resource mention editor", () => {
     test("uses stable component classes for inline media references", () => {
         const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
 
-        expect(component).toContain('chip.className = "canvas-resource-inline-mention"');
+        expect(component).toContain("chip.className = `canvas-resource-inline-mention");
         expect(component).toContain("canvas-resource-inline-preview is-${reference.kind}");
         expect(component).not.toContain("size-[1.18em]");
     });
@@ -106,12 +106,40 @@ describe("canvas resource mention editor", () => {
     });
 
     test("agent composer attachments stay large, previewable, and mentionable", () => {
-        const component = source("../src/components/canvas/canvas-agent-chat-ui.tsx");
+        const component = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
         expect(component).toContain("w-20 shrink-0");
         expect(component).toContain("insertAttachmentMention");
         expect(component).toContain("@[attachment:");
         expect(component).toContain("AgentImagePreview");
         expect(component).toContain("composerReferences");
         expect(component).toContain("点击放大预览");
+    });
+
+    test("agent composer renders slash skill references as stable skill chips and consumes the typed slash query", () => {
+        const component = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
+
+        expect(component).toContain("const token = `@[skill:${skill.skillId}] `");
+        expect(component).toContain("slash.start + 1 + slash.query.length");
+        expect(component).toContain("buildSkillMentionReferences(availableSlashSkills)");
+        expect(component).toContain("[/、]([^\\s/、]*)$");
+        expect(source("../src/components/canvas/canvas-cloud-agent-panel.tsx")).toContain("用 / 或 、 引用 Skills");
+    });
+
+    test("skill chips use one colored icon instead of exposing the serialized token", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const chat = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
+        const css = source("../src/components/canvas/canvas-cloud-agent.css");
+
+        expect(component).toContain('chip.className = `canvas-resource-inline-mention ${reference.kind === "skill" ? "is-skill" : ""}`');
+        expect(component).toContain('prefix.textContent = reference.kind === "skill" ? "✦" : "@"');
+        expect(component).toContain('if (reference.kind !== "skill") chip.appendChild(createInlinePreview(reference));');
+        expect(component).toContain('chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference))');
+        expect(chat).toContain('sendOnEnter={canSubmit ? "both" : false}');
+        expect(chat).toContain("agent-composer-resize-handle");
+        expect(chat).toContain("Enter 发送 · Shift+Enter 换行");
+        expect(css).toContain(".agent-composer-send-hint-full");
+        expect(css).toContain(".agent-composer-send-hint-compact");
+        expect(css).toContain(".agent-composer-prompt-scroll");
+        expect(css).not.toContain(".agent-tool-row:hover");
     });
 });

@@ -1,14 +1,12 @@
 import { lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, App } from "antd";
-import { Tooltip } from "@/components/ui/base/tooltip";
-import { ArrowLeft, BookOpenText, Clapperboard, Images, LayoutDashboard, LayoutGrid, Plus, Scissors, Settings2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 
 import { getProjectCore, getProjectOverview, getProjectUnitWorkspace, linkCanvasUnit, listProjectUnits } from "@/services/api/projects";
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
-import { useWorkspaceTopBarExtension } from "@/components/layout/workspace-top-bar-extension";
 import type { ProjectDetail } from "@/services/api/projects";
 
 import { WorkflowChapterNavigator } from "./detail/workflow-chapter-navigator";
@@ -23,14 +21,14 @@ const ProjectEditorView = lazy(() => import("./detail/editor"));
 
 type DetailView = "overview" | "chapters" | "workflow" | "canvases" | "editor" | "assets" | "settings";
 
-const views: Array<{ key: DetailView; label: string; icon: LucideIcon }> = [
-    { key: "overview", label: "制作概览", icon: LayoutDashboard },
-    { key: "chapters", label: "剧情章节", icon: BookOpenText },
-    { key: "workflow", label: "分镜制作", icon: Clapperboard },
-    { key: "canvases", label: "项目画布", icon: LayoutGrid },
-    { key: "editor", label: "剪辑成片", icon: Scissors },
-    { key: "assets", label: "角色与资产", icon: Images },
-    { key: "settings", label: "项目设置", icon: Settings2 },
+const views: Array<{ key: DetailView; label: string }> = [
+    { key: "overview", label: "制作概览" },
+    { key: "chapters", label: "剧情章节" },
+    { key: "workflow", label: "分镜制作" },
+    { key: "canvases", label: "项目画布" },
+    { key: "editor", label: "剪辑成片" },
+    { key: "assets", label: "角色与资产" },
+    { key: "settings", label: "项目设置" },
 ];
 
 export default function ProjectDetailPage() {
@@ -115,18 +113,6 @@ export default function ProjectDetailPage() {
     };
     const chapterHref = detail ? projectChapterHref(detail.units, projectId, chapterId) : `/projects/${projectId}/chapters`;
     const workflowHref = detail ? projectWorkflowHref(detail.units, projectId, unitId, stage) : `/projects/${projectId}/workflow`;
-    useWorkspaceTopBarExtension(detail ? (
-        <ProjectWorkspaceTopBar
-            detail={detail}
-            projectId={projectId}
-            activeView={activeView}
-            unitId={unitId}
-            stage={stage}
-            chapterHref={chapterHref}
-            workflowHref={workflowHref}
-            onCreateCanvas={createCanvas}
-        />
-    ) : null);
     if (coreQuery.isLoading || unitsQuery.isLoading) return <WorkspacePage><WorkspaceLoadingState label="正在打开项目工作台" detail="读取项目与章节索引" /></WorkspacePage>;
     if (coreQuery.isError || unitsQuery.isError || !detail) return <WorkspacePage><WorkspaceErrorState title="项目不可用" description="项目不存在、已被删除，或当前账号没有访问权限。" actionLabel="返回项目中心" onRetry={() => navigate("/projects")} /></WorkspacePage>;
     if (!chapterId && !unitId && (!view || !views.some((item) => item.key === view))) return <Navigate to={`/projects/${projectId}/overview`} replace />;
@@ -136,6 +122,16 @@ export default function ProjectDetailPage() {
     return (
         <WorkspacePage className="project-workbench-page !overflow-hidden" fluid>
             <div className="flex h-full min-h-0 flex-col">
+                <ProjectWorkspaceHeader
+                    detail={detail}
+                    projectId={projectId}
+                    activeView={activeView}
+                    unitId={unitId}
+                    stage={stage}
+                    chapterHref={chapterHref}
+                    workflowHref={workflowHref}
+                    onCreateCanvas={createCanvas}
+                />
                 {detail.project.status === "archived" ? <Alert type="warning" showIcon banner message="项目已归档，恢复后才能创建画布和生成任务" className="!border-x-0 !border-t-0" /> : null}
                 <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <div className={activeView === "chapters" || activeView === "workflow" || activeView === "editor" ? "min-h-0 flex-1" : "thin-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-5 lg:px-8 lg:py-7"}>
@@ -157,43 +153,48 @@ export default function ProjectDetailPage() {
     );
 }
 
-function ProjectWorkspaceTopBar({ detail, projectId, activeView, unitId, stage, chapterHref, workflowHref, onCreateCanvas }: { detail: ProjectDetail; projectId: string; activeView: DetailView; unitId?: string; stage?: string; chapterHref: string; workflowHref: string; onCreateCanvas: () => void }) {
-    const navigate = useNavigate();
+function ProjectWorkspaceHeader({ detail, projectId, activeView, unitId, stage, chapterHref, workflowHref, onCreateCanvas }: { detail: ProjectDetail; projectId: string; activeView: DetailView; unitId?: string; stage?: string; chapterHref: string; workflowHref: string; onCreateCanvas: () => void }) {
+    const archived = detail.project.status === "archived";
     const createCanvasLabel = activeView === "chapters" && detail.units.length ? "新建当前章节画布" : "新建项目画布";
     return (
-        <div className="project-workspace-topbar">
-            <button type="button" onClick={() => navigate("/projects")} className="project-workspace-back" aria-label="返回项目" title="返回项目"><ArrowLeft /></button>
+        <header className="project-workspace-header">
             <div className="project-workspace-identity">
-                <h1 title={detail.project.name}>{detail.project.name}</h1>
-                <span className={`project-workspace-status-dot ${detail.project.status === "archived" ? "is-archived" : ""}`} />
-                <span className="project-workspace-status-label">{detail.project.status === "archived" ? "已归档" : "进行中"}</span>
+                <Link to="/projects" className="project-workspace-back" aria-label="返回项目列表">
+                    <ArrowLeft />
+                    <span className="sr-only">返回</span>
+                </Link>
+                <div className="project-workspace-title">
+                    <h1 title={detail.project.name}>{detail.project.name}</h1>
+                    <span className={`project-workspace-status ${archived ? "is-archived" : "is-active"}`}>{archived ? "已归档" : "进行中"}</span>
+                </div>
             </div>
-            <nav className="project-workspace-tabs thin-scrollbar" aria-label="项目导航">
+            <nav className="project-workspace-tabs" aria-label="项目导航">
                 {views.map((item) => {
-                    const Icon = item.icon;
                     const active = item.key === activeView;
                     const href = item.key === "chapters" ? chapterHref : item.key === "workflow" ? workflowHref : `/projects/${projectId}/${item.key}`;
                     return (
-                        <Tooltip key={item.key} title={item.label} delay={150}>
-                            <Link
-                                to={href}
-                                aria-label={item.label}
-                                aria-current={active ? "page" : undefined}
-                                className={`project-workspace-tab ${active ? "is-active" : ""}`}
-                            >
-                                <Icon />
-                                <span>{item.label}</span>
-                            </Link>
-                        </Tooltip>
+                        <Link
+                            key={item.key}
+                            to={href}
+                            aria-current={active ? "page" : undefined}
+                            className={`project-workspace-tab ${active ? "is-active" : ""}`}
+                        >
+                            {item.label}
+                        </Link>
                     );
                 })}
             </nav>
-            {activeView === "workflow" ? (
-                <WorkflowChapterNavigator projectId={projectId} units={detail.units} unitId={unitId} stage={stage} />
-            ) : (
-                <Tooltip title={createCanvasLabel} delay={150}><button type="button" onClick={onCreateCanvas} className="grid size-8 shrink-0 place-items-center rounded-md text-foreground/42 transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={createCanvasLabel}><Plus className="size-4" /></button></Tooltip>
-            )}
-        </div>
+            <div className="project-workspace-actions">
+                {activeView === "workflow" ? (
+                    <WorkflowChapterNavigator projectId={projectId} units={detail.units} unitId={unitId} stage={stage} />
+                ) : (
+                    <button type="button" onClick={onCreateCanvas} className="project-workspace-create" aria-label={createCanvasLabel} title={createCanvasLabel}>
+                        <Plus />
+                        <span>新建画布</span>
+                    </button>
+                )}
+            </div>
+        </header>
     );
 }
 

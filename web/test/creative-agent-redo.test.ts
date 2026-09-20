@@ -4,7 +4,7 @@ import { assertCreativeBriefSpecifications, initialCreativeState, type CreativeA
 import type { CreativeProposal } from "../src/lib/creation/creative-agent-contract";
 import { creationRuns, type CreationRun, type CreationSubmission } from "../src/services/api/creation-runs";
 import { createModelChannel, defaultConfig } from "../src/stores/use-config-store";
-import type { CanvasAgentSnapshot } from "../src/lib/canvas/canvas-agent-ops";
+import type { CanvasSnapshot } from "../src/lib/canvas/canvas-operation-contract";
 import { CanvasNodeType } from "../src/types/canvas";
 import type { GenerationTask } from "../src/services/api/task-center";
 
@@ -24,7 +24,7 @@ describe("创作规格与局部重做", () => {
     for (const approvedBeforeDisconnect of [false, true]) test(`重做批准${approvedBeforeDisconnect ? "已落盘但回执丢失" : "尚未落盘"}，重新装载后仅准备原目标并保留参考节点`, async () => {
         const state: CreativeAgentState = { ...initialCreativeState(), proposal: structuredClone(proposal), canvasApplied: true, media: ["a", "b"].map((ref) => ({ ref, nodeId: `original-${ref}`, attempt: 1, status: "ready", taskId: `old-${ref}`, storageKey: `resource:${ref}` })) };
         let run: CreationRun = { id: "run", userId: "user", canvasId: "canvas", revision: 1, executionEpoch: 0, executionOwner: "", status: "completed", state: structuredClone(state) as unknown as Record<string, unknown>, approvedProposalVersion: 1, approvedProposalHash: "old", createdAt: "", updatedAt: "" };
-        const snapshot: CanvasAgentSnapshot = { projectId: "canvas", title: "画布", nodes: ["a", "b"].map((ref) => ({ id: `original-${ref}`, type: CanvasNodeType.Image, title: ref, position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { prompt: ref === "a" ? "参考" : "结果", model, size: "1024x1024", status: "success", storageKey: `resource:${ref}`, ...(ref === "b" ? { referenceNodeIds: ["original-a"] } : {}) } })), connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } };
+        const snapshot: CanvasSnapshot = { projectId: "canvas", title: "画布", nodes: ["a", "b"].map((ref) => ({ id: `original-${ref}`, type: CanvasNodeType.Image, title: ref, position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { prompt: ref === "a" ? "参考" : "结果", model, size: "1024x1024", status: "success", storageKey: `resource:${ref}`, ...(ref === "b" ? { referenceNodeIds: ["original-a"] } : {}) } })), connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } };
         const submissions: CreationSubmission[] = [];
         let disconnect = true, approvals = 0, executions = 0;
         const prepared: Parameters<typeof creationRuns.prepare>[1][] = [];

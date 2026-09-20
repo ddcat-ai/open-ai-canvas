@@ -200,9 +200,10 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                 ),
             )}
 
-            {props.selectedNodeBounds && !props.selectionBox && !props.isNodeDragging ? (
+            {props.selectedNodeBounds && !props.selectionBox ? (
                 <div
                     ref={props.selectionBoundsElementRef}
+                    data-canvas-selection-bounds
                     className="pointer-events-none absolute z-[var(--z-panel-floating)] rounded-xl"
                     style={{
                         left: props.selectedNodeBounds.left - 12 / viewportScale,

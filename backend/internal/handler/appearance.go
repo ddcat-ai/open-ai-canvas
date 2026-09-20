@@ -11,17 +11,6 @@ import (
 )
 
 func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
-	r.GET("/public/appearance/default-logo/:theme", func(c *gin.Context) {
-		data, err := svc.DefaultAppearanceLogo(c.Param("theme"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		c.Header("Cache-Control", "public, max-age=3600")
-		c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Data(http.StatusOK, "image/svg+xml", data)
-	})
 	r.GET("/public/appearance", func(c *gin.Context) {
 		setting, err := svc.Appearance()
 		if err != nil {

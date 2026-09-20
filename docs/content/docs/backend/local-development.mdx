@@ -1,6 +1,6 @@
 ---
 title: 本地开发
-description: 在宿主机启动影绘前后端开发服务
+description: 在宿主机启动影策前后端开发服务
 ---
 
 # 本地开发
@@ -21,7 +21,7 @@ description: 在宿主机启动影绘前后端开发服务
 - 打开两个 PowerShell 窗口，分别运行后端和前端；
 - 将前端 `/api` 请求代理到 `http://127.0.0.1:8080`。
 
-启动后访问 <http://localhost:3000>。后端健康检查地址是 <http://127.0.0.1:8080/api/health>。
+启动后访问 [http://localhost:3000](http://localhost:3000)。后端健康检查地址是 [http://127.0.0.1:8080/api/health](http://127.0.0.1:8080/api/health)。
 
 脚本使用固定的本地开发端口：前端 `3000`，后端 `8080`。如果端口被占用，脚本会先退出，不会关闭已有进程。请分别在两个开发窗口中按 `Ctrl+C` 停止服务。
 
@@ -54,7 +54,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-`web/` 与 `canvas-agent/` 只使用 `bun.lock`。不要用 pnpm 或 npm 往同一套 `node_modules` 里再装一遍。
+`web/` 只使用 `bun.lock`。不要用 pnpm 或 npm 往同一套 `node_modules` 里再装一遍。
 
 前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
 

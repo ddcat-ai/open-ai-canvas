@@ -7,6 +7,7 @@ import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
 import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
+import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "@/services/generation-consumer-dedupe";
@@ -102,8 +103,20 @@ function workflowMetadataForResultNode(): Partial<CanvasNodeMetadata> {
         workflowProvider: undefined,
         runningHubWorkflowId: undefined,
         runningHubWorkflowKind: undefined,
-        comfyBridgeWorkflowId: undefined,
         workflowParameters: undefined,
+    };
+}
+
+// 原地重生会换 storageKey 但继承旧 assetId，形成「旧素材 + 新资源」配对，云端校验会永久拒绝。
+// 新媒体结果必须清掉旧绑定，交给入库/修复路径按新资源重绑。
+export function applyGeneratedMediaResultMetadata(node: CanvasNodeData, media: CanvasNodeMetadata, extra: Partial<CanvasNodeMetadata> = {}): CanvasNodeMetadata {
+    return {
+        ...node.metadata,
+        ...workflowMetadataForResultNode(),
+        ...media,
+        ...extra,
+        errorDetails: undefined,
+        assetId: undefined,
     };
 }
 
@@ -144,22 +157,14 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             width: imageSize.width,
             height: imageSize.height,
             position: { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
-            metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...imageMetadata(normalizedImage), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
+            metadata: applyGeneratedMediaResultMetadata(node, imageMetadata(normalizedImage), { prompt, ...completedTaskMetadata(task) }),
         };
     }
 
     if (mode === "video") {
-        if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
+        if (!result.video?.storageKey && !result.video?.dataUrl) throw new Error("后端任务没有返回视频");
         const video = result.video.storageKey
-            ? {
-                  url: await resolveMediaUrl(result.video.storageKey, result.video.dataUrl),
-                  storageKey: result.video.storageKey,
-                  width: result.video.width,
-                  height: result.video.height,
-                  durationMs: result.video.durationMs,
-                  bytes: result.video.bytes || 0,
-                  mimeType: result.video.mimeType || "video/mp4",
-              }
+            ? await cacheGeneratedRemoteVideo({ ...result.video, storageKey: result.video.storageKey })
             : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || node.width || VIDEO_NODE_MAX_SIZE.width, video.height || node.height || VIDEO_NODE_MAX_SIZE.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
         const geometry = node.metadata?.locked
@@ -173,7 +178,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             ...node,
             type: CanvasNodeType.Video,
             ...geometry,
-            metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...videoMetadata(video), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
+            metadata: applyGeneratedMediaResultMetadata(node, videoMetadata(video), { prompt, ...completedTaskMetadata(task) }),
         };
     }
 
@@ -182,7 +187,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         const audio = result.audio.storageKey
             ? { url: await resolveMediaUrl(result.audio.storageKey, result.audio.dataUrl), storageKey: result.audio.storageKey, durationMs: result.audio.durationMs, bytes: result.audio.bytes || 0, mimeType: result.audio.mimeType || "audio/mpeg" }
             : await storeGeneratedAudio(await (await fetch(result.audio.dataUrl)).blob(), result.audio.format || "mp3");
-        return { ...node, type: CanvasNodeType.Audio, metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...audioMetadata(audio), prompt, ...completedTaskMetadata(task), errorDetails: undefined } };
+        return { ...node, type: CanvasNodeType.Audio, metadata: applyGeneratedMediaResultMetadata(node, audioMetadata(audio), { prompt, ...completedTaskMetadata(task) }) };
     }
 
     if (!result.text) throw new Error("后端任务没有返回文本");
@@ -190,6 +195,36 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         ...node,
         type: CanvasNodeType.Text,
         metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
+    };
+}
+
+type GeneratedVideoResult = {
+    dataUrl: string;
+    storageKey?: string;
+    width?: number;
+    height?: number;
+    durationMs?: number;
+    bytes?: number;
+    mimeType?: string;
+};
+
+/**
+ * 生成任务的远程视频只有在浏览器已拿到可复用的 Blob 后才进入成功态。
+ * 节点仍保存稳定的资源文件地址，Blob 只作为本地缓存和后续字节处理的加速层。
+ */
+async function cacheGeneratedRemoteVideo(result: GeneratedVideoResult & { storageKey: string }): Promise<UploadedFile> {
+    const blob = await getCachedResourceBlob(result.storageKey);
+    if (!blob) throw new Error("生成视频资源缓存失败，未标记为成功");
+    const url = await resolveMediaUrl(result.storageKey, result.dataUrl || "");
+    if (!url) throw new Error("生成视频资源地址为空，未标记为成功");
+    return {
+        url,
+        storageKey: result.storageKey,
+        width: result.width,
+        height: result.height,
+        durationMs: result.durationMs,
+        bytes: result.bytes || blob.size,
+        mimeType: result.mimeType || blob.type || "video/mp4",
     };
 }
 

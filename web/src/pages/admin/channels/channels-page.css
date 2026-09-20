@@ -1,0 +1,306 @@
+.admin-channel-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
+    flex: 1;
+    gap: 12px;
+    min-width: 0;
+    min-height: 0;
+}
+
+.admin-channel-sidebar,
+.admin-channel-detail {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+}
+
+.admin-channel-sidebar-header {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-channel-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px;
+}
+
+.admin-channel-item {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 4px;
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    color: var(--admin-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-channel-item:hover {
+    background: var(--admin-row-hover);
+}
+
+.admin-channel-item[aria-pressed="true"] {
+    background: var(--admin-nav-active);
+    box-shadow: inset 0 0 0 1px var(--admin-border-strong);
+}
+
+.admin-channel-item:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: -3px;
+}
+
+.admin-channel-item-name {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-channel-item-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.admin-channel-item-arrow {
+    flex: none;
+    color: var(--admin-text-muted);
+    visibility: hidden;
+}
+
+.admin-channel-item[aria-pressed="true"] .admin-channel-item-arrow {
+    visibility: visible;
+}
+
+.admin-channel-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    padding: 2px 7px;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-3);
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-channel-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-channel-item-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+}
+
+.admin-channel-item-status::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--admin-text-placeholder);
+}
+
+.admin-channel-item-status[data-enabled="true"]::before {
+    background: var(--admin-status-success);
+}
+
+.admin-channel-sidebar-footer {
+    flex: none;
+    padding: 12px 16px;
+    border-top: 1px solid var(--admin-divider);
+}
+
+.admin-channel-sidebar-footer > button {
+    width: 100%;
+}
+
+.admin-channel-detail-header {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-channel-detail-title {
+    overflow-wrap: anywhere;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.admin-channel-detail-url {
+    overflow: hidden;
+    margin-top: 4px;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-channel-model-manager {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    padding: 16px;
+}
+
+.admin-channel-model-toolbar {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-channel-model-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.admin-channel-model-hint {
+    margin-top: 4px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-channel-model-icon {
+    display: grid;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+
+.admin-model-cost-summary {
+    padding: 4px 0;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.admin-model-cost-tier + .admin-model-cost-tier {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--admin-divider);
+}
+
+.admin-model-cost-spec {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.admin-model-cost-value {
+    color: var(--admin-text);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-model-cost-unit {
+    display: block;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.admin-model-cost-missing {
+    color: var(--admin-status-warning);
+    font-weight: 400;
+}
+
+.admin-model-cost-more {
+    margin-top: 8px;
+}
+
+.admin-model-cost-more > summary {
+    width: fit-content;
+    color: var(--admin-text-secondary);
+    cursor: pointer;
+}
+
+.admin-model-cost-more > summary:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+.admin-model-cost-more[open] > summary {
+    margin-bottom: 8px;
+}
+
+.admin-channel-load-error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    color: var(--admin-status-error);
+    overflow-wrap: anywhere;
+}
+
+.admin-channel-loading {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+}
+
+@media (max-width: 900px) {
+    .admin-channel-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(480px, 1fr);
+        overflow-y: auto;
+    }
+
+    .admin-channel-sidebar {
+        max-height: 360px;
+    }
+
+    .admin-channel-list {
+        min-height: 96px;
+    }
+
+    .admin-channel-sidebar-header,
+    .admin-channel-detail-header,
+    .admin-channel-model-manager {
+        padding: 12px;
+    }
+}

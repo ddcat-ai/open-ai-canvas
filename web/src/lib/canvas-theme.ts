@@ -11,6 +11,7 @@ export const canvasThemes = {
         },
         node: {
             label: "#4b5563",
+            agentUserMessage: "#edf6ff",
             fill: "#ffffff",
             panel: "#ffffff",
             stroke: "#e2e4e8",
@@ -77,6 +78,7 @@ export const canvasThemes = {
         },
         node: {
             label: "#a3a3a3",
+            agentUserMessage: "#182b40",
             fill: "#181818",
             panel: "#141414",
             stroke: "rgba(255,255,255,.12)",

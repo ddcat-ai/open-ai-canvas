@@ -1,44 +1,32 @@
-import { createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-type WorkspaceTopBarRegistration = {
-    id: string;
-    content: ReactNode;
-};
-
-type WorkspaceTopBarRegistrar = {
-    register: (registration: WorkspaceTopBarRegistration) => void;
-    unregister: (id: string) => void;
-};
-
-const WorkspaceTopBarRegistrarContext = createContext<WorkspaceTopBarRegistrar | null>(null);
-const WorkspaceTopBarContentContext = createContext<ReactNode>(null);
+const WorkspaceTopBarMountContext = createContext<HTMLElement | null | undefined>(undefined);
+const WorkspaceTopBarMountSetterContext = createContext<(node: HTMLElement | null) => void>(() => undefined);
 
 export function WorkspaceTopBarExtensionProvider({ children }: { children: ReactNode }) {
-    const [registration, setRegistration] = useState<WorkspaceTopBarRegistration | null>(null);
-    const register = useCallback((next: WorkspaceTopBarRegistration) => setRegistration(next), []);
-    const unregister = useCallback((id: string) => setRegistration((current) => current?.id === id ? null : current), []);
-    const registrar = useMemo(() => ({ register, unregister }), [register, unregister]);
+    const [mount, setMount] = useState<HTMLElement | null>(null);
 
     return (
-        <WorkspaceTopBarRegistrarContext.Provider value={registrar}>
-            <WorkspaceTopBarContentContext.Provider value={registration?.content || null}>
+        <WorkspaceTopBarMountSetterContext.Provider value={setMount}>
+            <WorkspaceTopBarMountContext.Provider value={mount}>
                 {children}
-            </WorkspaceTopBarContentContext.Provider>
-        </WorkspaceTopBarRegistrarContext.Provider>
+            </WorkspaceTopBarMountContext.Provider>
+        </WorkspaceTopBarMountSetterContext.Provider>
     );
 }
 
-export function useWorkspaceTopBarExtension(content: ReactNode) {
-    const registrar = useContext(WorkspaceTopBarRegistrarContext);
-    const id = useId();
+export function WorkspaceTopBarExtensionSlot() {
+    const setMount = useContext(WorkspaceTopBarMountSetterContext);
+    const ref = useRef<HTMLDivElement>(null);
 
     useLayoutEffect(() => {
-        if (!registrar) return;
-        registrar.register({ id, content });
-        return () => registrar.unregister(id);
-    }, [content, id, registrar]);
+        setMount(ref.current);
+        return () => setMount(null);
+    }, [setMount]);
+
+    return <div className="app-workspace-topbar-extension" ref={ref} />;
 }
 
-export function useWorkspaceTopBarContent() {
-    return useContext(WorkspaceTopBarContentContext);
+export function useWorkspaceTopBarMount() {
+    return useContext(WorkspaceTopBarMountContext);
 }

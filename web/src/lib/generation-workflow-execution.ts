@@ -5,7 +5,7 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 export type GenerationWorkflowMode = "text" | "image" | "video" | "audio";
 
 export type GenerationWorkflowExecution = {
-    provider: "runninghub" | "comfyui-bridge";
+	provider: "runninghub";
     kind: RunningHubWorkflowKind;
     capability: RunningHubCapability;
     interfaceType: string;
@@ -16,7 +16,6 @@ export type GenerationWorkflowExecution = {
     webappId: string;
     workflowJson: Record<string, unknown>;
     workflowFields: WorkflowFieldMapping[];
-    bridgeId: string;
 };
 
 // 画布样式计划、任务记录和后端协议必须共用同一个工作流选择结果，避免再次回退到普通模型。
@@ -52,35 +51,11 @@ export function resolveGenerationWorkflowExecution(config: AiConfig, mode: Gener
             webappId,
             workflowJson: workflow.workflowJson || {},
             workflowFields: workflow.fields || [],
-            bridgeId: "",
-        };
-    }
 
-    if (!workflowProviderPluginEnabled(usePluginStore.getState().runtimeStatuses, "comfyui")) throw new Error("ComfyUI Bridge 工作流插件未启用");
-    const comfyBridge = config.comfyBridge;
-    const workflowId = comfyBridge.workflowId.trim();
-    if (!comfyBridge.enabled || !comfyBridge.bridgeId.trim() || !workflowId) {
-        throw new Error("ComfyUI Bridge 配置不完整，请检查 Bridge 在线状态和已保存工作流");
-    }
-    const workflow = comfyBridge.workflows.find((item) => item.workflowId.trim() === workflowId);
-    if (!workflow) throw new Error("当前 ComfyUI 工作流条目不存在，请重新选择已保存条目");
-    const capability = normalizeRunningHubCapability(workflow.capability, normalizeRunningHubCapability(comfyBridge.capability));
-    assertWorkflowCapability("ComfyUI", capability, mode);
-    const name = workflow.title?.trim() || workflowId;
-    return {
-        provider: "comfyui-bridge",
-        kind: "workflow",
-        capability,
-        interfaceType: `comfyui-bridge-${capability}`,
-        name,
-        taskModel: workflowTaskModel("ComfyUI · ", name),
-        providerModel: workflowId,
-        workflowId,
-        webappId: "",
-        workflowJson: workflow.workflowJson || {},
-        workflowFields: workflow.fields || [],
-        bridgeId: comfyBridge.bridgeId.trim(),
-    };
+		};
+	}
+
+	throw new Error("未知工作流提供方");
 }
 
 function assertWorkflowCapability(providerName: string, capability: RunningHubCapability, mode: GenerationWorkflowMode) {

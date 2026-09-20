@@ -3,7 +3,7 @@ import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select } from "an
 import type { ColumnsType } from "antd/es/table";
 import { BadgeCheck, Coins, Plus, RefreshCw, Search, Trash2, Undo2 } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { listAdminUsers, type AdminReferenceData, type AdminUser } from "@/services/api/auth";
@@ -328,7 +328,11 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     <div className="text-xs leading-5">
                         <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "等待用量结算"}</div>
                         <div className="text-foreground/50">
-                            输入 {order.inputTokens} · 输出 {order.outputTokens} · 缓存 {order.cachedTokens}
+                            {order.usageSource === "video_formula"
+                                ? `公式结算 · ${order.outputTokens.toLocaleString()} 视频 Token`
+                                : order.capability === "video"
+                                    ? `上游用量 · ${order.outputTokens.toLocaleString()} 视频 Token`
+                                    : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存 ${order.cachedTokens}`}
                         </div>
                     </div>
                 ) : (

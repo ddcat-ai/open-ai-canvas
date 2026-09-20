@@ -5,6 +5,7 @@ import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
+import { offsetSelectedNodeBounds } from "@/lib/canvas/canvas-selection";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
 
@@ -57,6 +58,7 @@ type OverlayScene = LeaferScene & {
     guides: Path;
     draft: Path;
     batchDrafts: Group;
+    dragPreview: CanvasNodeDragPreview | null;
 };
 
 export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps) {
@@ -118,6 +120,8 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         });
         const unsubscribeNodeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             applyConnectionDragPreview(underlay, propsRef.current, preview);
+            overlay.dragPreview = preview;
+            syncLiveSelectionBounds(overlay, propsRef.current, viewportRef.current.k);
         });
         resize();
 
@@ -206,7 +210,7 @@ function createOverlayScene(host: HTMLDivElement): OverlayScene {
     world.add(draft);
     world.add(batchDrafts);
     leafer.add(world);
-    return { leafer, world, host, selection, selectionBounds, guides, draft, batchDrafts };
+    return { leafer, world, host, selection, selectionBounds, guides, draft, batchDrafts, dragPreview: null };
 }
 
 function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLayerProps) {
@@ -278,10 +282,10 @@ function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGrap
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
         stroke: emphasized ? props.theme.accent.primary : props.theme.node.muted,
-        strokeWidth: emphasized ? 1.6 : 1,
+        strokeWidth: emphasized ? 2.8 : 2,
         strokeScaleFixed: true,
         strokeCap: "round",
-        opacity: emphasized ? 0.52 : 0.24,
+        opacity: emphasized ? 0.95 : 0.8,
         hittable: false,
     });
 }
@@ -323,7 +327,7 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
     const bounds = props.selectedNodeBounds;
     scene.selectionBounds.visible = Boolean(bounds && !selection);
     if (bounds && !selection) {
-        syncSelectionBounds(scene.selectionBounds, bounds, viewportScale);
+        syncSelectionBounds(scene.selectionBounds, liveSelectedNodeBounds(bounds, scene.dragPreview), viewportScale);
         scene.selectionBounds.stroke = props.theme.node.label;
     }
 
@@ -388,7 +392,7 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
         cornerRadius: 2 / scale,
         dashPattern: [4 / scale, 4 / scale],
     });
-    if (props.selectedNodeBounds) syncSelectionBounds(overlay.selectionBounds, props.selectedNodeBounds, scale);
+    if (props.selectedNodeBounds) syncSelectionBounds(overlay.selectionBounds, liveSelectedNodeBounds(props.selectedNodeBounds, overlay.dragPreview), scale);
     overlay.selectionBounds.set({
         strokeWidth: 1 / scale,
         cornerRadius: 2 / scale,
@@ -436,6 +440,19 @@ function resetScenePreview(...scenes: LeaferScene[]) {
 
 function forceSceneRender(...scenes: LeaferScene[]) {
     for (const scene of scenes) scene.leafer.forceRender(undefined, true);
+}
+
+function liveSelectedNodeBounds(bounds: NonNullable<NodeBounds>, preview: CanvasNodeDragPreview | null) {
+    return offsetSelectedNodeBounds(bounds, preview);
+}
+
+function syncLiveSelectionBounds(scene: OverlayScene, props: CanvasLeaferGraphicsLayerProps, viewportScale: number) {
+    const bounds = props.selectedNodeBounds;
+    const selection = props.selectionBox;
+    scene.selectionBounds.visible = Boolean(bounds && !selection);
+    if (!bounds || selection) return;
+    syncSelectionBounds(scene.selectionBounds, liveSelectedNodeBounds(bounds, scene.dragPreview), viewportScale);
+    scene.selectionBounds.stroke = props.theme.node.label;
 }
 
 function syncSelectionBounds(rect: Rect, bounds: NonNullable<NodeBounds>, viewportScale: number) {

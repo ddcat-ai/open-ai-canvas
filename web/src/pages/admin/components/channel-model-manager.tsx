@@ -1,26 +1,27 @@
 import { useEffect, useState } from "react";
 import { App, Button, Checkbox, Input, Modal, Popconfirm, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
-import { PaginationBar } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIcon } from "@/components/model-picker";
 import { modelProtocolDefinition, modelProtocolLabel, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { deleteAdminChannelModel, deleteAdminChannelModels, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
+import { deleteAdminChannelModel, deleteAdminChannelModels, fetchAdminChannelModels, importAdminChannelModels, listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { ChannelModelEditor } from "./channel-model-editor";
-import { AdminPageFrame } from "./admin-shell";
-import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { ChannelOrderDialog } from "./channel-order-dialog";
+import { ChannelModelCostSummary } from "./channel-model-cost-summary";
 
-export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
+export function ChannelModelManager({ channel, onChanged }: { channel: ModelChannel; onChanged: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
     const [items, setItems] = useState<ChannelModel[]>([]);
     const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
     const [deletingSelected, setDeletingSelected] = useState(false);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [fetching, setFetching] = useState(false);
     const [fetchPreviewOpen, setFetchPreviewOpen] = useState(false);
     const [fetchPreviewModels, setFetchPreviewModels] = useState<string[]>([]);
@@ -50,13 +51,14 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const reload = async () => {
         if (!channel) return;
         setLoading(true);
+        setLoadError("");
         try {
             const models = (await listAdminChannelModels(channel.id)).models;
             const availableIDs = new Set(models.map((item) => item.id));
             setItems(models);
             setSelectedModelIds((current) => current.filter((id) => availableIDs.has(id)));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取渠道模型失败");
+            setLoadError(error instanceof Error ? error.message : "读取渠道模型失败");
         } finally {
             setLoading(false);
         }
@@ -175,14 +177,18 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const columns: ColumnsType<ChannelModel> = [
         {
             title: "模型",
+            width: 240,
             render: (_, item) => (
                 <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-muted/35">
+                    <span className="admin-channel-model-icon">
                         <ModelIcon model={item.modelKey} icon={item.icon} />
                     </span>
                     <div className="min-w-0">
-                        <div className="truncate font-medium">{item.displayName || item.modelKey}</div>
+                        <div className="truncate font-medium" title={item.displayName || item.modelKey}>
+                            {item.displayName || item.modelKey}
+                        </div>
                         <div className="admin-monospace truncate text-xs text-foreground/45">{item.modelKey}</div>
+                        {item.channelLabel ? <div className="truncate text-xs text-foreground/60">渠道展示名：{item.channelLabel}</div> : null}
                         {item.providerModelKey && item.providerModelKey !== item.modelKey ? <div className="admin-monospace truncate text-xs text-foreground/35">上游：{item.providerModelKey}</div> : null}
                     </div>
                 </div>
@@ -192,7 +198,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         {
             title: "请求协议",
             dataIndex: "protocol",
-            width: 230,
+            width: 190,
             render: (value: ModelProtocol) =>
                 value ? (
                     <div>
@@ -203,15 +209,16 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     <AdminStatusBadge label="待配置" tone="warning" />
                 ),
         },
-        { title: "规格价格", width: 280, render: (_, item) => (item.priceConfigured ? billingSummary(item) : <AdminStatusBadge label="未配置价格" tone="warning" />) },
+        { title: "规格成本价", width: 290, render: (_, item) => <ChannelModelCostSummary item={item} /> },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
             title: "操作",
-            width: 180,
+            width: 120,
+            fixed: "right",
             render: (_, item) => (
                 <Space>
-                    <Button size="small" disabled={deletingSelected} onClick={() => startEdit(item)}>
+                    <Button size="small" icon={<Pencil className="size-3.5" />} disabled={deletingSelected} onClick={() => startEdit(item)}>
                         编辑
                     </Button>
                     <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
@@ -224,7 +231,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const filteredItems = items.filter((item) => {
         const query = keyword.trim().toLowerCase();
-        if (query && !`${item.modelKey} ${item.providerModelKey} ${item.displayName}`.toLowerCase().includes(query)) return false;
+        if (query && !`${item.modelKey} ${item.providerModelKey} ${item.displayName} ${item.channelLabel || ""}`.toLowerCase().includes(query)) return false;
         if (capability !== "all" && item.capability !== capability) return false;
         if (status === "enabled" && !item.enabled) return false;
         if (status === "disabled" && item.enabled) return false;
@@ -251,11 +258,14 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     });
 
     return (
-        <AdminPageFrame
-            title={`${channel.name} / 模型管理`}
-            description="模型按用户端展示顺序排列，点击“设置排序”即可调整。"
-            back={{ label: "返回系统渠道", onClick: onClose }}
-            actions={
+        <div className="admin-channel-model-manager">
+            <div className="admin-channel-model-toolbar">
+                <div>
+                    <h3 className="admin-channel-model-heading">
+                        模型管理 <span className="admin-channel-count">{items.length}</span>
+                    </h3>
+                    <p className="admin-channel-model-hint">规格展示上游成本，不影响用户售价</p>
+                </div>
                 <Space wrap>
                     <ChannelOrderDialog
                         channelId={channel.id}
@@ -271,9 +281,22 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                         新增模型
                     </Button>
                 </Space>
-            }
-        >
+            </div>
+            {loadError ? (
+                <div className="admin-channel-load-error" role="alert">
+                    <span>{loadError}</span>
+                    <Button size="small" onClick={() => void reload()}>
+                        重新加载模型
+                    </Button>
+                </div>
+            ) : null}
             <AdminDataTable
+                empty={
+                    <AdminTableEmpty
+                        title={loadError ? "模型列表加载失败" : items.length ? "没有匹配的模型" : "这个渠道还没有模型"}
+                        description={loadError ? "请重试加载，暂时无法确认模型列表。" : items.length ? "调整搜索或筛选条件后重试。" : "点击上方“拉取模型”从上游导入，或手动新增模型。"}
+                    />
+                }
                 toolbar={
                     <Input
                         allowClear
@@ -381,7 +404,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
-                    scroll: { x: 1150 },
+                    scroll: { x: 1090 },
                 }}
                 footer={
                     <PaginationBar
@@ -459,48 +482,12 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     }}
                 />
             )}
-        </AdminPageFrame>
+        </div>
     );
 }
 
 function capabilityLabel(value: ChannelModel["capability"]) {
     return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value];
-}
-
-function billingSummary(item: ChannelModel) {
-    const tiers = item.priceTiers?.filter((tier) => tier.enabled && tier.priceConfigured) || [];
-    if (!tiers.length) return <AdminStatusBadge label="未配置价格" tone="warning" />;
-    return (
-        <div className="space-y-1 text-xs leading-5">
-            {tiers.slice(0, 3).map((tier) => (
-                <div key={tier.id}>{priceTierLabel(tier)}</div>
-            ))}
-            {tiers.length > 3 ? <div className="text-foreground/45">另有 {tiers.length - 3} 个规格价格档</div> : null}
-        </div>
-    );
-}
-
-function priceTierLabel(tier: ChannelModelPriceTier) {
-    const selector = tier.selector || {};
-    const specParts = [
-        selector.operation && selector.operation !== "*" ? operationLabel(selector.operation) : "任意生成方式",
-        selector.quality && selector.quality !== "*" ? selector.quality.toUpperCase() : "",
-        selector.size && selector.size !== "*" ? selector.size : "",
-        tier.resolution === "*" ? "" : tier.resolution.toUpperCase(),
-        tier.videoSeconds ? `${tier.videoSeconds} 秒` : "",
-        selector.imageCount && selector.imageCount !== "*" ? `${selector.imageCount} 张参考图` : "",
-    ].filter(Boolean);
-    const spec = specParts.length ? specParts.join(" / ") : "默认规格";
-    if (tier.billingMode === "token") return `${spec} · ${formatCredits(tier.outputTokenPriceMicrocredits)} / 百万 Token`;
-    return `${spec} · ${formatCredits(tier.unitPriceMicrocredits)} 积分 / ${tier.billingMode === "per_second" ? "秒" : "次"}`;
-}
-
-function operationLabel(operation: string) {
-    return ({ text_to_image: "文生图", image_to_image: "图生图", text_to_video: "文生视频", image_to_video: "图生视频", video_to_video: "视频生视频", text_generation: "文本生成" } as Record<string, string>)[operation] || operation;
-}
-
-function formatCredits(value: number) {
-    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
 }
 
 function normalizeFetchModelKey(value: string) {

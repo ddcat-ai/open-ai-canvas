@@ -27,13 +27,13 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
 import { useDirectorWorkbenchStore } from "@/stores/canvas/use-director-workbench-store";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { DirectorCamera, DirectorCameraMove, DirectorHumanoidBone, DirectorKeyframeDeleteTarget, DirectorKeyframeEasing, DirectorLight, DirectorObject, DirectorPose, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorSceneOutput, DirectorShot, DirectorShotSize, DirectorTransform, DirectorVec3 } from "@/types/director";
 
 export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingScope, onClose, onChange, onApply, onDeleteImageNode, onFlush }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onboardingScope: string; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void>; onDeleteImageNode: (nodeId: string) => void; onFlush?: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const viewportRef = useRef<DirectorViewportHandle>(null);
     const modelInputRef = useRef<HTMLInputElement>(null);
     const [draft, setDraft] = useState<DirectorScene | null>(null);

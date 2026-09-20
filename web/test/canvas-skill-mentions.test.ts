@@ -55,5 +55,6 @@ describe("canvas skill mentions", () => {
         const active = skill();
         const inactive = skill({ skillId: "skill-2", skillName: "未加入", isAdded: false });
         expect(resolveSkillMentions("请使用 @镜头拆解，但不要使用 @未加入。", [active, inactive]).map((item) => item.skillId)).toEqual(["skill-1"]);
+        expect(resolveSkillMentions("请使用 /镜头拆解 完成任务。", [active, inactive]).map((item) => item.skillId)).toEqual(["skill-1"]);
     });
 });

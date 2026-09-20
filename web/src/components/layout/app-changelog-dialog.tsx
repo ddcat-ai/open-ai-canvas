@@ -11,7 +11,6 @@ export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: 
 
     return (
         <AppModal
-            flush
             rootClassName="app-spatial-modal app-changelog-modal"
             title={
                 <div className="app-changelog-heading">

@@ -82,6 +82,148 @@ func TestRPCProviderClassifiesExecutableStartFailures(t *testing.T) {
 	}
 }
 
+func TestRPCProviderRejectsIncompatibleFallbackBinary(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("linux already classifies foreign binaries in TestRPCProviderClassifiesExecutableStartFailures")
+	}
+	dir := t.TempDir()
+	entry := filepath.Join(dir, "backend", "provider")
+	if err := os.MkdirAll(filepath.Dir(entry), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entry, []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01, 0x01, 0x00}, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewRPCProvider(Descriptor{ID: "test-provider", PluginID: "test-plugin"}, dir, "backend/provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = provider.ValidateConfig(Config{})
+	var providerErr *ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("ValidateConfig() error = %T %v, want ProviderError", err, err)
+	}
+	if providerErr.Code != "plugin_exec_format_error" || providerErr.Message != "支付插件可执行文件与当前操作系统或 CPU 架构不兼容" {
+		t.Fatalf("ProviderError = %#v", providerErr)
+	}
+}
+
+func TestResolveRPCBackendPathPrefersHostTaggedBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tagged fallback uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	backend := filepath.Join(dir, "backend")
+	if err := os.MkdirAll(backend, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backend, "provider"), []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01, 0x01, 0x00}, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tagged := "provider-" + runtime.GOOS + "-" + runtime.GOARCH
+	script := []byte("#!/bin/sh\nexit 0\n")
+	if err := os.WriteFile(filepath.Join(backend, tagged), script, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolveRPCBackendPath(dir, "backend/provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(resolved) != tagged {
+		t.Fatalf("resolved %q, want tagged %q", resolved, tagged)
+	}
+}
+
+func TestRPCProviderStartsOfficialHostArtifact(t *testing.T) {
+	artifact := "provider-" + runtime.GOOS + "-" + runtime.GOARCH
+	if runtime.GOOS == "windows" {
+		artifact += ".exe"
+	}
+	sourceDir := filepath.Join("..", "..", "..", "plugin-packages", "official-payment-xunhupay", "backend")
+	hostBinary, err := os.ReadFile(filepath.Join(sourceDir, artifact))
+	if err != nil {
+		t.Fatalf("read host artifact: %v", err)
+	}
+	fallback, err := os.ReadFile(filepath.Join(sourceDir, "provider"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	backend := filepath.Join(dir, "backend")
+	if err := os.MkdirAll(backend, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backend, artifact), hostBinary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backend, "provider"), fallback, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewRPCProvider(Descriptor{ID: "xunhupay-aggregate", PluginID: "official-payment-xunhupay"}, dir, "backend/provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = provider.ValidateConfig(Config{})
+	var providerErr *ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("ValidateConfig() error = %T %v, want ProviderError", err, err)
+	}
+	if providerErr.Code == "plugin_executable_missing" || providerErr.Code == "plugin_exec_format_error" || providerErr.Code == "plugin_start_failed" {
+		t.Fatalf("host artifact failed to start: %#v cause=%v", providerErr, providerErr.Cause)
+	}
+}
+
+func TestRPCProviderStartsFromRelativePackageDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("relative package directories are asserted against POSIX path resolution")
+	}
+	artifact := "provider-" + runtime.GOOS + "-" + runtime.GOARCH
+	source := filepath.Join("..", "..", "..", "plugin-packages", "official-payment-xunhupay", "backend", artifact)
+	hostBinary, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatalf("read host artifact: %v", err)
+	}
+	absDir := t.TempDir()
+	relDir, err := filepath.Rel(mustWorkingDir(t), absDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.IsAbs(relDir) {
+		t.Fatalf("test setup produced an absolute package dir %q", relDir)
+	}
+	backend := filepath.Join(absDir, "backend")
+	if err := os.MkdirAll(backend, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backend, artifact), hostBinary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewRPCProvider(Descriptor{ID: "xunhupay-aggregate", PluginID: "official-payment-xunhupay"}, relDir, "backend/provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(provider.dir) {
+		t.Fatalf("package dir = %q, want absolute", provider.dir)
+	}
+	err = provider.ValidateConfig(Config{})
+	var providerErr *ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("ValidateConfig() error = %T %v, want ProviderError", err, err)
+	}
+	if providerErr.Code == "plugin_executable_missing" || providerErr.Code == "plugin_exec_format_error" || providerErr.Code == "plugin_start_failed" {
+		t.Fatalf("relative package dir failed to start host artifact: %#v cause=%v", providerErr, providerErr.Cause)
+	}
+}
+
+func mustWorkingDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestClassifyPaymentPluginStartError(t *testing.T) {
 	tests := []struct {
 		name      string

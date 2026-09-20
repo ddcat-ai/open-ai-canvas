@@ -47,7 +47,6 @@ export type AuthSessionPayload = {
 export type RuntimeLimits = {
     activeTaskLimit: number;
     resourceUploadMB: number;
-    sessionUploadMB: number;
     recycleBinRetentionDays?: number;
 };
 
@@ -88,6 +87,8 @@ export type ApiCallLog = {
     videoSeconds: number;
     providerRequestId?: string;
     estimatedCostMicros: number;
+    creditCostConfigured?: boolean;
+    creditCostMicrocredits?: number;
     costAvailable: boolean;
     currency?: string;
     errorCode?: string;
@@ -128,8 +129,6 @@ export type AdminUserDetail = {
         assetBytes: number;
         canvasCount: number;
         canvasBytes: number;
-        sessionCount: number;
-        sessionBytes: number;
         taskCount: number;
         taskBytes: number;
         apiCallCount: number;
@@ -161,7 +160,16 @@ export type AnalyticsFilters = {
 
 export type AdminReferenceData = {
     users: Array<{ id: string; username: string; displayName: string }>;
-    channels: Array<{ id: string; name: string; enabled: boolean; models: string[] }>;
+    channels: Array<{ id: string; name: string; enabled: boolean; models: string[]; modelDisplayNames?: string[] }>;
+};
+
+export type AnalyticsFinance = {
+    settledOrders: number;
+    costedOrders: number;
+    revenueMicrocredits: number;
+    costMicrocredits: number;
+    profitMicrocredits: number | null;
+    profitMargin: number | null;
 };
 
 export type AdminAnalytics = {
@@ -177,9 +185,7 @@ export type AdminAnalytics = {
         successRate: number;
         p95DurationMs: number;
         currentQueuedTasks: number;
-        estimatedCostMicros: number;
-        costAvailable: boolean;
-        currency?: string;
+        finance?: AnalyticsFinance | null;
     };
     trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number }>;
     models: Array<{
@@ -198,9 +204,7 @@ export type AdminAnalytics = {
         usageAvailable: boolean;
         mediaCount: number;
         videoSeconds: number;
-        estimatedCostMicros: number;
-        costAvailable: boolean;
-        currency?: string;
+        finance?: AnalyticsFinance | null;
     }>;
     users: Array<{ userId: string; name: string; activeDays: number; tasks: number; agentMessages: number; canvasDays: number; assets: number; resources: number; commonModel?: string }>;
     failures: Array<{ type: string; model: string; count: number; lastError?: string; lastSeenAt: string }>;
@@ -307,7 +311,6 @@ export type AdminArkPrivateAssetSetting = {
 
 export type RuntimeResourcePolicy = {
     resourceUploadMB: number;
-    sessionUploadMB: number;
     generatedFileMB: number;
     dailyUploadMB: number;
     storedFileGB: number;
@@ -315,7 +318,6 @@ export type RuntimeResourcePolicy = {
     taskDataGB: number;
     assetCount: number;
     canvasCount: number;
-    sessionCount: number;
     taskCount: number;
     apiCallLogCount: number;
     recycleBinRetentionDays?: number;
@@ -335,10 +337,8 @@ export type RuntimeTaskPolicy = {
 
 export type RuntimeRequestPolicy = {
     taskCreatePerMinute: number;
-    sessionCreatePerMinute: number;
     resourceUploadPerMinute: number;
     resourceImportPerMinute: number;
-    sessionFilePerMinute: number;
     assetWritePerMinute: number;
     canvasWritePerMinute: number;
     registerPerHour: number;
@@ -403,7 +403,7 @@ export function getAdminFeatureAvailability() {
     return http.get<{ features: FeatureAvailability }>("/admin/settings/features");
 }
 
-export function updateAdminFeatureAvailability(features: Pick<FeatureAvailability, "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">) {
+export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
@@ -484,6 +484,10 @@ export function listAdminChannels(params: AdminListParams = {}) {
 
 export function createAdminChannel(input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
     return http.post<{ channel: ModelChannel }>("/admin/channels", input);
+}
+
+export function duplicateAdminChannel(id: string) {
+    return http.post<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}/duplicate`);
 }
 
 export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {

@@ -1,0 +1,244 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "siliconflow-chat",
+  "name": "SiliconFlow Chat",
+  "version": "2.0.0",
+  "author": "SiliconFlow / 影策",
+  "description": "SiliconFlow Chat 独立请求协议插件。",
+  "documentation": "# SiliconFlow Chat\n\n该目录是独立官方协议插件源码。后端从生成的 `siliconflow-chat.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# SiliconFlow Chat 接口字段\n\n## 协议身份\n\n- 插件 ID：`siliconflow-chat`。\n- Provider ID：`siliconflow-chat`。\n- 能力：`text`。\n- 默认 Base URL：`https://api.siliconflow.cn`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /v1/chat/completions`。\n- Agent：`POST /v1/chat/completions`。\n- 生命周期：同步响应。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 上游模型 ID。 |\n| `messages` | message[] | 是 | `provider message container` | 包含历史消息和当前用户输入。 |\n| `instructions` | string | 否 | `system/instructions` | 系统指令。 |\n| `temperature` | number | 否 | `temperature` | 采样温度。 |\n| `top_p` | number | 否 | `top_p` | 核采样参数。 |\n| `max_tokens` | integer | 否 | `max_tokens/max_output_tokens` | 最大输出 token。 |\n| `tools` | array | 否 | `tools/toolConfig` | 工具定义。 |\n| `tool_choice` | object|string | 否 | `tool_choice` | 工具选择策略。 |\n| `response_format` | object | 否 | `response_format/text` | 结构化输出配置。 |\n| `stream` | boolean | 否 | `stream` | 流式开关；后台任务当前以最终响应归一。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/v1/chat/completions\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.messages` | `{\"$ref\":\"request.messages\"}` |\n| `create.body.temperature` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.temperature\"}}` |\n| `create.body.top_p` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.top_p\"}}` |\n| `create.body.max_tokens` | `{\"$omitEmpty\":{\"$coalesce\":[{\"$ref\":\"request.extra.max_tokens\"},{\"$ref\":\"request.providerOptions.siliconflow-chat.max_tokens\"}]}}` |\n| `create.body.tools` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.tools\"}}` |\n| `create.body.tool_choice` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.tool_choice\"}}` |\n| `create.body.response_format` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.response_format\"}}` |\n| `create.body.stream` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.stream\"}}` |\n| `create.body.provider` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.provider\"}}` |\n| `create.body.transforms` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.transforms\"}}` |\n| `create.body.extra_body` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.siliconflow-chat.extra_body\"}}` |\n| `agent.method` | `\"POST\"` |\n| `agent.path` | `\"/v1/chat/completions\"` |\n| `agent.contentType` | `\"application/json\"` |\n| `agent.body` | `{\"$merge\":[{\"$ref\":\"request.extra.agent.chatCompletion\"},{\"model\":{\"$ref\":\"request.model\"}}]}` |\n\n## Provider 扩展键\n\n- `providerOptions.siliconflow-chat.extra_body`\n- `providerOptions.siliconflow-chat.max_tokens`\n- `providerOptions.siliconflow-chat.provider`\n- `providerOptions.siliconflow-chat.response_format`\n- `providerOptions.siliconflow-chat.stream`\n- `providerOptions.siliconflow-chat.temperature`\n- `providerOptions.siliconflow-chat.tool_choice`\n- `providerOptions.siliconflow-chat.tools`\n- `providerOptions.siliconflow-chat.top_p`\n- `providerOptions.siliconflow-chat.transforms`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.status` | `\"succeeded\"` |\n| `response.textPaths[0]` | `\"choices.0.message.content\"` |\n| `response.textPaths[1]` | `\"choices.0.text\"` |\n| `response.reasoningPaths[0]` | `\"choices.0.message.reasoning_content\"` |\n| `response.usage` | `{\"$ref\":\"response.usage\"}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.messagePaths[0]` | `\"error.message\"` |\n| `agentResponse.textPaths[0]` | `\"choices.0.message.content\"` |\n| `agentResponse.textPaths[1]` | `\"choices.0.text\"` |\n| `agentResponse.reasoningPaths[0]` | `\"choices.0.message.reasoning_content\"` |\n| `agentResponse.toolCallsPath` | `\"choices.0.message.tool_calls\"` |\n| `agentResponse.toolCallIdPaths[0]` | `\"id\"` |\n| `agentResponse.toolCallNamePaths[0]` | `\"function.name\"` |\n| `agentResponse.toolCallArgumentsPaths[0]` | `\"function.arguments\"` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n该插件实现该平台公开的 OpenAI Chat Completions 线协议 profile；平台专有字段通过 providerOptions 命名空间透传，未声明支持的 OpenAI 字段仍由模型 capability profile 校验。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"siliconflow-chat\",\n  \"name\": \"SiliconFlow Chat\",\n  \"version\": \"2.0.0\",\n  \"author\": \"SiliconFlow / 影策\",\n  \"description\": \"SiliconFlow Chat 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"siliconflow-chat\",\n        \"label\": \"SiliconFlow Chat\",\n        \"capabilities\": [\n          \"text\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://api.siliconflow.cn\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"上游模型 ID。\"\n          },\n          {\n            \"name\": \"messages\",\n            \"type\": \"message[]\",\n            \"required\": true,\n            \"mapping\": \"provider message container\",\n            \"description\": \"包含历史消息和当前用户输入。\"\n          },\n          {\n            \"name\": \"instructions\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"system/instructions\",\n            \"description\": \"系统指令。\"\n          },\n          {\n            \"name\": \"temperature\",\n            \"type\": \"number\",\n            \"required\": false,\n            \"mapping\": \"temperature\",\n            \"description\": \"采样温度。\"\n          },\n          {\n            \"name\": \"top_p\",\n            \"type\": \"number\",\n            \"required\": false,\n            \"mapping\": \"top_p\",\n            \"description\": \"核采样参数。\"\n          },\n          {\n            \"name\": \"max_tokens\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"max_tokens/max_output_tokens\",\n            \"description\": \"最大输出 token。\"\n          },\n          {\n            \"name\": \"tools\",\n            \"type\": \"array\",\n            \"required\": false,\n            \"mapping\": \"tools/toolConfig\",\n            \"description\": \"工具定义。\"\n          },\n          {\n            \"name\": \"tool_choice\",\n            \"type\": \"object|string\",\n            \"required\": false,\n            \"mapping\": \"tool_choice\",\n            \"description\": \"工具选择策略。\"\n          },\n          {\n            \"name\": \"response_format\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"response_format/text\",\n            \"description\": \"结构化输出配置。\"\n          },\n          {\n            \"name\": \"stream\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"stream\",\n            \"description\": \"流式开关；后台任务当前以最终响应归一。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/chat/completions\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"messages\": {\n              \"$ref\": \"request.messages\"\n            },\n            \"temperature\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.temperature\"\n              }\n            },\n            \"top_p\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.top_p\"\n              }\n            },\n            \"max_tokens\": {\n              \"$omitEmpty\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.extra.max_tokens\"\n                  },\n                  {\n                    \"$ref\": \"request.providerOptions.siliconflow-chat.max_tokens\"\n                  }\n                ]\n              }\n            },\n            \"tools\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.tools\"\n              }\n            },\n            \"tool_choice\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.tool_choice\"\n              }\n            },\n            \"response_format\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.response_format\"\n              }\n            },\n            \"stream\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.stream\"\n              }\n            },\n            \"provider\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.provider\"\n              }\n            },\n            \"transforms\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.transforms\"\n              }\n            },\n            \"extra_body\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.siliconflow-chat.extra_body\"\n              }\n            }\n          }\n        },\n        \"agent\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/chat/completions\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"$merge\": [\n              {\n                \"$ref\": \"request.extra.agent.chatCompletion\"\n              },\n              {\n                \"model\": {\n                  \"$ref\": \"request.model\"\n                }\n              }\n            ]\n          }\n        },\n        \"response\": {\n          \"status\": \"succeeded\",\n          \"textPaths\": [\n            \"choices.0.message.content\",\n            \"choices.0.text\"\n          ],\n          \"reasoningPaths\": [\n            \"choices.0.message.reasoning_content\"\n          ],\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"error.message\"\n          ]\n        },\n        \"agentResponse\": {\n          \"textPaths\": [\n            \"choices.0.message.content\",\n            \"choices.0.text\"\n          ],\n          \"reasoningPaths\": [\n            \"choices.0.message.reasoning_content\"\n          ],\n          \"toolCallsPath\": \"choices.0.message.tool_calls\",\n          \"toolCallIdPaths\": [\n            \"id\"\n          ],\n          \"toolCallNamePaths\": [\n            \"function.name\"\n          ],\n          \"toolCallArgumentsPaths\": [\n            \"function.arguments\"\n          ]\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "siliconflow-chat",
+        "label": "SiliconFlow Chat",
+        "capabilities": [
+          "text"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://api.siliconflow.cn",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "上游模型 ID。"
+          },
+          {
+            "name": "messages",
+            "type": "message[]",
+            "required": true,
+            "mapping": "provider message container",
+            "description": "包含历史消息和当前用户输入。"
+          },
+          {
+            "name": "instructions",
+            "type": "string",
+            "required": false,
+            "mapping": "system/instructions",
+            "description": "系统指令。"
+          },
+          {
+            "name": "temperature",
+            "type": "number",
+            "required": false,
+            "mapping": "temperature",
+            "description": "采样温度。"
+          },
+          {
+            "name": "top_p",
+            "type": "number",
+            "required": false,
+            "mapping": "top_p",
+            "description": "核采样参数。"
+          },
+          {
+            "name": "max_tokens",
+            "type": "integer",
+            "required": false,
+            "mapping": "max_tokens/max_output_tokens",
+            "description": "最大输出 token。"
+          },
+          {
+            "name": "tools",
+            "type": "array",
+            "required": false,
+            "mapping": "tools/toolConfig",
+            "description": "工具定义。"
+          },
+          {
+            "name": "tool_choice",
+            "type": "object|string",
+            "required": false,
+            "mapping": "tool_choice",
+            "description": "工具选择策略。"
+          },
+          {
+            "name": "response_format",
+            "type": "object",
+            "required": false,
+            "mapping": "response_format/text",
+            "description": "结构化输出配置。"
+          },
+          {
+            "name": "stream",
+            "type": "boolean",
+            "required": false,
+            "mapping": "stream",
+            "description": "流式开关；后台任务当前以最终响应归一。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "messages": {
+              "$ref": "request.messages"
+            },
+            "temperature": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.temperature"
+              }
+            },
+            "top_p": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.top_p"
+              }
+            },
+            "max_tokens": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.extra.max_tokens"
+                  },
+                  {
+                    "$ref": "request.providerOptions.siliconflow-chat.max_tokens"
+                  }
+                ]
+              }
+            },
+            "tools": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.tools"
+              }
+            },
+            "tool_choice": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.tool_choice"
+              }
+            },
+            "response_format": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.response_format"
+              }
+            },
+            "stream": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.stream"
+              }
+            },
+            "provider": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.provider"
+              }
+            },
+            "transforms": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.transforms"
+              }
+            },
+            "extra_body": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.siliconflow-chat.extra_body"
+              }
+            }
+          }
+        },
+        "agent": {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "contentType": "application/json",
+          "body": {
+            "$merge": [
+              {
+                "$ref": "request.extra.agent.chatCompletion"
+              },
+              {
+                "model": {
+                  "$ref": "request.model"
+                }
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": "succeeded",
+          "textPaths": [
+            "choices.0.message.content",
+            "choices.0.text"
+          ],
+          "reasoningPaths": [
+            "choices.0.message.reasoning_content"
+          ],
+          "usage": {
+            "$ref": "response.usage"
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "messagePaths": [
+            "error.message"
+          ]
+        },
+        "agentResponse": {
+          "textPaths": [
+            "choices.0.message.content",
+            "choices.0.text"
+          ],
+          "reasoningPaths": [
+            "choices.0.message.reasoning_content"
+          ],
+          "toolCallsPath": "choices.0.message.tool_calls",
+          "toolCallIdPaths": [
+            "id"
+          ],
+          "toolCallNamePaths": [
+            "function.name"
+          ],
+          "toolCallArgumentsPaths": [
+            "function.arguments"
+          ]
+        }
+      }
+    ]
+  }
+}

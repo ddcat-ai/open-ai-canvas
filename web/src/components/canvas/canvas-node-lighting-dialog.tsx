@@ -9,7 +9,7 @@ import { Tooltip } from "@/components/ui/base/tooltip";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useCopyText } from "@/hooks/use-copy-text";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type CanvasImageLightingOptions = {
     azimuth: number;
@@ -31,6 +31,9 @@ const LIGHT_POSITIONS = [
     { label: "底部", azimuth: 0, elevation: -80 },
     { label: "后方", azimuth: 180, elevation: 0 },
 ];
+
+const LIGHTING_PREVIEW_COLUMN_WIDTH = 300;
+const LIGHTING_SPHERE_SIZE = 220;
 
 const STYLE_PRESETS = [
     { id: "overexposed", name: "过曝胶片", color: "#d4b896", image: "/lighting-presets/overexposed.png", prompt: "overexposed film aesthetic, high-key lighting, washed out highlights, soft diffused light, vintage film look" },
@@ -138,7 +141,7 @@ function buildLightingPrompt(input: {
 }
 
 export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataUrl: string; onClose: () => void; onConfirm: (options: CanvasImageLightingOptions, prompt: string) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useActiveTheme()];
     const reducedMotion = useReducedMotion();
     const copyText = useCopyText();
     const [options, setOptions] = useState(defaultLightingOptions);
@@ -207,11 +210,21 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-         
-            <div className="flex p-0">
-                {/* Left col: view tabs + light sphere */}
-                <div className="flex flex-col items-center gap-2 border-r px-3 py-3" style={{ width: 185, borderColor: theme.toolbar.border }}>
-                    <div className="mb-1 flex w-full gap-1 rounded-[var(--r-md)] p-1" style={{ background: theme.toolbar.itemHover }}>
+            <div className="flex h-14 items-center justify-between border-b px-5" style={{ borderColor: theme.toolbar.border }}>
+                <h2 className="text-[var(--fs-title)] font-semibold leading-none">打光效果</h2>
+                <button
+                    type="button"
+                    aria-label="关闭打光效果"
+                    className="grid size-8 place-items-center rounded-[var(--r-md)] transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ color: theme.node.muted }}
+                    onClick={onClose}
+                >
+                    <X className="size-5" />
+                </button>
+            </div>
+            <div className="grid items-stretch" style={{ gridTemplateColumns: `${LIGHTING_PREVIEW_COLUMN_WIDTH}px minmax(0, 1fr)` }}>
+                <div className="flex shrink-0 flex-col items-center gap-2 border-r px-3 py-3" style={{ width: LIGHTING_PREVIEW_COLUMN_WIDTH, borderColor: theme.toolbar.border }}>
+                    <div className="flex w-full gap-1 rounded-[var(--r-md)] p-1" style={{ background: theme.toolbar.itemHover }}>
                         {(["perspective", "front"] as const).map((mode) => (
                             <button
                                 key={mode}
@@ -234,45 +247,27 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
                     />
                 </div>
 
-                {/* Middle col: global controls */}
-                <div className="flex flex-col gap-3 border-r px-3 py-3" style={{ width: 280, borderColor: theme.toolbar.border }}>
+                <div className="flex min-w-0 flex-1 flex-col justify-between gap-2.5 px-4 py-3">
                     <div className="flex items-center justify-between">
                         <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>全局</span>
                         <PanelToggle label="智能模式" checked={options.smartMode} onChange={(checked) => updateOption("smartMode", checked)} theme={theme} />
                     </div>
 
-                    <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                            <span className="w-8 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>亮度</span>
-                            <div className="min-w-0 flex-1"><Slider min={0} max={100} value={options.brightness} onChange={(value) => updateOption("brightness", value)} tooltip={{ formatter: (value) => `${value}%` }} /></div>
-                            <div className="flex items-center gap-1 rounded-[var(--r-md)] border px-2 py-1 text-[11px]" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover, color: theme.node.muted }}>
-                                <Sun className="size-3" />
-                                <span className="w-8 text-right">{options.brightness}%</span>
-                            </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-8 shrink-0 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>亮度</span>
+                        <div className="min-w-0 flex-1"><Slider min={0} max={100} value={options.brightness} onChange={(value) => updateOption("brightness", value)} tooltip={{ formatter: (value) => `${value}%` }} /></div>
+                        <div className="flex h-6 items-center gap-1 rounded-[var(--r-md)] border px-1.5 text-[11px]" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover, color: theme.node.muted }}>
+                            <Sun className="size-3" />
+                            <span className="w-7 text-right tabular-nums">{options.brightness}%</span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <span className="w-8 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>颜色</span>
-                        <div className="relative flex items-center">
-                            <label
-                                className="relative h-6 w-10 cursor-pointer overflow-hidden rounded border"
-                                style={{ borderColor: theme.toolbar.border, background: options.lightColor === "#ffffff" ? "linear-gradient(135deg, #ff0000 0%, #ff9900 25%, #ffff00 50%, transparent 50%, transparent 100%), linear-gradient(45deg, #aaa 25%, transparent 25%, transparent 75%, #aaa 75%)" : options.lightColor }}
-                            >
-                                <input
-                                    type="color"
-                                    aria-label="光线颜色"
-                                    value={options.lightColor}
-                                    onChange={(event) => updateOption("lightColor", event.target.value)}
-                                    className="absolute left-0 top-full h-0 w-0 cursor-pointer opacity-0"
-                                />
-                            </label>
-                            {options.lightColor === "#ffffff" ? (
-                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                    <div className="h-px w-full rotate-45 bg-red-500" />
-                                </div>
-                            ) : null}
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="w-8 shrink-0 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>颜色</span>
+                            <LightColorSwatch value={options.lightColor} theme={theme} onChange={(value) => updateOption("lightColor", value)} />
                         </div>
+                        <PanelToggle label="轮廓光" checked={options.rimLight} onChange={(checked) => updateOption("rimLight", checked)} theme={theme} />
                     </div>
 
                     <div className="space-y-1.5">
@@ -292,45 +287,39 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
                             ))}
                         </div>
                     </div>
-
-                    <div className="flex items-center justify-between">
-                        <span className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>轮廓光</span>
-                        <PanelToggle label="轮廓光" checked={options.rimLight} onChange={(checked) => updateOption("rimLight", checked)} theme={theme} />
-                    </div>
                 </div>
+            </div>
 
-                {/* Right col: smart description + presets */}
-                <div className="flex flex-1 flex-col gap-3 px-4 py-3">
-                    <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>智能模式</span>
-                    <textarea
-                        value={smartDesc}
-                        onChange={(event) => setSmartDesc(event.target.value)}
-                        placeholder="简单描述你想要实现的打光效果，或者情绪风格"
-                        disabled={!options.smartMode}
-                        className="h-16 w-full resize-none rounded-[var(--r-lg)] border px-3 py-2 text-xs outline-none transition-colors"
-                        style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover, color: theme.node.text, opacity: options.smartMode ? 1 : 0.55 }}
-                    />
-                    <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>预设</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        {STYLE_PRESETS.map((preset) => (
-                            <button
-                                key={preset.id}
-                                type="button"
-                                aria-pressed={options.stylePreset === preset.id}
-                                onClick={() => updateOption("stylePreset", options.stylePreset === preset.id ? "" : preset.id)}
-                                className={`relative h-[60px] overflow-hidden rounded-[var(--r-lg)] text-left transition-[box-shadow,filter,border-color,background-color] duration-150 ${options.stylePreset === preset.id ? "ring-2 ring-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "hover:ring-1 hover:ring-white/30"}`}
-                                style={{
-                                    backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.08)), url(${preset.image})`,
-                                    backgroundSize: "cover",
-                                    backgroundPosition: "center",
-                                    backgroundColor: preset.color,
-                                }}
-                            >
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.22),transparent_36%)]" />
-                                <span className="absolute bottom-1.5 left-2 right-2 text-[11px] font-medium leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">{preset.name}</span>
-                            </button>
-                        ))}
-                    </div>
+            <div className="flex flex-col gap-3 border-t px-4 py-3" style={{ borderColor: theme.toolbar.border }}>
+                <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>智能模式</span>
+                <textarea
+                    value={smartDesc}
+                    onChange={(event) => setSmartDesc(event.target.value)}
+                    placeholder="简单描述你想要实现的打光效果，或者情绪风格"
+                    disabled={!options.smartMode}
+                    className="h-16 w-full resize-none rounded-[var(--r-lg)] border px-3 py-2 text-xs outline-none transition-colors"
+                    style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover, color: theme.node.text, opacity: options.smartMode ? 1 : 0.55 }}
+                />
+                <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>预设</span>
+                <div className="grid shrink-0 auto-rows-[60px] grid-cols-4 gap-1.5">
+                    {STYLE_PRESETS.map((preset) => (
+                        <button
+                            key={preset.id}
+                            type="button"
+                            aria-pressed={options.stylePreset === preset.id}
+                            onClick={() => updateOption("stylePreset", options.stylePreset === preset.id ? "" : preset.id)}
+                            className={`relative h-full min-h-0 overflow-hidden rounded-[var(--r-lg)] text-left transition-[box-shadow,filter,border-color,background-color] duration-150 ${options.stylePreset === preset.id ? "ring-2 ring-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "hover:ring-1 hover:ring-white/30"}`}
+                            style={{
+                                backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.08)), url(${preset.image})`,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                                backgroundColor: preset.color,
+                            }}
+                        >
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.22),transparent_36%)]" />
+                            <span className="absolute bottom-1.5 left-2 right-2 text-[11px] font-medium leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">{preset.name}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -345,8 +334,8 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
                     type="button"
                     whileHover={reducedMotion ? undefined : { y: -1 }}
                     whileTap={reducedMotion ? undefined : { scale: 0.97 }}
-                    className="flex h-8 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-semibold"
-                    style={{ background: theme.node.activeStroke, color: theme.node.panel }}
+                    className="flex h-8 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-3 text-[var(--fs-label)] font-semibold transition-colors"
+                    style={{ borderColor: theme.node.activeStroke, color: theme.node.activeStroke, background: "transparent" }}
                     onClick={handleApply}
                 >
                     <Send className="size-3.5" />生成打光效果
@@ -365,6 +354,32 @@ export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataU
                 onChange={setPromptTemplate}
             />
         </SpotlightSurface>
+    );
+}
+
+function LightColorSwatch({ value, theme, onChange }: { value: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (value: string) => void }) {
+    const isWhite = value.toLowerCase() === "#ffffff";
+    return (
+        <label
+            className="relative h-6 w-10 shrink-0 cursor-pointer overflow-hidden rounded border"
+            style={{
+                borderColor: theme.toolbar.border,
+                background: isWhite
+                    ? "linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%), linear-gradient(45deg, #cfcfcf 25%, #ffffff 25%, #ffffff 75%, #cfcfcf 75%)"
+                    : value,
+                backgroundSize: isWhite ? "8px 8px, 8px 8px" : undefined,
+                backgroundPosition: isWhite ? "0 0, 4px 4px" : undefined,
+            }}
+        >
+            <input
+                type="color"
+                aria-label="光线颜色"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className="absolute inset-0 cursor-pointer opacity-0"
+            />
+            {isWhite ? <span className="pointer-events-none absolute inset-[-20%] m-auto h-px w-[140%] rotate-45 bg-red-500" /> : null}
+        </label>
     );
 }
 
@@ -542,8 +557,13 @@ function drawLightSphere(ctx: CanvasRenderingContext2D, width: number, height: n
     if (previewImageUrl) {
         const image = new Image();
         image.onload = () => {
-            const imageWidth = radius * 0.5;
-            const imageHeight = radius * 0.75;
+            const sourceWidth = image.naturalWidth || image.width;
+            const sourceHeight = image.naturalHeight || image.height;
+            const aspectRatio = sourceWidth > 0 && sourceHeight > 0 ? sourceWidth / sourceHeight : 2 / 3;
+            const maxImageWidth = radius * 0.92;
+            const maxImageHeight = radius * 0.96;
+            const imageWidth = Math.min(maxImageWidth, maxImageHeight * aspectRatio);
+            const imageHeight = Math.min(maxImageHeight, maxImageWidth / aspectRatio);
             ctx.save();
             ctx.shadowColor = "rgba(0,0,0,0.8)";
             ctx.shadowBlur = 12;
@@ -594,7 +614,7 @@ function LightingSphereControl({ azimuth, elevation, onAngleChange, previewImage
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDraggingRef = useRef(false);
     const dragStartRef = useRef<{ x: number; y: number; azimuth: number; elevation: number } | null>(null);
-    const size = 180;
+    const size = LIGHTING_SPHERE_SIZE;
 
     const redraw = useCallback(() => {
         const canvas = canvasRef.current;

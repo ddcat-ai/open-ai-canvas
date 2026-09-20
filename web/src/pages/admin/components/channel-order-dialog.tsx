@@ -1,7 +1,7 @@
 import { App, Button, Modal, Spin } from "antd";
 import { ArrowDown, ArrowUp, GripVertical, ListOrdered } from "lucide-react";
 import { useRef, useState } from "react";
-import { EmptyState } from "@/components/ui/product/empty-state";
+import { AdminEmpty } from "@/pages/admin/components/admin-ui";
 import { getChannelOrder, saveChannelOrder, type ChannelOrderItem } from "@/services/api/channel-order";
 
 export function moveOrderItem<T extends { id: string }>(items: T[], id: string, target: number): T[] {
@@ -87,7 +87,7 @@ export function ChannelOrderDialog({ channelId, onSaved }: { channelId?: string;
                 <Spin spinning={loading}>
                     <div className="max-h-[55vh] overflow-y-auto space-y-2" role="list" aria-label="展示顺序">
                         {!loading && !items.length ? (
-                            <EmptyState size="compact" title="暂无可排序条目" />
+                            <AdminEmpty size="compact" title="暂无可排序条目" />
                         ) : (
                             items.map((item, index) => (
                                 <div

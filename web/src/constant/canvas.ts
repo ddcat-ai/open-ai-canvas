@@ -27,6 +27,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Chart]: { width: 480, height: 320, title: "图表" },
     [CanvasNodeType.ColorGrade]: { width: 420, height: 360, title: "调色" },
     [CanvasNodeType.MediaConversion]: { width: 480, height: 460, title: "转换" },
+    [CanvasNodeType.BatchTable]: { width: 1280, height: 560, title: "批量创作表" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {
@@ -102,9 +103,22 @@ export const NODE_SPECS = {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.ColorGrade],
         metadata: { status: "idle" },
     },
-    [CanvasNodeType.MediaConversion]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.MediaConversion],
-        metadata: { status: "idle" },
+    [CanvasNodeType.MediaConversion]: { ...NODE_DEFAULT_SIZE[CanvasNodeType.MediaConversion], metadata: { status: "idle" } },
+    [CanvasNodeType.BatchTable]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.BatchTable],
+        metadata: {
+            status: "idle",
+            batchTable: {
+                operation: "try_on",
+                concurrency: 10,
+                referenceColumns: [
+                    { id: "reference-1", label: "参考图 1" },
+                    { id: "reference-2", label: "参考图 2" },
+                    { id: "reference-3", label: "参考图 3" },
+                ],
+                rows: [],
+            },
+        },
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;
 

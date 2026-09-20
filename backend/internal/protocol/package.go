@@ -13,10 +13,10 @@ import (
 
 const (
 	PluginPackageFormat    = "yingce.plugin/package-v1"
-	PluginPackageMaxBytes  = 16 << 20
+	PluginPackageMaxBytes  = 48 << 20
 	PluginManifestMaxBytes = 512 << 10
 	pluginPackageMaxFiles  = 256
-	pluginPackageMaxEntry  = 8 << 20
+	pluginPackageMaxEntry  = 16 << 20
 )
 
 // PluginPackage is the transport envelope for every uploaded plugin. The
@@ -117,7 +117,11 @@ func validatePluginPackageRuntime(manifest Manifest, files map[string][]byte) er
 		if !strings.HasPrefix(entry, "backend/") || path.Clean(entry) != entry {
 			return fmt.Errorf("manifest.runtime.backendEntry must point inside backend/")
 		}
-		if _, ok := files[entry]; !ok {
+		if backend == "rpc" {
+			if !HasAnyPaymentRPCBackend(entry, files) {
+				return fmt.Errorf("manifest runtime backend entry %q is missing a host-executable artifact", entry)
+			}
+		} else if _, ok := files[entry]; !ok {
 			return fmt.Errorf("manifest runtime backend entry %q is missing from package", entry)
 		}
 		if backend == "wasm" && !strings.HasSuffix(strings.ToLower(entry), ".wasm") {

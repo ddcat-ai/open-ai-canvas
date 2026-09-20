@@ -248,6 +248,29 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 		default:
 			return 0, nil
 		}
+	case "$split":
+		spec, ok := operand.([]any)
+		if !ok || len(spec) != 2 {
+			return nil, fmt.Errorf("$split requires [value, separator]")
+		}
+		value, err := evaluateManifestValue(spec[0], env)
+		if err != nil {
+			return nil, err
+		}
+		separator, err := evaluateManifestValue(spec[1], env)
+		if err != nil {
+			return nil, err
+		}
+		sep := manifestString(separator)
+		if sep == "" {
+			return nil, fmt.Errorf("$split separator must not be empty")
+		}
+		parts := strings.Split(manifestString(value), sep)
+		result := make([]any, 0, len(parts))
+		for _, part := range parts {
+			result = append(result, part)
+		}
+		return result, nil
 	case "$if":
 		spec, ok := operand.(map[string]any)
 		if !ok {
@@ -283,7 +306,7 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 			return nil, err
 		}
 		return value, nil
-	case "$lower", "$upper", "$trim", "$toString", "$toInt", "$toBool", "$dataMime", "$dataPayload", "$json":
+	case "$lower", "$upper", "$trim", "$toString", "$toInt", "$toFloat", "$toBool", "$dataMime", "$dataPayload", "$json":
 		value, err := evaluateManifestValue(operand, env)
 		if err != nil {
 			return nil, err
@@ -300,6 +323,12 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 			return text, nil
 		case "$toInt":
 			return manifestInt(value), nil
+		case "$toFloat":
+			parsed, ok := manifestFloatValue(value)
+			if !ok {
+				return nil, nil
+			}
+			return parsed, nil
 		case "$toBool":
 			return manifestTruthy(value), nil
 		case "$dataMime":
@@ -336,10 +365,28 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 			return manifestInt(manifestPathValue(items[i], "order")) < manifestInt(manifestPathValue(items[j], "order"))
 		})
 		return items, nil
-	case "$add", "$multiply", "$min", "$max":
+	case "$add", "$multiply", "$divide", "$min", "$max":
 		values, ok := operand.([]any)
 		if !ok || len(values) == 0 {
 			return nil, fmt.Errorf("%s requires an array", operator)
+		}
+		if operator == "$divide" {
+			if len(values) != 2 {
+				return nil, fmt.Errorf("$divide requires [numerator, denominator]")
+			}
+			numerator, err := evaluateManifestValue(values[0], env)
+			if err != nil {
+				return nil, err
+			}
+			denominator, err := evaluateManifestValue(values[1], env)
+			if err != nil {
+				return nil, err
+			}
+			denom := manifestFloat(denominator)
+			if denom == 0 {
+				return nil, fmt.Errorf("$divide denominator must not be zero")
+			}
+			return normalizeManifestNumber(manifestFloat(numerator) / denom), nil
 		}
 		result := 0.0
 		if operator == "$multiply" {
@@ -581,23 +628,28 @@ func manifestString(value any) string {
 }
 
 func manifestFloat(value any) float64 {
+	parsed, _ := manifestFloatValue(value)
+	return parsed
+}
+
+func manifestFloatValue(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case float64:
-		return typed
+		return typed, true
 	case float32:
-		return float64(typed)
+		return float64(typed), true
 	case int:
-		return float64(typed)
+		return float64(typed), true
 	case int64:
-		return float64(typed)
+		return float64(typed), true
 	case json.Number:
-		result, _ := typed.Float64()
-		return result
+		result, err := typed.Float64()
+		return result, err == nil
 	case string:
-		result, _ := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-		return result
+		result, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return result, err == nil
 	default:
-		return 0
+		return 0, false
 	}
 }
 

@@ -12,7 +12,7 @@
       { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
       { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
       { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-      { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+      { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
     ],
     "durationMs": 8000
   },
@@ -34,7 +34,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" },
           { "id": "clip-d", "kind": "video", "nodeId": "node-d", "trackId": "video-1", "startMs": 8000, "durationMs": 2000, "sourceStartMs": 0, "sourceDurationMs": 2000 }
         ],
         "durationMs": 10000
@@ -57,7 +57,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 2000, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 8000
       }
@@ -79,7 +79,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-2", "startMs": 3000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 6000
       }
@@ -101,7 +101,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 2000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 7000
       }
@@ -123,7 +123,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5500, "durationMs": 2000, "sourceStartMs": 3000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 7500
       }
@@ -146,7 +146,7 @@
           { "id": "clip-a:split:3000", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 3000, "durationMs": 2000, "sourceStartMs": 3000, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 8000
       }
@@ -167,7 +167,7 @@
         "clips": [
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 8000
       }
@@ -189,7 +189,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 0.5, "fadeInMs": 200, "fadeOutMs": 400 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" }
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" }
         ],
         "durationMs": 8000
       }
@@ -211,7 +211,7 @@
           { "id": "clip-a", "kind": "video", "nodeId": "node-a", "trackId": "video-1", "startMs": 0, "durationMs": 5000, "sourceStartMs": 0, "sourceDurationMs": 10000, "volume": 1, "fadeInMs": 0, "fadeOutMs": 0 },
           { "id": "clip-b", "kind": "video", "nodeId": "node-b", "trackId": "video-1", "startMs": 5000, "durationMs": 3000, "sourceStartMs": 2000, "sourceDurationMs": 8000 },
           { "id": "clip-c", "kind": "audio", "nodeId": "node-audio", "trackId": "audio-1", "startMs": 1000, "durationMs": 4000, "sourceStartMs": 0, "sourceDurationMs": 4000, "volume": 0.8 },
-          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影绘" },
+          { "id": "sub-1", "kind": "subtitle", "nodeId": "node-a", "trackId": "subtitle-1", "startMs": 500, "durationMs": 2000, "subtitleEntryIndex": 0, "text": "你好，影策" },
           { "id": "sub-2", "kind": "subtitle", "nodeId": "node-b", "trackId": "subtitle-1", "startMs": 5200, "durationMs": 1800, "subtitleEntryIndex": 1, "text": "副标题字幕" }
         ],
         "durationMs": 8000
@@ -241,7 +241,7 @@
     {
       "name": "rebuild-subtitle-clips-replaces-stale-snapshots",
       "commands": [
-        { "op": "rebuildSubtitleClips", "payload": { "nodeId": "node-a", "entries": [ { "index": 0, "startMs": 500, "endMs": 2500, "text": "你好，影绘" }, { "index": 1, "startMs": 3000, "endMs": 4200, "text": "第二句字幕" } ] } }
+        { "op": "rebuildSubtitleClips", "payload": { "nodeId": "node-a", "entries": [ { "index": 0, "startMs": 500, "endMs": 2500, "text": "你好，影策" }, { "index": 1, "startMs": 3000, "endMs": 4200, "text": "第二句字幕" } ] } }
       ],
       "expected": {
         "version": 2,
@@ -255,7 +255,7 @@
           {"id": "clip-a","kind": "video","nodeId": "node-a","trackId": "video-1","startMs": 0,"durationMs": 5000,"sourceStartMs": 0,"sourceDurationMs": 10000,"volume": 1,"fadeInMs": 0,"fadeOutMs": 0},
           {"id": "clip-b","kind": "video","nodeId": "node-b","trackId": "video-1","startMs": 5000,"durationMs": 3000,"sourceStartMs": 2000,"sourceDurationMs": 8000},
           {"id": "clip-c","kind": "audio","nodeId": "node-audio","trackId": "audio-1","startMs": 1000,"durationMs": 4000,"sourceStartMs": 0,"sourceDurationMs": 4000,"volume": 0.8},
-          {"id": "node-a:subtitle:0","kind": "subtitle","nodeId": "node-a","trackId": "subtitle-1","startMs": 500,"durationMs": 2000,"subtitleEntryIndex": 0,"text": "你好，影绘"},
+          {"id": "node-a:subtitle:0","kind": "subtitle","nodeId": "node-a","trackId": "subtitle-1","startMs": 500,"durationMs": 2000,"subtitleEntryIndex": 0,"text": "你好，影策"},
           {"id": "node-a:subtitle:1","kind": "subtitle","nodeId": "node-a","trackId": "subtitle-1","startMs": 3000,"durationMs": 1200,"subtitleEntryIndex": 1,"text": "第二句字幕"}
         ],
         "durationMs": 8000

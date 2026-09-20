@@ -49,7 +49,6 @@ describe("task cancellation policy", () => {
         expect(page).not.toContain("cancelGenerationTask");
         expect(page).not.toContain('runAction(detailTask.id, "cancel")');
         expect(page).toContain('if (task.status === "queued" || task.status === "running")');
-        expect(page).toContain("任务正在执行，不能删除本机记录");
     });
 
     test("batch stop only applies to items still waiting locally", () => {

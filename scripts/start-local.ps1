@@ -3,6 +3,9 @@ param()
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "windows-proxy.ps1")
+Import-CanvasWindowsProxy
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $backendDir = Join-Path $repoRoot "backend"
 $webDir = Join-Path $repoRoot "web"
@@ -71,7 +74,7 @@ Set-Location -LiteralPath $backendDirLiteral
 `$env:CANVAS_BACKEND_DATA_DIR = $dataDirLiteral
 `$env:GOCACHE = $(ConvertTo-PowerShellLiteral $goBuildCache)
 `$env:GOMODCACHE = $(ConvertTo-PowerShellLiteral $goModuleCache)
-Write-Host '影绘后端：http://127.0.0.1:8080' -ForegroundColor Cyan
+Write-Host '影策后端：http://127.0.0.1:8080' -ForegroundColor Cyan
 go run ./cmd/server
 "@
 
@@ -79,7 +82,7 @@ $webCommand = @"
 `$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $webDirLiteral
 `$env:VITE_API_PROXY_TARGET = 'http://127.0.0.1:8080'
-Write-Host '影绘前端：http://localhost:3000' -ForegroundColor Cyan
+Write-Host '影策前端：http://localhost:3000' -ForegroundColor Cyan
 bun run dev
 "@
 

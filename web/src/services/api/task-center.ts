@@ -1,23 +1,13 @@
-import { DREAMINA_SUBMIT_ERROR_MESSAGES, generationErrorMessage } from "@/lib/generation-error";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
-import {
-    deleteLocalDreaminaGenerationTask,
-    listLocalDreaminaGenerationTaskPage,
-    queryLocalDreaminaGenerationTask,
-    refreshLocalDreaminaGenerationTask,
-    waitForLocalDreaminaGenerationTask,
-    type LocalDreaminaGenerationTask,
-} from "@/services/local-dreamina-generation";
-import { isLocalDreaminaTaskId, projectLocalDreaminaDiagnosticLog, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 
 export type { BackendEnvelope } from "@/services/api/request";
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type TaskBillingStatus = "reserved" | "running" | "settled" | "refunded" | "uncertain";
 export type ProviderCancelStatus = "requested" | "confirmed" | "uncertain";
-export type AgentSessionStatus = "active" | "completed" | "failed";
 export type GenerationTaskResultState = "NOT_AVAILABLE" | "PENDING_MATERIALIZATION" | "MATERIALIZING" | "READY" | "FAILED_RETRYABLE" | "FAILED_PERMANENT";
 export type GenerationTaskOutput = {
     outputIndex: number;
@@ -32,7 +22,6 @@ export type GenerationTask = {
     clientOperationId?: string;
     retryOf?: string;
     attemptGroupId?: string;
-    sessionId?: string;
     projectId?: string;
     type: string;
     status: TaskStatus;
@@ -114,45 +103,6 @@ export type TaskTextReplay = {
     error?: string;
 };
 
-export type AgentSession = {
-    id: string;
-    projectId?: string;
-    status: AgentSessionStatus;
-    prompt: string;
-    canvasSnapshotJson?: string;
-    canvasOpsJson?: string;
-    createdAt: string;
-    updatedAt: string;
-};
-
-export type AgentMessage = {
-    id: string;
-    sessionId: string;
-    role: "user" | "assistant" | "system" | "tool" | string;
-    content: string;
-    payload?: string;
-    createdAt: string;
-};
-
-export type TaskResult = {
-    id: string;
-    taskId: string;
-    sessionId?: string;
-    kind: string;
-    url?: string;
-    payload?: string;
-    createdAt: string;
-};
-
-export type SessionFile = {
-    id: string;
-    sessionId: string;
-    fileName: string;
-    mimeType: string;
-    size: number;
-    createdAt: string;
-};
-
 export type TaskLog = {
     id: string;
     taskId: string;
@@ -164,26 +114,7 @@ export type TaskLog = {
     createdAt: string;
 };
 
-export type AgentSessionDetail = {
-    session: AgentSession;
-    messages: AgentMessage[];
-    tasks: GenerationTask[];
-    results: TaskResult[];
-};
-
-export type CreateSessionInput = {
-    projectId?: string;
-    prompt: string;
-    canvasSnapshot?: Record<string, unknown>;
-    references?: string[];
-    projectStyle?: { presetId: string; title: string; prompt: string };
-    characters?: Array<{ assetId: string; versionId: string; name: string; definition: Record<string, unknown> }>;
-    config?: Record<string, unknown>;
-	logicalModelId?: string;
-};
-
 export type CreateTaskInput = {
-    sessionId?: string;
     projectId?: string;
     type?: string;
     operation?: string;
@@ -193,42 +124,6 @@ export type CreateTaskInput = {
 	logicalModelId?: string;
     input?: Record<string, unknown>;
 };
-
-
-export function createAgentSession(input: CreateSessionInput) {
-    return http.post<AgentSessionDetail>("/sessions", input).then((detail) => {
-        detail.tasks.forEach((task) => notifyCanvasTaskCreated(task));
-        return detail;
-    });
-}
-
-export function queryAgentSession(id: string) {
-    return http.get<AgentSessionDetail>(`/sessions/${encodeURIComponent(id)}`);
-}
-
-export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback = "后端影视 Agent 会话失败") {
-    for (let index = detail.tasks.length - 1; index >= 0; index -= 1) {
-        const task = detail.tasks[index];
-        if ((task.status === "failed" || task.status === "cancelled") && task.error?.trim()) return generationErrorMessage(task.error.trim());
-    }
-    for (let index = detail.messages.length - 1; index >= 0; index -= 1) {
-        const message = detail.messages[index];
-        if (message.role === "assistant" && message.content.trim()) return generationErrorMessage(message.content.trim());
-    }
-    return fallback;
-}
-
-export function downloadSessionResults(id: string) {
-    return http.get<TaskResult[]>(`/sessions/${encodeURIComponent(id)}/results`);
-}
-
-export function uploadAgentFile(sessionId: string, file: File) {
-    const formData = new FormData();
-    formData.append("sessionId", sessionId);
-    formData.append("file", file);
-    return http.post<SessionFile>("/files", formData);
-}
-
 export function createGenerationTask(input: CreateTaskInput) {
     return http.post<GenerationTask>("/tasks", input).then((task) => {
         recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
@@ -250,9 +145,7 @@ type GenerationTaskPage<T> = { tasks: T[]; nextCursor?: string };
 type GenerationTaskListOptions = { projectId?: string; activeOnly?: boolean };
 type GenerationTaskListDependencies = {
     listBackend?(limit: number, options?: GenerationTaskListOptions, signal?: AbortSignal): Promise<GenerationTask[]>;
-    listLocal?(options?: GenerationTaskListOptions, signal?: AbortSignal): Promise<LocalDreaminaGenerationTask[]>;
     listBackendPage?(request: GenerationTaskPageRequest, signal?: AbortSignal): Promise<GenerationTaskPage<GenerationTask>>;
-    listLocalPage?(request: GenerationTaskPageRequest, signal?: AbortSignal): Promise<GenerationTaskPage<LocalDreaminaGenerationTask>>;
 };
 
 const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
@@ -262,7 +155,6 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
                 signal,
             }),
     }),
-    listLocalPage: (page, signal) => listLocalDreaminaGenerationTaskPage(page, {}, signal),
 };
 
 export async function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }, dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies, signal?: AbortSignal) {
@@ -286,21 +178,9 @@ export async function listGenerationTasks(limit = 30, options?: { projectId?: st
                     pageSignal,
                 )) ?? [],
         }));
-    const localPageReader =
-        dependencies.listLocalPage ??
-        (async (page: GenerationTaskPageRequest, pageSignal?: AbortSignal) => ({
-            tasks:
-                (await dependencies.listLocal?.(
-                    {
-                        ...(page.projectId ? { projectId: page.projectId } : {}),
-                        activeOnly: page.activeOnly,
-                    },
-                    pageSignal,
-                )) ?? [],
-        }));
-    const [backendTasks, localTasks] = await Promise.all([collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal), collectGenerationTaskPages(localPageReader, baseRequest, boundedLimit, signal).catch(() => [])]);
+    const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    return [...backendTasks, ...localTasks.map((task) => projectLocalDreaminaTask(task))]
+    return backendTasks
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
         .filter((task) => !options?.activeOnly || task.status === "queued" || task.status === "running")
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
@@ -324,22 +204,7 @@ async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskP
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
-    if (isLocalDreaminaTaskId(id)) {
-        return queryLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
-    }
     return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
-}
-
-export function waitForLocalGenerationTask(id: string, options?: { signal?: AbortSignal }) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不是本机即梦任务"));
-    return waitForLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
-}
-
-export function splitGenerationTaskObservationIds(ids: readonly string[]) {
-    return {
-        localWaitIds: ids.filter(isLocalDreaminaTaskId),
-        remotePollIds: ids.filter((id) => !isLocalDreaminaTaskId(id)),
-    };
 }
 
 type GenerationTaskSubscriptionDependencies = {
@@ -418,9 +283,6 @@ export function retryGenerationTask(id: string) {
 }
 
 export function cancelGenerationTask(id: string) {
-    if (isLocalDreaminaTaskId(id)) {
-        return Promise.reject(new Error("官方即梦 CLI 当前不支持可靠取消"));
-    }
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/cancel`).then((task) => {
         window.dispatchEvent(new CustomEvent("canvas:task-cancelled", { detail: { task } }));
         window.dispatchEvent(new CustomEvent("wallet:updated"));
@@ -433,42 +295,20 @@ export function queryFailedVideoProviderTask(id: string) {
 }
 
 export function refreshGenerationTaskStatus(id: string, options?: { signal?: AbortSignal }) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不支持手动更新官方状态"));
-    return refreshLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
+    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
 }
 
 export function deleteGenerationTask(id: string) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不支持删除"));
-    return deleteLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id));
+    return http.delete<void>(`/tasks/${encodeURIComponent(id)}`);
 }
 
 export async function listTaskLogs(id: string) {
-    if (isLocalDreaminaTaskId(id)) {
-        const task = await queryGenerationTask(id);
-        return [projectGenerationTaskSafeLog(task)];
-    }
     const raw = await http.get<Array<{ level?: unknown; message?: unknown; payload?: unknown; createdAt?: unknown }>>(`/tasks/${encodeURIComponent(id)}/logs`);
     return raw.map((log, index) => projectBackendSafeTaskLog(id, log, index));
 }
 
 export function formatTaskLog(log: TaskLog) {
     return [`stage=${log.stage}`, ...(log.errorCode ? [`error=${log.errorCode}`] : []), `provenance=${log.provenance}`, ...(log.observedAt ? [`observedAt=${log.observedAt}`] : [])].join(" ");
-}
-
-function projectGenerationTaskSafeLog(task: GenerationTask): TaskLog {
-    const diagnostic = projectLocalDreaminaDiagnosticLog({
-        level: task.errorCode || task.status === "failed" || task.status === "cancelled" ? "error" : "info",
-        stage: task.stage || task.status,
-        errorCode: task.errorCode,
-        provenance: task.officialStatus ? "provider_observation" : "task_state",
-        observedAt: task.updatedAt,
-    });
-    return {
-        id: `safe:${task.id}:${task.updatedAt}`,
-        taskId: task.id,
-        ...diagnostic,
-        createdAt: diagnostic.observedAt,
-    };
 }
 
 export function projectBackendSafeTaskLog(taskId: string, raw: { level?: unknown; message?: unknown; payload?: unknown; createdAt?: unknown }, index: number): TaskLog {
@@ -493,11 +333,11 @@ function safeTaskLogStage(value: unknown) {
     return match?.[1]?.toLowerCase();
 }
 
-const SAFE_TASK_LOG_ERROR_CODES = new Set([...Object.keys(DREAMINA_SUBMIT_ERROR_MESSAGES), "dreamina_query_failed", "dreamina_submission_unknown", "dreamina_reference_invalid"]);
+const SAFE_TASK_LOG_ERROR_CODES = new Set(["provider_query_failed", "provider_submission_unknown", "provider_reference_invalid"]);
 
 function safeTaskLogErrorCode(value: unknown) {
     if (typeof value !== "string") return undefined;
-    for (const match of value.matchAll(/(?:dreamina|local_generation|model|provider)_[a-z0-9_]{2,80}/gi)) {
+    for (const match of value.matchAll(/(?:model|provider)_[a-z0-9_]{2,80}/gi)) {
         const errorCode = match[0].toLowerCase();
         if (SAFE_TASK_LOG_ERROR_CODES.has(errorCode)) return errorCode;
     }
@@ -505,6 +345,7 @@ function safeTaskLogErrorCode(value: unknown) {
 }
 
 export type WaitForGenerationTaskOptions = {
+	textEventsSource?: "task" | "agent";
     signal?: AbortSignal;
     intervalMs?: number;
     timeoutMs?: number;
@@ -515,20 +356,6 @@ export type WaitForGenerationTaskOptions = {
 };
 
 export async function waitForGenerationTask(id: string, options?: WaitForGenerationTaskOptions) {
-    if (isLocalDreaminaTaskId(id)) {
-        try {
-            const task = await waitForLocalGenerationTask(id, { signal: options?.signal });
-            options?.onTaskUpdate?.(task);
-            if (task.status === "succeeded") return task;
-            if (task.status === "failed" || task.status === "cancelled") {
-                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? "已取消" : "失败"}`);
-            }
-            throw new Error("本机即梦任务等待提前结束");
-        } catch (error) {
-            if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-            throw error;
-        }
-    }
     if (options?.onTextDelta || options?.useTextEvents) return waitForGenerationTaskTextEvents(id, options);
     const startedAt = Date.now();
     const intervalMs = options?.intervalMs || 2000;
@@ -581,7 +408,9 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
     const intervalMs = options.intervalMs || 1000;
     let lastTask = options.initialTask;
     let lastEventId = 0;
-    let fullText = lastTask?.textDraft || "";
+    // Agent subscriptions replay from cursor 0; an existing draft must not be
+    // prepended to the same persisted deltas when reopening a conversation.
+    let fullText = options.textEventsSource === "agent" ? "" : lastTask?.textDraft || "";
     let lastStreamError: unknown;
     if (!lastTask) {
         lastTask = await queryGenerationTask(id, { signal: options.signal });
@@ -594,7 +423,8 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
         try {
             const base = String(apiBaseURL).replace(/\/+$/, "");
             const cursor = lastEventId > 0 ? `?after=${encodeURIComponent(String(lastEventId))}` : "";
-            const response = await fetch(`${base}/tasks/${encodeURIComponent(id)}/text-events${cursor}`, {
+            const path = options.textEventsSource === "agent" ? `/agent/runs/${encodeURIComponent(id)}/events` : `/tasks/${encodeURIComponent(id)}/text-events`;
+            const response = await fetch(`${base}${path}${cursor}`, {
                 headers: { Accept: "text/event-stream" },
                 credentials: "include",
                 signal: options.signal,

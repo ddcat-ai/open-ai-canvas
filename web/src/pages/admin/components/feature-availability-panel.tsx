@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
-import { Switch } from "@/components/ui/base/switch";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, LockKeyhole, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { Switch } from "@/pages/admin/ui/controls";
+import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
@@ -35,7 +35,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     {
         key: "creditsEnabled",
         title: "积分计费",
-        description: "控制钱包入口及新任务的积分预授权与结算。",
+        description: "控制积分中心弹窗及新任务的积分预授权与结算。",
         icon: <Coins className="size-4" aria-hidden="true" />,
     },
     {
@@ -269,7 +269,6 @@ export default function FeatureAvailabilityPanel() {
                     status={<AdminStatusBadge label={draftFeatures.frontendModelsEnabled ? "前台模型目录" : "系统渠道"} tone="info" />}
                 >
                     <FeatureSourceRow row={modelFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
-                    <FeatureRuntimeRow enabled={draftFeatures.desktopLocalChannelsEnabled} />
                 </FeatureDomainPanel>
             </div>
         </div>
@@ -341,18 +340,6 @@ function FeatureSourceRow({ row, saved, draft, saving, onChange }: { row: Featur
     );
 }
 
-function FeatureRuntimeRow({ enabled }: { enabled: boolean }) {
-    return (
-        <aside className="admin-feature-runtime-note" aria-label="桌面本地渠道部署状态">
-            <LockKeyhole className="size-4" aria-hidden="true" />
-            <div>
-                <strong>桌面本地渠道由部署环境控制</strong>
-            </div>
-            <AdminStatusBadge label={enabled ? "当前可用" : "当前不可用"} tone={enabled ? "success" : "neutral"} />
-        </aside>
-    );
-}
-
 function effectiveFeatureValue(features: FeatureAvailability, key: FeatureKey) {
     if (key === "systemPluginsVisibleToUsers") return features.pluginCenterEnabled && features.systemPluginsVisibleToUsers;
     return features[key];
@@ -381,6 +368,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         if (typeof record[key] !== "boolean") throw new Error("功能开放配置响应缺少有效开关状态");
     }
     return {
+        welcomeEnabled: record.welcomeEnabled as boolean,
         shortDramaEnabled: record.shortDramaEnabled as boolean,
         taskCenterEnabled: record.taskCenterEnabled as boolean,
         creditsEnabled: record.creditsEnabled as boolean,
@@ -388,7 +376,6 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
-        desktopLocalChannelsEnabled: record.desktopLocalChannelsEnabled === true,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,
         updatedBy: typeof record.updatedBy === "string" ? record.updatedBy : undefined,
         updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,

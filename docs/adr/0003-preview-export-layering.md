@@ -8,7 +8,7 @@
 
 Concat 的预览近似层：交互期间用 CSS 滤镜 / canvas 运算渲染近似效果，监视器播放引擎真帧；其原则是"导出只是你已看到内容的更高画质版本"。转场在导出器降级（交叉淡化 → 重叠片段 + 透明度斜坡）。Concat 自述的最大债务是 chains mirror（§6.1）：TS 手写镜像 Rust 滤镜链，两侧靠钉死测试维持一致，新增效果成本翻倍。
 
-影绘已有 `timeline-to-ffmpeg.ts` 纯函数规划层（trim → gap → concat → subtitle → burn），`timeline-export.ts` 用浏览器 ffmpeg.wasm 执行；后端 Go 暂无 ffmpeg。
+影策已有 `timeline-to-ffmpeg.ts` 纯函数规划层（trim → gap → concat → subtitle → burn），`timeline-export.ts` 用浏览器 ffmpeg.wasm 执行；后端 Go 暂无 ffmpeg。
 
 ## 决策
 

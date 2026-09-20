@@ -10,6 +10,8 @@ const source: CanvasNodeData = {
     metadata: { content: "original-image", storageKey: "original-key", status: "success" },
 };
 const read = (path: string) => readFileSync(resolve(import.meta.dir, "../src", path), "utf8");
+// 断言源码时忽略换行与缩进：长条件被拆行属于排版变化，不应让契约测试失效。
+const flat = (text: string) => text.replace(/\s+/g, " ");
 
 describe("上传图片是输入素材", () => {
     test("上传与导入图片没有生成框，空节点与生成结果仍可配置", () => {
@@ -40,7 +42,7 @@ describe("上传图片是输入素材", () => {
         expect(canGenerateImageInPlace(source)).toBe(false);
     });
     test("页面和工具入口共享素材判定，人物质感接入原图连线", () => {
-        expect(read("pages/canvas/project.tsx")).toContain("dialogNode && !isCanvasImageSourceNode(dialogNode)");
+        expect(flat(read("pages/canvas/project.tsx"))).toContain("dialogNode && !isCanvasImageSourceNode(dialogNode)");
         expect(read("lib/canvas/tool-registry/definitions/node-hover-tools.tsx")).toContain("!isCanvasImageSourceNode(ctx.node)");
         const mediaTools = read("pages/canvas/use-canvas-media-tools.ts");
         const portrait = mediaTools.slice(mediaTools.indexOf("const openPortraitTextureEditor"), mediaTools.indexOf("const cropImageNode"));

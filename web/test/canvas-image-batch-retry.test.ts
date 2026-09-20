@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { cancelIncompleteImageBatch, failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild, retireImageBatchChildren } from "../src/lib/canvas/canvas-image-batch-retry";
+import { removeCanvasNodes } from "../src/lib/canvas/canvas-project-domain";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeStatus } from "../src/types/canvas";
 
 function imageNode(id: string, status: CanvasNodeStatus, metadata: Partial<NonNullable<CanvasNodeData["metadata"]>> = {}): CanvasNodeData {
@@ -107,5 +108,25 @@ describe("canvas image batch retry", () => {
         expect(cancelled.nodes.map((node) => node.id)).toEqual(["root", "done"]);
         expect(cancelled.nodes.find((node) => node.id === "root")?.metadata?.batchChildIds).toBeUndefined();
         expect(cancelled.nodes.find((node) => node.id === "done")?.metadata?.batchRootId).toBeUndefined();
+    });
+
+    test("删除最后一个失败子图后清除批量根节点的失败状态", () => {
+        const root = imageNode("root", "error", {
+            isBatchRoot: true,
+            batchChildIds: ["failed"],
+            batchFailedCount: 1,
+            errorDetails: "生成失败",
+            generationErrorCode: "upstream_unavailable",
+        });
+        const failed = imageNode("failed", "error", { batchRootId: root.id, errorDetails: "上游失败" });
+
+        const result = removeCanvasNodes([root, failed], new Set([failed.id]));
+        const nextRoot = result.nodes.find((node) => node.id === root.id);
+
+        expect(nextRoot?.metadata).toMatchObject({ status: "idle" });
+        expect(nextRoot?.metadata?.isBatchRoot).toBeUndefined();
+        expect(nextRoot?.metadata?.batchFailedCount).toBeUndefined();
+        expect(nextRoot?.metadata?.errorDetails).toBeUndefined();
+        expect(nextRoot?.metadata?.generationErrorCode).toBeUndefined();
     });
 });

@@ -346,21 +346,29 @@ export function useCanvasSelectionController({
         if (hadPendingSelection && !wasSelection && strategy === "replace") deselectCanvas();
     }, [deselectCanvas, resetSelectionBox, screenToCanvas, updateSelectionPreview]);
 
+    // 重渲染只更新回调，不能拆掉进行中的手势监听并清除 iframe 保护层 / 待执行帧。
+    const gestureHandlersRef = useRef({ finishNodeDrag, finishSelection, cancelSelectionBox, handleNodeDragMove, handlePointerMove });
+    useEffect(() => {
+        gestureHandlersRef.current = { finishNodeDrag, finishSelection, cancelSelectionBox, handleNodeDragMove, handlePointerMove };
+    });
+
     useEffect(() => {
         const handleMouseUp = (event: MouseEvent) => {
-            finishNodeDrag(event.clientX, event.clientY);
+            gestureHandlersRef.current.finishNodeDrag(event.clientX, event.clientY);
         };
         const handlePointerUp = (event: PointerEvent) => {
-            finishNodeDrag(event.clientX, event.clientY);
-            finishSelection(event.clientX, event.clientY);
+            gestureHandlersRef.current.finishNodeDrag(event.clientX, event.clientY);
+            gestureHandlersRef.current.finishSelection(event.clientX, event.clientY);
         };
         const cancel = () => {
-            finishNodeDrag();
-            cancelSelectionBox();
+            gestureHandlersRef.current.finishNodeDrag();
+            gestureHandlersRef.current.cancelSelectionBox();
         };
-        window.addEventListener("mousemove", handleNodeDragMove);
+        const onMouseMove = (event: MouseEvent) => gestureHandlersRef.current.handleNodeDragMove(event);
+        const onPointerMove = (event: PointerEvent) => gestureHandlersRef.current.handlePointerMove(event);
+        window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mouseup", handleMouseUp);
-        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointermove", onPointerMove);
         window.addEventListener("pointerup", handlePointerUp);
         window.addEventListener("pointercancel", cancel);
         window.addEventListener("blur", cancel);
@@ -368,14 +376,14 @@ export function useCanvasSelectionController({
             if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
             if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
             applyCanvasNodeDragPreview(containerRef.current, null);
-            window.removeEventListener("mousemove", handleNodeDragMove);
+            window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", handleMouseUp);
-            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointermove", onPointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
             window.removeEventListener("pointercancel", cancel);
             window.removeEventListener("blur", cancel);
         };
-    }, [cancelSelectionBox, finishNodeDrag, finishSelection, handleNodeDragMove, handlePointerMove]);
+    }, [containerRef]);
 
     return {
         alignmentGuides,

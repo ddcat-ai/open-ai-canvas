@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { autoMentionCanvasResourceReferences, findCanvasResourceAutoLinkMatch, type CanvasResourceReference, applyCanvasConnectionPromptSync, buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes, imageGenerationReferenceConnections } from "../src/lib/canvas/canvas-resource-references";
+import { autoMentionCanvasResourceReferences, findCanvasResourceAutoLinkMatch, type CanvasResourceReference, applyCanvasConnectionPromptSync, buildAssetMentionReferences, buildCanvasNodeMentionReferenceMap, buildNodeMentionReferences, buildOrderedCanvasResourceReferences, canvasResourceMentionToken, collectUpstreamVideoNodes, imageGenerationReferenceConnections, reorderCanvasResourceConnections, replaceCanvasMentionToken, replaceCanvasReferenceMentions } from "../src/lib/canvas/canvas-resource-references";
 import { canvasNodeToAsset } from "../src/lib/canvas/canvas-node-asset";
 import { buildNodeGenerationInputs } from "../src/components/canvas/canvas-node-generation";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
@@ -227,6 +227,21 @@ describe("canvas resource mention slots", () => {
         expect(uploadedReference?.storageKey).toBe("video:user:source");
     });
 
+    test("绘图引用保留本地预览定位信息", () => {
+        const drawing: CanvasNodeData = {
+            id: "drawing-a",
+            type: CanvasNodeType.Drawing,
+            title: "草图 A",
+            position: { x: 0, y: 0 },
+            width: 100,
+            height: 100,
+            metadata: { drawingId: "drawing-document-a", drawingRevision: 3 },
+        };
+        const target = videoNode("target");
+        const [reference] = buildNodeMentionReferences(target, [drawing, target], [connection(drawing.id, target.id)]);
+        expect(reference).toMatchObject({ kind: "image", label: "绘图1", drawingId: "drawing-document-a", drawingRevision: 3 });
+    });
+
     test("画布节点引用只保存类型位置，不保存节点 ID", () => {
         const target = videoNode("target");
         const image = imageNode("image-a");
@@ -337,5 +352,78 @@ describe("image generation reference connections", () => {
         const copied = imageGenerationReferenceConnections(source.id, "result", nodes, connections, () => "new-id");
         expect(copied.map((item) => item.fromNodeId)).toEqual(["image-a", "image-b"]);
         expect(copied.every((item) => item.toNodeId === "result")).toBe(true);
+    });
+});
+
+describe("reorder canvas resource connections", () => {
+    test("直接引用按指定顺序换位并同步编号提示词", () => {
+        const imageA = imageNode("image-a");
+        const imageB = imageNode("image-b");
+        const target = { ...videoNode("target"), metadata: { composerContent: "比较 @图片1 和 @图片2" } };
+        const nodes = [imageA, imageB, target];
+        const previousConnections = [connection(imageA.id, target.id), connection(imageB.id, target.id)];
+        const nextConnections = reorderCanvasResourceConnections(target.id, [imageB.id, imageA.id], nodes, previousConnections);
+        expect(nextConnections.map((item) => item.fromNodeId)).toEqual([imageB.id, imageA.id]);
+        const nextNodes = applyCanvasConnectionPromptSync(nodes, previousConnections, nodes, nextConnections);
+        expect(nextNodes.find((node) => node.id === target.id)?.metadata?.composerContent).toBe("比较 @图片2 和 @图片1");
+    });
+
+    test("配置节点承接的引用可排序且不改变主链和无关连线", () => {
+        const imageA = imageNode("image-a");
+        const imageB = imageNode("image-b");
+        const target = videoNode("target");
+        const config: CanvasNodeData = { id: "config", type: CanvasNodeType.Config, title: "config", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: {} };
+        const other = videoNode("other");
+        const main = connection(target.id, config.id);
+        const unrelated = connection(imageA.id, other.id);
+        const previousConnections = [main, connection(imageA.id, config.id), unrelated, connection(imageB.id, config.id)];
+        const nextConnections = reorderCanvasResourceConnections(target.id, [imageB.id, imageA.id], [imageA, imageB, target, config, other], previousConnections);
+        expect(nextConnections).toEqual([main, connection(imageB.id, config.id), unrelated, connection(imageA.id, config.id)]);
+        expect(nextConnections[0]).toBe(main);
+        expect(nextConnections[2]).toBe(unrelated);
+    });
+});
+
+describe("replace canvas reference mentions", () => {
+    test("替换参考图时将提示词内所有提及同张图片的标记全部替换", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "图片1",
+            title: "卡通可爱动画风画册",
+            active: true,
+        };
+        const prompt = "@图片1 参考 @图片2 生成，保持 @图片1 的色调与 @卡通可爱动画风画册 的画风";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "@图片3", "未来赛博超跑");
+        expect(replaced).toBe("@图片3 参考 @图片2 生成，保持 @图片3 的色调与 @未来赛博超跑 的画风");
+    });
+
+    test("不会误替换较长数字或无关标记", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "图片1",
+            title: "画册",
+            active: true,
+        };
+        const prompt = "@图片1 和 @图片10 及 @图片11，不要改动 @图片10";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "@图片9");
+        expect(replaced).toBe("@图片9 和 @图片10 及 @图片11，不要改动 @图片10");
+    });
+
+    test("自动规范化带有或缺失@前缀的参数", () => {
+        const oldRef: CanvasResourceReference = {
+            id: "node-old",
+            nodeId: "node-old",
+            kind: "image",
+            label: "@图片1",
+            title: "@画册",
+            active: true,
+        };
+        const prompt = "@图片1 的画风结合 @画册 的色调";
+        const replaced = replaceCanvasReferenceMentions(prompt, oldRef, "图片2", "新封面");
+        expect(replaced).toBe("@图片2 的画风结合 @新封面 的色调");
     });
 });

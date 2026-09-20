@@ -623,7 +623,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                     </div>
                     <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-foreground/68">文本模型</span>
-                        <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} fullWidth placeholder="选择用于提取角色、场景与道具的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />
+                        <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} variant="creation" fullWidth placeholder="选择用于提取角色、场景与道具的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />
                     </label>
                 </div>
             </Modal>
@@ -637,7 +637,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                     {storyboardImpact.shotCount ? <Callout tone="warning" title={`本章已有 ${storyboardImpact.shotCount} 个分镜`}>继续后会先生成新分镜；生成成功后，再按确认内容整体替换旧镜头及其关联数据。</Callout> : null}
                     <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-foreground/68">文本模型</span>
-                        <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} fullWidth placeholder="选择用于生成分镜的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />
+                        <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} variant="creation" fullWidth placeholder="选择用于生成分镜的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />
                     </label>
                     <div>
                         <label className="block">

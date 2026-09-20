@@ -1,24 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import { HardDrive } from "lucide-react";
 
-import { formatBytes } from "@/lib/image-utils";
-import { getAccountFileStorageUsage } from "@/services/api/resources";
+import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
+import { accountFileStorageUsageQueryKey, accountStorageMeter, formatStorageBytes } from "@/lib/account-storage-usage";
 
-export const assetStorageUsageQueryKey = ["account-file-storage-usage"] as const;
+export const assetStorageUsageQueryKey = accountFileStorageUsageQueryKey;
 
 export function AssetStorageUsage() {
-    const query = useQuery({
-        queryKey: assetStorageUsageQueryKey,
-        queryFn: getAccountFileStorageUsage,
-        refetchOnMount: "always",
-    });
+    const query = useAccountFileStorageUsage();
     const usage = query.data;
-    const percent = usage?.totalBytes ? Math.min(100, (usage.usedBytes / usage.totalBytes) * 100) : 0;
-    const percentLabel = usage?.usedBytes && percent < 0.1 ? "<0.1%" : `${Math.round(percent * 10) / 10}%`;
-    const full = Boolean(usage && usage.usedBytes >= usage.totalBytes);
+    const meter = accountStorageMeter(usage);
 
     return (
-        <section className={`assets-storage-usage${full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`} aria-label="账号文件容量" aria-busy={query.isPending} title="包含素材文件和 Agent 会话附件">
+        <section className={`assets-storage-usage${meter.full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`} aria-label="账号文件容量" aria-busy={query.isPending} title="包含素材文件和 Agent 会话附件">
             <span className="assets-storage-usage-icon" aria-hidden="true">
                 <HardDrive />
             </span>
@@ -26,7 +19,7 @@ export function AssetStorageUsage() {
             {usage ? (
                 <>
                     <span className="assets-storage-usage-value">
-                        {storageBytes(usage.usedBytes)} / {storageBytes(usage.totalBytes)}
+                        {formatStorageBytes(usage.usedBytes)} / {formatStorageBytes(usage.totalBytes)}
                     </span>
                     <span
                         className="assets-storage-usage-track"
@@ -35,11 +28,11 @@ export function AssetStorageUsage() {
                         aria-valuemin={0}
                         aria-valuemax={usage.totalBytes}
                         aria-valuenow={Math.min(usage.usedBytes, usage.totalBytes)}
-                        aria-valuetext={`已使用 ${storageBytes(usage.usedBytes)}，总容量 ${storageBytes(usage.totalBytes)}`}
+                        aria-valuetext={`已使用 ${formatStorageBytes(usage.usedBytes)}，总容量 ${formatStorageBytes(usage.totalBytes)}`}
                     >
-                        <span style={{ width: `${percent}%` }} />
+                        <span style={{ width: `${meter.percent}%` }} />
                     </span>
-                    <span className="assets-storage-usage-percent">{percentLabel}</span>
+                    <span className="assets-storage-usage-percent">{meter.percentLabel}</span>
                 </>
             ) : query.isError ? (
                 <span className="assets-storage-usage-status">
@@ -53,8 +46,4 @@ export function AssetStorageUsage() {
             )}
         </section>
     );
-}
-
-function storageBytes(value: number) {
-    return formatBytes(value) || "0 B";
 }

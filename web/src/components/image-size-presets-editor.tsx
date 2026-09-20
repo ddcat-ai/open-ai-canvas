@@ -4,7 +4,7 @@ import { Check, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/base/switch";
 import "./image-size-picker.css";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
 import type { ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profile: ImageCapabilityConfig; disabled?: boolean; onChange: (size: ImageCapabilityConfig["size"]) => void }) {
@@ -62,7 +62,7 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                             </div>
                         </header>
                         <div className="image-size-preset-body">
-                            {!imageTierAvailable(profile, tier) ? <p className="image-size-hint">需先配置此档位对应的质量值，用户端才会开放。</p> : null}
+                            {imageResolutionUsesQuality(profile) && !imageTierAvailable(profile, tier) ? <p className="image-size-hint">需先配置此档位对应的质量值，用户端才会开放。</p> : null}
                             <div className="image-size-preset-options" role="group" aria-label={`${tier.toUpperCase()} 支持的宽高比`}>
                                 {ratios.map((ratio) => {
                                     const selected = items.find((item) => item.ratio === ratio);

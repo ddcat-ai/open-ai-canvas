@@ -3,6 +3,13 @@ import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet"
 
 export type PriceTierMatchMode = "default" | "advanced";
 
+// 与后端保存口径一致：上游键比较前剥掉一次 models/ 前缀，避免极旧存量行误报差异。
+export function normalizeUpstreamModelKey(value: unknown): string {
+    return String(value || "")
+        .trim()
+        .replace(/^models\//, "");
+}
+
 export type PriceTierFormValues = {
     matchMode: PriceTierMatchMode;
     operation: string;
@@ -10,6 +17,7 @@ export type PriceTierFormValues = {
     size: string;
     resolution: string;
     videoSeconds: number;
+    videoGenerateAudio: string;
     imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
@@ -17,6 +25,11 @@ export type PriceTierFormValues = {
     inputTokenPrice: number;
     outputTokenPrice: number;
     cachedTokenPrice: number;
+    costConfigured: boolean;
+    costUnitPrice: number;
+    costInputTokenPrice: number;
+    costOutputTokenPrice: number;
+    costCachedTokenPrice: number;
     priceConfigured: boolean;
     enabled: boolean;
 };
@@ -29,6 +42,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         size: "*",
         resolution: "*",
         videoSeconds: 0,
+        videoGenerateAudio: "*",
         imageCount: 0,
         providerModelKey: "",
         billingMode: "fixed_request",
@@ -36,6 +50,11 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         inputTokenPrice: 0,
         outputTokenPrice: 0,
         cachedTokenPrice: 0,
+        costConfigured: false,
+        costUnitPrice: 0,
+        costInputTokenPrice: 0,
+        costOutputTokenPrice: 0,
+        costCachedTokenPrice: 0,
         priceConfigured: true,
         enabled: true,
     };
@@ -43,7 +62,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 
 export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
     const selector = tier.selector || {};
-    const hasSpecificMatch = Object.values(selector).some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*") || tier.videoSeconds > 0;
+    const hasSpecificMatch = [selector.operation, selector.quality, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
@@ -51,6 +70,7 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
         size: selector.size || "*",
         resolution: tier.resolution || "*",
         videoSeconds: tier.videoSeconds || 0,
+        videoGenerateAudio: selector.videoGenerateAudio || "*",
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
@@ -58,6 +78,11 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
         inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
+        costConfigured: tier.costPricing?.configured === true,
+        costUnitPrice: (tier.costPricing?.unitPriceMicrocredits ?? 0) / 1_000_000,
+        costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
         priceConfigured: tier.priceConfigured,
         enabled: tier.enabled,
     };
@@ -66,7 +91,8 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
 export function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
     return {
         ...defaultPriceTier(),
-        providerModelKey: item.providerModelKey || "",
+        // 不预填顶层上游键：统一价格档保持“跟随模型默认上游 ID”，
+        // 否则首次保存会把当时的上游键固化进档位，之后模型级重命名会被旧值遮蔽。
         billingMode: item.billingMode,
         unitPrice: item.unitPriceMicrocredits / 1_000_000,
         inputTokenPrice: item.inputTokenPriceMicrocredits / 1_000_000,
@@ -83,8 +109,6 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
     if (capability === "video") {
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
-        if (Number(tier.videoSeconds) > 0) selector.videoSeconds = String(Number(tier.videoSeconds));
-        if (Number(tier.imageCount) > 0) selector.imageCount = String(Number(tier.imageCount));
     }
     if (capability === "image") {
         if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
@@ -98,5 +122,31 @@ export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, t
 }
 
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
-    return capability === "video" && tier.matchMode === "advanced" ? Number(tier.videoSeconds || 0) : 0;
+    void capability;
+    void tier;
+    return 0;
+}
+
+export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {
+    const videoTokens = capability === "video" && tier.billingMode === "token";
+    return {
+        selector: skuSelectorFromForm(capability, tier),
+        resolution: priceTierResolutionFromForm(capability, tier),
+        videoSeconds: priceTierVideoSecondsFromForm(capability, tier),
+        providerModelKey: tier.providerModelKey?.trim() || upstreamModel,
+        billingMode: tier.billingMode,
+        unitPriceMicrocredits: Math.round((tier.unitPrice || 0) * 1_000_000),
+        inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.inputTokenPrice || 0) * 1_000_000),
+        outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
+        cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
+        costPricing: {
+            configured: tier.costConfigured,
+            unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),
+            inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costInputTokenPrice * 1_000_000),
+            outputTokenPriceMicrocredits: Math.round(tier.costOutputTokenPrice * 1_000_000),
+            cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costCachedTokenPrice * 1_000_000),
+        },
+        priceConfigured: tier.priceConfigured !== false,
+        enabled: tier.enabled !== false,
+    };
 }

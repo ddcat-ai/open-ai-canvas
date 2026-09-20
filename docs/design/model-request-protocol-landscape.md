@@ -1,8 +1,8 @@
-# LLM、Image、Video 主流请求协议全景与影绘兼容性调查
+# LLM、Image、Video 主流请求协议全景与影策兼容性调查
 
 > 调查快照：2026-08-31
 > 文档性质：协议调研与现状审计，不是最终统一协议设计稿
-> 目标：为后续“影绘通用生成请求标准底座”和 provider 插件体系提供事实清单、差异维度与验收边界。
+> 目标：为后续“影策通用生成请求标准底座”和 provider 插件体系提供事实清单、差异维度与验收边界。
 
 ## 1. 结论先行
 
@@ -11,7 +11,7 @@
 3. **文本、图片、视频不能共用一个扁平字段表。** 文本主要是消息/内容块与流式事件；图片同时存在 JSON、multipart、同步 base64、异步任务；视频普遍是异步任务，并且参考图的“顺序”和“语义角色”会改变协议结构。
 4. **参考素材必须以语义角色建模，不能只以数组下标建模。** `images[0]` 可能代表首帧、主参考图、被编辑原图或第一张角色图；`images[1]` 可能代表尾帧、第二角色、风格图或 mask。数组下标只能作为稳定顺序，不能承担业务语义。
 5. **插件不能只做字段重命名。** 主流协议需要数组遍历、按 role 过滤、条件分支、对象/数组构造、枚举转换、multipart、签名、轮询、取消、SSE 解析、结果下载和错误归一化。
-6. **影绘当前已经有统一请求雏形，但声明式插件能力不足。** `GenerationRequest` 已有 `Images/Videos/Audios/Operation/Extra`，`MediaReference` 也已有 `Role`；但声明式插件看到的 `request.images` 丢失了 `id` 与 `role`，只能写 `request.images.0.url` 之类固定编号。
+6. **影策当前已经有统一请求雏形，但声明式插件能力不足。** `GenerationRequest` 已有 `Images/Videos/Audios/Operation/Extra`，`MediaReference` 也已有 `Role`；但声明式插件看到的 `request.images` 丢失了 `id` 与 `role`，只能写 `request.images.0.url` 之类固定编号。
 7. **MiniMax H3 的现有问题不是单一参数名问题。** 当前前端旧直连与后端内置适配器对 MiniMax 视频的 payload 不一致：分辨率、比例、水印、校验范围、content 结构及顶层 prompt 的处理均有差异；通过中转时还可能再套一层 NewAPI 结构。
 
 ## 2. 调查范围与分类方法
@@ -23,7 +23,7 @@
 - 影像生成领域常见商业 API；
 - OpenAI-compatible、NewAPI、LiteLLM、OpenRouter、fal、Replicate 等聚合/运行时协议；
 - ComfyUI、RunningHub、AutoDL 等工作流协议；
-- 影绘仓库已经出现或社区明确反馈的协议。
+- 影策仓库已经出现或社区明确反馈的协议。
 
 每个条目区分四层：
 
@@ -224,7 +224,7 @@
 
 因此通用层应保存 `order`，插件应消费 `role`；只有协议明确以顺序定义首尾帧时，插件才把 role 排序后生成数组。
 
-## 8. 影绘当前实现审计
+## 8. 影策当前实现审计
 
 ### 8.1 已有的正确基础
 
@@ -435,6 +435,8 @@ if model name contains minimax/h3
 | `openai-videos` | multipart create/task/content/cancel |
 | `xai-video` | xAI JSON video + reference_images |
 | `volcengine-ark-seedance` | Ark contents task + multimodal roles |
+| `volcengine-ark-agent-plan-seedream` | Agent Plan `/api/plan/v3/images/generations` |
+| `volcengine-ark-agent-plan-seedance` | Agent Plan `/api/plan/v3/contents/generations/tasks` |
 | `minimax-hailuo-video-v2` | MiniMax `/v2/video_generation` |
 | `dashscope-wan-video` | DashScope async Wan task |
 | `newapi-media-task-v1` | NewAPI Channel 1 包装 |
@@ -443,7 +445,6 @@ if model name contains minimax/h3
 | `agnes-video-v20` | frame-based V2.0 profile |
 | `replicate-prediction` | prediction lifecycle + model schema |
 | `fal-queue` | queue lifecycle + endpoint schema |
-| `comfyui-workflow` | workflow graph/upload/history/view |
 
 一个安装包可以贡献多个 provider profile，但运行时必须能区分每个 profile 的 endpoint、transport、能力和模型约束。
 
@@ -537,7 +538,7 @@ if model name contains minimax/h3
 
 ## 15. 调查结论
 
-- **现状是：** 影绘已有统一任务生命周期和初版 `GenerationRequest`，内置 adapter 能处理一部分复杂协议；上传的声明式插件仍主要是固定 JSON path 映射。
+- **现状是：** 影策已有统一任务生命周期和初版 `GenerationRequest`，内置 adapter 能处理一部分复杂协议；上传的声明式插件仍主要是固定 JSON path 映射。
 - **关键约束是：** 协议兼容的难点集中在媒体 role、动态数组、条件结构、transport、异步生命周期和模型级能力，不是 endpoint 和字段改名。
 - **此前不明显但现在确认的是：** `MediaReference.Role` 已存在，却在 manifest projection 中丢失；MiniMax 后端 adapter 与前端旧直连 payload 也存在实质差异。
 - **基于以上，判断是：** 下一阶段应先升级通用请求和插件执行底座，再批量制作主流 provider 插件；如果直接继续新增固定 `fields` 映射，会不断把协议差异硬编码进宿主，并重复出现参考图编号和 H3 参数问题。

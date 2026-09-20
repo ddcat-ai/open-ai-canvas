@@ -20,9 +20,6 @@ web/.next
 web/dist
 web/node_modules
 web/out
-canvas-agent/dist
-canvas-agent/node_modules
-canvas-agent/pnpm-lock.yaml
 *.log
 *.db
 *.sqlite

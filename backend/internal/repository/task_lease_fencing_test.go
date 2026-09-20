@@ -15,7 +15,7 @@ func TestTaskLeaseFencesExpiredAndReclaimedWriters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}, &model.Result{}, &model.Message{}, &model.Session{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.Result{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&model.Task{ID: "task", UserID: "user", Status: model.TaskStatusQueued}).Error; err != nil {
@@ -49,11 +49,11 @@ func TestTaskLeaseFencesExpiredAndReclaimedWriters(t *testing.T) {
 		}
 	}
 	old.Status = model.TaskStatusSucceeded
-	if err := repo.SaveTaskCompletion(old, model.TaskStatusRunning, nil, &model.Message{ID: "stale"}, []model.Result{{ID: "stale"}}); !errors.Is(err, ErrTaskStateConflict) {
+	if err := repo.SaveTaskCompletion(old, model.TaskStatusRunning, []model.Result{{ID: "stale"}}); !errors.Is(err, ErrTaskStateConflict) {
 		t.Fatalf("stale completion: %v", err)
 	}
 	var count int64
-	for _, table := range []any{&model.Result{}, &model.Message{}} {
+	for _, table := range []any{&model.Result{}} {
 		if err := db.Model(table).Count(&count).Error; err != nil || count != 0 {
 			t.Fatalf("stale related row persisted: %d %v", count, err)
 		}
@@ -65,7 +65,7 @@ func TestTaskLeaseFencesExpiredAndReclaimedWriters(t *testing.T) {
 		t.Fatal(err)
 	}
 	current.Status = model.TaskStatusSucceeded
-	if err := repo.SaveTaskCompletion(current, model.TaskStatusRunning, nil, nil, []model.Result{{ID: "valid", TaskID: current.ID}}); err != nil {
+	if err := repo.SaveTaskCompletion(current, model.TaskStatusRunning, []model.Result{{ID: "valid", TaskID: current.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := repo.Task(current.ID)

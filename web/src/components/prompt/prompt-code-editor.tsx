@@ -2,7 +2,7 @@ import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 
 import { cn } from "@/lib/utils";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type PromptCodeEditorHandle = {
     insertText: (text: string) => void;
@@ -18,7 +18,7 @@ type PromptCodeEditorProps = {
 };
 
 export const PromptCodeEditor = forwardRef<PromptCodeEditorHandle, PromptCodeEditorProps>(function PromptCodeEditor({ value, onChange, readOnly = false, ariaLabel, className }, ref) {
-    const theme = useThemeStore((state) => state.theme);
+    const theme = useActiveTheme();
     const viewRef = useRef<EditorView | null>(null);
 
     useImperativeHandle(ref, () => ({

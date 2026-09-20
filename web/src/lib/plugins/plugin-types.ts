@@ -322,13 +322,13 @@ export type PluginAgentAction = {
     description: string;
     inputSchema: Record<string, unknown>;
     /** Pure planner: validate input and return operations, never perform side effects here. */
-    buildOperations: (input: Record<string, unknown>, snapshot: import("@/lib/canvas/canvas-agent-ops").CanvasAgentSnapshot) => import("@/lib/canvas/canvas-agent-ops").CanvasAgentOp[];
+    buildOperations: (input: Record<string, unknown>, snapshot: import("@/lib/canvas/canvas-operation-contract").CanvasSnapshot) => import("@/lib/canvas/canvas-operation-contract").CanvasOperation[];
 };
 
 export type RegisteredPlugin = {
     agentActions?: PluginAgentAction[];
     /** Pure, bounded projection: never return embedded media or provider credentials. */
-    readAgentNode?: (node: import("@/types/canvas").CanvasNodeData, snapshot: import("@/lib/canvas/canvas-agent-ops").CanvasAgentSnapshot) => Record<string, unknown>;
+    readAgentNode?: (node: import("@/types/canvas").CanvasNodeData, snapshot: import("@/lib/canvas/canvas-operation-contract").CanvasSnapshot) => Record<string, unknown>;
     /** v1 或 v2 插件清单；v2 清单结构为 v1 超集（含 editorSlots 声明）。 */
     manifest: PluginManifest | PluginManifestV2;
     source?: "bundled" | "uploaded" | string;

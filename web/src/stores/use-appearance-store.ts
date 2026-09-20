@@ -5,12 +5,7 @@ import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     schemaVersion: 8,
-    studioLabel: "YINGHUI STUDIO",
-    noticeEnabled: false,
-    noticeText: "",
-    noticeLinkText: "",
-    noticeLinkUrl: "",
-    brandName: "影绘",
+    brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
     authHeroDescription: "",
@@ -22,10 +17,10 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     authVideoAutoplay: true,
     skinId: "classic",
     activeSkin: DEFAULT_CLASSIC_SKIN,
-    seoTitle: "影绘",
-    seoDescription: "影绘，面向 AI 影视与短剧创作的工作台。",
+    seoTitle: "影策",
+    seoDescription: "影策，面向 AI 影视与短剧创作的工作台。",
     seoKeywords: "",
-    footerCopyright: `© ${new Date().getFullYear()} 影绘. All rights reserved.`,
+    footerCopyright: `© ${new Date().getFullYear()} 影策. All rights reserved.`,
     icpFilingEnabled: false,
     icpFilingNumber: "",
     logoConfigured: false,
@@ -66,11 +61,6 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
         schemaVersion: 8,
-        studioLabel: normalizeAppearanceCopy(value?.studioLabel, brandSlug.replace(/-+/g, " ").toLocaleUpperCase(), true),
-        noticeEnabled: value?.noticeEnabled === true && Boolean(value?.noticeText?.trim()),
-        noticeText: normalizeAppearanceCopy(value?.noticeText, "", true),
-        noticeLinkText: normalizeAppearanceCopy(value?.noticeLinkText, "", true),
-        noticeLinkUrl: safeNoticeURL(value?.noticeLinkUrl),
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -165,18 +155,8 @@ export function appearanceLogoURL(appearance: PublicAppearance, theme: "light" |
 }
 
 export function brandStudioLabel(appearance: PublicAppearance) {
-    return appearance.studioLabel;
-}
-
-export function safeNoticeURL(value: unknown): string {
-    const candidate = typeof value === "string" ? value.trim() : "";
-    if (!candidate || /[\\\r\n\t]/.test(candidate)) return "";
-    if (candidate.startsWith("/") && !candidate.startsWith("//")) return candidate;
-    try {
-        const parsed = new URL(candidate);
-        if (parsed.protocol === "https:" && !parsed.username && !parsed.password) return candidate;
-    } catch { /* Invalid links are not rendered. */ }
-    return "";
+    if (appearance.brandName === DEFAULT_PUBLIC_APPEARANCE.brandName && appearance.brandSlug === DEFAULT_PUBLIC_APPEARANCE.brandSlug) return "YINGCE STUDIO";
+    return appearance.brandSlug.replace(/-+/g, " ").toLocaleUpperCase();
 }
 
 function normalizeBrandSlug(value: unknown) {

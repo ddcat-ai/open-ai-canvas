@@ -1,7 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { App, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { History } from "lucide-react";
+import { History, Sparkles, Maximize2 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "react-router";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
@@ -20,6 +21,7 @@ import { resolveModelChannel, selectableModelsByCapability, useConfigStore, useE
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
@@ -27,9 +29,11 @@ import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
-import { modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
+import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
-import { CreationComposer, CreationEmptyBanner, CreationEmptySuggest, CreationHistoryDrawer, CreationMessageView, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
+import { CreationComposer, CreationEmptySuggest, CreationFeaturedWorks, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
+import { CreationAgentEntry } from "./creation-agent-entry";
+import { createCreationSubmitGate } from "./creation-submit-gate";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -54,6 +58,7 @@ function writeComposerPref(key: string, value: boolean) {
 }
 
 export default function CreatePage() {
+    const [agentMode, setAgentMode] = useState(false);
     const { message: toast, modal } = App.useApp();
     const navigate = useNavigate();
     const [openingCanvas, setOpeningCanvas] = useState(false);
@@ -79,7 +84,7 @@ export default function CreatePage() {
     const [activeId, setActiveId] = useState("");
     const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
-    const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || "video");
+    const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || defaultCreationMode);
     const [prompt, setPrompt] = useState("");
     const [attachments, setAttachments] = useState<CreationAttachment[]>([]);
     const promptRef = useRef(prompt);
@@ -102,10 +107,14 @@ export default function CreatePage() {
     const abortRef = useRef<AbortController | null>(null);
     const composerFocusRef = useRef<HTMLTextAreaElement>(null);
     const threadScrollRef = useRef<HTMLElement>(null);
+    const launchpadRef = useRef<HTMLElement>(null);
+    const reducedMotion = useReducedMotion();
+    const [launchpadCondensed, setLaunchpadCondensed] = useState(false);
     const followLatestMessageRef = useRef(true);
     const taskSyncWarningRef = useRef(false);
     const activeGenerationTaskIdsRef = useRef(new Set<string>());
     const retryPreparingRef = useRef(new Set<string>());
+    const submitGateRef = useRef(createCreationSubmitGate());
     const pendingRetryRef = useRef<{ context: CreationRetryContext; lockKey: string } | null>(null);
     const [retrySequence, setRetrySequence] = useState(0);
     const [composerPreferencesInitialized, setComposerPreferencesInitialized] = useState(false);
@@ -149,6 +158,15 @@ export default function CreatePage() {
     }, [attachments]);
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
+
+    // 空首页从顶部开始；有消息的对话由跟随消息逻辑管理滚动。
+    useLayoutEffect(() => {
+        if (!hydrated || !isEmpty) return;
+        const frame = window.requestAnimationFrame(() => {
+            threadScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [activeId, hydrated, isEmpty]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
     const recoveryTaskKey = useMemo(() => pendingTaskIds.filter((id) => !activeGenerationTaskIdsRef.current.has(id)).join("|"), [pendingTaskIds]);
     const videoShots = useMemo(() => creationShotRail(activeConversation?.messages || []), [activeConversation]);
@@ -162,7 +180,7 @@ export default function CreatePage() {
     useEffect(() => {
         if (!composerPreferencesHydrated || composerPreferencesInitialized) return;
         const saved = useCreationPreferencesStore.getState().preferences;
-        const nextMode = saved.mode || "video";
+        const nextMode = saved.mode || defaultCreationMode;
         setMode(nextMode);
         if (nextMode === "image" && saved.image) {
             if (saved.image.ratio) setRatio(saved.image.ratio);
@@ -305,13 +323,13 @@ export default function CreatePage() {
     }, []);
 
     useEffect(() => {
-        if (!followLatestMessageRef.current) return;
+        if (isEmpty || !followLatestMessageRef.current) return;
         const frame = window.requestAnimationFrame(() => {
             const container = threadScrollRef.current;
             if (container) container.scrollTop = container.scrollHeight;
         });
         return () => window.cancelAnimationFrame(frame);
-    }, [activeConversation?.id, activeConversation?.messages]);
+    }, [activeConversation?.id, activeConversation?.messages, isEmpty]);
 
     const updateActive = useCallback((updater: (conversation: CreationConversation) => CreationConversation) => {
         const next = updateCreationConversationSnapshot(conversationsRef.current, activeId, updater);
@@ -511,24 +529,33 @@ export default function CreatePage() {
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
         };
+        if (!submitGateRef.current.tryAcquire()) {
+            releaseRetryLock();
+            return;
+        }
+        const releaseSubmitGate = () => submitGateRef.current.release();
         const text = prompt.trim();
         if (!text || busy || !activeConversation) {
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (!selectedModel) {
             toast.warning(`请先在设置中配置${modeLabels[mode]}模型`);
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
             toast.error("当前模型不支持所选视频时长，请重新选择");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (attachments.length > maxReferences) {
             toast.warning("参考内容正在按当前模型能力调整，请稍后重试");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         const settings = { ratio, seconds, quality, videoQuality, count };
@@ -543,7 +570,15 @@ export default function CreatePage() {
             characterCount: 0,
         });
         const skillReferences = references.flatMap((reference) => (reference.skill ? [reference.skill] : []));
-        const runtime = await loadCreationRuntime();
+        let runtime: CreationRuntime;
+        try {
+            runtime = await loadCreationRuntime();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "生成运行时加载失败");
+            releaseRetryLock();
+            releaseSubmitGate();
+            return;
+        }
         let skillExecution: Awaited<ReturnType<typeof runtime.skillRuntime.prepare>>;
         try {
             skillExecution = await runtime.skillRuntime.prepare({
@@ -555,6 +590,7 @@ export default function CreatePage() {
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "技能上下文加载失败");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         const expandedPrompt = skillExecution.prompt;
@@ -703,6 +739,7 @@ export default function CreatePage() {
             for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();
             releaseRetryLock();
+            releaseSubmitGate();
             if (abortRef.current === controller) {
                 abortRef.current = null;
                 setBusy(false);
@@ -882,6 +919,15 @@ export default function CreatePage() {
         const container = threadScrollRef.current;
         if (!container) return;
         followLatestMessageRef.current = container.scrollHeight - container.scrollTop - container.clientHeight <= 160;
+        if (isEmpty) {
+            // Keep the original editor in flow: changing its height here feeds
+            // scroll anchoring back into this handler and causes flicker.
+            const bottom = launchpadRef.current?.getBoundingClientRect().bottom;
+            if (bottom === undefined) return;
+            const remaining = bottom - container.getBoundingClientRect().top;
+            if (remaining < -16) setLaunchpadCondensed(true);
+            else if (remaining > 24 || container.scrollTop <= 24) setLaunchpadCondensed(false);
+        }
     };
 
 
@@ -940,19 +986,36 @@ export default function CreatePage() {
                 <div className="creation-top-actions">
                     <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip>
                 </div>
+                <AnimatePresence>
+                    {launchpadCondensed && !agentMode ? <motion.div className="creation-floating-prompt" key="floating-prompt"
+                        style={{ x: "-50%" }}
+                        initial={{ opacity: 0, y: -12, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: .98 }}
+                        transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 32, mass: .8 }}>
+                        <Sparkles aria-hidden="true" />
+                        <input aria-label="快捷编辑提示词" placeholder="继续描述你的创作想法…" value={prompt} disabled={busy || referenceReplacementBusy} onChange={(event) => setPrompt(event.target.value)} />
+                        <Tooltip title="展开完整创作区"><button type="button" aria-label="展开完整创作区" onClick={() => {
+                            threadScrollRef.current?.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+                            composerFocusRef.current?.focus({ preventScroll: true });
+                        }}><Maximize2 /></button></Tooltip>
+                    </motion.div> : null}
+                </AnimatePresence>
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-empty-workspace creation-scrollbar">
-                <CreationEmptyBanner />
-                <div className="creation-chat-intro">
-                    <span className="creation-intro-signal" aria-hidden="true" />
-                    <p>{brandName} · AI 影视创作工作台</p>
-                    <h1>把脑海里的画面，<span className="creation-intro-emphasis"><span className="is-pink">交给{brandName}</span><span className="is-blue">拍出来</span></span></h1>
+                <div className="creation-home-heading">
+                    <h1>和{brandName}聊聊创作想法</h1>
+                    <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
                 </div>
-                <div className="creation-empty-composer">
-                    <CreationComposer {...composerProps} variant="empty" />
-                </div>
-                <CreationEmptySuggest
-                    onStartPrompt={(nextMode, prompt) => { selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
-                    onOpenLibrary={() => { selectMode("image"); setLibraryOpen(true); }}
+                <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
+                    <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
+                        <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
+                        {agentMode ? <CreationAgentEntry /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>}
+                    </div>
+                    <CreationEmptySuggest
+                        onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        onOpenLibrary={() => { setAgentMode(false); selectMode("image"); setLibraryOpen(true); }}
+                    />
+                </section>
+                <CreationFeaturedWorks
+                    onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                 />
             </main>
             </> : <div className="creation-thread-workbench">

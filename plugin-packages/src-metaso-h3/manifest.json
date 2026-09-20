@@ -1,0 +1,100 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "metaso-h3",
+  "name": "METASO MiniMax H3",
+  "version": "1.0.0",
+  "author": "METASO",
+  "description": "秘塔 METASO MiniMax H3 文生视频/图生视频协议插件（异步任务）。",
+  "permissions": ["generation.run", "media.read"],
+  "configuration": {
+    "fields": [
+      { "name": "apiKey", "type": "secret", "label": "API Key", "required": true }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "metaso-h3",
+        "label": "METASO MiniMax H3",
+        "capabilities": ["video"],
+        "scopes": ["admin.system-channel", "user.custom-channel", "canvas", "creation", "agent"],
+        "baseUrl": "https://metaso.cn",
+        "auth": { "type": "bearer", "field": "apiKey" },
+        "requiresPublicMediaUrls": true,
+        "parameters": [
+          { "name": "model", "type": "string", "required": true, "mapping": "model", "description": "视频模型 ID（MiniMax-H3 / MiniMax-H3-Max）。" },
+          { "name": "prompt", "type": "string", "required": true, "mapping": "prompt/content/input", "description": "视频提示词。" },
+          { "name": "images", "type": "media[]", "required": false, "mapping": "first/last/reference image", "description": "显式 role 图片输入（首帧/尾帧/参考图）。" },
+          { "name": "videos", "type": "media[]", "required": false, "mapping": "reference video", "description": "参考视频。" },
+          { "name": "audios", "type": "media[]", "required": false, "mapping": "reference audio/voice", "description": "参考音频或音色。" },
+          { "name": "duration", "type": "integer", "required": false, "mapping": "duration/seconds", "description": "时长秒数（4-15）。" },
+          { "name": "aspectRatio", "type": "string", "required": false, "mapping": "ratio/aspect_ratio/size", "description": "画幅比例（16:9 等）。" },
+          { "name": "resolution", "type": "string", "required": false, "mapping": "resolution", "description": "分辨率档位（768P / 2K）。" },
+          { "name": "watermark", "type": "boolean", "required": false, "mapping": "watermark", "description": "AIGC 水印开关。" },
+          { "name": "providerOptions", "type": "object", "required": false, "mapping": "provider-specific fields", "description": "插件命名空间内的厂商扩展字段。" }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/minimax/v2/video_generation",
+          "contentType": "application/json",
+          "body": {
+            "model": { "$coalesce": [ { "$ref": "request.model" }, "MiniMax-H3" ] },
+            "content": {
+              "$concatArrays": [
+                { "$if": { "condition": { "$gt": [ { "$len": { "$ref": "request.prompt" } }, 0 ] }, "then": [ { "type": "text", "text": { "$ref": "request.prompt" } } ], "else": [] } },
+                { "$map": { "from": { "$ref": "request.images" }, "as": "media", "in": { "type": "image_url", "image_url": { "url": { "$coalesce": [ { "$ref": "media.url" }, { "$ref": "media.dataUrl" } ] } }, "role": { "$omitEmpty": { "$ref": "media.role" } } } } },
+                { "$map": { "from": { "$ref": "request.videos" }, "as": "media", "in": { "type": "video_url", "video_url": { "url": { "$coalesce": [ { "$ref": "media.url" }, { "$ref": "media.dataUrl" } ] } }, "role": { "$omitEmpty": { "$ref": "media.role" } } } } },
+                { "$map": { "from": { "$ref": "request.audios" }, "as": "media", "in": { "type": "audio_url", "audio_url": { "url": { "$coalesce": [ { "$ref": "media.url" }, { "$ref": "media.dataUrl" } ] } }, "role": { "$omitEmpty": { "$ref": "media.role" } } } } }
+              ]
+            },
+            "resolution": { "$omitEmpty": { "$coalesce": [ { "$ref": "request.resolution" }, { "$ref": "request.providerOptions.metaso-h3.resolution" }, "768P" ] } },
+            "duration": { "$omitEmpty": { "$coalesce": [ { "$ref": "request.duration" }, { "$ref": "request.providerOptions.metaso-h3.duration" }, 5 ] } },
+            "ratio": { "$omitEmpty": { "$coalesce": [ { "$ref": "request.aspectRatio" }, { "$ref": "request.providerOptions.metaso-h3.ratio" }, "16:9" ] } },
+            "aigc_watermark": { "$omitEmpty": { "$ref": "request.providerOptions.metaso-h3.aigc_watermark" } }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/minimax/v2/query/video_generation/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              { "$ref": "response.task_id" },
+              { "$ref": "response.taskId" },
+              { "$ref": "response.data.task_id" }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              { "$ref": "response.task.status" },
+              { "$ref": "response.status" },
+              { "$ref": "response.data.status" },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              { "$ref": "response.task.error.message" },
+              { "$ref": "response.task.fail_reason" },
+              { "$ref": "response.error.message" },
+              { "$ref": "response.message" }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              { "$ref": "response.task.content.url" },
+              { "$ref": "response.task.content.video_url" },
+              { "$ref": "response.content.url" },
+              { "$ref": "response.data.url" }
+            ]
+          },
+          "usage": { "$ref": "response.task.usage" },
+          "errorPaths": ["task.error.type", "error.type", "error.code"],
+          "resultEphemeral": true,
+          "messagePaths": ["task.error.message", "error.message"]
+        }
+      }
+    ]
+  }
+}

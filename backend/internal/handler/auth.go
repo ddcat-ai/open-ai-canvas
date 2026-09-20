@@ -427,6 +427,19 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"channel": channel})
 	})
+	r.POST("/admin/channels/:id/duplicate", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		channel, err := svc.DuplicateSystemChannel(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"channel": channel})
+	})
 	r.PATCH("/admin/channels/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -871,7 +884,7 @@ func shortSystemProxyPath(rawPath string) (string, string, bool) {
 // as a channel request when a business route returns 404.
 func isReservedAPIPathPrefix(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "admin", "ai", "announcements", "assets", "auth", "canvas-projects", "channels", "diagnostics", "features", "files", "model-catalog", "models", "oauth", "plugins", "projects", "public", "resources", "sessions", "settings", "skills", "style-profiles", "tasks", "timeline", "user-data", "voice-profiles", "wallet":
+	case "admin", "agent", "ai", "announcements", "banner-announcements", "assets", "auth", "canvas-projects", "channels", "diagnostics", "features", "files", "model-catalog", "models", "oauth", "plugins", "projects", "public", "resources", "sessions", "settings", "skills", "style-profiles", "tasks", "timeline", "user-data", "voice-profiles", "wallet":
 		return true
 	default:
 		return false
@@ -949,7 +962,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		target += "?" + encodedQuery
 	}
-	validatedTarget, err := svc.ValidateChannelOutboundURL(target, channel.AllowLocalChannel, false)
+	validatedTarget, err := svc.ValidateChannelOutboundURL(target)
 	if err != nil {
 		failService(c, err)
 		return
@@ -1010,7 +1023,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	status := model.ApiCallStatusSucceeded
 	statusCode := 0
 	errorText := ""
-	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget, channel.AllowLocalChannel).Do(upstreamReq)
+	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget).Do(upstreamReq)
 	if err != nil {
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()

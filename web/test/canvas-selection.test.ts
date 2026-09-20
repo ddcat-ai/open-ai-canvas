@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, resolveCanvasPointerIntent, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy } from "@/lib/canvas/canvas-selection";
+import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, offsetSelectedNodeBounds, resolveCanvasPointerIntent, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy, selectedNodesWorldBounds } from "@/lib/canvas/canvas-selection";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 describe("canvas selection semantics", () => {
@@ -94,6 +94,19 @@ describe("canvas selection semantics", () => {
         expect(graphicsSource).toContain('dashPattern: [4 / scale, 4 / scale]');
         expect(globalStyles).toContain(".canvas-cursor-select");
         expect(globalStyles).not.toContain("filter='drop-shadow");
+    });
+
+    test("offsets multi-select bounds with the live drag preview", () => {
+        const bounds = selectedNodesWorldBounds([
+            node("a", 100, 40),
+            node("b", 300, 80),
+        ]);
+        expect(bounds).toEqual({ left: 100, top: 40, width: 360, height: 130, count: 2 });
+        expect(offsetSelectedNodeBounds(bounds!, { x: 40, y: -20 })).toEqual({ left: 140, top: 20, width: 360, height: 130, count: 2 });
+        expect(selectedNodesWorldBounds([
+            node("a", 100, 40),
+            node("b", 300, 80),
+        ], { x: 40, y: -20, nodeIds: new Set(["a", "b"]) })).toEqual({ left: 140, top: 20, width: 360, height: 130, count: 2 });
     });
 });
 

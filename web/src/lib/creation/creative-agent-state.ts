@@ -1,5 +1,5 @@
-import type { CanvasAgentOp, CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import { buildCanvasWorkflowOps } from "@/lib/canvas/canvas-agent-workflow";
+import type { CanvasOperation, CanvasSnapshot } from "@/lib/canvas/canvas-operation-contract";
+import { buildCanvasWorkflowOps } from "@/lib/canvas/canvas-workflow-builder";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
@@ -15,7 +15,7 @@ export type CreativeAgentState = {
     schemaVersion: 1; scene: CreativeScenarioId; brief: CreativeBrief; messages: CreativeMessage[];
     references: CreativeReference[]; selectedSkillIds: string[]; textModel?: string;
     questions?: CreativeQuestionRequest; answers?: CreativeAnswers; proposal?: CreativeProposal;
-    operations?: CanvasAgentOp[]; canvasApplied?: boolean; pendingEdits?: CanvasAgentOp[];
+    operations?: CanvasOperation[]; canvasApplied?: boolean; pendingEdits?: CanvasOperation[];
     pendingRedo?: { ref: string; attempt: number; proposalVersion: number };
     media: CreativeMediaState[]; pendingPayment?: string[];
     planning?: { itemKey: string; submissionId?: string; protocol: ResponseInputMessage[]; model?: string; prompt?: string; consumed?: boolean };
@@ -135,7 +135,7 @@ export function assertCreativeMediaCapability(item: CreativeGenerationItem, conf
     }
 }
 
-export function creativeProposalOps(runId: string, proposal: CreativeProposal, snapshot: CanvasAgentSnapshot, config: AiConfig): CanvasAgentOp[] {
+export function creativeProposalOps(runId: string, proposal: CreativeProposal, snapshot: CanvasSnapshot, config: AiConfig): CanvasOperation[] {
     const ops = buildCanvasWorkflowOps(proposal.workflow, snapshot, config, `creation:${runId}:v${proposal.version}`);
     const columns = new Map<string, number>();
     const visiting = new Set<string>();

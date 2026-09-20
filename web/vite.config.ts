@@ -40,9 +40,19 @@ export default defineConfig({
             output: {
                 strictExecutionOrder: true,
                 codeSplitting: {
+                    // Keep route-level lazy imports isolated. Recursively merging dependencies
+                    // pulls unrelated pages into the initial modulepreload graph.
                     includeDependenciesRecursively: false,
-                    minSize: 20 * 1024,
+                    minSize: 40 * 1024,
                     groups: [
+                        {
+                            // Shared interop helpers must not be emitted into a route entry:
+                            // AntD would import that entry back and execute its bootstrap early.
+                            name: "vendor-babel-runtime",
+                            minSize: 0,
+                            test: /node_modules[\\/]@babel[\\/]runtime[\\/]/,
+                            priority: 40,
+                        },
                         {
                             name: "vendor-react",
                             test: /node_modules[\\/](?:react(?:-dom|-router|-router-dom)?|scheduler|zustand|use-sync-external-store|@tanstack[\\/](?:query-core|react-query))[\\/]/,
@@ -61,14 +71,6 @@ export default defineConfig({
                             priority: 10,
                             entriesAware: true,
                             entriesAwareMergeThreshold: 80 * 1024,
-                        },
-                        {
-                            name: "app-shared",
-                            test: /[\\/]src[\\/]/,
-                            priority: 5,
-                            minShareCount: 2,
-                            entriesAware: true,
-                            entriesAwareMergeThreshold: 48 * 1024,
                         },
                     ],
                 },

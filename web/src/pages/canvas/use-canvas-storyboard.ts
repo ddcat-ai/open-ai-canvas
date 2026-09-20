@@ -170,8 +170,8 @@ export function useCanvasStoryboard({
             assertCurrent();
             const request = {
                 projectId,
-                type: "agent_storyboard_rows",
-                operation: "storyboard_rows",
+                type: "canvas_text",
+                operation: "storyboard",
                 prompt: skillExecution.prompt,
                 model: generationConfig.model,
                 ...(logicalModelIDForConfig(generationConfig) ? { logicalModelId: logicalModelIDForConfig(generationConfig) } : {}),

@@ -36,8 +36,9 @@ export function TaskListRow({
     const context = getTaskCanvasContext(task, canvasById, projectNameById);
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
+    const retryDisabled = task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error);
     return (
-        <article className={`task-record-row group${isFailed ? " is-attention" : ""}`}>
+        <article className={`product-collection-card task-record-row group${isFailed ? " is-attention" : ""}`}>
             <TaskPreviewThumbnail task={task} onOpen={onPreview} />
             <div className="task-record-main">
                 <div className="task-record-heading">
@@ -60,7 +61,7 @@ export function TaskListRow({
                     </span>
                 </div>
                 {isActive ? (
-                    <div className="task-record-progress">
+                    <div className="task-record-progress" role="progressbar" aria-label={task.stage || "任务生成进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
                         <span>{task.stage || "正在生成"}</span>
                         <span>{task.progress || 0}%</span>
                         <i>
@@ -83,14 +84,14 @@ export function TaskListRow({
                     <IconButton size="sm" variant="ghost" icon={Eye} aria-label="查看详情" onClick={onOpen} />
                 </Tooltip>
                 {isFailed ? (
-                    <Tooltip title="重试任务">
+                    <Tooltip title={retryDisabled ? "内容审核失败，无法自动重试" : "重试任务"}>
                         <Button
                             type="text"
                             size="small"
                             icon={<RotateCcw className="size-3.5" />}
                             aria-label="重试任务"
                             loading={actingId === task.id}
-                            disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)}
+                            disabled={retryDisabled}
                             onClick={onRetry}
                         />
                     </Tooltip>

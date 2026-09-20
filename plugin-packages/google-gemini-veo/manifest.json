@@ -1,0 +1,465 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "google-gemini-veo",
+  "name": "Google Gemini Veo",
+  "version": "2.0.0",
+  "author": "Google / 影策",
+  "description": "Google Gemini Veo 独立请求协议插件。",
+  "documentation": "# Google Gemini Veo\n\n该目录是独立官方协议插件源码。后端从生成的 `google-gemini-veo.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Google Gemini Veo 接口字段\n\n## 协议身份\n\n- 插件 ID：`google-gemini-veo`。\n- Provider ID：`gemini-veo`。\n- 能力：`video`。\n- 默认 Base URL：`https://generativelanguage.googleapis.com`。\n- 鉴权驱动：`google-api-key`。\n- 创建：`POST /v1beta/models/{{model}}:predictLongRunning`。\n- 查询：`GET /v1beta/{{taskId}}`。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 视频模型 ID。 |\n| `prompt` | string | 是 | `prompt/content/input` | 视频提示词。 |\n| `images` | media[] | 否 | `first/last/reference image` | 显式 role 图片输入。 |\n| `videos` | media[] | 否 | `reference video` | 参考视频。 |\n| `audios` | media[] | 否 | `reference audio/voice` | 参考音频或音色。 |\n| `duration` | integer | 否 | `duration/seconds` | 时长秒数。 |\n| `aspectRatio` | string | 否 | `ratio/aspect_ratio/size` | 画幅比例或尺寸。 |\n| `resolution` | string | 否 | `resolution` | 分辨率档位。 |\n| `generateAudio` | boolean | 否 | `generate_audio` | 是否生成音频。 |\n| `watermark` | boolean | 否 | `watermark` | 水印开关。 |\n| `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/v1beta/models/{{model}}:predictLongRunning\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.instances[0].prompt` | `{\"$ref\":\"request.prompt\"}` |\n| `create.body.instances[0].image` | `{\"$if\":{\"condition\":{\"$gt\":[{\"$len\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}}},0]},\"then\":{\"$if\":{\"condition\":{\"$first\":{\"$map\":{\"from\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}},\"as\":\"media\",\"in\":{\"$ref\":\"media.dataUrl\"}}}},\"then\":{\"inlineData\":{\"mimeType\":{\"$dataMime\":{\"$first\":{\"$map\":{\"from\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}},\"as\":\"media\",\"in\":{\"$ref\":\"media.dataUrl\"}}}}},\"data\":{\"$dataPayload\":{\"$first\":{\"$map\":{\"from\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}},\"as\":\"media\",\"in\":{\"$ref\":\"media.dataUrl\"}}}}}}},\"else\":{\"fileUri\":{\"$first\":{\"$map\":{\"from\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}},\"as\":\"media\",\"in\":{\"$ref\":\"media.url\"}}}},\"mimeType\":{\"$omitEmpty\":{\"$first\":{\"$map\":{\"from\":{\"$filter\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"\"]]}}},\"as\":\"media\",\"in\":{\"$ref\":\"media.mimeType\"}}}}}}}},\"else\":null}}` |\n| `create.body.parameters.aspectRatio` | `{\"$omitEmpty\":{\"$ref\":\"request.aspectRatio\"}}` |\n| `create.body.parameters.durationSeconds` | `{\"$omitEmpty\":{\"$ref\":\"request.duration\"}}` |\n| `create.body.parameters.resolution` | `{\"$omitEmpty\":{\"$ref\":\"request.resolution\"}}` |\n| `create.body.parameters.generateAudio` | `{\"$ref\":\"request.generateAudio\"}` |\n| `create.body.parameters.sampleCount` | `{\"$omitEmpty\":{\"$ref\":\"request.imageCount\"}}` |\n| `create.body.parameters.negativePrompt` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.gemini-veo.negativePrompt\"}}` |\n| `create.body.parameters.personGeneration` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.gemini-veo.personGeneration\"}}` |\n| `create.body.parameters.seed` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.gemini-veo.seed\"}}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/v1beta/{{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- `providerOptions.gemini-veo.negativePrompt`\n- `providerOptions.gemini-veo.personGeneration`\n- `providerOptions.gemini-veo.seed`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.name\"},{\"$ref\":\"taskId\"}]}` |\n| `response.status` | `{\"$if\":{\"condition\":{\"$ref\":\"response.error\"},\"then\":\"failed\",\"else\":{\"$if\":{\"condition\":{\"$ref\":\"response.done\"},\"then\":\"succeeded\",\"else\":\"processing\"}}}}` |\n| `response.message` | `{\"$ref\":\"response.error.message\"}` |\n| `response.videos` | `{\"$coalesce\":[{\"$ref\":\"response.response.generateVideoResponse.generatedSamples\"},{\"$ref\":\"response.response.generatedVideos\"},{\"$ref\":\"response.response.videos\"}]}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.resultEphemeral` | `true` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"google-gemini-veo\",\n  \"name\": \"Google Gemini Veo\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Google / 影策\",\n  \"description\": \"Google Gemini Veo 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"gemini-veo\",\n        \"label\": \"Google Gemini Veo\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://generativelanguage.googleapis.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"google-api-key\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"视频模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt/content/input\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"first/last/reference image\",\n            \"description\": \"显式 role 图片输入。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"reference video\",\n            \"description\": \"参考视频。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"reference audio/voice\",\n            \"description\": \"参考音频或音色。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"duration/seconds\",\n            \"description\": \"时长秒数。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"ratio/aspect_ratio/size\",\n            \"description\": \"画幅比例或尺寸。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution\",\n            \"description\": \"分辨率档位。\"\n          },\n          {\n            \"name\": \"generateAudio\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"generate_audio\",\n            \"description\": \"是否生成音频。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"watermark\",\n            \"description\": \"水印开关。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"reference_image\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"Gemini Veo 当前 profile 不支持角色参考图，请使用首帧输入或支持 reference_to_video 的协议\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1beta/models/{{model}}:predictLongRunning\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"instances\": [\n              {\n                \"prompt\": {\n                  \"$ref\": \"request.prompt\"\n                },\n                \"image\": {\n                  \"$if\": {\n                    \"condition\": {\n                      \"$gt\": [\n                        {\n                          \"$len\": {\n                            \"$filter\": {\n                              \"from\": {\n                                \"$sortByOrder\": {\n                                  \"$ref\": \"request.images\"\n                                }\n                              },\n                              \"as\": \"media\",\n                              \"where\": {\n                                \"$in\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  [\n                                    \"first_frame\",\n                                    \"\"\n                                  ]\n                                ]\n                              }\n                            }\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    \"then\": {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$first\": {\n                            \"$map\": {\n                              \"from\": {\n                                \"$filter\": {\n                                  \"from\": {\n                                    \"$sortByOrder\": {\n                                      \"$ref\": \"request.images\"\n                                    }\n                                  },\n                                  \"as\": \"media\",\n                                  \"where\": {\n                                    \"$in\": [\n                                      {\n                                        \"$ref\": \"media.role\"\n                                      },\n                                      [\n                                        \"first_frame\",\n                                        \"\"\n                                      ]\n                                    ]\n                                  }\n                                }\n                              },\n                              \"as\": \"media\",\n                              \"in\": {\n                                \"$ref\": \"media.dataUrl\"\n                              }\n                            }\n                          }\n                        },\n                        \"then\": {\n                          \"inlineData\": {\n                            \"mimeType\": {\n                              \"$dataMime\": {\n                                \"$first\": {\n                                  \"$map\": {\n                                    \"from\": {\n                                      \"$filter\": {\n                                        \"from\": {\n                                          \"$sortByOrder\": {\n                                            \"$ref\": \"request.images\"\n                                          }\n                                        },\n                                        \"as\": \"media\",\n                                        \"where\": {\n                                          \"$in\": [\n                                            {\n                                              \"$ref\": \"media.role\"\n                                            },\n                                            [\n                                              \"first_frame\",\n                                              \"\"\n                                            ]\n                                          ]\n                                        }\n                                      }\n                                    },\n                                    \"as\": \"media\",\n                                    \"in\": {\n                                      \"$ref\": \"media.dataUrl\"\n                                    }\n                                  }\n                                }\n                              }\n                            },\n                            \"data\": {\n                              \"$dataPayload\": {\n                                \"$first\": {\n                                  \"$map\": {\n                                    \"from\": {\n                                      \"$filter\": {\n                                        \"from\": {\n                                          \"$sortByOrder\": {\n                                            \"$ref\": \"request.images\"\n                                          }\n                                        },\n                                        \"as\": \"media\",\n                                        \"where\": {\n                                          \"$in\": [\n                                            {\n                                              \"$ref\": \"media.role\"\n                                            },\n                                            [\n                                              \"first_frame\",\n                                              \"\"\n                                            ]\n                                          ]\n                                        }\n                                      }\n                                    },\n                                    \"as\": \"media\",\n                                    \"in\": {\n                                      \"$ref\": \"media.dataUrl\"\n                                    }\n                                  }\n                                }\n                              }\n                            }\n                          }\n                        },\n                        \"else\": {\n                          \"fileUri\": {\n                            \"$first\": {\n                              \"$map\": {\n                                \"from\": {\n                                  \"$filter\": {\n                                    \"from\": {\n                                      \"$sortByOrder\": {\n                                        \"$ref\": \"request.images\"\n                                      }\n                                    },\n                                    \"as\": \"media\",\n                                    \"where\": {\n                                      \"$in\": [\n                                        {\n                                          \"$ref\": \"media.role\"\n                                        },\n                                        [\n                                          \"first_frame\",\n                                          \"\"\n                                        ]\n                                      ]\n                                    }\n                                  }\n                                },\n                                \"as\": \"media\",\n                                \"in\": {\n                                  \"$ref\": \"media.url\"\n                                }\n                              }\n                            }\n                          },\n                          \"mimeType\": {\n                            \"$omitEmpty\": {\n                              \"$first\": {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$filter\": {\n                                      \"from\": {\n                                        \"$sortByOrder\": {\n                                          \"$ref\": \"request.images\"\n                                        }\n                                      },\n                                      \"as\": \"media\",\n                                      \"where\": {\n                                        \"$in\": [\n                                          {\n                                            \"$ref\": \"media.role\"\n                                          },\n                                          [\n                                            \"first_frame\",\n                                            \"\"\n                                          ]\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$ref\": \"media.mimeType\"\n                                  }\n                                }\n                              }\n                            }\n                          }\n                        }\n                      }\n                    },\n                    \"else\": null\n                  }\n                }\n              }\n            ],\n            \"parameters\": {\n              \"aspectRatio\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.aspectRatio\"\n                }\n              },\n              \"durationSeconds\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.duration\"\n                }\n              },\n              \"resolution\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.resolution\"\n                }\n              },\n              \"generateAudio\": {\n                \"$ref\": \"request.generateAudio\"\n              },\n              \"sampleCount\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.imageCount\"\n                }\n              },\n              \"negativePrompt\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.providerOptions.gemini-veo.negativePrompt\"\n                }\n              },\n              \"personGeneration\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.providerOptions.gemini-veo.personGeneration\"\n                }\n              },\n              \"seed\": {\n                \"$omitEmpty\": {\n                  \"$ref\": \"request.providerOptions.gemini-veo.seed\"\n                }\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1beta/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.name\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$if\": {\n              \"condition\": {\n                \"$ref\": \"response.error\"\n              },\n              \"then\": \"failed\",\n              \"else\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$ref\": \"response.done\"\n                  },\n                  \"then\": \"succeeded\",\n                  \"else\": \"processing\"\n                }\n              }\n            }\n          },\n          \"message\": {\n            \"$ref\": \"response.error.message\"\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.response.generateVideoResponse.generatedSamples\"\n              },\n              {\n                \"$ref\": \"response.response.generatedVideos\"\n              },\n              {\n                \"$ref\": \"response.response.videos\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "gemini-veo",
+        "label": "Google Gemini Veo",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://generativelanguage.googleapis.com",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "google-api-key",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "视频模型 ID。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt/content/input",
+            "description": "视频提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "first/last/reference image",
+            "description": "显式 role 图片输入。"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference video",
+            "description": "参考视频。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference audio/voice",
+            "description": "参考音频或音色。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": false,
+            "mapping": "duration/seconds",
+            "description": "时长秒数。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "ratio/aspect_ratio/size",
+            "description": "画幅比例或尺寸。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "resolution",
+            "description": "分辨率档位。"
+          },
+          {
+            "name": "generateAudio",
+            "type": "boolean",
+            "required": false,
+            "mapping": "generate_audio",
+            "description": "是否生成音频。"
+          },
+          {
+            "name": "watermark",
+            "type": "boolean",
+            "required": false,
+            "mapping": "watermark",
+            "description": "水印开关。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "reference_image"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Gemini Veo 当前 profile 不支持角色参考图，请使用首帧输入或支持 reference_to_video 的协议"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1beta/models/{{model}}:predictLongRunning",
+          "contentType": "application/json",
+          "body": {
+            "instances": [
+              {
+                "prompt": {
+                  "$ref": "request.prompt"
+                },
+                "image": {
+                  "$if": {
+                    "condition": {
+                      "$gt": [
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$sortByOrder": {
+                                  "$ref": "request.images"
+                                }
+                              },
+                              "as": "media",
+                              "where": {
+                                "$in": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  [
+                                    "first_frame",
+                                    ""
+                                  ]
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    "then": {
+                      "$if": {
+                        "condition": {
+                          "$first": {
+                            "$map": {
+                              "from": {
+                                "$filter": {
+                                  "from": {
+                                    "$sortByOrder": {
+                                      "$ref": "request.images"
+                                    }
+                                  },
+                                  "as": "media",
+                                  "where": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "first_frame",
+                                        ""
+                                      ]
+                                    ]
+                                  }
+                                }
+                              },
+                              "as": "media",
+                              "in": {
+                                "$ref": "media.dataUrl"
+                              }
+                            }
+                          }
+                        },
+                        "then": {
+                          "inlineData": {
+                            "mimeType": {
+                              "$dataMime": {
+                                "$first": {
+                                  "$map": {
+                                    "from": {
+                                      "$filter": {
+                                        "from": {
+                                          "$sortByOrder": {
+                                            "$ref": "request.images"
+                                          }
+                                        },
+                                        "as": "media",
+                                        "where": {
+                                          "$in": [
+                                            {
+                                              "$ref": "media.role"
+                                            },
+                                            [
+                                              "first_frame",
+                                              ""
+                                            ]
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "as": "media",
+                                    "in": {
+                                      "$ref": "media.dataUrl"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "data": {
+                              "$dataPayload": {
+                                "$first": {
+                                  "$map": {
+                                    "from": {
+                                      "$filter": {
+                                        "from": {
+                                          "$sortByOrder": {
+                                            "$ref": "request.images"
+                                          }
+                                        },
+                                        "as": "media",
+                                        "where": {
+                                          "$in": [
+                                            {
+                                              "$ref": "media.role"
+                                            },
+                                            [
+                                              "first_frame",
+                                              ""
+                                            ]
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "as": "media",
+                                    "in": {
+                                      "$ref": "media.dataUrl"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "else": {
+                          "fileUri": {
+                            "$first": {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$sortByOrder": {
+                                        "$ref": "request.images"
+                                      }
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$in": [
+                                        {
+                                          "$ref": "media.role"
+                                        },
+                                        [
+                                          "first_frame",
+                                          ""
+                                        ]
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.url"
+                                }
+                              }
+                            }
+                          },
+                          "mimeType": {
+                            "$omitEmpty": {
+                              "$first": {
+                                "$map": {
+                                  "from": {
+                                    "$filter": {
+                                      "from": {
+                                        "$sortByOrder": {
+                                          "$ref": "request.images"
+                                        }
+                                      },
+                                      "as": "media",
+                                      "where": {
+                                        "$in": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          [
+                                            "first_frame",
+                                            ""
+                                          ]
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$ref": "media.mimeType"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "else": null
+                  }
+                }
+              }
+            ],
+            "parameters": {
+              "aspectRatio": {
+                "$omitEmpty": {
+                  "$ref": "request.aspectRatio"
+                }
+              },
+              "durationSeconds": {
+                "$omitEmpty": {
+                  "$ref": "request.duration"
+                }
+              },
+              "resolution": {
+                "$omitEmpty": {
+                  "$ref": "request.resolution"
+                }
+              },
+              "generateAudio": {
+                "$ref": "request.generateAudio"
+              },
+              "sampleCount": {
+                "$omitEmpty": {
+                  "$ref": "request.imageCount"
+                }
+              },
+              "negativePrompt": {
+                "$omitEmpty": {
+                  "$ref": "request.providerOptions.gemini-veo.negativePrompt"
+                }
+              },
+              "personGeneration": {
+                "$omitEmpty": {
+                  "$ref": "request.providerOptions.gemini-veo.personGeneration"
+                }
+              },
+              "seed": {
+                "$omitEmpty": {
+                  "$ref": "request.providerOptions.gemini-veo.seed"
+                }
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1beta/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.name"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$if": {
+              "condition": {
+                "$ref": "response.error"
+              },
+              "then": "failed",
+              "else": {
+                "$if": {
+                  "condition": {
+                    "$ref": "response.done"
+                  },
+                  "then": "succeeded",
+                  "else": "processing"
+                }
+              }
+            }
+          },
+          "message": {
+            "$ref": "response.error.message"
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$ref": "response.response.generateVideoResponse.generatedSamples"
+              },
+              {
+                "$ref": "response.response.generatedVideos"
+              },
+              {
+                "$ref": "response.response.videos"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

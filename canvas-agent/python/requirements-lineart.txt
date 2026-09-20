@@ -1,1 +1,0 @@
-controlnet-aux==0.0.10

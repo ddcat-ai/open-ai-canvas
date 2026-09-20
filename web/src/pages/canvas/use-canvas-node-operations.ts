@@ -14,7 +14,6 @@ import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 import { useUserStore } from "@/stores/use-user-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
-import { createDefaultPortraitClearanceState, PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
 import { workflowProviderPluginEnabled } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
 
@@ -129,32 +128,31 @@ export function useCanvasNodeOperations({
         setSelectedConnectionId(null);
     }, [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const createNode = useCallback((type: CanvasNodeTypeId, position?: Position, workflowProvider?: "runninghub" | "comfyui") => {
+    const createNode = useCallback((type: CanvasNodeTypeId, position?: Position, workflowProvider?: "runninghub") => {
         if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
             message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
             return;
         }
         const selectedWorkflowProvider = type === CanvasNodeType.Config
-            ? workflowProvider || (workflowProviderPluginEnabled(runtimeStatuses, "runninghub") ? "runninghub" : workflowProviderPluginEnabled(runtimeStatuses, "comfyui") ? "comfyui" : undefined)
+            ? workflowProvider || (workflowProviderPluginEnabled(runtimeStatuses, "runninghub") ? "runninghub" : undefined)
             : undefined;
         if (selectedWorkflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, selectedWorkflowProvider)) {
-            message.error(`${selectedWorkflowProvider === "runninghub" ? "RunningHub" : "ComfyUI"} 工作流插件未启用`);
+            message.error("RunningHub 工作流插件未启用");
             return;
         }
-        const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : type === CanvasNodeType.Config && selectedWorkflowProvider === "comfyui" ? "ComfyUI Bridge" : undefined;
+        const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : undefined;
         const metadata: CanvasNodeMetadata | undefined = type === CanvasNodeType.Drawing
             ? { drawingEngine: defaultDrawingEngine }
             : type === CanvasNodeType.Config
                 ? { generationMode: "image", workflowProvider: selectedWorkflowProvider || "model" }
-                : type === PORTRAIT_CLEARANCE_NODE_TYPE
-                    ? { portraitClearance: createDefaultPortraitClearanceState() }
-                    : undefined;
+                : undefined;
         const node = createCanvasNode(type, position || getCanvasCenter(), metadata);
         if (workflowTitle) node.title = workflowTitle;
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
-        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing && type !== CanvasNodeType.MediaConversion && type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(node.id);
-    }, [commitNodes, defaultDrawingEngine, effectiveConfig.comfyBridge.enabled, effectiveConfig.comfyBridge.workflows.length, effectiveConfig.runningHub.enabled, effectiveConfig.runningHub.workflows.length, getCanvasCenter, message, nodesRef, runtimeStatuses, selectNodes, setDialogNodeId, tldrawLicenseKey]);
+        if (type === CanvasNodeType.Script) setDialogNodeId(null);
+        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.BatchTable && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing && type !== CanvasNodeType.MediaConversion) setDialogNodeId(node.id);
+    }, [commitNodes, defaultDrawingEngine, effectiveConfig.runningHub.enabled, effectiveConfig.runningHub.workflows.length, getCanvasCenter, message, nodesRef, runtimeStatuses, selectNodes, setDialogNodeId, tldrawLicenseKey]);
 
     const createFolder = useCallback((position?: Position, linked?: { id: string; projectId: string; title: string; style: CanvasFolderStyle; theme: CanvasFolderTheme; createdAt: string }) => {
         const folder = createCanvasNode(CanvasNodeType.Frame, position || getCanvasCenter(), {
@@ -413,7 +411,8 @@ export function useCanvasNodeOperations({
             const sourceNode = sourceByTargetId.get(targetNode.id);
             if (sourceNode) cloneDrawingForNode(sourceNode, targetNode, "绘图副本保存失败，请重新复制");
         });
-        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing && source.type !== CanvasNodeType.MediaConversion && source.type !== PORTRAIT_CLEARANCE_NODE_TYPE) setDialogNodeId(id);
+        if (source.type === CanvasNodeType.Script) setDialogNodeId(null);
+        else if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing) setDialogNodeId(id);
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, nodesRef, selectNodes, setDialogNodeId]);
 
     const setPrimaryVersion = useCallback((nodeId: string) => {
@@ -527,7 +526,7 @@ export function useCanvasNodeOperations({
         selectNodes(topLevelIds);
         setContextMenu(null);
         const primaryNode = nextNodes.find((node) => !node.parentId);
-        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) && primaryNode.type !== CanvasNodeType.Drawing && primaryNode.type !== PORTRAIT_CLEARANCE_NODE_TYPE ? primaryNode.id : null);
+        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) && primaryNode.type !== CanvasNodeType.Drawing && primaryNode.type !== CanvasNodeType.Script ? primaryNode.id : null);
         return true;
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, getCanvasCenter, nodesRef, selectNodes, setContextMenu, setDialogNodeId]);
 

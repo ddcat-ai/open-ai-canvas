@@ -1,12 +1,11 @@
-import { App, Button, Form, Input, Popconfirm, Segmented, Select, Switch, Tooltip } from "antd";
-import { Pencil, MonitorUp, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
+import { App, Button, Form, Input, Popconfirm, Segmented, Select, Tooltip } from "antd";
+import { Pencil, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ModelEditorModal } from "@/components/model-editor-modal";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
-import { desktopLocalChannelFormState, desktopLocalChannelPayloadValue, DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL } from "@/lib/desktop-local-channel";
 import { fetchChannelModels } from "@/services/api/image";
 import {
     createModelChannel,
@@ -18,27 +17,22 @@ import {
     type ModelChannel,
 } from "@/stores/use-config-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
-import { useUserStore } from "@/stores/use-user-store";
 
 type UserChannelConnection = "openai" | "gemini";
 type ChannelSettingsPaneProps = {
     onOpenModels: () => void;
     onOpenRunningHub?: () => void;
-    onOpenComfyUI?: () => void;
 };
 
-export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComfyUI }: ChannelSettingsPaneProps) {
+export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
     const { message } = App.useApp();
     const config = useConfigStore((state) => state.config);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
     const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
     const [newChannelId, setNewChannelId] = useState<string | null>(null);
-    const desktopLocalChannelsEnabled = useUserStore((state) => state.features.desktopLocalChannelsEnabled);
-    const desktopLocalChannelHostname = typeof window === "undefined" ? "" : window.location.hostname;
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
     const runningHubReady = Boolean(config.runningHub.enabled && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim() && config.runningHub.workflowId.trim());
-    const comfyBridgeReady = Boolean(config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim());
 
     const updateChannels = (channels: ModelChannel[], baseConfig = config) => {
         replaceConfig(withChannels(baseConfig, channels));
@@ -98,8 +92,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
         }
         setChannelLoading(channel.id, true);
         try {
-            const projectedChannel = { ...channel, allowLocalChannel: userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).payloadValue };
-            const result = await fetchChannelModels(projectedChannel, true);
+            const result = await fetchChannelModels(channel, true);
             if (!result.models.length) {
                 message.warning(`${channel.name || "当前渠道"}未返回模型，已保留现有手工模型`);
                 return;
@@ -136,8 +129,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
             const results = await Promise.all(
                 runnable.map(async (channel) => {
                     try {
-                        const projectedChannel = { ...channel, allowLocalChannel: userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).payloadValue };
-                        const result = await fetchChannelModels(projectedChannel, true);
+                        const result = await fetchChannelModels(channel, true);
                         return { channel, result, error: "" };
                     } catch (error) {
                         return { channel, result: { models: [], catalog: [] }, error: error instanceof Error ? error.message : "读取失败" };
@@ -190,10 +182,10 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                     <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>新增渠道</Button>
                 </div>
             </div>
-            {onOpenRunningHub || onOpenComfyUI ? <section className="settings-section mb-3">
+            {onOpenRunningHub ? <section className="settings-section mb-3">
                 <div className="mb-3">
                     <h3 className="text-sm font-semibold">个人工作流渠道</h3>
-                    <p className="mt-1 text-xs text-foreground/55">RunningHub 和 ComfyUI 使用各自的工作流参数与执行通道，配置入口统一放在个人渠道中。</p>
+                    <p className="mt-1 text-xs text-foreground/55">RunningHub 使用独立的云端工作流参数与执行通道。</p>
                 </div>
                 <div className="grid gap-2 lg:grid-cols-2">
                     {onOpenRunningHub ? (
@@ -204,16 +196,6 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                             status={runningHubReady ? `${config.runningHub.workflows.length} 个工作流已配置` : config.runningHub.enabled ? "待完成连接和工作流配置" : "未启用"}
                             ready={runningHubReady}
                             onOpen={onOpenRunningHub}
-                        />
-                    ) : null}
-                    {onOpenComfyUI ? (
-                        <WorkflowChannelEntry
-                            icon={<MonitorUp className="size-4" />}
-                            title="ComfyUI"
-                            description="通过 Bridge 连接本机或远程 ComfyUI"
-                            status={comfyBridgeReady ? `${config.comfyBridge.workflows.length} 个工作流已配置` : config.comfyBridge.enabled ? "待选择 Bridge 和工作流" : "未启用"}
-                            ready={comfyBridgeReady}
-                            onOpen={onOpenComfyUI}
                         />
                     ) : null}
                 </div>
@@ -247,7 +229,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                                         subtitle={channel.name}
                                         onClose={closeChannelEditor}
                                         footer={<div className="model-editor-footer">
-                                            <span className="text-xs text-foreground/50">更改实时保存到本地渠道配置</span>
+                                            <span className="text-xs text-foreground/50">更改实时保存到云端渠道配置</span>
                                             <div className="model-editor-footer-actions">
                                                 <Button loading={loadingChannelIds.includes(channel.id)} onClick={() => void refreshChannelModels(channel)}>拉取模型</Button>
                                                 <Button type="primary" onClick={closeChannelEditor}>完成</Button>
@@ -263,14 +245,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComf
                                                 <div className="model-editor-connection-fields grid gap-3 sm:grid-cols-2">
                                                     <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-name`} value={channel.name} placeholder="例如：我的 NewAPI" onChange={(event) => updateChannel(channel.id, { name: event.target.value })} onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || "未命名渠道" })} /></Form.Item>
                                                     <Form.Item label="目录连接类型" className="mb-0 sm:col-span-1" extra="仅影响模型目录拉取。"><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI", value: "openai" }, { label: "Gemini", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
-                                                    <UserLocalChannelFields
-                                                        channel={channel}
-                                                        visible={userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).visible}
-                                                        checked={userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked}
-                                                        desktopLocalChannelsEnabled={desktopLocalChannelsEnabled}
-                                                        hostname={desktopLocalChannelHostname}
-                                                        updateChannel={updateChannel}
-                                                    />
+                                                    <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder="填写云端渠道 Base URL" onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/u, "") })} /></Form.Item>
                                                     <Form.Item label="API Key" htmlFor={`channel-${channel.id}-api-key`} className="mb-0 sm:col-span-1"><Input.Password id={`channel-${channel.id}-api-key`} autoComplete="new-password" value={channel.apiKey} placeholder={channel.apiFormat === "gemini" ? "填写 Gemini API Key" : "填写当前渠道 API Key"} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { apiKey: event.target.value.trim() })} /></Form.Item>
                                                     <Form.Item label="Secret Key（可选）" htmlFor={`channel-${channel.id}-secret-key`} className="mb-0 sm:col-span-1" extra="即梦等 AK/SK 协议需要；其他协议留空。"><Input.Password id={`channel-${channel.id}-secret-key`} autoComplete="new-password" value={channel.secretKey || ""} placeholder="填写 Secret Key" onChange={(event) => updateChannel(channel.id, { secretKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })} /></Form.Item>
                                                     <div className="sm:col-span-2"><ChannelHeadersEditor value={channel.headers} onChange={(headers) => updateChannel(channel.id, { headers })} /></div>
@@ -310,35 +285,6 @@ function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen 
             <Button size="small" onClick={onOpen} disabled={!onOpen}>配置</Button>
         </div>
     );
-}
-
-export function userLocalChannelFormOwner(desktopLocalChannelsEnabled: boolean, hostname: string, requestedAllowLocalChannel?: boolean) {
-    const state = desktopLocalChannelFormState(desktopLocalChannelsEnabled, hostname, requestedAllowLocalChannel);
-    return { ...state, payloadValue: desktopLocalChannelPayloadValue(desktopLocalChannelsEnabled, hostname, requestedAllowLocalChannel) };
-}
-
-export function UserLocalChannelSwitch({ visible, checked, onChange }: { visible: boolean; checked: boolean; onChange: (checked: boolean) => void }) {
-    if (!visible) return null;
-    return (
-        <Form.Item label="允许本机渠道" className="mb-0 lg:col-span-12" extra={`仅放行精确 localhost 或 127.0.0.1；示例：${DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}`}>
-            <Switch checked={checked} onChange={onChange} />
-        </Form.Item>
-    );
-}
-
-export function UserLocalChannelFields({ channel, visible, checked, desktopLocalChannelsEnabled, hostname, updateChannel }: { channel: ModelChannel; visible: boolean; checked: boolean; desktopLocalChannelsEnabled: boolean; hostname: string; updateChannel: (id: string, patch: Partial<ModelChannel>) => void }) {
-    return (
-        <>
-            <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 lg:col-span-6">
-                <Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : "填写渠道 Base URL"} onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/, "") })} />
-            </Form.Item>
-            <UserLocalChannelSwitch visible={visible} checked={checked} onChange={(value) => updateChannel(channel.id, userLocalChannelChangePatch(desktopLocalChannelsEnabled, hostname, value))} />
-        </>
-    );
-}
-
-export function userLocalChannelChangePatch(desktopLocalChannelsEnabled: boolean, hostname: string, checked: boolean) {
-    return { allowLocalChannel: userLocalChannelFormOwner(desktopLocalChannelsEnabled, hostname, checked).payloadValue };
 }
 
 export function channelValidationError(channel: ModelChannel) {
@@ -411,7 +357,7 @@ function channelConnectionError(channel: ModelChannel) {
 }
 
 function channelConnectionSignature(channel: ModelChannel) {
-    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.allowLocalChannel === true ? "local" : "remote", JSON.stringify(channel.headers || [])].join("\n");
+    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, JSON.stringify(channel.headers || [])].join("\n");
 }
 
 function channelProtocolLabel(channel: ModelChannel) {

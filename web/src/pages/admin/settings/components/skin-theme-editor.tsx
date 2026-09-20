@@ -1,12 +1,9 @@
 import { Button, Form, Input, InputNumber } from "antd";
-import { Select } from "@/components/ui/base/select";
-import { IconButton } from "@/components/ui/base/buttons";
-import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import { Tooltip } from "@/components/ui/base/tooltip";
+import { IconButton, SegmentedControl, Select, Tooltip } from "@/pages/admin/ui/controls";
 import { Check, Copy, LockKeyhole, Moon, Plus, Sparkles, Sun, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { SKIN_COLOR_GROUPS, SKIN_COMPONENT_NUMBER_FIELDS, skinSwatches, type SkinComponentTokens, type SkinDefinition, type SkinModeTokens, type SkinThemeMode } from "@/lib/skin-themes";
+import { SKIN_COLOR_GROUPS, SKIN_COMPONENT_NUMBER_FIELDS, SKIN_BUTTON_COLOR_FIELDS, getSkinButtonAppearance, skinSwatches, type SkinButtonFill, type SkinComponentTokens, type SkinDefinition, type SkinModeTokens, type SkinThemeMode } from "@/lib/skin-themes";
 import { cn } from "@/lib/utils";
 import { AdminStatusBadge } from "@/pages/admin/components/admin-ui";
 
@@ -33,6 +30,10 @@ export function SkinThemeEditor({
     const selected = useMemo(() => themes.find((theme) => theme.id === selectedID) || themes[0], [selectedID, themes]);
     if (!selected) return null;
     const editorDisabled = disabled || selected.locked;
+    const buttonFill = selected.tokens.buttons[mode];
+    const updateButton = (patch: Partial<SkinButtonFill>) => onChange({ ...selected, tokens: { ...selected.tokens,
+        buttons: { ...selected.tokens.buttons, [mode]: { ...buttonFill, ...patch } },
+    } });
 
     const updateIdentity = (patch: Partial<Pick<SkinDefinition, "name" | "description">>) => onChange({ ...selected, ...patch });
     const updateColor = (key: keyof SkinModeTokens, value: string) =>
@@ -118,7 +119,7 @@ export function SkinThemeEditor({
                 {selected.locked ? (
                     <div className="admin-skin-locked-note">
                         <LockKeyhole className="size-4" aria-hidden="true" />
-                        <span>经典黑白始终保留项目原始视觉，不能改名、修改或删除。点击“从默认新建”即可复制全部参数后自由调整。</span>
+                        <span>经典黑白采用黑白基础配色与紫蓝渐变主按钮，不能改名、修改或删除。点击“从默认新建”即可复制全部参数后自由调整。</span>
                     </div>
                 ) : null}
 
@@ -166,6 +167,27 @@ export function SkinThemeEditor({
                 </div>
 
                 <SkinThemePreview theme={selected} mode={mode} />
+
+                <details className="admin-skin-token-group" open>
+                    <summary><span>主按钮填充</span><small>{mode === "light" ? "浅色" : "深色"}模式</small></summary>
+                    <div className="admin-skin-component-grid">
+                        <label className="admin-skin-number-field">
+                            <span>填充方式</span>
+                            <Select value={buttonFill.mode} disabled={editorDisabled}
+                                options={[{ label: "纯色（使用主操作颜色）", value: "solid" }, { label: "渐变", value: "gradient" }]}
+                                onChange={(value) => updateButton({ mode: value })} />
+                        </label>
+                        {buttonFill.mode === "gradient" ? <label className="admin-skin-number-field">
+                            <span>渐变角度</span>
+                            <InputNumber aria-label="渐变角度" value={buttonFill.angle} min={0} max={360} precision={0} addonAfter="°" disabled={editorDisabled}
+                                onChange={(value) => { if (typeof value === "number") updateButton({ angle: value }); }} />
+                        </label> : null}
+                    </div>
+                    {buttonFill.mode === "gradient" ? <div className="admin-skin-color-grid">
+                        {SKIN_BUTTON_COLOR_FIELDS.map(({ key, label }) => <ColorTokenField key={key} label={label} help="仅影响主按钮，不改变选中态、开关和危险操作" value={buttonFill[key]} disabled={editorDisabled}
+                            onChange={(value) => updateButton({ [key]: value.trim().toLowerCase() })} />)}
+                    </div> : null}
+                </details>
 
                 <div className="admin-skin-color-groups">
                     {SKIN_COLOR_GROUPS.map((group, index) => (
@@ -243,6 +265,7 @@ function ColorTokenField({ label, help, value, disabled, onChange }: { label: st
 
 function SkinThemePreview({ theme, mode }: { theme: SkinDefinition; mode: SkinThemeMode }) {
     const color = theme.tokens[mode];
+    const button = getSkinButtonAppearance(theme, mode);
     const component = theme.tokens.components;
     const shadow = component.shadowStyle === "none" ? "none" : component.shadowStyle === "strong" ? "0 18px 44px #0000003d" : "0 10px 28px #00000024";
     return (
@@ -267,7 +290,7 @@ function SkinThemePreview({ theme, mode }: { theme: SkinDefinition; mode: SkinTh
                 >
                     输入框状态
                 </span>
-                <span className="admin-skin-live-preview-button" style={{ height: component.controlHeight, background: color.primary, color: color.primaryForeground, borderRadius: component.buttonRadius, fontWeight: component.buttonFontWeight }}>
+                <span className="admin-skin-live-preview-button" style={{ height: component.controlHeight, background: button.background, color: button.foreground, borderRadius: component.buttonRadius, fontWeight: component.buttonFontWeight }}>
                     主要操作
                 </span>
                 <span className="admin-skin-live-preview-switches" aria-label="开关开启与关闭状态预览">

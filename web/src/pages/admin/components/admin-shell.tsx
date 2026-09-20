@@ -1,5 +1,4 @@
-import { ConfigProvider, Dropdown } from "antd";
-import { Tooltip } from "@/components/ui/base/tooltip";
+import { App, ConfigProvider, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import {
     Activity,
@@ -20,6 +19,7 @@ import {
     KeyRound,
     Layers3,
     Mail,
+    Megaphone,
     MessageSquareText,
     Moon,
     Palette,
@@ -27,6 +27,7 @@ import {
     PlugZap,
     RadioTower,
     RefreshCw,
+    Sparkles,
     Settings2,
     ShieldAlert,
     ShieldCheck,
@@ -40,14 +41,16 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
-import { WorkspacePage } from "@/components/layout/workspace-page";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
-import { getAdminAntThemeConfig } from "@/lib/app-theme";
 import { cn } from "@/lib/utils";
-import "@/styles/admin-ui.css";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
+import { AdminTooltip } from "../ui/controls";
+import "@/styles/admin-ui.css";
+import "../theme/admin-tokens.css";
+import "../theme/admin-chrome.css";
 
 type AdminNavigationItem = {
     path: string;
@@ -77,6 +80,8 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
         label: "运营",
         items: [
             { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
+            { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
+            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
             { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
             { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
             { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
@@ -109,6 +114,10 @@ function isAdminNavigationPath(pathname: string, navigationPath: string) {
     return pathname === navigationPath || pathname.startsWith(`${navigationPath}/`);
 }
 
+function adminPopupContainer(node?: HTMLElement) {
+    return document.getElementById("admin-root") || node?.closest("[data-admin-root]") || document.body;
+}
+
 export function AdminShell() {
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
@@ -130,54 +139,52 @@ export function AdminShell() {
     };
 
     return (
-        <ConfigProvider theme={getAdminAntThemeConfig(dark, appearance.activeSkin)}>
-            <main className="admin-shell app-user-workspace flex h-full min-h-0 overflow-hidden text-foreground">
-                <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
-                    <div className="admin-sidebar-identity shrink-0">
-                        <Tooltip delay={100} title={collapsed ? "查看更新日志" : undefined} placement="right">
-                            <AppChangelogButton
-                                className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
-                                icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
-                                label={appearance.brandName}
-                                showLabel={!collapsed}
-                                showVersion={!collapsed}
-                                labelClassName="admin-sidebar-brand-title"
-                                versionClassName="admin-sidebar-brand-version"
-                            />
-                        </Tooltip>
-                    </div>
-                    <AdminNavigation collapsed={collapsed} />
-                    <div className="admin-sidebar-footer shrink-0">
-                        <Tooltip delay={100} title={collapsed ? "返回创作台" : undefined} placement="right">
-                            <NavLink
-                                to="/"
-                                aria-label={collapsed ? "返回创作台" : undefined}
-                                className={cn("app-workspace-nav-link group flex h-8 items-center text-foreground/62 transition-colors hover:bg-surface-hover hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2.5 px-2.5")}
-                            >
-                                <Home className="size-4" strokeWidth={1.6} />
-                                {!collapsed ? <span>返回创作台</span> : null}
-                            </NavLink>
-                        </Tooltip>
-                    </div>
-                </aside>
-                <Tooltip delay={100} title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right">
-                    <button type="button" className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")} onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "收起侧栏"} aria-expanded={!collapsed}>
-                        {collapsed ? <ChevronRight className="size-3.5" aria-hidden="true" /> : <ChevronLeft className="size-3.5" aria-hidden="true" />}
-                    </button>
-                </Tooltip>
-                <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                    <MobileAdminNavigation />
-                    <Suspense
-                        fallback={
-                            <div className="p-8 text-sm text-foreground/60" role="status">
-                                正在加载管理页面…
-                            </div>
-                        }
-                    >
-                        <Outlet />
-                    </Suspense>
-                </section>
-            </main>
+        <ConfigProvider theme={getIsolatedAdminAntTheme(dark, appearance.activeSkin)} getPopupContainer={(node) => adminPopupContainer(node)}>
+            <App>
+                <main id="admin-root" data-admin-root className="admin-shell flex h-full min-h-0 overflow-hidden">
+                    <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
+                        <div className="admin-sidebar-identity shrink-0">
+                            <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
+                                <AppChangelogButton
+                                    className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
+                                    icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
+                                    label={appearance.brandName}
+                                    showLabel={!collapsed}
+                                    showVersion={!collapsed}
+                                    labelClassName="admin-sidebar-brand-title"
+                                    versionClassName="admin-sidebar-brand-version"
+                                />
+                            </AdminTooltip>
+                        </div>
+                        <AdminNavigation collapsed={collapsed} />
+                        <div className="admin-sidebar-footer shrink-0">
+                            <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
+                                <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
+                                    <Home className="size-4" strokeWidth={1.6} />
+                                    {!collapsed ? <span>返回创作台</span> : null}
+                                </NavLink>
+                            </AdminTooltip>
+                        </div>
+                    </aside>
+                    <AdminTooltip title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right">
+                        <button type="button" className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")} onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "收起侧栏"} aria-expanded={!collapsed}>
+                            {collapsed ? <ChevronRight className="size-3.5" aria-hidden="true" /> : <ChevronLeft className="size-3.5" aria-hidden="true" />}
+                        </button>
+                    </AdminTooltip>
+                    <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                        <MobileAdminNavigation />
+                        <Suspense
+                            fallback={
+                                <div className="p-8 text-sm" role="status">
+                                    正在加载管理页面…
+                                </div>
+                            }
+                        >
+                            <Outlet />
+                        </Suspense>
+                    </section>
+                </main>
+            </App>
         </ConfigProvider>
     );
 }
@@ -190,16 +197,16 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
     const sectionPath = back ? (currentItem?.path ?? currentSection?.items[0]?.path ?? "/admin") : (currentSection?.items[0]?.path ?? "/admin");
 
     return (
-        <WorkspacePage scroll={scroll} fluid className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
+        <div className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
             <div className={cn("admin-page-frame", scroll && "admin-page-frame-scrollable")}>
-                <header className="admin-page-header flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <header className="admin-page-header flex shrink-0 flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                         {back ? (
-                            <Tooltip title={back.label}>
-                                <button type="button" className="app-workspace-icon-button size-9 shrink-0" aria-label={back.label} onClick={back.onClick}>
+                            <AdminTooltip title={back.label}>
+                                <button type="button" className="admin-icon-button shrink-0" aria-label={back.label} onClick={back.onClick}>
                                     <ArrowLeft className="size-4" />
                                 </button>
-                            </Tooltip>
+                            </AdminTooltip>
                         ) : null}
                         <div className="admin-page-title-block min-w-0">
                             <nav className="admin-page-location" aria-label="当前位置">
@@ -209,19 +216,19 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
                                 <span className="admin-page-location-separator" aria-hidden="true">
                                     /
                                 </span>
-                                <h1 className="admin-page-title truncate font-semibold">{title}</h1>
+                                <h1 className="admin-page-title truncate">{title}</h1>
                             </nav>
                             {description ? <p className="admin-page-description">{description}</p> : null}
                         </div>
                     </div>
-                    <div className="admin-page-actions flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="admin-page-actions flex shrink-0 flex-wrap items-center">
                         {actions}
                         <AdminThemeButton />
                     </div>
                 </header>
                 {children}
             </div>
-        </WorkspacePage>
+        </div>
     );
 }
 
@@ -231,11 +238,11 @@ function AdminThemeButton() {
     const dark = theme === "dark";
 
     return (
-        <Tooltip title={dark ? "切换到浅色主题" : "切换到深色主题"} placement="bottom">
-            <button type="button" className="app-workspace-icon-button admin-page-theme-toggle size-9 shrink-0" onClick={() => setTheme(dark ? "light" : "dark")} aria-label={dark ? "切换到浅色主题" : "切换到深色主题"}>
+        <AdminTooltip title={dark ? "切换到浅色主题" : "切换到深色主题"} placement="bottom">
+            <button type="button" className="admin-page-theme-toggle shrink-0" onClick={() => setTheme(dark ? "light" : "dark")} aria-label={dark ? "切换到浅色主题" : "切换到深色主题"}>
                 {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
             </button>
-        </Tooltip>
+        </AdminTooltip>
     );
 }
 
@@ -261,7 +268,7 @@ function MobileAdminNavigation() {
     }));
 
     return (
-        <nav className="admin-mobile-navigation flex shrink-0 items-center justify-between gap-2 border-b lg:hidden" aria-label="管理后台导航">
+        <nav className="admin-mobile-navigation flex shrink-0 items-center justify-between gap-2 lg:hidden" aria-label="管理后台导航">
             <Dropdown menu={{ items: menuItems, selectable: true, selectedKeys: currentItem ? [currentItem.path] : [], className: "admin-mobile-navigation-menu" }} trigger={["click"]} placement="bottomLeft">
                 <button type="button" className="admin-mobile-navigation-trigger" aria-label={`打开管理后台导航，当前页面${currentItem?.label || "未知"}`}>
                     <span className="admin-mobile-navigation-current-icon">{currentItem?.icon}</span>
@@ -273,11 +280,11 @@ function MobileAdminNavigation() {
                 </button>
             </Dropdown>
             <div className="flex shrink-0 items-center gap-1">
-                <Tooltip title="返回创作台">
+                <AdminTooltip title="返回创作台">
                     <Link to="/" className="admin-mobile-navigation-action" aria-label="返回创作台">
                         <Home className="size-4" aria-hidden="true" />
                     </Link>
-                </Tooltip>
+                </AdminTooltip>
                 <AppChangelogButton className="admin-mobile-navigation-action [&_svg]:size-4" />
             </div>
         </nav>
@@ -302,25 +309,14 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                         ) : (
                             <div className="admin-nav-collapsed-separator" />
                         )}
-                        <div className={cn("admin-nav-group-items space-y-0.5", collapsed && "is-collapsed")}>
+                        <div className={cn("admin-nav-group-items", collapsed && "is-collapsed")}>
                             {visibleItems.map((item) => (
-                                <Tooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
-                                    <NavLink
-                                        to={item.path}
-                                        end={item.path === "/admin"}
-                                        aria-label={collapsed ? item.label : undefined}
-                                        className={({ isActive }) =>
-                                            cn(
-                                                "app-workspace-nav-link flex h-8 items-center rounded-md transition-colors",
-                                                collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
-                                                isActive ? "is-active" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
-                                            )
-                                        }
-                                    >
+                                <AdminTooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
+                                    <NavLink to={item.path} end={item.path === "/admin"} aria-label={collapsed ? item.label : undefined} className={({ isActive }) => cn("admin-nav-link", collapsed && "is-collapsed", isActive && "is-active")}>
                                         {item.icon}
                                         {!collapsed ? <span className="truncate">{item.label}</span> : null}
                                     </NavLink>
-                                </Tooltip>
+                                </AdminTooltip>
                             ))}
                         </div>
                     </div>

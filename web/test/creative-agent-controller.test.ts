@@ -2,14 +2,29 @@ import { describe, expect, test } from "bun:test";
 import { CreativeAgentController, type CreativeControllerView } from "../src/services/creative-agent-controller";
 import { initialCreativeState, type CreativeAgentState } from "../src/lib/creation/creative-agent-state";
 import { creationRuns, type CreationRun, type CreationSubmission } from "../src/services/api/creation-runs";
-import { applyCanvasAgentOps, type CanvasAgentSnapshot } from "../src/lib/canvas/canvas-agent-ops";
+import { applyCanvasOperations, type CanvasSnapshot } from "../src/lib/canvas/canvas-operation-contract";
 import { defaultConfig } from "../src/stores/use-config-store";
 import type { GenerationTask } from "../src/services/api/task-center";
 import { CanvasNodeType } from "../src/types/canvas";
+import { CREATIVE_AGENT_SYSTEM_PROMPT, CREATIVE_AGENT_TOOLS } from "../src/lib/creation/creative-agent-tools";
+
+test("首页创造规划请求使用自动工具选择", async () => {
+    const source = await Bun.file(new URL("../src/services/creative-agent-controller.ts", import.meta.url)).text();
+    expect(source).toContain('tools: CREATIVE_AGENT_TOOLS, toolChoice: "auto"');
+    expect(source).not.toContain('tools: CREATIVE_AGENT_TOOLS, toolChoice: "required"');
+});
+
+test("首页创造提示词只声明实际注册的规划工具", () => {
+    expect(CREATIVE_AGENT_TOOLS.map((tool) => tool.function.name)).toEqual(["creative_respond"]);
+    expect(CREATIVE_AGENT_SYSTEM_PROMPT).toContain("唯一可调用的函数工具是 creative_respond");
+    expect(CREATIVE_AGENT_SYSTEM_PROMPT).not.toContain("canvas_generate_storyboard");
+    expect(CREATIVE_AGENT_SYSTEM_PROMPT).not.toContain("canvas_create_storyboard");
+    expect(CREATIVE_AGENT_SYSTEM_PROMPT).not.toContain("canvas_edit_storyboard");
+});
 
 function harness(state: CreativeAgentState, status: CreationRun["status"] = "paused", submissions: CreationSubmission[] = [], waitTask?: ConstructorParameters<typeof CreativeAgentController>[0]["waitTask"]) {
     let run: CreationRun = { id: "run", userId: "user", canvasId: "canvas", revision: 1, executionEpoch: 0, executionOwner: "", status, state: structuredClone(state) as unknown as Record<string, unknown>, approvedProposalVersion: state.proposal?.version, approvedProposalHash: state.operations ? "approved-proposal-hash" : undefined, createdAt: "", updatedAt: "" };
-    let snapshot: CanvasAgentSnapshot = { projectId: "canvas", title: "canvas", nodes: state.media.map((media) => ({ id: media.nodeId, type: CanvasNodeType.Image, title: media.ref, position: { x: 0, y: 0 }, width: 100, height: 100, metadata: {} })), connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } };
+    let snapshot: CanvasSnapshot = { projectId: "canvas", title: "canvas", nodes: state.media.map((media) => ({ id: media.nodeId, type: CanvasNodeType.Image, title: media.ref, position: { x: 0, y: 0 }, width: 100, height: 100, metadata: {} })), connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } };
     let view: CreativeControllerView | undefined;
     let commits = 0, prepares = 0, executions = 0;
     const api = { ...creationRuns,
@@ -23,7 +38,7 @@ function harness(state: CreativeAgentState, status: CreationRun["status"] = "pau
         canvasSnapshot: async () => ({ document: { id: "canvas", title: "canvas", nodes: snapshot.nodes, connections: snapshot.connections, chatSessions: [], activeChatId: null, viewport: snapshot.viewport, createdAt: "", updatedAt: "", directorScenes: [] }, snapshotHash: "hash" }),
         commitCanvas: async () => { commits++; return { snapshotHash: "saved" }; },
     } as typeof creationRuns;
-    const controller = new CreativeAgentController({ config: () => defaultConfig, canvas: () => ({ canvasId: "canvas", read: () => snapshot, apply: async (ops) => snapshot = applyCanvasAgentOps(snapshot, ops) }), onChange: (next) => { view = next; }, onOpenCanvas: () => undefined, api, waitTask, ensureAsset: async () => ({ assetId: "asset", created: false, linkedToProject: false }) });
+    const controller = new CreativeAgentController({ config: () => defaultConfig, canvas: () => ({ canvasId: "canvas", read: () => snapshot, apply: async (ops) => snapshot = applyCanvasOperations(snapshot, ops) }), onChange: (next) => { view = next; }, onOpenCanvas: () => undefined, api, waitTask, ensureAsset: async () => ({ assetId: "asset", created: false, linkedToProject: false }) });
     return { controller, api, view: () => view!, counters: () => ({ commits, prepares, executions }), snapshot: () => snapshot };
 }
 const proposal = { id: "p", version: 1, title: "方案", summary: "摘要", markdown: "内容", deliverables: [], workflow: { nodes: [], edges: [], autoRun: false as const }, generationItems: [] };
