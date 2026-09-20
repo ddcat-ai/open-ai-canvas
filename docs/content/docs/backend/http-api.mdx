@@ -36,7 +36,11 @@ description: 信封、错误码与 OpenAPI
 | POST /canvas-branches/:branchId/archive | 仅方案 owner，保留画布与正文 |
 | GET /canvas-projects/:id/credit-usage | 当前用户自己的该画布任务账单；含已结算/待结算/退回、能力分类及最近订单，不包含他人的账单或内部成本 |
 
-旧协作请求和节点生命周期不匹配时保留冲突，不静默覆盖。完整协议与限制见 [共享协作画布](/docs/overview/canvas-collaboration)。邀请不会扩大私有媒体、其他项目和任务的访问权限。
+旧协作请求和节点生命周期不匹配时保留冲突，不静默覆盖。完整协议与限制见 [共享协作画布](/docs/overview/canvas-collaboration)。邀请授予画布合法引用的媒体读取权，其他项目、任务、账单和未共享素材仍保持私有。
+
+`GET /resources/:id`、`GET /resources/:id/file`（含 Range 与 `variant=playback`）、素材详情及 `POST /assets/batch` 支持按画布媒体授权读取。每次请求检查当前成员关系；资源元数据对非所有者隐藏对象路径、桶、Endpoint 和内部错误。跨所有者文件强制代理并返回 `Cache-Control: private, no-store`，撤权后的旧 ETag 请求也返回 404。`GET /resources/:id/oss-url`、上传/删除/管理接口仍按资源所有者校验；`GET /assets` 仍是个人素材列表。
+
+协作保存中的新媒体必须归发布者所有或已获目标/来源画布授权；伪造他人私有引用返回 403，缺失或未完成同步的媒体返回 400，正文、revision 和授权不部分提交。方案创建和合并只传播所需媒体授权。
 
 ## 站点皮肤主按钮
 

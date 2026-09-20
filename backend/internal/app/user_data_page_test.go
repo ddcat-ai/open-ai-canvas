@@ -49,6 +49,9 @@ func TestUserCanvasLibraryPageIsBoundedAndScoped(t *testing.T) {
 
 func TestUserAssetsBatchIsBoundedAndScoped(t *testing.T) {
 	service, db := newProjectWorkbenchReadTestService(t)
+	if err := db.AutoMigrate(&model.CanvasMediaGrant{}, &model.CanvasCollaborator{}); err != nil {
+		t.Fatal(err)
+	}
 	for _, owner := range []string{"owner", "other"} {
 		if err := db.Create(&model.Asset{ID: owner, UserID: owner, PayloadJSON: fmt.Sprintf(`{"id":%q}`, owner)}).Error; err != nil {
 			t.Fatal(err)

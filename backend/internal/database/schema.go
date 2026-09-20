@@ -94,6 +94,7 @@ func Models() []any {
 		&model.CanvasBranch{},
 		&model.CanvasShare{},
 		&model.CanvasCollaborator{},
+		&model.CanvasMediaGrant{},
 		&model.CanvasCollaborationNode{},
 		&model.CanvasCollaborationOperation{},
 		&model.PromptTemplate{},

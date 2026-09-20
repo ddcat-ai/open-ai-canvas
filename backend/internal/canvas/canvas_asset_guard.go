@@ -2,10 +2,12 @@ package canvas
 
 import (
 	"encoding/json"
+	"errors"
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/kernel"
 	"strings"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -14,68 +16,32 @@ type MediaAssetReference struct {
 	ResourceID string
 }
 
-// validateCanvasMediaAssets is the final server-side invariant for canvas sync:
-// a persisted canvas may only point at an uploaded Resource through an Asset
-// owned by the same user. The client writes Assets before canvases, so rejecting
-// an incomplete pair prevents a durable Resource-only (ghost capacity) state.
+// Media must have a valid Asset/Resource pair and be owned by the publisher or
+// already authorized in this canvas. The same contract applies to branches.
 func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) error {
+	var document struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return kernel.BadAuthRequest("画布媒体数据格式错误")
+	}
 	references, err := MediaAssetReferences(raw)
 	if err != nil {
 		return kernel.BadAuthRequest("画布媒体数据格式错误")
 	}
-	if len(references) == 0 {
-		return nil
-	}
-
-	assetIDSet := make(map[string]struct{}, len(references))
-	resourceIDSet := make(map[string]struct{}, len(references))
 	for _, reference := range references {
 		if reference.AssetID == "" {
 			return kernel.BadAuthRequest("画布媒体尚未进入素材库，请等待同步完成后重试")
 		}
-		assetIDSet[reference.AssetID] = struct{}{}
-		resourceIDSet[reference.ResourceID] = struct{}{}
 	}
-
-	ownedAssets, err := s.repo.AssetsForUserIDs(userID, assets.SortedIDs(assetIDSet))
-	if err != nil {
-		return err
-	}
-	assetResources := make(map[string]map[string]struct{}, len(ownedAssets))
-	for _, asset := range ownedAssets {
-		assetResources[asset.ID] = assets.DocumentReferencedIDs(asset.PayloadJSON, resourceIDSet)
-	}
-
-	resources, err := s.repo.ResourcesForUserIDs(userID, assets.SortedIDs(resourceIDSet))
-	if err != nil {
-		return err
-	}
-	readyResources := make(map[string]struct{}, len(resources))
-	for _, resource := range resources {
-		if resource.Status == model.ResourceStatusReady {
-			readyResources[resource.ID] = struct{}{}
-		}
-	}
-
-	for _, reference := range references {
-		if _, exists := readyResources[reference.ResourceID]; !exists {
-			return kernel.BadAuthRequest("画布媒体对应的云端资源不存在或尚未就绪，请重新上传")
-		}
-		resourceIDs, assetExists := assetResources[reference.AssetID]
-		if !assetExists {
-			return kernel.BadAuthRequest("画布媒体尚未进入素材库，请等待同步完成后重试")
-		}
-		if _, matches := resourceIDs[reference.ResourceID]; !matches {
-			return kernel.BadAuthRequest("画布媒体与素材库记录不一致，请重新同步")
-		}
-	}
-	return nil
+	_, err = canvasDocumentMediaGrants(s.repo, userID, document.ID, string(raw))
+	return err
 }
 
 // validateAssetCanvasReferences prevents an Asset update from changing the
 // resource behind a canvas that already points at that Asset.
 func (s *Service) ValidateAssetCanvasReferences(userID string, asset model.Asset) error {
-	canvases, err := s.repo.CanvasProjects(userID)
+	canvases, err := s.repo.CanvasProjectsReferencingUserAssets(userID)
 	if err != nil {
 		return err
 	}
@@ -105,7 +71,7 @@ func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replac
 	for _, asset := range replacement {
 		assetByID[asset.ID] = asset
 	}
-	canvases, err := s.repo.CanvasProjects(userID)
+	canvases, err := s.repo.CanvasProjectsReferencingUserAssets(userID)
 	if err != nil {
 		return err
 	}
@@ -116,6 +82,14 @@ func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replac
 		}
 		for _, reference := range references {
 			asset, exists := assetByID[reference.AssetID]
+			if !exists {
+				if _, err := s.repo.AssetForUser(userID, reference.AssetID); err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						continue
+					}
+					return err
+				}
+			}
 			if !exists {
 				return kernel.BadAuthRequest("素材仍被画布引用，不能从素材库移除")
 			}

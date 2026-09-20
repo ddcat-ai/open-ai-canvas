@@ -176,10 +176,13 @@ func (s *Service) sharedCanvasResource(token string, resourceID string) (string,
 		return "", nil, gorm.ErrRecordNotFound
 	}
 	resource, err := s.repo.ResourceForUser(share.UserID, resourceID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		resource, err = s.repo.ResourceGrantedToCanvas(project.ID, resourceID)
+	}
 	if err != nil {
 		return "", nil, err
 	}
-	return share.UserID, resource, nil
+	return resource.UserID, resource, nil
 }
 
 func (s *Service) sharedCanvasProject(token string) (*model.CanvasShare, *model.CanvasProject, error) {

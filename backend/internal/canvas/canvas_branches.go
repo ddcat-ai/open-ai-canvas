@@ -300,7 +300,19 @@ func (s *Service) CreateCanvasBranchForUser(actor *model.User, sourceCanvasID st
 	if source.UserID != actor.ID && !seen[source.UserID] {
 		members = append(members, model.CanvasCollaborator{ID: kernel.NewID(), CanvasID: branchCanvasID, UserID: source.UserID, Role: CanvasCollaboratorRoleEditor, CreatedBy: actor.ID, CreatedAt: branchProject.CreatedAt, UpdatedAt: branchProject.UpdatedAt})
 	}
-	if err := s.repo.CreateCanvasBranch(&branchProject, &branch, members); err != nil {
+	if err := s.repo.WithCanvasCollaborationTransaction(source.ID, func(tx *gorm.DB, locked *model.CanvasProject) error {
+		if err := canvasEditAccessTx(tx, locked, actor.ID); err != nil {
+			return err
+		}
+		if locked.Revision != source.Revision {
+			return canvasRevisionConflict()
+		}
+		txRepo := repository.New(tx)
+		if err := grantCanvasDocumentMedia(txRepo, actor.ID, branchProject.ID, branchProject.PayloadJSON, source.ID); err != nil {
+			return err
+		}
+		return txRepo.CreateCanvasBranch(&branchProject, &branch, members)
+	}); err != nil {
 		return CanvasBranchCreateResult{}, err
 	}
 	return CanvasBranchCreateResult{Branch: canvasBranchSummary(branch, &branchProject), Project: branchRaw}, nil
@@ -425,6 +437,12 @@ func (s *Service) MergeCanvasBranchForUser(actor *model.User, branchID string, r
 	}
 	var result CanvasBranchMergeResult
 	err = s.repo.WithCanvasBranchMerge(branchID, targetID, func(tx *gorm.DB, lockedBranch *model.CanvasBranch, branchProject *model.CanvasProject, target *model.CanvasProject) error {
+		if _, err := canvasCollaborationRole(tx, branchProject, actor.ID); err != nil {
+			return err
+		}
+		if err := canvasEditAccessTx(tx, target, actor.ID); err != nil {
+			return err
+		}
 		mergeOpID := canvasBranchMergeOperationID(lockedBranch.ID, req.SourceRevision, req.ExpectedTargetRevision)
 		// A client may lose the response after the transaction commits and retry
 		// the same merge. Return the committed result instead of treating the
@@ -496,6 +514,9 @@ func (s *Service) MergeCanvasBranchForUser(actor *model.User, branchID string, r
 		after.ProjectID = target.ProjectID
 		after.CollaborationEnabled = target.CollaborationEnabled
 		after.PayloadJSON = string(rebound)
+		if err := grantCanvasDocumentMedia(repository.New(tx), actor.ID, target.ID, after.PayloadJSON, branchProject.ID); err != nil {
+			return err
+		}
 		snapshot, resourceIDs, err := buildCanvasSnapshot(target, after, "branch_merge")
 		if err != nil {
 			return err

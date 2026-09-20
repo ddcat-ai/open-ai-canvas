@@ -27,6 +27,21 @@ func (s *Service) UserAssetsByIDs(userID string, ids []string) ([]json.RawMessag
 	if err != nil {
 		return nil, err
 	}
+	owned := make(map[string]bool, len(assets))
+	for _, asset := range assets {
+		owned[asset.ID] = true
+	}
+	missing := make([]string, 0)
+	for _, id := range unique {
+		if !owned[id] {
+			missing = append(missing, id)
+		}
+	}
+	shared, err := s.repo.GrantedAssetsForReader(userID, missing)
+	if err != nil {
+		return nil, err
+	}
+	assets = append(assets, shared...)
 	result := make([]json.RawMessage, 0, len(assets))
 	for _, asset := range assets {
 		if payload := ClientAssetPayload(asset); len(payload) > 0 {

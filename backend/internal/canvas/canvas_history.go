@@ -33,7 +33,12 @@ func SaveDocumentWithHistory(repo *repository.Repository, before *model.CanvasPr
 		}
 		restoredIDs = assets.SortedIDs(refs)
 	}
-	return repo.SaveCanvasWithSnapshot(after, snapshot, resourceIDs, restoredIDs, after.UpdatedAt.Add(-canvasHistoryInterval), canvasHistoryLimit, reason == "before_restore")
+	return repo.WithTransaction(func(txRepo *repository.Repository) error {
+		if err := grantCanvasDocumentMedia(txRepo, after.UserID, after.ID, after.PayloadJSON); err != nil {
+			return err
+		}
+		return txRepo.SaveCanvasWithSnapshot(after, snapshot, resourceIDs, restoredIDs, after.UpdatedAt.Add(-canvasHistoryInterval), canvasHistoryLimit, reason == "before_restore")
+	})
 }
 
 func canvasRevisionConflict() error {

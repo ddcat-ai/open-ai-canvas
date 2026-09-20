@@ -78,6 +78,15 @@ func (s *Service) UserAssetSummaries(userID string) ([]UserDataSummary, error) {
 
 func (s *Service) UserAsset(userID string, id string) (json.RawMessage, error) {
 	asset, err := s.repo.AssetForUser(userID, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		shared, sharedErr := s.repo.GrantedAssetsForReader(userID, []string{id})
+		if sharedErr != nil {
+			return nil, sharedErr
+		}
+		if len(shared) == 1 {
+			return ClientAssetPayload(shared[0]), nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +111,6 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 		if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 			return existingErr
 		}
-		if existing != nil && existing.PayloadJSON != asset.PayloadJSON {
-			if err := s.ValidateAssetCanvasReferences(userID, asset); err != nil {
-				return err
-			}
-		}
 		existingBytes := int64(0)
 		if existing != nil {
 			existingBytes = int64(len([]byte(existing.PayloadJSON)))
@@ -114,7 +118,16 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 		if err := s.host.StructuredQuota(userID, "asset", errors.Is(existingErr, gorm.ErrRecordNotFound), int64(len(raw))-existingBytes); err != nil {
 			return err
 		}
-		if err := s.repo.UpsertAsset(&asset); err != nil {
+		if err := s.repo.WithTransaction(func(txRepo *repository.Repository) error {
+			if _, err := txRepo.AssetRecords([]string{asset.ID}); err != nil {
+				return err
+			}
+			txService := New(txRepo, s.host)
+			if err := txService.ValidateAssetCanvasReferences(userID, asset); err != nil {
+				return err
+			}
+			return txRepo.UpsertAsset(&asset)
+		}); err != nil {
 			return err
 		}
 		if existingErr != nil {
@@ -160,13 +173,26 @@ func (s *Service) ReplaceUserAssets(userID string, req AssetsSyncRequest) ([]jso
 		totalBytes += int64(len(raw))
 	}
 	err := s.host.WithStorageLock(func() error {
-		if err := s.ValidateAssetReplacementCanvasReferences(userID, assets); err != nil {
-			return err
-		}
 		if err := s.host.StructuredReplacementQuota(userID, "asset", len(assets), totalBytes); err != nil {
 			return err
 		}
-		if err := s.repo.ReplaceAssets(userID, assets); err != nil {
+		if err := s.repo.WithTransaction(func(txRepo *repository.Repository) error {
+			existing, err := txRepo.Assets(userID)
+			if err != nil {
+				return err
+			}
+			ids := make([]string, 0, len(existing))
+			for _, item := range existing {
+				ids = append(ids, item.ID)
+			}
+			if _, err := txRepo.AssetRecords(ids); err != nil {
+				return err
+			}
+			if err := New(txRepo, s.host).ValidateAssetReplacementCanvasReferences(userID, assets); err != nil {
+				return err
+			}
+			return txRepo.ReplaceAssets(userID, assets)
+		}); err != nil {
 			return err
 		}
 		if len(assets) > 0 {

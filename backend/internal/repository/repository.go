@@ -60,6 +60,11 @@ func (r *Repository) WithContext(ctx context.Context) *Repository {
 	return &Repository{db: r.db.WithContext(ctx)}
 }
 
+// WithTransaction binds domain validation and dependent writes to one commit.
+func (r *Repository) WithTransaction(fn func(*Repository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error { return fn(New(tx)) })
+}
+
 func (r *Repository) Dialect() string {
 	return r.db.Dialector.Name()
 }
@@ -1338,8 +1343,17 @@ func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// Serialize deletion with saves before reading the history IDs to remove.
-		if err := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND id = ?", userID, id).UpdateColumn("revision", gorm.Expr("revision")).Error; err != nil {
-			return err
+		locked := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND id = ?", userID, id).UpdateColumn("revision", gorm.Expr("revision"))
+		if locked.Error != nil {
+			return locked.Error
+		}
+		if locked.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		for _, record := range []any{&model.CanvasMediaGrant{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}} {
+			if err := tx.Where("canvas_id = ?", id).Delete(record).Error; err != nil {
+				return err
+			}
 		}
 		var snapshotIDs []string
 		if err := tx.Model(&model.CanvasSnapshot{}).Where("user_id = ? AND canvas_id = ?", userID, id).Pluck("id", &snapshotIDs).Error; err != nil {

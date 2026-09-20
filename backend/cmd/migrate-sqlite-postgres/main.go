@@ -287,6 +287,7 @@ func migrations() []tableMigration {
 		migrateTable[model.CanvasSnapshotResource]("canvas_snapshot_resources"),
 		migrateTable[model.CanvasShare]("canvas_shares"),
 		migrateTable[model.CanvasCollaborator]("canvas_collaborators"),
+		migrateTable[model.CanvasMediaGrant]("canvas_media_grants"),
 		migrateTable[model.CanvasCollaborationNode]("canvas_collaboration_nodes"),
 		migrateTable[model.CanvasCollaborationOperation]("canvas_collaboration_operations"),
 		migrateTable[model.CanvasBranch]("canvas_branches"),

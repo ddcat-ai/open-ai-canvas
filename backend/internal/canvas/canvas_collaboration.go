@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -238,6 +239,10 @@ func (s *Service) EnableCanvasCollaboration(actor *model.User, canvasID, memberU
 		if project.UserID != actor.ID {
 			return kernel.Forbidden("只有画布所有者可以管理协作成员")
 		}
+		txRepo := repository.New(tx)
+		if err := grantCanvasDocumentMedia(txRepo, actor.ID, project.ID, project.PayloadJSON); err != nil {
+			return err
+		}
 		now := time.Now().UTC()
 		var item model.CanvasCollaborator
 		queryErr := tx.Where("canvas_id = ? AND user_id = ?", canvasID, memberUserID).First(&item).Error
@@ -454,6 +459,9 @@ func (s *Service) ApplyCanvasCollaborationOperation(actor *model.User, canvasID 
 		root["connections"] = encodedConnections
 		encodedRoot, err := json.Marshal(root)
 		if err != nil {
+			return err
+		}
+		if err := grantCanvasDocumentMedia(repository.New(tx), actor.ID, project.ID, string(encodedRoot)); err != nil {
 			return err
 		}
 		project.PayloadJSON = string(encodedRoot)

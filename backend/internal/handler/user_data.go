@@ -252,11 +252,12 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		resource, err := svc.Resource(user.ID, c.Param("id"))
+		resource, err := svc.ReadResource(user.ID, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusNotFound, err)
 			return
 		}
+		c.Header("Cache-Control", "private, no-store")
 		ok(c, gin.H{"resource": resource})
 	})
 	r.GET("/resources/:id/oss-url", func(c *gin.Context) {
@@ -315,7 +316,9 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		// 资源 ID 内容不可变（上传永远生成新 ID，不会原地覆盖）：图片可以放心交给浏览器
 		// 磁盘强缓存 30 天，大画布二次打开零请求直读磁盘缓存。视频/音频涉及转码副本
 		// 就绪与 Range 语义，保持逐次条件请求（304）。
-		if strings.HasPrefix(resource.MimeType, "image/") {
+		if resource.UserID != user.ID {
+			c.Header("Cache-Control", "private, no-store")
+		} else if strings.HasPrefix(resource.MimeType, "image/") {
 			c.Header("Cache-Control", "private, max-age=2592000, stale-while-revalidate=86400")
 		} else {
 			c.Header("Cache-Control", "private, no-cache")

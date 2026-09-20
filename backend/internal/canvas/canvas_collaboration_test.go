@@ -395,7 +395,7 @@ func newCanvasCollaborationTestService(t *testing.T) (*Service, *model.User, *mo
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.Resource{}, &model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.CanvasProject{}, &model.CanvasShare{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.Resource{}, &model.Asset{}, &model.CanvasMediaGrant{}, &model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := repository.New(db)
@@ -408,7 +408,7 @@ func newCanvasCollaborationTestService(t *testing.T) (*Service, *model.User, *mo
 			t.Fatal(err)
 		}
 	}
-	return &Service{repo: repo}, owner, editorB, editorC
+	return New(repo, nil), owner, editorB, editorC
 }
 
 func seedCanvasCollaborationProject(t *testing.T, repo *repository.Repository) {

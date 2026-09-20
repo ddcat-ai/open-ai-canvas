@@ -377,13 +377,13 @@ func TestCanvasCollaborationMigrationPreservesExistingCanvas(t *testing.T) {
 	if project.Revision != 7 || project.CollaborationEnabled || project.PayloadJSON != `{"nodes":[{"id":"retained"}]}` {
 		t.Fatalf("existing canvas changed: %#v", project)
 	}
-	for _, table := range []any{&model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}} {
+	for _, table := range []any{&model.CanvasBranch{}, &model.CanvasCollaborator{}, &model.CanvasCollaborationNode{}, &model.CanvasCollaborationOperation{}, &model.CanvasMediaGrant{}} {
 		if !db.Migrator().HasTable(table) {
 			t.Fatalf("missing table %T", table)
 		}
 	}
 	status, err := ReadSchemaStatus(db)
-	if err != nil || !status.Ready || status.Current != 31 {
+	if err != nil || !status.Ready || status.Current != 32 {
 		t.Fatalf("schema = %#v, %v", status, err)
 	}
 }

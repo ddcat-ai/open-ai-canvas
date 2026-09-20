@@ -300,7 +300,7 @@ func clipText(s string, max int) string {
 // OpenResourcePlaybackRange 打开浏览器兼容播放副本（本地 ffmpeg 转码的 H.264）。
 // 仅当资源为本地存储且副本 ready 时可用；否则返回 ErrPlaybackNotReady，调用方回退原件。
 func (s *Service) OpenResourcePlaybackRange(userID string, resourceID string) (*ResourceStream, error) {
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	resource, err := s.canvasDomain().ResourceForReader(userID, resourceID)
 	if err != nil {
 		return nil, err
 	}
