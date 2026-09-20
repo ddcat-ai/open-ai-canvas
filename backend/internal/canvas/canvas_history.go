@@ -46,7 +46,7 @@ type CanvasHistoryList struct {
 }
 
 func (s *Service) scopedCanvasHistoryProject(userID string, canvasID string) (*model.CanvasProject, error) {
-	project, err := s.repo.CanvasProjectMetadata(userID, strings.TrimSpace(canvasID))
+	project, err := s.scopedCanvasProject(&model.User{ID: userID}, strings.TrimSpace(canvasID))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, kernel.NewAppError(http.StatusNotFound, "画布不存在或无权访问")
 	}
@@ -87,6 +87,13 @@ func (s *Service) RestoreCanvasHistory(userID string, canvasID, snapshotID strin
 	}
 	if current.Revision != *revision {
 		return UserDataSummary{}, canvasRevisionConflict()
+	}
+	if current.CollaborationEnabled {
+		result, err := s.ApplyCanvasCollaborationOperation(&model.User{ID: userID}, canvasID, CanvasCollaborationOperationRequest{OpID: kernel.NewID(), Kind: "restore_snapshot", BaseRevision: *revision, SnapshotID: snapshotID})
+		if err != nil {
+			return UserDataSummary{}, err
+		}
+		return UserDataSummary{ID: current.ID, Title: current.Title, Revision: result.Revision, CollaborationEnabled: true}, nil
 	}
 	item, err := s.CanvasHistorySnapshot(userID, canvasID, snapshotID)
 	if err != nil {
@@ -174,7 +181,7 @@ func canvasProjectPayload(project model.CanvasProject) (json.RawMessage, error) 
 	if payload == nil {
 		return nil, kernel.BadAuthRequest("画布数据格式错误")
 	}
-	for key, value := range map[string]any{"id": project.ID, "title": project.Title, "projectId": project.ProjectID, "revision": project.Revision, "createdAt": project.CreatedAt, "updatedAt": project.UpdatedAt} {
+	for key, value := range map[string]any{"id": project.ID, "title": project.Title, "projectId": project.ProjectID, "revision": project.Revision, "collaborationEnabled": project.CollaborationEnabled, "createdAt": project.CreatedAt, "updatedAt": project.UpdatedAt} {
 		encoded, err := json.Marshal(value)
 		if err != nil {
 			return nil, err

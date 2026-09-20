@@ -218,6 +218,14 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         if (request?.controller === controller) generationRequestsRef.current.delete(targetNodeId);
     }, []);
 
+    const cancelGenerationRequest = useCallback((targetNodeId: string) => {
+        const request = generationRequestsRef.current.get(targetNodeId);
+        if (!request) return;
+        request.controller.abort();
+        generationRequestsRef.current.delete(targetNodeId);
+        setRunningNodeId((current) => (current === request.runningNodeId ? null : current));
+    }, []);
+
     const openNodeTaskDetails = useCallback(
         async (node: CanvasNodeData) => {
             const taskId = node.metadata?.taskId;
@@ -533,6 +541,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
     return {
         applyGenerationTaskResult,
         bindGenerationTask,
+        cancelGenerationRequest,
         finishGenerationRequest,
         openNodeTaskDetails,
         runningNodeId,

@@ -171,7 +171,7 @@ func (r *Repository) ProjectCanvasSummariesPage(userID string, projectID string,
 func (r *Repository) UserCanvasProjectsPage(userID string, page int, pageSize int, projectID string, search string, sort string) ([]model.CanvasProject, int64, error) {
 	var projects []model.CanvasProject
 	var total int64
-	query := r.db.Model(&model.CanvasProject{}).Where("user_id = ?", userID)
+	query := r.db.Model(&model.CanvasProject{}).Where("user_id = ? OR id IN (SELECT canvas_id FROM canvas_collaborators WHERE user_id = ?)", userID, userID)
 	if projectID == "independent" {
 		query = query.Where("project_id = '' OR project_id IS NULL")
 	} else if projectID != "" && projectID != "all" {

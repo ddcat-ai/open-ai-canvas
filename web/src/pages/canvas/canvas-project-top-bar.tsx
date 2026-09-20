@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Dropdown, Tooltip } from "antd";
+import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, GitBranch, Users, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { App, Button, Dropdown, Tooltip, Modal, Statistic, Tag } from "antd";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -14,9 +14,18 @@ import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasMediaPerformanceMode } from "@/types/canvas";
 import { CanvasShortcutsModal } from "./canvas-shortcuts-modal";
+import { CanvasPresenceMembers } from "./canvas-presence";
+import type { CanvasPresence } from "@/services/api/canvas-collaboration";
+import type { CanvasBranchContext } from "@/services/api/canvas-collaboration";
+import { getCanvasCreditUsage, type CanvasCreditUsage } from "@/services/api/user-data";
+import { formatCredits } from "@/constant/credits";
 
 type CanvasTopBarProps = {
+    canvasId: string;
     syncStatus?: ReactNode;
+    presence?: CanvasPresence[];
+    collaborationEnabled?: boolean;
+    branchContext?: CanvasBranchContext | null;
     versionsOpen: boolean;
     onToggleVersions: () => void;
     title: string;
@@ -48,7 +57,11 @@ type CanvasTopBarProps = {
 };
 
 export function CanvasTopBar({
+    canvasId,
     syncStatus,
+    presence = [],
+    collaborationEnabled = false,
+    branchContext,
     versionsOpen,
     onToggleVersions,
     title,
@@ -78,6 +91,7 @@ export function CanvasTopBar({
     onEnterFocusMode,
     shortDramaGuide,
 }: CanvasTopBarProps) {
+    const { message } = App.useApp();
     const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
@@ -85,6 +99,52 @@ export function CanvasTopBar({
     const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [usageOpen, setUsageOpen] = useState(false);
+    const [usage, setUsage] = useState<CanvasCreditUsage | null>(null);
+    const [usageLoading, setUsageLoading] = useState(false);
+    const [usageError, setUsageError] = useState("");
+    const usageRequestRef = useRef<{ projectId: string; controller: AbortController; promise: Promise<void> } | null>(null);
+    const openUsage = async () => {
+        const id = canvasId;
+        if (!id || usageLoading) return;
+        const existing = usageRequestRef.current;
+        if (existing?.projectId === id) return existing.promise;
+        existing?.controller.abort();
+        setUsageOpen(true);
+        setUsageLoading(true);
+        setUsageError("");
+        const controller = new AbortController();
+        const promise = (async () => {
+            try {
+                const result = await getCanvasCreditUsage(id, { signal: controller.signal });
+                if (!controller.signal.aborted) setUsage(result.usage);
+            } catch (cause) {
+                if (controller.signal.aborted) return;
+                if (!controller.signal.aborted) {
+                    setUsageError(cause instanceof Error ? cause.message : "积分统计读取失败，请重试");
+                    message.error("积分统计读取失败，请稍后重试");
+                }
+            } finally {
+                if (usageRequestRef.current?.controller === controller) {
+                    usageRequestRef.current = null;
+                    setUsageLoading(false);
+                }
+            }
+        })();
+        usageRequestRef.current = { projectId: id, controller, promise };
+        return promise;
+    };
+
+    useEffect(() => {
+        usageRequestRef.current?.controller.abort();
+        usageRequestRef.current = null;
+        setUsage(null);
+        setUsageError("");
+        setUsageLoading(false);
+        return () => {
+            usageRequestRef.current?.controller.abort();
+        };
+    }, [canvasId]);
 
     const handleShortDramaGuideToggle = () => {
         shortDramaGuide?.onToggle();
@@ -119,6 +179,7 @@ export function CanvasTopBar({
                                     { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                     { key: "save", icon: <Save className="size-4" />, label: <MenuLabel text="保存" shortcut="⌘ S" />, onClick: () => void onSave() },
                                     { key: "force-save", icon: <CloudUpload className="size-4" />, label: "修复素材关联并保存", onClick: onForceSave },
+                                    ...(creditsEnabled ? [{ key: "credit-usage", icon: <Gauge className="size-4" />, label: "我在此画布的积分用量", onClick: () => void openUsage() }] : []),
                                     { type: "divider" },
                                     { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                     { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ F" />, onClick: onOpenSearch },
@@ -190,6 +251,21 @@ export function CanvasTopBar({
                                     {projectContext.shotLabel ? ` · ${projectContext.shotLabel}` : ""}
                                     {projectContext.selectedCount ? ` · 已选 ${projectContext.selectedCount}` : ""}
                                 </button>
+                            </div>
+                        ) : null}
+                        {branchContext && !isTitleEditing ? (
+                            <div className="canvas-topbar-project-context canvas-topbar-branch-context mt-0.5 flex w-full min-w-0 items-center gap-1.5 overflow-hidden text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                                <GitBranch className="size-3 shrink-0" />
+                                <span className="truncate" title={`来自：${branchContext.branch.sourceTitle || branchContext.sourceCanvas.name || "主画布"}`}>
+                                    独立方案 · 来自 {branchContext.branch.sourceTitle || branchContext.sourceCanvas.name || "主画布"}
+                                </span>
+                                <Link
+                                    className="shrink-0 hover:underline"
+                                    to={`/canvas/${encodeURIComponent(branchContext.sourceCanvas.branchCanvasId)}`}
+                                    title={`返回「${branchContext.branch.sourceTitle || branchContext.sourceCanvas.name || "来源画布"}」`}
+                                >
+                                    返回来源画布
+                                </Link>
                             </div>
                         ) : null}
                     </div>
@@ -272,17 +348,20 @@ export function CanvasTopBar({
                             </Button>
                         </CanvasTopBarTooltip>
                     ) : null}
-                    <CanvasTopBarTooltip label="版本记录与本地草稿">
+                    <span className="canvas-topbar-presence-button">
+                        <CanvasPresenceMembers presence={presence} collaborationEnabled={collaborationEnabled} />
+                    </span>
+                    <CanvasTopBarTooltip label="协作与独立方案">
                         <Button
                             type="text"
                             className="canvas-topbar-action canvas-topbar-version-button !h-10 !rounded-xl !px-2.5 !font-medium"
                             style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.activeBg : undefined }}
-                            icon={<History className="size-4" />}
-                            aria-label="版本记录"
+                            icon={<Users className="size-4" />}
+                            aria-label="打开协作面板"
                             aria-pressed={versionsOpen}
                             onClick={onToggleVersions}
                         >
-                            版本
+                            协作
                         </Button>
                     </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="分享画布">
@@ -290,6 +369,37 @@ export function CanvasTopBar({
                     </CanvasTopBarTooltip>
                 </div>
             </div>
+            <Modal title="我在此画布的积分用量" open={usageOpen} onCancel={() => setUsageOpen(false)} footer={null} confirmLoading={usageLoading} width="min(520px, calc(100vw - 24px))">
+                {usageLoading ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                        <LoaderCircle className="mx-auto mb-2 size-5 animate-spin motion-reduce:animate-none" />
+                        正在读取统计…
+                    </div>
+                ) : usageError ? (
+                    <div className="space-y-3 py-4 text-sm">
+                        <p className="m-0 text-muted-foreground">{usageError}</p>
+                        <Button type="primary" onClick={() => void openUsage()}>
+                            重试
+                        </Button>
+                    </div>
+                ) : usage ? (
+                    <div className="grid grid-cols-2 gap-4">
+                        <Statistic title="已结算" value={formatCredits(usage.settledMicrocredits)} suffix="积分" />
+                        <Statistic title="待结算" value={formatCredits(usage.pendingMicrocredits)} suffix="积分" />
+                        <Statistic title="已退回" value={formatCredits(usage.refundedMicrocredits)} suffix="积分" />
+                        <Statistic title="计费任务" value={usage.taskCount} suffix="个" />
+                        <div className="col-span-2 flex flex-wrap gap-2">
+                            {Object.entries(usage.byCapability).map(([key, value]) => (
+                                <Tag key={key}>
+                                    {key}: {formatCredits(value)}
+                                </Tag>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <p className="py-4 text-sm text-muted-foreground">暂无统计数据</p>
+                )}
+            </Modal>
             <CanvasShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         </>
     );

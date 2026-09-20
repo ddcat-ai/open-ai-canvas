@@ -4,8 +4,12 @@ import { apiClient } from "../src/services/api/request";
 import { canvasContentHash } from "../src/lib/canvas/canvas-content";
 import { rebaseCanvasProjects, parseCanvasStorageDocument } from "../src/lib/canvas/canvas-storage-revision";
 import { readCanvasSyncDrafts } from "../src/services/canvas-sync-drafts";
-import { applyAgentCanvasPatches, deleteCanvasProjectsWithRemoteSync, refreshCanvasAfterAgent, initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
+import { applyCanvasCollaborationRemoteOperation, mergeCanvasBranchWithSync, preserveCanvasLiveConflict, pullLatestCollaborativeCanvasProject, resolveCanvasConflict, applyAgentCanvasPatches, deleteCanvasProjectsWithRemoteSync, refreshCanvasAfterAgent, initializeRemoteUserDataSession, installRemoteUserDataAutoSync, loadCanvasProjectForEditing, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData } from "../src/services/user-data-sync";
 import { createAgentCanvasSync } from "../src/services/agent-canvas-sync";
+import { readCanvasConflict } from "../src/services/canvas-conflicts";
+import { applyCanvasCollaborationOperation } from "../src/lib/canvas/canvas-collaboration-operations";
+import { readCanvasCollaborationQueue } from "../src/services/canvas-collaboration-queue";
+import type { CanvasCollaborationOperation, CanvasCollaborationOperationResult } from "../src/services/api/canvas-collaboration";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { flushAssetStorePersistence, useAssetStore } from "../src/stores/use-asset-store";
 import { useSyncProgressStore } from "../src/stores/use-sync-progress-store";
@@ -15,6 +19,7 @@ const originalWindow = globalThis.window;
 const originalAdapter = apiClient.defaults.adapter;
 const originalGet = localforage.getItem;
 const originalSet = localforage.setItem;
+const originalRemove = localforage.removeItem;
 const indexed = new Map<string, string>();
 let scope = "";
 let sequence = 0;
@@ -23,6 +28,11 @@ let remote = new Map<string, CanvasProject>();
 let requests: Array<{ method: string; id: string; project?: CanvasProject }> = [];
 let beforePut: (() => Promise<void>) | undefined;
 let deleteFailureId: string | undefined;
+let beforeMerge: (() => Promise<void>) | undefined;
+let operationRequests: CanvasCollaborationOperation[] = [];
+let receipts = new Map<string, CanvasCollaborationOperationResult>();
+let loseReceipt = false;
+let beforeOperation: (() => void | Promise<void>) | undefined;
 
 function canvas(id = "canvas"): CanvasProject {
     return {
@@ -54,28 +64,19 @@ beforeEach(async () => {
     autoSave = undefined;
     beforePut = undefined;
     deleteFailureId = undefined;
-    remote = new Map([
-        ["canvas", canvas()],
-        ["other", canvas("other")],
-    ]);
-    Object.defineProperty(globalThis, "window", {
-        configurable: true,
-        value: {
-            setTimeout: (callback: () => void) => {
-                autoSave = callback;
-                return 1;
-            },
-            clearTimeout: () => {
-                autoSave = undefined;
-            },
-            localStorage: { getItem: () => scope, setItem: () => undefined },
-        },
-    });
+    operationRequests = [];
+    receipts.clear();
+    loseReceipt = false;
+    beforeOperation = undefined;
+    remote = new Map([["canvas", canvas()], ["other", canvas("other")]]);
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {
+        setTimeout: (callback: () => void) => { autoSave = callback; return 1; },
+        clearTimeout: () => { autoSave = undefined; },
+        localStorage: { getItem: () => scope, setItem: () => undefined },
+    } });
     localforage.getItem = (async (key: string) => indexed.get(key) ?? null) as typeof localforage.getItem;
-    localforage.setItem = (async (key: string, value: string) => {
-        indexed.set(key, value);
-        return value;
-    }) as typeof localforage.setItem;
+    localforage.setItem = (async (key: string, value: string) => { indexed.set(key, value); return value; }) as typeof localforage.setItem;
+    localforage.removeItem = (async (key: string) => { indexed.delete(key); }) as typeof localforage.removeItem;
     apiClient.defaults.adapter = async (config) => {
         const method = config.method || "get";
         const id = String(config.url).split("/").at(-1)!;
@@ -96,7 +97,35 @@ beforeEach(async () => {
                 createdAt: "2026-09-01", updatedAt: "2026-09-01",
                 data: { dataUrl: "https://example.com/image.png", width: 100, height: 100, bytes: 1, mimeType: "image/*" },
             }] };
-        } else if (id === "restore" && method === "post") {
+        }
+        else if (id === "merge") {
+            const saved = { ...addNode(remote.get("canvas")!, "merged-node"), revision: remote.get("canvas")!.revision! + 1 };
+            remote.set("canvas", saved);
+            await beforeMerge?.();
+            data = { status: "merged", targetCanvasId: "canvas", targetRevision: saved.revision, project: saved };
+        }
+        else if (id === "events") {
+            const current = remote.get("canvas")!;
+            data = { events: [], currentRevision: current.revision };
+        }
+        else if (id === "operations") {
+            const operation = body as CanvasCollaborationOperation;
+            operationRequests.push(operation);
+            await beforeOperation?.();
+            const receipt = receipts.get(operation.opId);
+            if (receipt) data = { ...receipt, status: "already_applied" };
+            else {
+                const current = remote.get("canvas")!;
+                const applied = applyCanvasCollaborationOperation(current, { ...operation, revision: current.revision! + 1 });
+                if (!applied.applied) throw new Error("mock cannot apply operation");
+                const result: CanvasCollaborationOperationResult = { status: "applied", operationId: operation.opId, canvasId: "canvas", revision: applied.project.revision!, document: applied.project };
+                remote.set("canvas", applied.project);
+                receipts.set(operation.opId, structuredClone(result));
+                data = result;
+                if (loseReceipt) { loseReceipt = false; throw new Error("connection lost after commit"); }
+            }
+        }
+        else if (id === "restore" && method === "post") {
             const current = remote.get("canvas")!;
             if (body.revision !== current.revision) status = 409;
             else {
@@ -123,12 +152,192 @@ beforeEach(async () => {
     await syncRemoteUserData(scope);
 });
 
+async function enableCollaboration() {
+    remote.set("canvas", { ...remote.get("canvas")!, collaborationEnabled: true });
+    await syncRemoteUserData(scope);
+}
+
+for (const shared of [false, true]) {
+    test(`branch merge receipt preserves edits made during the request and serializes saves (${shared ? "shared" : "private"} target)`, async () => {
+        if (shared) await enableCollaboration();
+        let release!: () => void;
+        let entered!: () => void;
+        const started = new Promise<void>((resolve) => { entered = resolve; });
+        const wait = new Promise<void>((resolve) => { release = resolve; });
+        beforeMerge = async () => { entered(); await wait; };
+        try {
+            const merging = mergeCanvasBranchWithSync("branch", { targetCanvasId: "canvas", expectedTargetRevision: 1, sourceRevision: 2 });
+            await started;
+            const local = useCanvasStore.getState().openProject("canvas")!;
+            useCanvasStore.getState().updateProject("canvas", { nodes: local.nodes.map((node) => ({ ...node, title: "edited during merge" })) });
+            const saving = saveRemoteUserDataNow("canvas");
+            release();
+            const result = await merging;
+            expect(result.project?.revision).toBe(2);
+            await saving;
+            const saved = remote.get("canvas")!;
+            expect(saved.revision).toBe(3);
+            expect(saved.nodes.some((node) => node.id === "merged-node")).toBe(true);
+            expect(saved.nodes.find((node) => node.id === "old-image")?.title).toBe("edited during merge");
+            expect(useCanvasStore.getState().openProject("canvas")!.nodes).toEqual(saved.nodes);
+            expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("done");
+        } finally { beforeMerge = undefined; release?.(); }
+    });
+}
+
+test("remote position merges with unsent local text and only the local edit is sent", async () => {
+    await enableCollaboration();
+    const base = useCanvasStore.getState().openProject("canvas")!;
+    useCanvasStore.getState().updateProject("canvas", { nodes: base.nodes.map((n) => ({ ...n, title: "my text" })) });
+    const operation = { opId: "other-move", kind: "update_node", nodeId: "old-image", revision: 2, incarnation: 1, patch: { position: { x: 300, y: 20 } } };
+    remote.set("canvas", applyCanvasCollaborationOperation(base, operation).project);
+    await applyCanvasCollaborationRemoteOperation("canvas", operation);
+    const live = useCanvasStore.getState().openProject("canvas")!;
+    expect(live.nodes[0].title).toBe("my text");
+    expect(live.nodes[0].position).toEqual({ x: 300, y: 20 });
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("pending");
+    await saveRemoteUserDataNow();
+    expect(operationRequests).toHaveLength(1);
+    expect(operationRequests[0].patch).toEqual({ title: "my text" });
+    expect(remote.get("canvas")!.nodes[0].position.x).toBe(300);
+});
+
+test("unchanged polling preserves unsaved edits and does not report saved", async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().renameProject("canvas", "unsent");
+    const result = await pullLatestCollaborativeCanvasProject("canvas");
+    expect(result.changed).toBe(false);
+    expect(result.project).toBeUndefined();
+    expect(useCanvasStore.getState().openProject("canvas")!.title).toBe("unsent");
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("pending");
+});
+
+for (const initializeSession of [syncRemoteUserData, initializeRemoteUserDataSession]) {
+test(`lost receipt is replayed with the exact operation id after ${initializeSession.name}`, async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().updateProject("canvas", { nodes: addNode(useCanvasStore.getState().openProject("canvas")!, "once-only").nodes });
+    loseReceipt = true;
+    await expect(saveRemoteUserDataNow()).rejects.toThrow("connection lost after commit");
+    const queued = await readCanvasCollaborationQueue(scope, "canvas");
+    expect(queued?.pending).toHaveLength(1);
+    expect(remote.get("canvas")!.revision).toBe(2);
+    resetRemoteUserDataSync();
+    await initializeSession(scope);
+    await loadCanvasProjectForEditing("canvas");
+    await saveRemoteUserDataNow();
+    expect(operationRequests).toHaveLength(2);
+    expect(operationRequests[1]).toEqual(operationRequests[0]);
+    expect(remote.get("canvas")!.nodes.filter((n) => n.id === "once-only")).toHaveLength(1);
+    expect(remote.get("canvas")!.revision).toBe(2);
+    expect(await readCanvasCollaborationQueue(scope, "canvas")).toBeNull();
+});
+}
+
+test("a same-field remote edit keeps the draft and reports conflict", async () => {
+    await enableCollaboration();
+    const base = useCanvasStore.getState().openProject("canvas")!;
+    useCanvasStore.getState().updateProject("canvas", { nodes: base.nodes.map((n) => ({ ...n, title: "mine" })) });
+    await applyCanvasCollaborationRemoteOperation("canvas", { opId: "other-title", kind: "update_node", nodeId: "old-image", revision: 2, patch: { title: "theirs" } });
+    expect(useCanvasStore.getState().openProject("canvas")!.nodes[0].title).toBe("mine");
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("conflict");
+    expect((await readCanvasSyncDrafts("canvas"))[0].project.nodes[0].title).toBe("mine");
+});
+
+test("a partial batch resumes only its unacknowledged request with the original payload", async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().updateProject("canvas", { title: "renamed", nodes: addNode(useCanvasStore.getState().openProject("canvas")!, "batch-node").nodes });
+    beforeOperation = () => { if (operationRequests.length === 2) loseReceipt = true; };
+    await expect(saveRemoteUserDataNow()).rejects.toThrow("connection lost after commit");
+    const queue = await readCanvasCollaborationQueue(scope, "canvas");
+    expect(queue?.confirmed.title).toBe("renamed");
+    expect(queue?.pending).toHaveLength(1);
+    await saveRemoteUserDataNow();
+    expect(operationRequests).toHaveLength(3);
+    expect(operationRequests[2]).toEqual(operationRequests[1]);
+    expect(remote.get("canvas")!.revision).toBe(3);
+    expect(remote.get("canvas")!.nodes.filter((n) => n.id === "batch-node")).toHaveLength(1);
+});
+
+test("queue persistence failure prevents network submission and keeps the local edit", async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().renameProject("canvas", "local edit");
+    const setItem = localforage.setItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        if (key.includes("collaboration-queue:")) throw new Error("storage quota exceeded");
+        return setItem(key, value);
+    }) as typeof localforage.setItem;
+    await expect(saveRemoteUserDataNow()).rejects.toThrow("storage quota exceeded");
+    expect(operationRequests).toHaveLength(0);
+    expect(useCanvasStore.getState().openProject("canvas")!.title).toBe("local edit");
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("error");
+    localforage.setItem = setItem;
+});
+
+test("edits made while a request is in flight are saved after its acknowledgement", async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().renameProject("canvas", "first edit");
+    beforeOperation = () => {
+        beforeOperation = undefined;
+        useCanvasStore.getState().renameProject("canvas", "newer edit");
+    };
+    await saveRemoteUserDataNow();
+    expect(operationRequests).toHaveLength(2);
+    expect(operationRequests[0].rootPatch).toEqual({ title: "first edit" });
+    expect(operationRequests[1].rootBefore).toEqual({ title: "first edit" });
+    expect(operationRequests[1].rootPatch).toEqual({ title: "newer edit" });
+    expect(useCanvasStore.getState().openProject("canvas")!.title).toBe("newer edit");
+    expect(remote.get("canvas")!.title).toBe("newer edit");
+});
+
+test("a live editor conflict during receipt projection is not marked as saved", async () => {
+    await enableCollaboration();
+    useCanvasStore.getState().renameProject("canvas", "my edit");
+    Object.assign(window, { dispatchEvent: () => {
+        useSyncProgressStore.getState().setProjectProgress("canvas", { phase: "conflict", message: "new live conflict" });
+        return true;
+    } });
+    await expect(saveRemoteUserDataNow()).rejects.toMatchObject({ status: 409 });
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("conflict");
+    expect((await readCanvasCollaborationQueue(scope, "canvas"))?.blocked).toBe(true);
+});
+
+test("a user-selected conflict resolution does not replay the old draft over the choice", async () => {
+    await enableCollaboration();
+    const base = useCanvasStore.getState().openProject("canvas")!;
+    useCanvasStore.getState().updateProject("canvas", { nodes: base.nodes.map((n) => ({ ...n, title: "mine" })) });
+    const delta = { opId: "other-title", kind: "update_node", nodeId: "old-image", revision: 2, patch: { title: "theirs" } };
+    remote.set("canvas", applyCanvasCollaborationOperation(base, delta).project);
+    await applyCanvasCollaborationRemoteOperation("canvas", delta);
+    const snapshot = (await readCanvasConflict("canvas"))!;
+    const merged = { ...snapshot.remote, nodes: snapshot.remote.nodes.map((n) => ({ ...n, title: "combined" })) };
+    const result = await resolveCanvasConflict(snapshot, merged);
+    expect(result.nodes[0].title).toBe("combined");
+    expect(remote.get("canvas")!.nodes[0].title).toBe("combined");
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("done");
+    expect(await readCanvasConflict("canvas")).toBeNull();
+});
+
+test("conflict snapshots stay in the original account when switching during persistence", async () => {
+    await enableCollaboration();
+    const originalScope = scope;
+    const base = useCanvasStore.getState().openProject("canvas")!;
+    const local = { ...base, title: "mine" };
+    const latest = { ...base, title: "theirs", revision: 2 };
+    const saving = preserveCanvasLiveConflict(base, local, latest);
+    scope = "switched-account";
+    await saving;
+    expect((await readCanvasConflict("canvas", originalScope))?.local.title).toBe("mine");
+    expect(await readCanvasConflict("canvas", scope)).toBeNull();
+    expect(await readCanvasCollaborationQueue(scope, "canvas")).toBeNull();
+});
+
 afterEach(async () => {
     resetRemoteUserDataSync();
     await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
     apiClient.defaults.adapter = originalAdapter;
     localforage.getItem = originalGet;
     localforage.setItem = originalSet;
+    localforage.removeItem = originalRemove;
     if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
     else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
 });
@@ -229,13 +438,13 @@ test("a conflict preserves drafts, stops retries and does not block another canv
     expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("conflict");
     expect((await readCanvasSyncDrafts("canvas"))[0].project.nodes.at(-1)!.id).toBe("local-video");
     useCanvasStore.getState().renameProject("canvas", "more local edits");
-    await expect(saveRemoteUserDataNow()).rejects.toThrow("云端画布已有更新");
+    await expect(saveRemoteUserDataNow()).rejects.toMatchObject({ status: 409 });
     useCanvasStore.getState().renameProject("other", "still saves independently");
     await saveRemoteUserDataNow("other");
     expect(remote.get("other")!.title).toBe("still saves independently");
-    await expect(saveRemoteUserDataNow(["canvas", "other"])).rejects.toThrow("云端画布已有更新");
+    await expect(saveRemoteUserDataNow(["canvas", "other"])).rejects.toMatchObject({ status: 409 });
     expect(requests.filter((request) => request.method === "put" && request.id === "canvas")).toHaveLength(1);
-    await expect(saveRemoteUserDataNow("canvas")).rejects.toThrow("云端画布已有更新");
+    await expect(saveRemoteUserDataNow("canvas")).rejects.toMatchObject({ status: 409 });
     await loadCanvasProjectForEditing("canvas", { latest: true });
     expect(useCanvasStore.getState().openProject("canvas")!.nodes.at(-1)!.id).toBe("remote-video");
     expect((await readCanvasSyncDrafts("canvas")).some((draft) => draft.project.title === "more local edits")).toBe(true);

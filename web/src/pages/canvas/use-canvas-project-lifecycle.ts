@@ -9,14 +9,16 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
-import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { applyCanvasCollaborationRemoteOperation, preserveCanvasLiveConflict, pullLatestCollaborativeCanvasProject, createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
+import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { readCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { CanvasHistorySnapshot } from "./use-canvas-history";
+import { rebaseCanvasCollaborationProject } from "@/lib/canvas/canvas-collaboration-rebase";
+import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 
 type UseCanvasProjectLifecycleOptions = {
     projectId: string;
@@ -45,6 +47,7 @@ type UseCanvasProjectLifecycleOptions = {
     setViewport: Dispatch<SetStateAction<ViewportTransform>>;
     setProjectLoaded: Dispatch<SetStateAction<boolean>>;
     resetHistory: (snapshot: CanvasHistorySnapshot) => void;
+    adoptRemoteHistory: (before: CanvasHistorySnapshot, next: CanvasHistorySnapshot) => void;
     cleanupAssetImages: (options?: unknown) => void;
     cleanupCanvasFiles: (extra?: unknown) => void;
 };
@@ -76,6 +79,7 @@ export function useCanvasProjectLifecycle({
     setViewport,
     setProjectLoaded,
     resetHistory,
+    adoptRemoteHistory,
     cleanupAssetImages,
     cleanupCanvasFiles,
 }: UseCanvasProjectLifecycleOptions) {
@@ -94,6 +98,9 @@ export function useCanvasProjectLifecycle({
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const observedContentRef = useRef<CanvasHistorySnapshot | null>(null);
+    const [reloadNonce, setReloadNonce] = useState(0);
+	const collaborativePullInFlightRef = useRef(false);
+	const collaborativePullQueuedRef = useRef(false);
     const loadLatestRef = useRef(false);
     const historyRestoreRef = useRef<{ snapshotId: string; revision: number; resolve: () => void; reject: (error: unknown) => void } | null>(null);
     const pendingReloadRef = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
@@ -215,8 +222,8 @@ export function useCanvasProjectLifecycle({
         };
     }, [hydrated, sessionHydrated, loadAttempt, message, navigate, openProject, projectId, resetHistory, setActiveChatId, setBackgroundMode, setCanvasAppearance, setChatSessions, setConnections, setNodes, setShowImageInfo, setViewport]);
 
-    useEffect(() => {
-        if (!projectLoaded) return;
+	useEffect(() => {
+		if (!projectLoaded) return;
         let cancelled = false;
         listAddedSkills()
             .then(({ skills }) => {
@@ -228,7 +235,108 @@ export function useCanvasProjectLifecycle({
         return () => {
             cancelled = true;
         };
-    }, [projectLoaded]);
+	}, [projectLoaded]);
+
+	useEffect(() => {
+		if (!projectLoaded) return;
+		let cancelled = false;
+		const applyPulledProject = (project: CanvasProject) => {
+			if (cancelled) return;
+			const fallbackTheme = useCanvasThemeStore.getState().theme;
+			const nextAppearance = project.appearance
+				? normalizeCanvasAppearance(project.appearance, fallbackTheme)
+				: canvasAppearanceForTheme(fallbackTheme);
+			const nextNodes = project.nodes || [];
+			const before = observedContentRef.current;
+			observedContentRef.current = {
+				nodes: nextNodes,
+				connections: project.connections || [],
+				chatSessions: project.chatSessions || [],
+				activeChatId: project.activeChatId || null,
+				canvasAppearance: nextAppearance,
+				backgroundMode: project.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE,
+				showImageInfo: project.showImageInfo || false,
+			};
+			if (before) adoptRemoteHistory({ ...before, nodes: nodesRef.current, connections: connectionsRef.current, chatSessions: chatSessionsRef.current, activeChatId: activeChatIdRef.current }, observedContentRef.current);
+			nodesRef.current = nextNodes;
+			connectionsRef.current = project.connections || [];
+			chatSessionsRef.current = project.chatSessions || [];
+			activeChatIdRef.current = project.activeChatId || null;
+			setNodes(nextNodes);
+			setConnections(project.connections || []);
+			setChatSessions(project.chatSessions || []);
+			setActiveChatId(project.activeChatId || null);
+			setCanvasAppearance(nextAppearance);
+			setBackgroundMode(project.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE);
+			setShowImageInfo(project.showImageInfo || false);
+			useCanvasThemeStore.getState().setTheme(canvasAppearanceBaseTheme(nextAppearance, fallbackTheme));
+		};
+        const onProjection = (event: Event) => {
+            const detail = (event as CustomEvent<{ canvasId: string; previous?: CanvasProject; project: CanvasProject }>).detail;
+            if (cancelled || detail?.canvasId !== projectId) return;
+            const previous = detail.previous;
+            const live = previous ? {
+                ...previous, nodes: nodesRef.current, connections: connectionsRef.current,
+                chatSessions: chatSessionsRef.current, activeChatId: activeChatIdRef.current,
+            } : detail.project;
+            const rebased = previous && rebaseCanvasCollaborationProject(previous, live, detail.project);
+            const project = rebased?.project || detail.project;
+            if (previous && rebased?.conflicts.length) void preserveCanvasLiveConflict(previous, live, detail.project);
+            // Editor callbacks may run between the network request and store
+            // publication. Carry those newer edits forward before rendering.
+            applyPulledProject(project);
+            useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => item.id === projectId ? project : item) }));
+        };
+        window.addEventListener("canvas-collaboration-projection", onProjection);
+        // A branch can also merge into a private canvas. Its own merge receipt
+        // must update the editor even though background collaboration is off.
+        if (!currentProject?.collaborationEnabled) return () => {
+            cancelled = true;
+            window.removeEventListener("canvas-collaboration-projection", onProjection);
+        };
+        const pull = () => {
+            if (cancelled || document.visibilityState === "hidden") return;
+            if (collaborativePullInFlightRef.current) {
+                collaborativePullQueuedRef.current = true;
+                return;
+            }
+            collaborativePullQueuedRef.current = false;
+            collaborativePullInFlightRef.current = true;
+            void pullLatestCollaborativeCanvasProject(projectId).catch((error) => {
+                if (!cancelled) console.warn("协作画布轮询失败", error);
+            }).finally(() => {
+                collaborativePullInFlightRef.current = false;
+                if (collaborativePullQueuedRef.current && !cancelled) {
+                    collaborativePullQueuedRef.current = false;
+                    pull();
+                }
+            });
+        };
+        const onRealtimeOperation = (event: Event) => {
+            const detail = (event as CustomEvent<{ canvasId?: string; operation?: import("@/services/api/canvas-collaboration").CanvasCollaborationOperationDelta }>).detail;
+            if (detail?.canvasId !== projectId) return;
+            if (detail.operation) {
+                void applyCanvasCollaborationRemoteOperation(projectId, detail.operation).then((result) => {
+                    if (!result) void pull();
+                }).catch(() => pull());
+                return;
+            }
+            void pull();
+        };
+        window.addEventListener("canvas-collaboration-remote-operation", onRealtimeOperation);
+        void pull();
+        const onVisibilityChange = () => { if (document.visibilityState === "visible") void pull(); };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        const timer = window.setInterval(pull, 5000);
+        return () => {
+            cancelled = true;
+            collaborativePullQueuedRef.current = false;
+            window.clearInterval(timer);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+            window.removeEventListener("canvas-collaboration-remote-operation", onRealtimeOperation);
+            window.removeEventListener("canvas-collaboration-projection", onProjection);
+		};
+	}, [currentProject?.collaborationEnabled, projectId, projectLoaded]);
 
     useEffect(() => subscribeAgentCanvasRefresh((project, previous) => {
         if (!projectLoaded || project.id !== projectId) return;
@@ -254,7 +362,17 @@ export function useCanvasProjectLifecycle({
     useEffect(() => {
         if (!projectLoaded || historyPausedRef.current) return;
         const snapshot = { nodes, connections, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };
-        if (!observedContentRef.current || JSON.stringify(observedContentRef.current) === JSON.stringify(snapshot)) return;
+        const observed = observedContentRef.current;
+        if (
+            observed &&
+            observed.nodes === nodes &&
+            observed.connections === connections &&
+            observed.chatSessions === chatSessions &&
+            observed.activeChatId === activeChatId &&
+            observed.canvasAppearance === canvasAppearance &&
+            observed.backgroundMode === backgroundMode &&
+            observed.showImageInfo === showImageInfo
+        ) return;
         observedContentRef.current = snapshot;
         const patch = { nodes, connections, chatSessions, activeChatId, appearance: canvasAppearance, backgroundMode, showImageInfo };
         const stored = useCanvasStore.getState().projects.find((project) => project.id === projectId);

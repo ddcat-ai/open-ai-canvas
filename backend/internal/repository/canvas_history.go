@@ -35,6 +35,12 @@ func (r *Repository) CanvasSnapshot(userID, canvasID, id string) (*model.CanvasS
 	return &item, err
 }
 
+func (r *Repository) CanvasSnapshotAtRevision(userID, canvasID string, revision int64) (*model.CanvasSnapshot, error) {
+	var item model.CanvasSnapshot
+	err := r.db.Where("user_id = ? AND canvas_id = ? AND revision = ?", userID, canvasID, revision).First(&item).Error
+	return &item, err
+}
+
 // The successful CAS takes the canvas row lock before inspecting the history.
 // Snapshot creation, reference protection and retention commit with the content.
 func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, restoredResourceIDs []string, cutoff time.Time, limit int, force bool) error {

@@ -5,6 +5,12 @@ description: 在宿主机启动影策前后端开发服务
 
 # 本地开发
 
+## 协作 WebSocket 开发代理
+
+Vite 为 /api/canvas-projects/:id/collaboration/ws 配置专用 ws 代理，目标跟随 VITE_API_PROXY_TARGET；专用规则必须位于通用 /api 前。部署时 nginx.conf 同一路径保留 Upgrade/Connection 头并关闭该连接缓冲，外层代理也必须支持升级。普通 HTTP 健康检查不能替代握手与消息验证。
+
+代理专项：在 web 目录执行 bun test test/canvas-collaboration-proxy.test.ts。测试使用临时目录隔离 Vite cacheDir，避免破坏已有开发服务的依赖缓存；排障见 docs/AGENT_RUNBOOK.md 的 RB-20260920-01、02。无需为普通单元测试启动开发服务。
+
 ## 一键启动（Windows PowerShell）
 
 在仓库根目录执行：

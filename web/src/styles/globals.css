@@ -1865,7 +1865,7 @@
 
     .canvas-topbar-project-cluster {
         width: max-content;
-        max-width: min(360px, calc(50vw - 88px));
+        max-width: min(560px, calc(50vw - 88px));
     }
 
     /* 右侧命令组在窄屏保持可达，不挤压项目标题，也不制造横向溢出。 */

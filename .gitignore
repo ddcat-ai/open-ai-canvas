@@ -72,3 +72,10 @@ camera_language_guide.md
 backend/cmd/server/server
 # One-off local probe scripts and their compiled output.
 backend/tmp_*
+
+# Canvas collaboration documentation and local agent configuration.
+!docs/AGENT_RUNBOOK.md
+!docs/content/docs/overview/canvas-collaboration-realtime.mdx
+!docs/content/docs/overview/canvas-collaboration-figma-plan.mdx
+!docs/content/docs/overview/canvas-collaboration.mdx
+.codex/

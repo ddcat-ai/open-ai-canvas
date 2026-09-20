@@ -20,16 +20,18 @@ type AssetsSyncRequest struct {
 }
 
 type UserDataSummary struct {
-	ID        string           `json:"id"`
-	FolderID  string           `json:"folderId,omitempty"`
-	Kind      string           `json:"kind,omitempty"`
-	Category  string           `json:"category,omitempty"`
-	Status    string           `json:"status,omitempty"`
-	Title     string           `json:"title"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
-	Revision  int64            `json:"revision,omitempty"`
-	SaveAudit *CanvasSaveAudit `json:"-"`
+	CollaborationEnabled bool             `json:"collaborationEnabled,omitempty"`
+	SharedWithMe         bool             `json:"sharedWithMe,omitempty"`
+	ID                   string           `json:"id"`
+	FolderID             string           `json:"folderId,omitempty"`
+	Kind                 string           `json:"kind,omitempty"`
+	Category             string           `json:"category,omitempty"`
+	Status               string           `json:"status,omitempty"`
+	Title                string           `json:"title"`
+	CreatedAt            time.Time        `json:"createdAt"`
+	UpdatedAt            time.Time        `json:"updatedAt"`
+	Revision             int64            `json:"revision,omitempty"`
+	SaveAudit            *CanvasSaveAudit `json:"-"`
 }
 
 type CanvasSaveAudit struct {
@@ -183,6 +185,11 @@ func (s *Service) UserCanvasProjects(userID string) ([]json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	shared, err := s.repo.CanvasProjectsForCollaborator(userID)
+	if err != nil {
+		return nil, err
+	}
+	projects = mergeCanvasProjects(projects, shared)
 	result := make([]json.RawMessage, 0, len(projects))
 	for _, project := range projects {
 		if strings.TrimSpace(project.PayloadJSON) != "" {
@@ -201,15 +208,20 @@ func (s *Service) UserCanvasProjectSummaries(userID string) ([]UserDataSummary, 
 	if err != nil {
 		return nil, err
 	}
+	shared, err := s.repo.CanvasProjectSummariesForCollaborator(userID)
+	if err != nil {
+		return nil, err
+	}
+	projects = mergeCanvasProjects(projects, shared)
 	result := make([]UserDataSummary, 0, len(projects))
 	for _, project := range projects {
-		result = append(result, UserDataSummary{ID: project.ID, Title: project.Title, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt, Revision: project.Revision})
+		result = append(result, UserDataSummary{ID: project.ID, Title: project.Title, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt, Revision: project.Revision, CollaborationEnabled: project.CollaborationEnabled, SharedWithMe: project.UserID != userID})
 	}
 	return result, nil
 }
 
 func (s *Service) UserCanvasProject(userID string, id string) (json.RawMessage, error) {
-	project, err := s.repo.CanvasProjectForUser(userID, id)
+	project, err := s.scopedCanvasProject(&model.User{ID: userID}, id)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +264,9 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 		if existing != nil {
 			existingBytes = int64(len([]byte(existing.PayloadJSON)))
 			project.CreatedAt = existing.CreatedAt
+			if existing.CollaborationEnabled && reason == "automatic" {
+				return kernel.NewAppError(http.StatusConflict, "该画布已开启多人协作，请通过协作操作接口保存修改")
+			}
 		}
 		if (existing == nil && project.Revision != 0) || (existing != nil && project.Revision != existing.Revision) {
 			return canvasRevisionConflict()
@@ -367,11 +382,12 @@ func canvasProjectFromJSON(userID string, raw json.RawMessage) (model.CanvasProj
 		return model.CanvasProject{}, err
 	}
 	var payload struct {
-		ID        string `json:"id"`
-		Title     string `json:"title"`
-		ProjectID string `json:"projectId"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
+		CollaborationEnabled bool   `json:"collaborationEnabled"`
+		ID                   string `json:"id"`
+		Title                string `json:"title"`
+		ProjectID            string `json:"projectId"`
+		CreatedAt            string `json:"createdAt"`
+		UpdatedAt            string `json:"updatedAt"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return model.CanvasProject{}, kernel.BadAuthRequest("画布数据格式错误")
@@ -384,13 +400,14 @@ func canvasProjectFromJSON(userID string, raw json.RawMessage) (model.CanvasProj
 		id = kernel.NewID()
 	}
 	return model.CanvasProject{
-		ID:          id,
-		UserID:      userID,
-		ProjectID:   strings.TrimSpace(payload.ProjectID),
-		Title:       strings.TrimSpace(payload.Title),
-		PayloadJSON: string(raw),
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
+		CollaborationEnabled: payload.CollaborationEnabled,
+		ID:                   id,
+		UserID:               userID,
+		ProjectID:            strings.TrimSpace(payload.ProjectID),
+		Title:                strings.TrimSpace(payload.Title),
+		PayloadJSON:          string(raw),
+		CreatedAt:            createdAt,
+		UpdatedAt:            updatedAt,
 	}, nil
 }
 

@@ -6,18 +6,26 @@ import { canvasContentHash, sameCanvasContent } from "@/lib/canvas/canvas-conten
 import { getActiveUserScope } from "@/lib/user-scope";
 import { preserveCanvasSyncDraft, readCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 import { appQueryClient } from "@/lib/query-client";
+import { buildCanvasConflictFields, clearCanvasConflict, saveCanvasConflict, type CanvasConflictSnapshot } from "@/services/canvas-conflicts";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { parseAssetRecordList } from "@/lib/asset-record";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
 import type { Asset } from "@/stores/use-asset-store";
 import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
+import type { CanvasNodeData } from "@/types/canvas";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { repairMissingCanvasAssets, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { applyAgentCanvasPatch, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
+import { cloneCanvasDrawing, removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
+import { submitCanvasCollaborationOperation, type CanvasCollaborationOperation } from "@/services/api/canvas-collaboration";
+import { listCanvasCollaborationEvents, mergeCanvasBranch, type CanvasCollaborationOperationDelta } from "@/services/api/canvas-collaboration";
+import { applyCanvasCollaborationOperation } from "@/lib/canvas/canvas-collaboration-operations";
+import { collaborationValueEqual, rebaseCanvasCollaborationProject } from "@/lib/canvas/canvas-collaboration-rebase";
+import { readCanvasCollaborationQueue, writeCanvasCollaborationQueue, withCanvasCollaborationQueueLock } from "@/services/canvas-collaboration-queue";
 
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
@@ -35,6 +43,11 @@ let sessionEpoch = 0;
 const verifiedProjects = new Set<string>();
 const verifiedAssets = new Set<string>();
 const remoteProjectLoadPromises = new Map<string, Promise<CanvasProject | undefined>>();
+const queuedCollaborationProjects = new Set<string>();
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryAttempt = 0;
+let syncScheduledAt = 0;
+const REMOTE_SYNC_DEBOUNCE_MS = 150;
 
 export async function initializeRemoteUserDataSession(userId: string) {
     await withRemoteUserDataSyncExclusive(async () => {
@@ -43,7 +56,18 @@ export async function initializeRemoteUserDataSession(userId: string) {
         incrementalSession = true;
         acknowledgedProjects = new Map(useCanvasStore.getState().projects.map((project) => [project.id, project]));
         acknowledgedAssets = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
+        const scope = getActiveUserScope();
+        for (const project of useCanvasStore.getState().projects) {
+            const queue = await readCanvasCollaborationQueue(scope, project.id);
+            if (queue) {
+                queuedCollaborationProjects.add(project.id);
+                acknowledgedProjects.set(project.id, queue.base);
+                verifiedProjects.add(project.id);
+                useSyncProgressStore.getState().setProjectProgress(project.id, { phase: queue.blocked ? "conflict" : "pending", message: queue.blocked ? "有修改需要确认，草稿已保留" : "正在恢复未完成的同步" });
+            }
+        }
         remoteUserDataPhase = "ready";
+        if (queuedCollaborationProjects.size) scheduleRemoteUserDataSync();
     });
 }
 
@@ -66,6 +90,11 @@ export async function loadCanvasProjectForEditing(id: string, options: { latest?
             if (live === undefined) throw new Error(message);
             return live;
         };
+        if (options.latest || options.historyRestore) await discardCanvasCollaborationQueue(id);
+        else if (queuedCollaborationProjects.has(id)) {
+            const pendingLocal = useCanvasStore.getState().openProject(id);
+            if (pendingLocal) { options.onLoad?.(pendingLocal); return pendingLocal; }
+        }
         if (options.historyRestore) {
             const local = useCanvasStore.getState().openProject(id);
             if (local) {
@@ -110,6 +139,7 @@ export async function loadCanvasProjectForEditing(id: string, options: { latest?
             useSyncProgressStore.getState().setProjectProgress(id, { draftCount });
             if (!options.latest && !options.historyRestore && local.revision !== undefined) {
                 if (local.revision !== remote.revision) {
+                    await persistCanvasConflictSnapshot(id, acknowledgedProjects.get(id), local, remote, scope);
                     useSyncProgressStore.getState().setProjectProgress(id, { phase: "conflict", message: "云端画布已有更新，本地修改已保留为草稿" });
                 } else {
                     // A cached draft is not an acknowledged cloud save. Once its
@@ -301,6 +331,7 @@ export async function syncRemoteUserData(userId?: string | null) {
         incrementalSession = false;
         activeRemoteUserId = userId || "";
         acknowledgedProjects.clear();
+        queuedCollaborationProjects.clear();
         acknowledgedAssets.clear();
         if (!activeRemoteUserId) {
             remoteUserDataPhase = "inactive";
@@ -322,6 +353,12 @@ export async function syncRemoteUserData(userId?: string | null) {
                 const local = localProjects.find((item) => item.id === project.id);
                 const draftCount = (await readCanvasSyncDrafts(project.id)).length;
                 useSyncProgressStore.getState().setProjectProgress(project.id, { phase: "done", draftCount, message: "已保存到云端" });
+                const queue = await readCanvasCollaborationQueue(getActiveUserScope(), project.id);
+                if (queue) {
+                    queuedCollaborationProjects.add(project.id);
+                    useSyncProgressStore.getState().setProjectProgress(project.id, { phase: queue.blocked ? "conflict" : "pending", message: queue.blocked ? "有修改需要确认，草稿已保留" : "正在恢复未完成的同步" });
+                    return { ...(local || queue.source), collaborationEnabled: true };
+                }
                 return { ...project, viewport: local?.viewport || project.viewport || { x: 0, y: 0, k: 1 }, remoteContentHash: await canvasContentHash(project) };
             }));
             if (useCanvasStore.getState().projects !== localProjects) throw new Error("本地画布仍在更新，已保留本地内容，请重新同步");
@@ -331,6 +368,7 @@ export async function syncRemoteUserData(userId?: string | null) {
             acknowledgedProjects = new Map(projects.map((project) => [project.id, project]));
             acknowledgedAssets = new Map(parseAssetRecordList(snapshot.assets).map((asset) => [asset.id, asset]));
             remoteUserDataPhase = "ready";
+            if (queuedCollaborationProjects.size) scheduleRemoteUserDataSync();
         } catch (error) {
             remoteUserDataPhase = "failed";
             throw error;
@@ -370,6 +408,11 @@ export function resetRemoteUserDataSync() {
     remoteUserDataPhase = "inactive";
     acknowledgedAssets.clear();
     acknowledgedProjects.clear();
+    queuedCollaborationProjects.clear();
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = undefined;
+    retryAttempt = 0;
+    syncScheduledAt = 0;
     if (syncTimer) {
         window.clearTimeout(syncTimer);
         syncTimer = null;
@@ -403,11 +446,14 @@ export function scheduleRemoteUserDataSync() {
         syncQueued = true;
         return;
     }
+    if (!syncScheduledAt) syncScheduledAt = Date.now();
     if (syncTimer) window.clearTimeout(syncTimer);
+    const delay = Math.max(0, Math.min(REMOTE_SYNC_DEBOUNCE_MS, 500 - (Date.now() - syncScheduledAt)));
     syncTimer = window.setTimeout(() => {
         syncTimer = null;
+        syncScheduledAt = 0;
         void saveRemoteUserDataNow().catch((error) => console.warn("云端自动同步失败", error));
-    }, 1200);
+    }, delay);
 }
 
 export function formatLocalSavedRemotePending(localAction: string, error: unknown): string {
@@ -578,7 +624,7 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
         const ids = projectId === undefined ? useCanvasStore.getState().projects.map((project) => project.id)
             : typeof projectId === "string" ? [projectId] : projectId;
         if (ids.some((id) => useSyncProgressStore.getState().syncingProjects[id]?.phase === "conflict")) {
-            throw new ApiError("云端画布已有更新，请保留本地草稿并加载最新版本", { status: 409 });
+            throw new ApiError("有修改需要确认，请先处理冲突；本地内容仍然保留", { status: 409 });
         }
     };
     if (projectId !== undefined) assertNoConflict();
@@ -596,7 +642,19 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
     });
     try {
         await syncPromise;
+        retryAttempt = 0;
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = undefined;
         assertNoConflict();
+    } catch (error) {
+        if (activeRemoteUserId && !(error instanceof ApiError && [400, 401, 403, 404, 409, 428].includes(error.status || 0))) {
+            const scope = getActiveUserScope();
+            if (!retryTimer) retryTimer = setTimeout(() => {
+                retryTimer = undefined;
+                if (getActiveUserScope() === scope && activeRemoteUserId) void saveRemoteUserDataNow().catch(() => undefined);
+            }, Math.min(30_000, 1000 * 2 ** Math.min(retryAttempt++, 5)));
+        }
+        throw error;
     } finally {
         syncPromise = null;
         if (syncQueued) scheduleRemoteUserDataSync();
@@ -642,13 +700,16 @@ async function drainRemoteUserDataChanges(options: { force?: boolean } = {}) {
 }
 
 async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: { force?: boolean } = {}) {
-    // 中央兜底：任何调用方只要把持久媒体写进画布，提交前都会先补齐素材记录与 assetId。
-    // 页面级入口仍主动入库，以便立即反馈；这里负责阻止遗漏入口形成远端幽灵资源。
+    const scope = getActiveUserScope();
+    const assertScope = () => {
+        if (getActiveUserScope() !== scope || !activeRemoteUserId) throw new Error("账号已切换，待同步修改保留在原账号");
+    };
     const changedProjectIds = new Set(useCanvasStore.getState().projects.filter((project) => !sameCanvasContent(acknowledgedProjects.get(project.id), project)).map((project) => project.id));
     repairMissingCanvasAssets(changedProjectIds, incrementalSession);
     const currentProjects = useCanvasStore.getState().projects;
     const currentAssets = useAssetStore.getState().assets;
-    const dirtyProjects = currentProjects.filter((project) => !sameCanvasContent(acknowledgedProjects.get(project.id), project) && useSyncProgressStore.getState().syncingProjects[project.id]?.phase !== "conflict");
+    const dirtyProjects = currentProjects.filter((project) => (!sameCanvasContent(acknowledgedProjects.get(project.id), project) || queuedCollaborationProjects.has(project.id))
+        && useSyncProgressStore.getState().syncingProjects[project.id]?.phase !== "conflict");
     const dirtyAssets = currentAssets.filter((asset) => !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
     if (!dirtyProjects.length && !dirtyAssets.length) return;
 
@@ -678,6 +739,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     }
     const errors: unknown[] = [];
     for (const source of dirtyProjects) {
+        assertScope();
         const keysToUpload = collectLocalMediaKeys(source);
         const total = keysToUpload.length;
         useSyncProgressStore.getState().setProjectProgress(source.id, {
@@ -697,12 +759,18 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                 throw new ApiError("缺少画布版本，请保留草稿并加载云端最新版本", { status: 428 });
             }
             const hash = await canvasContentHash(source);
+            assertScope();
             const remotePayload = await ensureRemoteResourceReferences(source, uploaded, onMediaUploaded);
+            assertScope();
             if (total > 0) {
                 useSyncProgressStore.getState().setProjectProgress(source.id, {
                     phase: "saving",
                     message: "正在保存画布结构",
                 });
+            }
+            if (source.collaborationEnabled) {
+                await saveCollaborativeCanvasProject(source, remotePayload, uploaded);
+                continue;
             }
             const { project: saved } = await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
             if (!Number.isSafeInteger(saved.revision) || saved.revision !== source.revision! + 1) {
@@ -724,6 +792,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             useSyncProgressStore.getState().setProjectProgress(source.id, { phase: pending ? "pending" : "done", message: pending ? "有新修改等待保存" : "已保存到云端" });
             if (pending) syncQueued = true;
         } catch (error) {
+            assertScope();
             const conflict = error instanceof ApiError && (error.status === 409 || error.status === 428);
             useSyncProgressStore.getState().setProjectProgress(source.id, {
                 phase: conflict ? "conflict" : "error",
@@ -732,9 +801,28 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             if (conflict) {
                 try {
                     const current = useCanvasStore.getState().openProject(source.id) || source;
-                    const draftCount = await preserveCanvasSyncDraft(current);
+                    const draftCount = await preserveCanvasSyncDraft(current, scope);
+                    assertScope();
+                    const base = acknowledgedProjects.get(source.id);
+                    if (base) {
+                        try {
+                            const latest = (await getRemoteCanvasProject(source.id)).project;
+                            assertScope();
+                            await saveCanvasConflict({
+                                projectId: source.id,
+                                base,
+                                local: current,
+                                remote: latest,
+                                fields: buildCanvasConflictFields(base, current, latest),
+                            }, scope);
+                        } catch (conflictSnapshotError) {
+                            console.warn("保存协作冲突三方快照失败:", conflictSnapshotError);
+                        }
+                    }
+                    assertScope();
                     useSyncProgressStore.getState().setProjectProgress(source.id, { draftCount });
                 } catch (draftError) {
+                    assertScope();
                     useSyncProgressStore.getState().setProjectProgress(source.id, { message: "本地草稿保存失败，请勿关闭页面；请先下载草稿" });
                     errors.push(draftError);
                 }
@@ -744,6 +832,490 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     }
     if (errors.length) throw errors[0];
     if (dirtyProjects.length) void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
+}
+
+async function buildCollaborativeOperations(initial: CanvasProject, remotePayload: CanvasProject) {
+    if (!initial || !Number.isSafeInteger(initial.revision)) {
+        throw new ApiError("多人协作画布缺少可靠基线，请重新打开画布", { status: 428 });
+    }
+    let remote = initial;
+    const localNodes = remotePayload.nodes || [];
+    const baseNodes = new Map((initial.nodes || []).map((node) => [node.id, node]));
+    const localNodesById = new Map(localNodes.map((node) => [node.id, node]));
+    const operations: CanvasCollaborationOperation[] = [];
+    const submit = async (operation: CanvasCollaborationOperation) => {
+        operations.push({ ...operation, baseRevision: remote.revision || 0 });
+        const applied = applyCanvasCollaborationOperation(remote, { ...operation, revision: (remote.revision || 0) + 1 });
+        if (!applied.applied) throw new ApiError("本地节点关系不完整，请检查连线后重试", { status: 409 });
+        remote = applied.project;
+    };
+
+    // Project-level edits use the same three-way field check as node edits.
+    // Viewport, revision, timestamps and collaboration state stay server/local
+    // metadata and are deliberately excluded from this operation.
+    const rootKeys: Array<keyof CanvasProject> = [
+        "title", "projectId", "chatSessions", "activeChatId",
+        "starterMode", "appearance", "backgroundMode", "showImageInfo", "directorScenes", "timeline",
+    ];
+    const rootBefore: Record<string, unknown> = {};
+    const rootPatch: Record<string, unknown> = {};
+    for (const key of rootKeys) {
+        const beforeValue = initial[key];
+        const nextValue = remotePayload[key];
+        if (canvasCollaborationValueEqual(beforeValue, nextValue)) continue;
+        rootBefore[key] = beforeValue === undefined ? null : beforeValue;
+        rootPatch[key] = nextValue === undefined ? null : nextValue;
+    }
+    if (Object.keys(rootPatch).length) {
+        await submit({
+            opId: newCanvasCollaborationOperationID(),
+            kind: "update_canvas",
+            rootBefore,
+            rootPatch,
+        });
+    }
+
+    // Existing nodes are compared by top-level fields. The server applies only
+    // the changed fields, so a remote position edit does not overwrite a local
+    // prompt edit and vice versa.
+    for (const [nodeID, baseNode] of baseNodes) {
+        const localNode = localNodesById.get(nodeID);
+        if (!localNode) continue;
+        const patch: Record<string, unknown> = {};
+        const before: Record<string, unknown> = {};
+        for (const key of new Set([...Object.keys(baseNode), ...Object.keys(localNode)])) {
+            if (key === "id" || key === "createdAt" || key === "updatedAt") continue;
+            const beforeValue = (baseNode as unknown as Record<string, unknown>)[key];
+            const nextValue = (localNode as unknown as Record<string, unknown>)[key];
+            if (canvasCollaborationValueEqual(beforeValue, nextValue)) continue;
+            before[key] = beforeValue === undefined ? null : beforeValue;
+            patch[key] = nextValue === undefined ? null : nextValue;
+        }
+        if (!Object.keys(patch).length) continue;
+        await submit({
+            opId: newCanvasCollaborationOperationID(),
+            kind: "update_node",
+            nodeId: nodeID,
+            incarnation: canvasNodeIncarnation(baseNode),
+            fieldGroup: canvasCollaborationFieldGroup(Object.keys(patch)),
+            before,
+            patch,
+        });
+    }
+
+    // Deletions run before new-node batches. This prevents a local graph that
+    // deletes A and also connects a new child to A from partially publishing
+    // the child before the deletion conflict is discovered.
+    for (const [nodeID, baseNode] of baseNodes) {
+        if (localNodesById.has(nodeID)) continue;
+        const initialIncidentConnections = (initial.connections || [])
+            .filter((connection) => connection.fromNodeId === nodeID || connection.toNodeId === nodeID)
+        const currentRemoteConnectionIDs = new Set((remote.connections || []).map((connection) => connection.id));
+        // A previous local deletion may already have removed a shared edge.
+        // Keep only still-present edges from the original read set; any new
+        // remote edge remains an unexpected relation and causes a conflict.
+        const expectedConnections = initialIncidentConnections.filter((connection) => currentRemoteConnectionIDs.has(connection.id));
+        await submit({
+            opId: newCanvasCollaborationOperationID(),
+            kind: "delete_node",
+            nodeId: nodeID,
+            incarnation: canvasNodeIncarnation(baseNode),
+            before: baseNode as unknown as Record<string, unknown>,
+            expectedConnectionIds: expectedConnections.map((connection) => connection.id).sort(),
+            expectedConnections: expectedConnections as unknown as Array<Record<string, unknown>>,
+        });
+    }
+
+    // New nodes and their new relations are submitted as one atomic batch. If
+    // an existing endpoint was deleted by another member, the whole batch is
+    // rejected and the new nodes remain in the local conflict draft.
+    const newNodes = localNodes.filter((node) => !baseNodes.has(node.id));
+    if (newNodes.length) {
+        const newIDs = new Set(newNodes.map((node) => node.id));
+        const newConnections = (remotePayload.connections || []).filter((connection) => {
+            return newIDs.has(connection.fromNodeId) || newIDs.has(connection.toNodeId);
+        });
+        await submit({
+            opId: newCanvasCollaborationOperationID(),
+            kind: "create_nodes",
+            nodes: newNodes as unknown as Array<Record<string, unknown>>,
+            connections: newConnections as unknown as Array<Record<string, unknown>>,
+            // The new nodes may connect to existing endpoints. Keep the
+            // relation set observed immediately before this atomic batch so a
+            // concurrent edge change cannot be silently folded into it.
+            expectedConnections: (remote.connections || []) as unknown as Array<Record<string, unknown>>,
+        });
+    }
+
+    const remoteConnectionIDs = new Set((remote.connections || []).map((connection) => connection.id));
+    const desiredConnections = remotePayload.connections || [];
+    const desiredConnectionIDs = new Set(desiredConnections.map((connection) => connection.id));
+    if (!canvasCollaborationConnectionListsEqual(remote.connections || [], desiredConnections) || remoteConnectionIDs.size !== desiredConnectionIDs.size) {
+        await submit({
+            opId: newCanvasCollaborationOperationID(),
+            kind: "update_connections",
+            expectedConnectionIds: [...remoteConnectionIDs].sort(),
+            expectedConnections: (remote.connections || []) as unknown as Array<Record<string, unknown>>,
+            connections: desiredConnections as unknown as Array<Record<string, unknown>>,
+        });
+    }
+
+    return operations;
+}
+
+async function saveCollaborativeCanvasProject(source: CanvasProject, remotePayload: CanvasProject, _uploaded: Map<string, string>) {
+    const scope = getActiveUserScope();
+    return withCanvasCollaborationQueueLock(scope, source.id, async () => {
+        const assertScope = () => {
+            if (getActiveUserScope() !== scope || !activeRemoteUserId) throw new Error("账号已切换，待同步修改保留在原账号");
+        };
+        assertScope();
+        let queue = await readCanvasCollaborationQueue(scope, source.id);
+        assertScope();
+        if (queue?.blocked) throw new ApiError("有修改需要确认，草稿已保留", { status: 409 });
+        if (!queue) {
+            const initial = acknowledgedProjects.get(source.id);
+            if (!initial || !Number.isSafeInteger(initial.revision)) throw new ApiError("协作画布缺少可靠基线，请重新打开", { status: 428 });
+            queue = { base: initial, source, target: remotePayload, confirmed: initial, pending: await buildCollaborativeOperations(initial, remotePayload) };
+            await writeCanvasCollaborationQueue(scope, source.id, queue);
+            assertScope();
+            queuedCollaborationProjects.add(source.id);
+        }
+        // Persist exact requests before sending. A lost acknowledgement repeats
+        // the same opId, baseRevision and payload after a retry or browser restart.
+        let needsFreshSnapshot = true;
+        while (queue.pending.length) {
+            assertScope();
+            const operation = queue.pending[0];
+            try {
+                const result = await submitCanvasCollaborationOperation(source.id, operation);
+                if (!result.document) throw new Error("服务端未返回操作确认，修改保留等待重试");
+                needsFreshSnapshot = result.status === "already_applied";
+                assertScope();
+                queue = { ...queue, confirmed: result.document, pending: queue.pending.slice(1) };
+                await writeCanvasCollaborationQueue(scope, source.id, queue);
+            } catch (error) {
+                if (error instanceof ApiError && (error.status === 409 || error.status === 428)) {
+                    queue.blocked = true;
+                    await writeCanvasCollaborationQueue(scope, source.id, queue);
+                    throw new ApiError(formatCanvasCollaborationConflict(operation, error.message, new Map(queue.base.nodes.map((n) => [n.id, n]))), { status: error.status, cause: error });
+                }
+                throw error;
+            }
+        }
+        // The last receipt may be an old already_applied acknowledgement. Fetch
+        // once per batch, never replace later commits with that historical receipt.
+        const remote = needsFreshSnapshot ? (await getRemoteCanvasProject(source.id)).project : queue.confirmed;
+        const hash = await canvasContentHash(remote);
+        assertScope();
+        const current = useCanvasStore.getState().openProject(source.id);
+        const rebased = current && rebaseCanvasCollaborationProject(queue.source, current, remote);
+        const next = { ...(rebased?.project || remote), remoteContentHash: hash, viewport: current?.viewport || remote.viewport };
+        if (rebased?.conflicts.length) {
+            await preserveCanvasSyncDraft(current!, scope);
+            await persistCanvasConflictSnapshot(source.id, queue.source, current, remote, scope);
+            queue.blocked = true;
+            await writeCanvasCollaborationQueue(scope, source.id, queue);
+            throw new ApiError("保存期间同一处内容又有修改，已保留草稿供确认", { status: 409 });
+        }
+        acknowledgedProjects.set(source.id, { ...remote, remoteContentHash: hash });
+        verifiedProjects.add(source.id);
+        publishCollaborativeProject(source.id, current || undefined, next);
+        await flushCanvasStorePersistence();
+        assertScope();
+        if (useSyncProgressStore.getState().syncingProjects[source.id]?.phase === "conflict") {
+            // The editor may detect a newer edit while applying the receipt.
+            // Keep that conflict and the completed receipt available for resolution.
+            await writeCanvasCollaborationQueue(scope, source.id, { ...queue, blocked: true });
+            return remote;
+        }
+        await writeCanvasCollaborationQueue(scope, source.id, null);
+        assertScope();
+        queuedCollaborationProjects.delete(source.id);
+        const dirty = !sameCanvasContent(remote, useCanvasStore.getState().openProject(source.id) || undefined);
+        if (dirty) syncQueued = true;
+        useSyncProgressStore.getState().setProjectProgress(source.id, { phase: dirty ? "pending" : "done", message: dirty ? "有新修改等待同步" : "已同步" });
+        return remote;
+    });
+}
+
+/**
+ * Apply a user-selected three-way merge as normal collaboration operations.
+ * The remote revision is the optimistic-lock base, so a new remote edit
+ * during conflict resolution is rejected and the resolver stays open.
+ */
+export async function resolveCanvasConflict(snapshot: CanvasConflictSnapshot, merged: CanvasProject) {
+    const scope = getActiveUserScope();
+    return withRemoteUserDataSyncExclusive(async () => {
+        const assertScope = () => {
+            if (getActiveUserScope() !== scope || !activeRemoteUserId) throw new Error("账号已切换，请在原账号继续处理草稿");
+        };
+        assertScope();
+        requireRemoteUserDataBaseline();
+        const latest = (await getRemoteCanvasProject(snapshot.projectId)).project;
+        assertScope();
+        if (latest.revision !== snapshot.remote.revision) {
+            const draftCount = await preserveCanvasSyncDraft(merged, scope);
+            await persistCanvasConflictSnapshot(snapshot.projectId, snapshot.remote, merged, latest, scope);
+            assertScope();
+            useSyncProgressStore.getState().setProjectProgress(snapshot.projectId, {
+                phase: "conflict",
+                draftCount,
+                message: "云端又有新修改，请重新确认合并内容",
+            });
+            throw new ApiError("云端又有新修改，请重新打开冲突处理", { status: 409 });
+        }
+        acknowledgedProjects.set(snapshot.projectId, latest);
+        await discardCanvasCollaborationQueue(snapshot.projectId);
+        assertScope();
+        const source = { ...merged, revision: latest.revision, collaborationEnabled: true };
+        useSyncProgressStore.getState().setProjectProgress(snapshot.projectId, { phase: "saving", message: "正在同步确认后的内容" });
+        // This is the user's explicit resolution. Adopt it before sending, so
+        // the old draft is not replayed over the chosen fields on acknowledgement.
+        publishCollaborativeProject(snapshot.projectId, undefined, source);
+        try {
+            const remotePayload = await ensureRemoteResourceReferences(source, new Map());
+            assertScope();
+            await saveCollaborativeCanvasProject(source, remotePayload, new Map());
+            assertScope();
+            if (useSyncProgressStore.getState().syncingProjects[snapshot.projectId]?.phase === "conflict") throw new ApiError("合并期间又有新修改，请再次确认", { status: 409 });
+            const next = useCanvasStore.getState().openProject(snapshot.projectId)!;
+            await clearCanvasConflict(snapshot.projectId, scope);
+            return next;
+        } catch (error) {
+            assertScope();
+            if (error instanceof ApiError && (error.status === 409 || error.status === 428)) {
+                const currentLatest = (await getRemoteCanvasProject(snapshot.projectId)).project;
+                assertScope();
+                const current = useCanvasStore.getState().openProject(snapshot.projectId) || merged;
+                const draftCount = await preserveCanvasSyncDraft(current, scope);
+                await persistCanvasConflictSnapshot(snapshot.projectId, snapshot.remote, current, currentLatest, scope);
+                assertScope();
+                useSyncProgressStore.getState().setProjectProgress(snapshot.projectId, {
+                    phase: "conflict",
+                    draftCount,
+                    message: "云端又有新修改，请重新确认合并内容",
+                });
+            } else {
+                useSyncProgressStore.getState().setProjectProgress(snapshot.projectId, { phase: "error", message: "合并尚未同步，请重试；确认后的内容仍在本地" });
+            }
+            throw error;
+        }
+    });
+}
+
+async function discardCanvasCollaborationQueue(id: string) {
+    const scope = getActiveUserScope();
+    await withCanvasCollaborationQueueLock(scope, id, async () => {
+        const queue = await readCanvasCollaborationQueue(scope, id);
+        if (queue) {
+            await preserveCanvasSyncDraft(queue.source, scope);
+            await writeCanvasCollaborationQueue(scope, id, null);
+        }
+        if (getActiveUserScope() === scope) queuedCollaborationProjects.delete(id);
+    });
+}
+
+function newCanvasCollaborationOperationID() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return `canvas-op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function formatCanvasCollaborationConflict(operation: CanvasCollaborationOperation, message: string, baseNodes: Map<string, CanvasNodeData>) {
+    const node = operation.nodeId ? baseNodes.get(operation.nodeId) : undefined;
+    const nodeLabel = node?.title?.trim() || "未命名节点";
+    if (operation.kind === "delete_node" && /已被删除|已经被删除|删除了|存续版本/.test(message)) {
+        return message.includes("删除了") ? message : `节点“${nodeLabel}”已被其他成员删除，你的修改已保留为待处理草稿。`;
+    }
+    if (operation.kind === "update_node" && /已被删除|已经删除|删除了|存续版本/.test(message)) {
+        return message.includes("删除了") ? message : `节点“${nodeLabel}”已被其他成员删除，你对它的修改已保留为待处理草稿。`;
+    }
+    if (operation.kind === "update_node" && /字段已被其他成员修改|内容已变化/.test(message)) {
+        return `节点“${nodeLabel}”刚被其他成员修改，双方内容没有自动覆盖；你的修改已保留为待处理草稿。`;
+    }
+    if (operation.kind === "create_nodes") {
+        return `新增节点组与其他成员的最新画布关系发生冲突，整组修改已保留为待处理草稿。`;
+    }
+    if (operation.kind === "update_connections") {
+        return `画布连线刚被其他成员修改，你的连线修改已保留为待处理草稿。`;
+    }
+    return message;
+}
+
+function canvasCollaborationValueEqual(left: unknown, right: unknown) {
+    return collaborationValueEqual(left, right);
+}
+
+function canvasNodeIncarnation(node: CanvasProject["nodes"][number]) {
+    const value = (node.metadata as unknown as Record<string, unknown> | undefined)?.collaborationIncarnation;
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+function canvasCollaborationFieldGroup(keys: string[]) {
+    if (keys.some((key) => key === "position" || key === "width" || key === "height")) return "geometry";
+    if (keys.some((key) => key === "metadata" || key === "type")) return "config";
+    return "content";
+}
+
+function canvasCollaborationConnectionListsEqual(left: CanvasProject["connections"], right: CanvasProject["connections"]) {
+    if (left.length !== right.length) return false;
+    const byID = new Map(left.map((connection) => [connection.id, connection]));
+    return right.every((connection) => canvasCollaborationValueEqual(byID.get(connection.id), connection));
+}
+
+// Pull shared-canvas changes without replacing a local draft. A clean editor
+// follows the latest remote revision; a dirty editor keeps its work and moves
+// into the same conflict/draft state used by an ordinary save conflict.
+export type CollaborativeCanvasPullResult = {
+    changed: boolean;
+    project?: CanvasProject;
+    usedIncremental: boolean;
+};
+
+function publishCollaborativeProject(id: string, previous: CanvasProject | undefined, project: CanvasProject) {
+    useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => item.id === id ? project : item) }));
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("canvas-collaboration-projection", { detail: { canvasId: id, previous, project } }));
+    }
+}
+
+export async function preserveCanvasLiveConflict(base: CanvasProject, local: CanvasProject, remote: CanvasProject) {
+    const scope = getActiveUserScope();
+    useSyncProgressStore.getState().setProjectProgress(local.id, { phase: "conflict", message: "你正在编辑的内容也被其他成员修改，请确认后继续" });
+    try {
+        const draftCount = await preserveCanvasSyncDraft(local, scope);
+        await persistCanvasConflictSnapshot(local.id, base, local, remote, scope);
+        if (getActiveUserScope() === scope) useSyncProgressStore.getState().setProjectProgress(local.id, { draftCount });
+    } catch {
+        if (getActiveUserScope() === scope) useSyncProgressStore.getState().setProjectProgress(local.id, { message: "本地草稿保存失败，请先下载草稿再关闭页面" });
+    }
+}
+
+async function acceptCollaborativeSnapshot(id: string, remote: CanvasProject, usedIncremental: boolean, scope: string): Promise<CollaborativeCanvasPullResult> {
+    const hash = await canvasContentHash(remote);
+    if (getActiveUserScope() !== scope || !activeRemoteUserId) return { changed: false, usedIncremental };
+    const acknowledged = acknowledgedProjects.get(id);
+    if (!acknowledged || (remote.revision || 0) < (acknowledged.revision || 0)) return { changed: false, usedIncremental };
+    if (sameCanvasContent(acknowledged, remote) && acknowledged.revision === remote.revision) return { changed: false, usedIncremental };
+    if (useSyncProgressStore.getState().syncingProjects[id]?.phase === "conflict") return { changed: false, usedIncremental };
+    const local = useCanvasStore.getState().openProject(id);
+    if (!local) return { changed: false, usedIncremental };
+    const merged = rebaseCanvasCollaborationProject(acknowledged, local, remote);
+    if (merged.conflicts.length) {
+        await preserveCanvasLiveConflict(acknowledged, local, remote);
+        return { changed: false, usedIncremental };
+    }
+    const next = { ...merged.project, remoteContentHash: hash };
+    acknowledgedProjects.set(id, { ...remote, remoteContentHash: hash });
+    publishCollaborativeProject(id, local, next);
+    await flushCanvasStorePersistence();
+    if (getActiveUserScope() !== scope || !activeRemoteUserId) return { changed: false, usedIncremental };
+    if (useSyncProgressStore.getState().syncingProjects[id]?.phase === "conflict") return { changed: true, usedIncremental };
+    const dirty = !sameCanvasContent(remote, useCanvasStore.getState().openProject(id) || undefined);
+    useSyncProgressStore.getState().setProjectProgress(id, { phase: dirty ? "pending" : "done", message: dirty ? "有修改等待同步" : "已同步" });
+    if (dirty) scheduleRemoteUserDataSync();
+    return { changed: true, usedIncremental, project: next };
+}
+
+async function pullCollaborativeDelta(id: string, acknowledged: CanvasProject): Promise<{ project: CanvasProject; changed: boolean } | null> {
+    const baseRevision = Number.isSafeInteger(acknowledged.revision) ? acknowledged.revision! : 0;
+    const events = await listCanvasCollaborationEvents(id, baseRevision, 100);
+    if (events.currentRevision === baseRevision) return { project: acknowledged, changed: false };
+    if (events.events.length !== events.currentRevision - baseRevision) return null;
+    let project = acknowledged;
+    for (const event of events.events.sort((left, right) => left.revision - right.revision)) {
+        const operation = event.operation as CanvasCollaborationOperationDelta | undefined;
+        if (!operation) return null;
+        const applied = applyCanvasCollaborationOperation(project, operation);
+        if (applied.requiresResync) return null;
+        project = applied.project;
+    }
+    if (project.revision !== events.currentRevision) return null;
+    return { project, changed: true };
+}
+
+// Applies a websocket operation without waiting for the events endpoint. The
+// authenticated events pull remains the recovery path for gaps, older servers,
+// and private restore operations.
+export async function applyCanvasCollaborationRemoteOperation(id: string, operation: CanvasCollaborationOperationDelta): Promise<CollaborativeCanvasPullResult | null> {
+    const scope = getActiveUserScope();
+    return withRemoteUserDataSyncExclusive(async () => {
+        requireRemoteUserDataBaseline();
+        if (getActiveUserScope() !== scope) return { changed: false, usedIncremental: true };
+        // A pending receipt must be resolved by replaying its exact request.
+        if (await readCanvasCollaborationQueue(scope, id)) return { changed: false, usedIncremental: true };
+        if (getActiveUserScope() !== scope || !activeRemoteUserId) return { changed: false, usedIncremental: true };
+        const acknowledged = acknowledgedProjects.get(id);
+        if (!acknowledged?.collaborationEnabled) return null;
+        const applied = applyCanvasCollaborationOperation(acknowledged, operation);
+        if (applied.requiresResync) return null;
+        if (!applied.applied) return { changed: false, usedIncremental: true };
+        return acceptCollaborativeSnapshot(id, applied.project, true, scope);
+    });
+}
+
+export async function pullLatestCollaborativeCanvasProject(id: string): Promise<CollaborativeCanvasPullResult> {
+    const scope = getActiveUserScope();
+    return withRemoteUserDataSyncExclusive(async () => {
+        requireRemoteUserDataBaseline();
+        if (getActiveUserScope() !== scope || await readCanvasCollaborationQueue(scope, id)) return { changed: false, usedIncremental: false };
+        if (getActiveUserScope() !== scope || !activeRemoteUserId) return { changed: false, usedIncremental: false };
+        const acknowledged = acknowledgedProjects.get(id);
+        let remote: CanvasProject;
+        let usedIncremental = false;
+        let changed = false;
+        if (acknowledged?.collaborationEnabled) {
+            const incremental = await pullCollaborativeDelta(id, acknowledged).catch(() => null);
+            if (incremental) {
+                remote = incremental.project;
+                changed = incremental.changed;
+                usedIncremental = true;
+            } else {
+                remote = (await getRemoteCanvasProject(id)).project;
+                changed = !sameCanvasContent(acknowledged, remote);
+            }
+        } else {
+            remote = (await getRemoteCanvasProject(id)).project;
+            changed = true;
+        }
+        if (!remote.collaborationEnabled) return { changed: false, usedIncremental };
+        if (!changed && acknowledged?.revision === remote.revision) return { changed: false, usedIncremental };
+        return acceptCollaborativeSnapshot(id, remote, usedIncremental, scope);
+    });
+}
+
+// Keep automatic saves behind the merge receipt. Accept the committed target
+// through the normal rebase path so edits made during the request survive.
+export async function mergeCanvasBranchWithSync(branchId: string, input: Parameters<typeof mergeCanvasBranch>[1]) {
+    const scope = getActiveUserScope();
+    return withRemoteUserDataSyncExclusive(async () => {
+        requireRemoteUserDataBaseline();
+        if (getActiveUserScope() !== scope) throw new Error("账号已切换，请重新打开合并窗口");
+        const result = await mergeCanvasBranch(branchId, input);
+        if (getActiveUserScope() !== scope) return result;
+        if (result.project) {
+            try { await acceptCollaborativeSnapshot(result.targetCanvasId, result.project, false, scope); }
+            catch { throw new Error("合并已完成，但本机显示更新失败，请重新打开接收画布查看结果"); }
+        }
+        return result;
+    });
+}
+
+async function persistCanvasConflictSnapshot(projectId: string, base: CanvasProject | undefined, local: CanvasProject | null | undefined, remote: CanvasProject, scope = getActiveUserScope()) {
+    if (!base || !local) return;
+    try {
+        await saveCanvasConflict({
+            projectId,
+            base,
+            local,
+            remote,
+            fields: buildCanvasConflictFields(base, local, remote),
+        }, scope);
+    } catch (error) {
+        // The normal draft remains available even if IndexedDB is unavailable;
+        // keep the conflict state visible and let the user use that fallback.
+        console.warn("保存协作冲突三方快照失败:", error);
+    }
 }
 
 function collectLocalMediaKeys(value: unknown, set = new Set<string>()): string[] {

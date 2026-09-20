@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ContextMenuState } from "@/types/canvas";
+import { collaborationValueEqual } from "@/lib/canvas/canvas-collaboration-rebase";
 
 export type CanvasHistorySnapshot = {
     nodes: CanvasNodeData[];
@@ -147,6 +148,29 @@ export function useCanvasHistory({
 
     const getHistoryCleanupContext = useCallback(() => ({ history: historyRef.current, lastHistory: lastHistoryRef.current }), []);
 
+    const adoptRemoteHistory = useCallback((before: CanvasHistorySnapshot, next: CanvasHistorySnapshot) => {
+        clearCommitTimer();
+        // Commit local work pending the debounce, then exclude incoming changes
+        // from this user's undo buffer. Existing snapshots of remotely changed
+        // entities are invalidated so undo cannot replace another editor's work.
+        const localPatch = lastHistoryRef.current && createCanvasHistoryPatch(lastHistoryRef.current, before);
+        if (localPatch) historyRef.current.past.push(localPatch);
+        const safe = (patch: CanvasHistoryPatch) => {
+            for (const key of ["nodes", "connections", "chatSessions"] as const) {
+                const after = new Map<string, unknown>(next[key].map((item) => [item.id, item]));
+                const prior = new Map<string, unknown>(before[key].map((item) => [item.id, item]));
+                if (patch[key]?.changes.some((change) => !collaborationValueEqual(prior.get(change.id), after.get(change.id)))) return false;
+                if (patch[key]?.beforeOrder && !collaborationValueEqual([...prior.keys()], [...after.keys()])) return false;
+            }
+            return (["activeChatId", "canvasAppearance", "backgroundMode", "showImageInfo"] as const)
+                .every((key) => !patch[key] || collaborationValueEqual(before[key], next[key]));
+        };
+        historyRef.current.past = historyRef.current.past.filter(safe).slice(-50);
+        historyRef.current.future = historyRef.current.future.filter(safe);
+        lastHistoryRef.current = next;
+        setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
+    }, [clearCommitTimer]);
+
     useEffect(() => {
         if (!projectLoaded || applyingHistoryRef.current || historyPausedRef.current) return;
         const next = createHistorySnapshot();
@@ -175,7 +199,7 @@ export function useCanvasHistory({
         if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
     }, [clearCommitTimer]);
 
-    return { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas };
+    return { adoptRemoteHistory, getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas };
 }
 
 function snapshotsShareReferences(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot) {

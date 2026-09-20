@@ -4,6 +4,7 @@ import (
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
+	"sync"
 )
 
 // Host 由组合根注入，避免 canvas → service 回环。
@@ -41,13 +42,16 @@ func (nopHost) DeleteUserAssetWithResources(string, string) error           { re
 func (nopHost) RecordActivity(string, string, int)                          {}
 
 type Service struct {
-	repo *repository.Repository
-	host Host
+	repo                   *repository.Repository
+	host                   Host
+	canvasPresenceMu       sync.Mutex
+	canvasPresence         map[string]map[string]CanvasPresence
+	canvasCollaborationHub *canvasCollaborationHub
 }
 
 func New(repo *repository.Repository, host Host) *Service {
 	if host == nil {
 		host = nopHost{}
 	}
-	return &Service{repo: repo, host: host}
+	return &Service{repo: repo, host: host, canvasCollaborationHub: newCanvasCollaborationHub()}
 }

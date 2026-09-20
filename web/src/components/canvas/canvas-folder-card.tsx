@@ -1,5 +1,5 @@
 import { App, Dropdown, Input } from "antd";
-import { Download, LoaderCircle, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Download, LoaderCircle, MoreHorizontal, Pencil, Trash2, Users } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import { ProjectPreview } from "@/components/canvas/canvas-project-card";
@@ -66,6 +66,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     {opening ? <div className="canvas-collection-opening"><LoaderCircle className="size-5 animate-spin" /><span>正在打开</span></div> : null}
                 </div>
                 <div className="canvas-collection-body">
+                    {project.sharedWithMe || project.collaborationEnabled || project.collaborationEnabled ? <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5 shrink-0" /><span>{project.sharedWithMe ? "共享给我的 · 协作画布" : "协作画布"}</span></div> : null}
                     <div className="canvas-collection-heading-row">
                         {editing ? (
                             <Input

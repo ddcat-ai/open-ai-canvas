@@ -11,6 +11,8 @@ export type RemoteUserDataSummary = {
     createdAt: string;
     updatedAt: string;
     revision?: number;
+    collaborationEnabled?: boolean;
+    sharedWithMe?: boolean;
 };
 
 export type AssetFolder = {
@@ -38,6 +40,8 @@ export type RemoteUserDataSnapshot = {
 };
 
 export type CanvasLibrarySummary = Pick<CanvasProject, "id" | "projectId" | "title" | "revision" | "createdAt" | "updatedAt"> & {
+    collaborationEnabled?: boolean;
+    sharedWithMe?: boolean;
     nodeCount: number;
     previewNodes: CanvasProject["nodes"];
 };
@@ -116,6 +120,8 @@ export function listRemoteCanvasProjects() {
 export function getRemoteCanvasProject(id: string) {
     return http.get<{ project: CanvasProject }>(`/canvas-projects/${encodeURIComponent(id)}`);
 }
+export type CanvasCreditUsage = { canvasId: string; totalMicrocredits: number; settledMicrocredits: number; pendingMicrocredits: number; refundedMicrocredits: number; orderCount: number; taskCount: number; byCapability: Record<string, number>; recentOrders: Array<{ id: string; taskId?: string; capability: string; amountMicrocredits: number; status: string; createdAt: string }> };
+export function getCanvasCreditUsage(id: string, options?: { signal?: AbortSignal }) { return http.get<{ usage: CanvasCreditUsage }>(`/canvas-projects/${encodeURIComponent(id)}/credit-usage`, options); }
 
 export function upsertRemoteCanvasProject(project: CanvasProject) {
     const { viewport: _viewport, remoteContentHash: _hash, ...content } = project;
