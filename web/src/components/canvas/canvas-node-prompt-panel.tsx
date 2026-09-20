@@ -108,19 +108,23 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
-    // 直接从提示词文本构建工具引用，确保 textarea 能即时渲染 chip，不依赖 render model 的异步传播。
+    // 从 metadata（style/effect）和 prompt 文本（nine_grid/motion）构建工具引用，确保 textarea 能即时渲染 chip。
     const promptToolReferences = useMemo(() => {
-        const tokens = parseToolMentionTokens(prompt);
-        if (!tokens.length) return [];
-        const seen = new Set<number>();
         const refs: CanvasResourceReference[] = [];
-        for (const { type, toolId, label, icon } of tokens) {
-            if (seen.has(toolId)) continue;
-            seen.add(toolId);
-            refs.push(buildToolMentionReference(toolId, label, type, icon));
+        const seen = new Set<number>();
+        if (node.metadata?.styleTool) {
+            const t = node.metadata.styleTool;
+            if (!seen.has(t.id)) { seen.add(t.id); refs.push(buildToolMentionReference(t.id, t.label, "style", "Palette")); }
+        }
+        if (node.metadata?.effectTool) {
+            const t = node.metadata.effectTool;
+            if (!seen.has(t.id)) { seen.add(t.id); refs.push(buildToolMentionReference(t.id, t.label, "effect", "Sparkles")); }
+        }
+        for (const { type, toolId, label, icon } of parseToolMentionTokens(prompt)) {
+            if ((type === "nine_grid" || type === "motion") && !seen.has(toolId)) { seen.add(toolId); refs.push(buildToolMentionReference(toolId, label, type, icon)); }
         }
         return refs;
-    }, [prompt]);
+    }, [node.metadata?.styleTool, node.metadata?.effectTool, prompt]);
     const textareaReferences = useMemo(() => {
         if (!promptToolReferences.length) return resolvedMentionReferences;
         const existingIds = new Set(resolvedMentionReferences.map((r) => r.id));
@@ -131,8 +135,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const activeNineGridIcon = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "nine_grid")?.icon ?? "Grid3x3", [prompt]);
     // 当前节点选中的风格工具，从 metadata 读取（参考 portraitTexture 模式），用于风格按钮回显。
     const activeStyleTool = node.metadata?.styleTool != null ? { toolId: node.metadata.styleTool.id, label: node.metadata.styleTool.label } : undefined;
-    // 当前提示词持有的特效工具标签，用于特效按钮回显与原位替换。
-    const activeEffectTool = useMemo(() => parseToolMentionTokens(prompt).find((tool) => tool.type === "effect"), [prompt]);
+    // 当前节点选中的特效工具，从 metadata 读取（参考 styleTool 模式），用于特效按钮回显。
+    const activeEffectTool = node.metadata?.effectTool != null ? { toolId: node.metadata.effectTool.id, label: node.metadata.effectTool.label } : undefined;
     // 当前提示词持有的运镜工具标签（可多个），用于运镜按钮回显与菜单高亮。
     const activeMotionTools = useMemo(() => parseToolMentionTokens(prompt).filter((tool) => tool.type === "motion"), [prompt]);
     const activeMotionTool = activeMotionTools[0];
@@ -297,19 +301,13 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         updatePrompt(trimmedBase ? `${trimmedBase} ${insertText}` : insertText);
     };
 
-    // 移除提示词中的 effect 工具标签（连同其后一个空白），用于特效 chip 的关闭操作。
-    const removeEffectToolMention = () => {
-        if (!activeEffectTool) return;
-        const effectMentionRe = new RegExp(`\\s*@\\[tool:effect:${activeEffectTool.toolId}:[^\\]]*\\](\\s|$)`, "g");
-        updatePrompt(prompt.replace(effectMentionRe, "").replace(/\s{2,}/g, " ").trim());
-    };
-
     // 移除提示词中的所有 motion 工具标签，用于运镜 chip 的关闭操作。
     const removeMotionToolMention = () => {
         if (activeMotionTools.length === 0) return;
         const motionMentionRe = /\s*@\[tool:motion:\d+:[^\]]*\](\s|$)/g;
         updatePrompt(prompt.replace(motionMentionRe, "").replace(/\s{2,}/g, " ").trim());
     };
+
 
     const submit = () => {
         const text = prompt.trim();
@@ -543,8 +541,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         effectToolOpen={expanded ? expandedEffectToolOpen : effectToolOpen}
                         activeEffectToolId={activeEffectTool?.toolId}
                         activeEffectToolLabel={activeEffectTool?.label}
-                        onEffectToolItem={(toolId, label) => insertPromptReference(buildToolMentionReference(toolId, label, "effect", "Sparkles"))}
-                        onClearEffectTool={removeEffectToolMention}
+                        onEffectToolItem={(toolId, label) => onConfigChange(node.id, { effectTool: { id: toolId, label } })}
+                        onClearEffectTool={() => onConfigChange(node.id, { effectTool: undefined })}
                         onMotionToolOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen}
                         motionToolOpen={expanded ? expandedMotionToolOpen : motionToolOpen}
                         activeMotionToolIds={activeMotionTools.map((t) => t.toolId)}

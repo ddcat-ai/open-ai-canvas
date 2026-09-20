@@ -141,6 +141,10 @@ export function useCanvasGenerationExecutor({
                         const styleTool = sourceNode.metadata.styleTool;
                         generationPrompt = `${generationPrompt}\n@[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
                     }
+                    if (mode === "video" && sourceNode?.metadata?.effectTool?.id != null) {
+                        const effectTool = sourceNode.metadata.effectTool;
+                        generationPrompt = `${generationPrompt}\n@[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
+                    }
                     if (mode === "image" && sourceNode?.metadata?.cameraControl?.enabled) {
                         const cameraControl = sourceNode.metadata.cameraControl;
                         const cameraPrompt = buildCameraPrompt({ cameraId: cameraControl.camera, lensId: cameraControl.lens, focalLengthMm: cameraControl.focalLength, apertureF: cameraControl.aperture });
