@@ -1,0 +1,239 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "minimax-t2a",
+  "name": "MiniMax T2A 语音合成",
+  "version": "3.0.0",
+  "author": "MiniMax / 趣影",
+  "description": "通过 MiniMax 异步语音合成 API（/v1/t2a_async_v2 + /v1/query/t2a_async_query_v2 + /v1/files/retrieve_content）合成语音。",
+  "documentation": "# MiniMax T2A 语音合成\n\n该目录是独立官方协议插件源码。后端从生成的 `minimax-t2a.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# MiniMax T2A 语音合成 接口字段\n\n## 协议身份\n\n- 插件 ID：`minimax-t2a`。\n- Provider ID：`minimax-t2a`。\n- 能力：`audio`。\n- 默认 Base URL：`https://api.minimaxi.com`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /v1/t2a_async_v2`。\n- 查询：`GET /v1/query/t2a_async_query_v2?task_id={{taskId}}`。\n- 结果：`GET /v1/files/retrieve_content?file_id={{taskId}}`。\n- 媒体：`requiresPublicMediaUrls: false`（纯文本入参，不需要公网可访问的素材地址）。\n\nMiniMax 的异步长文本语音合成是**三步链路**：建任务 → 轮询 → 下载音频字节。\n它没有 OpenAI 兼容的单次返回形态，因此本插件必须独立声明 `result` 端点：\n查询接口在成功时才给出 `file_id`，音频字节要从文件接口单独取。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 语音模型 ID，如 `speech-02-hd`。 |\n| `prompt` | string | 是 | `text` | 待合成文本。 |\n| `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段（音色/语速/音量/音调/情感/采样率/格式/声道）。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query 和 headers 中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/v1/t2a_async_v2\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.text` | `{\"$ref\":\"request.prompt\"}` |\n| `create.body.voice_setting.voice_id` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.voice_id\"},{\"$ref\":\"request.extra.audioVoice\"},\"male-qn-qingse\"]}` |\n| `create.body.voice_setting.speed` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.speed\"},{\"$ref\":\"request.extra.audioSpeed\"}]}` |\n| `create.body.voice_setting.vol` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.vol\"}]}` |\n| `create.body.voice_setting.pitch` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.pitch\"}]}` |\n| `create.body.voice_setting.emotion` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.emotion\"}]}` |\n| `create.body.audio_setting.audio_sample_rate` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.sample_rate\"},32000]}` |\n| `create.body.audio_setting.bitrate` | `128000` |\n| `create.body.audio_setting.format` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.format\"},{\"$ref\":\"request.extra.audioFormat\"},\"mp3\"]}` |\n| `create.body.audio_setting.channel` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.minimax-t2a.channel\"},1]}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/v1/query/t2a_async_query_v2?task_id={{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n| `result.method` | `\"GET\"` |\n| `result.path` | `\"/v1/files/retrieve_content?file_id={{taskId}}\"` |\n\n### 两个必须注意的取值约定\n\n- **音色优先取插件命名空间**，再回落到 `extra.audioVoice`（对外 API 的 OpenAI `voice` 参数走这条），\n  最后默认 `male-qn-qingse`。上游没有 `voice_id` 会直接回 `2013 invalid params, no voice_id found`，\n  所以缺省音色必须发一个合法值，而不是省略字段 —— 「面板里选了模型就能出活」比\n  「必须先去别处挑一个音色」更符合画布用法。\n- **未给出的数值字段整体省略**（`$coalesce` 落空即不写该键）。上游对 `null` 按参数错误处理，\n  例如未提供 `pitch` 时不能发 `\"pitch\": null`。\n\n## Provider 扩展键\n\n- `providerOptions.minimax-t2a.voice_id` — 音色 ID（预设音色、克隆音色或音色设计生成的 `ttv-voice-…` 均可）\n- `providerOptions.minimax-t2a.speed` — 语速 0.5–2.0\n- `providerOptions.minimax-t2a.vol` — 音量 0.1–3.0\n- `providerOptions.minimax-t2a.pitch` — 音调 −12–12（仅 `speech-02` 系列）\n- `providerOptions.minimax-t2a.emotion` — 情感（仅 `speech-02` 系列）\n- `providerOptions.minimax-t2a.sample_rate` — 采样率 8000/16000/32000/44100/48000\n- `providerOptions.minimax-t2a.format` — 音频格式 mp3/wav/flac\n- `providerOptions.minimax-t2a.channel` — 声道 1/2\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$if\":{\"condition\":{\"$eq\":[{\"$lower\":{\"$ref\":\"response.status\"}},\"success\"]},\"then\":{\"$ref\":\"response.file_id\"},\"else\":{\"$ref\":\"response.task_id\"}}}` |\n| `response.status` | `{\"$lower\":{\"$ref\":\"response.status\"}}` |\n| `response.errorPaths[0]` | `\"base_resp.status_code\"` |\n| `response.messagePaths[0]` | `\"base_resp.status_msg\"` |\n| `response.resultKind` | `\"audio\"` |\n\n### 响应形状的两个陷阱\n\n- **字段都在顶层，没有 `data` 包装**：`task_id` / `file_id` / `status` 直接挂在响应根上。\n- **`task_id` 与 `file_id` 是数字，且不是同一个数**。官方文档示例里\n  `task_id = 95157322514444`、`file_id = 95157322514496`。处理中要继续用 `task_id` 轮询，\n  成功后才切换到 `file_id` 下载 —— 这就是 `response.taskId` 那条 `$if` 的由来。\n\n## 响应与错误\n\n插件把上游 `task_id`/`file_id`/`status`/音频字节映射为统一结果。\n创建与查询接口都返回**顶层** `base_resp`，业务错误码在 `base_resp.status_code`、\n原因在 `base_resp.status_msg`；参数错误时 `task_id` 是 `0`，此时必须把真实原因\n（例如 `invalid params, no voice_id found`）浮上来，不能被宿主的兜底解析盖成\n「字段类型不对」。HTTP 错误、业务 code 保持失败语义，不包装成成功。\n\n音频字节以 `resultKind: \"audio\"` 交给宿主，宿主按音频媒体处理并持久化。\n\n## 兼容边界\n\n- 只覆盖 **异步** 长文本语音合成（`t2a_async_v2`）。MiniMax 的同步 `t2a_v2`、\n  音色设计、音色克隆属于**控制面**接口（不是生成任务），不在协议插件的职责范围内。\n- 语速/音量/音调/情感四组参数里，`pitch` 与 `emotion` 仅 `speech-02` 系列支持；\n  `speech-01` 系列传入会被上游忽略或报错，由调用方按模型选择。\n- `status` 取值 `processing`/`success`/`failed`/`expired` 统一归一：`success` → 成功，\n  `failed`/`expired` → 失败，其余视为处理中。\n- Base URL 默认 `https://api.minimaxi.com`；MiniMax 另提供 `api.minimax.chat` /\n  `api.minimax.io` 等域名，部署方可在渠道配置里覆盖。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"minimax-t2a\",\n  \"name\": \"MiniMax T2A 语音合成\",\n  \"version\": \"3.0.0\",\n  \"author\": \"MiniMax / 趣影\",\n  \"description\": \"通过 MiniMax 异步语音合成 API（/v1/t2a_async_v2 + /v1/query/t2a_async_query_v2 + /v1/files/retrieve_content）合成语音。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"minimax-t2a\",\n        \"label\": \"MiniMax T2A 语音合成\",\n        \"capabilities\": [\n          \"audio\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://api.minimaxi.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"text\",\n            \"type\": \"string\",\n            \"mapping\": \"request.prompt\",\n            \"description\": \"要合成的文本\"\n          },\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"mapping\": \"request.model\",\n            \"description\": \"speech-02-hd 等\"\n          },\n          {\n            \"name\": \"voice_id\",\n            \"type\": \"string\",\n            \"mapping\": \"providerOptions.voice_id\",\n            \"description\": \"音色 ID（预设音色、克隆音色或音色设计生成的 ttv-voice-… 均可）\"\n          },\n          {\n            \"name\": \"speed\",\n            \"type\": \"number\",\n            \"mapping\": \"providerOptions.speed\",\n            \"description\": \"语速 0.5-2.0\"\n          },\n          {\n            \"name\": \"vol\",\n            \"type\": \"number\",\n            \"mapping\": \"providerOptions.vol\",\n            \"description\": \"音量 0.1-3.0\"\n          },\n          {\n            \"name\": \"pitch\",\n            \"type\": \"number\",\n            \"mapping\": \"providerOptions.pitch\",\n            \"description\": \"音调 -12~12（仅 speech-02 系列）\"\n          },\n          {\n            \"name\": \"emotion\",\n            \"type\": \"string\",\n            \"mapping\": \"providerOptions.emotion\",\n            \"description\": \"情感（仅 speech-02 系列）\"\n          },\n          {\n            \"name\": \"sample_rate\",\n            \"type\": \"integer\",\n            \"mapping\": \"providerOptions.sample_rate\",\n            \"description\": \"采样率 8000/16000/32000/44100/48000\"\n          },\n          {\n            \"name\": \"format\",\n            \"type\": \"string\",\n            \"mapping\": \"providerOptions.format\",\n            \"description\": \"音频格式 mp3/wav/flac\"\n          },\n          {\n            \"name\": \"channel\",\n            \"type\": \"integer\",\n            \"mapping\": \"providerOptions.channel\",\n            \"description\": \"声道 1/2\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/t2a_async_v2\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"text\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"voice_setting\": {\n              \"voice_id\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.voice_id\"\n                  },\n                  {\n                    \"$ref\": \"request.extra.audioVoice\"\n                  },\n                  \"male-qn-qingse\"\n                ]\n              },\n              \"speed\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.speed\"\n                  },\n                  {\n                    \"$ref\": \"request.extra.audioSpeed\"\n                  }\n                ]\n              },\n              \"vol\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.vol\"\n                  }\n                ]\n              },\n              \"pitch\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.pitch\"\n                  }\n                ]\n              },\n              \"emotion\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.emotion\"\n                  }\n                ]\n              }\n            },\n            \"audio_setting\": {\n              \"audio_sample_rate\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.sample_rate\"\n                  },\n                  32000\n                ]\n              },\n              \"bitrate\": 128000,\n              \"format\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.format\"\n                  },\n                  {\n                    \"$ref\": \"request.extra.audioFormat\"\n                  },\n                  \"mp3\"\n                ]\n              },\n              \"channel\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-t2a.channel\"\n                  },\n                  1\n                ]\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/query/t2a_async_query_v2?task_id={{taskId}}\",\n          \"contentType\": \"application/json\"\n        },\n        \"result\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/files/retrieve_content?file_id={{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$if\": {\n              \"condition\": {\n                \"$eq\": [\n                  {\n                    \"$lower\": {\n                      \"$ref\": \"response.status\"\n                    }\n                  },\n                  \"success\"\n                ]\n              },\n              \"then\": {\n                \"$ref\": \"response.file_id\"\n              },\n              \"else\": {\n                \"$ref\": \"response.task_id\"\n              }\n            }\n          },\n          \"status\": {\n            \"$lower\": {\n              \"$ref\": \"response.status\"\n            }\n          },\n          \"errorPaths\": [\n            \"base_resp.status_code\"\n          ],\n          \"messagePaths\": [\n            \"base_resp.status_msg\"\n          ],\n          \"resultKind\": \"audio\"\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "minimax-t2a",
+        "label": "MiniMax T2A 语音合成",
+        "capabilities": [
+          "audio"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://api.minimaxi.com",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "text",
+            "type": "string",
+            "mapping": "request.prompt",
+            "description": "要合成的文本"
+          },
+          {
+            "name": "model",
+            "type": "string",
+            "mapping": "request.model",
+            "description": "speech-02-hd 等"
+          },
+          {
+            "name": "voice_id",
+            "type": "string",
+            "mapping": "providerOptions.voice_id",
+            "description": "音色 ID（预设音色、克隆音色或音色设计生成的 ttv-voice-… 均可）"
+          },
+          {
+            "name": "speed",
+            "type": "number",
+            "mapping": "providerOptions.speed",
+            "description": "语速 0.5-2.0"
+          },
+          {
+            "name": "vol",
+            "type": "number",
+            "mapping": "providerOptions.vol",
+            "description": "音量 0.1-3.0"
+          },
+          {
+            "name": "pitch",
+            "type": "number",
+            "mapping": "providerOptions.pitch",
+            "description": "音调 -12~12（仅 speech-02 系列）"
+          },
+          {
+            "name": "emotion",
+            "type": "string",
+            "mapping": "providerOptions.emotion",
+            "description": "情感（仅 speech-02 系列）"
+          },
+          {
+            "name": "sample_rate",
+            "type": "integer",
+            "mapping": "providerOptions.sample_rate",
+            "description": "采样率 8000/16000/32000/44100/48000"
+          },
+          {
+            "name": "format",
+            "type": "string",
+            "mapping": "providerOptions.format",
+            "description": "音频格式 mp3/wav/flac"
+          },
+          {
+            "name": "channel",
+            "type": "integer",
+            "mapping": "providerOptions.channel",
+            "description": "声道 1/2"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/t2a_async_v2",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "text": {
+              "$ref": "request.prompt"
+            },
+            "voice_setting": {
+              "voice_id": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.voice_id"
+                  },
+                  {
+                    "$ref": "request.extra.audioVoice"
+                  },
+                  "male-qn-qingse"
+                ]
+              },
+              "speed": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.speed"
+                  },
+                  {
+                    "$ref": "request.extra.audioSpeed"
+                  }
+                ]
+              },
+              "vol": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.vol"
+                  }
+                ]
+              },
+              "pitch": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.pitch"
+                  }
+                ]
+              },
+              "emotion": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.emotion"
+                  }
+                ]
+              }
+            },
+            "audio_setting": {
+              "audio_sample_rate": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.sample_rate"
+                  },
+                  32000
+                ]
+              },
+              "bitrate": 128000,
+              "format": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.format"
+                  },
+                  {
+                    "$ref": "request.extra.audioFormat"
+                  },
+                  "mp3"
+                ]
+              },
+              "channel": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.minimax-t2a.channel"
+                  },
+                  1
+                ]
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/query/t2a_async_query_v2?task_id={{taskId}}",
+          "contentType": "application/json"
+        },
+        "result": {
+          "method": "GET",
+          "path": "/v1/files/retrieve_content?file_id={{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$if": {
+              "condition": {
+                "$eq": [
+                  {
+                    "$lower": {
+                      "$ref": "response.status"
+                    }
+                  },
+                  "success"
+                ]
+              },
+              "then": {
+                "$ref": "response.file_id"
+              },
+              "else": {
+                "$ref": "response.task_id"
+              }
+            }
+          },
+          "status": {
+            "$lower": {
+              "$ref": "response.status"
+            }
+          },
+          "errorPaths": [
+            "base_resp.status_code"
+          ],
+          "messagePaths": [
+            "base_resp.status_msg"
+          ],
+          "resultKind": "audio"
+        }
+      }
+    ]
+  }
+}
