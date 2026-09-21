@@ -328,7 +328,10 @@ export default function AdminToolsPage() {
                     />
                 }
             />
-            <ToolEditorModal open={editorOpen} mode={editorMode} toolId={editingId ?? undefined} onClose={() => setEditorOpen(false)} onSaved={() => void queryClient.invalidateQueries({ queryKey: ["admin-tools"] })} />
+            <ToolEditorModal open={editorOpen} mode={editorMode} toolId={editingId ?? undefined} onClose={() => setEditorOpen(false)} onSaved={() => {
+                void queryClient.invalidateQueries({ queryKey: ["admin-tools"] });
+                void queryClient.invalidateQueries({ queryKey: ["admin-tool"] });
+            }} />
         </AdminPageFrame>
     );
 }
@@ -472,6 +475,7 @@ function ToolEditorModal({ open, mode, toolId, onClose, onSaved }: { open: boole
         mutationFn: async (values: ToolFormValues) => {
             const payload: AdminToolMutationInput = {
                 type: values.type,
+                source: values.source as ToolSource | undefined,
                 label: values.label.trim(),
                 desc: values.desc?.trim() || undefined,
                 tag: values.tag?.trim() || undefined,

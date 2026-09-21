@@ -267,11 +267,11 @@ func (r *Repository) AdminUpdateTool(tool *model.Tool) (*model.Tool, error) {
 	return &updated, nil
 }
 
-// AdminUpdateToolFull 后台完整更新工具业务字段；保留来源、所属人与英文标识。
+// AdminUpdateToolFull 后台完整更新工具业务字段；来源与所属人随请求调整，英文标识保留原值。
 func (r *Repository) AdminUpdateToolFull(tool *model.Tool) (*model.Tool, error) {
 	err := r.db.Model(&model.Tool{}).Where("id = ?", tool.ID).
 		Select("type", "label", "desc", "tag", "cover", "extra_info_json", "prompt", "ratio",
-			"media_url", "visibility", "enabled", "sort_weight", "updated_at").
+			"media_url", "owner_id", "source", "visibility", "enabled", "sort_weight", "updated_at").
 		Updates(tool).Error
 	if err != nil {
 		return nil, err

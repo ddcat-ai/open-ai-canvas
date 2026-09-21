@@ -135,11 +135,12 @@ type AdminToolCreateRequest struct {
 	SortWeight *int   `json:"sortWeight"`
 }
 
-// AdminToolEditRequest 后台编辑工具完整内容；不改变来源、所属人与英文标识。
+// AdminToolEditRequest 后台编辑工具完整内容；来源可在 builtin 与 user 之间调整，英文标识保持原值。
 type AdminToolEditRequest struct {
 	ToolMutationRequest
-	Enabled    *bool `json:"enabled"`
-	SortWeight *int  `json:"sortWeight"`
+	Source     string `json:"source"` // builtin | user，空表示保持原来源
+	Enabled    *bool  `json:"enabled"`
+	SortWeight *int   `json:"sortWeight"`
 }
 
 // AdminToolPage 后台工具分页结果。
@@ -391,8 +392,8 @@ func (s *Service) AdminCreate(adminID string, req AdminToolCreateRequest) (*Tool
 	return &item, nil
 }
 
-// AdminEdit 后台编辑工具内容；保留来源、所属人与英文标识，仅更新业务字段。
-func (s *Service) AdminEdit(toolID int64, req AdminToolEditRequest) (*ToolItem, error) {
+// AdminEdit 后台编辑工具内容；来源可在 builtin 与 user 之间调整，英文标识保持原值。
+func (s *Service) AdminEdit(toolID int64, adminID string, req AdminToolEditRequest) (*ToolItem, error) {
 	if toolID <= 0 {
 		return nil, kernel.BadAuthRequest("工具 ID 无效")
 	}
@@ -413,6 +414,18 @@ func (s *Service) AdminEdit(toolID int64, req AdminToolEditRequest) (*ToolItem, 
 	existing.Ratio = normalized.Ratio
 	existing.MediaURL = normalized.MediaURL
 	existing.Visibility = normalized.Visibility
+	// 来源调整：仅在来源真正变化时更新归属（builtin 归平台、user 归当前管理员），避免误改未变更工具的归属人。
+	if source := strings.TrimSpace(req.Source); source != "" && source != existing.Source {
+		if source != ToolSourceBuiltin && source != ToolSourceUser {
+			return nil, kernel.BadAuthRequest("工具来源仅支持 builtin 或 user")
+		}
+		existing.Source = source
+		if source == ToolSourceUser {
+			existing.OwnerID = strings.TrimSpace(adminID)
+		} else {
+			existing.OwnerID = ""
+		}
+	}
 	// extraInfo 样本图路径不通过后台表单编辑，保留原值，避免误清空内置工具样本。
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled

@@ -84,8 +84,8 @@ func (s *Service) AdminCreateTool(adminID string, req AdminToolCreateRequest) (*
 	return s.toolDomain().AdminCreate(adminID, req)
 }
 
-func (s *Service) AdminEditTool(toolID int64, req AdminToolEditRequest) (*ToolItem, error) {
-	return s.toolDomain().AdminEdit(toolID, req)
+func (s *Service) AdminEditTool(toolID int64, adminID string, req AdminToolEditRequest) (*ToolItem, error) {
+	return s.toolDomain().AdminEdit(toolID, adminID, req)
 }
 
 func (s *Service) AdminUpdateTool(toolID int64, req AdminToolUpdateRequest) (*ToolSummary, error) {

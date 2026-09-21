@@ -210,7 +210,7 @@ func RegisterToolRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, service.BadAuthRequest("请求体格式无效"))
 			return
 		}
-		item, err := svc.AdminEditTool(toolID, req)
+		item, err := svc.AdminEditTool(toolID, user.ID, req)
 		if err != nil {
 			failService(c, err)
 			return
