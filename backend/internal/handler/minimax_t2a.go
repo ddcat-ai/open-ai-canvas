@@ -169,6 +169,8 @@ func handleT2ASynthesize(c *gin.Context, svc *service.Service) {
 		Voice t2aVoiceSetting `json:"voice"`
 		Audio t2aAudioSetting `json:"audio"`
 	}
+	// 请求体上限：只有文本与参数，1MiB 对长文本合成足够宽裕（远小于 nginx 的 1024m）。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fail(c, 400, err)
 		return
@@ -249,6 +251,8 @@ func handleT2AVoiceDesign(c *gin.Context, svc *service.Service) {
 		Prompt      string `json:"prompt"`
 		PreviewText string `json:"previewText"`
 	}
+	// 请求体上限：音色描述 ≤80 字、试听文本 ≤500 字，64KiB 已远高于实际用量。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fail(c, 400, err)
 		return
@@ -300,6 +304,9 @@ func handleT2AVoiceClone(c *gin.Context, svc *service.Service) {
 		VoiceID      string `json:"voiceId"`
 		Model        string `json:"model"`
 	}
+	// 请求体上限：样本是 base64 传的音频，按「数分钟 mp3 / 短 WAV」留足余量 ——
+	// 16MiB 请求体约合 12MiB 音频，同时把这条接口的读取量钉住（nginx 允许 1024m，不能靠它兜底）。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<20)
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fail(c, 400, err)
 		return
