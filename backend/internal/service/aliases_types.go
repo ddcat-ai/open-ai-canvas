@@ -285,6 +285,11 @@ type (
 	StorageMigrationSummary                = app.StorageMigrationSummary
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest
 	StyleProfileRequest                    = app.StyleProfileRequest
+	AdminToolListRequest                   = app.AdminToolListRequest
+	AdminToolPage                          = app.AdminToolPage
+	AdminToolUpdateRequest                 = app.AdminToolUpdateRequest
+	AdminToolCreateRequest                 = app.AdminToolCreateRequest
+	AdminToolEditRequest                   = app.AdminToolEditRequest
 	ToolItem                               = app.ToolItem
 	ToolList                               = app.ToolList
 	ToolListRequest                        = app.ToolListRequest

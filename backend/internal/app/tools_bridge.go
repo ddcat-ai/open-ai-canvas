@@ -7,11 +7,16 @@ import (
 )
 
 type (
-	ToolListRequest     = tools.ToolListRequest
-	ToolList            = tools.ToolList
-	ToolItem            = tools.ToolItem
-	ToolSummary         = tools.ToolSummary
-	ToolMutationRequest = tools.ToolMutationRequest
+	ToolListRequest        = tools.ToolListRequest
+	ToolList               = tools.ToolList
+	ToolItem               = tools.ToolItem
+	ToolSummary            = tools.ToolSummary
+	ToolMutationRequest    = tools.ToolMutationRequest
+	AdminToolListRequest   = tools.AdminToolListRequest
+	AdminToolUpdateRequest = tools.AdminToolUpdateRequest
+	AdminToolCreateRequest = tools.AdminToolCreateRequest
+	AdminToolEditRequest   = tools.AdminToolEditRequest
+	AdminToolPage          = tools.AdminToolPage
 )
 
 func (s *Service) toolDomain() *tools.Service {
@@ -65,6 +70,30 @@ func (s *Service) CreateTool(userID string, req ToolMutationRequest) (*ToolItem,
 
 func (s *Service) DeleteTool(userID string, toolID int64) error {
 	return s.toolDomain().Delete(userID, toolID)
+}
+
+func (s *Service) AdminListTools(req AdminToolListRequest) (*AdminToolPage, error) {
+	return s.toolDomain().AdminList(req)
+}
+
+func (s *Service) AdminToolDetail(toolID int64) (*ToolItem, error) {
+	return s.toolDomain().AdminDetail(toolID)
+}
+
+func (s *Service) AdminCreateTool(adminID string, req AdminToolCreateRequest) (*ToolItem, error) {
+	return s.toolDomain().AdminCreate(adminID, req)
+}
+
+func (s *Service) AdminEditTool(toolID int64, req AdminToolEditRequest) (*ToolItem, error) {
+	return s.toolDomain().AdminEdit(toolID, req)
+}
+
+func (s *Service) AdminUpdateTool(toolID int64, req AdminToolUpdateRequest) (*ToolSummary, error) {
+	return s.toolDomain().AdminUpdate(toolID, req)
+}
+
+func (s *Service) AdminDeleteTool(toolID int64) error {
+	return s.toolDomain().AdminDelete(toolID)
 }
 
 // ResolveToolMentionTokens 将 prompt 中的 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本。

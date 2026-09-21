@@ -26,6 +26,11 @@ type Repository interface {
 	RemoveToolFavorite(userID string, toolID int64) error
 	CreateTool(tool *model.Tool) (*model.Tool, error)
 	DeleteUserTool(userID string, toolID int64) error
+	AdminListTools(req AdminToolListRequest) ([]model.Tool, int64, error)
+	AdminTool(toolID int64) (model.Tool, error)
+	AdminUpdateTool(tool *model.Tool) (*model.Tool, error)
+	AdminUpdateToolFull(tool *model.Tool) (*model.Tool, error)
+	AdminDeleteTool(toolID int64) error
 }
 
 var labelEnPattern = regexp.MustCompile(`[^a-zA-Z0-9_]+`)

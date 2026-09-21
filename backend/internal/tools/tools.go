@@ -110,6 +110,46 @@ type ToolMutationRequest struct {
 	Visibility string   `json:"visibility"`
 }
 
+// AdminToolListRequest 后台工具列表查询参数，不受用户可见性约束。
+type AdminToolListRequest struct {
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	Enabled  *bool  `json:"enabled"`
+	Search   string `json:"search"`
+}
+
+// AdminToolUpdateRequest 后台工具管理可更新的字段，均为可选的指针字段。
+type AdminToolUpdateRequest struct {
+	Enabled    *bool   `json:"enabled"`
+	Visibility *string `json:"visibility"`
+	SortWeight *int    `json:"sortWeight"`
+}
+
+// AdminToolCreateRequest 后台新建工具；在用户创建字段基础上增加来源与平台字段。
+type AdminToolCreateRequest struct {
+	ToolMutationRequest
+	Source     string `json:"source"` // builtin | user，默认 user
+	Enabled    *bool  `json:"enabled"`
+	SortWeight *int   `json:"sortWeight"`
+}
+
+// AdminToolEditRequest 后台编辑工具完整内容；不改变来源、所属人与英文标识。
+type AdminToolEditRequest struct {
+	ToolMutationRequest
+	Enabled    *bool `json:"enabled"`
+	SortWeight *int  `json:"sortWeight"`
+}
+
+// AdminToolPage 后台工具分页结果。
+type AdminToolPage struct {
+	Tools      []ToolSummary `json:"tools"`
+	TotalCount int64         `json:"totalCount"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"pageSize"`
+}
+
 // Service 工具域服务。
 type Service struct {
 	repo Repository
@@ -232,6 +272,200 @@ func (s *Service) Delete(userID string, toolID int64) error {
 		return kernel.BadAuthRequest("工具 ID 无效")
 	}
 	return s.repo.DeleteUserTool(userID, toolID)
+}
+
+// AdminList 后台分页查询全部工具（含禁用、私有），不受用户可见性约束。
+func (s *Service) AdminList(req AdminToolListRequest) (*AdminToolPage, error) {
+	if err := normalizeAdminToolListRequest(&req); err != nil {
+		return nil, err
+	}
+	items, total, err := s.repo.AdminListTools(req)
+	if err != nil {
+		return nil, err
+	}
+	summaries := make([]ToolSummary, 0, len(items))
+	for _, item := range items {
+		summaries = append(summaries, buildToolSummary(item, false))
+	}
+	return &AdminToolPage{
+		Tools:      summaries,
+		TotalCount: total,
+		Page:       req.Page,
+		PageSize:   req.PageSize,
+	}, nil
+}
+
+// AdminUpdate 后台更新工具的启用状态、可见性与排序权重。
+func (s *Service) AdminUpdate(toolID int64, req AdminToolUpdateRequest) (*ToolSummary, error) {
+	if toolID <= 0 {
+		return nil, kernel.BadAuthRequest("工具 ID 无效")
+	}
+	tool, err := s.repo.AdminTool(toolID)
+	if err != nil {
+		return nil, err
+	}
+	if req.Enabled != nil {
+		tool.Enabled = *req.Enabled
+	}
+	if req.Visibility != nil {
+		visibility := strings.TrimSpace(*req.Visibility)
+		if visibility != ToolVisibilityPublic && visibility != ToolVisibilityPrivate {
+			return nil, kernel.BadAuthRequest("可见性仅支持 public 或 private")
+		}
+		tool.Visibility = visibility
+	}
+	if req.SortWeight != nil {
+		tool.SortWeight = *req.SortWeight
+	}
+	tool.UpdatedAt = time.Now()
+	updated, err := s.repo.AdminUpdateTool(&tool)
+	if err != nil {
+		return nil, err
+	}
+	summary := buildToolSummary(*updated, false)
+	return &summary, nil
+}
+
+// AdminDetail 后台获取工具完整详情（含提示词），不做可见性/启用过滤。
+func (s *Service) AdminDetail(toolID int64) (*ToolItem, error) {
+	if toolID <= 0 {
+		return nil, kernel.BadAuthRequest("工具 ID 无效")
+	}
+	tool, err := s.repo.AdminTool(toolID)
+	if err != nil {
+		return nil, err
+	}
+	return buildToolItemPtr(tool, false, nil), nil
+}
+
+// AdminCreate 后台新建工具；来源默认 user（归属当前管理员），可选 builtin 作为平台工具。
+func (s *Service) AdminCreate(adminID string, req AdminToolCreateRequest) (*ToolItem, error) {
+	normalized, err := normalizeToolMutationRequest(req.ToolMutationRequest)
+	if err != nil {
+		return nil, err
+	}
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = ToolSourceUser
+	}
+	if source != ToolSourceBuiltin && source != ToolSourceUser {
+		return nil, kernel.BadAuthRequest("工具来源仅支持 builtin 或 user")
+	}
+	ownerID := ""
+	if source == ToolSourceUser {
+		ownerID = strings.TrimSpace(adminID)
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	sortWeight := 0
+	if req.SortWeight != nil {
+		sortWeight = *req.SortWeight
+	}
+	now := time.Now()
+	tool := model.Tool{
+		Type:          normalized.Type,
+		LabelEn:       normalized.LabelEn,
+		Label:         normalized.Label,
+		Desc:          normalized.Desc,
+		Tag:           normalized.Tag,
+		Cover:         normalized.Cover,
+		ExtraInfoJSON: normalized.ExtraInfoJSON,
+		Prompt:        normalized.Prompt,
+		Ratio:         normalized.Ratio,
+		MediaURL:      normalized.MediaURL,
+		OwnerID:       ownerID,
+		Source:        source,
+		Enabled:       enabled,
+		Visibility:    normalized.Visibility,
+		SortWeight:    sortWeight,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	created, err := s.repo.CreateTool(&tool)
+	if err != nil {
+		return nil, err
+	}
+	item := buildToolItem(*created, false, nil)
+	return &item, nil
+}
+
+// AdminEdit 后台编辑工具内容；保留来源、所属人与英文标识，仅更新业务字段。
+func (s *Service) AdminEdit(toolID int64, req AdminToolEditRequest) (*ToolItem, error) {
+	if toolID <= 0 {
+		return nil, kernel.BadAuthRequest("工具 ID 无效")
+	}
+	existing, err := s.repo.AdminTool(toolID)
+	if err != nil {
+		return nil, err
+	}
+	normalized, err := normalizeToolMutationRequest(req.ToolMutationRequest)
+	if err != nil {
+		return nil, err
+	}
+	existing.Type = normalized.Type
+	existing.Label = normalized.Label
+	existing.Desc = normalized.Desc
+	existing.Tag = normalized.Tag
+	existing.Cover = normalized.Cover
+	existing.Prompt = normalized.Prompt
+	existing.Ratio = normalized.Ratio
+	existing.MediaURL = normalized.MediaURL
+	existing.Visibility = normalized.Visibility
+	// extraInfo 样本图路径不通过后台表单编辑，保留原值，避免误清空内置工具样本。
+	if req.Enabled != nil {
+		existing.Enabled = *req.Enabled
+	}
+	if req.SortWeight != nil {
+		existing.SortWeight = *req.SortWeight
+	}
+	existing.UpdatedAt = time.Now()
+	updated, err := s.repo.AdminUpdateToolFull(&existing)
+	if err != nil {
+		return nil, err
+	}
+	item := buildToolItem(*updated, false, nil)
+	return &item, nil
+}
+
+// AdminDelete 后台删除工具；内置工具不可删除，同步清理收藏记录。
+func (s *Service) AdminDelete(toolID int64) error {
+	if toolID <= 0 {
+		return kernel.BadAuthRequest("工具 ID 无效")
+	}
+	tool, err := s.repo.AdminTool(toolID)
+	if err != nil {
+		return err
+	}
+	if tool.Source == ToolSourceBuiltin {
+		return kernel.BadAuthRequest("内置工具不可删除")
+	}
+	return s.repo.AdminDeleteTool(toolID)
+}
+
+func normalizeAdminToolListRequest(req *AdminToolListRequest) error {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 20
+	}
+	if req.PageSize > toolMaxPageSize {
+		req.PageSize = toolMaxPageSize
+	}
+	if req.Type != "" {
+		if _, ok := validToolTypes[req.Type]; !ok {
+			return kernel.BadAuthRequest(fmt.Sprintf("不支持的工具类型: %s", req.Type))
+		}
+	}
+	if req.Source != "" {
+		if req.Source != ToolSourceBuiltin && req.Source != ToolSourceUser {
+			return kernel.BadAuthRequest("不支持的工具来源")
+		}
+	}
+	req.Search = strings.TrimSpace(req.Search)
+	return nil
 }
 
 func normalizeToolListRequest(req *ToolListRequest) error {
