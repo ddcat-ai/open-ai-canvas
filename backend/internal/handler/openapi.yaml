@@ -26,6 +26,68 @@ tags:
   - name: agent
   - name: admin
 paths:
+  /admin/settings/appearance/live2d:
+    post:
+      tags: [admin]
+      summary: 导入管理员 Live2D 模型草稿（不自动启用）
+      description: ZIP 最大 128 MiB，最多 256 条目；解压累计 384 MiB，单文件最大 128 MiB。只接受一个 Version 3 model3.json 及 ZIP 内 MOC3、PNG、JSON 引用。启用通过 PATCH /admin/settings/appearance 的 canvas 配置完成。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        "200":
+          description: 成功信封 data.model 包含 resourceId 和服务端确认的 entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      model:
+                        type: object
+                        required: [resourceId, entry]
+                        properties:
+                          resourceId: {type: string}
+                          entry: {type: string}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance/live2d/{id}/{file}:
+    get:
+      tags: [admin]
+      summary: 读取模型草稿文件（管理员所有者或当前配置引用）
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+      responses:
+        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /public/appearance/live2d/{id}/{file}:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取当前启用的 Live2D 模型文件
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+      responses:
+        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封；停用后拒绝公开读取}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /tools:
     get:
       tags: [canvas]

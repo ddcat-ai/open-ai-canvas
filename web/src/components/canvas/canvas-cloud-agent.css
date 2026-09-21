@@ -561,6 +561,16 @@
     backdrop-filter: blur(10px);
 }
 
+.canvas-agent-launcher.canvas-agent-launcher-live2d {
+    padding: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: none;
+}
+
+.canvas-agent-launcher-live2d::before {
+    display: none;
+}
+
 .canvas-agent-launcher-status {
     position: absolute;
     top: 6px;

@@ -138,7 +138,7 @@ func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminReso
 		Limit:    limit,
 		Offset:   (page - 1) * limit,
 	}
-	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file") {
+	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file", "live2d") {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源类型筛选无效")
 	}
 	if filter.Status != "" && !oneOf(filter.Status, string(model.ResourceStatusPending), string(model.ResourceStatusReady), string(model.ResourceStatusFailed), string(model.ResourceStatusDeleted)) {

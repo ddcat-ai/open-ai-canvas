@@ -1,19 +1,20 @@
 import { ArrowUpRight, Clapperboard, Layers3, Sparkles } from "lucide-react";
+import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
 
 type AgentWelcomeProps = {
-    brandName: string;
+    appearance: CanvasAppearance;
     nodeCount: number;
     onChooseSkill: () => void;
     onDraftPrompt: (prompt: string) => void;
 };
 
-export function AgentWelcome({ brandName, nodeCount, onChooseSkill, onDraftPrompt }: AgentWelcomeProps) {
+export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftPrompt }: AgentWelcomeProps) {
     return (
         <section className="agent-welcome" aria-label="开始 Agent 创作">
             <div className="agent-welcome-intro">
                 <span className="agent-welcome-orb" aria-hidden="true" />
-                <h2>在这里，和{brandName}让灵感，慢慢成形</h2>
-                <p>从一个想法开始，和 Agent 一起创作。</p>
+                <h2>{agentCopy(appearance.welcomeTitle, appearance.agentName)}</h2>
+                <p>{agentCopy(appearance.welcomeDescription, appearance.agentName)}</p>
             </div>
             <div className="agent-welcome-actions">
                 <button type="button" onClick={onChooseSkill}>

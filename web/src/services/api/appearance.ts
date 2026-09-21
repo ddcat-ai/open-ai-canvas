@@ -1,7 +1,10 @@
 import { http } from "@/services/api/request";
 import type { SkinDefinition } from "@/lib/skin-themes";
+import type { CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import { apiBaseURL } from "@/services/api/request";
 
 export type PublicAppearance = {
+    canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
     brandSlug: string;
@@ -31,6 +34,7 @@ export type PublicAppearance = {
 };
 
 export type AdminAppearance = {
+    canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
     brandSlug: string;
@@ -81,6 +85,7 @@ export async function updateAdminAppearance(
     input: Pick<
         AdminAppearance,
         | "brandName"
+        | "canvas"
         | "brandSlug"
         | "authHeroTitle"
         | "authHeroDescription"
@@ -114,4 +119,14 @@ export async function uploadAppearanceAsset(slot: AppearanceAssetSlot, file: Fil
     body.append("file", file);
     const result = await http.post<{ resource: AppearanceResource }>(`/admin/settings/appearance/assets/${slot}`, body);
     return result.resource;
+}
+
+export async function uploadLive2D(file: File) {
+    const body = new FormData(); body.append("file", file);
+    const result = await http.post<{ model: { resourceId: string; entry: string } }>("/admin/settings/appearance/live2d", body);
+    return result.model;
+}
+
+export function live2DModelURL(resourceId: string, entry: string, preview = false) {
+    return `${apiBaseURL.replace(/\/$/, "")}/${preview ? "admin/settings" : "public"}/appearance/live2d/${encodeURIComponent(resourceId)}/${entry.split("/").map(encodeURIComponent).join("/")}`;
 }

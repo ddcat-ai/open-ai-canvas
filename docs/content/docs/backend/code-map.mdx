@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 画布 Agent 配置与 Live2D
+
+- 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。
+- 公共配置及文案：`web/src/stores/use-appearance-store.ts`、`web/src/lib/canvas/agent-appearance.ts`。
+- 画布形象：`web/src/components/canvas/live2d-avatar.tsx`、`canvas-cloud-agent-panel.tsx`；受限资源加载：`web/src/services/live2d-loader.ts`。
+- 服务端：`backend/internal/app/appearance_canvas.go` 校验配置，`appearance_live2d.go` 验证 ZIP、导入及资源访问；`backend/internal/handler/appearance_live2d.go` 为 HTTP 边界。已有外观设置和资源引用链路负责持久化及删除保护。
+
 这是一张入口地图，不罗列所有文件。先找到功能所属层，再沿调用关系阅读。
 
 ## 前端页面

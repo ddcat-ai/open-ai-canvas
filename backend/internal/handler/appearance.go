@@ -11,6 +11,7 @@ import (
 )
 
 func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerLive2DRoutes(r, svc)
 	r.GET("/public/appearance", func(c *gin.Context) {
 		setting, err := svc.Appearance()
 		if err != nil {

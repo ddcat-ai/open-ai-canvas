@@ -20,6 +20,7 @@ docs/content/docs/plugins/*
 docs/content/docs/backend/*
 !docs/content/docs/backend/task-runtime-stability.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
+!docs/content/docs/backend/canvas-agent-appearance.mdx
 !docs/content/docs/backend/http-api.mdx
 !docs/content/docs/backend/code-map.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx
@@ -72,3 +73,6 @@ camera_language_guide.md
 backend/cmd/server/server
 # One-off local probe scripts and their compiled output.
 backend/tmp_*
+# Deployment-owned proprietary Live2D Core; never redistribute in this repository.
+/web/public/live2d/live2dcubismcore.min.js
+/web/public/live2d/live2dcubismcore.min.js.map

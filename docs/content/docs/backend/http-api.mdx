@@ -13,6 +13,18 @@ description: 信封、错误码与 OpenAPI
 
 ## 站点皮肤主按钮
 
+### 画布配置与 Live2D（外观合同版本 9）
+
+`GET /public/appearance` 和管理员 `GET /admin/settings/appearance` 返回 `canvas`；管理员通过 `PATCH /admin/settings/appearance` 随外观配置统一保存。字段为 `agentName`（1–24 字）、`launcherLabel`（0–24 字）、`panelTitle`（1–40 字）、`welcomeTitle`（1–100 字）、`welcomeDescription`（0–200 字）、`inputPlaceholder`（1–160 字）、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360 整数）、`live2dResourceId`、`live2dEntry`。入口由服务端核验覆盖；Live2D 无有效资源时拒绝启用。配置不修改 Agent 系统提示词。
+
+- `POST /admin/settings/appearance/live2d`：管理员 multipart `file` 上传，受上传频率和配额限制。成功信封的 `data.model` 为 `{ resourceId, entry }`，上传不会发布。ZIP 限 128 MiB、256 条目、解压合计 384 MiB、单文件 128 MiB；只接收 model3/MOC3/PNG/JSON，拒绝路径穿越、脚本和外部资源。
+- `GET /admin/settings/appearance/live2d/:id/*file`：管理员预览，校验资源归属；其他管理员仅能查看当前外观已引用模型。
+- `GET /public/appearance/live2d/:id/*file`：仅提供当前启用模型的数据文件。停用或更换后旧模型拒绝公开访问。成功为文件内容，失败为错误信封；响应带 `nosniff` 和私有、需重新验证的缓存策略。
+
+管理员资源列表增加 `kind=live2d` 筛选；引用中的模型禁止删除，清除外观引用后按既有资源删除流程清理。
+
+部署要求与更详细的文件限制见 [画布 Agent 外观与 Live2D](/docs/backend/canvas-agent-appearance)。
+
 `GET /public/appearance` 返回当前 `activeSkin`；管理员通过 `GET/PUT /admin/settings/appearance` 读取、保存完整主题库。外观合同版本 8 新增 `tokens.buttons.light/dark`，字段为 `mode`（`solid|gradient`）、整数 `angle`（0–360）、HEX 色值 `start/end`、`hoverStart/hoverEnd`、`activeStart/activeEnd`、`foreground`。纯色模式使用既有主操作颜色，渐变仅用于主按钮。非法模式、角度、色值或修改锁定经典主题均拒绝保存；整块缺失的旧配置按主题身份补齐。此变更不增加数据表迁移。
 
 ## 模型规格报价

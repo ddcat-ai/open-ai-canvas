@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, isSkinButtonFill, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
 import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
 import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
+import { CanvasAppearanceEditor } from "./components/canvas-appearance-editor";
+import { DEFAULT_CANVAS_APPEARANCE, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
@@ -31,6 +33,8 @@ export default function AppearanceSettingsPage() {
     const [activeTab, setActiveTab] = useState("brand");
     const [setting, setSetting] = useState<AdminAppearance | null>(null);
     const [brandName, setBrandName] = useState("");
+    const [canvas, setCanvas] = useState<CanvasAppearance>(DEFAULT_CANVAS_APPEARANCE);
+    const [canvasUploading, setCanvasUploading] = useState(false);
     const [brandSlug, setBrandSlug] = useState("");
     const [authHeroTitle, setAuthHeroTitle] = useState("");
     const [authHeroDescription, setAuthHeroDescription] = useState("");
@@ -61,7 +65,7 @@ export default function AppearanceSettingsPage() {
 
     const dirty =
         Boolean(setting) &&
-        (brandName.trim() !== setting?.brandName ||
+        (JSON.stringify(canvas) !== JSON.stringify(setting?.canvas || DEFAULT_CANVAS_APPEARANCE) || canvasUploading || brandName.trim() !== setting?.brandName ||
             brandSlug.trim().toLocaleLowerCase() !== setting?.brandSlug ||
             normalizeDraftCopy(authHeroTitle) !== setting?.authHeroTitle ||
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
@@ -84,6 +88,7 @@ export default function AppearanceSettingsPage() {
         const selectedID = themes.some((theme) => theme.id === value.skinId) ? value.skinId : "classic";
         setSetting({ ...value, skinThemes: themes, skinId: selectedID });
         setBrandName(value.brandName);
+        setCanvas(value.canvas || DEFAULT_CANVAS_APPEARANCE);
         setBrandSlug(value.brandSlug);
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
@@ -136,7 +141,7 @@ export default function AppearanceSettingsPage() {
         if (blocker.state !== "blocked") return;
         modal.confirm({
             title: "放弃站点及外观调整？",
-            content: "当前品牌、SEO、备案、皮肤或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
+            content: "当前品牌、画布 Agent、SEO、备案、皮肤或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -191,7 +196,8 @@ export default function AppearanceSettingsPage() {
     };
 
     const discardDraft = () => {
-        if (!setting || saving || restoring) return;
+        if (!setting || saving || restoring || canvasUploading) return;
+        setCanvas(setting.canvas || DEFAULT_CANVAS_APPEARANCE);
         setBrandName(setting.brandName);
         setBrandSlug(setting.brandSlug);
         setAuthHeroTitle(setting.authHeroTitle);
@@ -215,13 +221,14 @@ export default function AppearanceSettingsPage() {
     };
 
     const requestRefresh = () => {
+        if (canvasUploading) return;
         if (!dirty) {
             void load(false);
             return;
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前品牌、SEO、备案、皮肤和待上传文件。",
+            content: "重新读取会丢弃当前品牌、画布 Agent、SEO、备案、皮肤和待上传文件。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -230,10 +237,10 @@ export default function AppearanceSettingsPage() {
     };
 
     const restoreBuiltInAppearance = () => {
-        if (!setting?.configured || saving || refreshing || restoring) return;
+        if (!setting?.configured || saving || refreshing || restoring || canvasUploading) return;
         modal.confirm({
             title: "恢复影策默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面、SEO、备案和皮肤主题会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            content: "品牌名称、英文标识、Logo、画布 Agent 名称/文案/形象、登录页文案、视频、封面、SEO、备案和皮肤主题会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -259,7 +266,12 @@ export default function AppearanceSettingsPage() {
     };
 
     const save = async () => {
-        if (!setting || saving || restoring) return;
+        if (!setting || saving || restoring || canvasUploading) return;
+        if (![canvas.agentName, canvas.panelTitle, canvas.welcomeTitle, canvas.inputPlaceholder].every((text) => text.trim())) {
+            setActiveTab("canvas");
+            message.error("请填写助手名称、面板标题、欢迎标题和输入框提示");
+            return;
+        }
         const nextBrandName = brandName.trim();
         const nextBrandSlug = brandSlug.trim().toLocaleLowerCase();
         const nextAuthHeroTitle = normalizeDraftCopy(authHeroTitle);
@@ -330,6 +342,7 @@ export default function AppearanceSettingsPage() {
                 ids[slot] = resource.id;
             }
             const updated = await updateAdminAppearance({
+                canvas,
                 brandName: nextBrandName,
                 brandSlug: nextBrandSlug,
                 authHeroTitle: nextAuthHeroTitle,
@@ -443,17 +456,17 @@ export default function AppearanceSettingsPage() {
                         </div>
                         <div className="admin-appearance-command-actions">
                             {dirty ? (
-                                <Button icon={<Undo2 className="size-4" />} disabled={saving || restoring} onClick={discardDraft}>
+                                <Button icon={<Undo2 className="size-4" />} disabled={saving || restoring || canvasUploading} onClick={discardDraft}>
                                     撤销调整
                                 </Button>
                             ) : null}
-                            <Button icon={<RotateCcw className="size-4" />} loading={restoring} disabled={!setting.configured || saving || refreshing} onClick={restoreBuiltInAppearance}>
+                            <Button icon={<RotateCcw className="size-4" />} loading={restoring} disabled={!setting.configured || saving || refreshing || canvasUploading} onClick={restoreBuiltInAppearance}>
                                 恢复影策默认
                             </Button>
-                            <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving || restoring} onClick={requestRefresh}>
+                            <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving || restoring || canvasUploading} onClick={requestRefresh}>
                                 刷新状态
                             </Button>
-                            <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || refreshing || restoring} onClick={() => void save()}>
+                            <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || refreshing || restoring || canvasUploading} onClick={() => void save()}>
                                 保存修改
                             </Button>
                         </div>
@@ -754,6 +767,7 @@ export default function AppearanceSettingsPage() {
                                     </SettingsSectionCard>
                                 ),
                             },
+                            { key: "canvas", label: "画布配置", children: <CanvasAppearanceEditor value={canvas} onChange={setCanvas} disabled={saving || refreshing || restoring} onUploading={setCanvasUploading} /> },
                         ]}
                     />
                 </div>

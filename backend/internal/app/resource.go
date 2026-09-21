@@ -500,7 +500,10 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, false, resourceUploadInProgress()
 	}
 	now := time.Now()
-	kind = normalizeResourceKind(kind, mimeType)
+	// Live2D is reserved for the administrator's validated local import path.
+	if !(forceLocal && kind == "live2d") {
+		kind = normalizeResourceKind(kind, mimeType)
+	}
 	var setting ossSettingValue
 	var storageSettingID string
 	var useOSS bool
