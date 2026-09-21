@@ -267,7 +267,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     <h3 className="admin-channel-model-heading">
                         模型管理 <span className="admin-channel-count">{items.length}</span>
                     </h3>
-                    <p className="admin-channel-model-hint">规格展示成本价 / 销售价及利润率，勾选模型可统一调价</p>
+                    <p className="admin-channel-model-hint">点击“自定义排序”调整模型展示顺序；规格展示成本价 / 销售价及利润率，勾选模型可统一调价</p>
                 </div>
                 <Space wrap>
                     <ChannelOrderDialog

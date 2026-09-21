@@ -48,6 +48,7 @@ test("real model manager renders inline without a second page or back navigation
     expect(html).toContain("模型管理");
     expect(html).toContain("拉取模型");
     expect(html).toContain("新增模型");
+    expect(html).toContain("自定义排序");
     expect(html).toContain("正在加载表格");
     expect(html).not.toContain("admin-page-root");
     expect(html).not.toContain("返回系统渠道");
