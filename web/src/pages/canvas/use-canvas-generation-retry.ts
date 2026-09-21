@@ -84,7 +84,7 @@ export function useCanvasGenerationRetry({
             const batchRoot = node.metadata?.batchRootId ? nodesRef.current.find((item) => item.id === node.metadata?.batchRootId) : null;
             const savedImageMetadata = node.type === CanvasNodeType.Image ? { ...batchRoot?.metadata, ...node.metadata } : undefined;
             const hasSavedImageMetadata = Boolean(savedImageMetadata?.generationType);
-            const generationSourceNode = node.type === CanvasNodeType.Config && isCanvasWorkflowProvider(node.metadata) || node.metadata?.workflowProvider === "model" ? node : sourceNode;
+            const generationSourceNode = (node.type === CanvasNodeType.Config && isCanvasWorkflowProvider(node.metadata)) || node.metadata?.workflowProvider === "model" ? node : sourceNode;
             const sourceGenerationConfig = buildGenerationConfig(effectiveConfig, generationSourceNode, retryMode);
             let generationConfig =
                 hasSavedImageMetadata && savedImageMetadata
@@ -103,7 +103,16 @@ export function useCanvasGenerationRetry({
             }
 
             const retryPromptSource = sourceNode.metadata?.composerContent || sourceNode.metadata?.prompt || node.metadata?.prompt || "";
-            const retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
+            let retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
+            if (retryMode === "image" && sourceNode.metadata?.styleTool?.id != null) {
+                const styleTool = sourceNode.metadata.styleTool;
+                retryContextPrompt = `${retryContextPrompt}\n@[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
+            }
+            if (retryMode === "video" && sourceNode.metadata?.effectTool?.id != null) {
+                const effectTool = sourceNode.metadata.effectTool;
+                retryContextPrompt = `${retryContextPrompt}\n@[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
+            }
+
             if (unchangedModeratedPrompt(node.metadata, retryPromptSource)) {
                 message.warning("该提示词未通过内容审核，请先修改提示词再重新生成");
                 return;
@@ -220,7 +229,11 @@ export function useCanvasGenerationRetry({
                     : undefined;
 
             setRunningNodeId(node.id);
-            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item)));
+            setNodes((current) =>
+                current.map((item) =>
+                    item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item,
+                ),
+            );
             const controller = startGenerationRequest(node.id, sourceNode.id, node.id);
             const retryContext = node.metadata?.taskId ? await createGenerationRetryContext(node.metadata.taskId, node.metadata.attemptGroupId) : {};
             const runAndConsumeRetry = async (input: Parameters<typeof runBackendCanvasGenerationTask>[0]) => {
@@ -350,7 +363,16 @@ export function useCanvasGenerationRetry({
                         referenceImages: [editReference, characterReference],
                         mask,
                         signal: controller.signal,
-                        metadata: { retry: true, sourceNodeId: emotionSource.id, edit: "emotion", emotionEditMode: editPlan.mode, emotion: nextEmotionEdit, resolvedCharacterVersions: context?.resolvedCharacterVersions || [], ...styleMetadata, ...skillMetadata },
+                        metadata: {
+                            retry: true,
+                            sourceNodeId: emotionSource.id,
+                            edit: "emotion",
+                            emotionEditMode: editPlan.mode,
+                            emotion: nextEmotionEdit,
+                            resolvedCharacterVersions: context?.resolvedCharacterVersions || [],
+                            ...styleMetadata,
+                            ...skillMetadata,
+                        },
                     });
                     return;
                 }
