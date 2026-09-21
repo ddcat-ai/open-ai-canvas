@@ -23,6 +23,7 @@ import {
     supportsVideoReferenceAudio,
 } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
+import { buildCameraPrompt } from "@/lib/canvas/camera-prompt-library";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
@@ -106,11 +107,16 @@ export function useCanvasGenerationRetry({
             let retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
             if (retryMode === "image" && sourceNode.metadata?.styleTool?.id != null) {
                 const styleTool = sourceNode.metadata.styleTool;
-                retryContextPrompt = `${retryContextPrompt}\n@[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
+                retryContextPrompt = `${retryContextPrompt}\n\n风格模板:\n- ${styleTool.label}\n- @[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
             }
             if (retryMode === "video" && sourceNode.metadata?.effectTool?.id != null) {
                 const effectTool = sourceNode.metadata.effectTool;
-                retryContextPrompt = `${retryContextPrompt}\n@[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
+                retryContextPrompt = `${retryContextPrompt}\n\n特效模板:\n- ${effectTool.label}\n- @[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
+            }
+            if (retryMode === "image" && sourceNode.metadata?.cameraControl?.enabled) {
+                const cameraControl = sourceNode.metadata.cameraControl;
+                const cameraPrompt = buildCameraPrompt({ cameraId: cameraControl.camera, lensId: cameraControl.lens, focalLengthMm: cameraControl.focalLength, apertureF: cameraControl.aperture });
+                retryContextPrompt = `${retryContextPrompt}\n\nCamera setup:\n- ${cameraControl.camera}\n- ${cameraControl.lens}\n- ${cameraControl.focalLength}\n- ${cameraControl.aperture}\n${cameraPrompt}`;
             }
 
             if (unchangedModeratedPrompt(node.metadata, retryPromptSource)) {

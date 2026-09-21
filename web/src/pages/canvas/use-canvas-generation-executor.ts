@@ -140,17 +140,17 @@ export function useCanvasGenerationExecutor({
 
                     if (mode === "image" && sourceNode?.metadata?.styleTool?.id != null) {
                         const styleTool = sourceNode.metadata.styleTool;
-                        generationPrompt = `${generationPrompt}\n@[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
+                        generationPrompt = `${generationPrompt}\n\n风格模板:\n- ${styleTool.label}\n- @[tool:style:${styleTool.id}:${styleTool.label}:Palette]`;
                     }
                     if (mode === "video" && sourceNode?.metadata?.effectTool?.id != null) {
                         const effectTool = sourceNode.metadata.effectTool;
-                        generationPrompt = `${generationPrompt}\n@[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
+                        generationPrompt = `${generationPrompt}\n\n特效模板:\n- ${effectTool.label}\n- @[tool:effect:${effectTool.id}:${effectTool.label}:Sparkles]`;
                     }
 
                     if (mode === "image" && sourceNode?.metadata?.cameraControl?.enabled) {
                         const cameraControl = sourceNode.metadata.cameraControl;
                         const cameraPrompt = buildCameraPrompt({ cameraId: cameraControl.camera, lensId: cameraControl.lens, focalLengthMm: cameraControl.focalLength, apertureF: cameraControl.aperture });
-                        generationPrompt = `${generationPrompt}\n${cameraPrompt}`;
+                        generationPrompt = `${generationPrompt}\n\nCamera setup:\n- ${cameraControl.camera}\n- ${cameraControl.lens}\n- ${cameraControl.focalLength}\n- ${cameraControl.aperture}\n${cameraPrompt}`;
                     }
                     const isPreparingEmptyImage = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content;
 
