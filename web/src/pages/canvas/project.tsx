@@ -136,6 +136,8 @@ import { useCanvasGeneration } from "./use-canvas-generation";
 import { useCanvasGenerationBatches } from "./use-canvas-generation-batches";
 import { useCanvasBatchTable } from "./use-canvas-batch-table";
 import { useCanvasGenerationExecutor, type CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
+import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import { emitPluginNodeGenerate } from "@/lib/plugins/plugin-node-bus";
 import { useCanvasGenerationRetry } from "./use-canvas-generation-retry";
 import { useCanvasHistory } from "./use-canvas-history";
 import { useCanvasKeyboard } from "./use-canvas-keyboard";
@@ -1919,6 +1921,18 @@ function InfiniteCanvasPage() {
         generateNodeRef.current = handleGenerateNode;
     }, [handleGenerateNode]);
 
+    // sandbox 渲染的插件节点（如 minimax-t2a）自带生成逻辑：宿主提示词面板的「生成」按钮
+    // 通过事件总线转发给插件节点组件，由插件用自己的链路执行（插件内订阅 onPluginNodeGenerate）。
+    const handleGenerateNodeForSandbox = useCallback(async (...args: Parameters<typeof handleGenerateNode>) => {
+        const [nodeId, mode, prompt] = args;
+        const node = nodeById.get(nodeId);
+        if (node && getNodeDefinition(node.type)?.plugin?.renderer === "sandbox") {
+            emitPluginNodeGenerate({ nodeId, prompt: prompt ?? "", mode: mode as string });
+            return;
+        }
+        return handleGenerateNode(...args);
+    }, [handleGenerateNode, nodeById]);
+
     const { enqueueGenerationBatch, retryFailedBatchItems, stopRemainingBatchItems } = useCanvasGenerationBatches({
         projectId,
         projectLoaded,
@@ -2195,7 +2209,7 @@ function InfiniteCanvasPage() {
                     }}
                     onPromptChange={handleNodePromptChange}
                     onConfigChange={handleConfigNodeChange}
-                    onGenerate={handleGenerateNode}
+                    onGenerate={handleGenerateNodeForSandbox}
                     onRemoveReference={handleRemoveNodeReference}
                     onReorderReferences={handleReorderNodeReferences}
                     onReplaceReference={handleReplaceNodeReference}
