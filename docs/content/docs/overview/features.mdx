@@ -5,6 +5,16 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## 平台公共图片与视频 API（MVP）
+
+登录用户可在「设置 → 开发者 API」创建平台 API Key，第三方使用该 Key 异步提交文生图或文生视频任务。平台 Key 只保存哈希并支持撤销；上游渠道 Token 留在服务端，通过逻辑模型路由、任务队列、资源存储和积分账务完成一次调用。公共 API 支持按逻辑模型 `code` 或 `id` 调用，幂等重试直接回放原任务并返回稳定的失败 / 取消错误；接口合同见[HTTP API 合同](../backend/http-api)。
+
+### 相关实现
+
+- `backend/internal/handler/public_api.go`：平台 Key 管理及 `/api/v1` 公共生成接口。
+- `backend/internal/app/public_api.go`：Key 认证、幂等提交、模型投影和结果签名 URL。
+- `web/src/pages/settings/public-api-keys-pane.tsx`：开发者 API Key 设置页。
+
 ## 素材库分类与画布媒体链路
 
 素材库支持用户手动新增、重命名和删除分类，也可以按分类或“未分类”筛选素材，并批量移动素材。删除分类不会删除素材，分类内素材会回到“未分类”。

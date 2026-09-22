@@ -90,6 +90,9 @@ type CreateTaskRequest struct {
 	Input           map[string]any `json:"input"`
 	TraceID         string         `json:"-"`
 	RequestID       string         `json:"-"`
+	// CreationSubmissionID is reserved for trusted idempotent callers such as
+	// the public generation API. It is never accepted from JSON clients.
+	CreationSubmissionID string `json:"-"`
 }
 
 type TaskListOptions struct {

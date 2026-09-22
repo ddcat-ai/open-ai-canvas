@@ -5,9 +5,68 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
-路径前缀是 `/api`。前后端一起发布，不按 `/api/v1`、`/api/v2` 做路径版本。不兼容变更随版本一起改接口和调用方。
+工作台接口路径前缀是 `/api`，公共开发者接口固定使用 `/api/v1`。工作台接口不按 `/api/v1`、`/api/v2` 做路径版本；公共接口的版本前缀用于第三方调用合同。不兼容变更随版本一起改接口和调用方。
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
+
+## 公共图片与视频生成 API
+
+平台 API Key 由登录用户在设置中的“开发者 API”创建。明文只在创建响应中返回一次，服务端只保存哈希；撤销后立即失效。第三方请求使用 `Authorization: Bearer sk_live_...`，不会接触系统渠道的上游密钥。
+
+公共媒体接口当前只支持文生图和文生视频，统一采用异步任务：
+
+```text
+GET  /api/v1/models
+POST /api/v1/generations
+GET  /api/v1/generations/:id
+```
+
+创建请求必须携带 `Idempotency-Key`。请求体的 `type` 为 `image` 或 `video`，`operation` 只能是 `text_to_image` 或 `text_to_video`；`model` 可以使用 `/v1/models` 返回的逻辑模型 `code` 或 `id`。API Key 的模型授权也同时匹配这两种标识。图片和视频都返回 `202`，终态通过查询接口读取，结果中的 URL 是平台资源的短期签名地址。相同幂等键的重试会直接读取原任务，不重复占用创建限流额度；相同幂等键提交不同请求返回 `409`。首版不接受上游 URL、Provider Header、Base64 媒体、参考素材或 Webhook。
+
+公共接口成功响应直接返回模型对象，不使用工作台的 `{ code, data, msg, reason }` 信封；失败响应统一为 `{ error: { code, type, message } }`。终态 `failed` 和 `cancelled` 都带稳定的 `error.code`，分别为 `generation_failed`、`generation_cancelled`。如果任务已成功但结果资源损坏或不可用，查询接口返回 `result_unavailable` 错误，而不会伪装成空结果成功。
+
+平台会复用现有任务准入、逻辑模型路由、Provider 轮询、资源落盘、积分预留/结算和调用日志。相同 Key、端点和幂等键重复提交相同请求返回原任务；请求内容不同返回 `409`。
+
+### 接入 OpenAI 兼容上游
+
+在后台先创建一个系统渠道，再为渠道创建图片或视频模型。`token.xinhankr.com` 这类 OpenAI 兼容网关的图片配置使用以下合同：
+
+```text
+BaseURL:       https://token.xinhankr.com/v1
+APIFormat:     openai
+Auth:          Bearer
+APIKey:        上游网关 Token（只保存在系统渠道）
+图片协议:      openai-image
+图片路径:      /images/generations
+```
+
+渠道模型的 `ProviderModelKey` 填上游实际模型 ID，逻辑模型的 `Code` 是第三方请求 `model` 使用的公开 ID。平台 API Key 和上游 Token 是两套凭证；第三方只拿到平台 Key。
+
+视频不能仅凭“OpenAI 兼容”判断协议。当前仓库内的协议分为三类：遗留 `newapi` 走 `POST /videos`（multipart）和 `GET /videos/{id}`；`newapi-channel-1` 走 `POST /videos` 的 JSON 媒体任务包装；`newapi-channel-2` 走 `POST /video/generations` 的 JSON 接口。它们的字段、轮询路径和结果下载合同不同，不能只按名称互换。只有上游文档确认对应路径和字段时才把视频模型挂到公共目录；如果 `token.xinhankr.com` 实际提供其他异步字段，需要先新增协议适配器再开放视频逻辑模型。
+
+第三方调用示例：
+
+```bash
+curl https://your-domain/api/v1/models \
+  -H 'Authorization: Bearer sk_live_...'
+
+curl https://your-domain/api/v1/generations \
+  -H 'Authorization: Bearer sk_live_...' \
+  -H 'Idempotency-Key: demo-001' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"your-image-model","type":"image","prompt":"一只在雨中的猫","size":"1024x1024"}'
+
+curl https://your-domain/api/v1/generations \
+  -H 'Authorization: Bearer sk_live_...' \
+  -H 'Idempotency-Key: video-demo-001' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"your-video-model","type":"video","prompt":"雨夜街头缓慢推进","aspect_ratio":"16:9","duration":5,"resolution":"720p"}'
+
+curl https://your-domain/api/v1/generations/generation_xxx \
+  -H 'Authorization: Bearer sk_live_...'
+```
+
+创建响应中的 `id` 用于轮询。任务进入 `succeeded` 后，`result.images[]` 或 `result.videos[]` 返回资源 ID 和短期 URL；调用方应在 URL 过期前下载或重新查询任务获得新的签名 URL。
 
 出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会自动重试、切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。
 

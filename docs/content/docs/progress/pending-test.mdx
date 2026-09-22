@@ -5,6 +5,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 平台公共图片与视频 API（MVP）
+
+- [x] 已实现平台 API Key 创建、哈希保存、一次性明文展示、列表与撤销；已实现 `/api/v1/models`、异步 `/api/v1/generations` 和状态查询、`Idempotency-Key`、资源短期 URL 及设置页入口。
+- [x] 后端专项测试、数据库迁移覆盖检查、前端类型检查和生产构建通过；迁移工具已覆盖新增公共表。
+- [ ] 使用真实上游 Token 验收图片：确认 `https://token.xinhankr.com/v1` 的模型 ID、`/images/generations` 响应和资源落盘；核对积分预留/结算、重复幂等提交及撤销 Key。
+- [ ] 使用真实上游文档确认视频属于哪一种已实现合同：遗留 `newapi` 的 `POST /videos` multipart、`newapi-channel-1` 的 `/videos` JSON 媒体任务，或 `newapi-channel-2` 的 `/video/generations` JSON；若 `token.xinhankr.com` 使用其他路径 / 字段，需要先补协议适配器再开放视频逻辑模型。本地无法访问该域名时不能替代真实上游验收。
+
 ## 多模态列表与分镜表合并回归
 
 - [x] 合入 PR #549 的图片 / 视频列表分析、动态表格、视频脚本转换和批量生成设置；参考图上限前后端统一为 10。保留本地主分支表格布局、参考图提及、删除列、结果定位、手工行增量同步及单行重新生成。
