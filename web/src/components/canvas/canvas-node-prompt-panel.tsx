@@ -342,7 +342,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
 
                     </> : <>
                         <CanvasChooseEffectPicker open={expanded ? expandedEffectToolOpen : effectToolOpen} onOpenChange={expanded ? setExpandedEffectToolOpen : setEffectToolOpen} activeToolId={activeEffectTool?.id} activeLabel={activeEffectTool?.label} onSelect={(id, label) => onConfigChange(node.id, { effectTool: { id, label } })} onClear={() => onConfigChange(node.id, { effectTool: undefined })} />
-                        <CanvasChooseMotionPicker open={expanded ? expandedMotionToolOpen : motionToolOpen} onOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen} activeToolIds={activeMotionTools.map(t => t.toolId)} activeLabel={activeMotionTool?.label} onSelect={(id, label) => updatePrompt(applyToolMention(prompt, { id, label, type: "motion" }, "Camera"))} onClear={removeMotionToolMention} />
+                        <CanvasChooseMotionPicker open={expanded ? expandedMotionToolOpen : motionToolOpen} onOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen} activeToolIds={activeMotionTools.map(t => t.toolId)} activeLabel={activeMotionTool?.label} onSelect={(id,label) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt,{id,label,type:"motion"},"Camera"))} onClear={removeMotionToolMention} />
                     </>}
                 </div> : null}
                 {showPromptTemplates ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense appearance="quiet" /> : null}
