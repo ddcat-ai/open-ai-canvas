@@ -158,6 +158,8 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
         taskStatus: task.status,
         taskProgress: progress,
         taskStage: task.stage,
+        taskMediaStage: task.mediaStage,
+        taskCanRecoverMedia: task.canRecoverMedia,
         taskProvider: task.provider,
         taskStartedAt: task.startedAt,
         taskCompletedAt: task.completedAt,

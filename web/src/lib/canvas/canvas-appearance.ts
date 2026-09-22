@@ -31,8 +31,8 @@ export const DEFAULT_CANVAS_BACKGROUND_MODE: CanvasBackgroundMode = "dots";
 
 const CANVAS_APPEARANCE_DEFAULT_KEY = "infinite-canvas:canvas-appearance-default";
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
-const CUSTOM_GRID_COLOR: Record<CanvasColorTheme, string> = { light: "#000000", dark: "#AFAFAF" };
-const CUSTOM_GRID_OPACITY = 80;
+const CUSTOM_GRID_COLOR: Record<CanvasColorTheme, string> = { light: "#000000", dark: "#000000" };
+const CUSTOM_GRID_OPACITY: Record<CanvasColorTheme, number> = { light: 80, dark: 100 };
 
 export function canvasAppearanceForTheme(theme: CanvasColorTheme, previous?: CanvasAppearance): CanvasAppearance {
     return previous?.custom?.baseTheme === theme ? { mode: theme, custom: previous.custom } : { mode: theme };
@@ -46,7 +46,7 @@ export function customCanvasAppearanceFromTheme(theme: CanvasColorTheme): Canvas
             backgroundColor: canvasThemes[theme].canvas.background.toUpperCase(),
             backgroundBrightness: 0,
             gridColor: CUSTOM_GRID_COLOR[theme],
-            gridOpacity: CUSTOM_GRID_OPACITY,
+            gridOpacity: CUSTOM_GRID_OPACITY[theme],
         },
     };
 }
@@ -143,7 +143,7 @@ function normalizeCustomAppearance(value: unknown): CanvasCustomAppearance | und
         backgroundColor,
         backgroundBrightness: clampNumber(candidate.backgroundBrightness, -30, 30, 0),
         gridColor,
-        gridOpacity: clampNumber(candidate.gridOpacity, 0, 100, CUSTOM_GRID_OPACITY),
+        gridOpacity: clampNumber(candidate.gridOpacity, 0, 100, CUSTOM_GRID_OPACITY[candidate.baseTheme]),
     };
 }
 

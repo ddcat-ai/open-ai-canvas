@@ -491,6 +491,10 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 }
 
 func (s *Service) storeResource(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool) (*model.Resource, bool, error) {
+	return s.storeResourceWithWriter(userID, kind, fileName, mimeType, size, width, height, durationMs, body, uploadKey, forceLocal, s.storeResourceObject)
+}
+
+func (s *Service) storeResourceWithWriter(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool, writeObject func(*model.Resource, string, io.Reader) (string, error)) (*model.Resource, bool, error) {
 	if existing, err := s.resourceForUploadKey(userID, uploadKey); err != nil {
 		return nil, false, err
 	} else if existing != nil {
@@ -536,7 +540,7 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 		return nil, false, err
 	}
 	var etag string
-	etag, err = s.storeResourceObject(&resource, fileName, body)
+	etag, err = writeObject(&resource, fileName, body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		resource.Status = model.ResourceStatusFailed

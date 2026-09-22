@@ -96,8 +96,6 @@ type cloudAgentRuntime struct {
 	StepLimits cloudAgentStepLimits `json:"-"`
 	// ImageInspectCounts 记录本轮内每张图被查看的次数，用于"同一张图不要反复看"的护栏。
 	ImageInspectCounts map[string]int `json:"imageInspectCounts,omitempty"`
-	// PendingVisualNodeID 是刚看过、还没写观察的那张图；模型下一次输出正文时把观察记到锚点。
-	PendingVisualNodeID string `json:"pendingVisualNodeId,omitempty"`
 	// PendingImageInspections 暂存"本批还有工具结果没入历史"的看图结果，等整批 tool
 	// 结果都入历史后合并成一条 user 图片消息（见 cloudAgentFlushPendingImages）。
 	//
@@ -432,7 +430,7 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 	}
 	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
 	// 上游每一步都会重新读取历史里的图片并按视觉 token 计费，保留整段历史既贵又没有新信息。
-	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, state.cloudAgentVisualNotes()); changed && run.ID != "" {
+	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed && run.ID != "" {
 		state.event(run.ID, "context_images_pruned", map[string]any{
 			"prunedImages": pruned, "retentionRounds": cloudAgentImageRetentionRounds,
 			"text": "已把超出保留轮次的看图结果移出模型上下文（保留文字回执与 nodeId）",
@@ -721,9 +719,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			}
 			if result.Text != "" {
 				state.event(run.ID, "assistant_message", map[string]any{"messageId": task.ID, "text": result.Text})
-				// 刚看过图时，模型在正文里写下的那句话就是可复用的视觉证据：
-				// 推理内容不回灌上下文，只有正文留得下来。
-				state.recordCloudAgentVisualNote(result.Text)
+				// 普通正文可能是读取失败或多图混合回答，不能自动归为某张图的视觉事实。
 				if len(calls) == 0 {
 					state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": result.Text})
 				}
@@ -778,7 +774,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 	cloudAgentDrainInterjections(run.ID, &state)
 	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
 	// 它必须在压缩判定之前跑：图片是最贵的一类内容，先移出再评估 token 压力才有意义。
-	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, state.cloudAgentVisualNotes()); changed {
+	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed {
 		state.event(run.ID, "context_images_pruned", map[string]any{
 			"prunedImages": pruned, "retentionRounds": cloudAgentImageRetentionRounds,
 			"text": "图片裁剪：移出超出保留轮次的看图结果",
@@ -793,11 +789,18 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		return contextErr
 	}
 	s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(&state))
+	references, refErr := s.cloudAgentImageReferences(run.UserID, state.Request, &canonical)
+	if refErr != nil {
+		return s.failCloudAgent(run, &state, cloudAgentSafeToolError(refErr))
+	}
 	// 单步输出上限与思考开关：默认按策略给每一步带上界（不带上界时上游按剩余上下文放行，
 	// 思考模型可以把单步拖到几分钟）；空输出升级重试时改为关思考 + 放大预算。
 	stepThinking := cloudAgentReasoningEnabled(state.Policy.ReasoningMode) && !state.ForceThinkingOff
 	stepOutputTokens := cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget)
 	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinking": stepThinking, "maxOutputTokens": stepOutputTokens}}
+	if len(references) > 0 {
+		input["referenceImages"] = references
+	}
 	tokens, tokenErr := cloudAgentRequestEstimatedTokens(&canonical)
 	if tokenErr != nil {
 		return s.failCloudAgent(run, &state, "模型上下文估算失败，请稍后重试")
@@ -1288,7 +1291,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			modelList, modelListErr = s.cloudAgentModelList(intent)
 		}
 	}
-	// 看图需要读取资源并签发链接，放在事务外完成，避免把网络/文件 IO 塞进写事务。
+	// 看图的资源与能力校验在写事务外完成；真实图片只在模型任务执行时读取。
 	var inspectionResult any
 	var inspectionErr error
 	if allowed && call.Function.Name == "canvas_inspect_image" && state.Request.VisionEnabled {
@@ -1330,7 +1333,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {
 				if inspection, ok := inspectionResult.(cloudAgentImageInspection); ok {
-					state.markCanvasAssetInspected(stringValue(inspection.Receipt["nodeId"]))
+					state.markCanvasImageAttached(stringValue(inspection.Receipt["nodeId"]))
 				}
 			}
 		case call.Function.Name == "skill_read_file", call.Function.Name == "image_annotation_render":

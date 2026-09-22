@@ -17,6 +17,8 @@ type TaskSummary struct {
 	Type                      string                     `json:"type"`
 	Status                    model.TaskStatus           `json:"status"`
 	Stage                     string                     `json:"stage"`
+	MediaStage                string                     `json:"mediaStage,omitempty"`
+	CanRecoverMedia           bool                       `json:"canRecoverMedia,omitempty"`
 	Progress                  int                        `json:"progress"`
 	Prompt                    string                     `json:"prompt"`
 	Operation                 string                     `json:"operation,omitempty"`
@@ -107,6 +109,8 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		Type:                      task.Type,
 		Status:                    task.Status,
 		Stage:                     task.Stage,
+		MediaStage:                task.MediaStage,
+		CanRecoverMedia:           task.MediaRecoveryJSON != "" && task.Status == model.TaskStatusFailed,
 		Progress:                  task.Progress,
 		Prompt:                    truncateRunes(task.Prompt, 500),
 		Operation:                 task.Operation,
@@ -285,6 +289,7 @@ func truncateRunes(value string, limit int) string {
 }
 
 func taskForOutput(task model.Task) *model.Task {
+	task.CanRecoverMedia = task.MediaRecoveryJSON != "" && task.Status == model.TaskStatusFailed
 	task.Diagnostic = taskExecutionDiagnostic(&task)
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
 	// 普通任务接口只暴露前台模型身份；渠道模型和供应线路属于管理员内部信息。

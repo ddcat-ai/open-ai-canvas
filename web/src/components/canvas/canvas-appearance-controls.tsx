@@ -4,6 +4,7 @@ import { CircleDot, Grid2x2, Moon, Paintbrush, RotateCcw, Save, Square, Sun } fr
 
 import {
     canvasAppearanceForTheme,
+    DEFAULT_CANVAS_BACKGROUND_MODE,
     customCanvasAppearanceFromTheme,
     enterCustomCanvasAppearance,
     normalizeHexColor,
@@ -40,6 +41,7 @@ export function CanvasAppearanceControls({
         const next = canvasAppearanceForTheme(target, draft);
         setDraft(next);
         onAppearanceChange(next);
+        onBackgroundModeChange(DEFAULT_CANVAS_BACKGROUND_MODE);
     };
     const selectCustomTheme = () => {
         const next = enterCustomCanvasAppearance(draft, colorTheme);
@@ -71,7 +73,7 @@ export function CanvasAppearanceControls({
             <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">主题模式</div>
             <div className="mt-1 grid grid-cols-3 gap-1 rounded-[var(--dock-item-radius-labeled)] border p-1" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                 <ThemeButton active={draft.mode === "light"} label="浅色" theme={theme} onClick={() => selectFixedTheme("light")}><Sun className="size-3.5" /></ThemeButton>
-                <ThemeButton active={draft.mode === "dark"} label="深色" theme={theme} onClick={() => selectFixedTheme("dark")}><Moon className="size-3.5" /></ThemeButton>
+                <ThemeButton active={draft.mode === "dark"} label="黑色" theme={theme} onClick={() => selectFixedTheme("dark")}><Moon className="size-3.5" /></ThemeButton>
                 <ThemeButton active={draft.mode === "custom"} label="自定义" theme={theme} onClick={selectCustomTheme}><Paintbrush className="size-3.5" /></ThemeButton>
             </div>
 

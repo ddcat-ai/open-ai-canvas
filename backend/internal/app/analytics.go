@@ -246,7 +246,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 				billingOrderIDs = append(billingOrderIDs, log.BillingOrderID)
 			}
 		}
-		if (log.Capability != "image" && log.Capability != "video") || log.TaskID == "" {
+		if (log.Capability != "image" && log.Capability != "video" && log.Capability != "audio") || log.TaskID == "" {
 			continue
 		}
 		if _, exists := seenTaskIDs[log.TaskID]; exists {
@@ -303,6 +303,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 		}
 		if task, exists := taskByID[logs[index].TaskID]; exists && task.UserID == logs[index].UserID {
 			logs[index].TaskStatus = task.Status
+			logs[index].MediaStage = task.MediaStage
 			previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 			if canvasResourceID(previewURL) != "" {
 				logs[index].MediaPreviewURL = "/api/admin/api-logs/" + logs[index].ID + "/media"

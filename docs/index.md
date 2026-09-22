@@ -4,6 +4,8 @@
 
 ## 设计沉淀
 
+- [短信渠道插件与登录注册策略](design/sms-channels-and-auth-policy.md)：阿里云/腾讯云官方 SDK 候选基线、多渠道与模板路由、发送记录、验证码安全、短信和邮箱登录注册组合及分阶段验收（设计提案，未实施）。
+
 - [画布批量生成一致性治理](design/canvas-consistency-repair.mdx)：节点丢失、批次状态与引用解析的根因、已实施边界重构、回归证据和仍待验收的性能/同步场景。
 
 - [画布 Agent 外观与 Live2D](content/docs/backend/canvas-agent-appearance.mdx)：独立助手名称、文案模板、模型包边界、Core 部署和验收要求。

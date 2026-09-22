@@ -9,13 +9,13 @@ function loadCore() {
     if (corePromise) return corePromise;
     corePromise = new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
-        // Deployment-owned runtime only. Uploaded models may never provide executable code.
+        // Bundled same-origin runtime only. Uploaded models may never provide executable code.
         script.src = `${import.meta.env.BASE_URL}live2d/live2dcubismcore.min.js`;
         const timer = window.setTimeout(() => fail(), 15000);
         const fail = () => {
             clearTimeout(timer);
             script.remove();
-            reject(new Error("Live2D 运行库未安装或加载失败，请部署 Cubism Core 后重试"));
+            reject(new Error("Live2D 运行库加载失败，请确认部署产物包含 Cubism Core 且静态资源可访问后重试"));
         };
         script.onload = () => {
             if (!("Live2DCubismCore" in window)) {

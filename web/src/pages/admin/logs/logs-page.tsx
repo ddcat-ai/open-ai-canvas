@@ -10,6 +10,7 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { mediaDeliverySummary } from "@/lib/generation-task-display";
 import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
 import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
@@ -361,12 +362,13 @@ function CallStatus({ log }: { log: ApiCallLog }) {
         <div>
             <div className="mb-1 text-xs font-medium text-foreground/70">{requestKindText(log.requestKind)}</div>
             <AdminStatusBadge {...logStatus(log)} />
+            {log.mediaStage ? <div className="mt-1 text-xs text-foreground/60">{mediaDeliverySummary(log.taskStatus, log.mediaStage)}</div> : null}
             {log.capability === "video" ? <div className="mt-1 text-xs tabular-nums text-foreground/45">已轮询 {log.pollCount || 0} 次</div> : null}
         </div>
     );
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", repair: "结果修复" };
     return labels[value] || "上游请求";
 }

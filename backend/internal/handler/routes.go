@@ -202,6 +202,23 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, task)
 	})
+	r.POST("/tasks/:id/recover-media", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "task-media-recovery:"+user.ID, policy.Request.TaskCreatePerMinute, time.Minute) {
+			return
+		}
+		task, err := svc.RecoverTaskMedia(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, task)
+	})
 	r.POST("/tasks/:id/query-provider", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

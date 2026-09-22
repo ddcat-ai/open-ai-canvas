@@ -46,13 +46,17 @@ type Task struct {
 	LeaseExpiresAt            *time.Time           `json:"-" gorm:"index;index:idx_tasks_claim,priority:2"`
 	InputJSON                 string               `json:"inputJson" gorm:"type:text"`
 	ResultJSON                string               `json:"resultJson" gorm:"type:text"`
-	TextDraft                 string               `json:"textDraft,omitempty" gorm:"type:text"`
-	Error                     string               `json:"error"`
-	Attempts                  int                  `json:"attempts"`
-	StartedAt                 *time.Time           `json:"startedAt"`
-	CompletedAt               *time.Time           `json:"completedAt"`
-	CreatedAt                 time.Time            `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3;index:idx_tasks_user_project_created,priority:3"`
-	UpdatedAt                 time.Time            `json:"updatedAt"`
+	// MediaRecoveryJSON is an encrypted server-only checkpoint, never a public result.
+	MediaRecoveryJSON string     `json:"-" gorm:"type:text"`
+	MediaStage        string     `json:"mediaStage,omitempty" gorm:"size:24"`
+	CanRecoverMedia   bool       `json:"canRecoverMedia,omitempty" gorm:"-"`
+	TextDraft         string     `json:"textDraft,omitempty" gorm:"type:text"`
+	Error             string     `json:"error"`
+	Attempts          int        `json:"attempts"`
+	StartedAt         *time.Time `json:"startedAt"`
+	CompletedAt       *time.Time `json:"completedAt"`
+	CreatedAt         time.Time  `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3;index:idx_tasks_user_project_created,priority:3"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
 // TaskTextDelta 只保存可回放窗口内的文本增量；最终正文和失败草稿分别归并到 Task.ResultJSON 与 Task.TextDraft。

@@ -163,7 +163,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                         }
                     />
                 ) : null}
-                <p className="text-xs text-foreground/60">部署者需自行确认 Live2D 授权并安装 Cubism Core 至 /live2d/live2dcubismcore.min.js。未安装时名称、文案和默认动态球仍可使用。未启用的导入包可在资源管理中清理。</p>
+                <p className="text-xs text-foreground/60">项目已内置 Cubism Core，无需另行安装。使用前仍需确认 Live2D SDK 及模型素材的适用授权。未启用的导入包可在资源管理中清理。</p>
             </div>
         </div>
     );

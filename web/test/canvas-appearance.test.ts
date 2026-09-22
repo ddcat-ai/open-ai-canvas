@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { DEFAULT_CANVAS_COLOR_THEME } from "../src/lib/canvas-theme";
 
 import {
     DEFAULT_CANVAS_BACKGROUND_MODE,
@@ -39,6 +40,29 @@ afterEach(() => {
 describe("canvas custom appearance", () => {
     test("uses point grid as the default for new canvases", () => {
         expect(DEFAULT_CANVAS_BACKGROUND_MODE).toBe("dots");
+        expect(DEFAULT_CANVAS_COLOR_THEME).toBe("dark");
+    });
+
+    test("resolves the black preset to a black background and fully opaque black grid", () => {
+        const appearance = canvasAppearanceForTheme(DEFAULT_CANVAS_COLOR_THEME);
+        expect(resolveCanvasAppearance(appearance, "light")).toEqual({
+            baseTheme: "dark",
+            background: "#000000",
+            grid: "#000000",
+        });
+        expect(resolveCanvasGridColor(appearance, "light", "dots")).toBe("#000000");
+        expect(resolveCanvasAppearance(customCanvasAppearanceFromTheme("dark"), "light")).toEqual({
+            baseTheme: "dark",
+            background: "#000000",
+            grid: "rgba(0,0,0,1)",
+        });
+    });
+
+    test("selecting either fixed theme resets the spatial grid to dots", async () => {
+        const source = await Bun.file(new URL("../src/components/canvas/canvas-appearance-controls.tsx", import.meta.url)).text();
+        const fixedThemeSource = source.slice(source.indexOf("const selectFixedTheme"), source.indexOf("const selectCustomTheme"));
+        expect(fixedThemeSource).toContain("onBackgroundModeChange(DEFAULT_CANVAS_BACKGROUND_MODE)");
+        expect(resolveCanvasGridColor(canvasAppearanceForTheme("light"), "dark", "dots")).toBe("rgba(0,0,0,.80)");
     });
 
     test("inherits the active fixed theme the first time custom mode is selected", () => {
@@ -55,7 +79,7 @@ describe("canvas custom appearance", () => {
         });
 
         const dark = enterCustomCanvasAppearance(canvasAppearanceForTheme("dark"), "dark");
-        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#000000", backgroundBrightness: 0, gridColor: "#AFAFAF", gridOpacity: 80 });
+        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#000000", backgroundBrightness: 0, gridColor: "#000000", gridOpacity: 100 });
     });
 
     test("restores a previous custom profile only under the same base theme", () => {

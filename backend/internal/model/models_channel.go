@@ -105,6 +105,7 @@ type ApiCallLog struct {
 	ChannelName            string        `json:"channelName" gorm:"-"`
 	TaskID                 string        `json:"taskId,omitempty" gorm:"index;size:36"`
 	TaskStatus             TaskStatus    `json:"taskStatus,omitempty" gorm:"-"`
+	MediaStage             string        `json:"mediaStage,omitempty" gorm:"-"`
 	BillingOrderID         string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	BillingStatus          BillingStatus `json:"billingStatus,omitempty" gorm:"-"`
 	BillingAmount          int64         `json:"billingAmountMicrocredits" gorm:"-"`

@@ -185,6 +185,10 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if task.Type == model.TaskTypeTimelineRender {
 		return w.processTimelineRender(task, ctx)
 	}
+	if task.MediaRecoveryJSON != "" {
+		result, recoveryErr := s.resumeTaskMedia(ctx, task)
+		return s.finishTaskMediaRecovery(task, result, recoveryErr)
+	}
 
 	s.markAgentMemoryCompactRunning(*task)
 	task.Stage = "调用生成模型"
@@ -215,6 +219,15 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	default:
 	}
 	result, canvasOps, err := routeResult.result, routeResult.canvasOps, routeResult.err
+	latestMedia, readErr := s.repo.Task(task.ID)
+	if readErr != nil {
+		return readErr
+	}
+	task.MediaRecoveryJSON, task.MediaStage = latestMedia.MediaRecoveryJSON, latestMedia.MediaStage
+	var deliveryFailure *mediaRecoveryError
+	if task.MediaRecoveryJSON != "" || errors.As(err, &deliveryFailure) {
+		return s.finishTaskMediaRecovery(task, result, err)
+	}
 	providerSucceeded := routeResult.providerSucceeded
 	if err == nil {
 		result, err = s.persistGeneratedMediaResult(task.UserID, result)

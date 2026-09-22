@@ -10,6 +10,11 @@ afterEach(() => {
 });
 
 describe("canvas theme ownership", () => {
+    test("defaults to black while allowing an explicit light theme", () => {
+        expect(useCanvasThemeStore.getInitialState().theme).toBe("dark");
+        useCanvasThemeStore.getState().setTheme("light");
+        expect(useCanvasThemeStore.getState().theme).toBe("light");
+    });
     test("editing the canvas theme never mutates the workspace preference", () => {
         useThemeStore.setState({ theme: "light" });
         useCanvasThemeStore.setState({ active: true });

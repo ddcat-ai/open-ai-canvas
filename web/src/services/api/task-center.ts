@@ -27,6 +27,8 @@ export type GenerationTask = {
     status: TaskStatus;
     progress?: number;
     stage?: string;
+    mediaStage?: "download" | "upload" | "local_save" | "register" | "completed" | "checkpoint";
+    canRecoverMedia?: boolean;
     prompt: string;
     operation?: string;
     provider?: string;
@@ -280,6 +282,10 @@ export function queryTaskTextReplay(id: string, after = 0) {
 
 export function retryGenerationTask(id: string) {
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`);
+}
+
+export function recoverGenerationTaskMedia(id: string) {
+    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/recover-media`);
 }
 
 export function cancelGenerationTask(id: string) {

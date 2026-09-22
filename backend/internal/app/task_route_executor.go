@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -50,6 +51,13 @@ func (e *taskRouteExecutor) execute(ctx context.Context, task *model.Task, attem
 		execution.result, execution.canvasOps, execution.err = e.port.processTask(withProviderSubmissionKey(ctx, attempt), *task)
 		if stateErr := e.port.refreshTaskProviderState(task); stateErr != nil {
 			return taskRouteExecutionResult{}, stateErr
+		}
+		var deliveryFailure *mediaRecoveryError
+		if errors.As(execution.err, &deliveryFailure) {
+			// The provider succeeded. Delivery must never enter route failover.
+			e.port.finishTaskRouteAttempt(attempt, task, nil)
+			execution.providerSucceeded = true
+			return execution, nil
 		}
 		e.port.finishTaskRouteAttempt(attempt, task, execution.err)
 		if execution.err == nil {

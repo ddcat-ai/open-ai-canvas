@@ -59,6 +59,7 @@ export type ApiCallLog = {
     channelName: string;
     taskId?: string;
     taskStatus?: TaskStatus;
+    mediaStage?: GenerationTask["mediaStage"];
     billingOrderId?: string;
     billingStatus?: BillingOrder["status"];
     billingAmountMicrocredits: number;
@@ -66,7 +67,7 @@ export type ApiCallLog = {
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
     operation?: string;
-    requestKind: "create" | "poll" | "download" | "repair" | "";
+    requestKind: "create" | "poll" | "download" | "upload" | "local_save" | "register" | "repair" | "";
     billable: boolean;
     apiFormat: string;
     method: string;

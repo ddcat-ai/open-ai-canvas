@@ -1,9 +1,8 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -591,12 +590,13 @@ func TestCloudAgentImageContentPartsKeepsOneCaptionForBatch(t *testing.T) {
 //  2. advanceCloudAgent 里"本批调用都执行完、开始组装 canonical"之前的兜底 flush
 //     （本批最后一个调用不是看图，正常路径不会 flush）。
 func TestCloudAgentVisionBatchKeepsToolResultsContiguousEndToEnd(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
-	defer server.Close()
-	t.Setenv("CANVAS_PUBLIC_BASE_URL", server.URL)
-	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_PUBLIC_BASE_URL", "")
 	s, db, _ := agentMediaFixture(t)
-	// 本地存储的资源才能签出服务器自有的下载链接。
+	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceChatCompletion), "text-test")
+	capability.Text.References.MaxImages = 2
+	if err := db.Model(&model.ChannelModel{}).Where("id = ?", "cm").Update("capability_config_json", mustEncodeModelCapabilityConfig(t, capability)).Error; err != nil {
+		t.Fatal(err)
+	}
 	for _, id := range []string{"ref-one", "ref-two"} {
 		if err := db.Model(&model.Resource{}).Where("id = ?", id).Update("provider", "local").Error; err != nil {
 			t.Fatal(err)
@@ -670,6 +670,23 @@ func TestCloudAgentVisionBatchKeepsToolResultsContiguousEndToEnd(t *testing.T) {
 	final, err := cloudAgentDecode(run)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if final.ActiveTaskID == "" || run.Status == "failed" {
+		t.Fatalf("next model task not queued: %s", run.FailureMessage)
+	}
+	task, err := s.repo.TaskForUser("user", final.ActiveTaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input canvasGenerationInput
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		t.Fatal(err)
+	}
+	if len(input.ReferenceImages) != 2 || validateAgentResourcePlaceholders(input) != nil {
+		t.Fatalf("next task lost approved image resources: %+v", input.ReferenceImages)
+	}
+	if strings.Contains(task.InputJSON, "base64,") || strings.Contains(task.InputJSON, "signature=") {
+		t.Fatal("persisted image bytes or signed URL")
 	}
 	messages := final.Canonical.Messages
 	assertCloudAgentToolCallPairing(t, messages)

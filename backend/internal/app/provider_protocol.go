@@ -789,6 +789,9 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 	if len(references) == 0 {
 		return nil, errors.New("声明式协议已完成但没有返回媒体地址")
 	}
+	if output, handled, err := recoverProtocolMedia(ctx, config, mode, references); handled {
+		return output, err
+	}
 	items := make([]interface{}, 0, len(references))
 	for _, reference := range references {
 		var data []byte

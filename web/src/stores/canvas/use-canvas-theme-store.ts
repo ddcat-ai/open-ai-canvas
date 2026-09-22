@@ -3,17 +3,21 @@ import { persist } from "zustand/middleware";
 import type { ThemeName } from "@/stores/use-theme-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useLayoutEffect } from "react";
+import { DEFAULT_CANVAS_COLOR_THEME } from "@/lib/canvas-theme";
 
 type CanvasThemeStore = { theme: ThemeName; active: boolean; setTheme: (theme: ThemeName) => void };
 
 /** 画布外观是编辑器状态，不能写入用户工作台的全局主题。 */
 export const useCanvasThemeStore = create<CanvasThemeStore>()(
     persist(
-        (set) => ({ theme: "light", active: false, setTheme: (theme) => { if (theme === "light" || theme === "dark") set({ theme }); } }),
+        (set) => ({ theme: DEFAULT_CANVAS_COLOR_THEME, active: false, setTheme: (theme) => { if (theme === "light" || theme === "dark") set({ theme }); } }),
         {
             name: "infinite-canvas:canvas-theme",
             partialize: ({ theme }) => ({ theme }),
-            merge: (persisted, current) => ({ ...current, theme: (persisted as Partial<CanvasThemeStore> | null)?.theme === "dark" ? "dark" : "light" }),
+            merge: (persisted, current) => {
+                const theme = (persisted as Partial<CanvasThemeStore> | null)?.theme;
+                return { ...current, theme: theme === "light" || theme === "dark" ? theme : DEFAULT_CANVAS_COLOR_THEME };
+            },
         },
     ),
 );

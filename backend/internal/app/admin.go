@@ -750,7 +750,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			stdlog.Printf("provider billing request id update failed: billing_order_id=%s provider_request_id=%s error=%v", log.BillingOrderID, log.ProviderRequestID, err)
 		}
 	}
-	if log.TaskID != "" {
+	if log.TaskID != "" && (log.RequestKind == "create" || log.RequestKind == "poll" || log.RequestKind == "cancel") {
 		stage := log.RequestKind
 		var nextPollAt *time.Time
 		if stage == "create" && log.Status == model.ApiCallStatusSucceeded && log.ProviderRequestID != "" {
@@ -798,7 +798,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 }
 
 func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
-	if log.Capability != "video" || (log.RequestKind != "poll" && log.RequestKind != "download") {
+	// Delivery is a separate outcome: a failed download must not rewrite a
+	// successful generation request as failed.
+	if log.Capability != "video" || log.RequestKind != "poll" {
 		return false, nil
 	}
 	if log.TaskID == "" && log.ProviderRequestID == "" {

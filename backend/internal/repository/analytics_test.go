@@ -32,6 +32,9 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 		{ID: "poll", Capability: "video", RequestKind: "poll", CreatedAt: now},
 		{ID: "video-download", Capability: "video", RequestKind: "download", CreatedAt: now},
 		{ID: "image-download", Capability: "image", RequestKind: "download", CreatedAt: now},
+		{ID: "upload", Capability: "image", RequestKind: "upload", CreatedAt: now},
+		{ID: "local-save", Capability: "image", RequestKind: "local_save", CreatedAt: now},
+		{ID: "register", Capability: "image", RequestKind: "register", CreatedAt: now},
 	} {
 		if err := db.Create(&item).Error; err != nil {
 			t.Fatal(err)
@@ -41,7 +44,7 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 	for _, tc := range []struct {
 		kind  string
 		count int
-	}{{"", 1}, {"request", 1}, {"download", 2}, {"all", 4}} {
+	}{{"", 1}, {"request", 1}, {"download", 2}, {"all", 7}} {
 		filter := APICallLogFilter{AnalyticsFilter: AnalyticsFilter{From: now.Add(-time.Hour), To: now.Add(time.Hour)}, RecordType: tc.kind}
 		logs, total, err := repo.QueryAPICallLogs(filter)
 		if err != nil {

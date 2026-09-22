@@ -15,7 +15,14 @@ description: 影策后端核心持久化表与状态边界
 
 ## 结构迁移与版本
 
-当前结构版本为 33。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`；保留旧 state 的身份、PKCE、跳转目标及有效期，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 33，回退需恢复匹配的数据库备份。
+当前结构版本为 34。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 34，回退需恢复匹配的数据库备份。
+
+### 生成成功后的作品保存恢复
+
+- 使用原任务主键、计费订单及现有 worker 租约，不新增执行批次或第二套队列。`media_stage` 为 `download | upload | local_save | register | checkpoint | completed`，表示当前结果的保存阶段，不改变上游生成日志的成功状态。
+- `media_recovery_json` 使用已有 settings-key 加密，记录媒体地址、暂存文件名、资源 ID 和有界重试计数；不保存媒体 base64，不向任务 JSON/摘要返回该字段。数据库与 `.settings-key` 必须一起备份；该字段计入任务存储用量。
+- 下载前写入恢复记录，下载后记录暂存文件，上传后记录资源。通过任务 ID 和输出索引生成稳定的资源上传键、素材 ID；任务成功、结果记录及素材登记在同一数据库事务提交，登记失败则不发布任务成功。
+- 记录保留在终态任务中，成功后清理对应暂存文件；任务的既有保留/删除策略不变。结构迁移只增加列，不扫描日志，不修改历史任务、结果或账单。没有恢复记录的历史失败任务不会自动变为可恢复。
 
 ### 云端 Agent 运行时
 

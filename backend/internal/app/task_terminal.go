@@ -218,7 +218,7 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 	if fetchErr != nil {
 		completionErr = fmt.Errorf("任务成功后读取任务产物失败：%w", fetchErr)
 		_ = c.logger.log(task.UserID, task.ID, "error", "任务成功但读取任务产物失败", fetchErr.Error())
-	} else {
+	} else if completedTask.MediaRecoveryJSON == "" {
 		if registerErr := c.outputs.RegisterTaskOutputFromTask(*completedTask); registerErr != nil {
 			// 任务成功与产物登记分开记账；登记失败保持步骤异常，允许项目页幂等补登记。
 			_ = c.logger.log(task.UserID, task.ID, "error", "任务成功但项目产物登记失败", registerErr.Error())

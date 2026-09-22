@@ -17,14 +17,14 @@ description: 助手名称、文案、模型导入和运行库部署
 
 ## 部署运行库
 
-前端使用固定版本 `pixi.js@6.5.10` 和 `pixi-live2d-display@0.4.0`，按需加载 Cubism 3/4 渲染适配器。Cubism Core 不包含在仓库中，不从第三方 CDN 加载，也不接受模型 ZIP 中的脚本。
+前端使用固定版本 `pixi.js@6.5.10` 和 `pixi-live2d-display@0.4.0`，按需加载 Cubism 3/4 渲染适配器。Cubism Core 已纳入仓库的 `web/public/live2d/live2dcubismcore.min.js`，随前端构建及静态镜像发布，无需部署者另行安装。不从第三方 CDN 加载，也不接受模型 ZIP 中的脚本。Core 保留原始版权与许可声明，不适用本项目的 MIT 许可证；参见同目录 `NOTICE.txt`。
 
-1. 部署者从 Live2D 官方获取具有相应授权、与模型版本兼容的 Cubism SDK for Web。
-2. 将 Core 文件 `live2dcubismcore.min.js` 放到前端 `web/public/live2d/` 后重新构建；静态镜像部署也可将文件只读挂载到 `/usr/share/nginx/html/live2d/live2dcubismcore.min.js`。该文件已被 Git 忽略，不提交到本仓库。
+1. 使用前确认 Live2D SDK 及模型素材的适用授权；内置运行库不代替部署者对使用场景的授权确认。
+2. 拉取包含运行库的提交并重新构建前端，或部署由该提交构建的新镜像。Vite 将 Core 复制到 `dist/live2d/live2dcubismcore.min.js`，Docker 镜像中对应 `/usr/share/nginx/html/live2d/live2dcubismcore.min.js`。旧镜像不会因拉取源码自动更新；已有同路径挂载时应检查是否遮蔽内置文件。
 3. 确认同源 `/live2d/live2dcubismcore.min.js` 返回 JavaScript 而非 SPA 页面。非根路径部署跟随前端构建 BASE_URL。
 4. 后台导入并预览，成功后选择 Live2D，点击顶部「保存修改」。导入本身不启用；失败不更改当前形象。
 
-没有 Core、模型不兼容、网络超时或 WebGL 上下文丢失时，入口回退默认动态球，仍可点击打开 Agent。后台显示错误并提供重试。未提供授权 Core 和真实模型时，不能仅凭构建成功认定播放验收通过。
+部署产物遗漏 Core、模型不兼容、网络超时或 WebGL 上下文丢失时，入口回退默认动态球，仍可点击打开 Agent。后台显示错误并提供重试。未使用具有适用授权的真实模型验证时，不能仅凭构建成功认定播放验收通过。
 
 接入层支持旧版 `drawables.renderOrders` 和新版 Core 的 `Model.getRenderOrders()` 绘制顺序接口，不修改 Core 文件。当前 Cubism 4 渲染适配器不支持新版离屏渲染对象；此类模型会明确报错，而不是忽略对象后显示不完整形象。
 

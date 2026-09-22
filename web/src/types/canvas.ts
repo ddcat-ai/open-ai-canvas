@@ -7,6 +7,7 @@ import type { ArtCritiqueNodeState } from "@/lib/art-critique/contracts";
 import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
 import type { GenerationSpec } from "@/lib/canvas/generation-contract.generated";
+import type { GenerationTask } from "@/services/api/task-center";
 
 export type Position = {
     x: number;
@@ -360,6 +361,8 @@ export type CanvasNodeMetadata = {
     taskStatus?: "queued" | "running" | "succeeded" | "failed" | "cancelled" | string;
     taskProgress?: number;
     taskStage?: string;
+    taskMediaStage?: GenerationTask["mediaStage"];
+    taskCanRecoverMedia?: boolean;
     taskProvider?: string;
     taskStartedAt?: string;
     taskCompletedAt?: string;

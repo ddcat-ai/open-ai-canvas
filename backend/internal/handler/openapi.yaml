@@ -1067,6 +1067,25 @@ paths:
           $ref: "#/components/responses/Envelope"
         "400":
           $ref: "#/components/responses/Error"
+  /tasks/{id}/recover-media:
+    post:
+      tags: [tasks]
+      summary: 按原任务 ID 重试作品保存，不重新生成或创建计费订单
+      description: 仅当前用户有恢复记录的保存失败任务可重入队；已在队列或运行中时幂等返回。每任务最多手动恢复三次，间隔至少一分钟。已取消、已退款或归属项目不可用时拒绝。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /tasks/{id}/text-events:
     get:
       tags: [tasks]
