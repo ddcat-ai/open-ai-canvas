@@ -58,6 +58,22 @@ export type Skill = {
 
 export type SkillCategory = { value: string; label: string };
 
+/**
+ * 场景预设：平台只读目录（GET /skills/presets，随二进制内置）。
+ * 内容是「一个起步场景 → 一组已上架技能 ID」，不含任何技能正文，也不占用用户配额。
+ * 作用域是会话级：选一次只作用于当前会话，不写用户偏好、不改 schema。
+ */
+export type SkillPreset = {
+    presetId: string;
+    name: string;
+    scene: string;
+    skillIds: string[];
+    rationale: string;
+    source: string;
+    evidence: string;
+    upgrade: string;
+};
+
 export type SkillList = {
     skills: Skill[];
     totalCount: number;
@@ -140,6 +156,11 @@ export function listSkills(input: ListSkillsInput = {}) {
 
 export function getSkill(id: string) {
     return http.get<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`);
+}
+
+/** 场景预设目录：公开只读，与 /skills 同级的市场元数据，无需用户上下文。 */
+export function listSkillPresets() {
+    return http.get<{ presets: SkillPreset[] }>("/skills/presets");
 }
 
 export function listAddedSkills() {

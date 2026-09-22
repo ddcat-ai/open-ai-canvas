@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, Check, ChevronRight, CircleDot, Clock3, Download, History, LoaderCircle, MessageSquarePlus, MoveDiagonal2, Settings2, ShieldCheck, Trash2, Sparkles, X } from "lucide-react";
 import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
+import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { agentToolRetry, mergeAgentToolRetry } from "@/lib/canvas/agent-tool-retry";
 import { agentPlanVisible, latestAgentPlanItems, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
 import { nanoid } from "nanoid";
@@ -11,7 +12,6 @@ import { nanoid } from "nanoid";
 import { ModelPicker } from "@/components/model-picker";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { cn } from "@/lib/utils";
-import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -21,7 +21,7 @@ import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentat
 import { agentApprovalMatchesSettings, agentImageApproval } from "@/lib/canvas/agent-media-approval";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-settings";
-import { addSkill, listAddedSkills, listSkills, type Skill, type SkillCategory } from "@/services/api/skills";
+import { addSkill, listAddedSkills, listSkills, listSkillPresets, type Skill, type SkillCategory, type SkillPreset } from "@/services/api/skills";
 import { clearCloudAgentPendingSubmission, cloudAgentConversationTitle, loadCloudAgentConversations, loadCloudAgentPendingSubmission, saveCloudAgentConversations, saveCloudAgentPendingSubmission, type CloudAgentConversation, type CloudAgentPendingSubmission } from "@/services/cloud-agent-conversations";
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -29,7 +29,7 @@ import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
-import { AgentChatComposer, AgentChatMessage, AgentPlanBar, AgentQuestionBar, AgentWorkingMessage, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentPlanBar, AgentQuestionBar, AgentSceneCapsules, AgentWorkingMessage, AGENT_SCENE_DEFS, type AgentSceneBucket, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
@@ -92,6 +92,8 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     const planItems = useMemo(() => latestAgentPlanItems(messages), [messages]);
     const planVisible = agentPlanVisible(planItems);
     const pendingQuestion = useMemo(() => pendingAgentQuestion(messages), [messages]);
+    const [scenePresets, setScenePresets] = useState<SkillPreset[]>([]);
+    const [presetApplyingId, setPresetApplyingId] = useState("");
     const panelLayout = useAgentPanelLayout();
     const lastSeqRef = useRef(0);
     const canvasSyncRef = useRef<ReturnType<typeof createAgentCanvasSync> | null>(null);
@@ -122,6 +124,89 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     useEffect(() => { if (!reasoningSupported && reasoningMode !== "off") setReasoningMode("off"); }, [reasoningSupported, reasoningMode]);
     const installedSkills = useMemo(() => skills.filter((skill) => skill.isAdded), [skills]);
     const enabledSkills = useMemo(() => installedSkills.filter((skill) => selectedSkillIds.includes(skill.skillId)), [installedSkills, selectedSkillIds]);
+    const installedSkillIds = useMemo(() => new Set(installedSkills.map((skill) => skill.skillId)), [installedSkills]);
+
+    const [createdSkills, setCreatedSkills] = useState<Skill[]>([]);
+
+    // 场景预设是随二进制内置的只读目录，一次拉取即可；失败时静默降级为「不显示胶囊」。
+    useEffect(() => {
+        let active = true;
+        listSkillPresets()
+            .then((result) => { if (active) setScenePresets(result.presets || []); })
+            .catch(() => { if (active) setScenePresets([]); });
+        return () => { active = false; };
+    }, []);
+
+    // 用户自建技能也要能出现在推荐里：官方种子库与剧典走「已装」，自建走 scope=created。
+    useEffect(() => {
+        let active = true;
+        listSkills({ scope: "created", pageSize: 50 })
+            .then((result) => { if (active) setCreatedSkills(result.skills || []); })
+            .catch(() => { if (active) setCreatedSkills([]); });
+        return () => { active = false; };
+    }, []);
+
+    // 场景分桶：把「常用 / 推荐配方 / 场景技能」收进同一个维度，一级只显示分类。
+    // 常用度：自建 > 已收藏 > 已装，同级按市场热度降序。
+    const sceneBuckets = useMemo<AgentSceneBucket[]>(() => {
+        const merged = new Map<string, Skill>();
+        for (const skill of [...installedSkills, ...createdSkills]) {
+            if (!merged.has(skill.skillId)) merged.set(skill.skillId, skill);
+        }
+        const rank = (skill: Skill) => (skill.isOwner ? 0 : skill.isLike ? 1 : 2);
+        const frequent = [...merged.values()].sort((a, b) => rank(a) - rank(b) || (b.addedCount || 0) - (a.addedCount || 0));
+        const pool = frequent.slice(0, 24);
+        const sceneOf = (skill: Skill) => skill.tag || "others";
+        return AGENT_SCENE_DEFS.map((definition) => ({
+            key: definition.key,
+            label: definition.label,
+            presets: definition.key === "frequent" ? [] : scenePresets.filter((preset) => preset.scene === definition.key),
+            skills: definition.key === "frequent" ? frequent.slice(0, 8) : pool.filter((skill) => sceneOf(skill) === definition.key),
+        }));
+    }, [installedSkills, createdSkills, scenePresets]);
+
+    const applyScenePreset = useCallback(async (preset: SkillPreset) => {
+        if (running || busy) return;
+        const missing = preset.skillIds.filter((id) => !installedSkillIds.has(id));
+        setPresetApplyingId(preset.presetId);
+        try {
+            // 缺失的技能先补装：装失败不阻断，仍然挂载已经可用的那部分。
+            for (const id of missing) {
+                try { await addSkill(id); } catch { /* 单个失败不影响其余 */ }
+            }
+            setSelectedSkillIds(preset.skillIds);
+            setMessages((current) => appendUniqueMessage(current, {
+                id: `preset-${preset.presetId}-${Date.now()}`,
+                role: "system",
+                text: `已按「${preset.name}」挂上 ${preset.skillIds.length} 个技能${missing.length ? `（新装 ${missing.length} 个）` : ""}。${preset.rationale}`,
+            }));
+        } catch (cause) {
+            setMessages((current) => appendAgentError(current, `preset-${preset.presetId}`, cause, `「${preset.name}」挂载失败`));
+        } finally {
+            setPresetApplyingId("");
+        }
+    }, [busy, installedSkillIds, running]);
+
+    // 单个技能（含用户自建）挂载到本会话；未装的先补装，已挂的不重复追加。
+    const applySingleSkill = useCallback(async (skill: Skill) => {
+        if (running || busy) return;
+        setPresetApplyingId(skill.skillId);
+        try {
+            if (!installedSkillIds.has(skill.skillId)) {
+                try { await addSkill(skill.skillId); } catch { /* 装失败仍继续尝试挂载 */ }
+            }
+            setSelectedSkillIds((current) => (current.includes(skill.skillId) ? current : [...current, skill.skillId]));
+            setMessages((current) => appendUniqueMessage(current, {
+                id: `skill-${skill.skillId}-${Date.now()}`,
+                role: "system",
+                text: `已把「${skill.skillName}」挂到本会话。用哪张卡交给 Agent 按任务检索。`,
+            }));
+        } catch (cause) {
+            setMessages((current) => appendAgentError(current, `skill-${skill.skillId}`, cause, `「${skill.skillName}」挂载失败`));
+        } finally {
+            setPresetApplyingId("");
+        }
+    }, [busy, installedSkillIds, running]);
     const status = run?.status || "idle";
     const statusLabel = status === "waiting_approval" ? "等待审批" : status === "running" || status === "queued" ? "运行中" : status === "completed" ? "已完成" : status === "failed" ? "异常" : status === "cancelled" ? "已停止" : status === "rejected" ? "已拒绝" : "待命";
     const statusColor = status === "failed" ? "#e66b6b" : status === "rejected" || status === "cancelled" ? theme.node.muted : status === "waiting_approval" ? "#d6a24a" : status === "running" || status === "queued" ? "#69c29b" : theme.node.muted;
@@ -732,6 +817,16 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         onReject={() => void submitApproval("reject")}
                                     />
                                     {planVisible ? <AgentPlanBar items={planItems} theme={theme} minimized={planMinimized} onToggle={() => setPlanMinimized((value) => !value)} /> : null}
+                                    {historyHydrated && !messages.length && !run ? (
+                                        <AgentSceneCapsules
+                                            buckets={sceneBuckets}
+                                            installedIds={installedSkillIds}
+                                            theme={theme}
+                                            disabled={busy || running || Boolean(presetApplyingId)}
+                                            onPick={(preset) => void applyScenePreset(preset)}
+                                            onPickSkill={(skill) => void applySingleSkill(skill)}
+                                        />
+                                    ) : null}
                                     {pendingQuestion ? (
                                         <AgentQuestionBar
                                             question={pendingQuestion}
