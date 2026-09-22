@@ -403,6 +403,15 @@ paths:
       responses:
         "200":
           description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
+  /agent/skills/usage:
+    get:
+      tags: [agent]
+      summary: 读取当前用户技能的使用统计（由运行日志聚合，只读）
+      responses:
+        "200":
+          description: 信封 data 含 scannedRuns、searchCalls 与按启用次数降序的 skills；每个技能含 runsEnabled、searchHits、readCalls、readFailures、entryReads、cardReads 与 topCards（最多 5 条最热卡路径）。统计仅覆盖调用方本人最近的运行，且不含任何技能正文
+        "401":
+          description: 未登录
   /agent/profile:
     get:
       tags: [agent]
