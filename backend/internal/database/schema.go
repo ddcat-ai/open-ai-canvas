@@ -29,6 +29,8 @@ func Models() []any {
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},
+		&model.PublicAPIKey{},
+		&model.PublicGenerationRequest{},
 		&model.AuthVerification{},
 		&model.NotificationQuota{},
 		&model.SMSChannel{},

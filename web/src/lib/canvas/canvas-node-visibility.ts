@@ -5,7 +5,15 @@ const intersects = (a: CanvasSpatialBounds, b: CanvasSpatialBounds) => a.right >
 
 /** 预算只能裁减屏外预加载，不能裁掉屏内节点或正在交互的节点。 */
 export function selectCanvasVisibleNodes({
-    index, nodeById, view, enter, retain, hiddenIds, retainedIds, forcedIds, budget,
+    index,
+    nodeById,
+    view,
+    enter,
+    retain,
+    hiddenIds,
+    retainedIds,
+    forcedIds,
+    budget,
 }: {
     index: CanvasSpatialIndex<string>;
     nodeById: ReadonlyMap<string, CanvasNodeData>;

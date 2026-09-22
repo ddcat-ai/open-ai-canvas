@@ -3,6 +3,15 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	PublicAPIKeyView                       = app.PublicAPIKeyView
+	PublicAPIKeyCreated                    = app.PublicAPIKeyCreated
+	PublicAPIKeyCreateRequest              = app.PublicAPIKeyCreateRequest
+	PublicGenerationInput                  = app.PublicGenerationInput
+	PublicGenerationModel                  = app.PublicGenerationModel
+	PublicGenerationMedia                  = app.PublicGenerationMedia
+	PublicGenerationResult                 = app.PublicGenerationResult
+	PublicGenerationView                   = app.PublicGenerationView
+	PublicGenerationError                  = app.PublicGenerationError
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest

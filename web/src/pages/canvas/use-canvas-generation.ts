@@ -385,8 +385,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             let projectTasks: GenerationTask[] = [];
             if (needsDiscovery) {
                 try {
-                    projectTasks = (await listGenerationTasks(100, { projectId: startedProjectId }, undefined, signal))
-                        .filter((task) => task.projectId === startedProjectId && task.type.startsWith("canvas_"));
+                    projectTasks = (await listGenerationTasks(100, { projectId: startedProjectId }, undefined, signal)).filter((task) => task.projectId === startedProjectId && task.type.startsWith("canvas_"));
                 } catch (error) {
                     if (!isCurrentProject() || (error instanceof Error && error.name === "AbortError")) return;
                     // 发现接口失败不影响已有 taskId 的精确恢复，也不是“查无任务”的证据。

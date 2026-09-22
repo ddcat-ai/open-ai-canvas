@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 34
+const CurrentSchemaVersion int64 = 35
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -116,6 +116,9 @@ var schemaMigrations = []migration{
 			}
 		}
 		return nil
+	}},
+	{version: 35, name: "public_api_keys", checksum: "sha256:public-api-keys-v35-20260922", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.PublicAPIKey{}, &model.PublicGenerationRequest{})
 	}},
 }
 

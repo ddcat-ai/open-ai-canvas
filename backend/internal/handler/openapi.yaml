@@ -10,6 +10,9 @@ info:
     （例如 40301 配额、42901 限流）。机器判断请用 `reason`，不要解析 `msg`。
 
     TypeScript 调用面仍是 `web/src/services/api` 的 `http` 模块，不从本规范生成客户端。
+
+    `/api/v1` 公共开发者接口使用 Bearer API Key，成功响应是接口对象本身，不包裹业务信封；错误响应统一为
+    `{ error: { code, type, message } }`。公共生成是异步任务，图片和视频都返回 202，使用查询接口读取终态。
 servers:
   - url: /api
 security:
@@ -23,9 +26,114 @@ tags:
   - name: tasks
   - name: assets
   - name: models
+  - name: public-api
   - name: agent
   - name: admin
 paths:
+  /developer/api-keys:
+    post:
+      tags: [public-api]
+      summary: 创建平台公共 API Key（仅返回一次明文）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, maxLength: 120}
+                modelAllowlist: {type: array, items: {type: string}}
+                expiresAt: {type: string, format: date-time}
+      responses:
+        "200": {description: API Key 创建成功}
+    get:
+      tags: [public-api]
+      summary: 列出当前用户的公共 API Key（仅展示前缀）
+      responses:
+        "200": {description: API Key 列表}
+  /developer/api-keys/{id}:
+    delete:
+      tags: [public-api]
+      summary: 撤销公共 API Key
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 已撤销}
+  /v1/models:
+    get:
+      tags: [public-api]
+      security: [{publicApiKey: []}]
+      summary: 列出 API Key 可使用的图片和视频模型
+      responses:
+        "200":
+          description: OpenAI 风格模型列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicModelList"
+        "401":
+          $ref: "#/components/responses/PublicAPIError"
+  /v1/generations:
+    post:
+      tags: [public-api]
+      security: [{publicApiKey: []}]
+      summary: 创建异步图片或视频生成任务
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, maxLength: 200}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, type, prompt]
+              properties:
+                model: {type: string, description: /v1/models 返回的逻辑模型 code 或 id}
+                type: {type: string, enum: [image, video]}
+                operation: {type: string, enum: [text_to_image, text_to_video]}
+                prompt: {type: string}
+                size: {type: string}
+                aspect_ratio: {type: string}
+                quality: {type: string}
+                resolution: {type: string}
+                duration: {type: integer, minimum: 1, maximum: 60}
+                generate_audio: {type: boolean}
+                watermark: {type: boolean}
+      responses:
+        "202":
+          description: 任务已进入队列；相同幂等键的重放返回同一任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicGeneration"
+        "400": { $ref: "#/components/responses/PublicAPIError" }
+        "401": { $ref: "#/components/responses/PublicAPIError" }
+        "403": { $ref: "#/components/responses/PublicAPIError" }
+        "409": { $ref: "#/components/responses/PublicAPIError" }
+        "429": { $ref: "#/components/responses/PublicAPIError" }
+        "500": { $ref: "#/components/responses/PublicAPIError" }
+        "503": { $ref: "#/components/responses/PublicAPIError" }
+  /v1/generations/{id}:
+    get:
+      tags: [public-api]
+      security: [{publicApiKey: []}]
+      summary: 查询公共图片或视频任务
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 任务状态和平台资源结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicGeneration"
+        "401": { $ref: "#/components/responses/PublicAPIError" }
+        "404": { $ref: "#/components/responses/PublicAPIError" }
+        "500": { $ref: "#/components/responses/PublicAPIError" }
   /admin/settings/appearance/live2d:
     post:
       tags: [admin]
@@ -1214,11 +1322,101 @@ components:
       schema:
         type: string
   securitySchemes:
+    publicApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: sk_live_...
     sessionCookie:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
+  responses:
+    PublicAPIError:
+      description: 公共开发者接口错误
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PublicAPIError"
   schemas:
+    PublicModelList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicGenerationModel"
+    PublicGenerationModel:
+      type: object
+      required: [id, code, name, capability, available]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        name: {type: string}
+        capability: {type: string, enum: [image, video]}
+        available: {type: boolean}
+    PublicGeneration:
+      type: object
+      required: [id, object, type, status, model, created_at]
+      properties:
+        id: {type: string}
+        object: {type: string, enum: [generation]}
+        type: {type: string, enum: [image, video]}
+        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        progress: {type: integer, minimum: 0, maximum: 100}
+        model: {type: string}
+        created_at: {type: string, format: date-time}
+        started_at: {type: string, format: date-time, nullable: true}
+        ended_at: {type: string, format: date-time, nullable: true}
+        result:
+          allOf:
+            - $ref: "#/components/schemas/PublicGenerationResult"
+          nullable: true
+        error:
+          allOf:
+            - $ref: "#/components/schemas/PublicGenerationError"
+          nullable: true
+    PublicGenerationResult:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicGenerationMedia"
+        videos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicGenerationMedia"
+    PublicGenerationMedia:
+      type: object
+      required: [resource_id, url]
+      properties:
+        resource_id: {type: string}
+        url: {type: string, format: uri}
+        mime_type: {type: string}
+        width: {type: integer, minimum: 0}
+        height: {type: integer, minimum: 0}
+        duration_ms: {type: integer, minimum: 0}
+    PublicGenerationError:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, enum: [generation_failed, generation_cancelled]}
+        message: {type: string}
+    PublicAPIError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, type, message]
+          properties:
+            code: {type: integer}
+            type: {type: string}
+            message: {type: string}
     ToolMutation:
       type: object
       required: [type, label, prompt]

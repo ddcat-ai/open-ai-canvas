@@ -5,6 +5,15 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## 平台公共图片与视频 API（MVP）
+
+登录用户可在「设置 → 开发者 API」创建平台 API Key，第三方使用该 Key 异步提交文生图或文生视频任务。平台 Key 只保存哈希并支持撤销；上游渠道 Token 留在服务端，通过逻辑模型路由、任务队列、资源存储和积分账务完成一次调用。公共 API 支持按逻辑模型 `code` 或 `id` 调用，幂等重试直接回放原任务并返回稳定的失败 / 取消错误；接口合同见[HTTP API 合同](../backend/http-api)。
+
+### 相关实现
+
+- `backend/internal/handler/public_api.go`：平台 Key 管理及 `/api/v1` 公共生成接口。
+- `backend/internal/app/public_api.go`：Key 认证、幂等提交、模型投影和结果签名 URL。
+- `web/src/pages/settings/public-api-keys-pane.tsx`：开发者 API Key 设置页。
 ## 画布 Agent 名称、文案与形象
 
 「站点及外观 → 画布配置」提供独立助手名称、入口文字、面板标题和欢迎/输入文案。支持导入授权的 Live2D Cubism 3/4 运行时 ZIP，预览后保存启用、调整高度、切回默认动态球。加载失败保留可点击的默认入口，上传和资源访问具有管理员校验和引用保护。Cubism Core 由部署者提供，真实播放待验收；不含图片自动建模或 AI 自我介绍同步。详见 [画布 Agent 外观与 Live2D](/docs/backend/canvas-agent-appearance)。

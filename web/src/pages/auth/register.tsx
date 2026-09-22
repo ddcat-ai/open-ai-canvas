@@ -36,7 +36,12 @@ export default function RegisterPage() {
     useEffect(() => {
         let cancelled = false;
         void getAuthSettings()
-            .then((value) => { if (!cancelled) { setSettings(value); setMethod(verificationMethods(value, "register")[0] ?? "email"); } })
+            .then((value) => {
+                if (!cancelled) {
+                    setSettings(value);
+                    setMethod(verificationMethods(value, "register")[0] ?? "email");
+                }
+            })
             .catch((error) => !cancelled && message.error(error instanceof Error ? error.message : "读取注册设置失败"));
         return () => {
             cancelled = true;
@@ -111,21 +116,37 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
-            {settings?.firstUser ? <AuthField label="邮箱（可选）">
-                <Input
-                    size="large"
-                    prefix={<Mail className="size-4 text-white/35" />}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="用于登录与安全验证"
-                    autoComplete="email"
-                    required={!settings?.firstUser}
-                    disabled={disabled}
-                />
-            </AuthField> : <>
-                {methods.length > 1 && <Segmented block aria-label="注册验证方式" options={methods.map((value) => ({ value, label: methodLabels[value] }))} value={method} disabled={submitting} onChange={(value) => { setMethod(value as VerificationMethod); setVerification({ ...emptyVerification }); }} />}
-                {methods.length > 0 && <VerificationFields key={method} purpose="register" method={method} value={verification} onChange={setVerification} disabled={disabled || submitting} />}
-            </>}
+            {settings?.firstUser ? (
+                <AuthField label="邮箱（可选）">
+                    <Input
+                        size="large"
+                        prefix={<Mail className="size-4 text-white/35" />}
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="用于登录与安全验证"
+                        autoComplete="email"
+                        required={!settings?.firstUser}
+                        disabled={disabled}
+                    />
+                </AuthField>
+            ) : (
+                <>
+                    {methods.length > 1 && (
+                        <Segmented
+                            block
+                            aria-label="注册验证方式"
+                            options={methods.map((value) => ({ value, label: methodLabels[value] }))}
+                            value={method}
+                            disabled={submitting}
+                            onChange={(value) => {
+                                setMethod(value as VerificationMethod);
+                                setVerification({ ...emptyVerification });
+                            }}
+                        />
+                    )}
+                    {methods.length > 0 && <VerificationFields key={method} purpose="register" method={method} value={verification} onChange={setVerification} disabled={disabled || submitting} />}
+                </>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="密码">

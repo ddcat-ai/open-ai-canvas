@@ -225,6 +225,8 @@ func migrations() []tableMigration {
 		migrateTable[model.UserIdentity]("user_identities"),
 		migrateTable[model.OAuthState]("o_auth_states"),
 		migrateTable[model.EmailVerificationCode]("email_verification_codes"),
+		migrateTable[model.PublicAPIKey]("public_api_keys"),
+		migrateTable[model.PublicGenerationRequest]("public_generation_requests"),
 		migrateTable[model.AuthVerification]("auth_verifications"),
 		migrateTable[model.NotificationQuota]("notification_quota"),
 		migrateTable[model.SMSChannel]("sms_channels"),

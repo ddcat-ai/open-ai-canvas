@@ -7,4 +7,4 @@ export const modelTagColors = [
     { value: "pink", label: "粉色" },
 ] as const;
 
-export type ModelTag = { text: string; color: typeof modelTagColors[number]["value"] };
+export type ModelTag = { text: string; color: (typeof modelTagColors)[number]["value"] };

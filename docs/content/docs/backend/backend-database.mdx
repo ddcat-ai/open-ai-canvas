@@ -15,7 +15,7 @@ description: 影策后端核心持久化表与状态边界
 
 ## 结构迁移与版本
 
-当前结构版本为 34。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 34，回退需恢复匹配的数据库备份。
+当前结构版本为 35。版本 35 `public_api_keys` 新增平台 API Key 与公共生成幂等记录，Key 只保存哈希，生成记录绑定用户、Key、幂等键和内部任务。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 35，回退需恢复匹配的数据库备份。
 
 ### 生成成功后的作品保存恢复
 
@@ -38,7 +38,7 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-历史迁移说明：版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。版本 24 `channel_model_label` 为渠道模型增加 `channel_label`（最长 80 字、非空、默认空字符串），不重写模型标识、上游 ID、价格或能力；版本 25 `video_token_formula_snapshot` 为账单增加视频公式用量及用量来源快照。版本 26 `channel_model_description` 为渠道模型增加 `description`（最长 500 字、非空、默认空字符串），供二级选项展示使用说明，不重写身份或价格。版本 27 `channel_credit_cost` 为价格档添加管理员积分成本，并在账单保存执行线路的成本快照；成本不进入普通用户 API。已发布版本的实现和校验和不得修改。
+历史迁移说明：版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。版本 24 `channel_model_label` 为渠道模型增加 `channel_label`（最长 80 字、非空、默认空字符串），不重写模型标识、上游 ID、价格或能力；版本 25 `video_token_formula_snapshot` 为账单增加视频公式用量及用量来源快照。版本 26 `channel_model_description` 为渠道模型增加 `description`（最长 500 字、非空、默认空字符串），供二级选项展示使用说明，不重写身份或价格。版本 27 `channel_credit_cost` 为价格档添加管理员积分成本，并在账单保存执行线路的成本快照；版本 32 `channel_model_tags` 为渠道模型增加展示标签；版本 33 `oauth_state_accepted_terms` 为 OAuth 状态增加服务协议同意标记；版本 34 `task_media_recovery` 为任务增加媒体保存恢复字段；版本 35 `public_api_keys` 新增平台 API Key 与公共生成幂等记录，Key 只保存哈希，生成记录绑定用户、Key、幂等键和内部任务。已发布版本的实现和校验和不得修改。
 
 渠道模型的文本能力 JSON 还可声明 `contextWindowTokens` 与 `maxOutputTokens`。这两个字段是模型能力合同，不是数据库或 Agent checkpoint 的容量配置；旧记录读取时补 128K / 16K 默认值。运行状态、journal 和 transcript 的持久化边界仍由既有 runtime 表及其 512KB checkpoint 校验负责，本阶段没有通过扩大 checkpoint 绕过模型上下文限制。
 
@@ -121,6 +121,15 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 密码重置在单个数据库事务中条件消费 `password_reset` 验证码、更新 `users.password_hash` 并删除 `auth_sessions`。任一步失败都会回滚，不能出现密码已修改但旧会话仍有效，或验证码已消耗但密码未更新的部分状态。
 
 邮件系统设置还保存电子邮件域名白名单。新配置默认填入 Gmail、163、126、QQ、Outlook、Hotmail、iCloud、Yahoo 和 Foxmail；管理员可按行编辑完整域名。白名单为空时不限制邮箱域名，非空时只有精确匹配的域名可注册。该规则只作用于新用户注册和注册验证码，不限制 SMTP 发件邮箱，也不影响已有账号找回密码。
+
+## 平台公共 API Key 与生成任务
+
+| 表 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `public_api_keys` | 保存平台向用户签发的第三方调用 Key、状态、过期时间和模型授权范围 | 只保存 SHA-256 哈希；明文只在创建响应返回一次；撤销或账号停用后立即拒绝；上游渠道 Token 不写入此表 |
+| `public_generation_requests` | 将公共 API 的幂等键绑定到内部任务 | `(api_key_id, endpoint, idempotency_hash)` 唯一；记录绑定用户和任务，查询时同时校验 Key、用户和任务归属 |
+
+公共任务复用 `tasks`、逻辑模型路由、账单和资源表；删除或撤销平台 Key 不删除历史任务及其资源。
 
 ## 技能包与版本
 
@@ -273,7 +282,7 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 
 ## 画布生成工具
 
-Schema 30 新增 `tools`，31 新增 `tool_favorites`；主分支已有 28（Agent 执行日志）、29（资源租约）编号和 checksum 不变。
+Schema 30 新增 `tools`，31 新增 `tool_favorites`，32 新增 `public_api_keys` 与 `public_generation_requests`；主分支已有 28（Agent 执行日志）、29（资源租约）编号和 checksum 不变。
 
 Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`），通过 JSON serializer 存储有序的 `{ text, color }` 数组。每个模型最多 5 个标签，文字去除首尾空白后为 1–12 字且不重复，颜色为 `purple/blue/green/gold/orange/pink`。标签仅用于展示，不影响价格、能力和路由。后端启动时执行增量迁移，已有模型默认无标签；回退应用可保留此新增列，若人工删除列会丢失标签配置，须先备份。
 

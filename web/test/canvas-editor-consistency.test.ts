@@ -14,8 +14,14 @@ describe("canvas synchronous editor state", () => {
         const snapshots: string[][] = [];
         const write = createCanvasStateWriter(ref, (value) => snapshots.push(value));
         let calls = 0;
-        write((current) => { calls++; return [...current, "first"]; });
-        write((current) => { calls++; return [...current, "second"]; });
+        write((current) => {
+            calls++;
+            return [...current, "first"];
+        });
+        write((current) => {
+            calls++;
+            return [...current, "second"];
+        });
         expect(calls).toBe(2);
         expect(ref.current).toEqual(["first", "second"]);
         expect(snapshots).toEqual([["first"], ["first", "second"]]);
@@ -45,11 +51,13 @@ describe("canvas generation node commits", () => {
         const before = Array.from({ length: 5 }, (_, i) => image(String(i)));
         const ref = { current: [...before, image("new")] };
         const write = createCanvasStateWriter(ref, () => {});
-        await Promise.all(before.map(async (node, i) => {
-            await Promise.resolve();
-            const result: CanvasNodeData = { ...node, metadata: { ...node.metadata, status: i < 2 ? "success" : "error", storageKey: i < 2 ? `resource:${i}` : undefined } };
-            write((current) => commitCanvasGenerationResult(current, node, result, `task-${i}`));
-        }));
+        await Promise.all(
+            before.map(async (node, i) => {
+                await Promise.resolve();
+                const result: CanvasNodeData = { ...node, metadata: { ...node.metadata, status: i < 2 ? "success" : "error", storageKey: i < 2 ? `resource:${i}` : undefined } };
+                write((current) => commitCanvasGenerationResult(current, node, result, `task-${i}`));
+            }),
+        );
         expect(ref.current.filter((node) => node.metadata?.status === "success")).toHaveLength(2);
         expect(ref.current.filter((node) => node.metadata?.status === "error")).toHaveLength(3);
         expect(ref.current.at(-1)?.id).toBe("new");
@@ -79,7 +87,17 @@ describe("canvas viewport selection", () => {
         const nodeById = new Map(nodes.map((node) => [node.id, node]));
         const view = { left: 0, top: 0, right: 100, bottom: 100 };
         const retain = { ...view, left: -200, right: 200 };
-        const selected = selectCanvasVisibleNodes({ index, nodeById, view, enter: retain, retain, hiddenIds: new Set(nodes.filter((node) => node.id.startsWith("hidden")).map((node) => node.id)), retainedIds: new Set(), forcedIds: new Set(["forced"]), budget: 280 });
+        const selected = selectCanvasVisibleNodes({
+            index,
+            nodeById,
+            view,
+            enter: retain,
+            retain,
+            hiddenIds: new Set(nodes.filter((node) => node.id.startsWith("hidden")).map((node) => node.id)),
+            retainedIds: new Set(),
+            forcedIds: new Set(["forced"]),
+            budget: 280,
+        });
         expect(selected).toHaveLength(1001);
         expect(selected.filter((node) => node.id.startsWith("visible"))).toHaveLength(1000);
         expect(selected.at(-1)?.id).toBe("forced");

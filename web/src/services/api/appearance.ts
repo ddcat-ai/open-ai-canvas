@@ -122,7 +122,8 @@ export async function uploadAppearanceAsset(slot: AppearanceAssetSlot, file: Fil
 }
 
 export async function uploadLive2D(file: File) {
-    const body = new FormData(); body.append("file", file);
+    const body = new FormData();
+    body.append("file", file);
     const result = await http.post<{ model: { resourceId: string; entry: string } }>("/admin/settings/appearance/live2d", body);
     return result.model;
 }

@@ -4,12 +4,22 @@ type RetryMessage = { id: string; role: string; title?: string; text: string; de
 export type AgentToolRetryAttempt = { id: string; text: string; detail: unknown };
 
 function record(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 export function agentToolRetry(detail: unknown): AgentToolRetry | undefined {
     const retry = record(record(detail).retry);
-    if (typeof retry.groupId !== "string" || !retry.groupId || typeof retry.attempt !== "number" || !Number.isInteger(retry.attempt) || retry.attempt < 1 || typeof retry.maxAttempts !== "number" || !Number.isInteger(retry.maxAttempts) || retry.maxAttempts < retry.attempt) return;
+    if (
+        typeof retry.groupId !== "string" ||
+        !retry.groupId ||
+        typeof retry.attempt !== "number" ||
+        !Number.isInteger(retry.attempt) ||
+        retry.attempt < 1 ||
+        typeof retry.maxAttempts !== "number" ||
+        !Number.isInteger(retry.maxAttempts) ||
+        retry.maxAttempts < retry.attempt
+    )
+        return;
     if (retry.status !== "retrying" && retry.status !== "recovered" && retry.status !== "exhausted") return;
     return retry as AgentToolRetry;
 }
@@ -31,5 +41,5 @@ export function mergeAgentToolRetry<T extends RetryMessage>(messages: T[], messa
     const latest = previousRetry && (previousIsFinal || previousRetry.attempt > retry.attempt) ? previousRetry : retry;
     const group = { ...message, id, detail: { ...record(message.detail), retry: latest, retryAttempts: attempts } };
     if (index < 0) return [...messages, group];
-    return messages.map((item, itemIndex) => itemIndex === index ? group : item);
+    return messages.map((item, itemIndex) => (itemIndex === index ? group : item));
 }

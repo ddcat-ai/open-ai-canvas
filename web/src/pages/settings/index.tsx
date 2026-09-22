@@ -1,7 +1,7 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, Cloud, MessageSquareText, RadioTower, SlidersHorizontal, Workflow } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowLeft, Boxes, Brain, Bug, Cloud, KeyRound, MessageSquareText, RadioTower, SlidersHorizontal, Workflow } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
@@ -16,11 +16,13 @@ import AgentMemoryPane from "./agent-memory-pane";
 import { RunningHubSettingsPane } from "./runninghub-settings-pane";
 import { RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
+import { PublicAPIKeysPane } from "./public-api-keys-pane";
 
-type ConfigSectionKey = "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
+type ConfigSectionKey = "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "developer";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "channels", label: "个人渠道", description: "模型服务与个人工作流", icon: <RadioTower className="size-4" /> },
+    { key: "developer", label: "开发者 API", description: "管理第三方调用 Key", icon: <KeyRound className="size-4" /> },
     { key: "runninghub", label: "RunningHub 工作流", description: "个人渠道的云端工作流配置", icon: <Workflow className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布生成默认值", icon: <SlidersHorizontal className="size-4" /> },
@@ -103,6 +105,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
+        developer: <SettingsPane><PublicAPIKeysPane /></SettingsPane>,
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">

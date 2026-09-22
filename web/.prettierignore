@@ -12,3 +12,4 @@ bun.lock
 *.gif
 *.webp
 *.svg
+public/live2d/live2dcubismcore.min.js

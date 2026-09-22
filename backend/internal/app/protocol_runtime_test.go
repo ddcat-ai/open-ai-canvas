@@ -32,7 +32,7 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundledCount := len(bundledWorkflowPluginManifests())
+	bundledCount := len(bundledWorkflowPluginManifests()) + len(bundledSMSPluginManifests())
 	packageIDs := make(map[string]bool, len(packages))
 	for _, packagePath := range packages {
 		data, err := os.ReadFile(packagePath)

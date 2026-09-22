@@ -62,8 +62,7 @@ test("tool references with the same numeric id remain distinct across types", ()
         { type: "style", toolId: 7, label: "水墨" },
         { type: "motion", toolId: 7, label: "推镜" },
     ]);
-    expect(buildToolMentionReference(7, "水墨", "style", "Palette").id)
-        .not.toBe(buildToolMentionReference(7, "推镜", "motion", "Camera").id);
+    expect(buildToolMentionReference(7, "水墨", "style", "Palette").id).not.toBe(buildToolMentionReference(7, "推镜", "motion", "Camera").id);
 });
 
 test("nine grid creates idle child using stable source token, not an auto generation", () => {

@@ -124,6 +124,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		task.GenerationID = req.admission.GenerationID
 		task.ApprovalID = req.admission.ApprovalID
 	}
+	if submissionID := strings.TrimSpace(req.CreationSubmissionID); submissionID != "" {
+		task.CreationSubmissionID = &submissionID
+	}
 	if routed != nil {
 		task.LogicalModelID = routed.LogicalModel.ID
 		task.LogicalModelRevisionID = routed.Revision.ID
