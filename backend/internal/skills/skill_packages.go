@@ -118,7 +118,9 @@ func (s *Service) EnsureSkillPackages() error {
 	}
 	for index := range skills {
 		skill := &skills[index]
-		archive, err := archiveFromMarkdown([]byte(skill.Instruction), skill.Name, skill.Description)
+		// Legacy fields are only fallbacks for package metadata. Bound them at
+		// this migration boundary without rewriting source fields or relaxing uploads.
+		archive, err := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
 		if err != nil {
 			return fmt.Errorf("迁移技能 %s 文件包失败: %w", skill.ID, err)
 		}

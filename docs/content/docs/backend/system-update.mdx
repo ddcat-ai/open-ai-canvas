@@ -14,7 +14,7 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 ## 安全更新顺序
 
 1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。`sha-*` 这类非正式镜像标签一律视为低于正式 Release，避免把 `vsha-5509b17` 字典序比较成比 `v1.5.0` 更新。
-2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。当前标签不是 `vX.Y.Z` 时，健康检查只确认服务就绪，不要求构建号和镜像标签逐字相同。
+2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。当前标签不是 `vX.Y.Z` 或 `vX.Y.Z.N` 时，健康检查只确认服务就绪，不要求构建号和镜像标签逐字相同。
 3. 创建 `backup-YYYYMMDD-HHMMSS.zip.partial`，其中包含 PostgreSQL custom-format dump、后端数据目录 tar 和元数据；写入完成后 `fsync`、原子改名，并复核 ZIP 结构和 SHA-256。
 4. 拉取目标 backend/web 镜像并要求存在仓库 `sha256` 摘要。任何失败都在停服前中止。
 5. 停止 web/backend，等待 Backend 的 SIGTERM drain 完成；PostgreSQL 和 Redis 保持运行。

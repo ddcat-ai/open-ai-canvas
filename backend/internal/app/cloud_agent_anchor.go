@@ -25,12 +25,27 @@ type cloudAgentReferenceAnchor struct {
 	ReferenceReady           bool     `json:"referenceReady"`
 	VisualIdentity           string   `json:"visualIdentity"`
 	RequiresVisualInspection bool     `json:"requiresVisualInspection"`
-	Width                    any      `json:"width,omitempty"`
-	Height                   any      `json:"height,omitempty"`
+	// VisualNote 是模型看过这张图之后自己写下的一句观察。锚点会跨轮继承，
+	// 因此下一轮不必重复看图也能拿到文字观察（推理内容不会回灌上下文）。
+	VisualNote string `json:"visualNote,omitempty"`
+	Width      any    `json:"width,omitempty"`
+	Height     any    `json:"height,omitempty"`
 }
 
-func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID string, canvas *model.CanvasProject, prompt string) (cloudAgentCreativeAnchor, error) {
+// cloudAgentCreativeAnchorForCanvas 按当前画布重建候选素材锚点。
+// inherited 是上一轮的锚点：只继承"视觉事实"——已经看过的画面和模型自己写下的观察；
+// 用户目标、权限和旧计划都不继承（用户消息才是本轮目标，候选素材按当前画布重建，
+// 避免把过期素材带进新轮）。
+func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID string, canvas *model.CanvasProject, prompt string, inherited *cloudAgentCreativeAnchor) (cloudAgentCreativeAnchor, error) {
 	anchor := cloudAgentCreativeAnchor{Version: 2, UserPrompt: prompt}
+	inspected := map[string]cloudAgentReferenceAnchor{}
+	if inherited != nil {
+		for _, asset := range inherited.ReferenceAssets {
+			if asset.VisualIdentity == "inspected" {
+				inspected[asset.NodeID] = asset
+			}
+		}
+	}
 
 	doc, err := creationDocument(canvas.PayloadJSON)
 	if err != nil {
@@ -83,6 +98,12 @@ func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID strin
 				item.ReferenceReady = true
 				item.Width, item.Height = ref["width"], ref["height"]
 			}
+		}
+		if viewed, ok := inspected[item.NodeID]; ok {
+			// 这一轮之前已经看过画面：直接继承模型自己写下的观察，不重复看图。
+			item.VisualIdentity = "inspected"
+			item.RequiresVisualInspection = false
+			item.VisualNote = viewed.VisualNote
 		}
 		anchor.ReferenceNodeIDs = append(anchor.ReferenceNodeIDs, item.NodeID)
 		anchor.ReferenceAssets = append(anchor.ReferenceAssets, item)

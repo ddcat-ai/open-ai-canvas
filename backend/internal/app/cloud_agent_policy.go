@@ -84,6 +84,19 @@ func cloudAgentCapabilityGuide() string {
 	return b.String()
 }
 
+// cloudAgentSkillManifestDescription bounds the system prompt: the description
+// is author-supplied public metadata, so it is trimmed and capped before it
+// enters the compiled policy.
+func cloudAgentSkillManifestDescription(description string) string {
+	const maxRunes = 500
+	trimmed := strings.TrimSpace(description)
+	if utf8.RuneCountInString(trimmed) <= maxRunes {
+		return trimmed
+	}
+	runes := []rune(trimmed)
+	return strings.TrimSpace(string(runes[:maxRunes])) + "…"
+}
+
 func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
 	system, media, err := prompts.LoadAgentPolicies()
 	if err != nil {
@@ -121,7 +134,7 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 	}
 	manifests := make([]map[string]any, 0, len(skills))
 	for _, skill := range skills {
-		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "version": skill.Version, "hash": skill.Hash, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
+		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "description": cloudAgentSkillManifestDescription(skill.Description), "version": skill.Version, "hash": skill.Hash, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
 	}
 	context["skills"] = manifests
 	layers := make([]map[string]any, 0, len(profile.Layers))

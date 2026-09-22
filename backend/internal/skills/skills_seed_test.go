@@ -35,6 +35,8 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 	if err := json.Unmarshal(builtinSkillsJSON, &definitions); err != nil {
 		t.Fatal(err)
 	}
+	const communitySkillID = "16000000000081"
+	communitySkillName := ""
 	community := 0
 	for _, def := range definitions {
 		if def.OwnerUID == "" || def.OwnerUID != def.EffectiveUser.UID {
@@ -48,9 +50,15 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 		if def.OwnerUID == "community-itswyatt-k" {
 			community++
 		}
+		if def.SkillID == communitySkillID {
+			communitySkillName = def.SkillName
+		}
 	}
-	if community != 72 {
-		t.Fatalf("community skills = %d, want 72", community)
+	if community != 35 {
+		t.Fatalf("community skills = %d, want 35", community)
+	}
+	if communitySkillName == "" {
+		t.Fatalf("community seed skill %s is missing", communitySkillID)
 	}
 	if err := svc.EnsureBuiltinSkills(); err != nil {
 		t.Fatal(err)
@@ -58,7 +66,7 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 	if err := svc.EnsureSkillPackages(); err != nil {
 		t.Fatal(err)
 	}
-	state := model.UserSkillState{ID: "test-state", UserID: "test-user", SkillID: "16000000000001", Added: true, Liked: true}
+	state := model.UserSkillState{ID: "test-state", UserID: "test-user", SkillID: communitySkillID, Added: true, Liked: true}
 	if err := db.Create(&state).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +91,7 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 		t.Fatalf("user state lost: %#v", saved)
 	}
 	var skill model.Skill
-	if err := db.First(&skill, "id = ?", state.SkillID).Error; err != nil {
+	if err := db.First(&skill, "id = ?", communitySkillID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if skill.OwnerID != "community-itswyatt-k" || skill.CreatedAt.Year() != 2026 {
@@ -110,11 +118,11 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 			t.Fatalf("skill %s package instruction was changed", item.ID)
 		}
 	}
-	list, err := svc.Skills("test-user", SkillListRequest{Scope: "public", Search: "freestyle-template-match"})
+	list, err := svc.Skills("test-user", SkillListRequest{Scope: "public", Search: communitySkillName})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list.TotalCount != 1 || len(list.Skills) != 1 || list.Skills[0].SkillID != "16000000000003" {
+	if list.TotalCount != 1 || len(list.Skills) != 1 || list.Skills[0].SkillID != communitySkillID {
 		t.Fatalf("community skill not visible in public search: %#v", list)
 	}
 }

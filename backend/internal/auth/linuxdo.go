@@ -140,7 +140,7 @@ func (s *Service) LinuxDOEnabled() bool {
 	return err == nil && setting.Enabled
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return "", err
@@ -161,7 +161,7 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
 	if err := s.repo.CreateOAuthState(&model.OAuthState{
 		ID: kernel.NewID(), Provider: "linuxdo", StateHash: HashToken(state), CodeVerifier: verifier,
-		NextPath: safeOAuthNext(nextPath), ExpiresAt: time.Now().Add(10 * time.Minute),
+		NextPath: safeOAuthNext(nextPath), AcceptedTerms: acceptedTerms, ExpiresAt: time.Now().Add(10 * time.Minute),
 	}); err != nil {
 		return "", err
 	}
@@ -233,6 +233,9 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 		}
 		if !registrationEnabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
+		}
+		if !state.AcceptedTerms {
+			return nil, kernel.BadAuthRequest("请先同意影策服务协议")
 		}
 		user, identity, err = s.createLinuxDOUser(subject, providerUsername, displayName, profileString(profile, setting.EmailField), avatarURL)
 		if err != nil {

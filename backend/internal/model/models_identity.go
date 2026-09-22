@@ -36,14 +36,15 @@ type UserIdentity struct {
 }
 
 type OAuthState struct {
-	ID           string     `json:"id" gorm:"primaryKey;size:36"`
-	Provider     string     `json:"provider" gorm:"index;size:32"`
-	StateHash    string     `json:"-" gorm:"uniqueIndex;size:64"`
-	CodeVerifier string     `json:"-" gorm:"size:160"`
-	NextPath     string     `json:"nextPath"`
-	ExpiresAt    time.Time  `json:"expiresAt" gorm:"index"`
-	UsedAt       *time.Time `json:"usedAt" gorm:"index"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	ID            string     `json:"id" gorm:"primaryKey;size:36"`
+	Provider      string     `json:"provider" gorm:"index;size:32"`
+	StateHash     string     `json:"-" gorm:"uniqueIndex;size:64"`
+	CodeVerifier  string     `json:"-" gorm:"size:160"`
+	NextPath      string     `json:"nextPath"`
+	AcceptedTerms bool       `json:"acceptedTerms" gorm:"not null;default:false"`
+	ExpiresAt     time.Time  `json:"expiresAt" gorm:"index"`
+	UsedAt        *time.Time `json:"usedAt" gorm:"index"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 type EmailVerificationCode struct {

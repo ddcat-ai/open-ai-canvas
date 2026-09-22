@@ -26,6 +26,33 @@ const (
 	maxRuntimeTimeoutMinutes       = 9_999
 )
 
+// 画布 Agent 单步的输出上限与执行时限。上限是"每次模型调用"的边界（思考 + 正文 + 工具参数），
+// 时限是"这一次调用最多等多久"的墙钟；两者一起决定单步最坏耗时。0 在两个口径下都是"该边界不生效"：
+// 上限为 0 表示不限制输出（只由执行时限兜底），时限为 0 表示沿用文本任务超时。
+const (
+	MinRuntimeAgentStepOutputTokens     = 256
+	MaxRuntimeAgentStepOutputTokens     = 131_072
+	DefaultRuntimeAgentStepOutputTokens = 16_384
+	MinRuntimeAgentStepTimeoutSeconds   = 30
+	MaxRuntimeAgentStepTimeoutSeconds   = 3_600
+	DefaultRuntimeAgentStepTimeout      = 0
+)
+
+// agentStepMaxOutputTokensDefault 读取部署级覆盖并按同一套范围夹取；环境变量无法表达"不限制"（0），
+// 那个档位只在管理端配置里设置。
+func agentStepMaxOutputTokensDefault() int {
+	value := envInt("CANVAS_AGENT_STEP_MAX_OUTPUT_TOKENS", DefaultRuntimeAgentStepOutputTokens)
+	return min(max(value, MinRuntimeAgentStepOutputTokens), MaxRuntimeAgentStepOutputTokens)
+}
+
+func agentStepTimeoutSecondsDefault() int {
+	value := envInt("CANVAS_AGENT_STEP_TIMEOUT_SECONDS", DefaultRuntimeAgentStepTimeout)
+	if value <= 0 {
+		return DefaultRuntimeAgentStepTimeout
+	}
+	return min(max(value, MinRuntimeAgentStepTimeoutSeconds), MaxRuntimeAgentStepTimeoutSeconds)
+}
+
 type RuntimeResourcePolicy struct {
 	ResourceUploadMB        int64 `json:"resourceUploadMB"`
 	GeneratedFileMB         int64 `json:"generatedFileMB"`
@@ -50,6 +77,11 @@ type RuntimeTaskPolicy struct {
 	VideoTimeoutMinutes      int `json:"videoTimeoutMinutes"`
 	StoryboardTimeoutMinutes int `json:"storyboardTimeoutMinutes"`
 	DefaultTimeoutMinutes    int `json:"defaultTimeoutMinutes"`
+	// AgentStepMaxOutputTokens 是画布 Agent 单步模型调用的输出上限（思考 + 正文 + 工具调用参数）。
+	// 0 表示不限制输出，此时单步最坏耗时只由 AgentStepTimeoutSeconds 兜底。
+	AgentStepMaxOutputTokens int `json:"agentStepMaxOutputTokens"`
+	// AgentStepTimeoutSeconds 是画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。
+	AgentStepTimeoutSeconds int `json:"agentStepTimeoutSeconds"`
 }
 
 type RuntimeRequestPolicy struct {
@@ -123,6 +155,8 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			VideoTimeoutMinutes:      60,
 			StoryboardTimeoutMinutes: 20,
 			DefaultTimeoutMinutes:    10,
+			AgentStepMaxOutputTokens: agentStepMaxOutputTokensDefault(),
+			AgentStepTimeoutSeconds:  agentStepTimeoutSecondsDefault(),
 		},
 		Request: RuntimeRequestPolicy{
 			TaskCreatePerMinute:        30,
@@ -162,6 +196,7 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		ImageTimeoutMinutes: maxRuntimeTimeoutMinutes, TextTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
+		AgentStepMaxOutputTokens: MaxRuntimeAgentStepOutputTokens, AgentStepTimeoutSeconds: MaxRuntimeAgentStepTimeoutSeconds,
 	}
 	value.Request = RuntimeRequestPolicy{
 		TaskCreatePerMinute:     maxRuntimeRate,
@@ -344,6 +379,12 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 		if item < 1 || item > maxRuntimeTimeoutMinutes {
 			return kernel.BadAuthRequest(fmt.Sprintf("%s必须是 1-%d 分钟的整数", label, maxRuntimeTimeoutMinutes))
 		}
+	}
+	if task.AgentStepMaxOutputTokens != 0 && (task.AgentStepMaxOutputTokens < MinRuntimeAgentStepOutputTokens || task.AgentStepMaxOutputTokens > MaxRuntimeAgentStepOutputTokens) {
+		return kernel.BadAuthRequest(fmt.Sprintf("Agent 单步输出上限必须是 0 或 %d-%d 的整数 (0 表示不限制)", MinRuntimeAgentStepOutputTokens, MaxRuntimeAgentStepOutputTokens))
+	}
+	if task.AgentStepTimeoutSeconds != 0 && (task.AgentStepTimeoutSeconds < MinRuntimeAgentStepTimeoutSeconds || task.AgentStepTimeoutSeconds > MaxRuntimeAgentStepTimeoutSeconds) {
+		return kernel.BadAuthRequest(fmt.Sprintf("Agent 单步超时必须是 0 或 %d-%d 秒的整数 (0 表示沿用文本任务超时)", MinRuntimeAgentStepTimeoutSeconds, MaxRuntimeAgentStepTimeoutSeconds))
 	}
 	request := value.Request
 	for label, item := range map[string]int{

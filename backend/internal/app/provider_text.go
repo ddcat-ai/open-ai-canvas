@@ -58,6 +58,7 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 	}
 	body["model"] = input.Config.Model
 	applyTextThinking(body, input, protocol)
+	applyAgentOutputLimit(body, agentStepOutputLimit(input), protocol)
 	normalizeAgentToolChoice(body, input, protocol)
 	result, err := postAgentRequest(ctx, input, path, body, protocol)
 	if protocol == "chat-completion" && isAgentToolChoiceCompatibilityError(err) {
@@ -90,6 +91,39 @@ func postAgentRequest(ctx context.Context, input canvasGenerationInput, path str
 	return parseAgentToolPayload(payload, protocol)
 }
 
+// agentStepOutputLimit 取本次 Agent 调用的输出上限。
+//
+// 两个来源语义相同但通道不同：textOptions.maxOutputTokens 是任务信封里下发的策略值
+// （画布 Agent 每步按运行时策略给，persist 在任务输入里，重启后仍在）；input.MaxOutputTokens
+// 是进程内直传的旧入口（渠道模型能力声明）。都为 0 时不写上限字段，交给上游按剩余上下文放行。
+// 都非零时取较小值：策略上限不该超过模型自己声明的物理上限。
+func agentStepOutputLimit(input canvasGenerationInput) int {
+	limits := []int{input.TextOptions.MaxOutputTokens, input.MaxOutputTokens}
+	limit := 0
+	for _, candidate := range limits {
+		if candidate <= 0 {
+			continue
+		}
+		if limit == 0 || candidate < limit {
+			limit = candidate
+		}
+	}
+	return limit
+}
+
+// applyAgentOutputLimit 按协议写入输出上限字段名：Claude 与 Chat Completions 用 max_tokens，
+// Responses 用 max_output_tokens。
+func applyAgentOutputLimit(body map[string]interface{}, limit int, protocol string) {
+	if limit <= 0 {
+		return
+	}
+	field := "max_tokens"
+	if protocol == "responses" {
+		field = "max_output_tokens"
+	}
+	applyTextOutputLimit(body, limit, field)
+}
+
 func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, adapter protocol.AgentAdapter) (map[string]interface{}, error) {
 	wire := input.Config.InterfaceType
 	if wire == string(model.ChannelInterfaceOpenAIResponse) {
@@ -118,6 +152,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 			return nil, errors.New("声明式 Agent 请求体必须是 JSON 对象")
 		}
 		applyTextThinking(body, input, wire)
+		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
 		normalizeAgentToolChoice(body, input, wire)
 		spec.Body = body
 		if input.StreamText {

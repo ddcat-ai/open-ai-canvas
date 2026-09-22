@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { agentToolCategory, agentToolCategoryLabel, agentToolStatus, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
+import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolStatus, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
 
 describe("Agent tool presentation", () => {
     it("separates read, create, and canvas operation activity", () => {
@@ -41,5 +41,17 @@ describe("Agent tool presentation", () => {
         expect(friendlyAgentToolSummary("skills_load", "已从用户技能库固定加载 3 个技能")).toBe("已加载 3 个 Skills 技能");
         expect(agentToolStatus("canvas_get_state", "失败")).toBe("failed");
         expect(friendlyAgentToolSummary("canvas_get_state", "无法访问", { eventType: "tool_failed" })).toBe("获取画布内容失败");
+    });
+});
+
+describe("Agent tool error classification", () => {
+    it("maps backend errorClass to a human label, with a local fallback", () => {
+        expect(agentToolErrorClassLabel({ errorClass: "schema_error" })).toBe("参数不符合契约");
+        expect(agentToolErrorClassLabel({ result: { errorClass: "state_conflict" } })).toBe("画布状态已变化");
+        expect(agentToolErrorClassLabel({ errorClass: "permission_violation", errorClassLabel: "超出本轮权限" })).toBe("超出本轮权限");
+        expect(agentToolErrorClassLabel({ result: { errorClass: "upstream_failure" } })).toBe("上游故障");
+        expect(agentToolErrorClassLabel({ errorClass: "invalid_model_output" })).toBe("模型输出问题");
+        expect(agentToolErrorClassLabel({ errorClass: "unknown_new_class" })).toBe("工具执行失败");
+        expect(agentToolErrorClassLabel({ text: "没有归类" })).toBeUndefined();
     });
 });

@@ -51,5 +51,8 @@ test("sorting exposes a simple settings entry and moves items without changing t
     expect(moveOrderItem(rows, "c", 0).map((item) => item.id)).toEqual(["c", "a", "b"]);
     expect(moveOrderItem(rows, "a", 2).map((item) => item.id)).toEqual(["b", "c", "a"]);
     expect(moveOrderItem(rows, "a", -1)).toBe(rows);
+    expect(moveOrderItem(rows, "a", 1.5)).toBe(rows);
+    expect(moveOrderItem(rows, "a", Number.NaN)).toBe(rows);
+    expect(moveOrderItem(rows, "a", rows.length)).toBe(rows);
     expect(rows.map((item) => item.id)).toEqual(["a", "b", "c"]);
 });

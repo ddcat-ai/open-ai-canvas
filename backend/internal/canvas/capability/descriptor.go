@@ -2,6 +2,7 @@ package capability
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"unicode"
@@ -23,10 +24,12 @@ type ConnectionPolicy struct {
 }
 
 type PatchField struct {
-	Path        string
-	Kind        string
-	Label       string
-	Order       int
+	Path  string
+	Kind  string
+	Label string
+	Order int
+	// Limit > 0 时表示数值字段的绝对值上限（坐标用），避免模型写入离谱的几何值。
+	Limit       float64
 	Description string
 	MaxRunes    int
 }
@@ -107,8 +110,15 @@ func (d Descriptor) ValidatePatch(patch map[string]any) error {
 				return fmt.Errorf("%s 字段 %s 超出长度限制", d.Label, key)
 			}
 		case "number":
-			if _, ok := value.(float64); !ok {
+			number, ok := value.(float64)
+			if !ok {
 				return fmt.Errorf("%s 字段 %s 必须是数字", d.Label, key)
+			}
+			if math.IsNaN(number) || math.IsInf(number, 0) {
+				return fmt.Errorf("%s 字段 %s 不是有效数字", d.Label, key)
+			}
+			if field.Limit > 0 && math.Abs(number) > field.Limit {
+				return fmt.Errorf("%s 字段 %s 超出允许范围（±%g）", d.Label, key, field.Limit)
 			}
 		case "boolean":
 			if _, ok := value.(bool); !ok {

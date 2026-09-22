@@ -995,7 +995,7 @@ func (s *Service) enrichAPICallLogFailureSummary(log *model.ApiCallLog, response
 		Body:       string(responseBody),
 	})
 	detail := strings.TrimSpace(log.Error)
-	if detail == "" || detail == userMessage {
+	if detail == "" || detail == userMessage || strings.Contains(userMessage, "；上游："+detail) {
 		log.Error = userMessage
 		return
 	}

@@ -64,6 +64,20 @@ describe("Agent approval presentation", () => {
         expect(JSON.stringify(view)).not.toContain("private");
     });
 
+    it("keeps an arrange_nodes preview item instead of dropping it as an unknown operation", () => {
+        // 未知 operation 会被 operation() 判成 null 并丢掉整条预览项，因此新增的
+        // arrange_nodes 必须同时进联合类型与判据，否则审批卡只剩"生成"这个兜底标签。
+        const view = agentApprovalPresentation({ preview: {
+            kind: "canvas_mutation",
+            title: "确认整理画布",
+            description: "请确认要整理的节点。",
+            items: [{ operation: "arrange_nodes", nodeId: "text-1", nodeTitle: "开场分镜", nodeTypeLabel: "文本", summary: "整理《开场分镜》" }],
+        } });
+        expect(view.items).toHaveLength(1);
+        expect(view.items[0].operation).toBe("arrange_nodes");
+        expect(view.items[0].nodeTitle).toBe("开场分镜");
+    });
+
     it("states when an unknown approval cannot identify a target", () => {
         const view = agentApprovalPresentation({ toolName: "unknown_tool", arguments: {} });
         expect(view.items).toHaveLength(0);

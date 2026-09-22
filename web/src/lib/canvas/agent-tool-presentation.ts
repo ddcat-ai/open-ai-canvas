@@ -4,21 +4,25 @@ export const AGENT_TOOL_METADATA: Record<string, { summary: string | ((context: 
     canvas_list_node_types: { summary: "已读取可用节点类型", failureMessage: "获取可用节点类型失败" },
     canvas_get_state: { summary: "已读取当前画布", failureMessage: "获取画布内容失败" },
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
-    canvas_apply_ops: { summary: ({ pending }) => pending ? "准备更新画布内容" : "画布内容已保存至服务端", failureMessage: "更新画布内容失败" },
+    canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
-    generate_media: { summary: ({ pending, detail }) => pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交", failureMessage: "媒体生成未完成" },
+    generate_media: { summary: ({ pending, detail }) => (pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交"), failureMessage: "媒体生成未完成" },
 };
 
 export type AgentToolCategory = "read" | "create" | "operate";
 
 function record(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function toolArguments(detail?: unknown) {
     const value = record(detail).arguments;
     if (typeof value !== "string") return record(value);
-    try { return record(JSON.parse(value)); } catch { return {}; }
+    try {
+        return record(JSON.parse(value));
+    } catch {
+        return {};
+    }
 }
 
 /**
@@ -87,4 +91,28 @@ export function friendlyAgentToolSummary(toolName: string, text: string, detail?
     const summary = typeof metadata?.summary === "function" ? metadata.summary({ pending, detail }) : metadata?.summary;
     const failure = metadata?.failureMessage;
     return failed ? failure || "操作未完成" : summary || (pending ? "准备执行操作" : "操作已完成");
+}
+
+/**
+ * 工具失败的稳定归类标签（后端 `errorClass`，见 handoff 工作项 B 的第一步）。
+ * 界面上把"模型自己出的错"和"真实的权限/状态/上游问题"分开显示，用户与排查都不用猜。
+ */
+export const AGENT_TOOL_ERROR_CLASS_LABELS: Record<string, string> = {
+    invalid_model_output: "模型输出问题",
+    schema_error: "参数不符合契约",
+    state_conflict: "画布状态已变化",
+    permission_violation: "超出本轮权限",
+    upstream_failure: "上游故障",
+    tool_error: "工具执行失败",
+};
+
+/** 从工具事件载荷里取归类标签：优先用后端给的 label，其次查本地映射。 */
+export function agentToolErrorClassLabel(detail?: unknown): string | undefined {
+    const payload = record(detail);
+    const nested = record(payload.result);
+    const label = payload.errorClassLabel ?? nested.errorClassLabel;
+    if (typeof label === "string" && label) return label;
+    const errorClass = payload.errorClass ?? nested.errorClass;
+    if (typeof errorClass !== "string" || !errorClass) return undefined;
+    return AGENT_TOOL_ERROR_CLASS_LABELS[errorClass] ?? "工具执行失败";
 }

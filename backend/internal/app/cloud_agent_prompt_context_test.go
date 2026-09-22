@@ -72,7 +72,7 @@ func TestCloudAgentPolicyContextDoesNotPromoteUserGoal(t *testing.T) {
 func TestCloudAgentAnchorDoesNotInferReferenceRequirement(t *testing.T) {
 	canvas := &model.CanvasProject{PayloadJSON: `{"nodes":[{"id":"image-1","type":"image","title":"候选图"}]}`}
 	for _, prompt := range []string{"不要用参考图，只修正标点", "请解释图生视频是什么意思", "只改台词，不改变风格"} {
-		anchor, err := cloudAgentCreativeAnchorForCanvas(nil, "user", canvas, prompt)
+		anchor, err := cloudAgentCreativeAnchorForCanvas(nil, "user", canvas, prompt, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

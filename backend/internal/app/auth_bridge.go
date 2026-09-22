@@ -196,8 +196,8 @@ func (s *Service) LinuxDOEnabled() bool {
 	return s.authDomain().LinuxDOEnabled()
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
-	return s.authDomain().BeginLinuxDOLogin(nextPath)
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
+	return s.authDomain().BeginLinuxDOLogin(nextPath, acceptedTerms)
 }
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {

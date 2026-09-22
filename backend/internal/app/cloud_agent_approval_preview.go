@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/canvas/capability"
+	"infinite-canvas/backend/internal/canvas/layout"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -113,7 +114,33 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			if !ok {
 				return nil, BadAuthRequest("不支持的节点类型")
 			}
-			node := creationAddedNode(CreationCanvasOp{Type: op.Type, ID: op.ID, NodeType: op.NodeType, Title: title, X: &op.X, Y: &op.Y, Metadata: capability.Metadata(content)})
+			x, y := op.X, op.Y
+			if x == nil || y == nil {
+				// 没有（完整）坐标时不落到原点：按泳道与依赖关系算一个空位，
+				// 保证同一批新增的多个节点也不会互相重叠。模型只给了一个轴时保留它。
+				pending := cloudAgentLayoutNodes(map[string]any{"nodes": nodes})
+				var hint *layout.Position
+				if x != nil || y != nil {
+					hint = &layout.Position{}
+					if x != nil {
+						hint.X = *x
+					}
+					if y != nil {
+						hint.Y = *y
+					}
+				}
+				if slot, ok := cloudAgentArrangeAddNodePosition(doc, pending, op, ops, hint); ok {
+					if x == nil {
+						value := slot.X
+						x = &value
+					}
+					if y == nil {
+						value := slot.Y
+						y = &value
+					}
+				}
+			}
+			node := creationAddedNode(CreationCanvasOp{Type: op.Type, ID: op.ID, NodeType: op.NodeType, Title: title, X: x, Y: y, Metadata: capability.Metadata(content)})
 			nodes = append(nodes, node)
 			nodeTitle := cloudAgentApprovalNodeTitle(node, capability.Label)
 			items = append(items, cloudAgentApprovalPreviewItem{

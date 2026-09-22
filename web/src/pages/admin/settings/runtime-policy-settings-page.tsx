@@ -1,5 +1,5 @@
 import { App, Button, Form, InputNumber, Skeleton } from "antd";
-import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset } from "lucide-react";
+import { AlertTriangle, Bot, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -51,6 +51,27 @@ const timeoutFields: PolicyField[] = [
     { group: "task", name: "defaultTimeoutMinutes", label: "默认任务超时", extra: "未匹配专用类型时使用的最长执行时间。", unit: "分钟", max: 9_999 },
 ];
 
+const agentFields: PolicyField[] = [
+    {
+        group: "task",
+        name: "agentStepMaxOutputTokens",
+        label: "单步输出上限",
+        extra: "画布 Agent 每次模型调用的输出上限，含思考、正文与工具调用参数。0 表示不限制，此时只有单步超时兜底；抬高可以避免长思考模型被截断后返回空内容。",
+        unit: "token",
+        min: 0,
+        max: 131_072,
+    },
+    {
+        group: "task",
+        name: "agentStepTimeoutSeconds",
+        label: "单步超时",
+        extra: "画布 Agent 单步模型调用的最长等待时间，到点会中止这一步并自动关思考重试一次。0 表示沿用“文本任务超时”，不再单独计时。",
+        unit: "秒",
+        min: 0,
+        max: 3_600,
+    },
+];
+
 const rateFields: PolicyField[] = [
     { group: "request", name: "taskCreatePerMinute", label: "任务创建", extra: "每账号每分钟允许创建的任务数。", unit: "次/分钟", max: 999_999 },
     { group: "request", name: "resourceUploadPerMinute", label: "资源上传", extra: "每账号每分钟上传资源的次数。", unit: "次/分钟", max: 999_999 },
@@ -88,6 +109,15 @@ const policySections: PolicySectionDefinition[] = [
         status: <AdminStatusBadge label="保存后热更新" tone="info" />,
     },
     { id: "policy-timeout", icon: <TimerReset className="size-4" aria-hidden="true" />, title: "任务超时", shortTitle: "任务超时", description: "不同生成类型的最长执行时间。", fields: timeoutFields },
+    {
+        id: "policy-agent",
+        icon: <Bot className="size-4" aria-hidden="true" />,
+        title: "画布 Agent 单步",
+        shortTitle: "Agent 单步",
+        description: "画布 Agent 每一步模型调用的输出上限与等待时限；两者一起决定单步最坏耗时。",
+        fields: agentFields,
+        status: <AdminStatusBadge label="保存后热更新" tone="info" />,
+    },
     { id: "policy-rate", icon: <ShieldCheck className="size-4" aria-hidden="true" />, title: "业务频控", shortTitle: "业务频控", description: "账号与 IP 维度的固定窗口请求限制。", fields: rateFields },
     { id: "policy-relay", icon: <Network className="size-4" aria-hidden="true" />, title: "渠道中转与熔断", shortTitle: "中转与熔断", description: "请求体、响应体、并发、超时和上游故障保护。", fields: relayFields },
 ];

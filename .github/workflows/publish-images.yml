@@ -204,7 +204,7 @@ jobs:
         shell: bash
         run: |
           prerelease_args=()
-          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* ]]; then
+          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* || "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             prerelease_args+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" \

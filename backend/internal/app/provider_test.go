@@ -870,6 +870,10 @@ func TestProviderPayloadErrorMessageUsesSafeActionableCategories(t *testing.T) {
 		{name: "model access", raw: "model not found for tenant secret-id", want: "模型不存在"},
 		{name: "thinking mode rejects forced tool choice", raw: `{"error":{"message":"Thinking mode does not support this tool_choice","request_id":"secret-trace"}}`, want: "不支持强制工具调用"},
 		{name: "reasoning mode rejects forced tool choice", raw: `{"error":{"message":"tool_choice=required is not supported in reasoning mode"}}`, want: "不支持强制工具调用"},
+		// 真实上游原文：一轮里模型发了多个 canvas_inspect_image 调用，历史里的图片
+		// 插在 tool 结果之间，上游按"tool_call_id 没有被回应"拒绝。它含 "insufficient"，
+		// 落到额度类目会把协议错误报成"渠道余额不足"（见 providerPayloadErrorCategory）。
+		{name: "tool call pairing", raw: `{"error":{"message":"An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. (insufficient tool messages following tool_calls message)","type":"invalid_request_error","request_id":"secret-trace"}}`, want: "工具调用与结果不匹配"},
 		{name: "unknown", raw: "trace_id=private internal stack", want: "模型服务返回失败"},
 	}
 	for _, tt := range tests {

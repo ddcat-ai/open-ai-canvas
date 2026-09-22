@@ -333,6 +333,10 @@ export type RuntimeTaskPolicy = {
     videoTimeoutMinutes: number;
     storyboardTimeoutMinutes: number;
     defaultTimeoutMinutes: number;
+    /** 画布 Agent 单步模型调用的输出上限（思考 + 正文 + 工具参数）；0 表示不限制。 */
+    agentStepMaxOutputTokens: number;
+    /** 画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。 */
+    agentStepTimeoutSeconds: number;
 };
 
 export type RuntimeRequestPolicy = {
@@ -371,9 +375,10 @@ export function getAuthSettings() {
     return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>("/auth/settings");
 }
 
-export function linuxDOLoginURL(next: string) {
+export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
     const base = String(apiBaseURL).replace(/\/$/, "");
-    return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}`;
+    const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
+    return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
 }
 
 export function getAuthSession() {
@@ -426,7 +431,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string }) {
+export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
     return http.post<{ user: LocalUser }>("/auth/register", input);
 }
 

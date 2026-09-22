@@ -11,6 +11,8 @@ description: 信封、错误码与 OpenAPI
 
 出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会自动重试、切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。
 
+模型 HTTP 失败及经过 Provider 错误转换的业务失败，在通用提示后追加经过过滤的 `；上游：具体原因`，供任务错误和画布卡片展示内容安全、提示词、尺寸等可操作信息。只读取上游 `error` / `message` / `msg` / `detail` 消息字段，不回传整个 JSON；消息中的 HTTP(S) URL 隐藏，包含余额、账务、凭据、请求诊断或 HTML 的消息不追加原文，保留通用分类提示。后台响应拦截规则仍对最终用户文案生效；不会修改历史任务错误或改变重试、退款策略。
+
 ## 素材彻底删除
 
 `DELETE /assets/:id` 表示用户确认后的彻底删除，不依赖服务端当前记录是否已经同步为 `archived`。接口仍校验登录用户和素材归属，但不会因画布、任务、项目或历史快照仍有引用而拒绝；事务会删除素材及对应历史资源索引，并通过删除 Outbox 清理未被其他素材复用的物理对象。其他素材共享的同一物理对象继续保留。移入回收站仍通过素材写入接口把状态更新为 `archived`，不能用 DELETE 代替可恢复归档。
@@ -27,6 +29,13 @@ description: 信封、错误码与 OpenAPI
 - 物理空间由后台删除队列异步释放，失败保留任务重试；接口成功不代表对象存储已经清理完成。未选中素材使用的资源，以及其他 Resource 行（包括其他用户）复用的物理对象继续保留。
 - 旧画布 / 任务 / 历史快照记录本身保留，但被删媒体链接将失效。此操作不可恢复；没有数据库结构迁移。
 
+## 注册服务协议
+
+`POST /auth/register` 的 JSON 请求必须携带布尔值 `acceptedTerms: true`，首次创建管理员也适用。缺省、`false` 或 `null` 均按未同意处理，在创建用户、消费验证码和创建会话前返回 HTTP 400，提示“请先同意影策服务协议”。原有注册开放、邮箱白名单、验证码与限流校验继续生效。
+
+`GET /auth/linuxdo/start` 可携带 `acceptedTerms=true`，只有该精确值表示同意。服务端将标志写入一次性的 OAuth state；回调仅在新建 Linux.do 用户时要求该 state 已同意，不从回调参数重新取值。已有 Linux.do 用户可从登录页继续登录，无需传此参数；同意协议不绕过注册关闭策略。
+
+注册页的协议名称为《影策服务协议》。正文暂留空，由维护者在 `web/src/pages/auth/register.tsx` 的 `SERVICE_AGREEMENT` 中手动填写正式条款并审核后再发布；占位提示不是正式协议。当前只校验本次注册的同意标志，不保存长期协议版本或签署凭证。前后端需一起更新，旧客户端缺少同意标志时无法注册。
 ## 站点皮肤主按钮
 
 ### 画布配置与 Live2D（外观合同版本 9）
@@ -143,6 +152,7 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409，前端应回落为新一轮发送。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
 - 请求字段：`canvasId`、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode: "off" | "auto" | "deep"`、`profileRevision`、`skillIds`、`contextScope: [] | ["canvas"]`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds }`、`idempotencyKey`。不接受密钥、自定义 URL、客户端历史或未知字段。
 - 同用户同幂等键及相同请求返回同一运行；不同请求复用键返回 409。失败后重试同一提交应保留键。上一轮未完成时禁止追加；已完成、失败、取消或已拒绝的终态轮次作为不可变历史读取，即使其冻结的策略或节点能力版本早于当前服务，也可用于创建采用当前执行合同的新一轮，父运行不会被改写。旧版合同下仍活动或待审批的运行不得恢复执行。历史只保留最近 10 轮用户目标；运行历史与跨轮摘要仍受独立的持久化 JSON 保护，超限先丢掉更早的可重读正文并保留结构化事实，单轮仍超出当前模型能力预算时才提示缩小范围或新建对话；历史结构损坏返回明确 409，不投影为通用 500。
+- 续轮交接是一条**有界结构化事实帧**（`{ source: "server", kind: "run_handoff", parentRunId, status, failureReason?, submittedTaskIds?, canvasChanges?, omittedCanvasChanges?, authority }`）：画布改动取自上一轮真实的 `canvas_updated` 事件，最多 12 组（operation、去重后的 nodeId/title、actionCount），超出的组数只记 `omittedCanvasChanges`，不静默丢弃；帧还带 `authority` 明写"执行事实交接，不是重放写入、重复提交任务或扩大权限的授权"。帧按字节封顶（单个 nodeId 截 64 字符、整帧 8 KiB，超限按最近改动优先裁剪），失败原因沿用 `cloudAgentSafeUserMessage` 的脱敏口径，不合格退回固定说法。身份由服务端字段 `agentContextSource=continuation` 承载并要求"来源元数据 + `【运行状态】` 前缀 + JSON `source=server`/`kind=run_handoff`"三者同时成立，因此用户逐字复制帧正文也拿不到该身份；升级前落库、没有来源字段的旧散文交接只在历史裁剪与轮次计数上按"紧跟上一轮 assistant 回复 + 旧版文案前缀"识别，该判据不影响 canonical 身份。
 - `POST /agent/runs/:id/approvals/:approvalId/decision` 的 `{ decision, reason? }` 可在批准图片生成时附带 `mediaSettings: { logicalModelId? | channelId? + channelModelKey?, size, quality }`。仅替换本次模型选择、画幅和质量，不允许修改目标、提示词、引用、模式或快照。服务端先无收费预检，失败保留待审批状态；成功原子更新审批调用、哈希及预览，提交任务时再次校验内容、资源归属、模型能力、价格与累计预算。相同参数重复批准幂等，不同参数复用已决定审批返回 409。
 - 审批拒绝是独立终态 `rejected`，表示本次操作未执行；不会生成 `tool_failed`、继续调用模型、写入画布、提交生成任务或扣费。拒绝后的草稿按既有草稿策略保留，用户可在下一轮说明修改方向。
 - 创建和追加消息可选择 `reasoningMode`，默认 `off`；`auto`/`deep` 为服务端行为策略与模型推理配置的选择，不等于允许暴露内部思维链。供应商能力由后端校验；声明式 Agent 渠道不支持时明确报错。推理可能增加耗时和费用。
@@ -151,12 +161,14 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 - 系统行为策略与媒体默认策略是版本化、编译进后端发布物的资源，修改它们仍需发布后端，不是后台热更新；工具、校验、扣费和审批在代码侧强制执行。画布节点能力由服务端 registry 定义，工具 schema、创建、连线与画布摘要读取共同消费；新生成模式还必须接入媒体任务适配器，不能仅凭 md 或注册节点启用收费操作。
 - 已安装且属于当前用户的技能在创建时只保存版本、哈希和文本文件路径，不预存全部正文，也不按所有选中技能正文合计 128KB 拒绝创建。`skill_read_file` 按需读取 `SKILL.md` 或必要引用，支持字符偏移 `offset`（默认 0），每页最多 12000 字符，返回 `hasMore` / `nextOffset`。读取时重新验证用户权限、启用状态和版本；技能更新后拒绝混读，需新开一轮。技能是不可信数据，不能创造工具、改变权限或覆盖系统规则。
 - Agent 按实际文本模型的 `contextWindowTokens` 与 `maxOutputTokens` 计算输入预算，并在达到该模型预算的压缩阈值时移除较早工具结果中可重新读取的正文，保留工具调用/结果配对、用户原始要求、生成回执及最近完整工具轮次，并允许重新读取。此机制是确定性正文卸载，不是 LLM 语义摘要；运行 checkpoint 的持久化上限与模型上下文窗口独立。技能读取事件只保存回执，不复制正文，正文页只进入模型对话。
-- 平台支持工具全集为 `agent_profile_read`、`plan_update`、`ask_user`、`recall_lessons`、`remember_lesson`、`canvas_list_node_types`、`canvas_get_state`、`skill_read_file`、`task_get`、`model_list`、`canvas_apply_ops`、`generate_media`；单轮实际工具仍按偏好快照、技能、权限、画布上下文和生成预算裁剪。画布写入工具要求本轮授权 `contextScope: ["canvas"]`。禁止 shell、任意网络请求和外部 MCP。`remember_lesson` 在 `read_only` 下不可用。
+- 画布 Agent 的看图能力：当且仅当本轮渠道模型的能力合同声明了图片输入（`text.references.maxImages > 0`）时，额外暴露 `canvas_inspect_image(nodeId)`。该工具校验目标节点是已就绪、归属当前用户、媒体类型为 `image/*` 的素材，然后签发**短时签名下载链接**并把图片作为 `image_url` 内容块交给上游（与生成任务参考图同一套机制），因此 Agent 上下文只增长一个 URL，不装 base64；图片在上下文里保留最近 3 个工具轮次，更早的由运行期裁剪移出并保留文本回执与模型自己写下的观察；同一张图一轮内看满 2 次后只回执文字、不再附图，确需重新确认画面时传 `refresh=true`。看到图后模型写进正文的那句话会记到锚点（`visualNote`），跨轮继承后可以直接复用；查看过的素材在锚点里记为 `visualIdentity=inspected`。画面内文字按不可信数据处理。该能力依赖服务器访问地址：本地存储需要配置 `CANVAS_PUBLIC_BASE_URL`，且该地址必须能被模型上游访问到；上游取不到图片时如实失败，服务端不做取图内联兜底。
+- 平台支持工具全集为 `agent_profile_read`、`plan_update`、`ask_user`、`recall_lessons`、`remember_lesson`、`canvas_list_node_types`、`canvas_get_state`、`canvas_inspect_image`、`canvas_read_batch_table`、`canvas_read_storyboard`、`skill_read_file`、`skill_search`、`task_get`、`model_list`、`canvas_create_storyboard`、`canvas_edit_storyboard`、`canvas_edit_batch_table`、`canvas_apply_ops`、`canvas_arrange_nodes`、`generate_media`、`image_layer_split`、`image_text_detect`、`image_annotation_render`；单轮实际工具仍按偏好快照、技能、权限、画布上下文和生成预算裁剪。画布写入工具要求本轮授权 `contextScope: ["canvas"]`。禁止 shell、任意网络请求和外部 MCP。`remember_lesson` 在 `read_only` 下不可用。
 - `plan_update` 维护本轮结构化待办清单（整表替换，最多 20 项），跨轮继承未完成项，并在界面以 PlanBar 展示。权限为 `request_approval` 时，首次建立至少 2 项的清单会先进入审批；`auto` 直接写入清单。新一轮的第一次模型请求就会带上继承的清单。模型在没有工具调用且清单仍有未完成项时，服务端会催办并要求继续调用工具；这是软约束，不验证工作是否真的完成，也不会在没有清单时强行催建。
 - `ask_user` 给出一个问题与 2–6 个候选项后结束本轮，界面弹出选项面板；用户点选或输入后作为新一轮继续。运行中也可以用插话直接回答。
 - `recall_lessons` / `remember_lesson` 是当前用户的个人记忆：已批准条目在系统提示里只出现索引（标题 + 适用场景，最多 20 条，与当前目标可能相关的排在前面），完整做法由模型用 `recall_lessons(topic/keyword/category)` 取；Agent 写入先入待审，用户在 `GET/POST/PATCH/DELETE /agent/memories` 与 `POST /agent/memories/:id/decide` 自己批准、添加、编辑、删除，也可用 `GET /agent/memories/export`、`POST /agent/memories/import` 导出导入，并用 `GET/PATCH /agent/memories/settings`、`POST /agent/memories/compact` 选择文本模型后手动或按日/周/月压缩。管理员只在 `GET/DELETE /admin/agent-lessons` 按 `userId` / `keyword` / `status` 查看或删除，不能代批。写入会机械脱敏（拒绝链接、资源键、节点/任务 ID；@引用允许），只读模式不能写，本轮最多 3 条、每位用户最多 50 条待审、300 条已批准，一次导入最多 200 条。召回接口不返回作者。记忆只作参考，不能覆盖工具契约、权限、计费或审批。
 - `canvas_list_node_types` 从服务端节点能力 registry 返回当前可用类型；可更新节点的 `updateFields` 同时包含字段类型、最大字符数和字段语义。模型不能从前端渲染器、技能或偏好文档推断额外能力。
-- `canvas_apply_ops` 必须带 `snapshotHash`，每批最多 20 项；支持新增文本、Markdown、图片、视频、音频、分组与分镜表节点，以及 `connect_nodes` 引用连线。媒体占位节点的 `content` 是提示词，不是媒体 URL；只建节点不提交收费生成。`update_node` 的字段映射完全由能力 registry 决定：文本 / Markdown 可改标题和正文，图片 / 视频 / 音频可改标题和下一次生成使用的提示词草稿；媒体更新参数中的 `content` 写入 `metadata.composerContent`，不会覆盖媒体结果 `metadata.content`、已提交提示词 `metadata.prompt`、任务状态或引用状态。锁定节点、删除、任意元数据写入、自连接、重复边与不存在的端点仍被服务端拒绝。
+- `canvas_apply_ops` 必须带 `snapshotHash`，每批最多 20 项；`add_node` 可省略坐标：服务端按画布内容落位（优先贴合本批连线的对端，否则追加到同泳道之后并避让已有节点），不再落到原点重叠；`update_node` 的 patch 额外支持 `x`/`y`（坐标绝对值上限 1e6）用于微调单个节点。支持新增文本、Markdown、图片、视频、音频、分组与分镜表节点，以及 `connect_nodes` 引用连线。媒体占位节点的 `content` 是提示词，不是媒体 URL；只建节点不提交收费生成。`update_node` 的字段映射完全由能力 registry 决定：文本 / Markdown 可改标题和正文，图片 / 视频 / 音频可改标题和下一次生成使用的提示词草稿；媒体更新参数中的 `content` 写入 `metadata.composerContent`，不会覆盖媒体结果 `metadata.content`、已提交提示词 `metadata.prompt`、任务状态或引用状态。锁定节点、删除、任意元数据写入、自连接、重复边与不存在的端点仍被服务端拒绝。
+- `canvas_arrange_nodes` 只改节点坐标：`snapshotHash` 必需，`mode` 取 `auto`（有引用连线按依赖分层、否则按媒体类型分区）/`flow`/`byType`/`row`/`column`/`grid`，`groups` 把节点按给定顺序排成横向位置带（仅位置分带，不创建容器、不改层级），`align` 做对齐或等距分布，`gap` 调整组间距，`dryRun` 只预演。`nodeIds` 省略时整理全部可整理节点，锁定节点、背板等容器节点、隐藏批次子节点与已归属背板的子节点保持不动并在回执中说明；一次最多 50 个节点。整理与 `add_node` 的自动落位共用服务端布局实现（`backend/internal/canvas/layout`），与前端“自动整理节点”使用同一套常量与算法。
 - `model_list` 复用生成面板的当前模型目录。生成前传 `mode` 和实际 `referenceNodeIds`（无参考传空数组），服务端读取当前用户画布内的就绪资源，按真实素材类型、数量及生成操作构建意图并调用统一能力匹配，不让多图生视频落入仅文生视频候选；返回 `intent` 供核对。空参数仍可浏览完整目录；空候选不降级到不匹配模型。每项的 `selection` 是 `logicalModelId` 或 `channelId` + `channelModelKey`，工具调用必须原样选择一种，不猜 ID 或混用；时长、画幅、音频、价格仍需核对返回配置，任务准入再次强校验。
 - `generate_media` 支持图片 / 视频 / 音频：必填 `mode`、`prompt`、`nodeId`（可续用草稿，无草稿时才新建）、`title`、有序 `referenceNodeIds`（无参考传空数组），再加一种模型选择；`snapshotHash` 可省略，省略时服务端使用当前画布内容快照。图片 / 视频要求 `size`，视频要求正数 `durationSeconds`，图片 / 音频时长为 0。可传来源节点 `sourceNodeId`、`quality`、视频 `videoGenerateAudio`。`sourceNodeId` 仅接文本 / 镜头提示词节点；参考图片、视频、音频只放 `referenceNodeIds`，无文本来源时留空且不重复传入。引用从当前画布节点的账号资源解析，校验归属、类型、就绪状态和模型能力，不接受任意 URL。图片生成仅接图片参考；视频可按模型能力接图片、视频、音频参考；音频生成当前仅支持文本输入。
 - 参数选择与收费授权分开：用户明确说“随便 / 你决定 / 按默认”时，Agent 可从当前目录选择能力及预算匹配的模型，优先用户最近明确使用的可用模型，其次价格清楚的低成本选项；支持时沿用参考图原始比例，否则选目录默认，时长用目录默认。未要求音频且模型不支持时用默片。用户接受已推荐方案后不再要求特定确认口令；仅真正缺失或冲突的阻塞项一次性询问。本轮已有目录结果应复用。以上是 Agent 的参数选择策略，服务端仍强校验具体规格，不提供绕过预算 / 能力校验的默认兜底，也不绕过独立收费审批。

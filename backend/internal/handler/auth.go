@@ -139,7 +139,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "linuxdo-start:"+c.ClientIP(), 20, 10*time.Minute) {
 			return
 		}
-		target, err := svc.BeginLinuxDOLogin(c.Query("next"))
+		acceptedTerms := c.Query("acceptedTerms") == "true"
+		target, err := svc.BeginLinuxDOLogin(c.Query("next"), acceptedTerms)
 		if err != nil {
 			failService(c, err)
 			return

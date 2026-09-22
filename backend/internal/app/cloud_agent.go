@@ -42,6 +42,11 @@ type CloudAgentRequest struct {
 		MaxSteps int `json:"maxSteps,omitempty"`
 	} `json:"budget"`
 	IdempotencyKey string `json:"idempotencyKey"`
+	// VisionEnabled 决定是否给模型暴露看图工具，由服务端在创建 run 时按渠道模型合同
+	// （text.references.maxImages > 0）重新推导并覆盖，客户端传入值一律被忽略；
+	// 必须持久化：工具授权校验每步都从落库状态重建，丢掉这个标记会让模型看得见工具
+	// 却被判为"未获本轮权限授权"。
+	VisionEnabled bool `json:"visionEnabled,omitempty"`
 }
 
 const cloudAgentMaxStepsLimit = 9999
@@ -377,6 +382,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
 		inheritedPlan = parentState.Plan
+		// 视觉事实跨轮继承：这一轮已经看过的画面与模型自己写下的观察随锚点带过来，
+		// 否则新轮会把看过的图重新标成"没有视觉识别证据"并再花一次视觉 token。
+		creativeAnchor = parentState.CreativeAnchor
 		history = parentState.TextHistory
 		if history == nil {
 			history = cloudAgentLegacyHistory(parentState.Canonical.Messages, parent.Prompt)
@@ -395,7 +403,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 		history = append(history, providerTextMessage{Role: "assistant", Content: text})
 		if strings.TrimSpace(context) != "" {
-			history = append(history, providerTextMessage{Role: "user", Content: context})
+			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
 	}
 	history = trimCloudAgentTextHistory(history, cloudAgentHistoryKeepRounds, cloudAgentHistoryMaxBytes)
@@ -406,7 +414,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if len(encodedHistory) > cloudAgentHistoryMaxBytes {
 		return nil, BadAuthRequest("对话上下文超过 64KB，请新建对话")
 	}
-	creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt)
+	var inheritedAnchor *cloudAgentCreativeAnchor
+	if creativeAnchor.Version > 0 {
+		inheritedAnchor = &creativeAnchor
+	}
+	creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt, inheritedAnchor)
 	if err != nil {
 		return nil, err
 	}
@@ -414,6 +426,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
+	// 看图能力取决于本轮渠道模型自己的合同（text.references.maxImages），在建 run 时定格并
+	// 持久化：工具授权每步都从落库状态重建，运行期间不再变化，客户端传入值被忽略。
+	req.VisionEnabled = s.cloudAgentVisionEnabled(req)
 	canvasSummary := ""
 	if len(req.ContextScope) != 0 {
 		canvasSummary, err = cloudAgentCanvasSummary(canvas)
@@ -472,7 +487,12 @@ func cloudAgentLegacyHistory(messages []map[string]interface{}, currentPrompt st
 		if !ok || role != []string{"user", "assistant"}[index%2] {
 			return nil
 		}
-		history = append(history, providerTextMessage{Role: role, Content: content})
+		// 来源标记必须一起搬：丢了它，旧会话里的运行时交接消息会被当成真人轮次参与裁剪。
+		message := providerTextMessage{Role: role, Content: content}
+		if source, ok := messages[index][cloudAgentContextSourceKey].(string); ok && source != "" && source != "runtime" {
+			message.AgentContextSource = source
+		}
+		history = append(history, message)
 	}
 	return history
 }

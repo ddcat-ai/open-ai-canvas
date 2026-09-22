@@ -126,7 +126,11 @@ function adminPopupContainer(node?: HTMLElement) {
 
 export function AdminShell() {
     const userId = useUserStore((state) => state.user?.id);
-    return <AdminDensityProvider key={userId || "anonymous"} userId={userId}><AdminShellLayout /></AdminDensityProvider>;
+    return (
+        <AdminDensityProvider key={userId || "anonymous"} userId={userId}>
+            <AdminShellLayout />
+        </AdminDensityProvider>
+    );
 }
 
 function AdminShellLayout() {
