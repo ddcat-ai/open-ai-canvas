@@ -24,11 +24,8 @@ type toolSeedItem struct {
 	Prompt     string   `json:"prompt"`
 	Ratio      string   `json:"ratio"`
 	MediaURL   string   `json:"media_url"`
-	OwnerID    string   `json:"owner_id"`
 	Enabled    bool     `json:"enabled"`
 	Visibility string   `json:"visibility"`
-	CreateAt   string   `json:"create_at"`
-	UpdateAt   string   `json:"update_at"`
 }
 
 type toolSeedGroup struct {
@@ -50,18 +47,35 @@ const (
 	ToolTypeEffect   = "effect"
 )
 
-const seedTimeLayout = "2006-01-02 15:04:05"
+// SeedResourceImporter 用于将内置工具的外部 CDN 封面/视频导入本地存储。
+// 返回可供前端直接访问的资源 URL（如 /api/public/resources/{id}/file）。
+type SeedResourceImporter interface {
+	ImportSeedResource(ownerID string, rawURL string, kind string) (string, error)
+}
+
+// isLocalResourceURL 判断 URL 是否已经是本地资源路径，避免重复导入。
+func isLocalResourceURL(raw string) bool {
+	return strings.HasPrefix(raw, "/api/") || strings.HasPrefix(raw, "/resources/")
+}
 
 // EnsureBuiltinTools 将预设工具列表幂等写入数据库；重复启动只更新内容字段，不删除已有数据。
 // 初始化不下载第三方媒体，避免启动依赖外部 CDN 或产生无归属资源。
-func EnsureBuiltinTools(repo Repository) error {
+// 归属人取系统最早创建的管理员；尚无管理员（全新部署）时先留空，
+// 首个管理员注册后下次启动会随幂等更新自动补齐。
+func EnsureBuiltinTools(repo Repository, importer SeedResourceImporter) error {
 	var file builtinToolsFile
 	if err := json.Unmarshal(builtinToolsJSON, &file); err != nil {
 		return fmt.Errorf("解析内置工具失败: %w", err)
 	}
+	adminOwnerID, err := repo.FirstAdminUserID()
+	if err != nil {
+		return fmt.Errorf("查询系统管理员失败: %w", err)
+	}
 
 	var tools []model.Tool
 	sortWeight := 0
+	// 内置工具时间取本次启动时间：created_at 首次写入后保留，updated_at 每次启动随幂等更新刷新。
+	now := time.Now()
 
 	groups := []struct {
 		typ   string
@@ -101,15 +115,6 @@ func EnsureBuiltinTools(repo Repository) error {
 				return fmt.Errorf("内置工具可见性无效: %s visibility=%q", uniqueKey, item.Visibility)
 			}
 
-			createdAt, err := parseSeedTime(item.CreateAt)
-			if err != nil {
-				return fmt.Errorf("内置工具创建时间无效: %s: %w", uniqueKey, err)
-			}
-			updatedAt, err := parseSeedTime(item.UpdateAt)
-			if err != nil {
-				return fmt.Errorf("内置工具更新时间无效: %s: %w", uniqueKey, err)
-			}
-
 			extraInfoJSON := ""
 			if len(item.ExtraInfo) > 0 {
 				data, err := json.Marshal(item.ExtraInfo)
@@ -119,8 +124,21 @@ func EnsureBuiltinTools(repo Repository) error {
 				extraInfoJSON = string(data)
 			}
 
+			// cover 和 media_url 如果不为空，调用存储服务导入到本地，导入失败时降级使用原始 URL
 			cover := strings.TrimSpace(item.Cover)
 			mediaURL := strings.TrimSpace(item.MediaURL)
+			if importer != nil {
+				if cover != "" && !isLocalResourceURL(cover) {
+					if localURL, err := importer.ImportSeedResource(adminOwnerID, cover, "image"); err == nil && localURL != "" {
+						cover = localURL
+					}
+				}
+				if mediaURL != "" && !isLocalResourceURL(mediaURL) {
+					if localURL, err := importer.ImportSeedResource(adminOwnerID, mediaURL, "video"); err == nil && localURL != "" {
+						mediaURL = localURL
+					}
+				}
+			}
 			sortWeight++
 			tools = append(tools, model.Tool{
 				ID:            item.ID,
@@ -134,13 +152,13 @@ func EnsureBuiltinTools(repo Repository) error {
 				Prompt:        prompt,
 				Ratio:         strings.TrimSpace(item.Ratio),
 				MediaURL:      mediaURL,
-				OwnerID:       item.OwnerID,
+				OwnerID:       adminOwnerID,
 				Source:        ToolSourceBuiltin,
 				Enabled:       item.Enabled,
 				Visibility:    visibility,
 				SortWeight:    sortWeight,
-				CreatedAt:     createdAt,
-				UpdatedAt:     updatedAt,
+				CreatedAt:     now,
+				UpdatedAt:     now,
 			})
 		}
 	}
@@ -152,12 +170,4 @@ func EnsureBuiltinTools(repo Repository) error {
 		return fmt.Errorf("同步内置工具失败: %w", err)
 	}
 	return nil
-}
-
-func parseSeedTime(value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return time.Time{}, fmt.Errorf("时间为空")
-	}
-	return time.ParseInLocation(seedTimeLayout, value, time.Local)
 }

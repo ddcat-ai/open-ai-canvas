@@ -13,6 +13,19 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// FirstAdminUserID 返回最早创建的管理员 ID，用于内置工具归属；尚无管理员时返回空串。
+func (r *Repository) FirstAdminUserID() (string, error) {
+	var user model.User
+	err := r.db.Where("role = ?", model.UserRoleAdmin).Order("created_at asc").First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
 // UpsertBuiltinTools 按 id 幂等更新内置工具；created_at 保留首次写入值。
 func (r *Repository) UpsertBuiltinTools(tools []model.Tool) error {
 	if len(tools) == 0 {
