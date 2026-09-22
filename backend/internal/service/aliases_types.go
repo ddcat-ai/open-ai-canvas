@@ -148,7 +148,9 @@ type (
 	EagleItemQuery                         = app.EagleItemQuery
 	EagleLibrary                           = app.EagleLibrary
 	EmailCodeCooldownError                 = app.EmailCodeCooldownError
+	SmsCodeCooldownError                   = app.SmsCodeCooldownError
 	EmailSettingRequest                    = app.EmailSettingRequest
+	SmsSettingRequest                      = app.SmsSettingRequest
 	ErrorReason                            = app.ErrorReason
 	FeatureAvailability                    = app.FeatureAvailability
 	ImageCapabilityConfig                  = app.ImageCapabilityConfig
@@ -230,6 +232,7 @@ type (
 	PublicCreditPolicy                     = app.PublicCreditPolicy
 	PublicDrawingEngineSetting             = app.PublicDrawingEngineSetting
 	PublicEmailSetting                     = app.PublicEmailSetting
+	PublicSmsSetting                       = app.PublicSmsSetting
 	PublicFeatureAvailability              = app.PublicFeatureAvailability
 	PublicLibTVSetting                     = app.PublicLibTVSetting
 	PublicLinuxDOSetting                   = app.PublicLinuxDOSetting

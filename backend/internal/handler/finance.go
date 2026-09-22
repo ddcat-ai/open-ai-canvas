@@ -193,6 +193,64 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
+	// 阿里云短信配置（与邮件那两条同形）。
+	// 密钥只进不出 —— `PublicSmsSetting` 里没有 `accessKeySecret` 字段，只有 `hasAccessKeySecret`。
+	r.GET("/admin/settings/sms", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminSmsSetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/sms", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.SmsSettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateSmsSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	// 发送测试短信：**唯一能证明 AccessKey/签名/模板都对**的手段（会真发一条、按条计费）。
+	// 走一遍与真实发送完全相同的代码路径，只是不落验证码、不占冷却。
+	r.POST("/admin/settings/sms/test", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		bizId, err := svc.SendTestSms(user, req.Phone)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		// ⚠️ 回 BizId 是为了「显示成功但没收到」时能对账：拿它去阿里云控制台的
+		// **发送记录** 查真正的投递状态（提交成功 ≠ 送达，回执失败不计费但用户收不到）。
+		ok(c, gin.H{"sent": true, "bizId": bizId})
+	})
 
 	r.GET("/admin/channels/:id/models", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

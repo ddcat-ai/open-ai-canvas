@@ -12,6 +12,9 @@ const SessionCookieName = auth.SessionCookieName
 
 type (
 	EmailCodeCooldownError     = auth.EmailCodeCooldownError
+	SmsCodeCooldownError       = auth.SmsCodeCooldownError
+	SmsSettingRequest          = auth.SmsSettingRequest
+	PublicSmsSetting           = auth.PublicSmsSetting
 	RegisterRequest            = auth.RegisterRequest
 	LoginRequest               = auth.LoginRequest
 	PublicAuthSettings         = auth.PublicAuthSettings
@@ -183,6 +186,63 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*model.EmailVerificationCode, error) {
 	return s.authDomain().VerifyRegistrationEmailCode(email, rawCode)
 }
+
+// ------------------------------------------------------------------
+// 阿里云短信
+//
+// ⚠️ 这一层不能省：handler 拿到的 `svc` 是本包的 `Service`，
+//    auth 域的方法不转发过来，handler 里就是"没有这个方法"。
+// ------------------------------------------------------------------
+
+func (s *Service) AdminSmsSetting(actor *model.User) (*PublicSmsSetting, error) {
+	return s.authDomain().AdminSmsSetting(actor)
+}
+
+func (s *Service) UpdateSmsSetting(actor *model.User, req SmsSettingRequest) (*PublicSmsSetting, error) {
+	return s.authDomain().UpdateSmsSetting(actor, req)
+}
+
+func (s *Service) SmsEnabled() (bool, error) {
+	return s.authDomain().SmsEnabled()
+}
+
+func (s *Service) SendRegistrationSmsCode(rawPhone string) error {
+	return s.authDomain().SendRegistrationSmsCode(rawPhone)
+}
+
+func (s *Service) VerifyRegistrationSmsCode(phone string, rawCode string) (*model.PhoneVerificationCode, error) {
+	return s.authDomain().VerifyRegistrationSmsCode(phone, rawCode)
+}
+
+func (s *Service) SendPasswordResetSmsCode(rawPhone string) error {
+	return s.authDomain().SendPasswordResetSmsCode(rawPhone)
+}
+
+func (s *Service) ResetPasswordBySms(phone string, code string, password string) error {
+	return s.authDomain().ResetPasswordBySms(phone, code, password)
+}
+
+func (s *Service) SendBindPhoneSmsCode(user *model.User, rawPhone string) error {
+	return s.authDomain().SendBindPhoneSmsCode(user, rawPhone)
+}
+
+func (s *Service) BindPhone(user *model.User, phone string, code string) error {
+	return s.authDomain().BindPhone(user, phone, code)
+}
+
+func (s *Service) UnbindPhone(user *model.User) error {
+	return s.authDomain().UnbindPhone(user)
+}
+
+func (s *Service) SendTestSms(actor *model.User, phone string) (string, error) {
+	return s.authDomain().SendTestSms(actor, phone)
+}
+
+// NormalizeSmsPhone 归一化手机号（handler 侧校验/脱敏用）。
+func NormalizeSmsPhone(raw string) string { return auth.NormalizeSmsPhone(raw) }
+
+// MaskPhone 日志脱敏。
+func MaskPhone(phone string) string { return auth.MaskPhone(phone) }
 
 func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting, error) {
 	return s.authDomain().AdminLinuxDOSetting(actor)

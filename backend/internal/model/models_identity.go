@@ -13,6 +13,10 @@ type User struct {
 	LastLoginAt  *time.Time `json:"lastLoginAt"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	// 手机号，**E.164**（`+8613800138000`，给将来国际号码留路）。
+	// 空串 = 未绑定。唯一性由**代码查重**保证（`UserByPhone`），与 `Email` 同一套做法 ——
+	// ⚠️ **别加库级 `uniqueIndex`**：未绑定存的是空串而不是 NULL，多个空串会互相撞唯一约束。
+	Phone string `json:"phone,omitempty" gorm:"index;size:32"`
 }
 
 type AuthSession struct {
@@ -50,6 +54,21 @@ type OAuthState struct {
 type EmailVerificationCode struct {
 	ID        string     `json:"id" gorm:"primaryKey;size:36"`
 	Email     string     `json:"email" gorm:"index;size:160"`
+	CodeHash  string     `json:"-" gorm:"size:64"`
+	Purpose   string     `json:"purpose" gorm:"index;size:32"`
+	ExpiresAt time.Time  `json:"expiresAt" gorm:"index"`
+	UsedAt    *time.Time `json:"usedAt" gorm:"index"`
+	CreatedAt time.Time  `json:"createdAt" gorm:"index"`
+}
+
+// PhoneVerificationCode 手机验证码（阿里云短信）。
+//
+// 与 `EmailVerificationCode` **逐字段同形**，只是把 Email 换成 Phone —— 刻意保持一致，
+// 这样两条链（邮件/短信）的仓储方法、冷却、事务消费都能一一对照着看。
+// `Phone` 存**归一化后的 E.164**（`+8613800138000`），与 `User.Phone` 同一口径。
+type PhoneVerificationCode struct {
+	ID        string     `json:"id" gorm:"primaryKey;size:36"`
+	Phone     string     `json:"phone" gorm:"index;size:32"`
 	CodeHash  string     `json:"-" gorm:"size:64"`
 	Purpose   string     `json:"purpose" gorm:"index;size:32"`
 	ExpiresAt time.Time  `json:"expiresAt" gorm:"index"`

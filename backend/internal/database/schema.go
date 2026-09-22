@@ -29,6 +29,8 @@ func Models() []any {
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},
+		// 手机验证码（阿里云短信：注册 / 找回密码 / 绑定手机号）。
+		&model.PhoneVerificationCode{},
 		&model.ModelChannel{},
 		&model.ChannelModel{},
 		&model.ChannelModelPriceTier{},

@@ -71,6 +71,134 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"sent": true})
 	})
+	// 阿里云短信 —— 注册/找回/绑定三条链的验证码。
+	// 限流与邮件那条**对齐**（IP 每小时 + 单号码每小时），冷却（60s）在服务层。
+	r.POST("/auth/sms-code", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "sms-code:"+c.ClientIP(), policy.Request.SmsCodePerHour, time.Hour) {
+			return
+		}
+		if !enforceRateLimit(c, "registration-sms-account:"+passwordResetRateLimitSubject(service.NormalizeSmsPhone(req.Phone)), 10, time.Hour) {
+			return
+		}
+		if err := svc.SendRegistrationSmsCode(req.Phone); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/password-reset-sms-code", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "password-reset-sms-code-ip:"+c.ClientIP(), policy.Request.SmsCodePerHour, time.Hour) {
+			return
+		}
+		if !enforceRateLimit(c, "password-reset-sms-code-account:"+passwordResetRateLimitSubject(service.NormalizeSmsPhone(req.Phone)), policy.Request.SmsCodePerHour, time.Hour) {
+			return
+		}
+		if err := svc.SendPasswordResetSmsCode(req.Phone); err != nil {
+			failService(c, err)
+			return
+		}
+		// ⚠️ 手机号没注册时服务层也是**静默成功**（防枚举）—— 这里同样只回「已发送」。
+		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/password-reset-sms", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone    string `json:"phone"`
+			SmsCode  string `json:"smsCode"`
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available ||
+			!enforceRateLimit(c, "login-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) ||
+			!enforceRateLimit(c, "password-reset-sms:"+c.ClientIP()+":"+passwordResetRateLimitSubject(service.NormalizeSmsPhone(req.Phone)), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if err := svc.ResetPasswordBySms(req.Phone, req.SmsCode, req.Password); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
+	// 绑定 / 解绑手机号（要登录态）
+	r.POST("/auth/bind-phone-code", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "bind-phone-code:"+c.ClientIP(), policy.Request.SmsCodePerHour, time.Hour) {
+			return
+		}
+		if err := svc.SendBindPhoneSmsCode(user, req.Phone); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/bind-phone", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone   string `json:"phone"`
+			SmsCode string `json:"smsCode"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.BindPhone(user, req.Phone, req.SmsCode); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
+	r.POST("/auth/unbind-phone", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.UnbindPhone(user); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 	r.POST("/auth/password-reset-code", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 		var req struct {

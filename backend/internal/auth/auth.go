@@ -34,6 +34,9 @@ type RegisterRequest struct {
 	DisplayName   string `json:"displayName"`
 	Password      string `json:"password"`
 	AcceptedTerms bool   `json:"acceptedTerms"`
+	// 手机号注册那条路（与邮箱**二选一**，后端也要卡，不能只靠前端页签）。
+	Phone   string `json:"phone"`
+	SmsCode string `json:"smsCode"`
 }
 
 type LoginRequest struct {
@@ -47,6 +50,9 @@ type PublicAuthSettings struct {
 	LinuxDOEnabled      bool `json:"linuxdoEnabled"`
 	EmailEnabled        bool `json:"emailEnabled"`
 	EmailCodeRequired   bool `json:"emailCodeRequired"`
+	// 短信那条路是否可用（注册页/找回页据此显示「手机号」页签）。
+	SmsEnabled      bool `json:"smsEnabled"`
+	SmsCodeRequired bool `json:"smsCodeRequired"`
 }
 
 type AuthSessionResult struct {
@@ -79,7 +85,12 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true}, nil
+	smsEnabled, err := s.SmsEnabled()
+	if err != nil {
+		return nil, err
+	}
+	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true,
+		SmsEnabled: smsEnabled, SmsCodeRequired: true}, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
@@ -107,6 +118,8 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		return nil, err
 	}
 	var verifiedCode *model.EmailVerificationCode
+	var verifiedSmsCode *model.PhoneVerificationCode
+	phone := NormalizeSmsPhone(req.Phone)
 	if count > 0 {
 		registrationEnabled, err := s.RegistrationEnabled()
 		if err != nil {
@@ -115,15 +128,29 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		if !registrationEnabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
-		if email == "" {
-			return nil, kernel.BadAuthRequest("请输入邮箱")
+		// **二选一**：邮箱注册（email + emailCode）或手机号注册（phone + smsCode）。
+		// 两个都填 / 两个都不填都拒 —— 后端必须自己再判一遍（前端页签只是 UI）。
+		if strings.TrimSpace(req.Phone) != "" && phone == "" {
+			return nil, kernel.BadAuthRequest("手机号格式不正确")
 		}
-		if err := s.validateRegistrationEmailDomain(email); err != nil {
-			return nil, err
+		hasEmail := email != ""
+		hasPhone := phone != ""
+		if hasEmail == hasPhone {
+			return nil, kernel.BadAuthRequest("请选择一种注册方式：邮箱或手机号")
 		}
-		verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
-		if err != nil {
-			return nil, err
+		if hasEmail {
+			if err := s.validateRegistrationEmailDomain(email); err != nil {
+				return nil, err
+			}
+			verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			verifiedSmsCode, err = s.VerifyRegistrationSmsCode(phone, req.SmsCode)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if _, err := s.repo.UserByUsername(username); err == nil {
@@ -138,6 +165,13 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 			return nil, err
 		}
 	}
+	if phone != "" {
+		if _, err := s.repo.UserByPhone(phone); err == nil {
+			return nil, kernel.BadAuthRequest("该手机号已被注册")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -147,6 +181,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		ID:           kernel.NewID(),
 		Username:     username,
 		Email:        email,
+		Phone:        phone,
 		DisplayName:  displayName,
 		Role:         model.UserRoleUser,
 		Status:       model.UserStatusActive,
@@ -157,12 +192,20 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	if count == 0 {
 		user.Role = model.UserRoleAdmin
 	}
-	if verifiedCode != nil {
+	switch {
+	case verifiedCode != nil:
 		if err := s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now()); err != nil {
 			return nil, err
 		}
-	} else if err := s.repo.Create(&user); err != nil {
-		return nil, err
+	case verifiedSmsCode != nil:
+		// 与邮件同理：验证与消费分离，真正"用掉"在这个事务里（RowsAffected==1 才算数）。
+		if err := s.repo.CreateUserWithPhoneVerification(&user, verifiedSmsCode.ID, time.Now()); err != nil {
+			return nil, err
+		}
+	default:
+		if err := s.repo.Create(&user); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err

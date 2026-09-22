@@ -682,3 +682,42 @@ func TestToolsUpgradeFromMain29PreservesMigrationChecksums(t *testing.T) {
 		t.Fatal("tools tables missing")
 	}
 }
+
+// v34（阿里云短信）：users 加 phone + 新建手机验证码表。
+//
+// 这条迁移是**加列 + 加表**（不像上面几条纯加表），所以要同时验两样：列在不在、表在不在；
+// 并模拟「旧库升级」——删掉 v34 的产物与记录后重跑，应能重建。
+func TestMigrateSchemaV34AddsPhoneVerification(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-phone-verification-v34?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	if !db.Migrator().HasTable(&model.PhoneVerificationCode{}) {
+		t.Fatal("v34 did not create phone_verification_codes")
+	}
+	if !db.Migrator().HasColumn(&model.User{}, "phone") {
+		t.Fatal("v34 did not add users.phone")
+	}
+
+	// 模拟旧库升级：删表 + 删 v34 记录，重跑迁移应能重建。
+	// （不删 users.phone —— sqlite 的 DropColumn 支持不稳，列的存在性上面已经断言过。）
+	if err := db.Migrator().DropTable(&model.PhoneVerificationCode{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("version = ?", 34).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("upgrade from v33 failed: %v", err)
+	}
+	if !db.Migrator().HasTable(&model.PhoneVerificationCode{}) {
+		t.Fatal("v34 upgrade did not recreate phone_verification_codes")
+	}
+	status, err := ReadSchemaStatus(db)
+	if err != nil || !status.Ready || status.Current != CurrentSchemaVersion {
+		t.Fatalf("schema status after upgrade = %+v, %v", status, err)
+	}
+}
