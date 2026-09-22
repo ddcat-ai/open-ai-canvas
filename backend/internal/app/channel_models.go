@@ -84,7 +84,11 @@ func (s *Service) EnsureSystemChannelModels() error {
 			return err
 		}
 		if len(items) == 0 {
-			if err := s.syncInitialChannelModels(&channels[index], channelModelNames(channels[index])); err != nil {
+			models := channelModelNames(channels[index])
+			if len(models) == 0 && isAutoDLChannel(&channels[index]) {
+				models = autoDLPresetModels
+			}
+			if err := s.syncInitialChannelModels(&channels[index], models); err != nil {
 				return err
 			}
 		}
@@ -289,7 +293,11 @@ func (s *Service) fetchAdminChannelModelCatalog(ctx context.Context, actor *mode
 	if err != nil {
 		return nil, err
 	}
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
+	apiFormat := channel.APIFormat
+	if apiFormat == "" && isAutoDLChannel(channel) {
+		apiFormat = "autodl"
+	}
+	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: apiFormat, Headers: headers})
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +429,15 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 	}
 	resolutionSupported := make(map[string]bool, len(config.Video.Resolutions))
 	for _, resolution := range config.Video.Resolutions {
-		resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
+		resKey := normalizeChannelModelTierResolution(resolution)
+		resolutionSupported[resKey] = true
+		if num := extractResolutionDigits(resKey); num != "" {
+			resolutionSupported[num+"p"] = true
+			if num == "768" || num == "736" {
+				resolutionSupported["720p"] = true
+				resolutionSupported["768p"] = true
+			}
+		}
 	}
 	durationSupported := make(map[int]bool, len(config.Video.Duration.Values))
 	for _, seconds := range config.Video.Duration.Values {
@@ -965,6 +981,9 @@ func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []
 			return idErr
 		}
 		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, UnitPriceMicrocredits: 0, PriceVersion: 1}
+		if isAutoDLChannel(channel) {
+			s.populateAutoDLChannelModelInfo(&item)
+		}
 		if err := s.repo.SaveChannelModel(&item); err != nil {
 			return err
 		}
@@ -1009,7 +1028,11 @@ func (s *Service) ensureChannelModels(channelID string, includeDisabled bool) ([
 	if err != nil {
 		return nil, err
 	}
-	if err := s.syncInitialChannelModels(channel, channelModelNames(*channel)); err != nil {
+	models := channelModelNames(*channel)
+	if len(models) == 0 && isAutoDLChannel(channel) {
+		models = autoDLPresetModels
+	}
+	if err := s.syncInitialChannelModels(channel, models); err != nil {
 		return nil, err
 	}
 	return s.repo.ChannelModels(channelID, includeDisabled)
@@ -1032,4 +1055,41 @@ func protocolCapabilityFromMetadata(metadata protocol.Metadata) string {
 		return ""
 	}
 	return string(metadata.Categories[0])
+}
+
+func (s *Service) populateAutoDLChannelModelInfo(item *model.ChannelModel) {
+	if item.DisplayName == item.ModelKey || item.DisplayName == "" {
+		item.DisplayName = autoDLWorkflowDisplayName(item.ModelKey)
+	}
+	if item.ProviderModelKey == "" {
+		item.ProviderModelKey = item.ModelKey
+	}
+	if item.Icon == "" {
+		item.Icon = "Minimax"
+	}
+	if item.ModelKey == "indextts2-v1" {
+		item.Capability = "audio"
+		item.Protocol = "autodl-comfyui-audio"
+	} else {
+		item.Capability = "video"
+		item.Protocol = "autodl-comfyui"
+	}
+	defaultConfig := DefaultModelCapabilityConfigForModel(string(item.Protocol), item.ModelKey)
+	if strings.TrimSpace(item.CapabilityConfigJSON) == "" {
+		if encoded, err := json.Marshal(defaultConfig); err == nil {
+			item.CapabilityConfigJSON = string(encoded)
+		}
+	}
+}
+
+func extractResolutionDigits(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if b.Len() > 0 {
+			break
+		}
+	}
+	return b.String()
 }
