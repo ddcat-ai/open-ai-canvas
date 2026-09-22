@@ -512,6 +512,12 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 		out.Approval = nil
 	}
 	out.Step = state.Step
+	if stateErr == nil {
+		out.Delivery, err = s.cloudAgentDelivery(run, &state)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if stateErr == nil && state.ActiveTaskID != "" && (run.Status == "running" || run.Status == "queued") {
 		active, err := s.repo.TaskForUser(task.UserID, state.ActiveTaskID)
 		if err != nil {

@@ -16,6 +16,9 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { agentErrorPresentation, agentSubmissionErrorTitle } from "@/lib/canvas/agent-error-presentation";
+import { agentRunStatusLabel } from "@/lib/canvas/agent-delivery";
+import { restoreAgentResult } from "@/services/api/agent";
+import { CanvasAgentDelivery } from "./canvas-agent-delivery";
 import { cancelAgentRun, getAgentCapabilities, getAgentProfile, getAgentRun, createAgentRun, decideAgentApproval, sendAgentInterjection, sendAgentMessage, subscribeAgentEvents, updateAgentProfile, type AgentEvent, type AgentPermissionMode, type AgentProfileScope, type AgentProfileView, type AgentReasoningMode, type AgentRun } from "@/services/api/agent";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 import { agentApprovalMatchesSettings, agentImageApproval } from "@/lib/canvas/agent-media-approval";
@@ -78,6 +81,8 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     const [approvalSubmitting, setApprovalSubmitting] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [stopping, setStopping] = useState(false);
+    const [restoring, setRestoring] = useState<string | null>(null);
+    const restoreRequestRef = useRef(false);
     const [approval, setApproval] = useState<ApprovalState | null>(null);
     const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>("request_approval");
     const [contextScope, setContextScope] = useState<AgentContextKey[]>(["canvas"]);
@@ -123,7 +128,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     const installedSkills = useMemo(() => skills.filter((skill) => skill.isAdded), [skills]);
     const enabledSkills = useMemo(() => installedSkills.filter((skill) => selectedSkillIds.includes(skill.skillId)), [installedSkills, selectedSkillIds]);
     const status = run?.status || "idle";
-    const statusLabel = status === "waiting_approval" ? "等待审批" : status === "running" || status === "queued" ? "运行中" : status === "completed" ? "已完成" : status === "failed" ? "异常" : status === "cancelled" ? "已停止" : status === "rejected" ? "已拒绝" : "待命";
+    const statusLabel = agentRunStatusLabel(run);
     const statusColor = status === "failed" ? "#e66b6b" : status === "rejected" || status === "cancelled" ? theme.node.muted : status === "waiting_approval" ? "#d6a24a" : status === "running" || status === "queued" ? "#69c29b" : theme.node.muted;
 
     useEffect(() => {
@@ -379,13 +384,37 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
         }
     };
 
+    const restoreResult = async (taskId: string) => {
+        if (!run || running || busy || submissionRequestRef.current || restoreRequestRef.current) return;
+        const scope = conversationScope;
+        const runId = run.id;
+        restoreRequestRef.current = true;
+        setRestoring(taskId);
+        try {
+            await saveRemoteUserDataNow();
+            if (currentScope.current !== scope) return;
+            const result = await restoreAgentResult(runId, taskId);
+            await refreshCanvasAfterAgent(canvasId);
+            const snapshot = await getAgentRun(runId);
+            if (currentScope.current !== scope) return;
+            setRun((current) => current?.id === runId ? snapshot.run : current);
+            onFocusNode?.(result.nodeId);
+            setMessages((current) => appendUniqueMessage(current, { id: `restored-${runId}-${taskId}`, role: "system", text: "已有结果已恢复到画布，未重新生成或扣费。" }));
+        } catch (cause) {
+            if (currentScope.current === scope) setMessages((current) => appendAgentError(current, `restore-${runId}-${taskId}`, cause, "恢复未确认，请刷新核对；不会重新生成或扣费"));
+        } finally {
+            restoreRequestRef.current = false;
+            setRestoring(null);
+        }
+    };
+
     const submit = async (override?: string) => {
         const value = (override ?? prompt).trim();
         if (running) {
             await interject(value);
             return;
         }
-        if (!value || busy || running || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
+        if (!value || busy || running || restoreRequestRef.current || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
         const scope = conversationScope;
         submissionRequestRef.current = true;
         setBusy(true);
@@ -731,6 +760,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         onApprove={(settings) => void submitApproval("approve", settings)}
                                         onReject={() => void submitApproval("reject")}
                                     />
+                                    {run ? <CanvasAgentDelivery run={run} theme={theme} restoring={restoring} disabled={busy} onRestore={(taskId) => void restoreResult(taskId)} onFocus={onFocusNode} onContinue={() => setPrompt((current) => current.trim() || "请保留已有成果，核对画布和任务的真实状态，只继续未完成的部分。已成功的结果不要重新生成；需要重新生成时先展示报价并申请审批。")} /> : null}
                                     {planVisible ? <AgentPlanBar items={planItems} theme={theme} minimized={planMinimized} onToggle={() => setPlanMinimized((value) => !value)} /> : null}
                                     {pendingQuestion ? (
                                         <AgentQuestionBar
@@ -742,7 +772,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                     ) : null}
                                     <AgentChatComposer
                                         prompt={prompt}
-                                        disabled={Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
+                                        disabled={Boolean(restoring) || Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
                                         sending={busy}
                                         running={running}
                                         placeholder={running ? "运行中可直接插话，会在它下一步生效" : "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills"}
@@ -1153,7 +1183,7 @@ function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction
     const text = String(payload.text || payload.summary || payload.message || "");
     if (event.type === "run_status") {
         const snapshotApproval = payload.approval && typeof payload.approval === "object" ? payload.approval as AgentRun["approval"] : undefined;
-        setRun((current) => (current ? { ...current, status: String(payload.status || current.status) as AgentRun["status"], updatedAt: event.createdAt, revision: Number(payload.revision || 0), cleanupPending: Boolean(payload.cleanupPending), failureMessage: String(payload.failureMessage || ""), skills: payload.skills as AgentRun["skills"], spentCredits: Number(payload.spentCredits || 0), step: Number(payload.step || 0), approval: snapshotApproval } : current));
+        setRun((current) => (current ? { ...current, status: String(payload.status || current.status) as AgentRun["status"], delivery: payload.delivery as AgentRun["delivery"], updatedAt: event.createdAt, revision: Number(payload.revision || 0), cleanupPending: Boolean(payload.cleanupPending), failureMessage: String(payload.failureMessage || ""), skills: payload.skills as AgentRun["skills"], spentCredits: Number(payload.spentCredits || 0), step: Number(payload.step || 0), approval: snapshotApproval } : current));
         if (payload.failureMessage) setMessages((current) => appendAgentError(current, `terminal-${event.runId}`, String(payload.failureMessage)));
         if (snapshotApproval && !snapshotApproval.decision && snapshotApproval.approvalId) {
             setApproval((current) => ({ approvalId: snapshotApproval.approvalId, detail: snapshotApproval, reason: current?.approvalId === snapshotApproval.approvalId ? current.reason : snapshotApproval.reason || "" }));

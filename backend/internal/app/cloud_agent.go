@@ -71,6 +71,7 @@ type cloudAgentState struct {
 }
 
 type CloudAgentRun struct {
+	Delivery       *CloudAgentDelivery `json:"delivery,omitempty"`
 	ID             string              `json:"id"`
 	CanvasID       string              `json:"canvasId"`
 	ParentID       string              `json:"parentId,omitempty"`

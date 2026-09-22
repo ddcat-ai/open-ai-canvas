@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## Agent 交付状态与结果恢复
+
+- `backend/internal/app/cloud_agent_delivery.go`：按任务、资源和画布投影交付状态，校验并恢复已有结果，复用画布事务及撤销记录。
+- `web/src/components/canvas/canvas-agent-delivery.tsx`：展示已交付结果、恢复入口和剩余计划；`web/src/lib/canvas/agent-delivery.ts` 区分本轮状态与交付状态。
+- `canvas-cloud-agent-panel.tsx`：协调本地保存、恢复、画布刷新和续轮提交互斥；`services/api/agent.ts` 承载结果恢复接口与 SSE 快照字段。
+- 回归覆盖：后端 `cloud_agent_delivery_test.go` 和前端 `agent-delivery*.test.*` 验证归属、幂等、不重复计费、撤销后延迟重试及并发操作。真实登录态恢复与完整浏览器流程仍需验收。
+
 ## 画布 Agent 配置与 Live2D
 
 - 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。

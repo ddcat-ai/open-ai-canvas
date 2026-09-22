@@ -62,6 +62,7 @@ export type AgentApproval = {
 };
 
 export type AgentRun = {
+    delivery?: AgentDelivery;
     id: string;
     canvasId: string;
     status: "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "rejected";
@@ -79,6 +80,16 @@ export type AgentRun = {
     activeMessage?: { messageId: string; text: string };
     approval?: AgentApproval;
 };
+
+export type AgentDelivery = {
+    status: "running" | "finished" | "awaiting_input" | "partial" | "needs_attention" | "delivered" | "has_failures";
+    pendingTitles: string[];
+    items: Array<{ taskId: string; nodeId?: string; kind: string; status: "pending" | "failed" | "unavailable" | "restore_available" | "restored_then_changed" | "delivered" }>;
+};
+
+export function restoreAgentResult(runId: string, taskId: string) {
+    return http.post<{ nodeId: string; restored: boolean }>(`/agent/runs/${encodeURIComponent(runId)}/results/${encodeURIComponent(taskId)}/restore`, undefined, { timeout: 20_000 });
+}
 
 export type AgentEvent = {
     eventId: string;
@@ -255,7 +266,7 @@ export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent)
                                         emit("assistant_message", run.activeMessage);
                                     }
                                 }
-                                const statusPayload = { status: run.status, revision: run.revision, cleanupPending: run.cleanupPending, failureMessage: run.failureMessage, skills: run.skills, spentCredits: run.spentCredits, step: run.step, approval: run.approval };
+                                const statusPayload = { status: run.status, delivery: run.delivery, revision: run.revision, cleanupPending: run.cleanupPending, failureMessage: run.failureMessage, skills: run.skills, spentCredits: run.spentCredits, step: run.step, approval: run.approval };
                                 const statusKey = JSON.stringify(statusPayload);
                                 if (statusKey !== lastStatusKey) {
                                     lastStatusKey = statusKey;

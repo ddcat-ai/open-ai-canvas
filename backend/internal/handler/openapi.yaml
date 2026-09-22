@@ -753,6 +753,28 @@ paths:
           description: 请求无效、快照不可撤销或已提交任务不能撤销
         "409":
           description: 画布已发生后续变化、操作已处理或 stepId 不匹配
+  /agent/runs/{id}/results/{taskId}/restore:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+    post:
+      tags: [agent]
+      summary: 将本轮已成功的媒体结果恢复到画布
+      description: 仅允许本轮已结束且收尾完成的自有媒体任务；以新节点恢复现有资源，不新建生成任务或计费订单。重复请求返回现有节点；恢复后被修改或撤销的节点不会再次添加。恢复变更沿用画布版本校验和撤销记录。
+      responses:
+        "200":
+          description: 信封 data 为 { nodeId, restored }
+        "400":
+          description: 非本轮任务、只读运行或结果不可恢复
+        "404":
+          description: 运行、任务、画布或资源不属于当前用户或不存在
+        "409":
+          description: 本轮尚未停止、画布版本冲突或恢复后的节点已被修改或移除
   /agent/runs/{id}/approvals/{approvalId}/decision:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"

@@ -382,14 +382,14 @@ func validateCloudAgentMediaArgs(a cloudAgentMediaArgs, state *cloudAgentRuntime
 	}
 	a.Mode = mode
 	if a.SnapshotHash == "" {
-		return BadAuthRequest("缺少画布快照，请先读取当前画布")
+		return cloudAgentFieldError("snapshotHash", "required", "缺少画布快照，请先读取当前画布")
 	}
 	if len(a.SnapshotHash) != 64 {
-		return BadAuthRequest("画布快照无效，请重新读取当前画布")
+		return cloudAgentFieldError("snapshotHash", "invalid_value", "画布快照无效，请重新读取当前画布；不要自行编造哈希")
 	}
 	for _, r := range a.SnapshotHash {
 		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
-			return BadAuthRequest("画布快照无效，请重新读取当前画布")
+			return cloudAgentFieldError("snapshotHash", "invalid_value", "画布快照无效，请重新读取当前画布；不要自行编造哈希")
 		}
 	}
 	if err := validateCloudAgentID(a.NodeID, "生成节点 ID", 80); err != nil {
@@ -423,7 +423,7 @@ func validateCloudAgentMediaArgs(a cloudAgentMediaArgs, state *cloudAgentRuntime
 		return BadAuthRequest(fmt.Sprintf("提示词共%d字符，超过16000字符上限；请先告知用户，不要擅自删改关键内容", utf8.RuneCountInString(a.Prompt)))
 	}
 	if (mode == "image" || mode == "video") && strings.TrimSpace(a.Size) == "" {
-		return BadAuthRequest("请填写模型支持的具体画幅；用户授权默认时沿用参考图比例或目录默认画幅，无需重复询问")
+		return cloudAgentFieldError("size", "required", "请填写模型支持的具体画幅；用户授权默认时沿用参考图比例或目录默认画幅，无需重复询问")
 	}
 	if a.Duration < 0 {
 		return BadAuthRequest("生成时长不能为负数")
@@ -431,14 +431,14 @@ func validateCloudAgentMediaArgs(a cloudAgentMediaArgs, state *cloudAgentRuntime
 	switch mode {
 	case "video":
 		if a.Duration == 0 {
-			return BadAuthRequest("视频生成必须明确 durationSeconds")
+			return cloudAgentFieldError("durationSeconds", "required", "视频生成必须明确 durationSeconds")
 		}
 	case "image", "audio":
 		if a.Duration != 0 {
-			return BadAuthRequest("只有视频生成允许设置 durationSeconds")
+			return cloudAgentFieldError("durationSeconds", "unsupported_for_mode", "只有视频生成允许设置 durationSeconds；图片和音频请省略该字段")
 		}
 		if a.VideoGenerateAudio != nil {
-			return BadAuthRequest("videoGenerateAudio 仅适用于视频生成")
+			return cloudAgentFieldError("videoGenerateAudio", "unsupported_for_mode", "videoGenerateAudio 仅适用于视频生成；图片和音频请省略该字段")
 		}
 	}
 	if len(a.ReferenceNodeIDs) > 16 {
@@ -545,6 +545,11 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	a.Mode = strings.ToLower(strings.TrimSpace(a.Mode))
 	a.DraftRunID = run.ID
+	// A false video-only toggle expresses no requested audio generation. Omit
+	// that irrelevant default; never discard true or other substantive options.
+	if (a.Mode == "image" || a.Mode == "audio") && a.VideoGenerateAudio != nil && !*a.VideoGenerateAudio {
+		a.VideoGenerateAudio = nil
+	}
 	if state.Approval != nil && state.Approval.Call.ID == call.ID {
 		a.Prepared = state.Approval.Prepared
 	}

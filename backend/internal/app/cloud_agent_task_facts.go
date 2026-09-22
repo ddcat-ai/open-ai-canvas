@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -36,6 +37,12 @@ type cloudAgentTaskFacts struct {
 	CancellationAt     *time.Time                   `json:"cancellationRequestedAt,omitempty"`
 	SubmissionReceipt  *cloudAgentSubmissionReceipt `json:"submissionReceipt,omitempty"`
 	Billing            *cloudAgentTaskBillingFacts  `json:"billing,omitempty"`
+	ResultRestoration  *cloudAgentResultRestoration `json:"resultRestoration,omitempty"`
+}
+
+type cloudAgentResultRestoration struct {
+	Status string `json:"status"`
+	NodeID string `json:"nodeId,omitempty"`
 }
 
 type cloudAgentSubmissionReceipt struct {
@@ -86,6 +93,7 @@ func cloudAgentTaskDiagnostic(repo *repository.Repository, task *model.Task) map
 	} else if task.Status == model.TaskStatusFailed || task.Status == model.TaskStatusCancelled {
 		facts.Error = cloudAgentSafeMediaTaskError(task)
 	}
+	facts.ResultRestoration = cloudAgentTaskResultRestoration(repo, task)
 	if task.BillingOrderID != "" {
 		facts.Billing = &cloudAgentTaskBillingFacts{
 			OrderID: task.BillingOrderID, AuthorizedChargeMicrocredits: task.AuthorizedChargeMicrocredits,
@@ -111,6 +119,57 @@ func cloudAgentTaskDiagnostic(repo *repository.Repository, task *model.Task) map
 		return map[string]any{"taskId": task.ID, "taskStatus": task.Status, "taskSubmitted": true, "submissionOutcome": "unknown"}
 	}
 	return result
+}
+
+// Recovery is a current observation, separate from the original writeback audit.
+// Recheck the canvas so undo and later user edits never retain a delivery claim.
+func cloudAgentTaskResultRestoration(repo *repository.Repository, task *model.Task) *cloudAgentResultRestoration {
+	if repo == nil || task == nil || task.Status != model.TaskStatusSucceeded || task.AgentRunID == "" || task.UserID == "" || task.ProjectID == "" {
+		return nil
+	}
+	kind := strings.TrimPrefix(task.Type, "canvas_")
+	if task.Type != "canvas_"+kind || (kind != "image" && kind != "video" && kind != "audio") {
+		return nil
+	}
+	run, err := repo.CloudAgent(task.UserID, task.AgentRunID)
+	if err != nil {
+		return nil
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil || state.Request.CanvasID != task.ProjectID || !cloudAgentContainsString(state.TaskIDs, task.ID) {
+		return nil
+	}
+	var restoredNodeID string
+	for _, event := range state.Events {
+		if event.Type == "result_restored" && stringValue(event.Payload["taskId"]) == task.ID {
+			restoredNodeID = stringValue(event.Payload["nodeId"])
+		}
+	}
+	if restoredNodeID == "" {
+		return nil
+	}
+	facts := &cloudAgentResultRestoration{Status: "unavailable", NodeID: restoredNodeID}
+	canvas, err := repo.CanvasProjectForUser(task.UserID, task.ProjectID)
+	if err != nil {
+		return facts
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		return facts
+	}
+	resourceID, _ := taskOutputResource(task.ResultJSON, task.Type)
+	if resourceID == "" {
+		return facts
+	}
+	resource, err := repo.ResourceForUser(task.UserID, resourceID)
+	if err != nil || resource.Status != "ready" || !strings.HasPrefix(resource.MimeType, kind+"/") {
+		return facts
+	}
+	facts.Status = "restored_then_changed"
+	if id := cloudAgentDeliveredNode(doc, task.ID, resourceID); id != "" {
+		facts.Status, facts.NodeID = "delivered", id
+	}
+	return facts
 }
 
 func cloudAgentTaskSubmissionOutcome(task *model.Task) string {

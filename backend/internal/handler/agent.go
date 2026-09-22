@@ -130,6 +130,23 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/agent/runs", create)
 	// Each additional message starts a new immutable turn and returns its ID.
 	r.POST("/agent/runs/:id/messages", create)
+	r.POST("/agent/runs/:id/results/:taskId/restore", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "tasks:"+user.ID, policy.Request.TaskCreatePerMinute, time.Minute) {
+			return
+		}
+		result, err := svc.RestoreCloudAgentResult(user.ID, c.Param("id"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.POST("/agent/runs/:id/interjections", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -168,6 +168,10 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 ## 云端 Agent
 
+运行快照的 `delivery` 根据实际媒体任务、资源和画布节点投影交付情况，与运行生命周期 `status` 分开。`delivery.status` 为 `running`、`finished`、`awaiting_input`、`needs_attention`、`partial`、`delivered` 或 `has_failures`；模型本轮结束不等于作品全部交付，`has_failures` 表示已有交付且存在失败尝试记录，不直接判定创作目标未完成。`pendingTitles` 保留未完成计划，`items` 按任务返回 `taskId`、`kind`、可选 `nodeId` 和状态：`pending`、`failed`、`unavailable`、`restore_available`、`restored_then_changed`、`delivered`。模型读取的任务事实用独立 `resultRestoration` 展示手动恢复后的实际状态，保留原始写回失败审计；撤销或修改后不会继续投影为已交付。
+
+`POST /agent/runs/:id/results/:taskId/restore` 无需请求体，返回 `{ nodeId, restored }`。用户显式恢复本轮已成功、资源可用但不在画布的媒体结果；服务端校验运行、任务、画布和资源归属，以及终态、收尾完成和非只读权限。恢复会新建节点并保存可撤销的画布变更，不调用生成服务、不创建任务或计费订单。重复请求返回已存在的节点；恢复后被修改、移除或撤销的节点返回 409，避免延迟重试重新添加。客户端先保存编辑，再恢复、重新读取画布并定位节点，期间与新一轮提交互斥。“继续处理剩余项”只填入草稿，仍由用户发送并经过现有审批及预算控制。
+
 所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单；跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。
 
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
