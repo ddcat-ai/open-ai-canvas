@@ -372,7 +372,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsEnabled: boolean; smsCodeRequired: boolean }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
@@ -427,11 +427,37 @@ export function sendPasswordResetEmailCode(email: string) {
     return http.post<{ sent: boolean }>("/auth/password-reset-code", { email });
 }
 
+// ---- 阿里云短信：与上面邮件那批逐条对称 ----
+
+export function sendRegistrationSmsCode(phone: string) {
+    return http.post<{ sent: boolean }>("/auth/sms-code", { phone });
+}
+
+export function sendPasswordResetSmsCode(phone: string) {
+    return http.post<{ sent: boolean }>("/auth/password-reset-sms-code", { phone });
+}
+
+export function resetPasswordBySms(input: { phone: string; smsCode: string; password: string }) {
+    return http.post<{ ok: boolean }>("/auth/password-reset-sms", input);
+}
+
+export function sendBindPhoneSmsCode(phone: string) {
+    return http.post<{ sent: boolean }>("/auth/bind-phone-code", { phone });
+}
+
+export function bindPhone(input: { phone: string; smsCode: string }) {
+    return http.post<{ ok: boolean }>("/auth/bind-phone", input);
+}
+
+export function unbindPhone() {
+    return http.post<{ ok: boolean }>("/auth/unbind-phone");
+}
+
 export function resetPassword(input: { email: string; emailCode: string; password: string }) {
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
+export function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
     return http.post<{ user: LocalUser }>("/auth/register", input);
 }
 
