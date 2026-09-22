@@ -19,8 +19,7 @@ export function verificationMethods(policy: VerificationPolicy, purpose: "login"
     if (policy.smsAndEmailRegistration) return ["sms_email"];
     return [...(policy.smsRegistration ? ["sms" as const] : []), ...(policy.emailRegistration ? ["email" as const] : [])];
 }
-export const startVerification = (input: { purpose: VerificationPurpose; method: VerificationMethod; email?: string; phone?: string; password?: string }) =>
-    http.post<{ ticket: string; expiresIn: number; retryAfter: number }>("/auth/verification", input);
+export const startVerification = (input: { purpose: VerificationPurpose; method: VerificationMethod; email?: string; phone?: string; password?: string }) => http.post<{ ticket: string; expiresIn: number; retryAfter: number }>("/auth/verification", input);
 export async function loginVerification(input: VerificationDraft) {
     const result = await http.post<{ user: LocalUser }>("/auth/verification/login", input);
     invalidateAuthSessionCache();
