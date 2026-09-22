@@ -545,7 +545,12 @@ func cloudAgentLessonSearchTokens(keyword string) []string {
 	seen := map[string]bool{}
 	for _, raw := range strings.FieldsFunc(keyword, cloudAgentLessonTokenSeparator) {
 		token := strings.ToLower(strings.TrimSpace(raw))
-		if utf8.RuneCountInString(token) < 2 || seen[token] {
+		// 单字停用词过滤照搬的是英文逻辑（a / I）；汉字单字「梗」「钩」「戏」本身是完整
+		// 语义的最小单位。一刀切丢掉后 tokens 为空，检索会静默回落为「列前 N 条」。
+		// 这里只放行单个汉字的 token，英文/数字单字与空串仍按停用词丢掉。
+		first, size := utf8.DecodeRuneInString(token)
+		singleHan := size == len(token) && unicode.Is(unicode.Han, first)
+		if (!singleHan && utf8.RuneCountInString(token) < 2) || seen[token] {
 			continue
 		}
 		seen[token] = true
