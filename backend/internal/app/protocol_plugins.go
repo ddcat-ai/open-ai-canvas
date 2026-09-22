@@ -191,6 +191,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		byID[id] = record
 	}
 	bundledManifests := append(bundledWorkflowPluginManifests(), bundledPaymentPluginManifests()...)
+	bundledManifests = append(bundledManifests, bundledSMSPluginManifests()...)
 	for _, bundled := range bundledManifests {
 		builtInIDs[bundled.Metadata.ID] = struct{}{}
 		if existing, exists := byID[bundled.Metadata.ID]; exists && existing.PackagePath != "" && isSystemPaymentPluginID(bundled.Metadata.ID) {
@@ -220,6 +221,9 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		}
 		source := PluginOriginOfficial
 		if _, systemPayment := systemPaymentPolicies[bundled.Metadata.ID]; systemPayment {
+			source = PluginOriginSystem
+		}
+		if isSystemSMSPluginID(bundled.Metadata.ID) {
 			source = PluginOriginSystem
 		}
 		record.UpdatedAt = now
@@ -343,7 +347,12 @@ func (c *pluginRuntime) reload() error {
 				continue
 			}
 		}
-		if len(manifest.Contributes.PaymentProviders) > 0 && len(manifest.Contributes.Providers) == 0 {
+		if len(manifest.Contributes.SMSProviders) > 0 && (record.Source == PluginOriginUploaded || !isSystemSMSPluginID(id)) {
+			record.Metadata.Enabled, record.Status, record.Error = false, "invalid", "短信插件仅支持系统宿主适配器"
+			plugins[id] = record
+			continue
+		}
+		if (len(manifest.Contributes.PaymentProviders) > 0 || len(manifest.Contributes.SMSProviders) > 0) && len(manifest.Contributes.Providers) == 0 {
 			if record.Metadata.Enabled {
 				record.Status = "enabled"
 			} else {

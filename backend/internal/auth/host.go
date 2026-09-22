@@ -51,7 +51,15 @@ type Service struct {
 	mailSender     func(EmailSettingValue, string, string, string) error
 	emailCodeMu    sync.Mutex
 	registrationMu sync.Mutex
+	sms            SMSDelivery
 }
+
+type SMSDelivery interface {
+	Available(string) (bool, error)
+	SendCode(context.Context, string, string, string) error
+}
+
+func (s *Service) SetSMSDelivery(delivery SMSDelivery) { s.sms = delivery }
 
 func New(repo *repository.Repository, host Host, mailSender func(EmailSettingValue, string, string, string) error) *Service {
 	if host == nil {
