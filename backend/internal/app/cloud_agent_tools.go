@@ -388,7 +388,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 		map[string]any{"items": map[string]any{"type": "array", "maxItems": 20, "items": map[string]any{"type": "object", "properties": map[string]any{"id": str("短标识，如 1"), "title": str("这一项要做什么"), "status": map[string]any{"type": "string", "enum": []string{"pending", "doing", "done"}}}, "required": []string{"id", "title", "status"}, "additionalProperties": false}}},
 		"items")
 	add("ask_user",
-		"需要用户拍板才能继续时调用本工具。给出一个问题与 2-6 个候选项，本轮会就此收尾，界面上弹出可点的选项面板（也可自己输入）。用户选完会自动开新一轮继续。只在确实无法自行决定时用：用户已授权自主决定或存在安全默认值时，直接做完继续，不要问。一次只问一件事。若只是顺带确认、手头还有能继续做的事，直接在正文里问即可。要从几个候选里挑一个、或希望本轮就此收尾等他，才用本工具。",
+		"需要用户拍板方向时调用本工具。给出一个问题与 2-6 个候选项，本轮会就此收尾，界面上弹出可点的选项面板，用户点一下即继续（也可自己输入），选完自动开新一轮。必须用本工具的场景：用户的需求存在两条以上明显不同的走向（风格、时长、平台、受众、预算等），或信息不足以开工而你的假设会显著影响结果——此时调用本工具给出候选让用户点选。不要把候选方向只写在正文里：正文里的选项用户只能手打回复，界面不会出现可点面板；要让用户点选就必须调用本工具。确实能自行决定时（用户已授权自主决定，或存在安全默认值）直接做完继续，不要问。一次只问一件事。",
 		map[string]any{
 			"question": str("要用户决定的这一个问题，一句话说清"),
 			"options": map[string]any{"type": "array", "minItems": 2, "maxItems": 6, "items": map[string]any{
