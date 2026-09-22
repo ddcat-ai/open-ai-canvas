@@ -34,6 +34,15 @@ func failService(c *gin.Context, err error) {
 		writeFailure(c, http.StatusTooManyRequests, service.CodeRateLimited, service.ReasonRateLimited, cooldown.Error())
 		return
 	}
+
+	// 短信验证码的重发冷却—— 与邮件那条**必须并列写在这里**：
+	// 漏了它就会掉进 failInternal → HTTP 500，前端的 `retryAfterMs` 倒计时也跟着废。
+	var smsCooldown *service.SmsCodeCooldownError
+	if errors.As(err, &smsCooldown) {
+		c.Header("Retry-After", strconv.Itoa(smsCooldown.Seconds))
+		writeFailure(c, http.StatusTooManyRequests, service.CodeRateLimited, service.ReasonRateLimited, smsCooldown.Error())
+		return
+	}
 	var modelErr *service.ModelError
 	if errors.As(err, &modelErr) && modelErr.AppError != nil && validErrorStatus(modelErr.Status) {
 		writeAppError(c, modelErr.AppError)

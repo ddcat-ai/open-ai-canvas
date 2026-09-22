@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 33
+const CurrentSchemaVersion int64 = 34
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -107,6 +107,25 @@ var schemaMigrations = []migration{
 	}},
 	{version: 32, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
 	{version: 33, name: "oauth_state_accepted_terms", checksum: "sha256:oauth-state-accepted-terms-v33", apply: migrateOAuthStateAcceptedTerms},
+	// 阿里云短信（注册 / 找回密码 / 绑定手机号的短信验证码）。
+	//   · `users.phone`：E.164（`+8613800138000`），可空 —— 邮箱注册的用户不绑就没有。
+	//     唯一性由**代码查重**保证（`UserByPhone`），与 `email` 同一套做法：未绑定存空串，
+	//     所以这里刻意**不加库级唯一索引**（多个空串会互相撞约束）。
+	//   · `phone_verification_codes`：与 `email_verification_codes` 逐字段同形。
+	// AutoMigrate 对已存在的 `users` 是**增量加列**，不动既有数据。
+	{version: 34, name: "phone_verification", checksum: "sha256:phone-verification-v34-20260920", apply: migratePhoneVerification},
+}
+
+// migratePhoneVerification 阿里云短信（用户表加手机号 + 新建手机验证码表）。
+//
+// 两件事一起做：
+//  1. `users` 加 `phone` —— AutoMigrate 对**已存在**的表是增量加列，不动既有数据。
+//  2. 新建 `phone_verification_codes` —— 与 `email_verification_codes` 逐字段同形。
+func migratePhoneVerification(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}, &model.PhoneVerificationCode{}); err != nil {
+		return fmt.Errorf("创建短信验证结构：%w", err)
+	}
+	return nil
 }
 
 func migrateChannelModelTags(tx *gorm.DB) error {

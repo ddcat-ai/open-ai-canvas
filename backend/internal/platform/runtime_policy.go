@@ -92,6 +92,7 @@ type RuntimeRequestPolicy struct {
 	CanvasWritePerMinute       int   `json:"canvasWritePerMinute"`
 	RegisterPerHour            int   `json:"registerPerHour"`
 	EmailCodePerHour           int   `json:"emailCodePerHour"`
+	SmsCodePerHour             int   `json:"smsCodePerHour"`
 	LoginIPPerTenMinutes       int   `json:"loginIPPerTenMinutes"`
 	LoginAccountPerTenMinutes  int   `json:"loginAccountPerTenMinutes"`
 	SystemRelayPerMinute       int   `json:"systemRelayPerMinute"`
@@ -166,6 +167,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			CanvasWritePerMinute:       120,
 			RegisterPerHour:            30,
 			EmailCodePerHour:           60,
+			SmsCodePerHour:             60,
 			LoginIPPerTenMinutes:       50,
 			LoginAccountPerTenMinutes:  10,
 			SystemRelayPerMinute:       120,
@@ -202,7 +204,7 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		TaskCreatePerMinute:     maxRuntimeRate,
 		ResourceUploadPerMinute: maxRuntimeRate, ResourceImportPerMinute: maxRuntimeRate,
 		AssetWritePerMinute: maxRuntimeRate, CanvasWritePerMinute: maxRuntimeRate,
-		RegisterPerHour: maxRuntimeRate, EmailCodePerHour: maxRuntimeRate,
+		RegisterPerHour: maxRuntimeRate, EmailCodePerHour: maxRuntimeRate, SmsCodePerHour: maxRuntimeRate,
 		LoginIPPerTenMinutes: maxRuntimeRate, LoginAccountPerTenMinutes: maxRuntimeRate,
 		SystemRelayPerMinute: maxRuntimeRate, CustomRelayPerMinute: maxRuntimeRate,
 		CustomRelayConcurrency: maxRuntimeConcurrency, CustomRelayRequestMB: maxRuntimeUploadMB,
@@ -392,7 +394,7 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 		"资源上传频控": request.ResourceUploadPerMinute, "资源导入频控": request.ResourceImportPerMinute,
 		"素材写入频控": request.AssetWritePerMinute,
 		"画布写入频控": request.CanvasWritePerMinute, "注册频控": request.RegisterPerHour,
-		"验证码频控": request.EmailCodePerHour, "登录 IP 频控": request.LoginIPPerTenMinutes,
+		"验证码频控": request.EmailCodePerHour, "短信频控": request.SmsCodePerHour, "登录 IP 频控": request.LoginIPPerTenMinutes,
 		"登录账号频控": request.LoginAccountPerTenMinutes, "系统渠道频控": request.SystemRelayPerMinute,
 		"自定义渠道频控": request.CustomRelayPerMinute,
 	} {

@@ -30,6 +30,9 @@ var ErrTextReplayClosed = errors.New("text replay task is closed")
 
 var ErrEmailVerificationCodeInvalid = errors.New("email verification code is no longer valid")
 
+// ErrPhoneVerificationCodeInvalid 手机验证码在消费那一刻已失效（被并发用掉 / 过期）。
+var ErrPhoneVerificationCodeInvalid = errors.New("phone verification code is no longer valid")
+
 var ErrProjectAssetFolderNotEmpty = errors.New("project asset folder is not empty")
 
 var ErrProjectHasActiveTasks = errors.New("project has active tasks")
@@ -344,6 +347,126 @@ func (r *Repository) ResetUserPasswordWithEmailVerification(userID string, email
 
 func (r *Repository) DeleteExpiredEmailVerificationCodes(now time.Time) error {
 	return r.db.Delete(&model.EmailVerificationCode{}, "expires_at <= ? OR used_at IS NOT NULL", now).Error
+}
+
+// ============================================================
+// 手机验证码（阿里云短信）
+//
+// 与上面那批 Email 版**逐条对称**，只是把 email 换成 phone、表换成 phone_verification_codes。
+// 刻意保持对称：两条链的冷却、频控、事务消费能一一对照着读。
+// ============================================================
+
+// UserByPhone 按手机号找用户（号码必须已归一化成 E.164）。
+// ⚠️ 未绑定是**空串**，这里必须挡掉空查询 —— 否则会随便命中一个没绑号的用户。
+func (r *Repository) UserByPhone(phone string) (*model.User, error) {
+	trimmed := strings.TrimSpace(phone)
+	if trimmed == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var user model.User
+	if err := r.db.First(&user, "phone = ?", trimmed).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) LatestPhoneVerificationCode(phone string, purpose string) (*model.PhoneVerificationCode, error) {
+	var code model.PhoneVerificationCode
+	if err := r.db.Where("phone = ? AND purpose = ? AND used_at IS NULL", phone, purpose).Order("created_at desc").First(&code).Error; err != nil {
+		return nil, err
+	}
+	return &code, nil
+}
+
+func (r *Repository) DeletePhoneVerificationCode(id string) error {
+	return r.db.Delete(&model.PhoneVerificationCode{}, "id = ?", id).Error
+}
+
+// CreateUserWithPhoneVerification 建号 + **原子消费**那条验证码。
+//
+// ⚠️ 与邮件版同理：验证与消费必须分开 —— `Verify*` 只读不标记，真正"用掉"在这里，
+// `RowsAffected != 1`（码被并发用掉/过期）就整体回滚，杜绝同一码注册两次。
+func (r *Repository) CreateUserWithPhoneVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.PhoneVerificationCode{}).Where("id = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, usedAt).Update("used_at", usedAt)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("phone verification code is no longer valid")
+		}
+		return tx.Create(user).Error
+	})
+}
+
+// ResetUserPasswordWithPhoneVerification 用短信验证码改密码（并对该号下所有未用码做一次性消费）。
+func (r *Repository) ResetUserPasswordWithPhoneVerification(userID string, phone string, purpose string, verificationCodeID string, passwordHash string, usedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		codeResult := tx.Model(&model.PhoneVerificationCode{}).
+			Where("id = ? AND phone = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, phone, purpose, usedAt).
+			Update("used_at", usedAt)
+		if codeResult.Error != nil {
+			return codeResult.Error
+		}
+		if codeResult.RowsAffected != 1 {
+			return ErrPhoneVerificationCodeInvalid
+		}
+
+		userResult := tx.Model(&model.User{}).
+			Where("id = ? AND phone <> '' AND phone = ? AND status = ? AND password_hash <> ''", userID, phone, model.UserStatusActive).
+			Updates(map[string]any{"password_hash": passwordHash, "updated_at": usedAt})
+		if userResult.Error != nil {
+			return userResult.Error
+		}
+		if userResult.RowsAffected != 1 {
+			return ErrPhoneVerificationCodeInvalid
+		}
+		if err := tx.Delete(&model.AuthSession{}, "user_id = ?", userID).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.PhoneVerificationCode{}).
+			Where("phone = ? AND purpose = ? AND used_at IS NULL", phone, purpose).
+			Update("used_at", usedAt).Error
+	})
+}
+
+// BindUserPhone 绑手机号（消费验证码 + 写 user.phone，同一事务）。
+//
+// 号码唯一性靠**调用方先查重**（`UserByPhone`）—— 与 Email 同一套做法，库里没有唯一索引
+// （未绑定是空串，加唯一索引会让多个空串互撞，见 model.User.Phone 的注释）。
+func (r *Repository) BindUserPhone(userID string, phone string, purpose string, verificationCodeID string, usedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		codeResult := tx.Model(&model.PhoneVerificationCode{}).
+			Where("id = ? AND phone = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, phone, purpose, usedAt).
+			Update("used_at", usedAt)
+		if codeResult.Error != nil {
+			return codeResult.Error
+		}
+		if codeResult.RowsAffected != 1 {
+			return ErrPhoneVerificationCodeInvalid
+		}
+		userResult := tx.Model(&model.User{}).
+			Where("id = ? AND status = ?", userID, model.UserStatusActive).
+			Updates(map[string]any{"phone": phone, "updated_at": usedAt})
+		if userResult.Error != nil {
+			return userResult.Error
+		}
+		if userResult.RowsAffected != 1 {
+			return ErrPhoneVerificationCodeInvalid
+		}
+		return tx.Model(&model.PhoneVerificationCode{}).
+			Where("phone = ? AND purpose = ? AND used_at IS NULL", phone, purpose).
+			Update("used_at", usedAt).Error
+	})
+}
+
+// UnbindUserPhone 解绑（清成空串）。唯一性检查同样在调用方。
+func (r *Repository) UnbindUserPhone(userID string) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]any{"phone": ""}).Error
+}
+
+func (r *Repository) DeleteExpiredPhoneVerificationCodes(now time.Time) error {
+	return r.db.Delete(&model.PhoneVerificationCode{}, "expires_at <= ? OR used_at IS NOT NULL", now).Error
 }
 
 func (r *Repository) Task(id string) (*model.Task, error) {

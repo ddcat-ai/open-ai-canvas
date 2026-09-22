@@ -16,6 +16,7 @@ const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages"
 const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
 const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
 const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
+const SmsSettingsPage = lazy(() => import("@/pages/admin/settings/sms-settings-page"));
 const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
 const AgentLessonsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AgentLessonsPage })));
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
@@ -206,6 +207,7 @@ export const router = createBrowserRouter([
                     { path: "settings/features", element: <FeatureAvailabilityPage /> },
                     { path: "settings/access", element: <AccessSettingsPage /> },
                     { path: "settings/email", element: <EmailSettingsPage /> },
+                    { path: "settings/sms", element: <SmsSettingsPage /> },
                     { path: "settings/storage", element: <StorageSettingsPage /> },
                     { path: "settings/ark-private-assets", element: <ArkPrivateAssetsSettingsPage /> },
                     { path: "settings/response-interception", element: <ResponseInterceptionSettingsPage /> },

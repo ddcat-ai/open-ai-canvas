@@ -6,6 +6,8 @@ export type LocalUser = {
     id: string;
     username: string;
     email?: string;
+    /** 绑定的手机号（E.164）。未绑定则没有这个字段。 */
+    phone?: string;
     displayName: string;
     avatarUrl?: string;
     identityProvider?: string;

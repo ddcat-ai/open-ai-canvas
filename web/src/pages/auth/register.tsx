@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
-import { App, Button, Checkbox, Divider, Input, Modal } from "antd";
-import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
+import { App, Button, Checkbox, Divider, Input, Modal, Segmented } from "antd";
+import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, Smartphone, TriangleAlert, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 
-import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode } from "@/services/api/auth";
+import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode, sendRegistrationSmsCode } from "@/services/api/auth";
 import { LinuxDOIcon } from "./auth-scene";
 import { ApiError } from "@/services/api/request";
 
@@ -20,6 +20,13 @@ export default function RegisterPage() {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [emailCode, setEmailCode] = useState("");
+    // 注册方式二选一：邮箱（email + emailCode）或手机号（phone + smsCode）。
+    // 默认走手机号注册；短信没启用时 `usePhoneMode` 会自动落回邮箱那条路。
+    const [mode, setMode] = useState<"email" | "phone">("phone");
+    const [phone, setPhone] = useState("");
+    const [smsCode, setSmsCode] = useState("");
+    const [sendingSms, setSendingSms] = useState(false);
+    const [smsCountdown, setSmsCountdown] = useState(0);
     const [displayName, setDisplayName] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,6 +37,7 @@ export default function RegisterPage() {
     const [countdown, setCountdown] = useState(0);
     const [registerCountdown, setRegisterCountdown] = useState(0);
     const sending = useRef(false),
+        smsSending = useRef(false),
         registering = useRef(false);
     const next = safeNext(params.get("next"));
 
@@ -48,6 +56,12 @@ export default function RegisterPage() {
         const timer = window.setInterval(() => setCountdown((value) => Math.max(0, value - 1)), 1000);
         return () => window.clearInterval(timer);
     }, [countdown]);
+
+    useEffect(() => {
+        if (smsCountdown <= 0) return;
+        const timer = window.setInterval(() => setSmsCountdown((value) => Math.max(0, value - 1)), 1000);
+        return () => window.clearInterval(timer);
+    }, [smsCountdown]);
 
     const sendCode = async () => {
         if (sending.current || countdown > 0) return;
@@ -70,6 +84,28 @@ export default function RegisterPage() {
         }
     };
 
+    /** 短信验证码（与 `sendCode` 逐行对称：同样的 429 → 倒计时口径）。 */
+    const sendSmsCode = async () => {
+        if (smsSending.current || smsCountdown > 0) return;
+        if (!phone.trim()) {
+            message.warning("请先输入手机号");
+            return;
+        }
+        smsSending.current = true;
+        setSendingSms(true);
+        try {
+            await sendRegistrationSmsCode(phone.trim());
+            setSmsCountdown(60);
+            message.success("验证码已发送，请查看短信");
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 429) setSmsCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
+            message.error(error instanceof Error ? error.message : "发送验证码失败");
+        } finally {
+            smsSending.current = false;
+            setSendingSms(false);
+        }
+    };
+
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (registering.current || registerCountdown > 0) return;
@@ -84,7 +120,10 @@ export default function RegisterPage() {
         registering.current = true;
         setSubmitting(true);
         try {
-            await register({ username, email, emailCode, displayName, password, acceptedTerms: agreementAccepted });
+            // 二选一：手机号那条路**不发** email/emailCode（否则后端会判成"两个都填"而拒掉）。
+            await register(usePhoneMode
+                ? { username, phone, smsCode, displayName, password, acceptedTerms: agreementAccepted }
+                : { username, email, emailCode, displayName, password, acceptedTerms: agreementAccepted });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
@@ -107,7 +146,11 @@ export default function RegisterPage() {
 
     const registrationClosed = settings?.registrationEnabled === false;
     const mailUnavailable = Boolean(settings && !settings.firstUser && settings.emailCodeRequired && !settings.emailEnabled);
-    const disabled = registrationClosed || mailUnavailable;
+    // 短信那条路：开关关着 / 没配齐凭证时，**页签根本不出现**（而不是让用户走到提交才失败）。
+    const smsUnavailable = Boolean(settings && !settings.firstUser && !settings.smsEnabled);
+    const showPhoneTab = Boolean(settings && !settings.firstUser && settings.smsEnabled);
+    const usePhoneMode = mode === "phone" && showPhoneTab;
+    const disabled = registrationClosed || (usePhoneMode ? smsUnavailable : mailUnavailable);
     const requireCode = Boolean(settings && !settings.firstUser && settings.emailCodeRequired);
 
     return (
@@ -137,39 +180,92 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
-            <AuthField label="邮箱">
-                <Input
+            {/* 注册方式：邮箱 / 手机号 —— **二选一**（后端 `Register` 也会再判一次） */}
+            {showPhoneTab ? (
+                <Segmented
+                    block
                     size="large"
-                    prefix={<Mail className="size-4 text-white/35" />}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="用于登录与安全验证"
-                    autoComplete="email"
-                    required={!settings?.firstUser}
-                    disabled={disabled}
+                    value={mode}
+                    onChange={(value) => setMode(value as "email" | "phone")}
+                    options={[
+                        { label: "手机号注册", value: "phone" },
+                        { label: "邮箱注册", value: "email" },
+                    ]}
                 />
-            </AuthField>
+            ) : null}
 
-            {requireCode ? (
-                <AuthField label="邮箱验证码">
-                    <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+            {usePhoneMode ? (
+                <>
+                    <AuthField label="手机号">
                         <Input
                             size="large"
-                            prefix={<ShieldCheck className="size-4 text-white/35" />}
-                            value={emailCode}
-                            onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                            placeholder="6 位验证码"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
+                            prefix={<Smartphone className="size-4 text-white/35" />}
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value.replace(/[^0-9+]/g, "").slice(0, 20))}
+                            placeholder="用于接收短信验证码"
+                            inputMode="tel"
+                            autoComplete="tel"
                             required
                             disabled={disabled}
                         />
-                        <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
-                            {countdown > 0 ? `${countdown}s` : "获取验证码"}
-                        </Button>
-                    </div>
-                </AuthField>
-            ) : null}
+                    </AuthField>
+
+                    <AuthField label="短信验证码">
+                        <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+                            <Input
+                                size="large"
+                                prefix={<ShieldCheck className="size-4 text-white/35" />}
+                                value={smsCode}
+                                onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                                placeholder="6 位验证码"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                required
+                                disabled={disabled}
+                            />
+                            <Button size="large" loading={sendingSms} disabled={disabled || smsCountdown > 0} onClick={() => void sendSmsCode()}>
+                                {smsCountdown > 0 ? `${smsCountdown}s` : "获取验证码"}
+                            </Button>
+                        </div>
+                    </AuthField>
+                </>
+            ) : (
+                <>
+                    <AuthField label="邮箱">
+                        <Input
+                            size="large"
+                            prefix={<Mail className="size-4 text-white/35" />}
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="用于登录与安全验证"
+                            autoComplete="email"
+                            required={!settings?.firstUser}
+                            disabled={disabled}
+                        />
+                    </AuthField>
+
+                    {requireCode ? (
+                        <AuthField label="邮箱验证码">
+                            <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+                                <Input
+                                    size="large"
+                                    prefix={<ShieldCheck className="size-4 text-white/35" />}
+                                    value={emailCode}
+                                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                                    placeholder="6 位验证码"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    required
+                                    disabled={disabled}
+                                />
+                                <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                                    {countdown > 0 ? `${countdown}s` : "获取验证码"}
+                                </Button>
+                            </div>
+                        </AuthField>
+                    ) : null}
+                </>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="密码">

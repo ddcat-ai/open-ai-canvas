@@ -40,6 +40,8 @@ var (
 	New                                        = app.New
 	NewAppError                                = app.NewAppError
 	NewModelError                              = app.NewModelError
+	MaskPhone                                  = app.MaskPhone
+	NormalizeSmsPhone                          = app.NormalizeSmsPhone
 	NormalizeCapabilitySpec                    = app.NormalizeCapabilitySpec
 	NormalizeModelCapabilityConfig             = app.NormalizeModelCapabilityConfig
 	NormalizeModelCapabilityConfigForModel     = app.NormalizeModelCapabilityConfigForModel

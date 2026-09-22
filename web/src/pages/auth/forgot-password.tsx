@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useState, type ReactNode } from "react";
-import { App, Button, Input } from "antd";
-import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
+import { App, Button, Input, Segmented } from "antd";
+import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck, Smartphone, TriangleAlert } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import { getAuthSettings, resetPassword, sendPasswordResetEmailCode } from "@/services/api/auth";
+import { getAuthSettings, resetPassword, resetPasswordBySms, sendPasswordResetEmailCode, sendPasswordResetSmsCode } from "@/services/api/auth";
 
 type RecoveryStage = "request" | "reset";
 
@@ -14,6 +14,14 @@ export default function ForgotPasswordPage() {
     const [stage, setStage] = useState<RecoveryStage>("request");
     const [email, setEmail] = useState("");
     const [emailCode, setEmailCode] = useState("");
+    /**
+     * 找回密码也支持短信那条路（**邮箱那条原样保留**）。
+     * 两条链的选择只在"重置阶段"之前有意义 —— 进入重置后按 channel 走对应的接口。
+     */
+    const [channel, setChannel] = useState<"email" | "phone">("email");
+    const [phone, setPhone] = useState("");
+    const [smsCode, setSmsCode] = useState("");
+    const [smsEnabled, setSmsEnabled] = useState(false);
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [emailEnabled, setEmailEnabled] = useState<boolean | null>(null);
@@ -26,8 +34,17 @@ export default function ForgotPasswordPage() {
     useEffect(() => {
         let cancelled = false;
         void getAuthSettings()
-            .then((settings) => !cancelled && setEmailEnabled(settings.emailEnabled))
-            .catch(() => !cancelled && setEmailEnabled(null));
+            .then((settings) => {
+                if (cancelled) return;
+                setEmailEnabled(settings.emailEnabled);
+                // 短信那条路能不能走，由后台「短信服务」的配置决定。
+                setSmsEnabled(Boolean(settings.smsEnabled));
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setEmailEnabled(null);
+                setSmsEnabled(false);
+            });
         return () => {
             cancelled = true;
         };
@@ -39,7 +56,29 @@ export default function ForgotPasswordPage() {
         return () => window.clearInterval(timer);
     }, [countdown]);
 
+    const usePhone = channel === "phone" && smsEnabled;
+    /** 发送验证码：按所选通道分流（**两条链的"防枚举"口径一致** —— 都只提示"如果已绑定…"）。 */
     const sendCode = async (advance: boolean) => {
+        if (usePhone) {
+            const normalizedPhone = phone.trim();
+            if (!normalizedPhone) {
+                message.warning("请先输入手机号");
+                return;
+            }
+            setSendingCode(true);
+            try {
+                await sendPasswordResetSmsCode(normalizedPhone);
+                setPhone(normalizedPhone);
+                setCountdown(60);
+                if (advance) setStage("reset");
+                message.success("如果该手机号已绑定可找回的账号，验证码将发送到手机");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "发送验证码失败");
+            } finally {
+                setSendingCode(false);
+            }
+            return;
+        }
         const normalizedEmail = email.trim();
         if (!normalizedEmail) {
             message.warning("请先输入邮箱");
@@ -72,7 +111,11 @@ export default function ForgotPasswordPage() {
         }
         setSubmitting(true);
         try {
-            await resetPassword({ email: email.trim(), emailCode, password });
+            if (usePhone) {
+                await resetPasswordBySms({ phone: phone.trim(), smsCode, password });
+            } else {
+                await resetPassword({ email: email.trim(), emailCode, password });
+            }
             message.success("密码已重置，请使用新密码登录");
             navigate(loginURL, { replace: true });
         } catch (error) {
@@ -93,22 +136,50 @@ export default function ForgotPasswordPage() {
     if (stage === "request") {
         return (
             <form onSubmit={requestCode} className="space-y-5">
-                {emailEnabled === false ? <Notice icon={<TriangleAlert className="size-3.5" />}>管理员尚未启用密码找回，请联系管理员处理。</Notice> : null}
-                <AuthField label="账号邮箱" htmlFor="recovery-email">
-                    <Input
-                        id="recovery-email"
+                {emailEnabled === false && !smsEnabled ? <Notice icon={<TriangleAlert className="size-3.5" />}>管理员尚未启用密码找回，请联系管理员处理。</Notice> : null}
+                {smsEnabled ? (
+                    <Segmented
+                        block
                         size="large"
-                        prefix={<Mail className="size-4 text-white/35" />}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="请输入绑定邮箱"
-                        autoComplete="email"
-                        inputMode="email"
-                        required
-                        disabled={emailEnabled === false}
+                        value={channel}
+                        onChange={(value) => setChannel(value as "email" | "phone")}
+                        options={[
+                            { label: "邮箱找回", value: "email" },
+                            { label: "手机号找回", value: "phone" },
+                        ]}
                     />
-                </AuthField>
-                <Button type="primary" htmlType="submit" size="large" block loading={sendingCode} disabled={emailEnabled === false} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                ) : null}
+                {usePhone ? (
+                    <AuthField label="手机号" htmlFor="recovery-phone">
+                        <Input
+                            id="recovery-phone"
+                            size="large"
+                            prefix={<Smartphone className="size-4 text-white/35" />}
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value.replace(/[^0-9+]/g, "").slice(0, 20))}
+                            placeholder="请输入绑定的手机号"
+                            autoComplete="tel"
+                            inputMode="tel"
+                            required
+                        />
+                    </AuthField>
+                ) : (
+                    <AuthField label="账号邮箱" htmlFor="recovery-email">
+                        <Input
+                            id="recovery-email"
+                            size="large"
+                            prefix={<Mail className="size-4 text-white/35" />}
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="请输入绑定邮箱"
+                            autoComplete="email"
+                            inputMode="email"
+                            required
+                            disabled={emailEnabled === false}
+                        />
+                    </AuthField>
+                )}
+                <Button type="primary" htmlType="submit" size="large" block loading={sendingCode} disabled={!usePhone && emailEnabled === false} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                     发送验证码
                 </Button>
                 <BackToLogin to={loginURL} />
@@ -118,22 +189,33 @@ export default function ForgotPasswordPage() {
 
     return (
         <form onSubmit={submitReset} className="space-y-4">
-            <AuthField label="账号邮箱" htmlFor="recovery-email-confirm">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                    <Input id="recovery-email-confirm" size="large" prefix={<Mail className="size-4 text-white/35" />} value={email} readOnly autoComplete="email" />
-                    <Button htmlType="button" size="large" onClick={editEmail}>
-                        修改邮箱
-                    </Button>
-                </div>
-            </AuthField>
-            <AuthField label="邮箱验证码" htmlFor="recovery-code">
+            {usePhone ? (
+                <AuthField label="手机号" htmlFor="recovery-phone-confirm">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                        <Input id="recovery-phone-confirm" size="large" prefix={<Smartphone className="size-4 text-white/35" />} value={phone} readOnly autoComplete="tel" />
+                        <Button htmlType="button" size="large" onClick={editEmail}>
+                            修改手机号
+                        </Button>
+                    </div>
+                </AuthField>
+            ) : (
+                <AuthField label="账号邮箱" htmlFor="recovery-email-confirm">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                        <Input id="recovery-email-confirm" size="large" prefix={<Mail className="size-4 text-white/35" />} value={email} readOnly autoComplete="email" />
+                        <Button htmlType="button" size="large" onClick={editEmail}>
+                            修改邮箱
+                        </Button>
+                    </div>
+                </AuthField>
+            )}
+            <AuthField label={usePhone ? "短信验证码" : "邮箱验证码"} htmlFor="recovery-code">
                 <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
                     <Input
                         id="recovery-code"
                         size="large"
                         prefix={<ShieldCheck className="size-4 text-white/35" />}
-                        value={emailCode}
-                        onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        value={usePhone ? smsCode : emailCode}
+                        onChange={(event) => (usePhone ? setSmsCode : setEmailCode)(event.target.value.replace(/\D/g, "").slice(0, 6))}
                         placeholder="6 位验证码"
                         inputMode="numeric"
                         autoComplete="one-time-code"

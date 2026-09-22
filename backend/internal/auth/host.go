@@ -45,11 +45,17 @@ func (nopHost) RequestRetryAfter(context.Context, string, time.Duration) time.Du
 	return 0
 }
 
+// SmsSender 短信投递函数（`设置` / 号码 / 验证码 / 模板CODE → BizId）。
+// 与 `mailSender` 同一套注入手法：生产用 `platform.SendAliyunSmsCode`，测试注入假的。
+type SmsSender func(setting SmsSettingValue, phone string, code string, templateCode string) (string, error)
+
 type Service struct {
 	repo           *repository.Repository
 	host           Host
 	mailSender     func(EmailSettingValue, string, string, string) error
+	smsSender      SmsSender
 	emailCodeMu    sync.Mutex
+	smsCodeMu      sync.Mutex
 	registrationMu sync.Mutex
 }
 
@@ -65,6 +71,13 @@ func (s *Service) SetMailSender(fn func(EmailSettingValue, string, string, strin
 		return
 	}
 	s.mailSender = fn
+}
+
+func (s *Service) SetSmsSender(fn SmsSender) {
+	if s == nil {
+		return
+	}
+	s.smsSender = fn
 }
 
 type brandHost struct {
