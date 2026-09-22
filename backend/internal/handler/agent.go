@@ -24,6 +24,21 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		capabilities := service.CloudAgentCapabilitySetInfo()
 		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": true, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": service.CloudAgentSupportedToolNames(), "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
+	// Skill usage is derived from the caller's own journal receipts, so it stays
+	// read-only and never exposes another user's runs.
+	r.GET("/agent/skills/usage", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		view, err := svc.CloudAgentSkillUsage(user.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, view)
+	})
 	// Profiles are durable preference data, not an authorization surface. The
 	// service validates scope ownership and the compiler injects the effective
 	// layers only after the code-level policy has been fixed.
