@@ -46,9 +46,7 @@ export function generationErrorMessage(error: unknown) {
 function contentModerationMessage(raw: string) {
     const detailIndex = raw.indexOf("；上游：");
     // 保留服务端过滤后的拒绝原因，同时保持平台审核的积分提示及重试保护。
-    return detailIndex >= 0 && !containsInfrastructureDetails(raw)
-        ? CONTENT_MODERATION_MESSAGE + raw.slice(detailIndex)
-        : CONTENT_MODERATION_MESSAGE;
+    return detailIndex >= 0 && !containsInfrastructureDetails(raw) ? CONTENT_MODERATION_MESSAGE + raw.slice(detailIndex) : CONTENT_MODERATION_MESSAGE;
 }
 
 export function generationErrorCode(error: unknown) {

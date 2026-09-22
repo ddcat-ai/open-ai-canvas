@@ -27,7 +27,7 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 		"GET /api/v1/models":                 false,
 		"POST /api/v1/generations":           false,
 		"GET /api/v1/generations/:id":        false,
-		"POST /api/tasks/:id/recover-media": false,
+		"POST /api/tasks/:id/recover-media":  false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

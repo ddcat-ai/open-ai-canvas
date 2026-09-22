@@ -1,13 +1,55 @@
-.model-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; margin-top: 6px; }
-.model-tag { --model-tag-ink: #6850a1; display: inline-flex; align-items: center; max-width: 100%; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--model-tag-ink) 22%, transparent); border-radius: var(--r-sm); color: var(--model-tag-ink); background: color-mix(in srgb, var(--model-tag-ink) 9%, transparent); font-size: var(--fs-tiny); font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
-.model-tag[data-color="blue"] { --model-tag-ink: #3562b1; }
-.model-tag[data-color="green"] { --model-tag-ink: #26745b; }
-.model-tag[data-color="gold"] { --model-tag-ink: #886310; }
-.model-tag[data-color="orange"] { --model-tag-ink: #a75321; }
-.model-tag[data-color="pink"] { --model-tag-ink: #a43e76; }
-.dark .model-tag { --model-tag-ink: #c8b6ed; }
-.dark .model-tag[data-color="blue"] { --model-tag-ink: #a3c3f5; }
-.dark .model-tag[data-color="green"] { --model-tag-ink: #94d6b9; }
-.dark .model-tag[data-color="gold"] { --model-tag-ink: #e6cb83; }
-.dark .model-tag[data-color="orange"] { --model-tag-ink: #edb08b; }
-.dark .model-tag[data-color="pink"] { --model-tag-ink: #e8acce; }
+.model-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    margin-top: 6px;
+}
+.model-tag {
+    --model-tag-ink: #6850a1;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, var(--model-tag-ink) 22%, transparent);
+    border-radius: var(--r-sm);
+    color: var(--model-tag-ink);
+    background: color-mix(in srgb, var(--model-tag-ink) 9%, transparent);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.model-tag[data-color="blue"] {
+    --model-tag-ink: #3562b1;
+}
+.model-tag[data-color="green"] {
+    --model-tag-ink: #26745b;
+}
+.model-tag[data-color="gold"] {
+    --model-tag-ink: #886310;
+}
+.model-tag[data-color="orange"] {
+    --model-tag-ink: #a75321;
+}
+.model-tag[data-color="pink"] {
+    --model-tag-ink: #a43e76;
+}
+.dark .model-tag {
+    --model-tag-ink: #c8b6ed;
+}
+.dark .model-tag[data-color="blue"] {
+    --model-tag-ink: #a3c3f5;
+}
+.dark .model-tag[data-color="green"] {
+    --model-tag-ink: #94d6b9;
+}
+.dark .model-tag[data-color="gold"] {
+    --model-tag-ink: #e6cb83;
+}
+.dark .model-tag[data-color="orange"] {
+    --model-tag-ink: #edb08b;
+}
+.dark .model-tag[data-color="pink"] {
+    --model-tag-ink: #e8acce;
+}

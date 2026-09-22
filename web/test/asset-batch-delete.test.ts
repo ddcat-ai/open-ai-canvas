@@ -11,18 +11,27 @@ const originalAdapter = apiClient.defaults.adapter;
 async function within<T>(promise: Promise<T>): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-        return await Promise.race([promise, new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error("删除或刷新链路未结束")), 1000);
-        })]);
+        return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error("删除或刷新链路未结束")), 1000);
+            }),
+        ]);
     } finally {
         clearTimeout(timer);
     }
 }
-const asset = (id: string): Asset => ({
-    id, kind: "text", title: id, coverUrl: "", tags: [],
-    createdAt: "2026-09-21T00:00:00.000Z", updatedAt: "2026-09-21T00:00:00.000Z",
-    data: { content: "测试素材" },
-} as Asset);
+const asset = (id: string): Asset =>
+    ({
+        id,
+        kind: "text",
+        title: id,
+        coverUrl: "",
+        tags: [],
+        createdAt: "2026-09-21T00:00:00.000Z",
+        updatedAt: "2026-09-21T00:00:00.000Z",
+        data: { content: "测试素材" },
+    }) as Asset;
 
 beforeEach(async () => {
     useAssetStore.setState({ assets: [] });
@@ -50,23 +59,35 @@ describe("素材批量删除", () => {
             return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { ids }, msg: "ok" } };
         };
         let updates = 0;
-        const stop = useAssetStore.subscribe((state, previous) => { if (state.assets !== previous.assets) updates++; });
+        const stop = useAssetStore.subscribe((state, previous) => {
+            if (state.assets !== previous.assets) updates++;
+        });
         try {
             await deleteAssetsWithRemoteSync(ids);
             expect(requests).toEqual([{ method: "post", url: "/assets/batch-delete", body: ids }]);
             expect(useAssetStore.getState().assets.map((item) => item.id)).toEqual(["keep"]);
             expect(updates).toBe(1);
-        } finally { stop(); }
+        } finally {
+            stop();
+        }
     });
 
     test.each([false, true])("真实分页查询刷新不阻塞删除完成（刷新失败：%s）", async (failRefresh) => {
         const initialPage = {
-            assets: [asset("first"), asset("keep")], total: 2, page: 1, pageSize: 20,
-            kindCounts: {}, categoryCounts: {}, folderCounts: {}, hasMore: false,
+            assets: [asset("first"), asset("keep")],
+            total: 2,
+            page: 1,
+            pageSize: 20,
+            kindCounts: {},
+            categoryCounts: {},
+            folderCounts: {},
+            hasMore: false,
         };
         useAssetStore.setState({ assets: initialPage.assets });
         let releaseRefresh!: () => void;
-        const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+        const refreshGate = new Promise<void>((resolve) => {
+            releaseRefresh = resolve;
+        });
         const requests: string[] = [];
         apiClient.defaults.adapter = async (config) => {
             requests.push(`${config.method} ${config.url}`);
@@ -75,22 +96,38 @@ describe("素材批量删除", () => {
             }
             await refreshGate;
             if (failRefresh) throw new Error("列表暂时不可用");
-            return { config, headers: {}, status: 200, statusText: "OK", data: {
-                code: 0, data: { ...initialPage, assets: [asset("keep")], total: 1 }, msg: "ok",
-            } };
+            return {
+                config,
+                headers: {},
+                status: 200,
+                statusText: "OK",
+                data: {
+                    code: 0,
+                    data: { ...initialPage, assets: [asset("keep")], total: 1 },
+                    msg: "ok",
+                },
+            };
         };
         const warning = spyOn(console, "warn").mockImplementation(() => {});
-        const observers = ["asset-library", "asset-picker"].map((key) => new QueryObserver(appQueryClient, {
-            queryKey: [key, "delete-regression"],
-            queryFn: () => loadAssetLibraryPage({ page: 1, pageSize: 20 }),
-            initialData: initialPage,
-        }));
+        const observers = ["asset-library", "asset-picker"].map(
+            (key) =>
+                new QueryObserver(appQueryClient, {
+                    queryKey: [key, "delete-regression"],
+                    queryFn: () => loadAssetLibraryPage({ page: 1, pageSize: 20 }),
+                    initialData: initialPage,
+                }),
+        );
         const stops: (() => void)[] = [];
-        const refreshed = observers.map((observer) => new Promise<void>((resolve) => {
-            stops.push(observer.subscribe((result) => {
-                if (result.fetchStatus === "idle" && (result.isError || result.data?.total === 1)) resolve();
-            }));
-        }));
+        const refreshed = observers.map(
+            (observer) =>
+                new Promise<void>((resolve) => {
+                    stops.push(
+                        observer.subscribe((result) => {
+                            if (result.fetchStatus === "idle" && (result.isError || result.data?.total === 1)) resolve();
+                        }),
+                    );
+                }),
+        );
         try {
             // GET 尚未返回，删除必须已返回，调用方才能关闭 Modal / Popconfirm。
             await within(deleteAssetsWithRemoteSync(["first"]));

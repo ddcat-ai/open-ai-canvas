@@ -58,7 +58,10 @@ test("candidate rows do not disguise missing prices as zero", () => {
 
 test("model rows preserve multiple promotional labels and colors without altering prices", () => {
     const config = fixture();
-    config.channels[0].modelCosts![0].tags = [{ text: "限时特价", color: "purple" }, { text: "官方1折", color: "gold" }];
+    config.channels[0].modelCosts![0].tags = [
+        { text: "限时特价", color: "purple" },
+        { text: "官方1折", color: "gold" },
+    ];
     for (const theme of [canvasThemes.light, canvasThemes.dark]) {
         const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={theme} creationVariant showConfiguredModelName={false} showPrice showDescription />);
         expect(markup).toContain('data-color="purple">限时特价');
