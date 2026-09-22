@@ -1,0 +1,12 @@
+Live2D Cubism Core
+Copyright (C) 2019 Live2D Inc. All rights reserved.
+
+live2dcubismcore.min.js is third-party software, not covered by this
+project's MIT license. Its original copyright and license header is retained.
+The file identifies itself as "Redistributable Code" under the Live2D
+Proprietary Software License Agreement:
+https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html
+
+Use and distribution remain subject to the applicable Live2D terms.
+Bundling the runtime does not grant rights to model assets or replace any
+license required for your use of the Live2D SDK.

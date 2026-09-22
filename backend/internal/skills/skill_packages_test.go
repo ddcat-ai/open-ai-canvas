@@ -3,6 +3,7 @@ package skills
 import (
 	"archive/zip"
 	"bytes"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/kernel"
@@ -23,6 +24,117 @@ func TestArchiveFromMarkdownInfersMetadata(t *testing.T) {
 	}
 	if string(archive.Files["SKILL.md"]) == "" || archive.ContentHash == "" {
 		t.Fatal("archive did not preserve the entry file or compute a hash")
+	}
+}
+
+func TestBuiltinSkillPackageBoundsMetadata(t *testing.T) {
+	skill := builtinSkillDefinition{
+		SkillID:     "test-builtin-skill",
+		SkillName:   "测试技能",
+		Description: strings.Repeat("描述内容。", 140),
+		Instruction: "# 测试技能\n\n保留完整正文。\n",
+	}
+	archive, err := archiveFromMarkdown([]byte(skill.Instruction), skill.SkillName, skill.Description)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]rune(archive.Metadata.Description)); got > 500 {
+		t.Fatalf("builtin skill metadata description length = %d, want <= 500", got)
+	}
+	if string(archive.Files["SKILL.md"]) != skill.Instruction {
+		t.Fatal("builtin skill package must preserve the complete instruction")
+	}
+}
+
+func TestEnsureSkillPackagesBoundsLegacyFallbackMetadata(t *testing.T) {
+	for _, source := range []int{3, skillSourceUser} {
+		db, err := gorm.Open(sqlite.Open("file:"+kernel.NewID()+"?mode=memory&cache=shared"), &gorm.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = sqlDB.Close() })
+		if err := db.AutoMigrate(&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}); err != nil {
+			t.Fatal(err)
+		}
+		svc := New(repository.New(db), t.TempDir(), nil)
+		skill := model.Skill{ID: kernel.NewID(), Name: strings.Repeat("名", 81), Description: strings.Repeat("文", 503), Instruction: "## 旧技能\n", Status: skillStatusEnabled, Source: source}
+		if err := db.Create(&skill).Error; err != nil {
+			t.Fatal(err)
+		}
+		for range 2 {
+			if err := svc.EnsureSkillPackages(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		assertSkillVersionCount(t, db, skill.ID, 1)
+		var saved model.Skill
+		if err := db.First(&saved, "id = ?", skill.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if saved.Name != skill.Name || saved.Description != skill.Description || saved.Instruction != skill.Instruction {
+			t.Fatal("migration changed original skill fields")
+		}
+		version, err := svc.repo.SkillVersion(saved.CurrentVersionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := svc.readSkillArchiveEntry(version, "SKILL.md")
+		if err != nil || string(body) != skill.Instruction {
+			t.Fatalf("original instruction not preserved: %v", err)
+		}
+	}
+	if _, err := archiveFromMarkdown([]byte("## 旧技能\n"), strings.Repeat("名", 81), strings.Repeat("文", 503)); err == nil {
+		t.Fatal("non-migration archive input must still reject oversized fallback metadata")
+	}
+}
+
+func TestArchiveFromMarkdownTruncatesInferredDescriptionWithinLimit(t *testing.T) {
+	longDescription := bytes.Repeat([]byte("描述内容。"), 140)
+	data := append([]byte("# 风格库四级匹配序\n\n"), longDescription...)
+
+	archive, err := archiveFromMarkdown(data, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]rune(archive.Metadata.Description)); got > 500 {
+		t.Fatalf("inferred description length = %d, want <= 500", got)
+	}
+	if archive.Metadata.Description == "" {
+		t.Fatal("inferred description is empty")
+	}
+	if !bytes.Equal(archive.Files["SKILL.md"], data) {
+		t.Fatal("metadata truncation changed the original instruction")
+	}
+}
+
+func TestSkillMetadataLengthBoundaries(t *testing.T) {
+	for _, length := range []int{499, 500, 501, 553} {
+		value := strings.Repeat("文", length)
+		markdown := []byte("# 技能\n\n" + value)
+		archive, err := archiveFromMarkdown(markdown, "", "")
+		if err != nil {
+			t.Fatalf("description length %d: %v", length, err)
+		}
+		want := value
+		if length > 500 {
+			want = strings.Repeat("文", 497) + "..."
+		}
+		if archive.Metadata.Description != want {
+			t.Fatalf("description length %d: unexpected truncation", length)
+		}
+	}
+	metadata := parseSkillPackageMetadata([]byte("---\nname: " + strings.Repeat("名", 81) + "\ndescription: " + strings.Repeat("文", 501) + "\nmetadata:\n  version: " + strings.Repeat("版", 65) + "\n---\n"))
+	if len([]rune(metadata.Name)) != 80 || len([]rune(metadata.Description)) != 500 || len([]rune(metadata.Version)) != 64 {
+		t.Fatalf("metadata exceeds bounds: %#v", metadata)
+	}
+	// Supplied metadata still goes through strict validation; no widening of
+	// the archive contract is needed to fix inferred display metadata.
+	if _, err := finalizeSkillArchive(map[string][]byte{"SKILL.md": []byte("# 技能")}, skillPackageMetadata{Name: "技能", Description: strings.Repeat("文", 501)}); err == nil {
+		t.Fatal("expected overlong archive metadata to be rejected")
 	}
 }
 

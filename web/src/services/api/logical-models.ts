@@ -1,4 +1,5 @@
 import { http } from "@/services/api/request";
+import type { ModelTag } from "@/lib/model-tags";
 
 export type InputConstraint = { min: number; max: number };
 export type OptionConstraint = { values?: unknown[]; min?: number; max?: number; step?: number };
@@ -168,6 +169,7 @@ export type PublicChannelModel = {
     modelKey: string;
     displayName: string;
     channelLabel?: string;
+    tags?: ModelTag[];
     description?: string;
     sortOrder?: number;
     icon: string;

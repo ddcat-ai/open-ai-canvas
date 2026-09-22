@@ -15,7 +15,7 @@ done
 
 tags=(--tag "$IMAGE:sha-$GITHUB_SHA" --tag "$IMAGE:sha-${GITHUB_SHA:0:7}")
 if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-  [[ "${VERSION_TAG:?}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "Invalid version image tag" >&2; exit 1; }
+  [[ "${VERSION_TAG:?}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?([.-][0-9A-Za-z.-]+)?$ ]] || { echo "Invalid version image tag" >&2; exit 1; }
   tags+=(--tag "$IMAGE:$VERSION_TAG")
 elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
   current_sha=$(gh api "repos/${GITHUB_REPOSITORY:?}/git/ref/heads/main" --jq '.object.sha')

@@ -11,10 +11,12 @@ describe("channel model editor drafts", () => {
     test("new drafts select an enabled protocol and never share price state", () => {
         const first = initialChannelModelValues(null, protocols);
         first.priceTiers[0].unitPrice = 42;
+        first.tags.push({ text: "限时特价", color: "purple" });
         const second = initialChannelModelValues(null, protocols);
         expect(second.protocol).toBe("text");
         expect(second.priceTiers[0].unitPrice).toBe(0);
         expect(second.modelKey).toBe("");
+        expect(second.tags).toEqual([]);
     });
     test("missing catalogs do not invent a protocol", () => {
         expect(initialChannelModelValues(null, []).protocol).toBeUndefined();

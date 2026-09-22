@@ -83,7 +83,8 @@ func TestPublicGenerationResultResourceIDAcceptsStorageKey(t *testing.T) {
 }
 
 func TestPublicGenerationResultRejectsMalformedJSON(t *testing.T) {
-	svc := New(repository.New(nil), t.TempDir())
+	// Malformed JSON is rejected before the resource repository is needed.
+	svc := &Service{}
 	if _, err := svc.publicGenerationResult("user", "{"); err == nil || !strings.Contains(err.Error(), "生成结果暂时不可用") {
 		t.Fatalf("malformed result error = %v", err)
 	}

@@ -26,7 +26,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { flushAssetStorePersistence, useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
-import { deleteAssetWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { deleteAssetWithRemoteSync, deleteAssetsWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
 import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAssetsPage, moveRemoteAssetsToFolder, updateAssetFolder, type AssetFolder } from "@/services/api/user-data";
 import { AssetBatchUploadModal } from "./asset-batch-upload-modal";
@@ -487,9 +487,7 @@ export default function AssetsPage() {
         const count = trashAssets.length;
         if (!count) return;
         try {
-            for (const asset of trashAssets) {
-                await deleteAssetWithRemoteSync(asset.id);
-            }
+            await deleteAssetsWithRemoteSync(trashAssets.map((asset) => asset.id));
             setSelectedIds([]);
             message.success(`已彻底清空回收站 ${count} 个素材`);
         } catch (error) {
@@ -516,7 +514,7 @@ export default function AssetsPage() {
     const confirmBatchDelete = async () => {
         if (!selectedAssets.length) return;
         try {
-            for (const asset of selectedAssets) await deleteAssetWithRemoteSync(asset.id);
+            await deleteAssetsWithRemoteSync(selectedAssets.map((asset) => asset.id));
             message.success(`已彻底删除 ${selectedAssets.length} 个素材`);
             setSelectedIds([]);
             setBatchDeleteOpen(false);
@@ -982,7 +980,7 @@ export default function AssetsPage() {
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
             >
-                确定彻底删除「{deletingAsset?.title}」吗？未被其他内容引用的服务器本地或对象存储文件也会同步删除，操作不可恢复。
+                确定彻底删除「{deletingAsset?.title}」吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
@@ -994,7 +992,7 @@ export default function AssetsPage() {
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
             >
-                确定彻底删除已选择的 {selectedAssets.length} 个素材吗？未被复用的服务器文件会同步删除，操作不可恢复。
+                确定彻底删除已选择的 {selectedAssets.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
             </Modal>
         </>
     );

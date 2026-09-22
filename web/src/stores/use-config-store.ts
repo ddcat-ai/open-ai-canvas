@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ModelTag } from "@/lib/model-tags";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
@@ -363,6 +364,7 @@ export type ModelChannel = {
         model: string;
         displayName?: string;
         channelLabel?: string;
+        tags?: ModelTag[];
         description?: string;
         icon?: string;
         capability: ModelCapability;

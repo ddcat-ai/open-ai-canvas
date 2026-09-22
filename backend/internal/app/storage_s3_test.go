@@ -57,9 +57,9 @@ func TestS3ObjectOperationsUsePathStyleSessionTokenAndNoManagedHeaders(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, _ := io.ReadAll(stream.body)
-	_ = stream.body.Close()
-	if stream.statusCode != http.StatusPartialContent || stream.contentRange != "bytes 0-3/7" || string(data) != "payl" {
+	data, _ := io.ReadAll(stream.Body)
+	_ = stream.Body.Close()
+	if stream.StatusCode != http.StatusPartialContent || stream.ContentRange != "bytes 0-3/7" || string(data) != "payl" {
 		t.Fatalf("stream = %#v, body = %q", stream, data)
 	}
 	if err := deleteS3Object(setting, "prefix/object.txt"); err != nil {

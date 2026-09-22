@@ -85,11 +85,7 @@ function compactStatusLabel(settings: AgentMemoryCompactView | null) {
     if (settings.lastStatus === "failed") return settings.lastError || "上次压缩失败";
     if (settings.lastStatus === "succeeded") {
         const summary = settings.summary;
-        const parts = [
-            summary?.merged ? `合并 ${summary.merged}` : "",
-            summary?.rewritten ? `改写 ${summary.rewritten}` : "",
-            summary?.removed ? `删除 ${summary.removed}` : "",
-        ].filter(Boolean);
+        const parts = [summary?.merged ? `合并 ${summary.merged}` : "", summary?.rewritten ? `改写 ${summary.rewritten}` : "", summary?.removed ? `删除 ${summary.removed}` : ""].filter(Boolean);
         const when = settings.lastCompactAt ? new Date(settings.lastCompactAt).toLocaleString() : "";
         return [when && `上次 ${when}`, parts.join(" · ") || "模型认为没有需要改动的条目"].filter(Boolean).join(" · ");
     }
@@ -204,14 +200,7 @@ function AgentMemoryCompactCard({ compact = false, onApplied }: { compact?: bool
                 </Button>
             </div>
             <div className="flex min-w-0 flex-col gap-2">
-                <SegmentedControl
-                    size="sm"
-                    ariaLabel="压缩周期"
-                    value={settings?.compactInterval || "off"}
-                    disabled={saving || busy}
-                    options={COMPACT_INTERVALS}
-                    onChange={(value) => void persist(value, model)}
-                />
+                <SegmentedControl size="sm" ariaLabel="压缩周期" value={settings?.compactInterval || "off"} disabled={saving || busy} options={COMPACT_INTERVALS} onChange={(value) => void persist(value, model)} />
                 <div className="min-w-0 overflow-hidden rounded-xl bg-surface-tertiary">
                     <ModelPicker
                         config={config}
@@ -231,7 +220,9 @@ function AgentMemoryCompactCard({ compact = false, onApplied }: { compact?: bool
                 </div>
             </div>
             {failed && settings?.lastError ? (
-                <Callout tone="warning" title="上次压缩未完成">{settings.lastError}</Callout>
+                <Callout tone="warning" title="上次压缩未完成">
+                    {settings.lastError}
+                </Callout>
             ) : statusText ? (
                 <p className="text-caption leading-5 text-muted-foreground">{statusText}</p>
             ) : null}
@@ -378,13 +369,7 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
     return (
         <div className={compact ? "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden" : "flex flex-col gap-5"}>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <SegmentedControl
-                    size="sm"
-                    ariaLabel="记忆状态"
-                    value={status}
-                    options={statusFilters}
-                    onChange={setStatus}
-                />
+                <SegmentedControl size="sm" ariaLabel="记忆状态" value={status} options={statusFilters} onChange={setStatus} />
                 <div className="ml-auto flex items-center gap-1">
                     <IconButton variant="ghost" size="sm" icon={Download} aria-label="导出记忆" onClick={() => void onExport()} />
                     <IconButton variant="ghost" size="sm" icon={Upload} aria-label="导入记忆" onClick={() => fileRef.current?.click()} />
@@ -422,7 +407,13 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                         className={compact ? "min-h-0 flex-1 py-8" : "min-h-[220px] py-10"}
                         title={status === "pending" ? "没有待批准的记忆" : "还没有个人记忆"}
                         description={status === "pending" ? "Agent 跑通任务后会把可复用做法记到这里，等你点头。" : "手动添加立刻生效，也可以等 Agent 记下后再批准。"}
-                        action={status === "pending" ? undefined : <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>添加记忆</Button>}
+                        action={
+                            status === "pending" ? undefined : (
+                                <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>
+                                    添加记忆
+                                </Button>
+                            )
+                        }
                     />
                 ) : null}
                 {!loading && items.length ? (
@@ -478,14 +469,7 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                 </div>
             ) : null}
 
-            <AppModal
-                open={editorOpen}
-                title={editing ? "编辑记忆" : "添加记忆"}
-                okText={editing ? "保存" : "添加"}
-                confirmLoading={saving}
-                onOk={() => void save()}
-                onCancel={() => setEditorOpen(false)}
-            >
+            <AppModal open={editorOpen} title={editing ? "编辑记忆" : "添加记忆"} okText={editing ? "保存" : "添加"} confirmLoading={saving} onOk={() => void save()} onCancel={() => setEditorOpen(false)}>
                 <Form form={form} layout="vertical" className="pt-2">
                     <Form.Item name="topic" label="主题" rules={[{ required: true, message: "请填写主题" }]}>
                         <Input maxLength={120} placeholder="例如 canvas.snapshot-hash" />

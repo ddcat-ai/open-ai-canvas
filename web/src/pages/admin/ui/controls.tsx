@@ -22,14 +22,7 @@ export function AdminSwitch({
     className?: string;
     "aria-label"?: string;
 }) {
-    return (
-        <AntSwitch
-            {...props}
-            size={size === "sm" ? "small" : "default"}
-            className={cn("admin-switch", className)}
-            onChange={(checked) => props.onChange?.(checked)}
-        />
-    );
+    return <AntSwitch {...props} size={size === "sm" ? "small" : "default"} className={cn("admin-switch", className)} onChange={(checked) => props.onChange?.(checked)} />;
 }
 
 export function Switch(props: Parameters<typeof AdminSwitch>[0]) {
@@ -53,15 +46,7 @@ export function AdminSelect<V extends string = string>({
     ariaLabel?: string;
     className?: string;
 }) {
-    return (
-        <AntSelect
-            {...props}
-            size={size === "sm" ? "small" : "middle"}
-            className={cn("admin-select", className)}
-            aria-label={ariaLabel}
-            onChange={(value) => onChange?.(value as V)}
-        />
-    );
+    return <AntSelect {...props} size={size === "sm" ? "small" : "middle"} className={cn("admin-select", className)} aria-label={ariaLabel} onChange={(value) => onChange?.(value as V)} />;
 }
 
 export function Select<V extends string = string>(props: Parameters<typeof AdminSelect<V>>[0]) {
@@ -143,15 +128,7 @@ export function AdminSegmented<V extends string = string>({
     ariaLabel?: string;
     className?: string;
 }) {
-    return (
-        <Segmented
-            className={cn("admin-segmented", className)}
-            value={value}
-            options={options.map((option) => ({ ...option, label: option.label ?? option.value }))}
-            onChange={(next) => onChange?.(String(next) as V)}
-            aria-label={ariaLabel}
-        />
-    );
+    return <Segmented className={cn("admin-segmented", className)} value={value} options={options.map((option) => ({ ...option, label: option.label ?? option.value }))} onChange={(next) => onChange?.(String(next) as V)} aria-label={ariaLabel} />;
 }
 
 export function SegmentedControl<V extends string = string>(props: Parameters<typeof AdminSegmented<V>>[0]) {

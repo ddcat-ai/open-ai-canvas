@@ -137,7 +137,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeoutWithPolicy(task.Type, policy.Task))
+	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeout(task, policy.Task))
 	defer cancel()
 	leaseDone := make(chan struct{})
 	leaseLost := make(chan error, 1)
@@ -148,7 +148,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		for {
 			select {
 			case <-ticker.C:
-				renewCtx, cancelRenew := context.WithTimeout(ctx, 5*time.Second)
+				renewCtx, cancelRenew := taskLeaseRenewContext(ctx)
 				var err error
 				if globalSlot != nil {
 					err = globalSlot.Renew(renewCtx)
@@ -185,6 +185,10 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if task.Type == model.TaskTypeTimelineRender {
 		return w.processTimelineRender(task, ctx)
 	}
+	if task.MediaRecoveryJSON != "" {
+		result, recoveryErr := s.resumeTaskMedia(ctx, task)
+		return s.finishTaskMediaRecovery(task, result, recoveryErr)
+	}
 
 	s.markAgentMemoryCompactRunning(*task)
 	task.Stage = "调用生成模型"
@@ -215,6 +219,15 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	default:
 	}
 	result, canvasOps, err := routeResult.result, routeResult.canvasOps, routeResult.err
+	latestMedia, readErr := s.repo.Task(task.ID)
+	if readErr != nil {
+		return readErr
+	}
+	task.MediaRecoveryJSON, task.MediaStage = latestMedia.MediaRecoveryJSON, latestMedia.MediaStage
+	var deliveryFailure *mediaRecoveryError
+	if task.MediaRecoveryJSON != "" || errors.As(err, &deliveryFailure) {
+		return s.finishTaskMediaRecovery(task, result, err)
+	}
 	providerSucceeded := routeResult.providerSucceeded
 	if err == nil {
 		result, err = s.persistGeneratedMediaResult(task.UserID, result)
@@ -227,6 +240,9 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		if code, _ := ChannelSlotFailureDetails(err); code != "" {
 			channelSlotFailedBeforeRequest = true
 		}
+		// 续租使用独立 context；执行超时不能覆盖真实租约失效，否则旧 worker
+		// 可能在新 worker 接管后继续结算或写入终态。
+		deadlineExpired := errors.Is(ctx.Err(), context.DeadlineExceeded)
 		select {
 		case leaseErr := <-leaseLost:
 			_ = s.log(task.UserID, task.ID, "warn", "任务租约失效，等待其他 worker 恢复", leaseErr.Error())
@@ -251,8 +267,14 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		if newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			err = errors.New(taskTimeoutMessage(task.Type))
+		if errors.Is(err, context.DeadlineExceeded) || deadlineExpired {
+			// 画布 Agent 的单步超时是可恢复事件（运行期会关思考重试同一步），
+			// 因此必须与"任务执行超时"区分开，否则只能整轮判死。
+			if cloudAgentModelOperation(task) {
+				err = errors.New(cloudAgentStepTimeoutError + "，已中止这一步")
+			} else {
+				err = errors.New(taskTimeoutMessage(task.Type))
+			}
 		}
 		s.noteAgentMemoryCompactTask(*task, nil, err)
 		return terminal.handleExecutionFailure(task, err, providerSucceeded, channelSlotFailedBeforeRequest)
@@ -295,6 +317,30 @@ func taskFailureMessage(err error) string {
 		return "任务处理失败"
 	}
 	return truncateRunes(err.Error(), 2_000)
+}
+
+// taskLeaseRenewContext 给续租单独一份"不继承父 context 取消/时限"的上下文（仅 5 秒上限）。
+//
+// 续租必须比"这一条任务的执行时限"活得更久：父 context 一旦到点，派生的续租 context 会立刻
+// 被取消，续租请求带着 context.Canceled 失败并被误判成"租约失效"，任务于是停在 running，
+// 租约过期后又被其它 worker 重跑（实测一次上游调用被重跑成三次）。
+func taskLeaseRenewContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+}
+
+// taskExecutionTimeout 解析一次任务的执行墙钟：画布 Agent 的单步调用可以配秒级超时
+// （AgentStepTimeoutSeconds），没配时沿用文本任务超时。秒级粒度是必要的——一轮里每一步
+// 都是分钟级的调用，分钟粒度改不动"某一步卡住"的体验。
+// 超时的表现是任务错误里带 cloudAgentStepTimeoutError 标记，运行期据此关思考重试同一步，
+// 而不是把整轮判死（见 cloud_agent_step_timeout.go）。
+func taskExecutionTimeout(task *model.Task, policy RuntimeTaskPolicy) time.Duration {
+	if task != nil && cloudAgentModelOperation(task) && policy.AgentStepTimeoutSeconds > 0 {
+		return time.Duration(policy.AgentStepTimeoutSeconds) * time.Second
+	}
+	if task == nil {
+		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
+	}
+	return taskExecutionTimeoutWithPolicy(task.Type, policy)
 }
 
 func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) time.Duration {

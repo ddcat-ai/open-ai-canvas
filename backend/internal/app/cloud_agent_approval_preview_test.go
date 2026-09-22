@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -79,5 +80,27 @@ func TestCloudAgentCanvasApprovalPreviewRejectsUnknownTargetInsteadOfFallingBack
 	}})
 	if err == nil || !strings.Contains(err.Error(), "只能更新现有") {
 		t.Fatalf("unknown target was not rejected: %v", err)
+	}
+}
+
+// 漏 patch 必须是**可恢复的参数错误**：运行期会把它当工具结果回给模型重试，
+// 而不是把整轮判死；未知操作类型（例如删除）仍按准入失败终止。
+func TestCloudAgentCanvasApprovalPreviewTreatsMissingPatchAsArgumentError(t *testing.T) {
+	doc, err := creationDocument(`{"nodes":[{"id":"image-1","type":"image","title":"参考图"}],"connections":[]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = applyCloudAgentCanvasPlan(doc, []agentCanvasOp{{Type: "update_node", ID: "image-1"}})
+	var argumentErr *cloudAgentArgumentError
+	if !errors.As(err, &argumentErr) {
+		t.Fatalf("漏 patch 应当是可恢复的参数错误，实际：%v", err)
+	}
+
+	_, err = applyCloudAgentCanvasPlan(doc, []agentCanvasOp{{Type: "delete_node", ID: "image-1"}})
+	if err == nil {
+		t.Fatal("未知画布写操作必须仍然报错")
+	}
+	if errors.As(err, &argumentErr) {
+		t.Fatalf("未知画布写操作不能被当成可恢复的参数错误：%v", err)
 	}
 }

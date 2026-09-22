@@ -230,7 +230,7 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 		}
 	}
 	binding.AssetGroupID = groupID
-	resourceURL, err := s.directResourceURL(resource, time.Now().Add(time.Hour))
+	resourceURL, err := s.providerResourceURL(resource, time.Now().Add(time.Hour))
 	if err != nil {
 		return "", s.failArkPrivateAssetBinding(binding, fmt.Errorf("生成方舟素材临时地址失败：%w", err))
 	}

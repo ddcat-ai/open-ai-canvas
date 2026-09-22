@@ -58,11 +58,6 @@ export default function SettingsPage() {
 
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
 
-    useLayoutEffect(() => {
-        document.body.classList.add("app-user-overlays");
-        return () => document.body.classList.remove("app-user-overlays");
-    }, []);
-
     useEffect(() => {
         if (isVisibleConfigSection(requestedSection)) {
             setActiveTab(requestedSection);

@@ -498,7 +498,27 @@ function omittedImageQuality(value: string | undefined) {
 
 export function parseBackendGenerationResult(task: GenerationTask): BackendGenerationResult {
     if (!task.resultJson) throw new Error("后端任务没有返回结果");
-    const result = JSON.parse(task.resultJson) as BackendGenerationResult;
+    const result = JSON.parse(task.resultJson) as BackendGenerationResult & { text?: unknown };
     if (!result || typeof result !== "object") throw new Error("后端任务结果格式错误");
-    return result;
+    return { ...result, text: normalizeBackendText(result.text) };
+}
+
+function normalizeBackendText(value: unknown): string | undefined {
+    if (typeof value === "string") return value;
+    if (value === null || value === undefined) return undefined;
+    if (Array.isArray(value)) {
+        const text = value.map((item) => normalizeBackendText(item)).filter((item): item is string => Boolean(item)).join("");
+        return text || undefined;
+    }
+    if (typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        for (const key of ["text", "content", "output_text", "value"]) {
+            if (!(key in record)) continue;
+            const nested = normalizeBackendText(record[key]);
+            if (nested !== undefined) return nested;
+        }
+        // 某些结构化文本任务直接把 JSON 载荷放进 text 对象，保留 JSON 供上层契约解析。
+        return JSON.stringify(value);
+    }
+    return String(value);
 }

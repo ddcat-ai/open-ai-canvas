@@ -1,10 +1,12 @@
 import { create } from "zustand";
+import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 
 import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 8,
+    canvas: DEFAULT_CANVAS_APPEARANCE,
+    schemaVersion: 9,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -60,7 +62,8 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
-        schemaVersion: 8,
+        schemaVersion: 9,
+        canvas: { ...DEFAULT_CANVAS_APPEARANCE, ...value?.canvas },
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,

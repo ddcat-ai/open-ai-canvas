@@ -29,6 +29,11 @@ type ModelChannel struct {
 	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
+type ChannelModelTag struct {
+	Text  string `json:"text"`
+	Color string `json:"color"`
+}
+
 type ChannelModel struct {
 	ID                           string               `json:"id" gorm:"primaryKey;size:36"`
 	ChannelID                    string               `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
@@ -36,6 +41,7 @@ type ChannelModel struct {
 	ProviderModelKey             string               `json:"providerModelKey" gorm:"size:120"`
 	DisplayName                  string               `json:"displayName" gorm:"size:160"`
 	ChannelLabel                 string               `json:"channelLabel" gorm:"size:80;not null;default:''"`
+	Tags                         []ChannelModelTag    `json:"tags" gorm:"serializer:json;type:text;not null;default:'[]'"`
 	Description                  string               `json:"description" gorm:"size:500;not null;default:''"`
 	SortOrder                    int                  `json:"sortOrder" gorm:"not null;default:0"`
 	Icon                         string               `json:"icon" gorm:"size:80"`
@@ -99,6 +105,7 @@ type ApiCallLog struct {
 	ChannelName            string        `json:"channelName" gorm:"-"`
 	TaskID                 string        `json:"taskId,omitempty" gorm:"index;size:36"`
 	TaskStatus             TaskStatus    `json:"taskStatus,omitempty" gorm:"-"`
+	MediaStage             string        `json:"mediaStage,omitempty" gorm:"-"`
 	BillingOrderID         string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	BillingStatus          BillingStatus `json:"billingStatus,omitempty" gorm:"-"`
 	BillingAmount          int64         `json:"billingAmountMicrocredits" gorm:"-"`

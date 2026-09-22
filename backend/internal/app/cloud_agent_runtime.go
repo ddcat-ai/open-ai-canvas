@@ -68,6 +68,7 @@ type cloudAgentRuntime struct {
 	VideoSeconds           int                                     `json:"videoSeconds"`
 	Calls                  []cloudAgentCall                        `json:"calls"`
 	CallIndex              int                                     `json:"callIndex"`
+	ToolRepairs            map[string]cloudAgentToolRepair         `json:"toolRepairs,omitempty"`
 	Approval               *cloudAgentApproval                     `json:"approval,omitempty"`
 	Decisions              map[string]string                       `json:"decisions"`
 	DecisionSettings       map[string]string                       `json:"decisionSettings,omitempty"`
@@ -81,6 +82,28 @@ type cloudAgentRuntime struct {
 	TransientReferences    map[string]cloudAgentTransientReference `json:"transientReferences,omitempty"`
 	InterjectionIDs        []string                                `json:"interjectionIds,omitempty"`
 	Events                 []CloudAgentEvent                       `json:"events"`
+	// EmptyOutputEscalated 记录"空输出已经升级重试过几次"（关思考 + 放大输出预算）。
+	EmptyOutputEscalated int `json:"emptyOutputEscalated,omitempty"`
+	// StepTimeoutEscalated 记录"单步墙钟到点后已经关思考重试过几次"。
+	StepTimeoutEscalated int `json:"stepTimeoutEscalated,omitempty"`
+	// ForceThinkingOff 让本步请求强制关闭上游思考：思考模型偶发把整个输出预算花在推理上，
+	// 结果正文与工具调用皆空（实测 output_tokens 正好等于 maxOutputTokens）。
+	ForceThinkingOff bool `json:"forceThinkingOff,omitempty"`
+	// BoostStepOutputBudget 让本步请求使用放大后的输出预算（配合关思考重试）。
+	BoostStepOutputBudget bool `json:"boostStepOutputBudget,omitempty"`
+	// StepLimits 是本步实际生效的执行边界（管理员策略解析结果），只用于构造请求：
+	// 不进状态 JSON——每次推进都按当时的策略重新解析，改配置无需重发本轮。
+	StepLimits cloudAgentStepLimits `json:"-"`
+	// ImageInspectCounts 记录本轮内每张图被查看的次数，用于"同一张图不要反复看"的护栏。
+	ImageInspectCounts map[string]int `json:"imageInspectCounts,omitempty"`
+	// PendingImageInspections 暂存"本批还有工具结果没入历史"的看图结果，等整批 tool
+	// 结果都入历史后合并成一条 user 图片消息（见 cloudAgentFlushPendingImages）。
+	//
+	// 它必须进检查点，不能标 `json:"-"`：一次 advanceCloudAgent 只执行一个工具调用
+	// （advanceCloudAgentTool 执行完就 return，下一批调用走下一次转移），而每次转移都
+	// 从 StateJSON 重新解码（cloudAgentDecode）。进程内字段在下一个调用到来时必然为空，
+	// 缓冲就白缓冲了。载荷只有回执与签名链接，几十字节级。
+	PendingImageInspections []cloudAgentImageInspection `json:"pendingImageInspections,omitempty"`
 }
 
 type cloudAgentTransientReference struct {
@@ -104,7 +127,11 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	canonical := input.Requests.Canonical
 	canonical.SystemPrompt = stripCloudAgentPlanBlock(canonical.SystemPrompt)
 	canonical.Messages = stripCloudAgentRuntimeContext(canonical.Messages)
-	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: task.ID, TaskIDs: []string{task.ID}, Step: 1, Decisions: map[string]string{}, Plan: initial.Plan, Events: []CloudAgentEvent{}}
+	limits, err := s.cloudAgentStepLimits()
+	if err != nil {
+		return err
+	}
+	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: task.ID, TaskIDs: []string{task.ID}, Step: 1, Decisions: map[string]string{}, Plan: initial.Plan, Events: []CloudAgentEvent{}, StepLimits: limits}
 	if len(initial.Skills) > 0 {
 		state.event(task.ID, "tool_completed", map[string]any{"toolName": "skills_load", "text": fmt.Sprintf("已启用 %d 个技能，正文将按需读取", len(initial.Skills))})
 	}
@@ -231,6 +258,14 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	}
 	if state.CallIndex < 0 || state.CallIndex > len(state.Calls) || len(state.Calls) > cloudAgentMaxToolCalls {
 		return errors.New("Agent runtime call cursor is invalid")
+	}
+	for toolName, repair := range state.ToolRepairs {
+		if toolName == "" || utf8.RuneCountInString(toolName) > 80 || repair.Attempt < 1 || repair.Attempt > cloudAgentToolAttemptLimit || repair.GroupID == "" {
+			return errors.New("Agent runtime tool repair state is invalid")
+		}
+		if err := validateCloudAgentID(repair.GroupID, "工具纠错组 ID", 240); err != nil {
+			return err
+		}
 	}
 	if state.ActiveTaskID != "" && state.MediaTaskID != "" {
 		return errors.New("Agent runtime has multiple active tasks")
@@ -392,6 +427,14 @@ func cloudAgentContainsString(values []string, target string) bool {
 func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
 	if run == nil || state == nil {
 		return errors.New("Agent runtime state is missing")
+	}
+	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
+	// 上游每一步都会重新读取历史里的图片并按视觉 token 计费，保留整段历史既贵又没有新信息。
+	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed && run.ID != "" {
+		state.event(run.ID, "context_images_pruned", map[string]any{
+			"prunedImages": pruned, "retentionRounds": cloudAgentImageRetentionRounds,
+			"text": "已把超出保留轮次的看图结果移出模型上下文（保留文字回执与 nodeId）",
+		})
 	}
 	if run.ID != "" {
 		if err := validateCloudAgentRuntime(run, state); err != nil {
@@ -586,6 +629,11 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		}
 		return s.terminateCloudAgent(run, "Agent 运行状态损坏，本轮已停止")
 	}
+	// 单步边界每次推进都重新解析：管理员改配置后，正在跑的这一轮下一步就用新值。
+	state.StepLimits, err = s.cloudAgentStepLimits()
+	if err != nil {
+		return err
+	}
 	if state.ActiveTaskID != "" {
 		task, err := s.repo.TaskForUser(run.UserID, state.ActiveTaskID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -643,8 +691,18 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		if task.Status != model.TaskStatusSucceeded && cloudAgentTruncatedToolArguments(task) {
 			return s.correctCloudAgentTruncatedCalls(run, &state)
 		}
-		if cloudAgentEmptyModelOutput(task) && state.EmptyOutputNudged < cloudAgentMaxEmptyOutputNudges {
-			return s.correctCloudAgentEmptyOutput(run, &state)
+		if cloudAgentEmptyModelOutput(task) {
+			if state.EmptyOutputNudged < cloudAgentMaxEmptyOutputNudges {
+				return s.correctCloudAgentEmptyOutput(run, &state)
+			}
+			// 催过仍然空：改为"关思考 + 放大输出预算"重试同一步，而不是把整轮判死。
+			if state.EmptyOutputEscalated < cloudAgentMaxEmptyOutputEscalations {
+				return s.correctCloudAgentEmptyOutputEscalation(run, &state)
+			}
+		}
+		// 单步墙钟到点同样是可恢复失败：关思考重试一次，而不是把整轮判死。
+		if cloudAgentStepTimedOut(task) && state.StepTimeoutEscalated < cloudAgentMaxStepTimeoutEscalations {
+			return s.correctCloudAgentStepTimeout(run, &state)
 		}
 		return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 			if task.Status != model.TaskStatusSucceeded {
@@ -661,6 +719,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			}
 			if result.Text != "" {
 				state.event(run.ID, "assistant_message", map[string]any{"messageId": task.ID, "text": result.Text})
+				// 普通正文可能是读取失败或多图混合回答，不能自动归为某张图的视觉事实。
 				if len(calls) == 0 {
 					state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": result.Text})
 				}
@@ -698,6 +757,11 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 	if state.CallIndex < len(state.Calls) {
 		return s.advanceCloudAgentTool(run, &state)
 	}
+	// 兜底 flush：本批调用都执行完了（无论最后一个调用是不是看图、有没有被中断），
+	// 缓冲里的图片必须在这里合并成一条 user 消息落到全部 tool 结果之后。少了这一步，
+	// "看图不是最后一个调用"的批次会把图片永久丢掉，而对应的 tool 回执已经在历史里。
+	// 幂等：正常路径（最后一个调用就是看图）已经在 cloudAgentRecordToolResult 里 flush 过。
+	cloudAgentFlushPendingImages(&state)
 	contextBudget := s.cloudAgentContextBudgetForRequest(state.Request)
 	if compactCloudAgentContext(&state.Canonical, contextBudget) {
 		// Evicted read bodies must be obtainable again after compaction.
@@ -708,6 +772,14 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		return s.failCloudAgent(run, &state, fmt.Sprintf("达到 %d 次模型调用上限，本轮已停止", stepLimit))
 	}
 	cloudAgentDrainInterjections(run.ID, &state)
+	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
+	// 它必须在压缩判定之前跑：图片是最贵的一类内容，先移出再评估 token 压力才有意义。
+	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed {
+		state.event(run.ID, "context_images_pruned", map[string]any{
+			"prunedImages": pruned, "retentionRounds": cloudAgentImageRetentionRounds,
+			"text": "图片裁剪：移出超出保留轮次的看图结果",
+		})
+	}
 	canonical, contextErr := s.cloudAgentModelContext(run, &state, contextBudget)
 	if contextErr != nil {
 		var appErr *AppError
@@ -717,7 +789,18 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		return contextErr
 	}
 	s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(&state))
-	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(state.Policy.ReasoningMode)}}
+	references, refErr := s.cloudAgentImageReferences(run.UserID, state.Request, &canonical)
+	if refErr != nil {
+		return s.failCloudAgent(run, &state, cloudAgentSafeToolError(refErr))
+	}
+	// 单步输出上限与思考开关：默认按策略给每一步带上界（不带上界时上游按剩余上下文放行，
+	// 思考模型可以把单步拖到几分钟）；空输出升级重试时改为关思考 + 放大预算。
+	stepThinking := cloudAgentReasoningEnabled(state.Policy.ReasoningMode) && !state.ForceThinkingOff
+	stepOutputTokens := cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget)
+	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinking": stepThinking, "maxOutputTokens": stepOutputTokens}}
+	if len(references) > 0 {
+		input["referenceImages"] = references
+	}
 	tokens, tokenErr := cloudAgentRequestEstimatedTokens(&canonical)
 	if tokenErr != nil {
 		return s.failCloudAgent(run, &state, "模型上下文估算失败，请稍后重试")
@@ -852,6 +935,11 @@ func cloudAgentModelFailure(task *model.Task) (string, string) {
 	}
 	raw := strings.ToLower(task.Error)
 	switch {
+	case strings.Contains(task.Error, "没有返回内容"):
+		// 思考模型的典型失败：整个输出预算被推理吃掉，正文与工具调用皆空。
+		detail, reason = "上游连续返回空内容（通常是思考占满输出预算）；已自动关思考并放大预算重试仍失败，建议换用非思考模型或调小上下文", "model_empty_output"
+	case strings.Contains(task.Error, cloudAgentStepTimeoutError):
+		detail, reason = "单步模型调用超过执行时限仍未返回（长思考或上下文过大时常见）；已自动关思考重试仍超时，可在管理端调大 Agent 单步超时", "model_step_timeout"
 	case strings.Contains(raw, "connection reset by peer"):
 		detail, reason = "模型连接被对端或中间网络设备重置", "model_connection_reset"
 	case strings.Contains(raw, "timeout"), strings.Contains(raw, "deadline exceeded"):
@@ -918,7 +1006,7 @@ func cloudAgentSafeMediaTaskError(task *model.Task) string {
 	return detail
 }
 
-func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgentCall, result any, err error) {
+func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgentCall, result any, err error) bool {
 	payload := map[string]any{"toolName": call.Function.Name, "callId": call.ID, "arguments": call.Function.Arguments}
 	if call.Function.Name == "skill_read_file" {
 		var args struct {
@@ -938,8 +1026,22 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	kind := "tool_completed"
 	if err != nil {
 		detail, ok := result.(map[string]any)
-		if !ok {
+		if !ok || detail == nil {
 			detail = map[string]any{}
+		}
+		// 模型漏了必填字段（或参数不是对象）时，即便业务校验抛的是普通 AppError，也按
+		// "参数契约错误"处理：把本轮实际暴露的 schema 回给模型，它才改得对。
+		// 只在业务侧确实按参数问题拒绝（400/422）时套用：上游 5xx 或网络错误即便同时漏字段，
+		// 也该算上游故障，别把锅扣到参数上。已分类的参数错误不再套壳，避免覆盖更精确的反馈。
+		var appErr *AppError
+		var existingArgumentErr *cloudAgentArgumentError
+		if missing := cloudAgentMissingRequiredArguments(state.Canonical.Tools, call); len(missing) > 0 &&
+			!errors.As(err, &existingArgumentErr) &&
+			errors.As(err, &appErr) && appErr != nil && (appErr.Status == 400 || appErr.Status == 422) {
+			err = &cloudAgentFieldArgumentError{
+				error: &cloudAgentArgumentError{err},
+				Field: strings.Join(missing, ","), Issue: "required",
+			}
 		}
 		message := cloudAgentSafeToolError(err)
 		detail["error"] = message
@@ -966,6 +1068,19 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 			if call.Function.Name == "canvas_get_state" {
 				detail["exampleArguments"] = map[string]any{}
 			}
+			if call.Function.Name == "canvas_apply_ops" {
+				detail["exampleArguments"] = map[string]any{"snapshotHash": "<canvas_get_state.snapshotHash>", "ops": []any{map[string]any{"type": "add_node", "id": "<new-node-id>", "nodeType": "text", "content": "<content>"}}}
+			}
+		}
+		// 稳定归类 + 可行动字段：只加标注，不改任何放行/拒绝判定。
+		// allowed 与执行器用的是同一份判定（cloudAgentToolAllowed 是纯函数，结果一致）。
+		if class, retryable, requiredAction := cloudAgentToolErrorClass(state.Request, call, err, cloudAgentToolAllowed(state.Request, call.Function.Name)); class != "" {
+			detail["errorClass"], detail["errorClassLabel"] = class, cloudAgentToolErrorLabel(class)
+			detail["retryable"] = retryable
+			if requiredAction != "" {
+				detail["requiredAction"] = requiredAction
+			}
+			payload["errorClass"] = class
 		}
 		result = detail
 		kind = "tool_failed"
@@ -973,6 +1088,31 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	} else {
 		payload["text"] = "工具执行成功"
 	}
+	if inspection, ok := result.(cloudAgentImageInspection); ok && err == nil {
+		receipt, _ := json.Marshal(inspection.Receipt)
+		payload["result"] = inspection.Receipt
+		state.event(runID, kind, payload)
+		// tool 角色只接受字符串内容（四种上游图式都是纯文本），因此工具回执照常入历史，
+		// 图片另起一条 user 消息携带，并显式标注为数据而非指令。
+		state.Canonical.Messages = append(state.Canonical.Messages,
+			map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(receipt)})
+		// 重复查看时只回执文字（ImageURL 为空），不再附图。
+		if strings.TrimSpace(inspection.ImageURL) != "" {
+			cloudAgentStageImageInspection(state, inspection)
+		}
+		// 一批里可能有多个调用（模型一次发起 parallel tool calls），上游要求
+		// assistant(tool_calls) 之后紧跟每一个 tool_call_id 的 tool 消息，所以图片
+		// 不能插在 tool 结果之间。只有本批最后一个调用执行完，才把整批缓冲合并成
+		// 一条 user 消息追加在全部 tool 结果之后。
+		if state.CallIndex+1 >= len(state.Calls) {
+			cloudAgentFlushPendingImages(state)
+		}
+		state.CallIndex++
+		state.Approval = nil
+		// 看图是只读成功路径，不占自动纠错名额（那名额只给写/生成类工具的预执行参数错误）。
+		return false
+	}
+	exhausted := cloudAgentTrackToolRepair(runID, state, call, result, err, payload)
 	raw, _ := json.Marshal(result)
 	payload["result"] = result
 	if call.Function.Name == "skill_read_file" && err == nil {
@@ -991,6 +1131,7 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(raw)})
 	state.CallIndex++
 	state.Approval = nil
+	return exhausted
 }
 func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
 	if state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
@@ -1086,6 +1227,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					if err == nil {
 						preview = batchPlan.Preview
 					}
+				case "canvas_arrange_nodes":
+					arrangePlan, err := prepareCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = arrangePlan.Preview
+					}
 				default:
 					canvasPlan, err := prepareCloudAgentCanvasMutation(repo, run.UserID, state.Request.CanvasID, call)
 					mutationErr = err
@@ -1096,7 +1243,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				if mutationErr != nil {
 					var argumentErr *cloudAgentArgumentError
 					if errors.As(mutationErr, &argumentErr) {
-						cloudAgentToolResult(run.ID, state, call, nil, mutationErr)
+						cloudAgentRecordToolResult(current, state, call, nil, mutationErr)
 						return cloudAgentSave(current, state)
 					}
 					var appErr *AppError
@@ -1144,6 +1291,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			modelList, modelListErr = s.cloudAgentModelList(intent)
 		}
 	}
+	// 看图的资源与能力校验在写事务外完成；真实图片只在模型任务执行时读取。
+	var inspectionResult any
+	var inspectionErr error
+	if allowed && call.Function.Name == "canvas_inspect_image" && state.Request.VisionEnabled {
+		inspectionResult, inspectionErr = s.prepareCloudAgentImageInspection(run.UserID, state.Request.CanvasID, state, call)
+	}
 	// Skill reads use the domain repository and filesystem, not the checkpoint
 	// transaction's connection. Read first to avoid nesting DB reads on SQLite.
 	var skillResult any
@@ -1159,15 +1312,30 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		var toolErr error
 		switch {
 		case !allowed:
-			toolErr = BadAuthRequest("工具未获本轮权限授权")
+			// 幻觉出来的工具名与"真被权限挡住"要分开反馈：前者模型根本不该发这个调用，
+			// 后者是授权边界问题。两者仍然一律拒绝，只是给模型的下一步更明确。
+			if !cloudAgentPlatformToolNames()[call.Function.Name] {
+				toolErr = BadAuthRequest("模型调用了不存在的工具「" + truncateRunes(call.Function.Name, 60) + "」，本轮已拒绝；请只使用本轮工具表里列出的工具")
+			} else {
+				toolErr = BadAuthRequest("工具未获本轮权限授权")
+			}
 		case call.Function.Name == "canvas_apply_ops":
 			result, toolErr = applyCloudAgentCanvas(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "canvas_arrange_nodes":
+			result, toolErr = applyCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_create_storyboard", call.Function.Name == "canvas_edit_storyboard":
 			result, toolErr = applyCloudAgentStoryboardMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_edit_batch_table":
 			result, toolErr = applyCloudAgentBatchTableMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "model_list":
 			result, toolErr = modelList, modelListErr
+		case call.Function.Name == "canvas_inspect_image":
+			result, toolErr = inspectionResult, inspectionErr
+			if toolErr == nil && inspectionResult != nil {
+				if inspection, ok := inspectionResult.(cloudAgentImageInspection); ok {
+					state.markCanvasImageAttached(stringValue(inspection.Receipt["nodeId"]))
+				}
+			}
 		case call.Function.Name == "skill_read_file", call.Function.Name == "image_annotation_render":
 			result, toolErr = skillResult, skillErr
 		default:
@@ -1179,12 +1347,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		if call.Function.Name == "ask_user" && toolErr == nil {
 			payload, _ := result.(map[string]any)
 			state.event(run.ID, "user_question", payload)
-			cloudAgentToolResult(run.ID, state, call, result, nil)
+			cloudAgentRecordToolResult(current, state, call, result, nil)
 			skipRemainingCloudAgentCalls(run.ID, state)
 			current.Status = "completed"
 			return cloudAgentSave(current, state)
 		}
-		cloudAgentToolResult(run.ID, state, call, result, toolErr)
+		cloudAgentRecordToolResult(current, state, call, result, toolErr)
 		return cloudAgentSave(current, state)
 	})
 }
@@ -1350,7 +1518,7 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 			state.event(run.ID, "run_failed", map[string]any{"text": "Agent 媒体调用状态无效，本轮已停止"})
 			return cloudAgentSave(current, state)
 		}
-		cloudAgentToolResult(run.ID, state, state.Calls[state.CallIndex], map[string]any{"phase": phase, "taskSubmitted": submitted}, err)
+		cloudAgentRecordToolResult(current, state, state.Calls[state.CallIndex], map[string]any{"phase": phase, "taskSubmitted": submitted}, err)
 		if submitted {
 			state.MediaTaskID = ""
 		}

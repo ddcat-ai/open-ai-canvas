@@ -184,6 +184,7 @@ function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNodeConte
         provider: node.metadata?.taskProvider,
         status: (node.metadata?.taskStatus || "running") as GenerationTask["status"],
         stage: node.metadata?.taskStage,
+        mediaStage: node.metadata?.taskMediaStage,
         officialStatus: node.metadata?.taskOfficialStatus,
         errorCode: node.metadata?.taskErrorCode,
     };
@@ -245,6 +246,7 @@ function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<CanvasNod
         provider: node.metadata?.taskProvider,
         status: (node.metadata?.taskStatus || "failed") as GenerationTask["status"],
         stage: node.metadata?.taskStage,
+        mediaStage: node.metadata?.taskMediaStage,
         officialStatus: node.metadata?.taskOfficialStatus,
         errorCode: node.metadata?.taskErrorCode,
     };
@@ -295,7 +297,7 @@ function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<CanvasNod
                     onMouseDown={(event) => event.stopPropagation()}
                 >
                     <RefreshCw className="size-3.5" />
-                    {node.metadata?.isBatchRoot ? "重新生成失败项" : "重新生成"}
+                    {node.metadata?.taskCanRecoverMedia ? "重试保存（不重新生成）" : node.metadata?.isBatchRoot ? "重新生成失败项" : "重新生成"}
                 </button>
             )}
         </div>

@@ -2,9 +2,7 @@ package generation
 
 import (
 	"context"
-	"time"
 
-	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/protocol"
 )
 
@@ -36,7 +34,6 @@ type ChannelLimiter interface {
 // MediaPersister 持久化生成结果与资源 URL。
 type MediaPersister interface {
 	PersistGeneratedMediaResult(ctx context.Context, userID, taskID string, result map[string]interface{}) (map[string]interface{}, error)
-	DirectResourceURL(resource *model.Resource, expiresAt time.Time) (string, error)
 }
 
 // Deps 是 Engine 的外部端口集合；禁止持有组合根或回环到 service。

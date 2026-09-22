@@ -126,7 +126,7 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 	}
 	log.Printf("detached resource cleanup: removed %d resource rows for user %s", len(detached), userID)
 	if len(deletionJobs) > 0 {
-		go s.drainResourceDeletionJobs(len(deletionJobs))
+		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}
 	return nil
 }

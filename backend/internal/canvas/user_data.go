@@ -128,7 +128,17 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
 	return s.host.WithStorageLock(func() error {
-		return s.host.DeleteUserAssetWithResources(userID, id)
+		return s.host.DeleteUserAssetWithResources(userID, id, false)
+	})
+}
+
+func (s *Service) PurgeUserAsset(userID string, id string) error {
+	return s.PurgeUserAssets(userID, []string{id})
+}
+
+func (s *Service) PurgeUserAssets(userID string, ids []string) error {
+	return s.host.WithStorageLock(func() error {
+		return s.host.PurgeUserAssetsWithResources(userID, ids)
 	})
 }
 

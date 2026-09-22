@@ -144,7 +144,7 @@ func (r *Repository) filteredAPICallLogQuery(filter APICallLogFilter) *gorm.DB {
 		query = query.Where("api_call_logs.request_kind = ?", "download")
 	case "all":
 	default:
-		query = visibleAPICallLogQuery(query).Where("COALESCE(api_call_logs.request_kind, '') <> ?", "download")
+		query = visibleAPICallLogQuery(query).Where("COALESCE(api_call_logs.request_kind, '') NOT IN ?", []string{"download", "upload", "local_save", "register"})
 	}
 	if value := strings.TrimSpace(filter.Keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
@@ -167,7 +167,7 @@ func (r *Repository) APICallLogTasks(ids []string) ([]model.Task, error) {
 		return []model.Task{}, nil
 	}
 	var tasks []model.Task
-	err := r.db.Select("id", "user_id", "type", "status", "result_json").Where("id IN ?", ids).Find(&tasks).Error
+	err := r.db.Select("id", "user_id", "type", "status", "result_json", "media_stage").Where("id IN ?", ids).Find(&tasks).Error
 	return tasks, err
 }
 

@@ -561,6 +561,16 @@
     backdrop-filter: blur(10px);
 }
 
+.canvas-agent-launcher.canvas-agent-launcher-live2d {
+    padding: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: none;
+}
+
+.canvas-agent-launcher-live2d::before {
+    display: none;
+}
+
 .canvas-agent-launcher-status {
     position: absolute;
     top: 6px;
@@ -921,6 +931,7 @@
 .canvas-agent-approval-operation-add_node { background: #dcfce7; color: #166534; }
 .canvas-agent-approval-operation-update_node { background: #dbeafe; color: #1d4ed8; }
 .canvas-agent-approval-operation-connect_nodes { background: #fef3c7; color: #92400e; }
+.canvas-agent-approval-operation-arrange_nodes { background: #ccfbf1; color: #115e59; }
 .canvas-agent-approval-operation-generate_media { background: #f3e8ff; color: #7e22ce; }
 
 .canvas-agent-approval-node,

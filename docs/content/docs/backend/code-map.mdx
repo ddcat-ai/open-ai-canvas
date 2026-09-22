@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 画布 Agent 配置与 Live2D
+
+- 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。
+- 公共配置及文案：`web/src/stores/use-appearance-store.ts`、`web/src/lib/canvas/agent-appearance.ts`。
+- 画布形象：`web/src/components/canvas/live2d-avatar.tsx`、`canvas-cloud-agent-panel.tsx`；受限资源加载：`web/src/services/live2d-loader.ts`。
+- 服务端：`backend/internal/app/appearance_canvas.go` 校验配置，`appearance_live2d.go` 验证 ZIP、导入及资源访问；`backend/internal/handler/appearance_live2d.go` 为 HTTP 边界。已有外观设置和资源引用链路负责持久化及删除保护。
+
 这是一张入口地图，不罗列所有文件。先找到功能所属层，再沿调用关系阅读。
 
 ## 前端页面
@@ -59,7 +66,9 @@ description: 从产品功能快速定位主要代码入口
 | 3D 导演台 | `web/src/components/canvas/director/` |
 | 节点生成上下文 | `web/src/components/canvas/canvas-node-generation.ts` |
 | 布局和连线算法 | `web/src/lib/canvas/canvas-layout.ts`、`canvas-frame.ts` |
-| 任务结果回填 | `web/src/lib/canvas/canvas-generation-task-sync.ts` |
+| 任务结果准备与按节点提交 | `web/src/lib/canvas/canvas-generation-task-sync.ts`、`canvas-generation-result.ts`；持久化协调在 `web/src/services/canvas-generation-consumer.ts` |
+| 编辑命令与批次状态投影 | `web/src/lib/canvas/canvas-editor-state.ts`、`canvas-task-state.ts`、`canvas-image-batch-retry.ts` |
+| 视口节点选择与输入关系解析 | `web/src/lib/canvas/canvas-node-visibility.ts`、`canvas-resource-references.ts` |
 | 本地持久化状态 | `web/src/stores/canvas/use-canvas-store.ts` |
 | 云端 Agent 运行与事件 API | `web/src/services/api/agent.ts`、`web/src/components/canvas/canvas-cloud-agent-panel.tsx` |
 | Agent 画布上下文、操作与历史 | `web/src/lib/canvas/canvas-context-discovery.ts`、`canvas-operation-contract.ts`、`web/src/pages/canvas/use-canvas-operation-history.ts` |

@@ -28,11 +28,12 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 type AuthError = kernel.AppError
 
 type RegisterRequest struct {
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	EmailCode   string `json:"emailCode"`
-	DisplayName string `json:"displayName"`
-	Password    string `json:"password"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	EmailCode     string `json:"emailCode"`
+	DisplayName   string `json:"displayName"`
+	Password      string `json:"password"`
+	AcceptedTerms bool   `json:"acceptedTerms"`
 }
 
 type LoginRequest struct {
@@ -82,6 +83,9 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
+	if !req.AcceptedTerms {
+		return nil, kernel.BadAuthRequest("请先同意影策服务协议")
+	}
 	username := NormalizeUsername(req.Username)
 	email := NormalizeEmail(req.Email)
 	displayName := NormalizeDisplayName(req.DisplayName, username)

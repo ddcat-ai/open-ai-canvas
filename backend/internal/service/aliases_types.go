@@ -262,7 +262,9 @@ type (
 	ResolveBillingBatchResult              = app.ResolveBillingBatchResult
 	ResolveBillingRequest                  = app.ResolveBillingRequest
 	ResourceDelivery                       = app.ResourceDelivery
-	ResourceDeliveryOptions                = app.ResourceDeliveryOptions
+	ResourceAccessOptions                  = app.ResourceAccessOptions
+	ResourceAccessRequest                  = app.ResourceAccessRequest
+	ResourceAccess                         = app.ResourceAccess
 	ResourceStream                         = app.ResourceStream
 	ResponseInterceptionRule               = app.ResponseInterceptionRule
 	ResponseInterceptionSetting            = app.ResponseInterceptionSetting

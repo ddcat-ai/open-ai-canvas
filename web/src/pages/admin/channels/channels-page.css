@@ -23,8 +23,8 @@
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px;
+    gap: 8px;
+    padding: 12px;
     border-bottom: 1px solid var(--admin-divider);
 }
 
@@ -40,8 +40,8 @@
     display: flex;
     width: 100%;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
+    gap: 7px;
+    padding: 9px 10px;
     margin-bottom: 4px;
     border: 0;
     border-radius: var(--admin-radius);
@@ -136,7 +136,7 @@
 
 .admin-channel-sidebar-footer {
     flex: none;
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-top: 1px solid var(--admin-divider);
 }
 
@@ -150,7 +150,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
-    padding: 16px 20px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--admin-divider);
 }
 
@@ -176,7 +176,7 @@
     min-width: 0;
     min-height: 0;
     flex-direction: column;
-    padding: 16px;
+    padding: 12px;
 }
 
 .admin-channel-model-toolbar {
@@ -185,8 +185,8 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 
 .admin-channel-model-heading {
@@ -223,7 +223,7 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    gap: 16px;
+    gap: 12px;
     padding-block: 8px;
 }
 
@@ -235,8 +235,8 @@
     display: flex;
     align-items: flex-end;
     flex-wrap: wrap;
-    gap: 24px;
-    padding: 24px;
+    gap: 16px;
+    padding: 16px;
     border-radius: var(--admin-radius);
     background: var(--admin-surface-2);
 }

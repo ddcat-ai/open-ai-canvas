@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { applyToolMention, parseToolMentionTokens, removeToolMentions } from "../src/lib/canvas/canvas-resource-references";
+import { applyToolMention, buildToolMentionReference, parseToolMentionTokens, removeToolMentions } from "../src/lib/canvas/canvas-resource-references";
 import { createNineGridNode } from "../src/lib/canvas/canvas-image-source";
 import { CanvasNodeType } from "../src/types/canvas";
 import type { CanvasNodeData } from "../src/types/canvas";
@@ -53,6 +53,17 @@ test("tool labels round trip; style replaces, motion deduplicates; clear preserv
     const combined = applyToolMention(changed, motion);
     expect(applyToolMention(combined, motion)).toBe(combined);
     expect(parseToolMentionTokens(combined)).toHaveLength(2);
+});
+
+test("tool references with the same numeric id remain distinct across types", () => {
+    let prompt = applyToolMention("", { id: 7, type: "style", label: "水墨" }, "Palette");
+    prompt = applyToolMention(prompt, { id: 7, type: "motion", label: "推镜" }, "Camera");
+    expect(parseToolMentionTokens(prompt).map(({ type, toolId, label }) => ({ type, toolId, label }))).toEqual([
+        { type: "style", toolId: 7, label: "水墨" },
+        { type: "motion", toolId: 7, label: "推镜" },
+    ]);
+    expect(buildToolMentionReference(7, "水墨", "style", "Palette").id)
+        .not.toBe(buildToolMentionReference(7, "推镜", "motion", "Camera").id);
 });
 
 test("nine grid creates idle child using stable source token, not an auto generation", () => {

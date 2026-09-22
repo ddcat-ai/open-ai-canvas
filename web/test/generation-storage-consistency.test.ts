@@ -1,7 +1,20 @@
 import { expect, test } from "bun:test";
 
-type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race";
+type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race";
 type ScenarioResponse<T> = { ok: true; result: T } | { ok: false; error: string };
+
+test("并发生成结果经真实持久化消费链路及重新读取后保留成功、失败和用户编辑", async () => {
+    type Node = import("../src/types/canvas").CanvasNodeData;
+    const result = await runScenario<{ edited: boolean; live: Node[]; restored: Node[] }>("canvas-batch-commit-race");
+    expect(result.edited).toBe(true);
+    for (const nodes of [result.live, result.restored]) {
+        expect(nodes).toHaveLength(6);
+        expect(nodes.filter((node) => node.metadata?.status === "success")).toHaveLength(2);
+        expect(nodes.filter((node) => node.metadata?.status === "error")).toHaveLength(3);
+        expect(nodes.find((node) => node.id === "node-0")).toMatchObject({ title: "用户改名", position: { x: 700, y: 500 }, metadata: { assetId: "asset-0" } });
+        expect(nodes.find((node) => node.id === "node-1")?.metadata?.assetId).toBe("asset-1");
+    }
+});
 
 function runScenario<T>(scenario: Scenario): Promise<T> {
     return new Promise<T>((resolve, reject) => {

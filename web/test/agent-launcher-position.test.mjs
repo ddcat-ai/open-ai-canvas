@@ -5,6 +5,13 @@ import { clampAgentLauncherPosition, moveAgentLauncher, restoreAgentLauncherPosi
 const viewport = { width: 1280, height: 800 };
 const start = { right: 20, bottom: 20 };
 
+test("Live2D bounds use actual rectangular dimensions when restoring and dragging", () => {
+    const size = { width: 180, height: 240 };
+    const small = { width: 320, height: 400 };
+    expect(restoreAgentLauncherPosition('{"right":999,"bottom":999}', small, size)).toEqual({ right: 120, bottom: 140 });
+    expect(moveAgentLauncher({ start, x: 0, y: 0, dragged: true }, -999, -999, small, size).position).toEqual({ right: 120, bottom: 140 });
+});
+
 test("launcher restores a valid position and defaults safely for corrupt preferences", () => {
     expect(restoreAgentLauncherPosition('{"right":240,"bottom":180}', viewport)).toEqual({ right: 240, bottom: 180 });
     for (const raw of [null, "invalid", "null", "{}", '{"right":"20","bottom":20}', '{"right":1e999,"bottom":20}']) {

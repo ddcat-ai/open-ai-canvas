@@ -3,13 +3,14 @@ import { AGENT_LAUNCHER_POSITION_KEY, clampAgentLauncherPosition, moveAgentLaunc
 
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
 
-export function useAgentLauncherPosition(onOpen: () => void) {
+export function useAgentLauncherPosition(onOpen: () => void, width = 76, height = 76) {
+    const size = { width, height };
     const [position, setPosition] = useState(() => {
         try {
-            return restoreAgentLauncherPosition(localStorage.getItem(AGENT_LAUNCHER_POSITION_KEY), viewport());
+            return restoreAgentLauncherPosition(localStorage.getItem(AGENT_LAUNCHER_POSITION_KEY), viewport(), size);
         } catch (error) {
             console.warn("Agent 入口位置无法读取", error);
-            return restoreAgentLauncherPosition(null, viewport());
+            return restoreAgentLauncherPosition(null, viewport(), size);
         }
     });
     const [dragging, setDragging] = useState(false);
@@ -25,10 +26,11 @@ export function useAgentLauncherPosition(onOpen: () => void) {
     };
 
     useEffect(() => {
-        const resize = () => setPosition((current) => clampAgentLauncherPosition(current, viewport()));
+        const resize = () => setPosition((current) => clampAgentLauncherPosition(current, viewport(), size));
+        resize();
         window.addEventListener("resize", resize);
         return () => window.removeEventListener("resize", resize);
-    }, []);
+    }, [width, height]);
 
     const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -41,7 +43,7 @@ export function useAgentLauncherPosition(onOpen: () => void) {
         event.stopPropagation();
         const gesture = gestureRef.current;
         if (!gesture || gesture.pointerId !== event.pointerId) return;
-        const next = moveAgentLauncher(gesture, event.clientX, event.clientY, viewport());
+        const next = moveAgentLauncher(gesture, event.clientX, event.clientY, viewport(), size);
         gesture.dragged = next.dragged;
         if (!next.dragged) return;
         event.preventDefault();
@@ -54,7 +56,7 @@ export function useAgentLauncherPosition(onOpen: () => void) {
         const gesture = gestureRef.current;
         if (!gesture || gesture.pointerId !== event.pointerId) return;
         gestureRef.current = null;
-        const next = cancelled ? { dragged: gesture.dragged, position: clampAgentLauncherPosition(position, viewport()) } : moveAgentLauncher(gesture, event.clientX, event.clientY, viewport());
+        const next = cancelled ? { dragged: gesture.dragged, position: clampAgentLauncherPosition(position, viewport(), size) } : moveAgentLauncher(gesture, event.clientX, event.clientY, viewport(), size);
         suppressClick.current = cancelled || next.dragged;
         setDragging(false);
         setPosition(next.position);
@@ -77,7 +79,7 @@ export function useAgentLauncherPosition(onOpen: () => void) {
         const offset = offsets[event.key];
         if (!offset) return;
         event.preventDefault();
-        const next = clampAgentLauncherPosition({ right: position.right + offset[0], bottom: position.bottom + offset[1] }, viewport());
+        const next = clampAgentLauncherPosition({ right: position.right + offset[0], bottom: position.bottom + offset[1] }, viewport(), size);
         setPosition(next);
         save(next);
     };

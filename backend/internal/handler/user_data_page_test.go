@@ -13,9 +13,10 @@ func TestUserDataIncrementalRoutesAreRegistered(t *testing.T) {
 	router := gin.New()
 	RegisterUserDataRoutes(router.Group("/api"), &service.Service{})
 	wanted := map[string]bool{
-		"GET /api/canvas-projects":     false,
-		"GET /api/canvas-projects/:id": false,
-		"POST /api/assets/batch":       false,
+		"GET /api/canvas-projects":      false,
+		"GET /api/canvas-projects/:id":  false,
+		"POST /api/assets/batch":        false,
+		"POST /api/assets/batch-delete": false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

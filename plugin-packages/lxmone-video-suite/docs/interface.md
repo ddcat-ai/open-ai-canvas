@@ -85,9 +85,14 @@
 轮询时按 `status`、`state`、`data.status` 取状态，`completed`/`succeeded` 归一为 `succeeded`，
 `failed`/`expired`/`error` 归一为 `failed`，其余按进行中处理。
 
-视频地址按 `metadata.url`、`metadata.video_url`、`video_url`、`videoUrl`、`result_url`、`url`、
+视频地址优先取 `metadata.direct_url`、`data.metadata.direct_url`，再按
+`metadata.url`、`metadata.video_url`、`video_url`、`videoUrl`、`result_url`、`url`、
 `data.metadata.url`、`data.video_url`、`output.url` 依次取值；上游返回的是临时地址
 （`resultEphemeral`），由宿主立即下载并转存为项目资源。
+
+H3 工作流完成响应可能同时包含相对路径 `metadata.url` 和完整 HTTPS 地址
+`metadata.direct_url`，必须优先选择后者，避免把缺少主机的路径交给外部资源下载器。
+下载仍执行宿主的地址与 SSRF 校验。
 
 错误信息取 `error.message`、`message`、`fail_reason`，错误码路径为 `error.message` 与 `error.code`。
 HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结束并把上游原文回传给用户。
@@ -102,7 +107,7 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
   "apiVersion": "yingce.plugin/v2",
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Yingce / 万有引力",
   "description": "万有引力（lxmone.xyz）视频协议套件：Wan 3.0（现有渠道与 S 渠道）、Seedance 2 / 2.5、SD 2.0 / 2.5 / Mini、Grok Imagine、MiniMax H3（Max 与 A-E 独立工作流）。",
   "permissions": [
@@ -360,6 +365,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },
@@ -649,6 +660,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           "videos": {
             "$coalesce": [
               {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
+              {
                 "$ref": "response.metadata.url"
               },
               {
@@ -912,6 +929,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },
@@ -1177,6 +1200,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           "videos": {
             "$coalesce": [
               {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
+              {
                 "$ref": "response.metadata.url"
               },
               {
@@ -1440,6 +1469,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },
@@ -1721,6 +1756,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },
@@ -2013,6 +2054,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },
@@ -2347,6 +2394,12 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.direct_url"
+              },
+              {
+                "$ref": "response.data.metadata.direct_url"
+              },
               {
                 "$ref": "response.metadata.url"
               },

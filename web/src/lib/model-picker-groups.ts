@@ -1,4 +1,4 @@
-import { configuredModelDisplayName, groupModelsByDisplayName, type DisplayModelGroup } from "@/lib/model-selection";
+import { configuredModelDisplayName, groupModelsByDisplayName, isDirectSystemModel, type DisplayModelGroup } from "@/lib/model-selection";
 import { modelIcon, modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 
 export type ModelPickerGroup = {
@@ -10,12 +10,7 @@ export type ModelPickerGroup = {
     models: DisplayModelGroup[];
 };
 
-export function isDirectSystemModel(config: AiConfig, value: string) {
-    if (!value) return false;
-    const channel = resolveModelChannel(config, value);
-    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
-    return channel.scope === "system" && channel.id !== PUBLIC_MODEL_CATALOG_ID && !cost?.logicalModelId;
-}
+export { isDirectSystemModel } from "@/lib/model-selection";
 
 export function modelChannelLabel(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);

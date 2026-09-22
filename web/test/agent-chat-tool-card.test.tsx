@@ -3,6 +3,21 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AgentToolCard } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 import { canvasThemes } from "@/lib/canvas-theme";
 
+test("automatic correction is neutral and collapsed, with recovery and exhaustion history", () => {
+    for (const theme of [canvasThemes.dark, canvasThemes.light]) {
+        for (const status of ["retrying", "recovered", "exhausted"]) {
+            const html = renderToStaticMarkup(<AgentToolCard title="canvas_apply_ops" text="缺少操作类型" detail={{ eventType: "tool_failed", retry: { groupId: "run:repair:call", attempt: 1, maxAttempts: 3, status }, retryAttempts: [{ id: "call", text: "缺少操作类型" }] }} theme={theme} />);
+            expect(html).toContain("data-agent-tool-retry");
+            expect(html).toContain("<summary");
+            expect(html).not.toContain("open=");
+            expect(html).not.toContain("#dc2626");
+            expect(html).not.toContain("执行失败");
+            expect(html).toContain("缺少操作类型");
+            expect(html).toContain(status === "recovered" ? "自动纠正后已恢复" : status === "exhausted" ? "自动纠正未完成" : "自动纠正记录");
+        }
+    }
+});
+
 test("completed tools keep an accessible status without a duplicate visual badge", () => {
     const html = renderToStaticMarkup(<AgentToolCard title="model_list" text="工具执行成功" detail={{ eventType: "tool_completed" }} theme={canvasThemes.dark} />);
     expect(html).toContain("已获取可用模型");

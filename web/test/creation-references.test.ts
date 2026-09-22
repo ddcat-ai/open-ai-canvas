@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import { canvasResourceMentionToken } from "../src/lib/canvas/canvas-resource-references";
 import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
-import { buildCreationMentionReferences, displayCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences } from "../src/pages/create/creation-references";
+import {
+    buildCreationMentionReferences,
+    displayCreationPrompt,
+    reconcileCreationAttachmentLimit,
+    reconcileCreationAttachmentLimits,
+    removeCreationReferenceTokens,
+    replaceCreationAttachmentReference,
+    selectedCreationReferences,
+} from "../src/pages/create/creation-references";
 
 function imageAttachment(id: string): CreationAttachment {
     return {
@@ -12,6 +20,10 @@ function imageAttachment(id: string): CreationAttachment {
         dataUrl: `data:image/png;base64,${id}`,
         previewUrl: `data:image/png;base64,${id}`,
     };
+}
+
+function mediaAttachment(id: string, type: string): CreationAttachment {
+    return { id, name: id, type, url: `blob:${id}`, storageKey: `${id}:key`, previewUrl: "" };
 }
 
 describe("creation references", () => {
@@ -32,6 +44,23 @@ describe("creation references", () => {
     test("returns the original attachment list when it is already within the limit", () => {
         const attachments = [imageAttachment("first")];
         const result = reconcileCreationAttachmentLimit(attachments, buildCreationMentionReferences([], attachments), 1);
+
+        expect(result.attachments).toBe(attachments);
+        expect(result.removedReferences).toEqual([]);
+    });
+
+    test("视频参考内容分别遵守图片、视频和音频上限", () => {
+        const attachments = [imageAttachment("image-1"), mediaAttachment("video-1", "video/mp4"), imageAttachment("image-2"), mediaAttachment("audio-1", "audio/mpeg"), mediaAttachment("video-2", "video/mp4")];
+        const references = buildCreationMentionReferences([], attachments);
+        const result = reconcileCreationAttachmentLimits(attachments, references, { maxImages: 1, maxVideos: 2, maxAudios: 0 });
+
+        expect(result.attachments.map((attachment) => attachment.id)).toEqual(["image-1", "video-1", "video-2"]);
+        expect(result.removedReferences.map((reference) => reference.attachmentId)).toEqual(["image-2", "audio-1"]);
+    });
+
+    test("视频参考内容在各类型均未超限时保留原数组", () => {
+        const attachments = [imageAttachment("image"), mediaAttachment("video", "video/mp4"), mediaAttachment("audio", "audio/mpeg")];
+        const result = reconcileCreationAttachmentLimits(attachments, buildCreationMentionReferences([], attachments), { maxImages: 1, maxVideos: 1, maxAudios: 1 });
 
         expect(result.attachments).toBe(attachments);
         expect(result.removedReferences).toEqual([]);

@@ -150,7 +150,18 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	completed.ResultJSON = string(resultJSON)
 	completed.InputJSON = publicInputJSON
 	completed.CompletedAt = ptr(time.Now())
-	if err := s.repo.SaveTaskCompletion(&completed, expectedStatus, results); err != nil {
+	var register func(*repository.Repository) error
+	if task.MediaRecoveryJSON != "" {
+		completed.MediaStage = "completed"
+		register = func(repo *repository.Repository) error {
+			writer := &Service{repo: repo, dataDir: s.dataDir}
+			if err := writer.RegisterTaskOutputFromTask(completed); err != nil {
+				return err
+			}
+			return writer.registerRecoveredMediaAssets(completed)
+		}
+	}
+	if err := s.repo.SaveTaskCompletionWithRegistration(&completed, expectedStatus, results, register); err != nil {
 		return err
 	}
 	*task = completed

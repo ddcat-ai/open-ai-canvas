@@ -1,5 +1,6 @@
 export type CanvasColorTheme = "light" | "dark";
 export type CanvasBackgroundMode = "dots" | "lines" | "blank";
+export const DEFAULT_CANVAS_COLOR_THEME: CanvasColorTheme = "dark";
 
 export const canvasThemes = {
     light: {
@@ -72,8 +73,8 @@ export const canvasThemes = {
     dark: {
         canvas: {
             background: "#000000",
-            dot: "rgba(175,175,175,.80)",
-            line: "rgba(175,175,175,.80)",
+            dot: "#000000",
+            line: "#000000",
             selectionFill: "rgba(255,255,255,.12)",
         },
         node: {

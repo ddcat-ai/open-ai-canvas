@@ -25,11 +25,15 @@ type cloudAgentReferenceAnchor struct {
 	ReferenceReady           bool     `json:"referenceReady"`
 	VisualIdentity           string   `json:"visualIdentity"`
 	RequiresVisualInspection bool     `json:"requiresVisualInspection"`
-	Width                    any      `json:"width,omitempty"`
-	Height                   any      `json:"height,omitempty"`
+	// 旧检查点可能含有未经确认的正文摘录，不再自动写入或跨轮继承。
+	VisualNote string `json:"visualNote,omitempty"`
+	Width      any    `json:"width,omitempty"`
+	Height     any    `json:"height,omitempty"`
 }
 
-func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID string, canvas *model.CanvasProject, prompt string) (cloudAgentCreativeAnchor, error) {
+// cloudAgentCreativeAnchorForCanvas 按当前画布重建候选素材锚点。
+// 不继承旧视觉标记：工具成功和下一段正文都不是识别成功的可靠证据，节点也可能换图。
+func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID string, canvas *model.CanvasProject, prompt string, _ *cloudAgentCreativeAnchor) (cloudAgentCreativeAnchor, error) {
 	anchor := cloudAgentCreativeAnchor{Version: 2, UserPrompt: prompt}
 
 	doc, err := creationDocument(canvas.PayloadJSON)

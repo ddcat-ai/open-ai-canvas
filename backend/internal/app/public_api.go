@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
 	"github.com/google/uuid"
@@ -472,11 +473,15 @@ func (s *Service) publicGenerationResult(userID, raw string) (*PublicGenerationR
 		case map[string]any:
 			resourceID := publicGenerationResourceID(typed)
 			if resourceID != "" && !seen[resourceID] {
-				url, err := s.DirectResourceURL(userID, resourceID)
+				resource, err := s.repo.ResourceForUser(userID, resourceID)
 				if err != nil {
 					return err
 				}
-				media := PublicGenerationMedia{ResourceID: resourceID, URL: url, MimeType: stringValue(typed["mimeType"]), Width: intValue(typed["width"]), Height: intValue(typed["height"]), DurationMs: int64ValuePublic(typed["durationMs"])}
+				access, err := s.resolveResourceAccess(resource, ResourceAccessOptions{Purpose: assets.PurposeDisplay})
+				if err != nil {
+					return err
+				}
+				media := PublicGenerationMedia{ResourceID: resourceID, URL: access.URL, MimeType: stringValue(typed["mimeType"]), Width: intValue(typed["width"]), Height: intValue(typed["height"]), DurationMs: int64ValuePublic(typed["durationMs"])}
 				if strings.HasPrefix(media.MimeType, "video/") || typed["durationMs"] != nil {
 					result.Videos = append(result.Videos, media)
 				} else {

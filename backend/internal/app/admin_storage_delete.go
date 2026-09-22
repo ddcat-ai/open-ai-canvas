@@ -165,7 +165,7 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 		return nil, err
 	}
 	if len(deletionJobs) > 0 {
-		go s.drainResourceDeletionJobs(len(deletionJobs))
+		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}
 
 	result := &AdminResourceDeleteResult{Deleted: []string{}, Blocked: []AdminResourceDeleteBlocked{}}

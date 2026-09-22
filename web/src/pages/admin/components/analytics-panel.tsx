@@ -1,7 +1,6 @@
 import { Alert, App, Button, DatePicker, Select, Tabs, Tag } from "antd";
 import { Tooltip } from "@/pages/admin/ui/controls";
-import { useCountUp } from "@/hooks/use-count-up";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
@@ -40,6 +39,8 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [capability, setCapability] = useState(searchParams.get("capability") || undefined);
     const [data, setData] = useState<AdminAnalytics | null>(null);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState("");
+    const requestSequence = useRef(0);
     const [userOptions, setUserOptions] = useState(users);
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [modelPage, setModelPage] = useState(1);
@@ -62,14 +63,21 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     );
 
     const reload = useCallback(async () => {
+        const sequence = ++requestSequence.current;
         setLoading(true);
+        setLoadError("");
+        setData(null);
         try {
             const analytics = await getAdminAnalytics(filters);
+            if (sequence !== requestSequence.current) return;
             setData(analytics);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取统计数据失败");
+            if (sequence !== requestSequence.current) return;
+            const text = error instanceof Error ? error.message : "读取统计数据失败";
+            setLoadError(text);
+            message.error(text);
         } finally {
-            setLoading(false);
+            if (sequence === requestSequence.current) setLoading(false);
         }
     }, [filters, message]);
 
@@ -83,6 +91,9 @@ export default function AnalyticsPanel({ users, channels }: Props) {
         else next.delete("rangePreset");
         setSearchParams(next, { replace: true });
         void reload();
+        return () => {
+            requestSequence.current += 1;
+        };
     }, [filters, rangePreset]);
 
     useEffect(() => {
@@ -194,7 +205,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     };
 
     return (
-        <div className="admin-analytics-panel space-y-5">
+        <div className="admin-analytics-panel" aria-busy={loading}>
             <ListToolbar
                 className="admin-analytics-toolbar"
                 active={Boolean(userId || model || channelId || capability)}
@@ -266,30 +277,45 @@ export default function AnalyticsPanel({ users, channels }: Props) {
             </ListToolbar>
 
             {financeUnavailable && <Alert type="warning" showIcon title="后端未返回完整财务统计，缺失金额显示为 --。请确认后端已更新并重启后刷新。" />}
+            {loadError && (
+                <Alert
+                    type="error"
+                    showIcon
+                    title="统计数据读取失败"
+                    description={loadError}
+                    action={
+                        <Button size="small" onClick={() => void reload()}>
+                            重试
+                        </Button>
+                    }
+                />
+            )}
 
             <section className="admin-analytics-health-grid" aria-label="运营健康指标">
                 <AnalyticsHealthCard
                     icon={<UsersRound className="size-4" />}
                     label="活跃用户"
-                    value={data ? <AnimatedHealthValue target={data.kpi.activeUsers} format={formatNumber} /> : "--"}
+                    value={data ? formatNumber(data.kpi.activeUsers) : "--"}
                     trend={formatCountDelta(currentTrend?.activeUsers, previousTrend?.activeUsers)}
-                    detail={data ? `DAU ${formatNumber(data.kpi.dau)} · WAU ${formatNumber(data.kpi.wau)} · MAU ${formatNumber(data.kpi.mau)}` : undefined}
+                    detail={data ? `日 ${formatNumber(data.kpi.dau)} · 周 ${formatNumber(data.kpi.wau)} · 月 ${formatNumber(data.kpi.mau)}` : undefined}
                 />
                 <AnalyticsHealthCard
                     icon={<Workflow className="size-4" />}
                     label="生成任务"
-                    value={data ? <AnimatedHealthValue target={data.kpi.generationTasks} format={formatNumber} /> : "--"}
+                    value={data ? formatNumber(data.kpi.generationTasks) : "--"}
                     trend={formatCountDelta(currentTrend?.tasks, previousTrend?.tasks)}
-                    detail={data ? `上游请求 ${formatNumber(data.kpi.upstreamRequests)} · 队列 ${formatNumber(data.kpi.currentQueuedTasks)}` : undefined}
+                    detail={data ? `上游请求 ${formatNumber(data.kpi.upstreamRequests)}` : undefined}
                 />
                 <AnalyticsHealthCard
                     icon={<Gauge className="size-4" />}
                     label="服务质量"
-                    value={data ? <AnimatedHealthValue target={data.kpi.successRate} format={percent} /> : "--"}
+                    value={data && data.kpi.upstreamRequests > 0 ? percent(data.kpi.successRate) : "--"}
                     trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate)}
-                    detail={data ? `P95 ${formatDuration(data.kpi.p95DurationMs)}` : undefined}
-                    tone={data && data.kpi.successRate < 90 ? "warning" : "success"}
+                    detail={data ? (data.kpi.upstreamRequests ? "真实上游请求成功率" : "当前范围暂无请求") : undefined}
+                    tone={!data || !data.kpi.upstreamRequests ? "neutral" : data.kpi.successRate < 90 ? "warning" : "success"}
                 />
+                <AnalyticsHealthCard icon={<Clock3 className="size-4" />} label="P95 请求耗时" value={data && data.kpi.upstreamRequests > 0 ? formatDuration(data.kpi.p95DurationMs) : "--"} detail="筛选范围内的上游请求" />
+                <AnalyticsHealthCard icon={<Workflow className="size-4" />} label="当前排队" value={data ? formatNumber(data.kpi.currentQueuedTasks) : "--"} detail="实时快照 · 非历史累计" tone={data?.kpi.currentQueuedTasks ? "warning" : "neutral"} />
                 <AnalyticsHealthCard
                     icon={<CircleDollarSign className="size-4" />}
                     label="费用统计（积分）"
@@ -364,8 +390,8 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                             <span>
                                 <BarChart3 className="size-5" />
                             </span>
-                            <div className="font-medium">当前范围暂无{trendMetric === "quality" ? "质量" : trendMetric === "activity" ? "活跃" : "使用"}数据</div>
-                            <p>可以调整时间范围或筛选条件后重新查看。</p>
+                            <div className="font-medium">{!data ? (loading ? "正在读取趋势…" : "趋势数据不可用") : `当前范围暂无${trendMetric === "quality" ? "质量" : trendMetric === "activity" ? "活跃" : "使用"}数据`}</div>
+                            <p>{loadError ? "请重试，无法依据缺失数据判断运行状态。" : "按自然日统计，可调整时间范围或筛选条件。"}</p>
                         </div>
                     )}
                 </section>
@@ -376,23 +402,23 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                             <h2 id="admin-analytics-attention-title">需要关注</h2>
                             <p>优先展示可能需要处理的运行状态。</p>
                         </div>
-                        <AdminStatusBadge label={failureTotal > 0 ? `${formatNumber(failureTotal)} 次异常` : "运行平稳"} tone={failureTotal > 0 ? "warning" : "success"} />
+                        <AdminStatusBadge label={!data ? "状态未知" : failureTotal > 0 ? `${formatNumber(failureTotal)} 次异常` : "未记录异常"} tone={!data ? "neutral" : failureTotal > 0 ? "warning" : "success"} />
                     </div>
                     <div className="admin-analytics-attention-list">
                         <AnalyticsAttentionItem
                             icon={<AlertTriangle className="size-4" />}
                             label="异常请求"
                             value={data ? formatNumber(failureTotal) : "--"}
-                            description={topFailure ? `${topFailure.type} · ${topFailure.model}` : "当前范围未记录异常"}
-                            tone={failureTotal > 0 ? "warning" : "success"}
+                            description={!data ? "数据尚未就绪" : topFailure ? `${topFailure.type} · ${topFailure.model}` : "当前范围未记录异常"}
+                            tone={!data ? "neutral" : failureTotal > 0 ? "warning" : "success"}
                             onClick={failureTotal > 0 ? () => openAnalysis("failures") : undefined}
                         />
                         <AnalyticsAttentionItem
                             icon={<Clock3 className="size-4" />}
                             label="当前队列"
                             value={data ? formatNumber(data.kpi.currentQueuedTasks) : "--"}
-                            description={data?.kpi.currentQueuedTasks ? "存在等待执行的生成任务" : "没有排队中的生成任务"}
-                            tone={data?.kpi.currentQueuedTasks ? "warning" : "success"}
+                            description={!data ? "数据尚未就绪" : data.kpi.currentQueuedTasks ? "存在等待执行的生成任务" : "没有排队中的生成任务"}
+                            tone={!data ? "neutral" : data.kpi.currentQueuedTasks ? "warning" : "success"}
                         />
                         <AnalyticsAttentionItem
                             icon={<CircleDollarSign className="size-4" />}
@@ -467,11 +493,6 @@ export default function AnalyticsPanel({ users, channels }: Props) {
             </section>
         </div>
     );
-}
-
-function AnimatedHealthValue({ target, format }: { target: number; format: (value: number) => string }) {
-    const display = useCountUp(target, 420, 0);
-    return <>{format(display)}</>;
 }
 
 function AnalyticsHealthCard({ icon, label, value, trend, detail, tone = "neutral" }: { icon: ReactNode; label: string; value: ReactNode; trend?: { value: string; tone?: AdminStatusTone }; detail?: string; tone?: AdminStatusTone }) {

@@ -16,6 +16,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -31,7 +32,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 8
+	appearanceSchemaVersion        = 9
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -48,6 +49,7 @@ const (
 )
 
 type AppearanceSetting struct {
+	Canvas                    CanvasAppearance      `json:"canvas"`
 	SchemaVersion             int                   `json:"schemaVersion"`
 	BrandName                 string                `json:"brandName"`
 	BrandSlug                 string                `json:"brandSlug"`
@@ -70,6 +72,7 @@ type AppearanceSetting struct {
 }
 
 type PublicAppearanceSetting struct {
+	Canvas                    CanvasAppearance    `json:"canvas"`
 	SchemaVersion             int                 `json:"schemaVersion"`
 	BrandName                 string              `json:"brandName"`
 	BrandSlug                 string              `json:"brandSlug"`
@@ -109,6 +112,7 @@ type AdminAppearanceSetting struct {
 
 func defaultAppearanceSetting() AppearanceSetting {
 	return AppearanceSetting{
+		Canvas:            defaultCanvasAppearance(),
 		SchemaVersion:     appearanceSchemaVersion,
 		BrandName:         defaultAppearanceBrandName,
 		BrandSlug:         defaultAppearanceBrandSlug,
@@ -169,6 +173,11 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		return nil, err
 	}
 	value.SchemaVersion = appearanceSchemaVersion
+	canvas, canvasErr := normalizeCanvasAppearance(value.Canvas)
+	if canvasErr != nil {
+		return nil, canvasErr
+	}
+	value.Canvas = canvas
 	value.BrandName = strings.TrimSpace(value.BrandName)
 	value.BrandSlug = strings.ToLower(strings.TrimSpace(value.BrandSlug))
 	value.AuthHeroTitle = normalizeAppearanceCopy(value.AuthHeroTitle)
@@ -196,6 +205,13 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	current, before, err := s.readAppearance()
 	if err != nil {
 		return nil, err
+	}
+	if value.Canvas.Live2DResourceID != "" {
+		entry, err := s.validateLive2DResource(actor, value.Canvas.Live2DResourceID, before.Canvas.Live2DResourceID)
+		if err != nil {
+			return nil, err
+		}
+		value.Canvas.Live2DEntry = entry
 	}
 	for _, candidate := range []struct {
 		slot       string
@@ -302,6 +318,31 @@ func (s *Service) OpenAppearanceAsset(slot string, rangeHeader string) (*Resourc
 	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
+func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	_, value, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	resourceID := appearanceResourceID(value, slot)
+	if resourceID == "" {
+		return nil, NotFound("未配置该外观资源")
+	}
+	resource, err := s.repo.Resource(resourceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("外观资源不存在")
+		}
+		return nil, err
+	}
+	if err := validateAppearanceResourceType(slot, resource); err != nil {
+		return nil, err
+	}
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+}
+
 func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string][]AdminResourceReferenceView {
 	result := make(map[string][]AdminResourceReferenceView)
 	_, value, err := s.readAppearance()
@@ -321,6 +362,7 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.DarkLogoResourceID, title: "深色模式品牌 Logo"},
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
+		{resourceID: value.Canvas.Live2DResourceID, title: "画布 Agent Live2D 形象"},
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -615,6 +657,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
+		Canvas:              value.Canvas,
 		SchemaVersion:       appearanceSchemaVersion,
 		BrandName:           value.BrandName,
 		BrandSlug:           value.BrandSlug,

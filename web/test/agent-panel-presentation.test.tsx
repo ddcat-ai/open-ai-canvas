@@ -4,11 +4,12 @@ import { AgentWelcome } from "@/components/canvas/canvas-agent-welcome";
 import { AgentChatComposer } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 import { agentPermissionVisual } from "@/components/canvas/canvas-cloud-agent-settings";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { DEFAULT_CANVAS_APPEARANCE, agentCopy } from "@/lib/canvas/agent-appearance";
 
 const noop = () => {};
 
-test("welcome uses the configured brand and escapes it as text", () => {
-    const html = renderToStaticMarkup(<AgentWelcome brandName="我的<工作室>" nodeCount={2} onChooseSkill={noop} onDraftPrompt={noop} />);
+test("welcome uses the independent assistant name and escapes it as text", () => {
+    const html = renderToStaticMarkup(<AgentWelcome appearance={{ ...DEFAULT_CANVAS_APPEARANCE, agentName: "我的<工作室>" }} nodeCount={2} onChooseSkill={noop} onDraftPrompt={noop} />);
     expect(html).toContain("在这里，和我的&lt;工作室&gt;让灵感，慢慢成形");
     expect(html).toContain("2 个节点");
     expect(html.match(/type="button"/g)).toHaveLength(3);
@@ -16,10 +17,14 @@ test("welcome uses the configured brand and escapes it as text", () => {
 });
 
 test("empty canvas disables only the canvas-analysis shortcut", () => {
-    const html = renderToStaticMarkup(<AgentWelcome brandName="影策" nodeCount={0} onChooseSkill={noop} onDraftPrompt={noop} />);
+    const html = renderToStaticMarkup(<AgentWelcome appearance={DEFAULT_CANVAS_APPEARANCE} nodeCount={0} onChooseSkill={noop} onDraftPrompt={noop} />);
     expect(html.match(/disabled=""/g)).toHaveLength(1);
     expect(html).toContain("添加节点后，一起梳理创作思路");
     expect(html).not.toContain("生成前由你确认");
+});
+
+test("assistant template replacement treats names literally", () => {
+    expect(agentCopy("{agentName} / {agentName}", "$&小鱼")).toBe("$&小鱼 / $&小鱼");
 });
 
 test("permission modes have distinct icons, not just distinct colors", () => {

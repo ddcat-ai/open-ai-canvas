@@ -53,6 +53,16 @@ describe("creation library button", () => {
         expect(source).toContain("个素材已上传到素材库并自动选中");
     });
 
+    test("视频创作使用同名模型组的全部参考能力开放素材入口", () => {
+        const source = readCreateSource();
+        const workspace = readCreateWorkspaceSource();
+
+        expect(source).toContain('modelGroupReferenceLimits(config, preferredModel || selectedModel, "video")');
+        expect(source).toContain("reconcileCreationAttachmentLimits(attachments, mentionReferences, videoReferenceLimits)");
+        expect(workspace).toContain('props.mode !== "video" || props.maxReferences > 0');
+        expect(workspace).not.toContain('props.videoProfile.operations.includes("image_to_video")');
+    });
+
     test("previews prompt reference images without removing them", () => {
         const createSource = readCreateWorkspaceSource();
         const canvasSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-prompt-panel.tsx"), "utf8");
@@ -69,7 +79,7 @@ describe("creation library button", () => {
         const source = readCreateWorkspaceSource();
         const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
-        expect(source).toContain("import { Reorder, LayoutGroup, motion, useReducedMotion } from \"motion/react\"");
+        expect(source).toContain('import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react"');
         expect(source).toContain("<Reorder.Group");
         expect(source).toContain('axis="x"');
         expect(source).toContain("values={visibleAttachments}");

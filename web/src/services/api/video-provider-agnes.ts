@@ -1,4 +1,4 @@
-import { getResourceOSSUrl } from "@/services/api/resources";
+import { getResourceInputURL } from "@/services/api/resources";
 import { buildApiUrl, isSystemProxyBaseUrl, modelOptionName } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -184,7 +184,7 @@ function agnesAspectRatio(value: string) {
 }
 
 async function resolveAgnesMediaUrl(value: string | undefined, storageKey?: string) {
-    if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
+    if (storageKey?.startsWith("resource:")) return getResourceInputURL(storageKey);
     if (/^https?:\/\//i.test(value || "")) return String(value);
     throw new Error("Agnes 参考素材需要公网 URL；请先把素材保存到对象存储");
 }

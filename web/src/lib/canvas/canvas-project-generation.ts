@@ -158,6 +158,8 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
         taskStatus: task.status,
         taskProgress: progress,
         taskStage: task.stage,
+        taskMediaStage: task.mediaStage,
+        taskCanRecoverMedia: task.canRecoverMedia,
         taskProvider: task.provider,
         taskStartedAt: task.startedAt,
         taskCompletedAt: task.completedAt,
@@ -170,34 +172,7 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
     };
 }
 
-// 失败节点再次提交前必须移除旧任务绑定，否则批次调度会把它误判为仍在处理。
-export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undefined, status: CanvasNodeMetadata["status"] = "idle"): CanvasNodeMetadata {
-    const next = {
-        ...(metadata || {}),
-        status,
-        errorDetails: undefined,
-        generationErrorCode: undefined,
-        resourceReloadAvailable: undefined,
-        failedPromptFingerprint: undefined,
-    };
-    delete next.taskId;
-    delete next.taskClientOperationId;
-    delete next.retryOf;
-    delete next.attemptGroupId;
-    delete next.taskStatus;
-    delete next.taskProgress;
-    delete next.taskStage;
-    delete next.taskProvider;
-    delete next.taskStartedAt;
-    delete next.taskCompletedAt;
-    delete next.taskDurationMs;
-    delete next.taskErrorCode;
-    delete next.taskOfficialStatus;
-    delete next.taskReceiptRecorded;
-    delete next.taskCreatedAt;
-    delete next.taskUpdatedAt;
-    return next;
-}
+export { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 
 function normalizeTaskProgress(progress: number | undefined, status: GenerationTask["status"]) {
     if (typeof progress === "number" && Number.isFinite(progress)) return Math.max(0, Math.min(100, Math.round(progress)));

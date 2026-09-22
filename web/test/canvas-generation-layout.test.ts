@@ -8,6 +8,10 @@ function node(id: string, x: number, y: number, width = 340, height = 240): Canv
 }
 
 describe("findAvailableGenerationGroupPosition", () => {
+    test("已有存储标识但预览未恢复的媒体不能当作空节点覆盖", () => {
+        expect(canGenerateImageInPlace({ ...node("stored", 0, 0), metadata: { storageKey: "resource:image" } })).toBe(false);
+        expect(canGenerateMediaInPlace({ ...node("video", 0, 0), type: CanvasNodeType.Video, metadata: { storageKey: "resource:video" } }, CanvasNodeType.Video)).toBe(false);
+    });
     test("首选位置没有占用时保持原坐标", () => {
         expect(findAvailableGenerationGroupPosition([node("source", 0, 0)], { x: 436, y: 0 }, { width: 340, height: 240 })).toEqual({ x: 436, y: 0 });
     });

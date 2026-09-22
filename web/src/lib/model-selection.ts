@@ -1,7 +1,7 @@
 import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageSizePresets } from "@/lib/image-size-presets";
-import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
     textCount: number;
@@ -32,12 +32,20 @@ export type ModelReferenceLimits = {
     maxAudios: number;
 };
 
+export function isDirectSystemModel(config: AiConfig, value: string) {
+    if (!value) return false;
+    const channel = resolveModelChannel(config, value);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+    return channel.scope === "system" && channel.id !== PUBLIC_MODEL_CATALOG_ID && !cost?.logicalModelId;
+}
+
 export function groupModelsByDisplayName(config: AiConfig, models: string[]): DisplayModelGroup[] {
     const groups = new Map<string, DisplayModelGroup>();
     models.forEach((model) => {
         const channel = resolveModelChannel(config, model);
         const label = configuredModelDisplayName(config, model);
-        const key = `${channel.id}\u0000${label.toLocaleLowerCase()}`;
+        // 平台直连模型是独立的渠道 SKU；同名只用于菜单展示，不能合并能力或自动改选。
+        const key = isDirectSystemModel(config, model) ? JSON.stringify([channel.id, modelOptionName(model)]) : `${channel.id}\u0000${label.toLocaleLowerCase()}`;
         const current = groups.get(key);
         if (current) current.models.push(model);
         else groups.set(key, { key, label, models: [model] });

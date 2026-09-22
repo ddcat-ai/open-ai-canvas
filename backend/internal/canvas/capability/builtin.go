@@ -3,6 +3,8 @@ package capability
 const (
 	maxAgentNodeTitleRunes   = 240
 	maxAgentNodeContentRunes = 16000
+	// 坐标绝对值上限：与 app 侧整理工具收敛几何值的范围一致。
+	maxAgentNodeCoordLimit = 1e6
 )
 
 func BuiltinRegistry() *Registry {
@@ -60,9 +62,15 @@ func BuiltinRegistry() *Registry {
 			InputKind:   "text",
 			Connection:  ConnectionPolicy{CanSource: true, CanTarget: true, AcceptedInputKinds: []string{"image"}},
 			CanUpdate:   true, SummaryFields: []string{"batchTable"}, DetailFields: []string{"batchTable"}, ProjectionKind: "batch_table", ProjectionField: "batchTable",
-			PatchFields: map[string]PatchField{
-				"title": {Path: "title", Kind: patchKindString, Label: "节点名称", Order: 10, Description: "批量创作表标题", MaxRunes: maxAgentNodeTitleRunes},
-			},
+			PatchFields: func() map[string]PatchField {
+				fields := map[string]PatchField{
+					"title": {Path: "title", Kind: patchKindString, Label: "节点名称", Order: 10, Description: "批量创作表标题", MaxRunes: maxAgentNodeTitleRunes},
+				}
+				for key, field := range positionPatchFields() {
+					fields[key] = field
+				}
+				return fields
+			}(),
 			CreateMetadata: func(string) map[string]any {
 				return map[string]any{
 					"status": "idle",
@@ -151,13 +159,26 @@ func generatedMediaSemantics(nodeType string) generatedMediaCapabilitySemantics 
 }
 
 func editableNodeFields(contentPath, contentLabel, contentDescription string) map[string]PatchField {
-	return map[string]PatchField{
+	fields := map[string]PatchField{
 		"title": {
 			Path: "title", Kind: patchKindString, Label: "节点名称", Order: 10, Description: "节点标题", MaxRunes: maxAgentNodeTitleRunes,
 		},
 		"content": {
 			Path: contentPath, Kind: patchKindString, Label: contentLabel, Order: 20, Description: contentDescription, MaxRunes: maxAgentNodeContentRunes,
 		},
+	}
+	for key, field := range positionPatchFields() {
+		fields[key] = field
+	}
+	return fields
+}
+
+// positionPatchFields 是坐标字段：模型可以直接指定节点位置（微调），批量整理走 canvas_arrange_nodes。
+// 坐标上限与整理侧的收敛范围一致，避免写进离谱的几何值。
+func positionPatchFields() map[string]PatchField {
+	return map[string]PatchField{
+		"x": {Path: "position.x", Kind: patchKindNumber, Label: "横坐标", Order: 30, Limit: maxAgentNodeCoordLimit, Description: "画布横坐标（像素）；与 y 一起移动节点，通常用 canvas_arrange_nodes 批量整理"},
+		"y": {Path: "position.y", Kind: patchKindNumber, Label: "纵坐标", Order: 31, Limit: maxAgentNodeCoordLimit, Description: "画布纵坐标（像素）；与 x 一起移动节点，通常用 canvas_arrange_nodes 批量整理"},
 	}
 }
 

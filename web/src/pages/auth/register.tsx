@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
-import { App, Button, Divider, Input } from "antd";
+import { App, Button, Checkbox, Divider, Input, Modal } from "antd";
 import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -8,6 +8,9 @@ import { LinuxDOIcon } from "./auth-scene";
 import { ApiError } from "@/services/api/request";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
+
+// TODO: 由维护者填写正式的影策服务协议条款后再发布。
+const SERVICE_AGREEMENT: { title: string; content: string }[] = [];
 
 export default function RegisterPage() {
     const navigate = useNavigate();
@@ -20,6 +23,8 @@ export default function RegisterPage() {
     const [displayName, setDisplayName] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [agreementAccepted, setAgreementAccepted] = useState(false);
+    const [agreementOpen, setAgreementOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [sendingCode, setSendingCode] = useState(false);
     const [countdown, setCountdown] = useState(0);
@@ -68,6 +73,10 @@ export default function RegisterPage() {
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (registering.current || registerCountdown > 0) return;
+        if (!agreementAccepted) {
+            message.warning("请先同意影策服务协议");
+            return;
+        }
         if (password !== confirmPassword) {
             message.error("两次输入的密码不一致");
             return;
@@ -75,7 +84,7 @@ export default function RegisterPage() {
         registering.current = true;
         setSubmitting(true);
         try {
-            await register({ username, email, emailCode, displayName, password });
+            await register({ username, email, emailCode, displayName, password, acceptedTerms: agreementAccepted });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
@@ -189,7 +198,16 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled || registerCountdown > 0} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+            <div className="flex items-start gap-2 text-xs leading-5 text-white/55">
+                <Checkbox checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)}>
+                    <span className="text-xs leading-5 text-white/55">我已阅读并同意</span>
+                </Checkbox>
+                <button type="button" className="-ml-1 text-xs leading-5 text-blue-300/85 transition hover:text-blue-200" onClick={() => setAgreementOpen(true)}>
+                    《影策服务协议》
+                </button>
+            </div>
+
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled || registerCountdown > 0 || !agreementAccepted} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                 {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : "创建账号"}
             </Button>
             {settings?.linuxdoEnabled ? (
@@ -197,11 +215,22 @@ export default function RegisterPage() {
                     <Divider plain className="!border-white/10 !text-white/30">
                         或
                     </Divider>
-                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                    <Button size="large" block disabled={!agreementAccepted} icon={<LinuxDOIcon />} href={agreementAccepted ? linuxDOLoginURL(next, true) : undefined}>
                         使用 Linux.do 注册 / 登录
                     </Button>
                 </>
             ) : null}
+            <Modal className="workspace-modal workspace-modal-compact" title="影策服务协议" open={agreementOpen} onCancel={() => setAgreementOpen(false)} footer={null} destroyOnHidden>
+                <div className="max-h-96 space-y-4 overflow-y-auto pr-1 text-sm leading-6 text-foreground/68">
+                    {SERVICE_AGREEMENT.length === 0 ? <p className="m-0">服务协议内容待补充。</p> : null}
+                    {SERVICE_AGREEMENT.map((item) => (
+                        <section key={item.title}>
+                            <h3 className="m-0 text-sm font-semibold text-foreground">{item.title}</h3>
+                            <p className="mt-1.5 mb-0">{item.content}</p>
+                        </section>
+                    ))}
+                </div>
+            </Modal>
         </form>
     );
 }

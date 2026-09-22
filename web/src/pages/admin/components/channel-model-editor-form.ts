@@ -2,6 +2,7 @@ import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
+import type { ModelTag } from "@/lib/model-tags";
 import { defaultPriceTier, legacyPriceTierToForm, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 
 export type ChannelModelFormValues = {
@@ -9,6 +10,7 @@ export type ChannelModelFormValues = {
     providerModelKey?: string;
     displayName?: string;
     channelLabel?: string;
+    tags: ModelTag[];
     description?: string;
     icon?: string;
     capability: ModelCapabilityChoice;
@@ -33,6 +35,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         providerModelKey: upstreamModel,
         displayName: item?.displayName || "",
         channelLabel: item?.channelLabel || "",
+        tags: item?.tags?.map((tag) => ({ ...tag })) || [],
         description: item?.description || "",
         icon: item?.icon || "",
         capability,

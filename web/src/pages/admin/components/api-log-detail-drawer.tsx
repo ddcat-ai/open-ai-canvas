@@ -4,6 +4,7 @@ import { AdminEmpty } from "@/pages/admin/components/admin-ui";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
+import { mediaDeliverySummary } from "@/lib/generation-task-display";
 import { getAdminApiLog, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
 import { AdminStatusBadge } from "./admin-ui";
 
@@ -80,6 +81,7 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
         ],
         ["能力", capabilityText(log.capability)],
         ["请求阶段", requestKindText(log.requestKind)],
+        ["作品交付", mediaDeliverySummary(log.taskStatus, log.mediaStage) || "未记录保存阶段"],
         ["计费属性", log.billable ? "计费调用" : "不计费"],
         ["总耗时", <span className="tabular-nums">{formatDuration(log.durationMs)}</span>],
         ["视频轮询", log.capability === "video" ? <span className="tabular-nums">{log.pollCount || 0} 次</span> : <span className="text-foreground/35">--</span>],
@@ -125,7 +127,7 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
         ["上游地址", log.upstreamUrl ? <code className="break-all text-sm text-foreground/70">{log.upstreamUrl}</code> : <span className="text-foreground/35">--</span>],
     ].map(([label, children], index) => ({ key: String(index), label, children }));
 
-    const canQueryProviderTask = log.capability === "video" && log.taskStatus === "failed" && Boolean(log.taskId && log.providerRequestId);
+    const canQueryProviderTask = !log.mediaStage && log.capability === "video" && log.taskStatus === "failed" && Boolean(log.taskId && log.providerRequestId);
 
     return (
         <div className="space-y-6">
@@ -159,7 +161,7 @@ function billingText(log: ApiCallLog) {
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", repair: "结果修复" };
     return labels[value] || "上游请求";
 }
 

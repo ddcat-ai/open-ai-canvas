@@ -139,6 +139,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     model: model.modelKey,
                     displayName: model.displayName,
                     channelLabel: model.channelLabel,
+                    tags: model.tags || [],
                     description: model.description || "",
                     icon: model.icon || "",
                     capability: model.capability as ModelCapability,

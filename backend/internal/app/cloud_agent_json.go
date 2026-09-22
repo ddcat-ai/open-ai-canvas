@@ -12,8 +12,8 @@ import (
 
 var errCloudAgentJSONSingleObject = errors.New("参数必须是单个 JSON 对象")
 
-// Only syntax/schema errors may be repaired by the model; authorization and
-// unsupported mutations still fail admission before any write or approval.
+// Only explicitly classified input errors may be repaired by the model;
+// authorization and unsupported mutations still fail before any write/approval.
 type cloudAgentArgumentError struct{ error }
 
 func (e *cloudAgentArgumentError) Unwrap() error { return e.error }

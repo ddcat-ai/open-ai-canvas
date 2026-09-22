@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -246,7 +247,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 				billingOrderIDs = append(billingOrderIDs, log.BillingOrderID)
 			}
 		}
-		if (log.Capability != "image" && log.Capability != "video") || log.TaskID == "" {
+		if (log.Capability != "image" && log.Capability != "video" && log.Capability != "audio") || log.TaskID == "" {
 			continue
 		}
 		if _, exists := seenTaskIDs[log.TaskID]; exists {
@@ -303,6 +304,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 		}
 		if task, exists := taskByID[logs[index].TaskID]; exists && task.UserID == logs[index].UserID {
 			logs[index].TaskStatus = task.Status
+			logs[index].MediaStage = task.MediaStage
 			previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 			if canvasResourceID(previewURL) != "" {
 				logs[index].MediaPreviewURL = "/api/admin/api-logs/" + logs[index].ID + "/media"
@@ -325,21 +327,15 @@ func (s *Service) OpenAdminAPICallLogMediaRange(actor *model.User, logID string,
 	return s.openResourceRange(userID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID string, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	userID, resource, err := s.adminAPICallLogMediaResource(actor, logID)
 	if err != nil {
 		return nil, err
 	}
-	delivery, err := s.prepareResourceDelivery(userID, resource, ResourceDeliveryOptions{})
-	if err != nil || delivery.RedirectURL != "" {
-		return delivery, err
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
 	}
-	stream, err := s.openResourceRange(userID, resource, rangeHeader)
-	if err != nil {
-		return nil, err
-	}
-	delivery.Stream = stream
-	return delivery, nil
+	return s.prepareResourceDelivery(userID, resource, options, rangeHeader)
 }
 
 func (s *Service) adminAPICallLogMediaResource(actor *model.User, logID string) (string, *model.Resource, error) {
@@ -995,7 +991,7 @@ func (s *Service) enrichAPICallLogFailureSummary(log *model.ApiCallLog, response
 		Body:       string(responseBody),
 	})
 	detail := strings.TrimSpace(log.Error)
-	if detail == "" || detail == userMessage {
+	if detail == "" || detail == userMessage || strings.Contains(userMessage, "；上游："+detail) {
 		log.Error = userMessage
 		return
 	}

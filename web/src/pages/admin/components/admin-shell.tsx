@@ -27,6 +27,7 @@ import {
     PlugZap,
     RadioTower,
     RefreshCw,
+    Rows3,
     Sparkles,
     Settings2,
     ShieldAlert,
@@ -48,6 +49,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
 import { AdminTooltip } from "../ui/controls";
+import { AdminDensityProvider, useAdminDensity } from "./admin-density";
 import "@/styles/admin-ui.css";
 import "../theme/admin-tokens.css";
 import "../theme/admin-chrome.css";
@@ -62,40 +64,42 @@ type AdminNavigationItem = {
 
 const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = [
     {
-        label: "概览",
-        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> }],
+        label: "监控与排查",
+        items: [
+            { path: "/admin", label: "运行总览", description: "请求质量、队列与成本趋势", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
+            { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
+        ],
     },
     {
-        label: "平台资源",
+        label: "模型与资源",
         items: [
-            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
-            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
             { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
         ],
     },
     {
-        label: "运营",
+        label: "用户与运营",
         items: [
+            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
             { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
             { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
             { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
-            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },
     {
-        label: "系统配置",
+        label: "平台配置",
         items: [
+            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
             { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO、备案与皮肤", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
-            { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
             { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
             { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
             { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
@@ -119,6 +123,16 @@ function adminPopupContainer(node?: HTMLElement) {
 }
 
 export function AdminShell() {
+    const userId = useUserStore((state) => state.user?.id);
+    return (
+        <AdminDensityProvider key={userId || "anonymous"} userId={userId}>
+            <AdminShellLayout />
+        </AdminDensityProvider>
+    );
+}
+
+function AdminShellLayout() {
+    const { density } = useAdminDensity();
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
@@ -141,7 +155,7 @@ export function AdminShell() {
     return (
         <ConfigProvider theme={getIsolatedAdminAntTheme(dark, appearance.activeSkin)} getPopupContainer={(node) => adminPopupContainer(node)}>
             <App>
-                <main id="admin-root" data-admin-root className="admin-shell flex h-full min-h-0 overflow-hidden">
+                <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
                             <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
@@ -223,12 +237,25 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
                     </div>
                     <div className="admin-page-actions flex shrink-0 flex-wrap items-center">
                         {actions}
+                        <AdminDensityButton />
                         <AdminThemeButton />
                     </div>
                 </header>
                 {children}
             </div>
         </div>
+    );
+}
+
+function AdminDensityButton() {
+    const { density, toggleDensity } = useAdminDensity();
+    return (
+        <AdminTooltip title={density === "compact" ? "切换为舒适行距" : "切换为紧凑行距"}>
+            <button type="button" className="admin-density-toggle" onClick={toggleDensity} aria-label="紧凑表格行距" aria-pressed={density === "compact"}>
+                <Rows3 className="size-4" aria-hidden="true" />
+                {density === "compact" ? "紧凑" : "舒适"}
+            </button>
+        </AdminTooltip>
     );
 }
 

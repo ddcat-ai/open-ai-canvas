@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { Check, ChevronDown, ChevronLeft, Coins } from "lucide-react";
+import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -12,6 +12,7 @@ import { modelDisplayName, modelIcon, modelOptionName, resolveModelChannel, sele
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ModelLogo } from "@/components/model-logo";
+import { ModelTags } from "@/components/model-tags";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
 
 type ModelPickerProps = {
@@ -54,7 +55,6 @@ export function ModelPicker({
     const theme = (canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark) as CanvasTheme;
     const [open, setOpen] = useState(false);
     const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
-    const [previewedModel, setPreviewedModel] = useState("");
     const [triggerWidth, setTriggerWidth] = useState<number | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -121,8 +121,7 @@ export function ModelPicker({
         if (nextOpen && !options.length) onMissingConfig?.();
         if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
         if (nextOpen) {
-            setPreviewedModel(current || options[0] || "");
-            setActiveGroupKey(null);
+            setActiveGroupKey(optionGroups.find((group) => group.models.some((item) => item.models.includes(current)))?.key ?? null);
         }
         setOpen(nextOpen);
     };
@@ -186,8 +185,7 @@ export function ModelPicker({
                     <div className="canvas-model-picker-brands" aria-label="选择产品模型">
                         {optionGroups.map((group) => {
                             const groupCurrent = group.models.find((item) => item.models.includes(current));
-                            const firstModel = groupCurrent?.models[0] || group.models[0]?.models[0] || "";
-                            return <button key={group.key} type="button" data-model-picker-item className="canvas-model-picker-brand" onClick={() => { setActiveGroupKey(group.key); setPreviewedModel(firstModel); focusMenuOption(); }}>
+                            return <button key={group.key} type="button" data-model-picker-item className={cn("canvas-model-picker-brand", groupCurrent && "is-active")} aria-pressed={Boolean(groupCurrent)} onClick={() => { setActiveGroupKey(group.key); focusMenuOption(); }}>
                                 <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
                                 <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
                                 <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
@@ -197,9 +195,7 @@ export function ModelPicker({
                 ) : <div className="canvas-model-picker-two-pane">
                     <div className="canvas-model-picker-brand-rail" aria-label="产品模型">
                         {optionGroups.map((group) => {
-                            const groupCurrent = group.models.find((item) => item.models.includes(current));
-                            const firstModel = groupCurrent?.models[0] || group.models[0]?.models[0] || "";
-                            return <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => { setActiveGroupKey(group.key); setPreviewedModel(firstModel); }}>
+                            return <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => setActiveGroupKey(group.key)}>
                                 <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
                                 <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
                                 <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
@@ -207,10 +203,6 @@ export function ModelPicker({
                         })}
                     </div>
                     {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0 overflow-hidden">
-                        <div className="canvas-model-picker-secondary-head">
-                            <button type="button" className="canvas-model-picker-back" onClick={() => { setActiveGroupKey(null); focusMenuOption(); }} aria-label="返回模型列表"><ChevronLeft /></button>
-                            <span><strong>{group.label}</strong>{group.scope ? <small>{group.scope}</small> : null}</span>
-                        </div>
                         <div className="grid min-w-0 gap-1">
                             {group.models.map((modelGroup) => {
                                 const selected = modelGroup.models.includes(current);
@@ -226,16 +218,11 @@ export function ModelPicker({
                                         aria-selected={selected}
                                         aria-disabled={Boolean(disabledReason)}
                                         disabled={Boolean(disabledReason)}
-                                        title={disabledReason || pickerModelOptionLabel(config, displayModel, showConfiguredModelName)}
-                                        className={cn("canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45", previewedModel === displayModel && "is-previewed")}
+                                        className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
                                         style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
-                                        onMouseEnter={() => setPreviewedModel(displayModel)}
-                                        onFocus={() => setPreviewedModel(displayModel)}
                                         onClick={() => {
                                             if (!model) return;
                                             onChange(model);
-                                            setOpen(false);
-                                            window.requestAnimationFrame(() => triggerRef.current?.focus());
                                         }}
                                     >
                                         <ModelLabel
@@ -249,9 +236,9 @@ export function ModelPicker({
                                             requirements={requirements}
                                             showPrice={showOptionPrices && creditsEnabled}
                                             disabledReason={disabledReason}
-                                            showDescription={selected || previewedModel === displayModel}
+                                            showDescription
                                         />
-                                        {selected ? <Check className="canvas-model-picker-option-check ml-1 shrink-0" style={{ color: theme.node.activeStroke }} /> : null}
+                                        <span className="canvas-model-picker-option-check ml-1 shrink-0" aria-hidden="true">{selected ? <Check className="size-full" style={{ color: theme.node.activeStroke }} /> : null}</span>
                                     </button>
                                 );
                             })}
@@ -311,7 +298,7 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "当前没有可用模型，请联系管理员或检查模型配置";
 }
 
-function ModelLabel({
+export function ModelLabel({
     config,
     model,
     capability,
@@ -352,13 +339,15 @@ function ModelLabel({
             </span>
             <span className="min-w-44 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{label || pickerModelDisplayName(config, model, showConfiguredModelName)}</span>
-                <span className={cn("canvas-model-picker-description mt-1 block truncate text-[var(--fs-tiny)]", showDescription && "is-visible")} style={{ color: theme.node.muted }} title={capabilitySummary}>
+                <span className={cn("canvas-model-picker-description mt-1 block truncate text-[var(--fs-tiny)]", showDescription && "is-visible")} style={{ color: theme.node.muted }}>
                     {capabilitySummary}
                 </span>
+                <ModelTags tags={logicalCost?.tags} />
             </span>
             {showPrice ? (
                 <span className="ml-auto shrink-0 pl-2">
-                    <ModelPrice price={modelMenuPrice(config, model, capability, !requirements, requirements)} />
+                    {/* 候选模型展示自身价目；当前参数的精确报价只在选中后的触发器显示。 */}
+                    <ModelPrice price={modelMenuPrice(config, model, capability, true, requirements)} />
                 </span>
             ) : null}
             {!creationVariant && meta.time ? (
@@ -508,8 +497,8 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
         const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
         const label = quote.estimated ? `预估:${amount}` : `${amount}`;
         return (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={modelQuoteDescription(quote)}>
-                <Coins className="size-3" />
+            <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-bold tabular-nums" aria-label={modelQuoteDescription(quote)}>
+                <Coins className="model-picker-price-icon" aria-hidden="true" />
                 {compact ? label : `${label} 积分`}
             </span>
         );
@@ -518,19 +507,19 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
     if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
     if (price.kind === "tiers") {
         return (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={price.title}>
-                <Coins className="size-3" />
+            <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-bold tabular-nums">
+                <Coins className="model-picker-price-icon" aria-hidden="true" />
                 {compact ? price.compactLabel : price.label}
             </span>
         );
     }
     if (price.kind === "estimate") {
-        return <span className="shrink-0 text-[var(--fs-tiny)] font-medium text-amber-600 dark:text-amber-300" title={price.title}>{price.label || "按量预估"}</span>;
+        return <span className="model-picker-price inline-flex shrink-0 items-center text-[var(--fs-tiny)] font-semibold"><Coins className="model-picker-price-icon" aria-hidden="true" />{price.label || "按量预估"}</span>;
     }
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
-            <Coins className="size-3" />
-            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
+        <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-bold tabular-nums">
+            <Coins className="model-picker-price-icon" aria-hidden="true" />
+            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}{compact ? "/" : " 积分/"}{price.unit}
         </span>
     );
 }

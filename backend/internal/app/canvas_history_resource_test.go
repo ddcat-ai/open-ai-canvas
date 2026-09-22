@@ -66,3 +66,47 @@ func TestCanvasHistoryProtectsMediaAndDeletionWorker(t *testing.T) {
 		t.Fatalf("unreferenced media not cleaned: %v", err)
 	}
 }
+
+func TestArchivedAssetDeletionRemovesCanvasHistoryReference(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	resource := model.Resource{
+		ID: "archived-history-resource", UserID: "user-1", Provider: "unsupported-test-provider",
+		ObjectKey: "users/user-1/image/archived-history.png", Status: model.ResourceStatusReady,
+	}
+	asset := model.Asset{
+		ID: "archived-history-asset", UserID: "user-1", Title: "回收站历史素材",
+		Status: model.AssetVersionStatusArchived, PayloadJSON: `{"data":{"storageKey":"resource:archived-history-resource"}}`,
+	}
+	snapshot := model.CanvasSnapshot{
+		ID: "archived-history-snapshot", CanvasID: "canvas", UserID: "user-1", Revision: 1,
+		Title: "历史画布", PayloadJSON: `{}`, CreatedAt: time.Now(),
+	}
+	ref := model.CanvasSnapshotResource{SnapshotID: snapshot.ID, ResourceID: resource.ID}
+	for _, item := range []any{&resource, &asset, &snapshot, &ref} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.DeleteUserAsset("user-1", asset.ID); err != nil {
+		t.Fatalf("archived asset deletion failed: %v", err)
+	}
+	for _, check := range []struct {
+		model any
+		want  int64
+	}{
+		{&model.Asset{}, 0},
+		{&model.Resource{}, 0},
+		{&model.CanvasSnapshotResource{}, 0},
+		{&model.CanvasSnapshot{}, 1},
+		{&model.ResourceDeletionJob{}, 1},
+	} {
+		var count int64
+		if err := db.Model(check.model).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != check.want {
+			t.Fatalf("%T count=%d, want %d", check.model, count, check.want)
+		}
+	}
+}

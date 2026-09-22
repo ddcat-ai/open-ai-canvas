@@ -19,6 +19,9 @@ type OSSFormValues = {
     region: string;
     endpoint: string;
     cdnBaseUrl: string;
+    cdnAuthMode: "" | "public" | "qiniu" | string;
+    requireCDN: boolean;
+    allowPrivateProxy: boolean;
     bucket: string;
     accessKeyId: string;
     accessKeySecret: string;
@@ -29,7 +32,26 @@ type OSSFormValues = {
     allowUserS3: boolean;
 };
 
-type StoragePayload = Pick<AdminOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "accessKeySecret" | "sessionToken" | "publicBaseUrl" | "pathPrefix" | "s3Preset" | "pathStyle" | "allowUserS3">;
+type StoragePayload = Pick<
+    AdminOSSSetting,
+    | "enabled"
+    | "provider"
+    | "region"
+    | "endpoint"
+    | "cdnBaseUrl"
+    | "cdnAuthMode"
+    | "requireCDN"
+    | "allowPrivateProxy"
+    | "bucket"
+    | "accessKeyId"
+    | "accessKeySecret"
+    | "sessionToken"
+    | "publicBaseUrl"
+    | "pathPrefix"
+    | "s3Preset"
+    | "pathStyle"
+    | "allowUserS3"
+>;
 
 const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; description: string }> = [
     { mode: "local", label: "服务器本地", short: "本地磁盘", description: "新增资源写入当前部署的数据目录，通过后端签名链接访问。" },
@@ -540,9 +562,24 @@ export default function StorageSettingsPage() {
                                             <Form.Item
                                                 name="cdnBaseUrl"
                                                 label={draftMode === "qiniu" ? "绑定域名（可选）" : "CDN 加速域名（可选）"}
-                                                extra={draftMode === "qiniu" ? "留空时浏览器通过当前后端代理读取七牛私有对象。" : "只填写域名根地址，不包含路径、查询参数或认证信息。"}
+                                                extra={draftMode === "qiniu" ? "留空时按下方分发策略处理；不会由浏览器自行决定是否代理。" : "只填写域名根地址，不包含路径、查询参数或认证信息。"}
                                             >
                                                 <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
+                                            </Form.Item>
+                                            <Form.Item name="cdnAuthMode" label="CDN 访问鉴权" extra="public 适用于 CDN 已公开或由 CDN 自行鉴权；qiniu 仅支持七牛私有下载签名。阿里云/腾讯云私有 CDN 暂不自动签名。">
+                                                <Select
+                                                    options={[
+                                                        { label: "未配置（回源或按兜底策略）", value: "" },
+                                                        { label: "公开 CDN", value: "public" },
+                                                        { label: "七牛私有下载签名", value: "qiniu" },
+                                                    ]}
+                                                />
+                                            </Form.Item>
+                                            <Form.Item name="requireCDN" label="必须走 CDN" valuePropName="checked" extra="开启后 CDN 鉴权配置不完整时直接失败，不会静默回源。">
+                                                <Switch checkedChildren="严格" unCheckedChildren="允许回源" />
+                                            </Form.Item>
+                                            <Form.Item name="allowPrivateProxy" label="允许私有源站代理" valuePropName="checked" extra="仅作为显式兜底；开启后源站私有时由平台承担带宽。">
+                                                <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                                             </Form.Item>
                                         </div>
                                     </div>
@@ -616,6 +653,9 @@ function formValues(setting: AdminOSSSetting): OSSFormValues {
         region: setting.region || "",
         endpoint: setting.endpoint || "",
         cdnBaseUrl: setting.cdnBaseUrl || "",
+        cdnAuthMode: setting.cdnAuthMode || "",
+        requireCDN: setting.requireCDN === true,
+        allowPrivateProxy: setting.allowPrivateProxy === true,
         bucket: setting.bucket || "",
         accessKeyId: setting.accessKeyId || "",
         accessKeySecret: "",
@@ -633,6 +673,9 @@ function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: Admin
             region: setting.region || "",
             endpoint: setting.endpoint || "",
             cdnBaseUrl: setting.cdnBaseUrl || "",
+            cdnAuthMode: setting.cdnAuthMode || "",
+            requireCDN: setting.requireCDN === true,
+            allowPrivateProxy: setting.allowPrivateProxy === true,
             bucket: setting.bucket || "",
             accessKeyId: setting.accessKeyId || "",
             accessKeySecret: "",
@@ -646,6 +689,9 @@ function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: Admin
         region: "",
         endpoint: "",
         cdnBaseUrl: "",
+        cdnAuthMode: "",
+        requireCDN: false,
+        allowPrivateProxy: false,
         bucket: "",
         accessKeyId: "",
         accessKeySecret: "",
@@ -668,6 +714,9 @@ function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminO
         region,
         endpoint,
         cdnBaseUrl: trimTrailingSlash(values.cdnBaseUrl || ""),
+        cdnAuthMode: values.cdnAuthMode || "",
+        requireCDN: values.requireCDN === true,
+        allowPrivateProxy: values.allowPrivateProxy === true,
         bucket: values.bucket?.trim() || "",
         accessKeyId: values.accessKeyId?.trim() || "",
         accessKeySecret: values.accessKeySecret?.trim() || "",
@@ -717,7 +766,7 @@ function validatePublicBaseURL(value: string) {
 
 function storageResponseMatches(setting: AdminOSSSetting, expected: StoragePayload) {
     const actual = normalizeStoragePayload(formValues(setting), setting);
-    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3"];
+    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "cdnAuthMode", "requireCDN", "allowPrivateProxy", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3"];
     if (expected.accessKeySecret && !setting.hasAccessKeySecret) return false;
     if (expected.sessionToken && !setting.hasSessionToken) return false;
     return fields.every((key) => actual[key] === expected[key]);
@@ -733,6 +782,9 @@ function isAdminOSSSetting(value: unknown): value is AdminOSSSetting {
         typeof setting.region === "string" &&
         typeof setting.endpoint === "string" &&
         typeof setting.cdnBaseUrl === "string" &&
+        typeof setting.cdnAuthMode === "string" &&
+        typeof setting.requireCDN === "boolean" &&
+        typeof setting.allowPrivateProxy === "boolean" &&
         typeof setting.bucket === "string" &&
         typeof setting.accessKeyId === "string" &&
         typeof setting.hasAccessKeySecret === "boolean" &&

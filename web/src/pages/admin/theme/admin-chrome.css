@@ -21,7 +21,7 @@
     width: var(--admin-sidebar-width);
     flex-basis: var(--admin-sidebar-width);
     background: var(--admin-sidebar);
-    border-right: 1px solid var(--admin-border);
+    border-right: 0;
     box-shadow: none;
     border-radius: 0 !important;
 }
@@ -36,7 +36,7 @@
     height: 56px;
     align-items: center;
     padding: 0 12px;
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 0;
 }
 
 [data-admin-root] .admin-sidebar-brand-button {
@@ -83,7 +83,7 @@
 }
 
 [data-admin-root] .admin-nav-group + .admin-nav-group {
-    margin-top: 18px;
+    margin-top: 14px;
 }
 
 [data-admin-root] .admin-nav-group-label,
@@ -115,7 +115,7 @@
 [data-admin-root] .admin-nav-group-items:not(.is-collapsed) {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 2px;
     margin-left: 0 !important;
     padding-left: 0 !important;
     border: 0 !important;
@@ -142,7 +142,9 @@
     font-weight: 500;
     line-height: 16px;
     text-decoration: none;
-    transition: background-color var(--admin-motion), color var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
 }
 
 [data-admin-root] .admin-nav-link.is-collapsed {
@@ -233,10 +235,34 @@
 }
 
 [data-admin-root] .admin-page-header {
+    min-height: 48px;
     gap: 12px !important;
     margin-bottom: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--admin-border);
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+[data-admin-root] .admin-density-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--admin-control-h);
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+[data-admin-root] .admin-density-toggle:hover {
+    background: var(--admin-surface-2);
+}
+
+[data-admin-root] :is(.admin-density-toggle, .admin-log-detail-link):focus-visible {
+    outline: 2px solid var(--admin-text-secondary);
+    outline-offset: 2px;
 }
 
 [data-admin-root] .admin-page-location {
@@ -286,9 +312,9 @@
     width: 32px;
     height: 32px;
     place-items: center;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: transparent;
     color: var(--admin-text-secondary);
 }
 
@@ -352,12 +378,22 @@
 }
 
 [data-admin-root] .admin-list-toolbar-main,
-[data-admin-root] .admin-list-toolbar-actions,
-[data-admin-root] .admin-list-toolbar-filters {
+[data-admin-root] .admin-list-toolbar-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+}
+
+[data-admin-root] .admin-list-toolbar-filters {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-admin-root] .admin-list-toolbar-filters.is-open {
+    display: flex;
 }
 
 [data-admin-root] .admin-list-toolbar .ant-input-affix-wrapper,
@@ -365,6 +401,7 @@
 [data-admin-root] .admin-list-toolbar .ant-btn,
 [data-admin-root] .admin-page-actions .ant-btn {
     height: var(--admin-control-h) !important;
+    min-height: var(--admin-control-h) !important;
     border-radius: var(--admin-radius) !important;
 }
 
@@ -387,7 +424,7 @@
     flex: 1;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius-lg);
     background: var(--admin-surface);
     box-shadow: none;
@@ -412,17 +449,16 @@
     border-bottom: 1px solid var(--admin-border) !important;
     background: var(--admin-surface-2) !important;
     color: var(--admin-text-muted) !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     font-weight: 650 !important;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: 0;
 }
 
 [data-admin-root] .admin-table-surface .ant-table-tbody > tr > td {
     height: var(--admin-row-h);
-    padding: 6px 12px !important;
+    padding: var(--admin-row-padding) 12px !important;
     border-bottom: 1px solid var(--admin-row-border) !important;
-    background: transparent !important;
+    background: var(--admin-surface) !important;
     color: var(--admin-text) !important;
     font-size: 13px;
     font-variant-numeric: tabular-nums;
@@ -432,9 +468,13 @@
     background: var(--admin-row-hover) !important;
 }
 
+[data-admin-root] .admin-table-surface .ant-table-tbody > tr.ant-table-row-selected > td {
+    background: var(--admin-surface-2) !important;
+}
+
 [data-admin-root] .admin-table-pagination {
     display: flex;
-    min-height: 44px;
+    min-height: 40px;
     align-items: center;
     justify-content: flex-end;
     padding: 0 10px;
@@ -506,12 +546,12 @@
     height: 22px;
     align-items: center;
     gap: 6px;
-    padding: 0 8px;
-    border: 1px solid var(--admin-border);
-    border-radius: 999px;
-    background: var(--admin-surface-2);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--admin-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 650;
     line-height: 1;
     white-space: nowrap;
@@ -570,10 +610,25 @@
     line-height: 18px;
 }
 
+[data-admin-root] .admin-inline-load-error {
+    display: flex;
+    min-height: 96px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    color: var(--admin-status-error);
+    font-size: 12px;
+}
+
+[data-admin-root] .admin-inline-load-error .ant-btn {
+    flex: none;
+}
+
 [data-admin-root] .admin-stat-tile {
-    min-height: 84px;
+    min-height: 76px;
     padding: 12px 14px;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius-lg);
     background: var(--admin-surface);
     box-shadow: none;
@@ -606,12 +661,12 @@
 [data-admin-root] .admin-settings-stack {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
 [data-admin-root] .admin-settings-section {
     overflow: hidden;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius-lg);
     background: var(--admin-surface);
     box-shadow: none;
@@ -629,7 +684,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px 14px;
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 0;
 }
 
 [data-admin-root] .admin-settings-section-summary h2 {
@@ -651,18 +706,19 @@
     padding: 4px 0;
 }
 
-[data-admin-root] :is(
-    .admin-feature-command-bar,
-    .admin-appearance-command-bar,
-    .admin-access-command-bar,
-    .admin-email-command-bar,
-    .admin-storage-command-bar,
-    .admin-ark-command-bar,
-    .admin-intercept-command-bar,
-    .admin-drawing-command-bar,
-    .admin-runtime-policy-command-bar,
-    .admin-third-party-command-bar
-) {
+[data-admin-root]
+    :is(
+        .admin-feature-command-bar,
+        .admin-appearance-command-bar,
+        .admin-access-command-bar,
+        .admin-email-command-bar,
+        .admin-storage-command-bar,
+        .admin-ark-command-bar,
+        .admin-intercept-command-bar,
+        .admin-drawing-command-bar,
+        .admin-runtime-policy-command-bar,
+        .admin-third-party-command-bar
+    ) {
     position: sticky;
     top: 0;
     z-index: 8;
@@ -681,26 +737,24 @@
     backdrop-filter: none !important;
 }
 
-[data-admin-root] :is(
-    .admin-feature-command-bar,
-    .admin-appearance-command-bar,
-    .admin-access-command-bar,
-    .admin-email-command-bar,
-    .admin-storage-command-bar,
-    .admin-ark-command-bar,
-    .admin-intercept-command-bar,
-    .admin-drawing-command-bar,
-    .admin-runtime-policy-command-bar,
-    .admin-third-party-command-bar
-).is-dirty {
+[data-admin-root]
+    :is(
+        .admin-feature-command-bar,
+        .admin-appearance-command-bar,
+        .admin-access-command-bar,
+        .admin-email-command-bar,
+        .admin-storage-command-bar,
+        .admin-ark-command-bar,
+        .admin-intercept-command-bar,
+        .admin-drawing-command-bar,
+        .admin-runtime-policy-command-bar,
+        .admin-third-party-command-bar
+    ).is-dirty {
     border-bottom-color: color-mix(in srgb, var(--admin-status-warning) 55%, var(--admin-border)) !important;
     background: color-mix(in srgb, var(--admin-status-warning) 8%, var(--admin-canvas)) !important;
 }
 
-[data-admin-root] :is(
-    .admin-feature-command-copy strong,
-    .admin-appearance-command-copy strong
-) {
+[data-admin-root] :is(.admin-feature-command-copy strong, .admin-appearance-command-copy strong) {
     color: var(--admin-text);
     font-size: 12px;
     font-weight: 650;
@@ -709,12 +763,12 @@
 [data-admin-root] .admin-feature-board {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
 [data-admin-root] .admin-feature-domain {
     overflow: hidden;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius-lg);
     background: var(--admin-surface);
     box-shadow: none;
@@ -725,8 +779,8 @@
     align-items: center;
     gap: 10px;
     padding: 12px 14px;
-    border-bottom: 1px solid var(--admin-border);
-    background: var(--admin-surface);
+    border-bottom: 0;
+    background: var(--admin-surface-2);
 }
 
 [data-admin-root] .admin-feature-domain-header h2 {
@@ -748,7 +802,7 @@
     width: 28px;
     height: 28px;
     place-items: center;
-    border: 1px solid var(--admin-border);
+    border: 0;
     border-radius: var(--admin-radius);
     background: var(--admin-surface-2);
     color: var(--admin-text-secondary);
@@ -979,4 +1033,3 @@
         animation-iteration-count: 1 !important;
     }
 }
-

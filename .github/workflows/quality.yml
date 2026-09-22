@@ -14,6 +14,24 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # 后端有 5 个用例默认会静默跳过：3 个需要 CANVAS_TEST_POSTGRES_DSN（PostgreSQL 迁移、
+    # 素材字节修复、画布版本历史），2 个用 exec.LookPath("redis-server") 自起临时实例
+    # （Redis 租约、缓存白名单）。只跑 go test ./... 而不备齐这两样，这些路径永远不会被执行。
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: canvas_test
+          POSTGRES_DB: canvas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CANVAS_TEST_POSTGRES_DSN: postgres://postgres:canvas_test@127.0.0.1:5432/canvas_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -21,6 +39,12 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
           cache: true
+      - name: Install redis-server for integration tests
+        # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq redis-server
+          sudo systemctl stop redis-server || true
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Run Go tests
@@ -28,6 +52,11 @@ jobs:
         run: |
           set -o pipefail
           go test -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+      - name: Ensure dependency-backed tests were not skipped
+        shell: bash
+        run: |
+          python3 ../.github/scripts/test_check_dependency_tests.py
+          python3 ../.github/scripts/check-dependency-tests.py "$RUNNER_TEMP/go-tests.jsonl"
       - name: Upload Go test timings
         if: always()
         uses: actions/upload-artifact@v4

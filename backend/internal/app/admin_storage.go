@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -127,6 +128,24 @@ func (s *Service) OpenResourceRangeAsAdmin(actor *model.User, id string, rangeHe
 	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
+func (s *Service) PrepareResourceDeliveryAsAdmin(actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	resource, err := s.repo.Resource(strings.TrimSpace(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("资源不存在")
+		}
+		return nil, err
+	}
+	resource.Provider = normalizedResourceProvider(resource.Provider)
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+}
+
 func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminResourceFilter, int, int, error) {
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
 	filter := repository.AdminResourceFilter{
@@ -138,7 +157,7 @@ func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminReso
 		Limit:    limit,
 		Offset:   (page - 1) * limit,
 	}
-	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file") {
+	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file", "live2d") {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源类型筛选无效")
 	}
 	if filter.Status != "" && !oneOf(filter.Status, string(model.ResourceStatusPending), string(model.ResourceStatusReady), string(model.ResourceStatusFailed), string(model.ResourceStatusDeleted)) {

@@ -38,6 +38,7 @@ type PublicChannelModel struct {
 	ID               string                        `json:"id"`
 	ModelKey         string                        `json:"modelKey"`
 	ChannelLabel     string                        `json:"channelLabel"`
+	Tags             []model.ChannelModelTag       `json:"tags"`
 	Description      string                        `json:"description"`
 	DisplayName      string                        `json:"displayName"`
 	SortOrder        int                           `json:"sortOrder"`
@@ -185,6 +186,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		ID:               cm.ID,
 		ModelKey:         cm.ModelKey,
 		ChannelLabel:     cm.ChannelLabel,
+		Tags:             cm.Tags,
 		Description:      cm.Description,
 		DisplayName:      cm.DisplayName,
 		SortOrder:        cm.SortOrder,

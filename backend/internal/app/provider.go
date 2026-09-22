@@ -47,6 +47,10 @@ type canvasGenerationInput struct {
 type canvasTextOptions struct {
 	Stream   *bool `json:"stream"`
 	Thinking bool  `json:"thinking"`
+	// MaxOutputTokens 是本次调用的输出上限（思考 + 正文 + 工具参数）。
+	// 画布 Agent 的每一步都带上限：不设时上游按"剩余上下文"放行，思考模型可以把单步
+	// 拖到几分钟（实测 output_tokens 正好吃满可用预算、正文与工具调用皆空）；0 表示不限制。
+	MaxOutputTokens int `json:"maxOutputTokens,omitempty"`
 }
 
 type agentToolRequests struct {
@@ -58,8 +62,9 @@ type agentToolRequests struct {
 }
 
 type providerTextMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role               string `json:"role"`
+	Content            string `json:"content"`
+	AgentContextSource string `json:"agentContextSource,omitempty"`
 }
 
 type providerConfig struct {
@@ -128,7 +133,7 @@ type providerError struct {
 }
 
 // providerPayloadError 在进程内保留上游原始原因，供协议兼容分支做机器判断；
-// 对调用方只暴露归类后的稳定文案。Provider 正文可能包含密钥或内部诊断，
+// 对调用方只暴露经过过滤的错误原因。Provider 正文可能包含密钥或内部诊断，
 // 禁止原样进入用户错误和日志。
 type providerPayloadError struct {
 	raw     string
@@ -230,6 +235,13 @@ func withProviderRequestKind(ctx context.Context, requestKind string) context.Co
 }
 
 func (e providerHTTPError) Error() string {
+	if e.StatusCode == http.StatusBadRequest || e.StatusCode == http.StatusUnprocessableEntity {
+		return providerErrorWithDetail(e.summary(), e.Body)
+	}
+	return appendProviderErrorDetail(e.summary(), e.Body)
+}
+
+func (e providerHTTPError) summary() string {
 	switch e.StatusCode {
 	case 524:
 		return "上游网关超时（524）：模型请求可能仍在服务端执行并产生费用，请勿立即重试，请先到供应商后台核对任务或账单"
@@ -266,14 +278,6 @@ func providerUserFacingErrorMessage(err error) string {
 	}
 	var httpErr providerHTTPError
 	if errors.As(err, &httpErr) {
-		// 仅对上游参数校验类状态码解析正文。其他状态码的正文可能是网关 HTML、
-		// 鉴权诊断或含密钥的内部信息，归类价值低且更容易误判。
-		switch httpErr.StatusCode {
-		case http.StatusBadRequest, http.StatusUnprocessableEntity:
-			if message, ok := providerPayloadErrorCategory(httpErr.Body); ok {
-				return message
-			}
-		}
 		return httpErr.Error()
 	}
 	return "连接模型服务失败，请检查渠道地址和网络"
@@ -297,6 +301,18 @@ func providerPayloadErrorCategory(raw string) (string, bool) {
 		return "输入素材疑似包含真人形象，该模型拒绝生成，请更换为非真人素材或改用其他模型", true
 	case strings.Contains(normalized, "safety"), strings.Contains(normalized, "moderation"), strings.Contains(normalized, "content policy"), strings.Contains(normalized, "blocked"):
 		return "请求内容未通过模型服务安全审核，请调整后重试", true
+	// 工具调用与工具结果不配对：上游要求 assistant 消息声明的每一个 tool_call_id 都在
+	// 紧随其后的 tool 消息里被回应。这是**我们组装请求**的问题——用户改提示词或查额度
+	// 都没用——所以文案指向反馈而不是"调整输入"。
+	//
+	// 必须排在额度类目之前：DeepSeek 的原文含 "insufficient"，
+	// "An assistant message with 'tool_calls' must be followed by tool messages
+	// responding to each 'tool_call_id'. (insufficient tool messages following
+	// tool_calls message)" 落到额度类目就会把协议错误报成"渠道余额不足"，
+	// 掩盖真正的原因（历史里的工具结果不连续）。
+	case strings.Contains(normalized, "must be followed by tool messages"),
+		strings.Contains(normalized, "insufficient tool messages following"):
+		return "会话里的工具调用与结果不匹配，本轮已停止；这不是额度或提示词问题，如反复出现请反馈", true
 	case strings.Contains(normalized, "quota"), strings.Contains(normalized, "insufficient"), strings.Contains(normalized, "balance"), strings.Contains(normalized, "billing"):
 		return "模型服务额度不足，请检查渠道余额或配额", true
 	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
@@ -316,10 +332,7 @@ func providerPayloadErrorCategory(raw string) (string, bool) {
 }
 
 func providerPayloadErrorMessage(raw string) string {
-	if message, ok := providerPayloadErrorCategory(raw); ok {
-		return message
-	}
-	return "模型服务返回失败，请检查请求内容或渠道配置"
+	return providerErrorWithDetail("模型服务返回失败，请检查请求内容或渠道配置", raw)
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
@@ -471,6 +484,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 type providerMediaHydrationPolicy struct {
 	requireURL bool
 	preferURL  bool
+	imageOnly  bool
+	maxBytes   int64
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
@@ -742,9 +757,21 @@ func metadataStringValues(value any) map[string]string {
 
 func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, policy providerMediaHydrationPolicy) error {
 	groups := [][]providerMedia{input.ReferenceImages, input.ReferenceVideos, input.ReferenceAudios}
-	for _, group := range groups {
+	for groupIndex, group := range groups {
+		mediaPolicy := policy
+		// 仅 Agent 图片走内存字节；视频、音频及普通生成任务保留原来的协议策略。
+		if groupIndex == 0 && input.Mode == "text" && input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
+			mediaPolicy = providerMediaHydrationPolicy{imageOnly: true}
+			if input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
+				limits := input.Config.CapabilityConfig.Text.References
+				if len(group) > limits.MaxImages {
+					return errors.New("参考图片数量超过当前模型限制")
+				}
+				mediaPolicy.maxBytes = limits.MaxImageBytes
+			}
+		}
 		for index := range group {
-			if err := s.hydrateProviderMedia(userID, &group[index], policy); err != nil {
+			if err := s.hydrateProviderMedia(userID, &group[index], mediaPolicy); err != nil {
 				return err
 			}
 		}
@@ -770,9 +797,15 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	if resource.Status != "ready" {
 		return errors.New("任务参考资源尚未上传完成")
 	}
+	if policy.imageOnly && !strings.HasPrefix(strings.ToLower(resource.MimeType), "image/") {
+		return errors.New("看图资源不是图片")
+	}
+	if policy.maxBytes > 0 && resource.Size > policy.maxBytes {
+		return errors.New("参考图片文件超过当前模型大小限制")
+	}
 	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
 	if useObjectURL {
-		signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
+		signedURL, err := s.providerResourceURL(resource, time.Now().Add(providerResourceURLTTL))
 		if err != nil {
 			return fmt.Errorf("生成参考素材地址失败：%w", err)
 		}
@@ -785,7 +818,8 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		media.DurationMs = resource.DurationMs
 		return nil
 	}
-	if strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+	// Agent 看图以归属校验后的资源文件为准，不能让附带的内嵌内容替换真实图片。
+	if !policy.imageOnly && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
 	}
 	resource, body, err := s.OpenResource(userID, resourceID)
@@ -798,12 +832,18 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return err
 	}
 	resourceLimit := megabytes(runtimePolicy.Resource.ResourceUploadMB)
+	if policy.maxBytes > 0 {
+		resourceLimit = min(resourceLimit, policy.maxBytes)
+	}
 	data, err := io.ReadAll(io.LimitReader(body, resourceLimit+1))
 	if err != nil {
 		return err
 	}
 	if int64(len(data)) > resourceLimit {
-		return fmt.Errorf("任务参考资源超过 %dMB", runtimePolicy.Resource.ResourceUploadMB)
+		return fmt.Errorf("任务参考资源超过读取上限 %d 字节", resourceLimit)
+	}
+	if policy.imageOnly && len(data) == 0 {
+		return errors.New("看图资源内容为空")
 	}
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
 	media.DataURL = dataURL(mimeType, data)

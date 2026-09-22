@@ -125,18 +125,16 @@ export async function getCachedResourceBlob(storageKey: string) {
         await pending.catch(() => "");
         const downloaded = sessionBlobs.get(target.key) || await blobStore.getItem<Blob>(target.key);
         if (downloaded) return downloaded;
-        return loadAndPersistProxyFallback(storageKey);
+        return loadAndPersistResource(storageKey);
     }
     await cacheResourceObjectUrl(storageKey).catch(() => "");
     const downloaded = sessionBlobs.get(target.key) || await blobStore.getItem<Blob>(target.key);
     if (downloaded) return downloaded;
-    // Explicit byte consumers (exports/provider inputs) need a same-origin fallback
-    // when the OSS bucket does not expose CORS. Display-only cache fills never do.
-    return loadAndPersistProxyFallback(storageKey);
+    return loadAndPersistResource(storageKey);
 }
 
-async function loadAndPersistProxyFallback(storageKey: string) {
-    const blob = await getResourceBlob(storageKey, { allowProxyFallback: true });
+async function loadAndPersistResource(storageKey: string) {
+    const blob = await getResourceBlob(storageKey);
     if (blob) await primeResourceBlobCache(storageKey, blob).catch(() => "");
     return blob;
 }

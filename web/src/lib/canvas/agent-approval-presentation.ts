@@ -41,7 +41,7 @@ function fieldLabel(key: string, nodeType: string): string {
 }
 
 function operation(value: unknown): AgentApprovalPreviewOperation | null {
-    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "generate_media" || value === "create_storyboard" || value === "edit_storyboard" || value === "plan_step" ? value : null;
+    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "arrange_nodes" || value === "generate_media" || value === "create_storyboard" || value === "edit_storyboard" || value === "plan_step" ? value : null;
 }
 
 function normalizeServerPreview(value: unknown): AgentApprovalPresentation | null {

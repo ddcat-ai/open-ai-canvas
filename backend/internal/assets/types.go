@@ -15,13 +15,8 @@ type ResourceStream struct {
 	AcceptRanges  string
 }
 
-type ResourceDeliveryOptions struct {
-	ForceDirect bool
-	ForceProxy  bool
-}
-
 type ResourceDelivery struct {
-	Resource    *model.Resource
-	Stream      *ResourceStream
-	RedirectURL string
+	Resource *model.Resource
+	Stream   *ResourceStream
+	Access   *ResourceAccess
 }

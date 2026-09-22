@@ -22,6 +22,7 @@ type ChannelModelRequest struct {
 	ProviderModelKey             string                         `json:"providerModelKey"`
 	DisplayName                  string                         `json:"displayName"`
 	ChannelLabel                 string                         `json:"channelLabel"`
+	Tags                         []model.ChannelModelTag        `json:"tags"`
 	Description                  string                         `json:"description"`
 	Icon                         string                         `json:"icon"`
 	Capability                   string                         `json:"capability"`
@@ -300,6 +301,10 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, err
 	}
 	channelLabel := strings.TrimSpace(req.ChannelLabel)
+	tags, err := normalizeChannelModelTags(req.Tags)
+	if err != nil {
+		return nil, err
+	}
 	description := strings.TrimSpace(req.Description)
 	if len([]rune(description)) > 500 {
 		return nil, BadAuthRequest("模型描述不能超过 500 字")
@@ -359,6 +364,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.ProviderModelKey = providerModelKey
 	item.DisplayName = strings.TrimSpace(req.DisplayName)
 	item.ChannelLabel = channelLabel
+	item.Tags = tags
 	item.Description = description
 	if item.DisplayName == "" {
 		item.DisplayName = modelKey

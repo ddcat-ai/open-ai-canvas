@@ -24,25 +24,13 @@ const movingMap: Record<Direction, string> = {
 const highlight = "radial-gradient(75% 181% at 50% 50%, color-mix(in srgb, var(--user-ink) 22%, transparent) 0%, transparent 100%)";
 
 function rotateDirection(current: Direction, clockwise: boolean): Direction {
-    const directions: Direction[] = clockwise
-        ? ["TOP", "LEFT", "BOTTOM", "RIGHT"]
-        : ["TOP", "RIGHT", "BOTTOM", "LEFT"];
+    const directions: Direction[] = clockwise ? ["TOP", "LEFT", "BOTTOM", "RIGHT"] : ["TOP", "RIGHT", "BOTTOM", "LEFT"];
     const index = directions.indexOf(current);
     return directions[(index - 1 + directions.length) % directions.length];
 }
 
 // Aceternity Hover Border Gradient：中性墨色描边，不用彩色高光。
-export function HoverBorderGradient<T extends ElementType = "button">({
-    children,
-    containerClassName,
-    className,
-    as,
-    duration = 1,
-    clockwise = true,
-    onMouseEnter,
-    onMouseLeave,
-    ...props
-}: HoverBorderGradientProps<T>) {
+export function HoverBorderGradient<T extends ElementType = "button">({ children, containerClassName, className, as, duration = 1, clockwise = true, onMouseEnter, onMouseLeave, ...props }: HoverBorderGradientProps<T>) {
     const Tag = (as || "button") as any;
     const reducedMotion = useReducedMotion();
     const [hovered, setHovered] = useState(false);

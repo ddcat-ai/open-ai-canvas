@@ -134,6 +134,68 @@ paths:
         "401": { $ref: "#/components/responses/PublicAPIError" }
         "404": { $ref: "#/components/responses/PublicAPIError" }
         "500": { $ref: "#/components/responses/PublicAPIError" }
+  /admin/settings/appearance/live2d:
+    post:
+      tags: [admin]
+      summary: 导入管理员 Live2D 模型草稿（不自动启用）
+      description: ZIP 最大 128 MiB，最多 256 条目；解压累计 384 MiB，单文件最大 128 MiB。只接受一个 Version 3 model3.json 及 ZIP 内 MOC3、PNG、JSON 引用。启用通过 PATCH /admin/settings/appearance 的 canvas 配置完成。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        "200":
+          description: 成功信封 data.model 包含 resourceId 和服务端确认的 entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      model:
+                        type: object
+                        required: [resourceId, entry]
+                        properties:
+                          resourceId: {type: string}
+                          entry: {type: string}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance/live2d/{id}/{file}:
+    get:
+      tags: [admin]
+      summary: 读取模型草稿文件（管理员所有者或当前配置引用）
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+      responses:
+        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /public/appearance/live2d/{id}/{file}:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取当前启用的 Live2D 模型文件
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+      responses:
+        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封；停用后拒绝公开读取}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /tools:
     get:
       tags: [canvas]
@@ -249,6 +311,21 @@ paths:
                                     type: string
                                     maxLength: 80
                                     default: ""
+                                  tags:
+                                    type: array
+                                    maxItems: 5
+                                    description: 后台模型创建及更新使用同名字段；文字去除首尾空白且不能重复，空数组清除标签，仅用于展示。
+                                    items:
+                                      type: object
+                                      required: [text, color]
+                                      properties:
+                                        text:
+                                          type: string
+                                          minLength: 1
+                                          maxLength: 12
+                                        color:
+                                          type: string
+                                          enum: [purple, blue, green, gold, orange, pink]
                                   description:
                                     type: string
                                     maxLength: 500
@@ -1073,6 +1150,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /resources/access:
+    post:
+      tags: [resources]
+      summary: 批量签发当前用户资源访问描述
+      description: 统一处理展示、下载、复制、浏览器字节处理和模型输入；客户端不能通过查询参数选择 direct/proxy。每项独立成功或失败。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                type: object
+                required: [resourceId]
+                properties:
+                  resourceId: {type: string}
+                  purpose: {type: string, enum: [display, copy, download, browser-process, provider-input], default: display}
+                  variant: {type: string, enum: [original, playback], default: original}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
   /resources/{id}/file:
     get:
       tags: [resources]
@@ -1082,6 +1186,16 @@ paths:
           name: id
           required: true
           schema: { type: string }
+        - in: query
+          name: access
+          schema: { type: string, enum: ["1"] }
+          description: 仅返回统一访问描述，不返回文件正文。
+        - in: query
+          name: variant
+          schema: { type: string, enum: [original, playback], default: original }
+        - in: query
+          name: purpose
+          schema: { type: string, enum: [display, download, browser-process], default: display }
       responses:
         "200":
           description: 文件流
@@ -1097,6 +1211,25 @@ paths:
         "200":
           $ref: "#/components/responses/Envelope"
         "400":
+          $ref: "#/components/responses/Error"
+  /tasks/{id}/recover-media:
+    post:
+      tags: [tasks]
+      summary: 按原任务 ID 重试作品保存，不重新生成或创建计费订单
+      description: 仅当前用户有恢复记录的保存失败任务可重入队；已在队列或运行中时幂等返回。每任务最多手动恢复三次，间隔至少一分钟。已取消、已退款或归属项目不可用时拒绝。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
   /tasks/{id}/text-events:
     get:
@@ -1121,6 +1254,65 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
+  /assets/batch-delete:
+    post:
+      tags: [assets]
+      summary: 批量彻底删除当前用户素材
+      description: 顶层 JSON 数组，一次请求、一个数据库事务。所有 ID 必须属于当前用户，不受任务、画布或历史引用阻塞；共享文件保留，其余通过 Outbox 异步清理，失败重试。任一素材不存在、越权或数据库写入失败时整批不删除。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 1000
+              items:
+                type: string
+                minLength: 1
+            example: ["asset-1", "asset-2"]
+      responses:
+        "200":
+          description: 成功信封，data.ids 返回本次请求的素材 ID 数组；物理文件清理由后台执行。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [ids]
+                        properties:
+                          ids:
+                            type: array
+                            items: { type: string }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+  /assets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [assets]
+      summary: 彻底删除当前用户素材
+      description: 不依赖素材 archived 状态，也不受画布、任务、项目或历史快照引用阻塞；其他素材共享的物理对象仍保留。
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     AgentRunID:

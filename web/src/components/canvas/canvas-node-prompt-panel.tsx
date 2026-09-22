@@ -90,6 +90,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const savedPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
     const [prompt, setPrompt] = useState(savedPrompt);
+    const promptRef = useRef(savedPrompt);
     const [presetOpen, setPresetOpen] = useState(false);
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [nineGridOpen, setNineGridOpen] = useState(false);
@@ -213,6 +214,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const canAutoMention = autoMentionedPrompt !== prompt;
 
     useEffect(() => {
+        promptRef.current = normalizedSavedPrompt;
         setPrompt(normalizedSavedPrompt);
         if (normalizedSavedPrompt !== savedPrompt) onPromptChange(node.id, normalizedSavedPrompt);
     }, [node.id, normalizedSavedPrompt, onPromptChange, savedPrompt]);
@@ -258,12 +260,17 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const skillReferences = useMemo(() => resolvedMentionReferences.filter((item) => item.kind === "skill"), [resolvedMentionReferences]);
 
     const updatePrompt = (value: string) => {
+        promptRef.current = value;
         setPrompt(value);
         onPromptChange(node.id, value);
         if (showPromptTemplates && /(^|\s)\/[\p{L}\p{N}_-]*$/u.test(value)) {
             if (expandedPromptOpen) setExpandedPresetOpen(true);
             else setPresetOpen(true);
         }
+    };
+
+    const updatePromptFromCurrent = (updater: (currentPrompt: string) => string) => {
+        updatePrompt(updater(promptRef.current));
     };
 
     const applyPreset = (preset: CanvasPromptPreset) => {
@@ -285,7 +292,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         updatePrompt(trimmedBase ? `${trimmedBase} ${insertText}` : insertText);
     };
 
-    const removeMotionToolMention = () => updatePrompt(removeToolMentions(prompt, "motion"));
+    const removeMotionToolMention = () => updatePromptFromCurrent((currentPrompt) => removeToolMentions(currentPrompt, "motion"));
 
     const submit = () => {
         const text = prompt.trim();
@@ -330,11 +337,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             {!simpleMode && (mode === "image" || mode === "video") ? <div className="canvas-node-tool-controls canvas-node-tool-controls-inline flex items-center gap-1" data-canvas-no-zoom data-canvas-wheel-scroll onPointerDown={e => e.stopPropagation()}>
                 {mode === "image" ? <>
-                    <CanvasChooseImageStylePicker open={expanded ? expandedStyleToolOpen : styleToolOpen} onOpenChange={expanded ? setExpandedStyleToolOpen : setStyleToolOpen} activeToolId={activeStyleTool?.toolId} activeLabel={activeStyleTool?.label} onSelect={(id,label) => updatePrompt(applyToolMention(prompt,{id,label,type:"style"},"Palette"))} onClear={() => updatePrompt(removeToolMentions(prompt,"style"))} />
-                    <CanvasNineGridPicker open={expanded ? expandedNineGridOpen : nineGridOpen} onOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen} icon={activeNineGridIcon} onSelect={(id,label,icon) => updatePrompt(applyToolMention(prompt,{id,label,type:"nine_grid"},icon))} />
+                    <CanvasChooseImageStylePicker open={expanded ? expandedStyleToolOpen : styleToolOpen} onOpenChange={expanded ? setExpandedStyleToolOpen : setStyleToolOpen} activeToolId={activeStyleTool?.toolId} activeLabel={activeStyleTool?.label} onSelect={(id,label) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt,{id,label,type:"style"},"Palette"))} onClear={() => updatePromptFromCurrent((currentPrompt) => removeToolMentions(currentPrompt,"style"))} />
+                    <CanvasNineGridPicker open={expanded ? expandedNineGridOpen : nineGridOpen} onOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen} icon={activeNineGridIcon} onSelect={(id,label,icon) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt,{id,label,type:"nine_grid"},icon))} />
                 </> : <>
-                    <CanvasChooseEffectPicker open={expanded ? expandedEffectToolOpen : effectToolOpen} onOpenChange={expanded ? setExpandedEffectToolOpen : setEffectToolOpen} activeToolId={activeEffectTool?.toolId} activeLabel={activeEffectTool?.label} onSelect={(id,label) => updatePrompt(applyToolMention(prompt,{id,label,type:"effect"},"Sparkles"))} onClear={() => updatePrompt(removeToolMentions(prompt,"effect"))} />
-                    <CanvasChooseMotionPicker open={expanded ? expandedMotionToolOpen : motionToolOpen} onOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen} activeToolIds={activeMotionTools.map(t => t.toolId)} activeLabel={activeMotionTool?.label} onSelect={(id,label) => updatePrompt(applyToolMention(prompt,{id,label,type:"motion"},"Camera"))} onClear={removeMotionToolMention} />
+                    <CanvasChooseEffectPicker open={expanded ? expandedEffectToolOpen : effectToolOpen} onOpenChange={expanded ? setExpandedEffectToolOpen : setEffectToolOpen} activeToolId={activeEffectTool?.toolId} activeLabel={activeEffectTool?.label} onSelect={(id,label) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt,{id,label,type:"effect"},"Sparkles"))} onClear={() => updatePromptFromCurrent((currentPrompt) => removeToolMentions(currentPrompt,"effect"))} />
+                    <CanvasChooseMotionPicker open={expanded ? expandedMotionToolOpen : motionToolOpen} onOpenChange={expanded ? setExpandedMotionToolOpen : setMotionToolOpen} activeToolIds={activeMotionTools.map(t => t.toolId)} activeLabel={activeMotionTool?.label} onSelect={(id,label) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt,{id,label,type:"motion"},"Camera"))} onClear={removeMotionToolMention} />
                 </>}
             </div> : null}
             {showPromptTemplates ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense appearance="quiet" /> : null}

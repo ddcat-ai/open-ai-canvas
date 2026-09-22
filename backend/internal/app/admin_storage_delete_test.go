@@ -10,7 +10,6 @@ import (
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -162,10 +161,7 @@ func TestDeleteAdminResourcesRejectsNonAdminAndOversizedBatch(t *testing.T) {
 
 func newAdminStorageDeleteTestService(t *testing.T) (*Service, *gorm.DB, string, *model.User) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := newSQLiteTestDB(t)
 	if err := database.MigrateSchema(db); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +170,9 @@ func newAdminStorageDeleteTestService(t *testing.T) (*Service, *gorm.DB, string,
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	return New(repository.New(db), dataDir), db, dataDir, admin
+	svc := New(repository.New(db), dataDir)
+	startDeletionTestWorkers(t, svc)
+	return svc, db, dataDir, admin
 }
 
 func assertModelCount(t *testing.T, db *gorm.DB, value any, query string, expected int64, args ...any) {

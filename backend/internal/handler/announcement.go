@@ -37,24 +37,12 @@ func RegisterAnnouncementRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		stream, err := svc.OpenAnnouncementImage(user, c.Param("id"), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAnnouncementImageDelivery(user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		defer stream.Body.Close()
-		mimeType := stream.Resource.MimeType
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		c.Header("Cache-Control", "private, max-age=3600")
-		c.Header("Referrer-Policy", "no-referrer")
-		c.Header("Accept-Ranges", stream.AcceptRanges)
-		c.Header("X-Content-Type-Options", "nosniff")
-		if stream.ContentRange != "" {
-			c.Header("Content-Range", stream.ContentRange)
-		}
-		c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
+		serveResourceDelivery(c, delivery, "private, no-cache", "")
 	})
 
 	r.POST("/announcements/read", func(c *gin.Context) {

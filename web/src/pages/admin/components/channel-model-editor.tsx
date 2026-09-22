@@ -13,6 +13,7 @@ import { createAdminChannelModel, testAdminChannelModel, updateAdminChannelModel
 import type { ModelChannel } from "@/stores/use-config-store";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
+import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
 import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, validateChannelModelPrices, validateChannelModelProtocol, type ChannelModelFormValues as FormValues, type EditorSection } from "./channel-model-editor-form";
 
 export function ChannelModelEditor({
@@ -112,6 +113,7 @@ export function ChannelModelEditor({
                 providerModelKey: upstreamModel,
                 displayName: values.displayName?.trim() || values.modelKey.trim(),
                 channelLabel: values.channelLabel?.trim() || "",
+                tags: (values.tags || []).map((tag) => ({ text: tag.text.trim(), color: tag.color })),
                 description: values.description?.trim() || "",
                 icon: values.icon?.trim() || "",
                 capability: values.capability,
@@ -275,7 +277,8 @@ export function ChannelModelEditor({
                                                 description="命中的请求会优先使用价格档的上游 ID；修改上方上游模型 ID 时，只有与旧值相同的档位会自动跟随更新，其余保持不变。"
                                             />
                                         ) : null}
-                                        <Form.Item name="description" label="模型描述" extra="在创作端二级渠道选项悬浮或聚焦时显示，可说明适用场景、渠道差异和注意事项。" rules={[{ max: 500, message: "模型描述不能超过 500 字" }]}>
+                                        <ChannelModelTagsEditor />
+                                        <Form.Item name="description" label="模型描述" extra="在创作端二级渠道选项中常驻显示，可说明适用场景、渠道差异和注意事项。" rules={[{ max: 500, message: "模型描述不能超过 500 字" }]}>
                                             <Input.TextArea rows={3} maxLength={500} showCount placeholder="填写此渠道模型的使用说明" />
                                         </Form.Item>
                                     </section>

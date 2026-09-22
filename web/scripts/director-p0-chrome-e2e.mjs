@@ -278,14 +278,23 @@ async function connectCdp(cdpPort) {
             if (!hit || (hit !== el && !el.contains(hit))) return null;
             return { x: Math.round(x), y: Math.round(y) };
         })()`);
-        const deadline = Date.now() + 5000;
+        // 目标必须"站稳"再点：AntD 弹窗/抽屉有约 200ms 入场动画，只要求相邻两次读数相同
+        // 会在动画刚开始、坐标还没动的那一拍就下判定，真正派发鼠标事件时控件已经移位 ——
+        // 点击落到遮罩上（mask.closable=false）就完全无效（"留在导演台" 曾这样偶发失败）。
+        const deadline = Date.now() + 8000;
         let previous = null;
+        let stableSince = 0;
         let box = null;
         while (Date.now() < deadline) {
             const next = await readInteractiveBox();
             if (next && previous && next.x === previous.x && next.y === previous.y) {
-                box = next;
-                break;
+                if (!stableSince) stableSince = Date.now();
+                if (Date.now() - stableSince >= 300) {
+                    box = next;
+                    break;
+                }
+            } else {
+                stableSince = 0;
             }
             previous = next;
             await sleep(100);
@@ -378,6 +387,26 @@ async function smokeWorkbench(cdp, baseUrl) {
     if (!opened) throw new Error("A: toggle-workbench not clickable");
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.director-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "A5 real canvas present in viewport shell");
+
+    // 使用真实产品 dock 验证 Tooltip 的 hover 与键盘触发，不能只验证包装 span 存在。
+    const tooltipButton = 'button[aria-label="移动对象"]';
+    const hoverPoint = await cdp.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(tooltipButton)}).getBoundingClientRect(); return {x:r.x+r.width/2, y:r.y+r.height/2}; })()`);
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoint });
+    const describedTooltip = `(() => { const b = document.querySelector(${JSON.stringify(tooltipButton)}); const ids = (b?.getAttribute('aria-describedby') || '').split(/\\s+/); return ids.some(id => document.getElementById(id)?.textContent.includes('移动对象')); })()`;
+    assert(await cdp.poll(describedTooltip, "tooltip on hover", 5000), "A5a Tooltip hover describes the actual control");
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    assert(await cdp.poll(`!document.querySelector('[role="tooltip"]')`, "tooltip dismiss", 5000), "A5b Escape dismisses Tooltip");
+    await cdp.evaluate(`document.querySelector(${JSON.stringify(tooltipButton)}).focus()`);
+    for (const modifiers of [8, 0]) {
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, modifiers });
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, modifiers });
+    }
+    assert(await cdp.poll(`document.activeElement === document.querySelector(${JSON.stringify(tooltipButton)}) && (${describedTooltip})`, "tooltip on keyboard focus", 5000), "A5c Tab focus opens Tooltip without an extra wrapper stop");
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await cdp.evaluate("document.activeElement?.blur()");
 
     // P1-A 起 AutoKey/时间轴归属动画模式：默认摆场模式下它们必须不存在。
     const layoutGating = await cdp.evaluate(`(() => ({

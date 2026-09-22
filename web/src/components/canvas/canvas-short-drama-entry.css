@@ -1,0 +1,184 @@
+.canvas-entry-stage {
+    --canvas-entry-hairline: color-mix(in srgb, var(--canvas-entry-text) 18%, transparent);
+    --canvas-entry-metal-highlight: var(--canvas-entry-text);
+    --canvas-entry-metal-mid: color-mix(in srgb, var(--canvas-entry-text) 52%, var(--canvas-entry-muted));
+    --canvas-entry-metal-shadow: color-mix(in srgb, var(--canvas-entry-muted) 32%, transparent);
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-node-active);
+    display: grid;
+    place-items: center;
+    padding: var(--space-20) var(--space-6);
+    color: var(--canvas-entry-text);
+    pointer-events: none;
+}
+
+.canvas-entry-shell {
+    width: min(100%, 520px);
+    max-height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-2);
+    text-align: left;
+    pointer-events: auto;
+}
+
+.canvas-entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.canvas-entry-heading-copy { min-width: 0; }
+
+.canvas-entry-header h2 {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    font-size: var(--typ-display-md);
+    font-weight: 400;
+    letter-spacing: -0.035em;
+    line-height: 1.45;
+}
+
+.canvas-entry-header h2 > span { color: var(--canvas-entry-muted); }
+.canvas-entry-header h2 > strong { font-weight: 600; }
+
+.canvas-entry-header p {
+    margin: var(--space-4) 0 0;
+    color: var(--canvas-entry-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.8;
+    text-wrap: balance;
+}
+
+.canvas-entry-film-mark {
+    width: calc(var(--space-24) + var(--space-4));
+    height: calc(var(--space-24) + var(--space-4));
+    flex-shrink: 0;
+    margin-right: var(--space-2);
+}
+
+.canvas-entry-shell button {
+    display: inline-flex;
+    min-height: calc(var(--space-10) + var(--space-1));
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    cursor: pointer;
+}
+
+.canvas-entry-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-8);
+    margin-top: var(--space-10);
+}
+
+.canvas-entry-shell .canvas-entry-agent {
+    gap: var(--space-4);
+    color: var(--canvas-entry-text);
+    font-size: var(--fs-heading-lg);
+    font-weight: 600;
+}
+
+.canvas-entry-agent-label { position: relative; }
+.canvas-entry-agent-label::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 calc(-1 * var(--space-1));
+    height: var(--stroke-1);
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--motion-state) var(--motion-ease-out);
+}
+
+.canvas-entry-agent-arrow {
+    display: grid;
+    width: var(--space-8);
+    height: var(--space-8);
+    place-items: center;
+    border: var(--stroke-1) solid var(--canvas-entry-hairline);
+    border-radius: var(--r-full);
+    transition: border-color var(--motion-state) ease, transform var(--motion-state) var(--motion-ease-out);
+}
+
+.canvas-entry-agent-arrow svg { width: var(--space-4); height: var(--space-4); }
+.canvas-entry-agent:is(:hover, :focus-visible) .canvas-entry-agent-label::after { transform: scaleX(1); }
+.canvas-entry-agent:is(:hover, :focus-visible) .canvas-entry-agent-arrow {
+    border-color: var(--canvas-entry-muted);
+    transform: translate(var(--space-half), calc(-1 * var(--space-half)));
+}
+.canvas-entry-agent:active .canvas-entry-agent-arrow { transform: none; }
+
+.canvas-entry-secondary-actions,
+.canvas-entry-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.canvas-entry-secondary-actions button,
+.canvas-entry-quick-actions button {
+    color: var(--canvas-entry-muted);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    transition: color var(--motion-state) ease;
+}
+
+.canvas-entry-secondary-actions svg { width: var(--space-3); height: var(--space-3); opacity: 0.6; }
+.canvas-entry-secondary-actions button:hover,
+.canvas-entry-quick-actions button:hover { color: var(--canvas-entry-text); }
+
+.canvas-entry-shell button:focus-visible {
+    outline: var(--stroke-2) solid var(--canvas-entry-accent);
+    outline-offset: var(--space-1);
+}
+
+.canvas-entry-footer {
+    position: relative;
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+}
+
+.canvas-entry-footer::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: var(--stroke-1);
+    background: linear-gradient(90deg, var(--canvas-entry-hairline), transparent);
+}
+
+.canvas-entry-quick-actions { gap: var(--space-6); }
+.canvas-entry-quick-actions svg { width: var(--space-3-half); height: var(--space-3-half); stroke-width: 1.5; }
+
+@media (max-width: 520px) {
+    .canvas-entry-stage { padding-inline: var(--space-5); }
+    .canvas-entry-header h2 { font-size: var(--typ-display-sm); }
+    .canvas-entry-film-mark { width: var(--space-20); height: var(--space-20); margin-right: 0; }
+    .canvas-entry-actions { column-gap: var(--space-4); margin-top: var(--space-8); }
+    .canvas-entry-quick-actions { gap: var(--space-4); }
+}
+
+@media (max-height: 560px) {
+    .canvas-entry-stage { padding-block: var(--space-4); }
+    .canvas-entry-actions { margin-top: var(--space-5); }
+    .canvas-entry-footer { margin-top: var(--space-4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-entry-shell button,
+    .canvas-entry-agent-label::after,
+    .canvas-entry-agent-arrow { transition: none; }
+    .canvas-entry-agent:is(:hover, :focus-visible) .canvas-entry-agent-arrow { transform: none; }
+}

@@ -5,6 +5,12 @@ description: 在宿主机启动影策前后端开发服务
 
 # 本地开发
 
+## Compose 公网资源地址
+
+`docker-compose.yml`、`docker-compose.dev.yml`、`docker-compose.local.yml`、`docker-compose.server.yml` 和 `docker-compose.deploy.yml` 均将 `.env` 中的 `CANVAS_PUBLIC_BASE_URL` 传入后端。使用本地文件存储且上游模型需要读取参考素材时，将它设为上游能访问的 HTTPS 站点根地址（例如 `https://canvas.example.com`，不要附加 `/api`）；存储设置中的公网访问地址优先于该环境变量。
+
+修改后需要重新创建后端容器，单纯重启旧容器不会更新环境变量。未配置时保持空值并由资源请求强校验，不会自动采用容器内网地址；这项设置不放宽出站 SSRF 校验，也不应为此开放数据库或后端端口。只做本地界面开发且不向模型提交资源时可以不设置。部署后仍需验证真实资源 URL 能被目标供应商读取，健康检查不能替代该验证。
+
 ## 一键启动（Windows PowerShell）
 
 在仓库根目录执行：

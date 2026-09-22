@@ -71,6 +71,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if task.Status != model.TaskStatusFailed {
 		return nil, BadAuthRequest("只能人工查询状态为失败的任务")
 	}
+	if task.MediaRecoveryJSON != "" {
+		return nil, BadAuthRequest("该任务已生成作品，请在任务中心重试保存，无需重新查询生成")
+	}
 	if !strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_") {
 		return nil, BadAuthRequest("该任务不是视频生成任务")
 	}

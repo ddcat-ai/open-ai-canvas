@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { applyMaterializedGenerationTaskResultToNodes } from "@/lib/canvas/canvas-generation-task-sync";
+import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
+import { sameCanvasContent } from "@/lib/canvas/canvas-content";
 import { parseCanvasStorageDocument, rebaseCanvasProjects, serializeCanvasStorageDocument } from "@/lib/canvas/canvas-storage-revision";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -114,18 +116,24 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
 }) {
     throwIfAborted(input.signal);
-    const previousNodes = input.nodesRef.current;
-    const applied = await applyMaterializedGenerationTaskResultToNodes(previousNodes, input.task, input.output, input.effectKey, input.nodeId);
+    const snapshot = input.nodesRef.current;
+    const before = snapshot.find((node) => node.id === input.nodeId);
+    if (!before) throw new Error("画布中找不到对应任务节点");
+    const applied = await applyMaterializedGenerationTaskResultToNodes(snapshot, input.task, input.output, input.effectKey, input.nodeId);
     if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
-    const persistedProject = await persistCanvasGenerationEffect({
+    throwIfAborted(input.signal);
+    const previousNodes = input.nodesRef.current;
+    const nodes = commitCanvasGenerationResult(previousNodes, before, applied.node, input.task.id);
+    await persistCanvasGenerationEffect({
         projectId: input.projectId,
         effectKey: input.effectKey,
         previousNodes,
-        nodes: applied.nodes,
+        nodes,
         signal: input.signal,
     });
-    input.nodesRef.current = persistedProject.nodes;
-    input.setNodes(persistedProject.nodes);
+    throwIfAborted(input.signal);
+    // 持久化已完成；最后一次 await 之后仍按节点合并，保留期间发生的编辑。
+    input.setNodes((current) => commitCanvasGenerationResult(current, before, applied.node!, input.task.id));
 }
 
 export async function persistCanvasOperationContinuationEffect(input: {
@@ -512,11 +520,19 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
                 const persistedProject = rebaseCommittedCanvasGenerationOntoLiveProject(scope, input.projectId, finalDocument, memoryProject, baseRevision) ?? generationCommittedProject;
                 if (!persistedProject) throw new Error("画布项目不存在，无法确认生成副作用");
                 if (getActiveUserScope() === scope) {
-                    withCanvasStorePersistenceSuppressed(() => {
+                    const publish = () => {
                         useCanvasStore.setState((state) => ({
                             projects: state.projects.map((project) => (project.id === input.projectId ? persistedProject : project)),
                         }));
-                    });
+                    };
+                    const durableProject = finalDocument.state.projects.find((project) => project.id === input.projectId);
+                    // 只有已落盘的快照才能跳过普通保存。rebase 带回的编辑仍是脏数据，
+                    // 否则 store 已接受编辑、后续 updateProject 判定无变化，刷新就会丢失。
+                    if (sameCanvasContent(durableProject, persistedProject) && JSON.stringify(durableProject?.viewport) === JSON.stringify(persistedProject.viewport)) {
+                        withCanvasStorePersistenceSuppressed(publish);
+                    } else {
+                        publish();
+                    }
                 }
                 return persistedProject;
             } catch (error) {

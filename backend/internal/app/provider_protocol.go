@@ -74,11 +74,15 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if err != nil {
 			return nil, err
 		}
-		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "create"), input.Config, spec)
+		body, streamedResult, err := executeProtocolCreateRequest(withProviderRequestKind(ctx, "create"), input, spec)
 		if err != nil {
 			return nil, err
 		}
-		created, err = adapter.ParseCreate(ctx, body)
+		if streamedResult != nil {
+			created = protocol.CreateResult{Status: protocol.StatusSucceeded, Result: streamedResult}
+		} else {
+			created, err = adapter.ParseCreate(ctx, body)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -784,6 +788,9 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 	}
 	if len(references) == 0 {
 		return nil, errors.New("声明式协议已完成但没有返回媒体地址")
+	}
+	if output, handled, err := recoverProtocolMedia(ctx, config, mode, references); handled {
+		return output, err
 	}
 	items := make([]interface{}, 0, len(references))
 	for _, reference := range references {

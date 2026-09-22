@@ -1,5 +1,6 @@
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
+import { createCanvasStateWriter } from "@/lib/canvas/canvas-editor-state";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +11,7 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
 import { createCanvasGenerationLiveProjectAdapter, registerCanvasGenerationLiveProject } from "@/services/canvas-generation-consumer";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
 import { uploadImage } from "@/services/image-storage";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
@@ -187,6 +188,11 @@ async function copyImageToSystemClipboard(source: string, storageKey?: string) {
         let sourceBlob: Blob | null = null;
         if (storageKey) {
             sourceBlob = await getCachedResourceBlob(storageKey).catch(() => null);
+            // A resource-backed image must be read through the resource access
+            // contract. Do not fall back to fetch(source) here: local/proxy
+            // deliveries may require the session cookie and a separate API
+            // origin, while CDN deliveries must omit that cookie.
+            if (!sourceBlob) throw new Error("图片资源读取失败");
         }
         if (!sourceBlob) {
             const response = await fetch(source);
@@ -275,24 +281,14 @@ function InfiniteCanvasPage() {
     const directorOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "");
     const nodesRef = useRef<CanvasNodeData[]>([]);
     const [nodes, setNodesState] = useState<CanvasNodeData[]>([]);
-    const setNodes = useCallback<Dispatch<SetStateAction<CanvasNodeData[]>>>((value) => {
-        if (typeof value === "function") {
-            setNodesState((current) => {
-                const next = stampCanvasNodeChanges(current, value(current));
-                nodesRef.current = next;
-                return next;
-            });
-            return;
-        }
-        const next = stampCanvasNodeChanges(nodesRef.current, value);
-        nodesRef.current = next;
-        setNodesState(next);
-    }, []);
+    const setNodes = useMemo(() => createCanvasStateWriter(nodesRef, setNodesState, stampCanvasNodeChanges), []);
     const [nodeStackOrder, setNodeStackOrder] = useState<CanvasNodeStackOrder>([]);
     const bringNodeToFront = useCallback((nodeId: string) => {
         setNodeStackOrder((current) => bringCanvasNodeToFront(current, nodeId));
     }, []);
-    const [connections, setConnections] = useState<CanvasConnection[]>([]);
+    const [connections, setConnectionsState] = useState<CanvasConnection[]>([]);
+    const connectionsRef = useRef<CanvasConnection[]>([]);
+    const setConnections = useMemo(() => createCanvasStateWriter(connectionsRef, setConnectionsState), []);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
@@ -370,7 +366,6 @@ function InfiniteCanvasPage() {
         });
     }, [nodes]);
 
-    const connectionsRef = useRef(connections);
     const chatSessionsRef = useRef(chatSessions);
     const activeChatIdRef = useRef(activeChatId);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
@@ -637,8 +632,6 @@ function InfiniteCanvasPage() {
     }, [dialogNodeId]);
 
     useLayoutEffect(() => {
-        nodesRef.current = nodes;
-        connectionsRef.current = connections;
         chatSessionsRef.current = chatSessions;
         activeChatIdRef.current = activeChatId;
         selectedNodeIdsRef.current = selectedNodeIds;
@@ -1754,16 +1747,22 @@ function InfiniteCanvasPage() {
             if (copyingNodeContentRef.current) return;
             copyingNodeContentRef.current = true;
             releaseCopiedNodesPastePriority();
-            const content = node?.metadata?.content?.trim();
-            const resourceId = resourceIdFromStorageKey(node?.metadata?.storageKey);
-            const copySource = content || (node?.type === CanvasNodeType.Image && resourceId ? resourceFileUrl(resourceId) : "");
-            if (!node || !copySource) {
+            if (!node) {
                 copyingNodeContentRef.current = false;
                 message.warning("没有可复制的内容");
                 return;
             }
 
             try {
+                const content = node.metadata?.content?.trim();
+                const resourceId = resourceIdFromStorageKey(node.metadata?.storageKey);
+                // Resource-backed media must use the central access contract. This keeps
+                // copy operations on the configured CDN/OSS URL instead of copying the
+                // platform file endpoint or a stale URL persisted in canvas metadata.
+                const copySource = resourceId
+                    ? resolveResourceAccessURL((await getResourceAccess(`resource:${resourceId}`, "copy")).url)
+                    : content || "";
+                if (!copySource) throw new Error("没有可复制的内容");
                 if (node.type === CanvasNodeType.Image) {
                     try {
                         await copyImageToSystemClipboard(copySource, node.metadata?.storageKey);
@@ -1803,8 +1802,10 @@ function InfiniteCanvasPage() {
                 const storageKey = node?.metadata?.storageKey;
                 const content = node?.metadata?.content?.trim();
                 const resourceId = resourceIdFromStorageKey(storageKey);
-                const mediaPath = content && !content.startsWith("data:") && !content.startsWith("blob:") ? content : resourceId ? resourceFileUrl(resourceId) : "";
-                const mediaURL = mediaPath ? new URL(mediaPath, window.location.href).toString() : "";
+                const mediaPath = content && !content.startsWith("data:") && !content.startsWith("blob:") ? content : "";
+                const mediaURL = resourceId
+                    ? resolveResourceAccessURL((await getResourceAccess(`resource:${resourceId}`, "copy")).url)
+                    : mediaPath ? new URL(mediaPath, window.location.href).toString() : "";
                 if (!mediaURL) throw new Error("当前媒体只有本地内容，没有可复制的地址");
                 if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(mediaURL);
                 else if (!(await copyToClipboard(mediaURL))) throw new Error("当前浏览器不支持写入剪贴板");

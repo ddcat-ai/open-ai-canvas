@@ -26,10 +26,63 @@ func cloudAgentObjectChanges(before, after any) []map[string]any {
 	for _, item := range creationMaps(after) {
 		old := previous[stringValue(item["id"])]
 		if !reflect.DeepEqual(old, item) {
-			changes = append(changes, map[string]any{"before": old, "after": item})
+			oldFields, newFields := cloudAgentShrinkChange(old, item)
+			changes = append(changes, map[string]any{"before": oldFields, "after": newFields})
 		}
 	}
 	return changes
+}
+
+// cloudAgentGeometryFields 是"只改位置/尺寸"的字段集合。
+var cloudAgentGeometryFields = []string{"position", "width", "height", "zIndex"}
+
+// cloudAgentShrinkChange 把"只动了几何"的节点变更缩成几何增量。
+//
+// 画布增量在前端是**三方合并**（按字段合并，未出现的字段保持本地值），所以只发发生变化的
+// 几何字段既安全又必要：一次整理 50 个节点时，若每个节点都带完整正文（分镜行、Markdown
+// 正文可达十几 KB），单条 canvas_updated 事件就会超过 validateCloudAgentRuntime 的
+// 单事件 128KiB 上限（"Agent runtime event payload is too large"），整轮直接终止。
+// 只有"除几何外完全一致"时才缩：带内容/metadata 变化的节点仍发完整 before/after，
+// 以免影响前端对生成任务状态的保护逻辑。
+func cloudAgentShrinkChange(before, after map[string]any) (map[string]any, map[string]any) {
+	if before == nil || after == nil {
+		return before, after
+	}
+	for key, value := range after {
+		if cloudAgentContainsString(cloudAgentGeometryFields, key) {
+			continue
+		}
+		if !reflect.DeepEqual(before[key], value) {
+			return before, after
+		}
+	}
+	for key, value := range before {
+		if cloudAgentContainsString(cloudAgentGeometryFields, key) {
+			continue
+		}
+		if _, exists := after[key]; !exists && value != nil {
+			return before, after
+		}
+	}
+	shrunkBefore := map[string]any{"id": after["id"]}
+	shrunkAfter := map[string]any{"id": after["id"]}
+	for _, key := range cloudAgentGeometryFields {
+		final, hasFinal := after[key]
+		initial, hasInitial := before[key]
+		if !hasFinal && !hasInitial {
+			continue
+		}
+		if reflect.DeepEqual(initial, final) {
+			continue
+		}
+		if hasInitial {
+			shrunkBefore[key] = initial
+		}
+		if hasFinal {
+			shrunkAfter[key] = final
+		}
+	}
+	return shrunkBefore, shrunkAfter
 }
 
 func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state *cloudAgentRuntime, input cloudAgentMutationInput) error {

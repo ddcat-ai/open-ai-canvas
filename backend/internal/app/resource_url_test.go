@@ -8,7 +8,7 @@ func TestResourceIDFromFileURL(t *testing.T) {
 		want string
 	}{
 		{"/api/resources/abc_123/file", "abc_123"},
-		{"https://host.example/api/resources/abc_123/file?proxy=1", "abc_123"},
+		{"https://host.example/api/resources/abc_123/file?variant=original", "abc_123"},
 		{"/api/projects/abc_123", ""},
 		{"", ""},
 	}

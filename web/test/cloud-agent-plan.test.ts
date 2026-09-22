@@ -49,29 +49,18 @@ describe("pendingAgentQuestion", () => {
     const question = { question: "选哪个模型？", options: [{ label: "H3文生视频" }, { label: "Seedance 2.5" }] };
 
     test("有未作答的提问 → 亮面板", () => {
-        const messages = [
-            { role: "user" },
-            { role: "assistant", question },
-        ];
+        const messages = [{ role: "user" }, { role: "assistant", question }];
         expect(pendingAgentQuestion(messages)?.question).toBe("选哪个模型？");
     });
 
     test("提问之后用户已回复 → 收起面板", () => {
-        const messages = [
-            { role: "assistant", question },
-            { role: "user" },
-        ];
+        const messages = [{ role: "assistant", question }, { role: "user" }];
         expect(pendingAgentQuestion(messages)).toBeUndefined();
     });
 
     test("多轮提问取最新那道；旧的那道不算数", () => {
         const later = { question: "确认开始吗？", options: [{ label: "开始" }, { label: "再改改" }] };
-        const messages = [
-            { role: "assistant", question },
-            { role: "user" },
-            { role: "assistant", question },
-            { role: "assistant", question: later },
-        ];
+        const messages = [{ role: "assistant", question }, { role: "user" }, { role: "assistant", question }, { role: "assistant", question: later }];
         expect(pendingAgentQuestion(messages)?.question).toBe("确认开始吗？");
     });
 

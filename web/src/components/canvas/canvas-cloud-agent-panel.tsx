@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, Check, ChevronRight, CircleDot, Clock3, Download, History, LoaderCircle, MessageSquarePlus, MoveDiagonal2, Settings2, ShieldCheck, Trash2, Sparkles, X } from "lucide-react";
 import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
+import { agentToolRetry, mergeAgentToolRetry } from "@/lib/canvas/agent-tool-retry";
 import { agentPlanVisible, latestAgentPlanItems, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
 import { nanoid } from "nanoid";
 
@@ -34,6 +35,9 @@ import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItem
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
 import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { AgentWelcome } from "./canvas-agent-welcome";
+import { DEFAULT_CANVAS_APPEARANCE, agentCopy } from "@/lib/canvas/agent-appearance";
+import { live2DModelURL } from "@/services/api/appearance";
+import { Live2DAvatar } from "./live2d-avatar";
 import "./canvas-cloud-agent.css";
 
 type CloudAgentPanelProps = { canvasId: string; domainProjectId?: string; nodeCount: number; references: CanvasResourceReference[]; open: boolean; prefillPrompt?: string; onOpen: () => void; onCollapse: () => void; onFocusNode?: (nodeId: string) => void };
@@ -41,6 +45,7 @@ type ApprovalState = { approvalId: string; detail: Record<string, unknown>; reas
 type AgentPanelView = "chat" | "history" | "settings";
 
 export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, references, open, prefillPrompt, onOpen, onCollapse, onFocusNode }: CloudAgentPanelProps) {
+    const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const theme = canvasThemes[useActiveTheme()];
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -798,22 +803,32 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
 }
 
 function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; onOpen: () => void }) {
-    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen);
+    const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
+    const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
+    const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    useEffect(() => {
+        const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+        window.addEventListener("resize", resize);
+        return () => window.removeEventListener("resize", resize);
+    }, []);
+    const height = live ? Math.max(40, Math.min(appearance.avatarHeight, viewport.height - 60, (viewport.width - 40) / 0.75)) : 76;
+    const width = live ? Math.round(height * 0.75) : 76;
+    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height);
     return (
         <motion.button
             type="button"
-            aria-label="打开云端 Agent"
+            aria-label={`打开${appearance.agentName}`}
             title={`${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
-            className={cn("canvas-agent-launcher fixed z-[var(--z-modal-overlay)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging")}
-            style={{ ...position, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
+            className={cn("canvas-agent-launcher fixed z-[var(--z-modal-overlay)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging", live && "canvas-agent-launcher-live2d")}
+            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
             data-canvas-no-zoom
             {...handlers}
             whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
             whileTap={reducedMotion || dragging ? undefined : { scale: 0.96 }}
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
-            <FluidOrb size={62} color="#7164f6" />
-            <span className="canvas-agent-launcher-label">Agent</span>
+            {live ? <Live2DAvatar url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)} width={width} height={height} reducedMotion={reducedMotion} fallback={<FluidOrb size={62} color="#7164f6" />} /> : <FluidOrb size={62} color="#7164f6" />}
+            {appearance.launcherLabel ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
             <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
             {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
         </motion.button>
@@ -821,17 +836,18 @@ function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onO
 }
 
 function AgentHeader({ theme, hasMessages, statusLabel, statusColor, nodeCount, onNew, onHistory, onSettings, onCollapse, onExport, exporting }: { theme: CanvasTheme; hasMessages: boolean; statusLabel: string; statusColor: string; nodeCount: number; onNew: () => void; onHistory: () => void; onSettings: () => void; onCollapse: () => void; onExport: () => void; exporting: boolean }) {
+    const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     return (
         <header data-agent-drag-handle className="agent-panel-header flex shrink-0 items-center gap-3">
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="agent-panel-title">{hasMessages ? "画布助手" : "新对话"}</span>
+                    <span className="agent-panel-title">{agentCopy(appearance.panelTitle, appearance.agentName)}{hasMessages ? "" : " · 新对话"}</span>
                     <span className="agent-panel-status flex items-center gap-1" style={{ color: statusColor }}>
                         <CircleDot className="size-3" />
                         {statusLabel}
                     </span>
                 </div>
-                <div className="agent-panel-context">Agent · 当前画布 {nodeCount} 个节点</div>
+                <div className="agent-panel-context">{appearance.agentName} · 当前画布 {nodeCount} 个节点</div>
             </div>
             <div className="agent-header-actions flex items-center gap-0.5" style={{ color: theme.node.muted }}>
                 <Button type="text" shape="circle" icon={<Download className="size-4" />} loading={exporting} onClick={onExport} aria-label="导出 Agent 调试记录" title="导出对话、工具参数、审批和错误（分享前请检查隐私）" />
@@ -917,7 +933,7 @@ function AgentConversation({
     onApprove: (settings?: AgentMediaSettings) => void;
     onReject: () => void;
 }) {
-    const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const scrollRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const followRef = useRef(true);
@@ -948,7 +964,7 @@ function AgentConversation({
             const element = event.currentTarget;
             followRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
         }}>
-            {!messages.length ? <AgentWelcome brandName={brandName} nodeCount={nodeCount} onChooseSkill={onChooseSkill} onDraftPrompt={onDraftPrompt} /> : null}
+            {!messages.length ? <AgentWelcome appearance={appearance} nodeCount={nodeCount} onChooseSkill={onChooseSkill} onDraftPrompt={onDraftPrompt} /> : null}
             <div ref={contentRef} className="agent-conversation-messages">
                 {messages.map((item) => (
                     <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} isStreaming={busy && !approval && item.streaming === true && item === messages.at(-1)} />
@@ -1086,7 +1102,7 @@ function ApprovalCard({ approval, theme, submitting, onFocusNode, onReasonChange
 }
 
 function ApprovalPreviewItemView({ item, theme, onFocusNode }: { item: ReturnType<typeof agentApprovalPresentation>["items"][number]; theme: CanvasTheme; onFocusNode?: (nodeId: string) => void }) {
-    const operationLabel = item.operation === "add_node" ? "新增" : item.operation === "update_node" ? "修改" : item.operation === "connect_nodes" ? "连线" : item.operation === "create_storyboard" ? "创建分镜" : item.operation === "edit_storyboard" ? "修改分镜" : item.operation === "plan_step" ? "计划" : "生成";
+    const operationLabel = item.operation === "add_node" ? "新增" : item.operation === "update_node" ? "修改" : item.operation === "connect_nodes" ? "连线" : item.operation === "arrange_nodes" ? "整理" : item.operation === "create_storyboard" ? "创建分镜" : item.operation === "edit_storyboard" ? "修改分镜" : item.operation === "plan_step" ? "计划" : "生成";
     const renderNode = (title: string | undefined, id: string | undefined, typeLabel: string | undefined, role: "source" | "target" | "node") => {
         if (!title) return null;
         const content = <><span className="canvas-agent-approval-node-title">{title}</span>{typeLabel ? <span className="canvas-agent-approval-node-type">{typeLabel}</span> : null}</>;
@@ -1235,6 +1251,11 @@ function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction
         const id = payload.callId ? `canvas-${event.runId}-${payload.callId}` : event.eventId;
         setMessages((current) => appendUniqueMessage(current, { id, role: "tool", title: "canvas_apply_ops", text: "画布操作已完成", detail: { ...detail, eventType: event.type } }));
         return;
+    }
+    if (event.type.startsWith("tool_") && agentToolRetry(payload)) {
+        const message: CloudAgentChatMessage = { id: event.eventId, role: "tool", title: String(payload.toolName || "工具执行"), text, detail: { ...payload, eventType: event.type } };
+        setMessages((current) => mergeAgentToolRetry(current, message));
+        if (event.type === "tool_failed") return;
     }
     if (event.type === "tool_completed" && payload.toolName === "canvas_apply_ops" && payload.callId) {
         const id = `canvas-${event.runId}-${payload.callId}`;

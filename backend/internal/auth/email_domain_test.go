@@ -43,7 +43,7 @@ func TestRegistrationDomainPolicyChecksSendingAndRegistration(t *testing.T) {
 	if _, err := svc.UpdateEmailSetting(admin, EmailSettingRequest{RegistrationAllowedDomains: []string{"gmail.com"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(RegisterRequest{Username: "member", Email: "member@example.com", Password: "strong-password", EmailCode: deliveredCode}); err == nil || !strings.Contains(err.Error(), "白名单") {
+	if _, err := svc.Register(RegisterRequest{Username: "member", Email: "member@example.com", Password: "strong-password", EmailCode: deliveredCode, AcceptedTerms: true}); err == nil || !strings.Contains(err.Error(), "白名单") {
 		t.Fatalf("registration must recheck current domain policy: %v", err)
 	}
 	count, err := svc.repo.UserCount()

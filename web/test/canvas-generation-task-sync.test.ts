@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyGeneratedMediaResultMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
+import { applyGeneratedMediaResultMetadata, applyGenerationTaskResultToNodes, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 function videoNode(assetId: string, storageKey: string): CanvasNodeData {
@@ -16,6 +16,12 @@ function videoNode(assetId: string, storageKey: string): CanvasNodeData {
 }
 
 describe("applyGeneratedMediaResultMetadata", () => {
+    test("明确指定的节点已删除时不能根据 taskId 误更新其他节点", async () => {
+        const other = { ...videoNode("asset", "video:key"), metadata: { taskId: "task" } };
+        const applied = await applyGenerationTaskResultToNodes([other], { id: "task", type: "canvas_video", status: "succeeded", prompt: "", attempts: 1, createdAt: "", updatedAt: "" }, "deleted-node");
+        expect(applied.updated).toBe(false);
+        expect(applied.nodes).toEqual([other]);
+    });
     test("clears the previous asset binding when a regenerated media result lands", () => {
         const node = videoNode("asset-old", "video:old");
         const next = applyGeneratedMediaResultMetadata(node, videoMetadata({
