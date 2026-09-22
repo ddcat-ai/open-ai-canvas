@@ -142,7 +142,7 @@ func TestDeleteAssetDatabaseFailureLeavesPhysicalObjectAndNoOutbox(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if err := svc.deleteUserAssetWithResources("user-1", "asset-1"); err == nil {
+	if err := svc.deleteUserAssetWithResources("user-1", "asset-1", false); err == nil {
 		t.Fatal("forced database failure should be returned")
 	}
 	if _, err := os.Stat(resourcePath); err != nil {
@@ -298,6 +298,49 @@ func TestDeleteGeneratedAssetTaskReferences(t *testing.T) {
 	}
 }
 
+func TestPurgeConfirmedAssetIgnoresTaskReferences(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	payload := `{"url":"/api/resources/purge-confirmed-resource/file"}`
+	resource := model.Resource{
+		ID: "purge-confirmed-resource", UserID: "user-1", Provider: "unsupported-test-provider",
+		ObjectKey: "purge-confirmed.png", Status: model.ResourceStatusReady,
+	}
+	asset := model.Asset{
+		ID: "purge-confirmed-asset", UserID: "user-1", Title: "本地已在回收站的素材",
+		Status: model.AssetVersionStatusConfirmed, PayloadJSON: payload,
+	}
+	task := model.Task{
+		ID: "purge-confirmed-task", UserID: "user-1", Prompt: "将图片拆分为可独立编辑的图层",
+		Status: model.TaskStatusRunning, InputJSON: payload, ResultJSON: payload,
+	}
+	for _, item := range []any{&resource, &asset, &task} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.PurgeUserAsset("user-1", asset.ID); err != nil {
+		t.Fatalf("PurgeUserAsset() error = %v", err)
+	}
+	for _, check := range []struct {
+		model any
+		want  int64
+	}{
+		{&model.Asset{}, 0},
+		{&model.Resource{}, 0},
+		{&model.ResourceDeletionJob{}, 1},
+		{&model.Task{}, 1},
+	} {
+		var count int64
+		if err := db.Model(check.model).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != check.want {
+			t.Fatalf("%T count=%d, want %d", check.model, count, check.want)
+		}
+	}
+}
+
 func TestResourceDeletionWorkerRemovesObjectAndCompletesOutbox(t *testing.T) {
 	svc, db, dataDir := newResourceDeletionTestService(t)
 	objectKey := "users/user-1/image/queued.png"
@@ -330,7 +373,7 @@ func TestResourceDeletionWorkerRemovesObjectAndCompletesOutbox(t *testing.T) {
 	}
 }
 
-func TestExpiredArchivedAssetCleanupRespectsCanvasReferencesAndUsesDeletionOutbox(t *testing.T) {
+func TestExpiredArchivedAssetCleanupDeletesReferencedAssetAndUsesDeletionOutbox(t *testing.T) {
 	svc, db, _ := newResourceDeletionTestService(t)
 	old := time.Now().Add(-45 * 24 * time.Hour)
 	resource := model.Resource{
@@ -363,25 +406,8 @@ func TestExpiredArchivedAssetCleanupRespectsCanvasReferencesAndUsesDeletionOutbo
 	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if assetCount != 1 || resourceCount != 1 || jobCount != 0 {
-		t.Fatalf("referenced archived asset cleanup changed data: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
-	}
-
-	if err := db.Delete(&model.CanvasProject{}, "id = ? AND user_id = ?", canvas.ID, canvas.UserID).Error; err != nil {
-		t.Fatal(err)
-	}
-	svc.cleanupExpiredArchivedAssets()
-	if err := db.Model(&model.Asset{}).Where("id = ?", asset.ID).Count(&assetCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Model(&model.Resource{}).Where("id = ?", resource.ID).Count(&resourceCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
-		t.Fatal(err)
-	}
 	if assetCount != 0 || resourceCount != 0 || jobCount != 1 {
-		t.Fatalf("unreferenced archived asset did not use deletion outbox: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
+		t.Fatalf("referenced archived asset was not force deleted through outbox: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
 	}
 }
 

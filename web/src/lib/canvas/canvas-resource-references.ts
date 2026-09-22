@@ -52,11 +52,12 @@ const TOOL_REF_PATTERN = /@\[tool:(\w+):(\d+):([^:\]]+):([^\]]+)\]/g;
 /** 从文本中解析所有 @[tool:type:ID:label:icon] 令牌，返回去重的工具引用。 */
 export function parseToolMentionTokens(text: string): { type: string; toolId: number; label: string; icon: string }[] {
     const results: { type: string; toolId: number; label: string; icon: string }[] = [];
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     for (const match of text.matchAll(TOOL_REF_PATTERN)) {
         const toolId = Number(match[2]);
-        if (seen.has(toolId)) continue;
-        seen.add(toolId);
+        const identity = `${match[1]}:${toolId}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
         let label = match[3];
         try { label = decodeURIComponent(label); } catch { /* Keep readable text for malformed imported labels. */ }
         results.push({ type: match[1], toolId, label, icon: match[4] });
@@ -405,6 +406,12 @@ export function buildNodeMentionReferences(node: CanvasNodeData, nodes: CanvasNo
 }
 
 export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], connections: CanvasConnection[], targetNodes: CanvasNodeData[] = nodes) {
+    const resolve = buildCanvasResourceInputResolver(nodes, connections);
+    return new Map(targetNodes.map((node) => [node.id, labelResourceNodes(resolve(node.id), true)]));
+}
+
+/** 批次关系属于分组，不是媒体输入；展示与提交共用这一份输入顺序解析。 */
+function buildCanvasResourceInputResolver(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const resourceInputsByTargetId = new Map<string, CanvasNodeData[]>();
     const configTargetBySourceId = new Map<string, string>();
@@ -412,7 +419,7 @@ export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], conn
         const source = nodeById.get(connection.fromNodeId);
         const target = nodeById.get(connection.toNodeId);
         if (!source || !target) continue;
-        if (isResourceNode(source)) {
+        if (isResourceNode(source) && target.metadata?.batchRootId !== source.id) {
             const inputs = resourceInputsByTargetId.get(target.id) || [];
             inputs.push(source);
             resourceInputsByTargetId.set(target.id, inputs);
@@ -422,15 +429,20 @@ export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], conn
         }
     }
 
-    const referencesByNodeId = new Map<string, CanvasResourceReference[]>();
-    for (const node of targetNodes) {
-        const configTargetId = configTargetBySourceId.get(node.id);
-        const configInputs = configTargetId ? (resourceInputsByTargetId.get(configTargetId) || []).filter((input) => input.id !== node.id) : [];
-        const ownInputs = resourceInputsByTargetId.get(node.id) || [];
-        const inputs = configInputs.length ? configInputs : ownInputs.filter((input) => input.id !== node.id);
-        referencesByNodeId.set(node.id, labelResourceNodes(inputs, true));
-    }
-    return referencesByNodeId;
+    return function resolve(nodeId: string, includeSelf = false, visited = new Set<string>()): CanvasNodeData[] {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+        const node = nodeById.get(nodeId);
+        if (!node) return [];
+        const configTargetId = configTargetBySourceId.get(nodeId);
+        const configInputs = configTargetId ? (resourceInputsByTargetId.get(configTargetId) || []).filter((input) => input.id !== nodeId) : [];
+        const ownInputs = (resourceInputsByTargetId.get(nodeId) || []).filter((input) => input.id !== nodeId);
+        if (configInputs.length) return uniqueCanvasNodes(configInputs);
+        if (ownInputs.length) return uniqueCanvasNodes(ownInputs);
+        const batchRoot = node.metadata?.batchRootId ? nodeById.get(node.metadata.batchRootId) : undefined;
+        if (batchRoot?.metadata?.isBatchRoot) return resolve(batchRoot.id, false, visited);
+        return includeSelf && isResourceNode(node) ? [node] : [];
+    };
 }
 
 export function buildOrderedCanvasResourceReferences(nodes: CanvasNodeData[], active = true) {
@@ -446,22 +458,13 @@ export function imageGenerationReferenceConnections(sourceNodeId: string, target
 }
 
 export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    const configInputs = getConnectedConfigResourceNodes(nodeId, nodes, connections);
-    if (configInputs.length) return configInputs;
-    const ownInputs = getContextResourceNodes(nodeId, nodes, connections);
-    if (ownInputs.length) return ownInputs;
     // 没有入边时，资源节点可以把自身当作 @图片1 / @视频1，用于图生图、视频再编辑。
     // 有入边时仍只暴露上游，避免自身把槽位序号挤掉。
-    const self = nodes.find((node) => node.id === nodeId);
-    return self && isResourceNode(self) ? [self] : [];
+    return buildCanvasResourceInputResolver(nodes, connections)(nodeId, true);
 }
 
 export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    const configInputs = getConnectedConfigResourceNodes(nodeId, nodes, connections);
-    if (configInputs.length) return configInputs;
-    const ownInputs = getContextResourceNodes(nodeId, nodes, connections);
-    if (ownInputs.length) return ownInputs;
-    return [];
+    return buildCanvasResourceInputResolver(nodes, connections)(nodeId);
 }
 
 /** 收集节点自身及其上游链路中的视频节点，用于时间线片段导入定位真正的视频源。 */
@@ -515,12 +518,6 @@ export function reorderCanvasResourceConnections(targetNodeId: string, orderedNo
         next[index] = reordered[orderIndex];
     });
     return next;
-}
-
-function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    const configConnection = connections.find((connection) => connection.fromNodeId === nodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config);
-    if (!configConnection) return [];
-    return getContextResourceNodes(configConnection.toNodeId, nodes, connections).filter((node) => node.id !== nodeId);
 }
 
 function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
@@ -585,8 +582,8 @@ function skillResourceText(node: CanvasNodeData) {
 
 export function buildToolMentionReference(toolId: number, label: string, type: string, icon: string): CanvasResourceReference {
     return {
-        id: `tool:${toolId}`,
-        nodeId: `tool:${toolId}`,
+        id: `tool:${type}:${toolId}`,
+        nodeId: `tool:${type}:${toolId}`,
         kind: "tool",
         label,
         title: label,

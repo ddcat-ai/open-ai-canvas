@@ -66,7 +66,9 @@ description: 从产品功能快速定位主要代码入口
 | 3D 导演台 | `web/src/components/canvas/director/` |
 | 节点生成上下文 | `web/src/components/canvas/canvas-node-generation.ts` |
 | 布局和连线算法 | `web/src/lib/canvas/canvas-layout.ts`、`canvas-frame.ts` |
-| 任务结果回填 | `web/src/lib/canvas/canvas-generation-task-sync.ts` |
+| 任务结果准备与按节点提交 | `web/src/lib/canvas/canvas-generation-task-sync.ts`、`canvas-generation-result.ts`；持久化协调在 `web/src/services/canvas-generation-consumer.ts` |
+| 编辑命令与批次状态投影 | `web/src/lib/canvas/canvas-editor-state.ts`、`canvas-task-state.ts`、`canvas-image-batch-retry.ts` |
+| 视口节点选择与输入关系解析 | `web/src/lib/canvas/canvas-node-visibility.ts`、`canvas-resource-references.ts` |
 | 本地持久化状态 | `web/src/stores/canvas/use-canvas-store.ts` |
 | 云端 Agent 运行与事件 API | `web/src/services/api/agent.ts`、`web/src/components/canvas/canvas-cloud-agent-panel.tsx` |
 | Agent 画布上下文、操作与历史 | `web/src/lib/canvas/canvas-context-discovery.ts`、`canvas-operation-contract.ts`、`web/src/pages/canvas/use-canvas-operation-history.ts` |

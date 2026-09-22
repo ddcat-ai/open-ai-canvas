@@ -1,0 +1,32 @@
+[data-admin-root] .admin-data-table:has(.admin-logs-compact, .admin-logs-full) .admin-list-toolbar-main {
+    min-width: 0;
+    flex: 1 1 640px;
+}
+
+[data-admin-root] .admin-logs-compact .ant-table-cell {
+    white-space: nowrap;
+}
+
+[data-admin-root] .admin-log-detail-link {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--admin-text-secondary);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+[data-admin-root] .admin-log-detail-link:hover {
+    color: var(--admin-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+[data-admin-root] .admin-log-error {
+    color: var(--admin-status-error);
+}

@@ -18,25 +18,54 @@ import (
 
 	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
 	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
+	"gorm.io/gorm"
 )
 
-func (s *Service) deleteUserAssetWithResources(userID string, assetID string) error {
-	asset, err := s.repo.AssetForUser(userID, assetID)
+func (s *Service) deleteUserAssetWithResources(userID string, assetID string, purge bool) error {
+	return s.deleteUserAssetsWithResources(userID, []string{assetID}, purge)
+}
+
+func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, purge bool) error {
+	if strings.TrimSpace(userID) == "" || len(ids) == 0 || len(ids) > 1000 {
+		return BadAuthRequest("每次删除须提供 1–1000 个素材 ID 和有效用户")
+	}
+	assetIDs := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return BadAuthRequest("素材 ID 不能为空")
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			assetIDs = append(assetIDs, id)
+		}
+	}
+	assetRecords, err := s.repo.AssetsForUserIDs(userID, assetIDs)
 	if err != nil {
 		return err
 	}
-	assetReferences, err := s.repo.AssetBusinessReferences(userID, assetID)
-	if err != nil {
-		return err
+	if len(assetRecords) != len(assetIDs) {
+		return NotFound("素材不存在或无权删除")
 	}
-	versions, representations, err := s.repo.AssetResourceRecords(assetID)
+	deleteReferencedResources := purge
+	if !purge {
+		// 内部普通删除仍为单素材保护路径；用户显式删除统一走 purge。
+		if len(assetRecords) != 1 {
+			return BadAuthRequest("普通删除仅支持单个素材")
+		}
+		deleteReferencedResources = assetRecords[0].Status == model.AssetVersionStatusArchived
+	}
+	versions, representations, err := s.repo.AssetsResourceRecords(assetIDs)
 	if err != nil {
 		return err
 	}
 
 	resourceIDs := map[string]struct{}{}
-	if err := collectOwnedAssetDocumentReferences(asset.PayloadJSON, resourceIDs); err != nil {
-		return BadAuthRequest("素材数据无法解析，已停止删除以避免误删文件")
+	for _, asset := range assetRecords {
+		if err := collectOwnedAssetDocumentReferences(asset.PayloadJSON, resourceIDs); err != nil {
+			return BadAuthRequest("素材数据无法解析，已停止删除以避免误删文件")
+		}
 	}
 	for _, version := range versions {
 		if err := collectOwnedAssetDocumentReferences(version.DefinitionJSON, resourceIDs); err != nil {
@@ -64,12 +93,24 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 		ownedIDSet[resource.ID] = struct{}{}
 	}
 
-	usages := make([]resourceUsage, 0, len(assetReferences))
-	for _, reference := range assetReferences {
-		usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+	usages := make([]resourceUsage, 0)
+	if !deleteReferencedResources {
+		assetReferences, referenceErr := s.repo.AssetBusinessReferences(userID, assetIDs[0])
+		if referenceErr != nil {
+			return referenceErr
+		}
+		for _, reference := range assetReferences {
+			usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+		}
 	}
 	if len(ownedIDs) > 0 {
-		snapshot, snapshotErr := s.repo.ResourceReferenceSnapshot(userID, assetID, ownedIDs)
+		var snapshot repository.ResourceReferenceSnapshot
+		var snapshotErr error
+		if deleteReferencedResources {
+			snapshot, snapshotErr = s.repo.OtherAssetResourceReferences(userID, assetIDs)
+		} else {
+			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshot(userID, assetIDs[0], ownedIDs)
+		}
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -80,7 +121,9 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 					sharedAssetResourceIDs[reference.ResourceID] = struct{}{}
 					continue
 				}
-				usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+				if !deleteReferencedResources {
+					usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+				}
 			}
 		}
 		for _, document := range snapshot.Documents {
@@ -106,7 +149,9 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 					}
 					continue
 				}
-				usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
+				if !deleteReferencedResources {
+					usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
+				}
 			}
 		}
 		if len(sharedAssetResourceIDs) > 0 {
@@ -139,7 +184,10 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 	deletionJobs := resourceDeletionJobs(userID, physicalObjects)
 	// 业务记录和 Outbox 必须在同一事务提交。事务失败时物理文件完全不动；
 	// 提交成功后由幂等 worker 清理，进程退出或对象存储暂时失败都可继续重试。
-	if err := s.repo.DeleteAssetAndResources(userID, assetID, ownedIDs, deletionJobs); err != nil {
+	if err := s.repo.DeleteAssetsAndResources(userID, assetIDs, ownedIDs, deletionJobs, deleteReferencedResources); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return NotFound("素材不存在或无权删除")
+		}
 		if errors.Is(err, repository.ErrCanvasHistoryResourceReferenced) {
 			return BadAuthRequest("素材仍被画布历史版本引用，已保留文件")
 		}

@@ -8506,19 +8506,27 @@
     line-height: 18px;
 }
 
+.admin-analytics-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .admin-analytics-health-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 4px;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-layer-1);
 }
 
 .admin-analytics-health-card {
     min-width: 0;
-    min-height: 118px;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 11px;
+    min-height: 104px;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
     background: var(--admin-layer-1);
-    padding: 16px 18px;
+    padding: 12px;
     box-shadow: var(--admin-card-shadow);
 }
 
@@ -8533,12 +8541,12 @@
 
 .admin-analytics-health-card-heading > span:first-child {
     display: grid;
-    width: 28px;
-    height: 28px;
+    width: 18px;
+    height: 18px;
     place-items: center;
-    border: 1px solid var(--admin-divider);
+    border: 0;
     border-radius: 7px;
-    background: var(--admin-layer-2);
+    background: transparent;
     color: var(--admin-text-secondary);
 }
 
@@ -8571,13 +8579,13 @@
     gap: 7px;
     margin-top: 10px;
     color: var(--admin-text-muted);
-    font-size: 11px;
+    font-size: 12px;
     line-height: 16px;
 }
 
 .admin-analytics-finance-values {
     display: grid;
-    gap: 6px;
+    gap: 2px;
     margin: 0;
     font-size: 14px;
     letter-spacing: 0;
@@ -8606,15 +8614,15 @@
     display: grid;
     min-width: 0;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: 12px;
 }
 
 .admin-analytics-trend-section {
     overflow: hidden;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
     background: var(--admin-layer-1);
-    padding: 18px 20px;
+    padding: 12px 16px;
     box-shadow: var(--admin-card-shadow);
 }
 
@@ -8629,9 +8637,9 @@
 }
 
 .admin-analytics-section-heading {
-    margin-bottom: 14px;
-    border-bottom: 1px solid var(--admin-divider);
-    padding-bottom: 13px;
+    margin-bottom: 8px;
+    border-bottom: 0;
+    padding-bottom: 0;
 }
 
 .admin-analytics-section-heading h2,
@@ -8648,17 +8656,17 @@
 .admin-analytics-analysis-heading p {
     margin-top: 4px;
     color: var(--admin-text-muted);
-    font-size: 11px;
+    font-size: 12px;
     line-height: 17px;
 }
 
 .admin-analytics-chart {
-    height: 280px;
+    height: 208px;
 }
 
 .admin-analytics-empty-chart {
     display: flex;
-    min-height: 220px;
+    min-height: 208px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -8700,24 +8708,24 @@
     display: flex;
     overflow: hidden;
     flex-direction: column;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
     background: var(--admin-layer-1);
-    padding: 18px 20px;
+    padding: 12px 16px;
     box-shadow: var(--admin-card-shadow);
 }
 
 .admin-analytics-attention-heading {
-    min-height: 50px;
+    min-height: 44px;
     align-items: flex-start;
-    border-bottom: 1px solid var(--admin-divider);
-    padding-bottom: 13px;
+    border-bottom: 0;
+    padding-bottom: 6px;
 }
 
 .admin-analytics-attention-list {
     display: grid;
     flex: 1 1 auto;
-    grid-template-rows: repeat(3, minmax(76px, 1fr));
+    grid-template-rows: repeat(3, minmax(64px, 1fr));
     margin-top: 2px;
 }
 
@@ -8725,7 +8733,7 @@
     display: grid;
     width: 100%;
     min-width: 0;
-    min-height: 76px;
+    min-height: 64px;
     grid-template-columns: 34px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
@@ -8794,7 +8802,7 @@
 .admin-analytics-attention-description {
     margin-top: 4px;
     color: var(--admin-text-muted);
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .admin-analytics-attention-item strong {
@@ -8805,18 +8813,18 @@
 
 .admin-analytics-analysis-section {
     overflow: hidden;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
     background: var(--admin-layer-1);
     box-shadow: var(--admin-card-shadow);
     scroll-margin-top: 16px;
 }
 
 .admin-analytics-analysis-heading {
-    min-height: 72px;
+    min-height: 56px;
     align-items: center;
-    border-bottom: 1px solid var(--admin-divider);
-    padding: 14px 18px;
+    border-bottom: 0;
+    padding: 10px 16px;
 }
 
 .admin-analytics-tabs {
@@ -10098,7 +10106,7 @@
     }
 
     .admin-analytics-trend-section {
-        padding: 22px 24px 18px;
+        padding: 12px 16px;
     }
 
     .admin-settings-section:not(.is-stacked) {
@@ -10139,7 +10147,7 @@
 
 @media (min-width: 1200px) {
     .admin-analytics-health-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
     }
 }
 
@@ -10717,11 +10725,11 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
     gap: 12px;
     min-height: 34px;
     padding: 6px 10px;
-    border: 1px solid var(--admin-divider);
+    border: 0;
     border-radius: 8px;
     background: var(--admin-layer-2);
     color: var(--admin-text-muted);
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .admin-performance-statusbar > div {
@@ -10733,7 +10741,7 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     overflow: hidden;
-    border: 1px solid var(--admin-card-border);
+    border: 0;
     border-radius: 10px;
     background: var(--admin-layer-1);
     box-shadow: var(--admin-card-shadow);
@@ -10745,7 +10753,7 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 }
 
 .admin-performance-kpi + .admin-performance-kpi {
-    border-left: 1px solid var(--admin-divider);
+    border-left: 0;
 }
 
 .admin-performance-kpi-heading {
@@ -10772,7 +10780,7 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 }
 
 .admin-performance-kpi-heading p {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }
 
@@ -10788,7 +10796,7 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-performance-kpi > p {
     margin-top: 3px;
     color: var(--admin-text-muted);
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .admin-performance-kpi .ant-progress {
@@ -10827,9 +10835,9 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-performance-facts dd {
     min-width: 0;
     margin: 0;
-    padding: 8px 14px;
+    padding: 6px 14px;
     border-top: 1px solid var(--admin-row-border);
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
 }
 

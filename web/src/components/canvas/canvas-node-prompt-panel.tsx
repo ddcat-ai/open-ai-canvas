@@ -90,6 +90,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const savedPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
     const [prompt, setPrompt] = useState(savedPrompt);
+    const promptRef = useRef(savedPrompt);
     const [presetOpen, setPresetOpen] = useState(false);
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [nineGridOpen, setNineGridOpen] = useState(false);
@@ -213,6 +214,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const canAutoMention = autoMentionedPrompt !== prompt;
 
     useEffect(() => {
+        promptRef.current = normalizedSavedPrompt;
         setPrompt(normalizedSavedPrompt);
         if (normalizedSavedPrompt !== savedPrompt) onPromptChange(node.id, normalizedSavedPrompt);
     }, [node.id, normalizedSavedPrompt, onPromptChange, savedPrompt]);
@@ -258,12 +260,17 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const skillReferences = useMemo(() => resolvedMentionReferences.filter((item) => item.kind === "skill"), [resolvedMentionReferences]);
 
     const updatePrompt = (value: string) => {
+        promptRef.current = value;
         setPrompt(value);
         onPromptChange(node.id, value);
         if (showPromptTemplates && /(^|\s)\/[\p{L}\p{N}_-]*$/u.test(value)) {
             if (expandedPromptOpen) setExpandedPresetOpen(true);
             else setPresetOpen(true);
         }
+    };
+
+    const updatePromptFromCurrent = (updater: (currentPrompt: string) => string) => {
+        updatePrompt(updater(promptRef.current));
     };
 
     const applyPreset = (preset: CanvasPromptPreset) => {
@@ -285,7 +292,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         updatePrompt(trimmedBase ? `${trimmedBase} ${insertText}` : insertText);
     };
 
-    const removeMotionToolMention = () => updatePrompt(removeToolMentions(prompt, "motion"));
+    const removeMotionToolMention = () => updatePromptFromCurrent((currentPrompt) => removeToolMentions(currentPrompt, "motion"));
 
     const submit = () => {
         const text = prompt.trim();

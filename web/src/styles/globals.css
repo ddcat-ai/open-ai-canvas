@@ -14049,9 +14049,10 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-cover-media { width: 100%; height: 100%; object-fit: contain; background: color-mix(in srgb, var(--foreground) 5%, transparent); }
 .assets-cover-fallback { display: grid; width: 100%; height: 100%; place-items: center; background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 42%, transparent); }
 .assets-cover-vignette { display: none; }
-.assets-cover-badges { position: absolute; top: 8px; left: 8px; z-index: 2; display: flex; align-items: center; gap: 5px; pointer-events: none; }
+.assets-cover-badges { position: absolute; top: 8px; left: 38px; right: 44px; z-index: 2; display: flex; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; pointer-events: none; }
 .assets-cover-badge {
     display: inline-flex;
+    flex-shrink: 0;
     height: 20px;
     align-items: center;
     gap: 4px;
@@ -14088,11 +14089,11 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-cover-play svg { position: relative; width: 17px; height: 17px; margin-left: 2px; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .45)); }
 .assets-cover-link:hover .assets-cover-play, .assets-cover-link:focus-visible .assets-cover-play { opacity: 1; }
 
-/* 选中态：accent 勾选框（右下）+ accent 描边由 is-selected 提供 */
+/* 选择入口固定在左上角，徽章预留其空间；选中描边由 is-selected 提供。 */
 .assets-select-check {
     position: absolute;
-    right: 8px;
-    bottom: 8px;
+    left: 8px;
+    top: 8px;
     z-index: 3;
     width: 22px;
     height: 22px;
@@ -14167,17 +14168,19 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-cover-model > svg { width: 34px; height: 34px; stroke-width: 1.1; }
 .assets-cover-model > span { max-width: 76%; overflow: hidden; font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
 
-/* 批量操作条：浮现动画，黑白表面 */
+/* 批量操作条随列表正常排版，留出选中描边和 hover 位移的空间。 */
 .assets-batch-bar {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin: 2px 0 0;
+    margin: 2px 0 var(--space-4);
     padding: 8px 12px;
     border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
     border-radius: var(--r-lg);
-    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+    background: color-mix(in srgb, var(--surface-card) 82%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     box-shadow: var(--elevation-hairline);
     animation: assets-batch-in 240ms var(--motion-ease-out) both;
 }
@@ -14185,7 +14188,7 @@ html:not(.dark) .creation-history-drawer-root {
 @media (prefers-reduced-motion: reduce) { .assets-batch-bar { animation: none; } }
 .assets-batch-count { display: inline-flex; align-items: baseline; gap: 6px; margin-right: auto; color: color-mix(in srgb, var(--foreground) 56%, transparent); font-size: var(--fs-label); }
 .assets-batch-count strong { color: var(--foreground); font-size: var(--fs-body); font-weight: 620; font-variant-numeric: tabular-nums; }
-.assets-batch-actions { display: inline-flex; align-items: center; gap: 4px; }
+.assets-batch-actions { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .assets-batch-actions .ant-btn { border: 0; border-radius: var(--r-md); background: transparent; color: color-mix(in srgb, var(--foreground) 56%, transparent); box-shadow: none; }
 .assets-batch-actions .ant-btn:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
 
@@ -14283,16 +14286,6 @@ html:not(.dark) .creation-history-drawer-root {
 
 /* 1. 欢迎卡与 banner 同列宽，边缘对齐 */
 .assets-empty-cards { width: min(720px, calc(100% - 24px)); }
-
-/* 2. 批量操作条：sticky + 毛玻璃，滚动长列表时始终可见 */
-.assets-batch-bar {
-    position: sticky;
-    top: 12px;
-    z-index: 20;
-    background: color-mix(in srgb, var(--surface-card) 82%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
 
 /* 素材密度由页面传入卡片最小宽度，网格布局统一在 workspace-product.css。 */
 .assets-library-page .library-create-title { margin-top: 12px; font-size: var(--fs-body); }

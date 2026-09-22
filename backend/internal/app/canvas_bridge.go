@@ -98,11 +98,15 @@ func (h canvasHost) StructuredReplacementQuota(userID, kind string, count int, b
 	return validateStructuredReplacementQuotaWithPolicy(usage, kind, count, bytes, policy.Resource)
 }
 
-func (h canvasHost) DeleteUserAssetWithResources(userID, assetID string) error {
+func (h canvasHost) DeleteUserAssetWithResources(userID, assetID string, purge bool) error {
 	if h.svc == nil {
 		return nil
 	}
-	return h.svc.deleteUserAssetWithResources(userID, assetID)
+	return h.svc.deleteUserAssetWithResources(userID, assetID, purge)
+}
+
+func (h canvasHost) PurgeUserAssetsWithResources(userID string, assetIDs []string) error {
+	return h.svc.deleteUserAssetsWithResources(userID, assetIDs, true)
 }
 
 func (h canvasHost) RecordActivity(userID, event string, count int) {
@@ -180,6 +184,14 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
 	return s.canvasDomain().DeleteUserAsset(userID, id)
+}
+
+func (s *Service) PurgeUserAsset(userID string, id string) error {
+	return s.canvasDomain().PurgeUserAsset(userID, id)
+}
+
+func (s *Service) PurgeUserAssets(userID string, ids []string) error {
+	return s.canvasDomain().PurgeUserAssets(userID, ids)
 }
 
 func (s *Service) UserAssets(userID string) ([]json.RawMessage, error) {

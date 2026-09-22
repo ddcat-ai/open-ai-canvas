@@ -361,8 +361,8 @@ test("admin console tokens and shell stay isolated from the user workspace", asy
         Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
     ]);
 
-    expect(tokens).toContain("--admin-canvas: #f5f5f5;");
-    expect(tokens).toContain("--admin-canvas: #0f0f0f;");
+    expect(tokens).toContain("--admin-canvas: #f7f8fa;");
+    expect(tokens).toContain("--admin-canvas: #111317;");
     expect(tokens).not.toContain("--admin-layer-0: var(--workspace-");
     expect(tokens).not.toContain("--admin-layer-0: var(--skin-admin-");
     expect(shell).toContain("data-admin-root");

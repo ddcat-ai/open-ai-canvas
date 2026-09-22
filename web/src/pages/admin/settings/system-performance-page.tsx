@@ -9,6 +9,7 @@ import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 const refreshIntervalMs = 15_000;
 
 function formatBytes(value?: number) {
+    if (value === undefined || !Number.isFinite(value)) return "--";
     if (!value || value < 0) return "0 B";
     const units = ["B", "KB", "MB", "GB", "TB"];
     const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
@@ -17,6 +18,7 @@ function formatBytes(value?: number) {
 }
 
 function formatDuration(seconds?: number) {
+    if (seconds === undefined || !Number.isFinite(seconds)) return "--";
     if (!seconds) return "不足 1 分钟";
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
@@ -25,7 +27,7 @@ function formatDuration(seconds?: number) {
 }
 
 function formatNumber(value?: number) {
-    return new Intl.NumberFormat("zh-CN").format(value || 0);
+    return value === undefined || !Number.isFinite(value) ? "--" : new Intl.NumberFormat("zh-CN").format(value);
 }
 
 function metricTone(value: number) {
@@ -62,20 +64,22 @@ export default function SystemPerformancePage() {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [loadError, setLoadError] = useState("");
     const mountedRef = useRef(true);
+    const requestSequence = useRef(0);
 
     const load = useCallback(async (initial = false) => {
+        const sequence = ++requestSequence.current;
         if (initial) setLoading(true);
         else setRefreshing(true);
         try {
             const next = await getSystemPerformance();
-            if (!mountedRef.current) return;
+            if (!mountedRef.current || sequence !== requestSequence.current) return;
             setData(next);
             setLoadError("");
         } catch (error) {
-            if (!mountedRef.current) return;
+            if (!mountedRef.current || sequence !== requestSequence.current) return;
             setLoadError(error instanceof Error ? error.message : "读取系统性能失败");
         } finally {
-            if (mountedRef.current) {
+            if (mountedRef.current && sequence === requestSequence.current) {
                 setLoading(false);
                 setRefreshing(false);
             }
@@ -85,7 +89,7 @@ export default function SystemPerformancePage() {
     useEffect(() => {
         mountedRef.current = true;
         void load(true);
-        return () => { mountedRef.current = false; };
+        return () => { mountedRef.current = false; requestSequence.current += 1; };
     }, [load]);
 
     useEffect(() => {
@@ -129,6 +133,12 @@ export default function SystemPerformancePage() {
         return <AdminPageFrame title="系统性能" description="服务器、数据库与运行时缓存状态。" scroll><div className="admin-settings-stack admin-system-performance"><Skeleton active paragraph={{ rows: 14 }} /></div></AdminPageFrame>;
     }
 
+    if (!data) {
+        return <AdminPageFrame title="系统性能" description="运行状态未知；尚未取得有效采集数据。" scroll>
+            <div className="admin-performance-alert" role="alert"><AlertTriangle className="size-4" /><span>{loadError || "性能数据不可用"}</span><Button size="small" loading={refreshing} onClick={() => void load(false)}>重试</Button></div>
+        </AdminPageFrame>;
+    }
+
     const memoryPercent = data?.memory.systemAvailable ? data.memory.usagePercent : undefined;
     const databaseConnections = data?.database.postgres?.connections ?? data?.database.pool.openConnections ?? 0;
     const databaseLimit = data?.database.postgres?.maxConnections || data?.database.pool.maxOpenConnections || 0;
@@ -144,9 +154,9 @@ export default function SystemPerformancePage() {
             actions={<><label className="admin-performance-auto"><Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} /><span>15 秒刷新</span></label><Button icon={<RefreshCw className="size-4" />} loading={refreshing} onClick={() => void load(false)}>刷新</Button></>}
         >
             <div className="admin-settings-stack admin-system-performance">
-                {loadError ? <div className="admin-performance-alert"><AlertTriangle className="size-4" /><span>{loadError}</span><Button size="small" onClick={() => void load(false)}>重试</Button></div> : null}
+                {loadError ? <div className="admin-performance-alert" role="alert"><AlertTriangle className="size-4" /><span>刷新失败，以下为上次采集的快照，非当前状态：{loadError}</span><Button size="small" onClick={() => void load(false)}>重试</Button></div> : null}
                 <div className="admin-performance-statusbar">
-                    <div><AdminStatusBadge label={data?.status === "healthy" ? "系统运行正常" : "部分服务降级"} tone={data?.status === "healthy" ? "success" : "warning"} /><span>采集于 {data ? new Date(data.collectedAt).toLocaleString("zh-CN", { hour12: false }) : "--"}</span></div>
+                    <div><AdminStatusBadge label={loadError ? "快照已过期" : data.status === "healthy" ? "系统运行正常" : "部分服务降级"} tone={loadError ? "warning" : data.status === "healthy" ? "success" : "warning"} /><span>采集于 {new Date(data.collectedAt).toLocaleString("zh-CN", { hour12: false })}</span></div>
                     <span>进程已运行 {formatDuration(data?.host.uptimeSeconds)}</span>
                 </div>
 

@@ -1156,7 +1156,7 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 }
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
-	return r.DeleteAssetAndResources(userID, id, nil, nil)
+	return r.DeleteAssetAndResources(userID, id, nil, nil, false)
 }
 
 func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]model.Asset, error) {

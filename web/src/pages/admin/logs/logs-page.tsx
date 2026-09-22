@@ -1,4 +1,4 @@
-import { App, Button, Input, Modal, Select } from "antd";
+import { Alert, App, Button, Input, Modal, Segmented, Select } from "antd";
 import { IconButton } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Play, Search } from "lucide-react";
@@ -14,11 +14,14 @@ import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/service
 import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
+import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
+import "./logs-page.css";
 
 export default function LogsPage() {
     const { message } = App.useApp();
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
+    const view = normalizeLogView(searchParams.get("view"));
     const status = normalizeStatus(searchParams.get("status"));
     const recordType = searchParams.get("recordType") === "download" ? "download" : searchParams.get("recordType") === "all" ? "all" : "request";
     const page = positiveInt(searchParams.get("page"), 1);
@@ -27,6 +30,8 @@ export default function LogsPage() {
     const [logs, setLogs] = useState<ApiCallLog[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const [retry, setRetry] = useState(0);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
     const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
@@ -46,6 +51,10 @@ export default function LogsPage() {
     useEffect(() => {
         const sequence = ++requestSequence.current;
         setLoading(true);
+        setLoadError("");
+        setLogs([]);
+        setTotal(0);
+        setSelectedIds([]);
         void listAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
             .then((result) => {
                 if (sequence !== requestSequence.current) return;
@@ -54,12 +63,18 @@ export default function LogsPage() {
                 setSelectedIds([]);
                 if (result.total > 0 && result.logs.length === 0 && page > 1) updateUrl({ page: 1 }, true);
             })
-            .catch((error) => sequence === requestSequence.current && message.error(error instanceof Error ? error.message : "读取请求明细失败"))
+            .catch((error) => {
+                if (sequence !== requestSequence.current) return;
+                const text = error instanceof Error ? error.message : "读取请求明细失败";
+                setLoadError(text);
+                message.error(text);
+            })
             .finally(() => sequence === requestSequence.current && setLoading(false));
-    }, [debouncedKeyword, status, recordType, page, pageSize]);
+        return () => { requestSequence.current += 1; };
+    }, [debouncedKeyword, status, recordType, page, pageSize, retry]);
 
-    const columns: ColumnsType<ApiCallLog> = [
-        { title: "时间", width: 168, render: (_, log) => formatTime(log.startedAt || log.createdAt) },
+    const fullColumns: ColumnsType<ApiCallLog> = [
+        { title: "时间", width: 168, render: (_, log) => <button type="button" className="admin-log-detail-link" aria-label={`查看请求 ${log.id} 详情`} onClick={() => setDetailLogId(log.id)}>{formatTime(log.startedAt || log.createdAt)}</button> },
         {
             title: "用户",
             width: 180,
@@ -124,6 +139,27 @@ export default function LogsPage() {
         },
     ];
 
+    const identityColumns: ColumnsType<ApiCallLog> = [
+        { title: "时间 / 详情", key: "time", width: 142, render: (_, log) => <button type="button" className="admin-log-detail-link" title={formatTime(log.startedAt || log.createdAt)} aria-label={`查看请求 ${log.id} 详情`} onClick={() => setDetailLogId(log.id)}>{formatCompactTime(log.startedAt || log.createdAt)}</button> },
+        { title: "状态", key: "status", width: 88, render: (_, log) => <AdminStatusBadge {...logStatus(log)} /> },
+        { title: "模型", dataIndex: "model", width: 170, ellipsis: true, render: (value) => value || "未识别模型" },
+        { title: "渠道", dataIndex: "channelName", width: 116, ellipsis: true, render: (value) => value || "未记录渠道" },
+        { title: "用户", key: "user", width: 110, ellipsis: true, render: (_, log) => <span title={[log.userDisplayName, log.userAccount].filter(Boolean).join(" · ")}>{log.userDisplayName || log.userAccount || "未知用户"}</span> },
+    ];
+    const compactColumns: ColumnsType<ApiCallLog> = view === "billing" ? [
+        ...identityColumns,
+        { title: "销售积分", key: "revenue", align: "right", width: 108, render: (_, log) => log.billable && log.billingAvailable ? formatCredits(log.billingAmountMicrocredits) : "—" },
+        { title: "成本积分", key: "cost", align: "right", width: 108, render: (_, log) => log.creditCostMicrocredits !== undefined ? formatCredits(log.creditCostMicrocredits) : log.creditCostConfigured ? "待核算" : "未配置" },
+        { title: "账务状态", key: "billingStatus", width: 100, render: (_, log) => logBillingLabel(log) },
+        { title: "Tokens 入 / 出", key: "usage", width: 142, render: (_, log) => log.usageAvailable ? `${log.inputTokens.toLocaleString()} / ${log.outputTokens.toLocaleString()}` : "未返回" },
+    ] : [
+        ...identityColumns,
+        { title: "阶段", key: "kind", width: 90, render: (_, log) => requestKindText(log.requestKind) },
+        { title: "耗时", dataIndex: "durationMs", align: "right", width: 90, render: formatDuration },
+        { title: "错误摘要", key: "error", ellipsis: true, render: (_, log) => <span className={logStatus(log).tone === "error" ? "admin-log-error" : undefined} title={[log.errorCode, log.error].filter(Boolean).join(" · ")}>{[log.errorCode, log.error].filter(Boolean).join(" · ") || (logStatus(log).tone === "error" ? `HTTP ${log.statusCode || "失败"} · 未返回详情` : "—")}</span> },
+    ];
+    const columns = view === "all" ? fullColumns : compactColumns;
+
     return (
         <AdminPageFrame
             title="请求明细"
@@ -138,7 +174,10 @@ export default function LogsPage() {
                 />
             }
         >
+            {loadError ? <Alert type="error" showIcon title="请求明细读取失败" description={loadError} action={<Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
             <AdminDataTable
+                className={view === "all" ? "admin-logs-full" : "admin-logs-compact"}
+                trailing={<Segmented aria-label="请求明细视图" value={view} onChange={(value) => updateUrl({ view: value })} options={[{ label: "排障", value: "troubleshoot" }, { label: "计费", value: "billing" }, { label: "全部字段", value: "all" }]} />}
                 toolbar={
                     <Input
                         allowClear
@@ -159,6 +198,7 @@ export default function LogsPage() {
                     <>
                     <Select aria-label="明细类型" className="w-32" value={recordType} onChange={(value) => updateUrl({ recordType: value, page: 1 })} options={[{ label: "仅请求", value: "request" }, { label: "仅下载", value: "download" }, { label: "全部明细", value: "all" }]} />
                     <Select
+                        aria-label="请求结果"
                         className="w-32"
                         value={status}
                         onChange={(value) => updateUrl({ status: value, page: 1 })}
@@ -191,7 +231,7 @@ export default function LogsPage() {
                     size: "small",
                     rowKey: "id",
                     loading,
-                    rowSelection: { selectedRowKeys: selectedIds, preserveSelectedRowKeys: false, onChange: (keys) => setSelectedIds(keys.map(String)) },
+                    rowSelection: { columnWidth: 36, selectedRowKeys: selectedIds, preserveSelectedRowKeys: false, onChange: (keys) => setSelectedIds(keys.map(String)) },
                     onRow: (log) => ({
                         onClick: (event) => {
                             if ((event.target as HTMLElement).closest("button,a,input,.ant-checkbox-wrapper")) return;
@@ -200,11 +240,12 @@ export default function LogsPage() {
                         className: "admin-table-clickable-row",
                     }),
                     columns,
+                    tableLayout: "fixed",
                     dataSource: logs,
                     pagination: false,
-                    scroll: { x: 1600 },
+                    scroll: { x: view === "all" ? 1775 : view === "billing" ? 1120 : 1060 },
                 }}
-                empty={<AdminTableEmpty filtered={hasFilters} />}
+                empty={loadError ? <span role="status">数据暂不可用，请重试</span> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
             <ApiLogDetailDrawer logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => (item.id === next.id ? next : item)))} />
@@ -250,6 +291,12 @@ function normalizeStatus(value: string | null): "all" | "succeeded" | "failed" {
 }
 function formatTime(value?: string) {
     return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
+}
+function formatCompactTime(value: string) {
+    if (!value) return "--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--";
+    return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 function capabilityText(value: string) {
     return ({ text: "文本", image: "图片", video: "视频", audio: "音频" } as Record<string, string>)[value] || "未知";
@@ -310,13 +357,10 @@ function downloadMedia(url: string, kind: "image" | "video") {
 }
 
 function CallStatus({ log }: { log: ApiCallLog }) {
-    const providerStatus = log.providerStatus?.toLowerCase();
-    const processing = ["queued", "pending", "processing", "running", "in_progress"].includes(providerStatus || "");
-    const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
     return (
         <div>
             <div className="mb-1 text-xs font-medium text-foreground/70">{requestKindText(log.requestKind)}</div>
-            <AdminStatusBadge label={failed ? "失败" : processing ? "处理中" : "成功"} tone={failed ? "error" : processing ? "warning" : "success"} />
+            <AdminStatusBadge {...logStatus(log)} />
             {log.capability === "video" ? <div className="mt-1 text-xs tabular-nums text-foreground/45">已轮询 {log.pollCount || 0} 次</div> : null}
         </div>
     );

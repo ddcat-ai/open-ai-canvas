@@ -2,9 +2,7 @@ import { CanvasNodeType, type CanvasMediaPerformanceMode, type CanvasNodeData } 
 
 const STORAGE_KEY = "canvas-media-performance-mode";
 
-// The DOM budget is deliberately below the connection budget. Image-heavy
-// canvases pay a texture/compositing cost per mounted card, even when the
-// cards themselves are already virtualized spatially.
+// 屏外预加载的软预算；屏内节点不可因预算而消失，媒体仍由节点按需加载。
 export const CANVAS_MAX_RENDERED_NODES = 720;
 export const CANVAS_MAX_RENDERED_CONNECTIONS = 5000;
 

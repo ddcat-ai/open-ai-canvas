@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
-import { buildCanvasResourceReferences } from "../src/lib/canvas/canvas-resource-references";
+import { buildCanvasResourceReferences, getGenerationResourceNodes } from "../src/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
 function node(id: string, type: CanvasNodeType, content: string): CanvasNodeData {
@@ -33,6 +33,40 @@ function connection(fromNodeId: string): CanvasConnection {
 }
 
 describe("canvas node generation position mentions", () => {
+    test("父图无预览时仍可继承输入，显式子图输入优先且去重", () => {
+        const a = node("a", CanvasNodeType.Image, "");
+        a.metadata = { storageKey: "resource:a" };
+        const b = node("b", CanvasNodeType.Image, "b");
+        const root = node("root", CanvasNodeType.Image, "");
+        root.metadata = { isBatchRoot: true };
+        const child = node("child", CanvasNodeType.Image, "");
+        child.metadata = { batchRootId: root.id };
+        const nodes = [a, b, root, child];
+        const connections = [{ id: "a-root", fromNodeId: a.id, toNodeId: root.id }, { id: "group", fromNodeId: root.id, toNodeId: child.id }];
+        expect(getGenerationResourceNodes(child.id, nodes, connections).map((item) => item.id)).toEqual(["a"]);
+        expect(getGenerationResourceNodes(child.id, nodes, [...connections, { id: "b-child", fromNodeId: b.id, toNodeId: child.id }, { id: "b-child-duplicate", fromNodeId: b.id, toNodeId: child.id }]).map((item) => item.id)).toEqual(["b"]);
+        root.metadata = { isBatchRoot: true, batchRootId: child.id };
+        child.metadata = { isBatchRoot: true, batchRootId: root.id };
+        expect(getGenerationResourceNodes(child.id, nodes, [])).toEqual([]);
+    });
+    test("批次子图沿父批次继承原始参考图，不把结果分组边当作参考图", () => {
+        const a = node("a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const b = node("b", CanvasNodeType.Image, "data:image/png;base64,b");
+        const root = node("root", CanvasNodeType.Image, "data:image/png;base64,result");
+        root.metadata = { ...root.metadata, isBatchRoot: true, batchChildIds: ["child"] };
+        const child = node("child", CanvasNodeType.Image, "");
+        child.metadata = { batchRootId: root.id, composerContent: "结合 @图片1 和 @图片2" };
+        const nodes = [a, b, root, child];
+        const connections = [
+            { id: "a-root", fromNodeId: a.id, toNodeId: root.id },
+            { id: "b-root", fromNodeId: b.id, toNodeId: root.id },
+            { id: "group", fromNodeId: root.id, toNodeId: child.id },
+        ];
+        const context = buildNodeGenerationContext(child.id, nodes, connections, child.metadata.composerContent!, []);
+        expect(context.referenceImages.map((image) => image.id)).toEqual([a.id, b.id]);
+        expect(buildCanvasResourceReferences(nodes, connections, child.id).filter((ref) => ref.active).map((ref) => ref.nodeId)).toEqual([a.id, b.id]);
+    });
+
     test("Agent 保存的素材引用块在编辑器和再次提交时保持相同编号", () => {
         const target = targetNode();
         const character = node("character", CanvasNodeType.Image, "data:image/png;base64,a");

@@ -59,6 +59,7 @@ type AssetStore = {
     addGenerationAsset: (effectKey: string, asset: NewAsset, signal?: AbortSignal) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => Promise<void>;
+    removeAssets: (ids: string[]) => Promise<void>;
     replaceAssets: (assets: Asset[]) => void;
     cleanupImages: (extra?: unknown) => Promise<void>;
 };
@@ -393,18 +394,23 @@ export const useAssetStore = create<AssetStore>()(
                 set((state) => ({
                     assets: state.assets.map((asset) => (asset.id === id ? parseAssetRecord({ ...asset, ...patch, updatedAt: new Date().toISOString() }) : asset)),
                 })),
-            removeAsset: async (id) => {
+            removeAsset: async (id) => get().removeAssets([id]),
+            removeAssets: async (ids) => {
+                const removedIds = new Set(ids);
                 let remainingAssets: Asset[] = [];
-                let removedAsset: Asset | undefined;
+                let hasLocalMedia = false;
                 set((state) => {
-                    removedAsset = state.assets.find((asset) => asset.id === id);
-                    const assets = state.assets.filter((asset) => asset.id !== id);
+                    const assets = state.assets.filter((asset) => {
+                        if (!removedIds.has(asset.id)) return true;
+                        hasLocalMedia ||= !!collectImageStorageKeys(asset).size || !!collectMediaStorageKeys(asset).size;
+                        return false;
+                    });
                     remainingAssets = assets;
                     return { assets };
                 });
                 // 没有本地媒体定位时没有需要由该删除动作回收的 Blob；跳过全库扫描，
                 // 避免纯文本/远程资源删除依赖浏览器 IndexedDB 驱动。
-                if (!removedAsset || (!collectImageStorageKeys(removedAsset).size && !collectMediaStorageKeys(removedAsset).size)) return;
+                if (!hasLocalMedia) return;
                 await get().cleanupImages({ assets: remainingAssets });
             },
             replaceAssets: (assets) => set({ assets: assets.map(parseAssetRecord) }),

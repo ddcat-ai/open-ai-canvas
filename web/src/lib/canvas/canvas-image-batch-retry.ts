@@ -1,17 +1,22 @@
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
+import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
+
+export function hasImageBatchResult(node: CanvasNodeData) {
+    return Boolean(node.metadata?.content || node.metadata?.storageKey);
+}
 
 export function liveImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[]) {
     if (root.type !== CanvasNodeType.Image) return [];
-    const listed = new Set(root.metadata?.batchChildIds || []);
-    return nodes.filter((node) => node.id !== root.id && (node.metadata?.batchRootId === root.id || listed.has(node.id)));
+    // 清理是破坏性写路径，父节点的旧索引不能证明子节点仍归这个批次所有。
+    return nodes.filter((node) => node.id !== root.id && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id);
 }
 
 export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const children = liveImageBatchChildren(root, nodes);
     if (!children.length) return { nodes, connections, removedIds: [] as string[] };
-    const removedIds = children.filter((node) => !node.metadata?.content).map((node) => node.id);
+    const removedIds = children.filter((node) => !hasImageBatchResult(node)).map((node) => node.id);
     const removed = new Set(removedIds);
-    const kept = children.filter((node) => Boolean(node.metadata?.content));
+    const kept = children.filter(hasImageBatchResult);
     const nextNodes = nodes
         .filter((node) => !removed.has(node.id))
         .map((node) => {
@@ -20,7 +25,7 @@ export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNode
                 delete metadata.batchChildIds;
                 delete metadata.primaryImageId;
                 delete metadata.batchFailedCount;
-                if (!metadata.content) metadata.status = "idle";
+                if (!hasImageBatchResult(node)) metadata.status = "idle";
                 return { ...node, metadata };
             }
             const index = kept.findIndex((item) => item.id === node.id);
@@ -42,14 +47,14 @@ export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNode
 
 export function cancelIncompleteImageBatch(rootId: string, childIds: string[], nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const childIdSet = new Set(childIds);
-    const removedIds = nodes.filter((node) => childIdSet.has(node.id) && !node.metadata?.content).map((node) => node.id);
+    const removedIds = nodes.filter((node) => childIdSet.has(node.id) && node.metadata?.batchRootId === rootId && !hasImageBatchResult(node)).map((node) => node.id);
     const removed = new Set(removedIds);
     const nextNodes = nodes
         .filter((node) => !removed.has(node.id))
         .map((node) => {
             if (node.id !== rootId) return node;
-            const remaining = (node.metadata?.batchChildIds || []).filter((id) => !removed.has(id) && nodes.some((item) => item.id === id && item.metadata?.content));
-            const hasContent = Boolean(node.metadata?.content);
+            const remaining = (node.metadata?.batchChildIds || []).filter((id) => !removed.has(id) && nodes.some((item) => item.id === id && item.metadata?.batchRootId === rootId && hasImageBatchResult(item)));
+            const hasContent = hasImageBatchResult(node);
             const metadata = {
                 ...node.metadata,
                 batchChildIds: remaining.length ? remaining : undefined,
@@ -75,7 +80,7 @@ export function cancelIncompleteImageBatch(rootId: string, childIds: string[], n
         nextNodes.find((node) => node.id === rootId)?.metadata?.batchChildIds || [],
     );
     const detached = nextNodes.map((node) => {
-        if (!childIdSet.has(node.id) || remainingIds.has(node.id)) return node;
+        if (!childIdSet.has(node.id) || node.metadata?.batchRootId !== rootId || remainingIds.has(node.id)) return node;
         const metadata = { ...node.metadata };
         delete metadata.batchRootId;
         return { ...node, metadata };
@@ -136,7 +141,7 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
         .map((id) => nodeById.get(id))
         .filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id));
     if (!children.length) {
-        const metadata: CanvasNodeMetadata = { ...root.metadata };
+        const metadata: CanvasNodeMetadata = resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
         delete metadata.batchChildIds;
         delete metadata.batchFailedCount;
         delete metadata.primaryImageId;
@@ -146,19 +151,21 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
         delete metadata.generationErrorCode;
         delete metadata.resourceReloadAvailable;
         delete metadata.failedPromptFingerprint;
-        if (!metadata.content) metadata.status = "idle";
+        if (!hasImageBatchResult(root)) metadata.status = "idle";
         return { ...root, metadata };
     }
 
-    const primary = children.find((node) => node.id === root.metadata?.primaryImageId && node.metadata?.content) || children.find((node) => node.metadata?.content);
+    const primary = children.find((node) => node.id === root.metadata?.primaryImageId && hasImageBatchResult(node)) || children.find(hasImageBatchResult);
     const loading = children.some((node) => node.metadata?.status === "loading");
     const failed = children.find((node) => node.metadata?.status === "error");
-    const metadata: CanvasNodeMetadata = { ...root.metadata };
+    // 批次父节点只是子任务的投影，不能保留上一轮单图任务的身份/终态。
+    const metadata: CanvasNodeMetadata = resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
     metadata.batchFailedCount = children.filter((node) => node.metadata?.status === "error").length;
 
     if (primary) {
         metadata.content = primary.metadata?.content;
         metadata.storageKey = primary.metadata?.storageKey;
+        metadata.assetId = primary.metadata?.assetId;
         metadata.mimeType = primary.metadata?.mimeType;
         metadata.bytes = primary.metadata?.bytes;
         metadata.naturalWidth = primary.metadata?.naturalWidth;
@@ -171,6 +178,7 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
     } else {
         delete metadata.content;
         delete metadata.storageKey;
+        delete metadata.assetId;
         delete metadata.mimeType;
         delete metadata.bytes;
         delete metadata.naturalWidth;

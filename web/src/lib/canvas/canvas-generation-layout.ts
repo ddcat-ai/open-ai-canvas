@@ -16,7 +16,7 @@ export function canGenerateImageInPlace(sourceNode: CanvasNodeData | undefined) 
 export function canGenerateMediaInPlace(sourceNode: CanvasNodeData | undefined, mediaType: typeof CanvasNodeType.Image | typeof CanvasNodeType.Video | typeof CanvasNodeType.Audio) {
     if (sourceNode?.type !== mediaType) return false;
     if (sourceNode.metadata?.generationResultPlacement) return sourceNode.metadata.generationResultPlacement === "replace-node";
-    if (!sourceNode.metadata?.content) return true;
+    if (!sourceNode.metadata?.content && !sourceNode.metadata?.storageKey) return true;
     // 兼容显式落点字段引入前创建的复制节点和版本节点。
     return Boolean(sourceNode.metadata?.copiedFromNodeId || sourceNode.metadata?.versionOfNodeId);
 }

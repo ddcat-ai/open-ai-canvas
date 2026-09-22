@@ -18,6 +18,24 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/assets/batch-delete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256<<10)
+		var ids []string
+		if err := c.ShouldBindJSON(&ids); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.PurgeUserAssets(user.ID, ids); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ids": ids})
+	})
 	r.POST("/assets/batch", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -586,7 +604,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteUserAsset(user.ID, c.Param("id")); err != nil {
+		if err := svc.PurgeUserAsset(user.ID, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}

@@ -11,17 +11,18 @@
     --admin-radius-lg: 8px;
     --admin-control-h: 32px;
     --admin-control-h-sm: 28px;
-    --admin-row-h: 40px;
-    --admin-head-h: 36px;
-    --admin-sidebar-width: 224px;
+    --admin-row-h: 36px;
+    --admin-row-padding: 4px;
+    --admin-head-h: 32px;
+    --admin-sidebar-width: 208px;
     --admin-sidebar-collapsed: 64px;
     --admin-motion: 120ms ease;
     --admin-shadow-overlay: 0 16px 40px rgba(15, 23, 42, 0.16);
 
-    --admin-canvas: #f5f5f5;
-    --admin-sidebar: #f5f5f5;
+    --admin-canvas: #f7f8fa;
+    --admin-sidebar: #f7f8fa;
     --admin-surface: #ffffff;
-    --admin-surface-2: #f6f6f6;
+    --admin-surface-2: #f2f4f7;
     --admin-surface-3: #ececec;
     --admin-text: #111111;
     --admin-text-secondary: #525252;
@@ -99,10 +100,10 @@
 
 .dark :is([data-admin-root], .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu),
 .dark body.admin-overlays {
-    --admin-canvas: #0f0f0f;
-    --admin-sidebar: #0f0f0f;
-    --admin-surface: #181818;
-    --admin-surface-2: #222222;
+    --admin-canvas: #111317;
+    --admin-sidebar: #111317;
+    --admin-surface: #191c21;
+    --admin-surface-2: #23272e;
     --admin-surface-3: #2a2a2a;
     --admin-text: #f5f5f5;
     --admin-text-secondary: #c4c4c4;
@@ -128,4 +129,10 @@
     --admin-chart-secondary: #2dd4bf;
     --admin-chart-warning: #fbbf24;
     --admin-shadow-overlay: 0 22px 56px rgba(0, 0, 0, 0.48);
+}
+
+[data-admin-root][data-admin-density="comfortable"] {
+    --admin-row-h: 44px;
+    --admin-row-padding: 8px;
+    --admin-head-h: 36px;
 }

@@ -1090,6 +1090,65 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
+  /assets/batch-delete:
+    post:
+      tags: [assets]
+      summary: 批量彻底删除当前用户素材
+      description: 顶层 JSON 数组，一次请求、一个数据库事务。所有 ID 必须属于当前用户，不受任务、画布或历史引用阻塞；共享文件保留，其余通过 Outbox 异步清理，失败重试。任一素材不存在、越权或数据库写入失败时整批不删除。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 1000
+              items:
+                type: string
+                minLength: 1
+            example: ["asset-1", "asset-2"]
+      responses:
+        "200":
+          description: 成功信封，data.ids 返回本次请求的素材 ID 数组；物理文件清理由后台执行。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [ids]
+                        properties:
+                          ids:
+                            type: array
+                            items: { type: string }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+  /assets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [assets]
+      summary: 彻底删除当前用户素材
+      description: 不依赖素材 archived 状态，也不受画布、任务、项目或历史快照引用阻塞；其他素材共享的物理对象仍保留。
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     AgentRunID:

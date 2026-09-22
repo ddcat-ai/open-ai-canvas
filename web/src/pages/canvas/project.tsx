@@ -1,5 +1,6 @@
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
+import { createCanvasStateWriter } from "@/lib/canvas/canvas-editor-state";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -275,24 +276,14 @@ function InfiniteCanvasPage() {
     const directorOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "");
     const nodesRef = useRef<CanvasNodeData[]>([]);
     const [nodes, setNodesState] = useState<CanvasNodeData[]>([]);
-    const setNodes = useCallback<Dispatch<SetStateAction<CanvasNodeData[]>>>((value) => {
-        if (typeof value === "function") {
-            setNodesState((current) => {
-                const next = stampCanvasNodeChanges(current, value(current));
-                nodesRef.current = next;
-                return next;
-            });
-            return;
-        }
-        const next = stampCanvasNodeChanges(nodesRef.current, value);
-        nodesRef.current = next;
-        setNodesState(next);
-    }, []);
+    const setNodes = useMemo(() => createCanvasStateWriter(nodesRef, setNodesState, stampCanvasNodeChanges), []);
     const [nodeStackOrder, setNodeStackOrder] = useState<CanvasNodeStackOrder>([]);
     const bringNodeToFront = useCallback((nodeId: string) => {
         setNodeStackOrder((current) => bringCanvasNodeToFront(current, nodeId));
     }, []);
-    const [connections, setConnections] = useState<CanvasConnection[]>([]);
+    const [connections, setConnectionsState] = useState<CanvasConnection[]>([]);
+    const connectionsRef = useRef<CanvasConnection[]>([]);
+    const setConnections = useMemo(() => createCanvasStateWriter(connectionsRef, setConnectionsState), []);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
@@ -370,7 +361,6 @@ function InfiniteCanvasPage() {
         });
     }, [nodes]);
 
-    const connectionsRef = useRef(connections);
     const chatSessionsRef = useRef(chatSessions);
     const activeChatIdRef = useRef(activeChatId);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
@@ -637,8 +627,6 @@ function InfiniteCanvasPage() {
     }, [dialogNodeId]);
 
     useLayoutEffect(() => {
-        nodesRef.current = nodes;
-        connectionsRef.current = connections;
         chatSessionsRef.current = chatSessions;
         activeChatIdRef.current = activeChatId;
         selectedNodeIdsRef.current = selectedNodeIds;
