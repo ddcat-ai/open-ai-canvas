@@ -7,6 +7,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-generation";
 import { canonicalGenerationMetadata } from "@/lib/canvas/generation-contract";
+import { getNodeGenerationMode } from "@/lib/canvas/node-registry";
 import { clampPromptEditorModalSize, PROMPT_EDITOR_VIEWPORT_MARGIN } from "@/lib/canvas/canvas-prompt-editor-size";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -83,7 +84,10 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const promptOptimizerInstallation = usePluginStore((state) => state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID));
     const promptOptimizerEnabled = usePluginStore((state) => state.pluginStates[PROMPT_OPTIMIZER_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID)?.enabled));
     const simpleMode = workspaceMode === "simple";
-    const mode = defaultMode(node.type);
+    // 类型判定**走节点注册表**（插件自己声明生成类型，见 resolvePromptPanelMode）；
+    // 官方的生成合同归一（canonicalGenerationMetadata）照收 —— 它把节点参数
+    // （尺寸/时长/条数…）按模型合同补齐，与"按什么类型展示面板"是两件事。
+    const mode = resolvePromptPanelMode(node);
     const showPromptTemplates = !simpleMode && mode !== "image";
     node = { ...node, metadata: canonicalGenerationMetadata(node, mode) };
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
@@ -1100,7 +1104,12 @@ function clampPromptHeight(height: number, bounds: { min: number; max: number })
     return Math.min(bounds.max, Math.max(bounds.min, height));
 }
 
-function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
+export function resolvePromptPanelMode(node: CanvasNodeData): CanvasNodeGenerationMode {
+    // 插件节点**自己声明**生成类型（例：minimax-t2a 声明 audio）。只看内置节点类型的话，
+    // 插件节点会一律落到 image —— 面板标题写成「图片生成」、模型下拉只列图片模型。
+    const declared = getNodeGenerationMode(node);
+    if (declared) return declared;
+    const type = node.type;
     return type === CanvasNodeType.Text || type === CanvasNodeType.Skill ? "text" : type === CanvasNodeType.Video ? "video" : type === CanvasNodeType.Audio ? "audio" : "image";
 }
 

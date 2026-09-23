@@ -20,6 +20,7 @@ import { resolveMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import { getPluginNodeRenderer } from "@/lib/plugins/plugin-node-renderers";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
@@ -88,6 +89,11 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
 
 function PluginCanvasNodeContent({ node, theme, renderer, schema }: CanvasNodeContentProps & { renderer: "declarative" | "sandbox"; schema: Record<string, unknown> }) {
     if (renderer === "sandbox") {
+        // —— 插件节点 sandbox 渲染器：组件注册表分发点 ——
+        // 插件通过 registerPluginNodeRenderer 注册自己的 React 组件；这里是宿主唯一的分发入口，
+        // 未来升级为 iframe/worker 沙箱执行插件上传 JS 时，协议不变、仅换执行载体。
+        const Renderer = getPluginNodeRenderer(node.type, node.metadata?.pluginId);
+        if (Renderer) return <Renderer node={node} theme={theme} schema={schema} />;
         return <div className="flex h-full w-full items-center justify-center p-4 text-center text-xs" style={{ color: theme.node.placeholder }}>
             插件节点等待隔离运行时
         </div>;
