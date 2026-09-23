@@ -23,6 +23,12 @@ function formatCredits(value?: number) {
     return `${(value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分起`;
 }
 
+function modelPriceSummary(model: PublicLogicalModel) {
+    const price = model.displayPrice ? formatCredits(model.displayPrice) : "";
+    if (price && model.priceLabel && model.priceLabel !== "未配置") return `${price} · ${model.priceLabel}`;
+    return price || model.priceLabel || formatCredits(model.unitPriceMicrocredits);
+}
+
 function modelCapabilitySummary(model: PublicLogicalModel) {
     const spec = model.capabilitySpec;
     const pieces: string[] = [];
@@ -400,7 +406,7 @@ task = response.json()`;
                                     </div>
                                     <p className="mt-3 min-h-10 text-xs leading-5 text-muted-foreground">{model.description || modelCapabilitySummary(model)}</p>
                                     <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                        <Tag className="m-0">{model.priceLabel || formatCredits(model.unitPriceMicrocredits)}</Tag>
+                                        <Tag className="m-0">{modelPriceSummary(model)}</Tag>
                                         <span className="rounded-md bg-surface-secondary px-2 py-1 text-muted-foreground">{modelCapabilitySummary(model)}</span>
                                     </div>
                                     <div className="mt-4">
