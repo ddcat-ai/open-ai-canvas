@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "updated": "2026-09-22",
+  "note": "场景预设内容层（平台层 RFC 见 项目/场景预设平台层-RFC-2026-09-22.md）。v1 只引用已进种子市场的技能（33 官方 + 35 judian 域包），未上架的 56 个 singles 不引用——避免用户一键挂载时遇到装不上的技能。skillIds 与上游 backend/internal/skills/seed/skills.json 对齐，变更前必须跑 presets_check.py 对账。",
+  "presets": [
+    {
+      "presetId": "short-drama-starter",
+      "name": "短剧爆款起步",
+      "scene": "drama",
+      "skillIds": ["16000000000081", "16000000000077", "16000000000091", "14811816970508"],
+      "rationale": "新手第一站：实战手册管钩子/反转/爽点方法论，一镜到底流水线管单集秒级节奏，模型路由先答该用哪个模型，官方叙事分镜把节奏落地成表。一个预设覆盖从想法到分镜表。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "singles 上架后，用三张 E1 实测卡（短剧开篇八法与付费点/爽点与钩子设计/反转结尾写法）替换对应域包位，粒度更轻；若 #590 显示用户反复跨对话重挂同一预设，再评估项目级默认（需 schema）。"
+    },
+    {
+      "presetId": "short-drama-pilot",
+      "name": "短剧立项与大纲",
+      "scene": "drama",
+      "skillIds": ["16000000000084", "16000000000073", "16000000000079", "16000000000075", "14811816983052"],
+      "rationale": "从零立项一部短剧：结构引擎给坐标系，角色工坊立人物，系列弧光规划跨集，对白工坊磨台词；官方故事开发兜底生产。适合还没动笔的阶段。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "视 #590 的 topCards 数据，把使用率低的域包换成同场景高命中单卡（待 singles 上架）。"
+    },
+    {
+      "presetId": "ad-full-chain",
+      "name": "广告全链路",
+      "scene": "ecommerce",
+      "skillIds": ["16000000000105", "16000000000098", "16000000000097", "16000000000095", "14519800321292"],
+      "rationale": "调研→概念→脚本→分镜一次配齐：全链路打法是主战，消费心理给卖点依据，文案四步打磨标题与长文案，视觉提示词工程管画面；官方波普广告导演做最终生产。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "电商场景模板包（分镜节点+batch-table）落地后，此预设可挂到模板上一并分发。"
+    },
+    {
+      "presetId": "h3-video",
+      "name": "H3 视频出片",
+      "scene": "creative",
+      "skillIds": ["16000000000090", "16000000000091"],
+      "rationale": "即梦 H3 出片最小组合：提示词套件含六段式/首尾帧衔接/资产绑定，模型路由答该用哪个模型族。两个就够，不凑数。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "若 H3 参考资产绑定类问题在 #590 的 readFailures 里占比高，把 singles 的 H3 参考资产绑定卡（E4 待测）纳入替换。"
+    },
+    {
+      "presetId": "seedance-video",
+      "name": "Seedance 生视频",
+      "scene": "creative",
+      "skillIds": ["16000000000093", "16000000000092"],
+      "rationale": "Seedance 出片：提示词工程给八块公式与参考图语法，2.5 导演工艺补模式选择与多镜连续性。单镜头用前者，多镜连续再加后者。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "Seedance 八块公式 single 已通过 E1 实测（2026-09-22），待 singles 上架后替换域包位。"
+    },
+    {
+      "presetId": "ecom-image",
+      "name": "电商大图与系列图",
+      "scene": "ecommerce",
+      "skillIds": ["16000000000095", "16000000000089", "16000000000105", "14811816982028"],
+      "rationale": "产品图/系列图：视觉提示词工程管四层结构与控色，风格库给模板与陷阱，全链路打法深读产品描述与商品图模式卡；官方系列套图生成做批量生产。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "singles 的生图五槽去油腻模板卡（E4 待测）上架后可作轻量替换项。"
+    },
+    {
+      "presetId": "ai-performer",
+      "name": "AI 角色表演",
+      "scene": "drama",
+      "skillIds": ["16000000000086", "16000000000073", "16000000000096", "14889899552012"],
+      "rationale": "IP 短片/数字人：表演实验室管表情/肢体/情绪节拍提示词，角色工坊保人设一致，视觉基调定全片气质；官方微表情导演做视频生产。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "AI 角色表演分层写法 single 待 E1 实测后（下批灯塔卡候选），可作替换位。"
+    },
+    {
+      "presetId": "brand-positioning",
+      "name": "品牌定位与策略",
+      "scene": "ecommerce",
+      "skillIds": ["16000000000102", "16000000000104", "16000000000099", "16000000000106"],
+      "rationale": "不写片不拍片的日子用这组：定位策略找心智空格，故事营销把目的讲成故事，决策模型格森做判断，STEPPS 设计传播。纯思考层，无生产技能。",
+      "source": "hand-curated",
+      "evidence": "E4",
+      "upgrade": "与官方技能无重叠冲突，可长期稳定；若定位类 singles（定位心智图等）上架，可拆出轻量版。"
+    }
+  ]
+}

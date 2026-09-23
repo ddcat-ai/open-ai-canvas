@@ -394,7 +394,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 		map[string]any{"items": map[string]any{"type": "array", "maxItems": 20, "items": map[string]any{"type": "object", "properties": map[string]any{"id": str("短标识，如 1"), "title": str("这一项要做什么"), "status": map[string]any{"type": "string", "enum": []string{"pending", "doing", "done"}}}, "required": []string{"id", "title", "status"}, "additionalProperties": false}}},
 		"items")
 	add("ask_user",
-		"需要用户拍板才能继续时调用本工具。给出一个问题与 2-6 个候选项，本轮会就此收尾，界面上弹出可点的选项面板（也可自己输入）。用户选完会自动开新一轮继续。只在确实无法自行决定时用：用户已授权自主决定或存在安全默认值时，直接做完继续，不要问。一次只问一件事。若只是顺带确认、手头还有能继续做的事，直接在正文里问即可。要从几个候选里挑一个、或希望本轮就此收尾等他，才用本工具。",
+		"创作需求有多个合理方向，或信息不足且假设显著影响结果时，先调用本工具给一个问题和 2-6 个可点选项；不要只在正文列候选，正文没有选项面板。本轮就此收尾，用户点选或自行输入后自动续轮。已指定方向、授权自主决定、存在安全默认值或明确说“直接做”时不要问，直接执行。一次只问一件事。",
 		map[string]any{
 			"question": str("要用户决定的这一个问题，一句话说清"),
 			"options": map[string]any{"type": "array", "minItems": 2, "maxItems": 6, "items": map[string]any{

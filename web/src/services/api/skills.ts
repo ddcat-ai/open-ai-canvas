@@ -4,6 +4,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 
 let addedSkillsRequest: { scope: string; promise: Promise<{ skills: Skill[] }> } | null = null;
 let addedSkillsCache: { scope: string; value: { skills: Skill[] }; expiresAt: number } | null = null;
+let addedSkillsCacheVersion = 0;
 
 export type SkillSort = "popular" | "new" | "updated";
 export type SkillScope = "public" | "mine" | "created" | "favorites";
@@ -57,6 +58,22 @@ export type Skill = {
 };
 
 export type SkillCategory = { value: string; label: string };
+
+/**
+ * 场景预设：平台只读目录（GET /skills/presets，随二进制内置）。
+ * 内容是「一个起步场景 → 一组已上架技能 ID」，不含任何技能正文，也不占用用户配额。
+ * 预设目录只读；选中技能作用于当前会话，缺失技能会持久安装到用户技能库。
+ */
+export type SkillPreset = {
+    presetId: string;
+    name: string;
+    scene: string;
+    skillIds: string[];
+    rationale: string;
+    source: string;
+    evidence: string;
+    upgrade: string;
+};
 
 export type SkillList = {
     skills: Skill[];
@@ -142,14 +159,20 @@ export function getSkill(id: string) {
     return http.get<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`);
 }
 
+/** 场景预设目录：公开只读，与 /skills 同级的市场元数据，无需用户上下文。 */
+export function listSkillPresets() {
+    return http.get<{ presets: SkillPreset[] }>("/skills/presets");
+}
+
 export function listAddedSkills() {
     const scope = getActiveUserScope();
+    const version = addedSkillsCacheVersion;
     const now = Date.now();
     if (addedSkillsCache?.scope === scope && addedSkillsCache.expiresAt > now) return Promise.resolve(addedSkillsCache.value);
     if (addedSkillsRequest?.scope === scope) return addedSkillsRequest.promise;
     const promise = readAddedSkillsWithRetry()
         .then((value) => {
-            addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
+            if (version === addedSkillsCacheVersion) addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
             return value;
         })
         .finally(() => {
@@ -172,7 +195,9 @@ async function readAddedSkillsWithRetry() {
 }
 
 function invalidateAddedSkillsCache() {
+    addedSkillsCacheVersion += 1;
     addedSkillsCache = null;
+    addedSkillsRequest = null;
     if (typeof window !== "undefined") window.dispatchEvent(new Event("canvas-skills-changed"));
 }
 

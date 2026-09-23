@@ -93,6 +93,31 @@ func (r *Repository) CloudAgentRevision(userID, id string) (int64, error) {
 	return run.Revision, err
 }
 
+// RecentCloudAgentEventsForUser returns the journal rows of the caller's most
+// recent runs, ordered by event time. Runs are resolved first so a fixed
+// event limit cannot cut a run in half; an ongoing run may still add events.
+func (r *Repository) RecentCloudAgentEventsForUser(userID string, runLimit int) ([]model.CloudAgentEventRecord, error) {
+	if runLimit < 1 {
+		return nil, nil
+	}
+	var runIDs []string
+	if err := r.db.Model(&model.CloudAgentExecution{}).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Limit(runLimit).
+		Pluck("id", &runIDs).Error; err != nil {
+		return nil, err
+	}
+	if len(runIDs) == 0 {
+		return nil, nil
+	}
+	var records []model.CloudAgentEventRecord
+	err := r.db.Where("user_id = ? AND run_id IN ?", userID, runIDs).
+		Order("created_at, sequence").
+		Find(&records).Error
+	return records, err
+}
+
 // Lock before reading: checkpoints, canvas writes and task reservations commit together.
 func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func(*model.CloudAgentExecution, *Repository) error) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {

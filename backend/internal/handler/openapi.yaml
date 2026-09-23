@@ -114,6 +114,15 @@ paths:
         "200": {description: 标准信封 data 为完整工具}
         "400": {description: 参数无效或预览资源不符合要求}
         "401": {description: 未登录}
+  /skills/presets:
+    get:
+      tags: [canvas]
+      security: []
+      summary: 获取公开场景技能预设目录
+      responses:
+        "200":
+          description: 标准信封 data 为 presets 数组；预设只引用公开且启用的种子技能
+        "500": {$ref: "#/components/responses/Error"}
   /tools/{id}:
     parameters:
       - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
@@ -403,6 +412,15 @@ paths:
       responses:
         "200":
           description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
+  /agent/skills/usage:
+    get:
+      tags: [agent]
+      summary: 读取当前用户技能的使用统计（由运行日志聚合，只读）
+      responses:
+        "200":
+          description: 信封 data 含 scannedRuns、searchCalls 与按启用次数降序的 skills；每个技能含 runsEnabled、searchHits、readCalls、readFailures、entryReads、cardReads 与 topCards（最多 5 条最热卡路径）。统计仅覆盖调用方本人最近的运行，且不含任何技能正文
+        "401":
+          description: 未登录
   /agent/profile:
     get:
       tags: [agent]

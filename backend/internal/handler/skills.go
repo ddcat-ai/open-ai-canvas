@@ -91,6 +91,16 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, result)
 	})
 
+	r.GET("/skills/presets", func(c *gin.Context) {
+		// 场景预设目录：公开只读的市场元数据（与 /openapi.yaml 同模式，无用户数据）。
+		presets, err := svc.SkillPresets()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"presets": presets})
+	})
+
 	r.GET("/skills/added", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

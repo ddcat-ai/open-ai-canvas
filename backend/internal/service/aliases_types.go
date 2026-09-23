@@ -283,6 +283,7 @@ type (
 	SkillPackageBundleFile                 = app.SkillPackageBundleFile
 	SkillPackageFileContent                = app.SkillPackageFileContent
 	SkillPackageFileItem                   = app.SkillPackageFileItem
+	SkillPreset                            = app.SkillPreset
 	SkillShowcaseMedia                     = app.SkillShowcaseMedia
 	StorageMigrationSummary                = app.StorageMigrationSummary
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest

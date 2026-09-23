@@ -24,6 +24,7 @@ type (
 	SkillPackageBundleFile    = skills.SkillPackageBundleFile
 	SkillPackageBundle        = skills.SkillPackageBundle
 	SkillFileSearchResult     = skills.SkillFileSearchResult
+	SkillPreset               = skills.SkillPreset
 )
 
 func (s *Service) skillDomain() *skills.Service {
@@ -42,6 +43,11 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 
 func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
 	return s.skillDomain().AddedSkills(userID)
+}
+
+// SkillPresets 返回场景预设目录（只读；数据随技能种子发布，无需用户上下文）。
+func (s *Service) SkillPresets() ([]SkillPreset, error) {
+	return s.skillDomain().SkillPresets()
 }
 
 func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
@@ -69,6 +75,10 @@ func (s *Service) SetSkillLiked(userID string, id string, liked bool) (*SkillIte
 }
 
 func (s *Service) EnsureBuiltinSkills() error {
+	// 在同步种子之前校验同版本的预设，避免服务启动后才在公开目录暴露坏引用。
+	if _, err := s.SkillPresets(); err != nil {
+		return err
+	}
 	return s.skillDomain().EnsureBuiltinSkills()
 }
 

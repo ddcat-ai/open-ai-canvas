@@ -216,6 +216,56 @@
     background: var(--agent-surface-raised, var(--background));
 }
 
+/* 场景起步胶囊：选择作用于会话，未安装的技能会加入用户技能库。 */
+.agent-scene-capsules {
+    border: 0;
+    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
+}
+
+.agent-scene-capsule {
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: var(--agent-surface-raised, var(--background));
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.agent-scene-capsule:hover:not(:disabled),
+.agent-scene-capsule:focus-visible {
+    border-color: color-mix(in srgb, var(--agent-accent, var(--foreground)) 45%, transparent);
+    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 6%, transparent));
+}
+
+.agent-scene-capsule:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.agent-scene-capsule:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.agent-scene-capsules-scroll {
+    scrollbar-width: thin;
+}
+
+.agent-scene-capsules-scroll::-webkit-scrollbar {
+    height: 4px;
+}
+
+.agent-scene-capsules-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-scene-capsule {
+        transition: none;
+    }
+    .agent-scene-capsule:active:not(:disabled) {
+        transform: none;
+    }
+}
+
 @container (max-width: 400px) {
     .agent-panel-header {
         gap: var(--space-2);
