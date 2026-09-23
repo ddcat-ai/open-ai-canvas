@@ -82,16 +82,19 @@ const taskLogPayloadLimit = 4000
 type CreateTaskRequest struct {
 	creationPrepare *creationTaskPreparation
 	admission       *taskAdmission
-	ProjectID       string         `json:"projectId"`
-	Type            string         `json:"type"`
-	Operation       string         `json:"operation"`
-	Prompt          string         `json:"prompt"`
-	Provider        string         `json:"provider"`
-	Model           string         `json:"model"`
-	LogicalModelID  string         `json:"logicalModelId"`
-	Input           map[string]any `json:"input"`
-	TraceID         string         `json:"-"`
-	RequestID       string         `json:"-"`
+	// publicAPI marks a task admitted by the authenticated public generation API.
+	// It is intentionally private so JSON clients cannot bypass feature gates.
+	publicAPI      bool
+	ProjectID      string         `json:"projectId"`
+	Type           string         `json:"type"`
+	Operation      string         `json:"operation"`
+	Prompt         string         `json:"prompt"`
+	Provider       string         `json:"provider"`
+	Model          string         `json:"model"`
+	LogicalModelID string         `json:"logicalModelId"`
+	Input          map[string]any `json:"input"`
+	TraceID        string         `json:"-"`
+	RequestID      string         `json:"-"`
 	// CreationSubmissionID is reserved for trusted idempotent callers such as
 	// the public generation API. It is never accepted from JSON clients.
 	CreationSubmissionID string `json:"-"`

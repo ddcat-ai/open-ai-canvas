@@ -36,6 +36,26 @@ func TestTaskInputUsesWorkflowProvider(t *testing.T) {
 	}
 }
 
+func TestPublicAPITaskRoutingIgnoresFrontendModelFeature(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+
+	publicEnabled, err := svc.frontendModelRoutingEnabled(CreateTaskRequest{publicAPI: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !publicEnabled {
+		t.Fatal("public API task routing should remain enabled when frontend models are disabled")
+	}
+
+	frontendEnabled, err := svc.frontendModelRoutingEnabled(CreateTaskRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frontendEnabled {
+		t.Fatal("ordinary frontend task routing should remain disabled by the default feature setting")
+	}
+}
+
 func TestResolveTaskModelSelectionAllowsExplicitSystemChannelWhenFrontendModelsEnabled(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

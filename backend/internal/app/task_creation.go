@@ -74,7 +74,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		}
 	} else {
 		// 工作流是独立执行器；普通模型仍严格使用主线的目录和路由校验。
-		frontendEnabled, err = s.FeatureEnabled(FeatureFrontendModels)
+		frontendEnabled, err = s.frontendModelRoutingEnabled(req)
 		if err != nil {
 			return nil, err
 		}
@@ -192,6 +192,17 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	s.recordActivity(userID, "task", 1)
 	_ = s.log(userID, task.ID, "info", "任务已进入队列", "")
 	return taskForOutput(task), nil
+}
+
+func (s *Service) frontendModelRoutingEnabled(req CreateTaskRequest) (bool, error) {
+	if req.publicAPI {
+		// The public generation API has already authenticated the API key,
+		// resolved the public logical model, and checked its allowlist. It must
+		// still use the same logical-model routing and billing path, but it is
+		// independent from the frontend canvas model rollout switch.
+		return true, nil
+	}
+	return s.FeatureEnabled(FeatureFrontendModels)
 }
 
 // resolveTaskModelSelection 根据请求实际携带的模型选择决定路由方式。

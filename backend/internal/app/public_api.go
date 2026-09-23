@@ -232,9 +232,6 @@ func (s *Service) CreatePublicGeneration(userID string, key *model.PublicAPIKey,
 	if err != nil {
 		return nil, err
 	}
-	if err := s.RequireFeature(FeatureFrontendModels); err != nil {
-		return nil, err
-	}
 	idemHash := publicAPIKeyHash(strings.TrimSpace(idempotencyKey))
 	requestHash := publicRequestHash(request)
 	if existing, lookupErr := s.repo.PublicGenerationRequestByIdempotency(key.ID, endpoint, idemHash); lookupErr != nil {
@@ -272,7 +269,7 @@ func (s *Service) CreatePublicGeneration(userID string, key *model.PublicAPIKey,
 	}
 	task, err := s.CreateTask(userID, CreateTaskRequest{
 		Type: taskType, Operation: operation, Prompt: request.Prompt, LogicalModelID: logicalModelID,
-		Input: input, TraceID: traceID, RequestID: requestID, CreationSubmissionID: submissionID,
+		Input: input, TraceID: traceID, RequestID: requestID, CreationSubmissionID: submissionID, publicAPI: true,
 	})
 	if err != nil {
 		if existingTask, lookupErr := s.repo.TaskByCreationSubmission(userID, submissionID); lookupErr == nil && existingTask != nil {
@@ -305,9 +302,6 @@ func (s *Service) CreatePublicGeneration(userID string, key *model.PublicAPIKey,
 func (s *Service) PublicGenerationReplay(userID string, key *model.PublicAPIKey, request PublicGenerationInput, endpoint, idempotencyKey string) (*PublicGenerationView, bool, error) {
 	if key == nil || key.UserID != userID {
 		return nil, false, Unauthorized("API Key 无效")
-	}
-	if err := s.RequireFeature(FeatureFrontendModels); err != nil {
-		return nil, false, err
 	}
 	idemHash := publicAPIKeyHash(strings.TrimSpace(idempotencyKey))
 	existing, err := s.repo.PublicGenerationRequestByIdempotency(key.ID, endpoint, idemHash)
