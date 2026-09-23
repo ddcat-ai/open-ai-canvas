@@ -73,6 +73,13 @@ func (e *ModelError) Error() string {
 	return string(e.ErrorCode)
 }
 
+func (e *ModelError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.AppError
+}
+
 // NewModelError 创建模型错误
 func NewModelError(code ModelErrorCode, message string) *ModelError {
 	err := NewAppError(400, message)

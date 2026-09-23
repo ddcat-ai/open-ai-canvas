@@ -36,3 +36,11 @@ func TestQuotaExceededUsesStableCodeAndReason(t *testing.T) {
 		t.Fatalf("QuotaExceeded = %#v", err)
 	}
 }
+
+func TestModelErrorUnwrapsAppErrorForHTTPProjection(t *testing.T) {
+	err := ModelRouteUnavailable("当前模型暂时无法满足这组输入和参数")
+	var appErr *AppError
+	if !errors.As(err, &appErr) || appErr.Status != 400 || appErr.Reason != ErrorReason(ErrCodeModelRouteUnavailable) {
+		t.Fatalf("ModelError app error projection = %#v", err)
+	}
+}
