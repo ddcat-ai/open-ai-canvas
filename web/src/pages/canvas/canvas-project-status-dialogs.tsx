@@ -1,14 +1,16 @@
+import { useEffect, useState } from "react";
 import { Button, Modal } from "antd";
 import { XCircle } from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { TaskDetailItem } from "./canvas-project-feedback";
-import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
+import { canCancelGenerationTask, generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import { formatTaskLog, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { VideoPlayer } from "@/components/video-player";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
+import { resolveMediaUrl } from "@/services/file-storage";
 
 type CanvasProjectStatusDialogsProps = {
     theme: { node: { stroke: string; panel: string; muted: string; fill: string } };
@@ -52,7 +54,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                             </div>
                         </div>
                         <TaskGenerationParameters inputJson={task.inputJson} theme={theme} />
-                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                        {onCancelTask && canCancelGenerationTask(task) ? (
                             <div className="flex justify-end">
                                 <Button danger icon={<XCircle className="size-4" />} onClick={() => onCancelTask(task)}>
                                     取消任务
@@ -77,7 +79,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
 
             <AppModal
                 title="视频预览"
-                open={Boolean(previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video)}
+                open={Boolean(previewNode?.type === CanvasNodeType.Video && (previewNode.metadata?.content || previewNode.metadata?.storageKey))}
                 centered
                 onCancel={onClosePreview}
                 footer={null}
@@ -85,14 +87,15 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                 flush
                 styles={{ body: { display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "var(--workspace-canvas-deep)" } }}
             >
-                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? (
-                    <VideoPlayer src={previewNode.metadata.content} mimeType={previewNode.metadata.mimeType} title={previewNode.title || "视频预览"} hasAudio={typeof previewNode.metadata.hasAudio === "boolean" ? previewNode.metadata.hasAudio : undefined} className="max-h-[84vh] max-w-full bg-black" />
+                {previewNode?.type === CanvasNodeType.Video && (previewNode.metadata?.content || previewNode.metadata?.storageKey) ? (
+                    <ResolvedCanvasVideoPreview node={previewNode} />
                 ) : null}
             </AppModal>
 
-            {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? (
+            {previewNode?.type === CanvasNodeType.Image && (previewNode.metadata?.content || previewNode.metadata?.storageKey) ? (
                 <CanvasImagePreview
                     src={previewNode.metadata.content}
+                    storageKey={previewNode.metadata.storageKey}
                     alt={previewNode.title || "图片"}
                     onClose={onClosePreview}
                 />
@@ -116,6 +119,34 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
             </Modal>
         </>
     );
+}
+
+function ResolvedCanvasVideoPreview({ node }: { node: CanvasNodeData }) {
+    const [src, setSrc] = useState(node.metadata?.storageKey ? "" : node.metadata?.content || "");
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        setSrc(node.metadata?.storageKey ? "" : node.metadata?.content || "");
+        setFailed(false);
+        void resolveMediaUrl(node.metadata?.storageKey, node.metadata?.content || "")
+            .then((url) => {
+                if (!cancelled) {
+                    setSrc(url);
+                    setFailed(!url);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setFailed(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [node.metadata?.content, node.metadata?.storageKey]);
+
+    if (failed) return <div className="grid min-h-72 w-full place-items-center text-sm text-white/55">视频地址获取失败，请关闭后重试</div>;
+    if (!src) return <div className="grid min-h-72 w-full place-items-center text-sm text-white/55">正在加载视频…</div>;
+    return <VideoPlayer src={src} mimeType={node.metadata?.mimeType} title={node.title || "视频预览"} hasAudio={typeof node.metadata?.hasAudio === "boolean" ? node.metadata.hasAudio : undefined} className="max-h-[84vh] max-w-full bg-black" />;
 }
 
 function TaskGenerationParameters({ inputJson, theme }: { inputJson?: string; theme: CanvasProjectStatusDialogsProps["theme"] }) {

@@ -194,6 +194,28 @@ func (s *Service) TasksWithOptions(userID string, options TaskListOptions) ([]Ta
 	if err != nil {
 		return nil, err
 	}
+	// Active task lists are the primary source for the canvas cancel affordance.
+	// The worker may have already logged an upstream request while the task row
+	// is waiting for its next lease update, so hydrate the list read model from
+	// the API log in one query instead of briefly exposing a stale cancel button.
+	taskIDs := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		taskIDs = append(taskIDs, task.ID)
+	}
+	providerRequestIDs, err := s.repo.LatestProviderRequestIDsForTasks(taskIDs)
+	if err != nil {
+		return nil, err
+	}
+	for index := range tasks {
+		if strings.TrimSpace(tasks[index].ProviderRequestID) != "" {
+			continue
+		}
+		if order, ok := orders[tasks[index].ID]; ok && strings.TrimSpace(order.ProviderRequestID) != "" {
+			tasks[index].ProviderRequestID = strings.TrimSpace(order.ProviderRequestID)
+			continue
+		}
+		tasks[index].ProviderRequestID = providerRequestIDs[tasks[index].ID]
+	}
 	return taskSummariesForOutputWithBilling(tasks, orders), nil
 }
 

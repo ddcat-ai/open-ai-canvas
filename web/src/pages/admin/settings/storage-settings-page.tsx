@@ -578,7 +578,7 @@ export default function StorageSettingsPage() {
                                             <Form.Item name="requireCDN" label="必须走 CDN" valuePropName="checked" extra="开启后 CDN 鉴权配置不完整时直接失败，不会静默回源。">
                                                 <Switch checkedChildren="严格" unCheckedChildren="允许回源" />
                                             </Form.Item>
-                                            <Form.Item name="allowPrivateProxy" label="允许私有源站代理" valuePropName="checked" extra="仅作为显式兜底；开启后源站私有时由平台承担带宽。">
+                                            <Form.Item name="allowPrivateProxy" label="允许模型输入代理" valuePropName="checked" extra="仅允许服务端向第三方模型提交参考素材时读取私有源站。浏览器展示、复制、下载和本地处理始终直连 OSS/CDN，不会经平台中转媒体正文。">
                                                 <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                                             </Form.Item>
                                         </div>

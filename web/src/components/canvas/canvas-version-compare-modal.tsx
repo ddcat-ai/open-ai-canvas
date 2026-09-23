@@ -1,8 +1,8 @@
 import { Button, Modal } from "antd";
 import { Check, Star } from "lucide-react";
 
+import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -13,7 +13,6 @@ export function CanvasVersionCompareModal({ open, versions, onClose, onSetPrimar
         <Modal title="版本对比" open={open} footer={null} width={modalWidth} centered onCancel={onClose} styles={{ body: { overflow: "hidden" } }}>
             <div className="thin-scrollbar grid max-h-[70vh] grid-flow-col auto-cols-[328px] gap-3 overflow-x-auto pb-2">
                 {versions.map((node) => {
-                    const videoPreview = canvasNodeVideoPreviewUrl(node);
                     return (
                     <article key={node.id} className="overflow-hidden rounded-[var(--r-lg)] border" style={{ borderColor: node.metadata?.versionPrimary ? theme.accent.primary : theme.node.stroke, background: theme.node.panel, boxShadow: node.metadata?.versionPrimary ? "0 0 0 2px " + theme.accent.primarySoft : undefined }}>
                         <div className="flex h-11 items-center justify-between gap-3 border-b px-3" style={{ borderColor: theme.node.stroke }}>
@@ -21,7 +20,7 @@ export function CanvasVersionCompareModal({ open, versions, onClose, onSetPrimar
                             {node.metadata?.versionPrimary ? <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-medium" style={{ color: theme.accent.primary }}><Check className="size-3" />主版本</span> : null}
                         </div>
                         <button type="button" className="block h-52 w-full overflow-hidden" style={{ background: theme.node.fill }} onClick={() => onFocus(node.id)}>
-                            {node.type === CanvasNodeType.Image && node.metadata?.content ? <img src={node.metadata.content} alt={node.title || "版本图片"} className="size-full object-contain" /> : videoPreview ? <img src={videoPreview} alt={node.title || "版本视频"} className="size-full object-contain" loading="lazy" decoding="async" /> : <span className="grid size-full place-items-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>点击定位到画布节点</span>}
+                            {node.type === CanvasNodeType.Image && node.metadata?.content ? <img src={node.metadata.content} alt={node.title || "版本图片"} className="size-full object-contain" /> : node.type === CanvasNodeType.Video ? <CanvasVideoPreviewImage node={node} alt={node.title || "版本视频"} className="size-full object-contain" loading="lazy" decoding="async" fallback={<span className="grid size-full place-items-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>暂无视频首帧</span>} /> : <span className="grid size-full place-items-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>点击定位到画布节点</span>}
                         </button>
                         <div className="space-y-2 p-3 text-[var(--fs-label)]">
                             <Info label="模型" value={node.metadata?.model || "默认模型"} />

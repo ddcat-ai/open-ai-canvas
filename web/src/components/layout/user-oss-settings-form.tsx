@@ -165,7 +165,7 @@ export function UserOSSSettingsForm() {
                     extra={isTencentCOS
                         ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
                         : isQiniuKodo
-                            ? "选填。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。"
+                            ? "选填。配置可访问的绑定域名后，浏览器直接从七牛下载与预览；不配置时也必须保证对象源站可由用户浏览器访问，不会由平台中转媒体正文。"
                             : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"}
                     rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}
                     className="mb-3"
@@ -183,7 +183,7 @@ export function UserOSSSettingsForm() {
                 <Form.Item name="requireCDN" label="必须走 CDN" valuePropName="checked" extra="开启后 CDN 鉴权未配置或不支持时直接失败，不会静默回源。" className="mb-3">
                     <Switch checkedChildren="必须" unCheckedChildren="允许回源" />
                 </Form.Item>
-                <Form.Item name="allowPrivateProxy" label="允许私有源站代理" valuePropName="checked" extra="仅作为显式兜底；开启后私有源站会经平台返回，平台仍会承担带宽。" className="mb-3">
+                <Form.Item name="allowPrivateProxy" label="允许模型输入代理" valuePropName="checked" extra="仅允许服务端向第三方模型提交参考素材时读取私有源站。浏览器展示、复制、下载和本地处理始终直连 OSS/CDN，不会经平台中转媒体正文。" className="mb-3">
                     <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                 </Form.Item>
                 <Form.Item name="bucket" label="Bucket" className="mb-3">

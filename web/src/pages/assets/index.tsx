@@ -13,7 +13,6 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { Switch } from "@/components/ui/base/switch";
-import { saveAs } from "file-saver";
 import { cn } from "@/lib/utils";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -23,6 +22,7 @@ import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } f
 import { formatBytes, readFileAsDataUrl, readImageMeta } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
+import { downloadBrowserMedia } from "@/services/browser-download";
 import { flushAssetStorePersistence, useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
@@ -395,11 +395,15 @@ export default function AssetsPage() {
         copyText(asset.data.content, "文本已复制");
     };
 
-    const downloadImage = (asset: LibraryAsset) => {
+    const downloadImage = async (asset: LibraryAsset) => {
         if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "model") return;
         const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
         const extension = asset.kind === "model" ? asset.data.fileName.split(".").pop() || "glb" : asset.data.mimeType.split("/")[1] || "png";
-        saveAs(url, `${asset.title || "asset"}.${extension}`);
+        try {
+            await downloadBrowserMedia({ storageKey: asset.data.storageKey, url, fileName: `${asset.title || "asset"}.${extension}` });
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "下载失败");
+        }
     };
 
     const exportAllAssets = async () => {

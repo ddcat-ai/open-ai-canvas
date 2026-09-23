@@ -4,8 +4,8 @@ import { ChevronDown, ChevronRight, Video } from "lucide-react";
 
 import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
+import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type Position } from "@/types/canvas";
@@ -295,11 +295,9 @@ function FramePreview({ nodes, frame, theme }: { nodes: CanvasNodeData[]; frame:
         <div className="pointer-events-none absolute inset-x-2 bottom-2 overflow-hidden rounded-md" style={{ top: FRAME_HEADER_HEIGHT, background: theme.frame.preview }}>
             {layout.length ? (
                 layout.map(({ node, ...style }) => {
-                    const videoPreview = canvasNodeVideoPreviewUrl(node);
                     return <div key={node.id} className="absolute overflow-hidden rounded-[var(--r-xs)] border" style={{ ...style, background: theme.node.fill, borderColor: theme.node.stroke }}>
                         {node.type === CanvasNodeType.Image && node.metadata?.content ? <img src={node.metadata.content} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} /> : null}
-                        {videoPreview ? <img src={videoPreview} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} /> : null}
-                        {node.type === CanvasNodeType.Video && !videoPreview ? <Video className="m-auto size-4 h-full opacity-40" /> : null}
+                        {node.type === CanvasNodeType.Video ? <CanvasVideoPreviewImage node={node} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} fallback={<Video className="m-auto size-4 h-full opacity-40" />} /> : null}
                         {node.type === CanvasNodeType.Text ? <div className="line-clamp-3 p-1 text-[var(--fs-nano)] leading-[9px]" style={{ color: theme.node.text }}>{node.metadata?.content || node.title}</div> : null}
                         {node.type === CanvasNodeType.Script ? <div className="p-1 text-[var(--fs-nano)] leading-[9px]" style={{ color: theme.node.text }}>分镜脚本 · {node.metadata?.storyboard?.rows.length || 0} 镜</div> : null}
                     </div>;

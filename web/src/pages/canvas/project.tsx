@@ -1,6 +1,7 @@
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import { createCanvasStateWriter } from "@/lib/canvas/canvas-editor-state";
+import { canCancelGenerationTask } from "@/lib/generation-task-display";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -570,6 +571,10 @@ function InfiniteCanvasPage() {
 
     const cancelCanvasTask = useCallback(
         (task: import("@/services/api/task-center").GenerationTask) => {
+            if (!canCancelGenerationTask(task)) {
+                message.info("第三方请求已提交，任务将继续创作，不能取消");
+                return;
+            }
             modal.confirm({
                 title: "取消生成任务？",
                 content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和积分状态。",
@@ -577,6 +582,11 @@ function InfiniteCanvasPage() {
                 okButtonProps: { danger: true },
                 cancelText: "继续等待",
                 onOk: async () => {
+                    const latestTask = taskDetail?.id === task.id ? taskDetail : task;
+                    if (!canCancelGenerationTask(latestTask)) {
+                        message.info("第三方请求已提交，任务将继续创作，不能取消");
+                        return;
+                    }
                     try {
                         const next = await cancelGenerationTask(task.id);
                         const node = nodesRef.current.find((item) => item.metadata?.taskId === task.id);
@@ -590,7 +600,7 @@ function InfiniteCanvasPage() {
                 },
             });
         },
-        [bindGenerationTask, message, modal, nodesRef, projectId, queryClient, setTaskDetail],
+        [bindGenerationTask, message, modal, nodesRef, projectId, queryClient, setTaskDetail, taskDetail],
     );
 
     useEffect(() => {
@@ -1331,6 +1341,13 @@ function InfiniteCanvasPage() {
             const characterCover = asset.character?.representations.find((item) => item.role === "turnaround_sheet") || asset.character?.representations.find((item) => item.role === "primary") || asset.character?.representations[0];
             const type = asset.category === "character" || asset.mediaType === "image" ? CanvasNodeType.Image : asset.mediaType === "video" ? CanvasNodeType.Video : asset.mediaType === "audio" ? CanvasNodeType.Audio : CanvasNodeType.Text;
             const remoteResourceId = resourceIdFromStorageKey(asset.storageKey);
+            const storageKey = characterCover
+                ? `resource:${characterCover.resourceId}`
+                : local?.kind === "image" || local?.kind === "video" || local?.kind === "audio"
+                  ? local.data.storageKey
+                  : remoteResourceId
+                    ? asset.storageKey
+                    : undefined;
             const content = characterCover
                 ? resourceFileUrl(characterCover.resourceId)
                 : local?.kind === "image"
@@ -1342,7 +1359,7 @@ function InfiniteCanvasPage() {
                       : remoteResourceId
                         ? resourceFileUrl(remoteResourceId)
                         : asset.previewText || "";
-            const preview: CanvasNodeData = { id: asset.id, type, title: asset.title, position: { x: 0, y: 0 }, width: 240, height: 160, metadata: { assetId: asset.id, content } };
+            const preview: CanvasNodeData = { id: asset.id, type, title: asset.title, position: { x: 0, y: 0 }, width: 240, height: 160, metadata: { assetId: asset.id, content, storageKey } };
             const current = result.get(asset.folderId) || [];
             current.push(preview);
             result.set(asset.folderId, current);

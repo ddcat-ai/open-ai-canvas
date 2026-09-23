@@ -190,3 +190,34 @@ func TestQueryAPICallLogsHidesInternalPollStages(t *testing.T) {
 		t.Fatalf("visible logs = %#v, want video-create and image-create", items)
 	}
 }
+
+func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:latest-provider-ids?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().Add(-time.Hour)
+	for _, log := range []model.ApiCallLog{
+		{ID: "old-task-1", TaskID: "task-1", ProviderRequestID: "provider-old", CreatedAt: base},
+		{ID: "new-task-1", TaskID: "task-1", ProviderRequestID: "provider-new", CreatedAt: base.Add(2 * time.Minute)},
+		{ID: "task-2", TaskID: "task-2", ProviderRequestID: "provider-2", CreatedAt: base.Add(time.Minute)},
+		{ID: "empty", TaskID: "task-3", ProviderRequestID: "", CreatedAt: base.Add(3 * time.Minute)},
+	} {
+		if err := db.Create(&log).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := New(db).LatestProviderRequestIDsForTasks([]string{"task-1", "task-2", "task-3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids["task-1"] != "provider-new" || ids["task-2"] != "provider-2" {
+		t.Fatalf("unexpected provider IDs: %#v", ids)
+	}
+	if _, ok := ids["task-3"]; ok {
+		t.Fatalf("empty provider ID should be omitted: %#v", ids)
+	}
+}

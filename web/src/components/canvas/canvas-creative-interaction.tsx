@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Dropdown } from "antd";
 import localforage from "localforage";
 import type { CanvasAssistantMessage } from "@/types/canvas";
@@ -7,7 +7,8 @@ import { getActiveUserScope } from "@/lib/user-scope";
 import { assertCreativeBriefSpecifications, initialCreativeState, normalizeCreativeProposal, type CreativeAgentState } from "@/lib/creation/creative-agent-state";
 import type { CreativeAnswers, CreativeQuote } from "@/lib/creation/creative-agent-contract";
 import { CreativeAgentController, type CreativeCanvasAdapter, type CreativeControllerView } from "@/services/creative-agent-controller";
-import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { resolveMediaUrl } from "@/services/file-storage";
 import { CreativeProposalCard, CreativeQuestionCard, CreativeQuoteCard } from "@/components/creation/creative-agent-cards";
 import { snapshotCreativePlan } from "@/lib/creation/creative-plan";
 
@@ -155,16 +156,16 @@ export function CanvasCreativeInteraction(props: Props) {
         {props.active && view.quote && <CreativeQuoteCard quote={view.quote} busy={view.busy} disabled={blocked} onApprove={() => invoke(controller.current?.approvePayment())} onRefresh={() => invoke(controller.current?.refreshQuotes())} />}
         {(detail.quotes || []).filter((quote) => !props.active || quote.id !== view.quote?.id).map((quote) => <details key={quote.id} className="creative-agent-receipt"><summary>{quote.approvedQuantity ? "已确认生成" : "历史报价"} · {quote.amountLabel} · {quote.items.length} 项</summary><p>{quote.basis}</p><ul>{quote.items.map((item) => <li key={item.id}>{item.label} · {item.model} · {item.specification}</li>)}</ul></details>)}
         {view.state.media.filter((item) => item.taskId || item.storageKey || item.error).map((item) => {
-            const resource = resourceIdFromStorageKey(item.storageKey), url = resource ? resourceFileUrl(resource) : "";
+            const hasResource = Boolean(resourceIdFromStorageKey(item.storageKey));
             const video = view.state.proposal?.generationItems.find((entry) => entry.ref === item.ref)?.mode === "video";
             return <div className="creative-agent-card" key={item.ref}>
                 <strong>{view.state.proposal?.workflow.nodes.find((node) => node.ref === item.ref)?.title || item.ref}</strong>
-                {!item.error && !url && item.taskId && <p className="creative-agent-muted">{view.busy ? item.status === "running" ? "正在生成，完成后自动显示。" : "已提交，正在等待生成结果。" : "任务已提交。点击下方“继续处理”读取最新结果，无需重复确认费用。"}</p>}
-                {url && (video ? <video className="w-full max-h-80 object-contain" src={url} controls preload="metadata" /> : <img className="w-full max-h-80 object-contain" src={url} alt={item.ref} />)}
+                {!item.error && !hasResource && item.taskId && <p className="creative-agent-muted">{view.busy ? item.status === "running" ? "正在生成，完成后自动显示。" : "已提交，正在等待生成结果。" : "任务已提交。点击下方“继续处理”读取最新结果，无需重复确认费用。"}</p>}
+                {hasResource ? <CreativeAgentMedia storageKey={item.storageKey!} video={video} alt={item.ref} actions={props.active ? <Dropdown trigger={["click"]} disabled={blocked} menu={{ items: [{ key: "adjust", label: "调整作品" }, { key: "redo", label: "重新生成（费用另行确认）" }], onClick: ({ key }) => key === "redo" ? invoke(controller.current?.redo(item.ref)) : modify(`请调整《${view.state.proposal?.workflow.nodes.find((entry) => entry.ref === item.ref)?.title || item.ref}》，保留其他作品：`) }}><Button type="text" disabled={blocked}>更多</Button></Dropdown> : null} /> : null}
                 {item.error && <p className="creative-agent-muted">这项作品还需要处理，已有结果会保留。</p>}
                 {item.error && <details className="creative-agent-receipt"><summary>查看失败原因</summary><p>{item.error}</p></details>}
                 {props.active && item.status === "failed" && item.failureKind !== "observation" && <Button type="primary" disabled={blocked} onClick={() => invoke(controller.current?.redo(item.ref))}>重新生成此项 · 先确认费用</Button>}
-                <div className="creative-agent-actions">{url && <a href={url} target="_blank" rel="noreferrer">查看作品</a>}{props.active && <Dropdown trigger={["click"]} disabled={blocked} menu={{ items: [{ key: "adjust", label: "调整作品" }, { key: "redo", label: "重新生成（费用另行确认）" }], onClick: ({ key }) => key === "redo" ? invoke(controller.current?.redo(item.ref)) : modify(`请调整《${view.state.proposal?.workflow.nodes.find((entry) => entry.ref === item.ref)?.title || item.ref}》，保留其他作品：`) }}><Button type="text" disabled={blocked}>更多</Button></Dropdown>}</div>
+                {!hasResource && props.active ? <div className="creative-agent-actions"><Dropdown trigger={["click"]} disabled={blocked} menu={{ items: [{ key: "adjust", label: "调整作品" }, { key: "redo", label: "重新生成（费用另行确认）" }], onClick: ({ key }) => key === "redo" ? invoke(controller.current?.redo(item.ref)) : modify(`请调整《${view.state.proposal?.workflow.nodes.find((entry) => entry.ref === item.ref)?.title || item.ref}》，保留其他作品：`) }}><Button type="text" disabled={blocked}>更多</Button></Dropdown></div> : null}
             </div>;
         })}
         {!props.active && rawError && <details className="creative-agent-receipt"><summary>这一步未完成，后续对话中可继续调整</summary><p>{feedback}</p></details>}
@@ -181,6 +182,32 @@ export function CanvasCreativeInteraction(props: Props) {
             {status === "paused" && <small className="creative-agent-muted">已停止后续制作。已提交的生成可能仍在处理，已有作品不会删除。</small>}
         </div>}
     </div>;
+}
+
+function CreativeAgentMedia({ storageKey, video, alt, actions }: { storageKey: string; video: boolean; alt: string; actions?: ReactNode }) {
+    const [url, setUrl] = useState("");
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        setUrl("");
+        setFailed(false);
+        void resolveMediaUrl(storageKey)
+            .then((resolved) => {
+                if (!cancelled) setUrl(resolved);
+            })
+            .catch(() => {
+                if (!cancelled) setFailed(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [storageKey]);
+
+    return <>
+        {url ? (video ? <video className="w-full max-h-80 object-contain" src={url} controls preload="metadata" /> : <img className="w-full max-h-80 object-contain" src={url} alt={alt} />) : <p className="creative-agent-muted">{failed ? "作品地址读取失败，请刷新后重试。" : "正在读取作品…"}</p>}
+        <div className="creative-agent-actions">{url ? <a href={url} target="_blank" rel="noreferrer">查看作品</a> : null}{actions}</div>
+    </>;
 }
 
 export function creativeInteractionSeed(history: CanvasAssistantMessage[]): CreativeAgentState {

@@ -5,30 +5,23 @@ import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 type VideoPreview = NonNullable<CanvasNodeMetadata["videoPreview"]>;
 
-const previewRequests = new Map<string, Promise<VideoPreview | null>>();
+export type HydratedCanvasVideoPreview = {
+    /** 页面先用这个 object URL 渲染首帧，不等待 OSS 预览图上传。 */
+    localUrl: string;
+    /** 持久化上传在首帧已经可见后后台完成；失败不影响本地首帧。 */
+    persisted: Promise<VideoPreview | null>;
+};
 
 export function hydrateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSignal) {
     const sourceKey = node.metadata?.storageKey || node.metadata?.content || "";
     if (!sourceKey) return Promise.resolve(null);
-    const requestKey = `${node.id}:${sourceKey}`;
-    const existing = previewRequests.get(requestKey);
-    if (existing) return existing;
-
-    const request = generateCanvasVideoPreview(node, signal)
-        .then((preview) => {
-            if (!preview) previewRequests.delete(requestKey);
-            return preview;
-        })
-        .catch((error: unknown) => {
-            previewRequests.delete(requestKey);
-            if (error instanceof DOMException && error.name === "AbortError") throw error;
-            return null;
-        });
-    previewRequests.set(requestKey, request);
-    return request;
+    return generateCanvasVideoPreview(node, signal).catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") throw error;
+        return null;
+    });
 }
 
-async function generateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSignal): Promise<VideoPreview | null> {
+async function generateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSignal): Promise<HydratedCanvasVideoPreview | null> {
     await waitForBrowserIdle(signal);
     throwIfAborted(signal);
     const source = await resolveMediaUrl(node.metadata?.storageKey, node.metadata?.content || "");
@@ -36,16 +29,22 @@ async function generateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSi
     const captured = await captureVideoPoster(source, { signal, maxWidth: 400 });
     throwIfAborted(signal);
     if (!captured.poster) return null;
-    const preview = await uploadImage(captured.poster);
-    throwIfAborted(signal);
-    return {
-        content: preview.url,
-        storageKey: preview.storageKey,
-        width: preview.width,
-        height: preview.height,
-        bytes: preview.bytes,
-        mimeType: preview.mimeType,
-    };
+    const localUrl = URL.createObjectURL(captured.poster);
+    const persisted = uploadImage(captured.poster)
+        .then((preview) => ({
+            content: preview.url,
+            storageKey: preview.storageKey,
+            width: preview.width,
+            height: preview.height,
+            bytes: preview.bytes,
+            mimeType: preview.mimeType,
+        }))
+        .catch((error) => {
+            // 首帧已经在本地可见；预览图持久化失败只影响后续刷新，不阻断视频节点。
+            console.warn("视频首帧持久化失败，保留本地首帧", { nodeId: node.id, error });
+            return null;
+        });
+    return { localUrl, persisted };
 }
 
 function waitForBrowserIdle(signal?: AbortSignal) {

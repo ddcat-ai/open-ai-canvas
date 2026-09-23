@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
-import { formatTaskKind, generationTaskStatusLabel } from "@/lib/generation-task-display";
+import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
 import { formatModelName, getTaskCanvasContext, isTaskFailed, statusDotClassName, taskAttentionReason, TaskBilling, TaskDate } from "./task-shared";
@@ -37,6 +37,8 @@ export function TaskListRow({
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
     const retryDisabled = task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error);
+    const stageLabel = generationTaskStageLabel(task);
+    const showsProgress = generationTaskShowsProgress(task);
     return (
         <article className={`product-collection-card task-record-row group${isFailed ? " is-attention" : ""}`}>
             <TaskPreviewThumbnail task={task} onOpen={onPreview} />
@@ -60,9 +62,9 @@ export function TaskListRow({
                         {context.projectName ? ` · ${context.projectName}` : ""}
                     </span>
                 </div>
-                {isActive && task.mediaStage ? <p>{task.stage || "作品已生成，正在保存"}</p> : isActive ? (
-                    <div className="task-record-progress" role="progressbar" aria-label={task.stage || "任务生成进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
-                        <span>{task.stage || "正在生成"}</span>
+                {isActive && !showsProgress ? <p>{stageLabel}</p> : isActive ? (
+                    <div className="task-record-progress" role="progressbar" aria-label={stageLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
+                        <span>{stageLabel}</span>
                         <span>{task.progress || 0}%</span>
                         <i>
                             <b style={{ width: `${task.progress || 0}%` }} />

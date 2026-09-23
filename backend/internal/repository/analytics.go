@@ -180,6 +180,36 @@ func (r *Repository) LatestProviderRequestIDForTask(taskID string) (string, erro
 	return strings.TrimSpace(log.ProviderRequestID), err
 }
 
+// LatestProviderRequestIDsForTasks returns the newest upstream request ID per task.
+// Task list queries intentionally select a narrow read model; this bulk lookup
+// hydrates IDs recorded in API logs so the UI can hide cancellation after the
+// upstream request has been accepted even when the task row was not updated yet.
+func (r *Repository) LatestProviderRequestIDsForTasks(taskIDs []string) (map[string]string, error) {
+	result := make(map[string]string, len(taskIDs))
+	if len(taskIDs) == 0 {
+		return result, nil
+	}
+	var logs []model.ApiCallLog
+	err := r.db.Select("task_id", "provider_request_id", "created_at").
+		Where("task_id IN ? AND provider_request_id <> ''", taskIDs).
+		Order("created_at desc").
+		Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, log := range logs {
+		taskID := strings.TrimSpace(log.TaskID)
+		providerRequestID := strings.TrimSpace(log.ProviderRequestID)
+		if taskID == "" || providerRequestID == "" {
+			continue
+		}
+		if _, exists := result[taskID]; !exists {
+			result[taskID] = providerRequestID
+		}
+	}
+	return result, nil
+}
+
 func (r *Repository) HasAPICallLogForTask(taskID string) (bool, error) {
 	if strings.TrimSpace(taskID) == "" {
 		return false, nil

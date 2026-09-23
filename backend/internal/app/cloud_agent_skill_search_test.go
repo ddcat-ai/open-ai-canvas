@@ -262,3 +262,30 @@ func TestCloudAgentSkillSearchNeverInlinesSkillBody(t *testing.T) {
 		t.Fatal("skill_search leaked instruction body")
 	}
 }
+
+func TestCloudAgentSkillSearchTokensKeepsSingleCJKRune(t *testing.T) {
+	// 单字停用词过滤照拿英文逻辑（a / I）；汉字单字「梗」「钩」「戏」本身就是完整语义的
+	// 最小单位。被 < 2 一刀切后 tokens 为空，cloudAgentSearchSkills 会把检索退化成
+	// 「列全部已启用技能索引」——用户以为搜过了，拿到的却是未排序的全量清单。
+	got := cloudAgentSkillSearchTokens("反转 钩子 梗 钩")
+	want := []string{"反转", "钩子", "梗", "钩"}
+	if len(got) != len(want) {
+		t.Fatalf("切词结果 %v，期望 %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("切词结果 %v，期望 %v", got, want)
+		}
+	}
+	// 只放行汉字单字：英文/数字单字与空串仍按停用词处理。
+	for _, keyword := range []string{"a", "I", "7", "", "，、。；"} {
+		if tokens := cloudAgentSkillSearchTokens(keyword); len(tokens) != 0 {
+			t.Fatalf("%q 应无候选词，得到 %v", keyword, tokens)
+		}
+	}
+	// 端到端：单个汉字 token 必须能对描述命中打分，否则放行也没有意义。
+	skill := cloudAgentSkill{ID: "x1", Name: "comedy-beat-lab", Description: "专门讲「梗」的密度、预期违背与排布节奏"}
+	if score, _ := cloudAgentSkillMatch(skill, []string{"梗"}); score == 0 {
+		t.Fatal("单个汉字 token 应该能命中描述")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -17,6 +18,7 @@ import (
 
 	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 func cloudAgentVisionFixture(t *testing.T) (*Service, *gorm.DB, []byte) {
@@ -321,6 +323,132 @@ func TestCloudAgentVisionLimitsAndUnconfirmedState(t *testing.T) {
 		if asset.VisualIdentity != "unknown" || asset.VisualNote != "" {
 			t.Fatal("inherited unconfirmed observation")
 		}
+	}
+}
+
+func TestCloudAgentVisionRefreshCannotBypassPerImageLimit(t *testing.T) {
+	s, _, _ := cloudAgentVisionFixture(t)
+	state := cloudAgentRuntime{Request: agentTestRequest()}
+	state.Request.VisionEnabled = true
+
+	firstCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-1", map[string]any{"nodeId": "cat"})
+	first, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, firstCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.markCanvasImageInspection("cat", strings.TrimSpace(first.(cloudAgentImageInspection).ImageURL) != "")
+
+	secondCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-2", map[string]any{"nodeId": "cat"})
+	second, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, secondCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.markCanvasImageInspection("cat", strings.TrimSpace(second.(cloudAgentImageInspection).ImageURL) != "")
+
+	refreshCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-refresh", map[string]any{"nodeId": "cat", "refresh": true})
+	refreshed, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, refreshCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection := refreshed.(cloudAgentImageInspection)
+	if inspection.ImageURL != "" {
+		t.Fatal("refresh=true bypassed the per-image inspection limit")
+	}
+	if inspection.Receipt["refreshIgnored"] != true || inspection.Receipt["repeat"] != true {
+		t.Fatalf("refresh protection receipt is incomplete: %+v", inspection.Receipt)
+	}
+	state.markCanvasImageInspection("cat", false)
+	if got := state.cloudAgentImageInspectionCount("cat"); got != 3 {
+		t.Fatalf("expected all successful inspection calls to count, got %d", got)
+	}
+}
+
+func TestCloudAgentVisionBlocksSameResourceInSameCanvasRevision(t *testing.T) {
+	s, _, _ := cloudAgentVisionFixture(t)
+	state := cloudAgentRuntime{Request: agentTestRequest()}
+	state.Request.VisionEnabled = true
+
+	firstCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-1", map[string]any{"nodeId": "cat"})
+	first, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, firstCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection := first.(cloudAgentImageInspection)
+	if inspection.CacheKey == "" {
+		t.Fatal("first inspection did not produce a stable cache key")
+	}
+	state.ImageInspectionReads = map[string]int{inspection.CacheKey: 1}
+
+	refreshCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-refresh", map[string]any{"nodeId": "cat", "refresh": true})
+	_, err = s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, refreshCall)
+	var loopErr *cloudAgentReadLoopError
+	if !errors.As(err, &loopErr) {
+		t.Fatalf("refresh should not re-read the same resource in the same revision: %v", err)
+	}
+}
+
+func TestCloudAgentVisionHasPerRunInspectionBudget(t *testing.T) {
+	s, _, _ := cloudAgentVisionFixture(t)
+	state := cloudAgentRuntime{Request: agentTestRequest(), ImageInspectCalls: cloudAgentMaxImageInspectionCallsPerRun - 1}
+	state.Request.VisionEnabled = true
+	call := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-last", map[string]any{"nodeId": "cat", "refresh": true})
+	result, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.markCanvasImageInspection("cat", strings.TrimSpace(result.(cloudAgentImageInspection).ImageURL) != "")
+	if got := state.ImageInspectCalls; got != cloudAgentMaxImageInspectionCallsPerRun {
+		t.Fatalf("expected budget to be consumed at the boundary, got %d", got)
+	}
+
+	blockedCall := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-blocked", map[string]any{"nodeId": "cat", "refresh": true})
+	if _, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", &state, blockedCall); !errors.Is(err, errCloudAgentImageInspectionBudget) {
+		t.Fatalf("expected image inspection budget error, got %v", err)
+	}
+}
+
+func TestCloudAgentVisionBudgetStopsRunBeforeAnotherModelStep(t *testing.T) {
+	s, _, _ := cloudAgentVisionFixture(t)
+	req := agentTestRequest()
+	req.VisionEnabled = true
+	root, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.ActiveTaskID = ""
+	state.ImageInspectCalls = cloudAgentMaxImageInspectionCallsPerRun
+	state.Calls = []cloudAgentCall{cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-blocked", map[string]any{"nodeId": "cat", "refresh": true})}
+	state.CallIndex = 0
+	if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run, err = s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	output, err := s.CloudAgentRun("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.Status != "failed" || !strings.Contains(output.FailureMessage, "识图调用已达到安全上限") {
+		t.Fatalf("inspection budget did not terminate the run: %+v", output)
 	}
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { formatCredits } from "@/constant/credits";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
+import { canCancelGenerationTask, formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -224,7 +224,7 @@ function ActiveTaskCard({
                                 {generationTaskStageLabel(task)}
                             </span>
                         </div>
-                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                        {onCancelTask && canCancelGenerationTask(task) ? (
                             <button
                                 type="button"
                                 className="mt-3 inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors"

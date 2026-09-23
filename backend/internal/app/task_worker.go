@@ -196,7 +196,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if taskUsesUpstreamReportedProgress(task.Type) {
 		// 图片/视频百分比只能来自供应商状态响应。连接和提交阶段只展示文案，
 		// 不能再用统一的 35% 冒充真实生成进度。
-		task.Stage = "正在连接上游"
+		task.Stage = "作品创作中"
 		task.Progress = 0
 	}
 	if err := s.repo.UpdateTaskProgressForLease(task.ID, task.LeaseOwner, task.Stage, task.Progress); err != nil {

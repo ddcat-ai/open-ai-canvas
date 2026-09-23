@@ -414,6 +414,28 @@ func TestLessonSearchTokensAreCapped(t *testing.T) {
 	}
 }
 
+func TestLessonSearchTokensKeepsSingleCJKRune(t *testing.T) {
+	// 单字停用词过滤照搬的是英文逻辑（a / I）；中文单字「梗」「钩」「戏」本身就是完整语义的最小单位，
+	// 被 < 2 一刀切后 tokens 为空，cloudAgentSearchLessons 会静默回落为「列前 N 条」——
+	// 用户以为搜过了，拿到的却是任意清单。
+	got := cloudAgentLessonSearchTokens("反转 钩子 梗 钩")
+	want := []string{"反转", "钩子", "梗", "钩"}
+	if len(got) != len(want) {
+		t.Fatalf("切词结果 %v，期望 %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("切词结果 %v，期望 %v", got, want)
+		}
+	}
+	// 只放行汉字单字：英文/数字单字与空串仍按停用词处理。
+	for _, keyword := range []string{"a", "I", "7", "", "，、。；"} {
+		if tokens := cloudAgentLessonSearchTokens(keyword); len(tokens) != 0 {
+			t.Fatalf("%q 应无候选词，得到 %v", keyword, tokens)
+		}
+	}
+}
+
 func TestLessonMatchScoreRanksByHit(t *testing.T) {
 	tokens := cloudAgentLessonSearchTokens("视频 合并 拼接")
 	strong := model.AgentLesson{Topic: "video.merge-concat-not-a-feature", Situation: "用户要把多条镜头视频合并成一条成片"}

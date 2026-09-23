@@ -823,3 +823,52 @@ func TestCloudAgentCanvasUpdatesExistingVideoDraftThroughCapabilityContract(t *t
 		t.Fatalf("video task state or submission snapshot was overwritten: %#v", metadata)
 	}
 }
+
+func TestCloudAgentMediaDependencyIgnoresNodeMovement(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeList := append(creationMaps(doc["nodes"]), map[string]any{
+		"id": "video-shot-1", "type": "video", "title": "镜头1视频",
+		"position": map[string]any{"x": 100.0, "y": 100.0}, "width": 360.0, "height": 640.0,
+		"metadata": map[string]any{"status": "idle", "prompt": args.Prompt, "agentDraftRunId": "run-current"},
+	})
+	normalizedNodes, err := json.Marshal(nodeList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decodedNodes []any
+	if err := json.Unmarshal(normalizedNodes, &decodedNodes); err != nil {
+		t.Fatal(err)
+	}
+	doc["nodes"] = decodedNodes
+	args.DraftRunID = "run-current"
+	base, err := cloudAgentMediaDependencyHash(doc, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := cloneCreationDocument(doc)
+	nodes, err := creationObjects(moved["nodes"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"video-shot-1", "cat", "hero", "shot-1"} {
+		node := nodes[id]
+		position := node["position"].(map[string]any)
+		position["x"] = position["x"].(float64) + 240
+		position["y"] = position["y"].(float64) + 120
+	}
+	got, err := cloudAgentMediaDependencyHash(moved, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != base {
+		t.Fatalf("moving target or input nodes changed generation dependency: base=%s got=%s", base, got)
+	}
+}

@@ -2,9 +2,9 @@ import { memo, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Input, Modal } from "antd";
 import { AudioLines, BookOpenText, Clock3, FileText, Image, Pencil, Search, Video } from "lucide-react";
 
+import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { getNodeListLabel } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -125,12 +125,17 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, acti
 
 function CanvasNodeSearchThumbnail({ node }: { node: CanvasNodeData }) {
     const [failed, setFailed] = useState(false);
-    const mediaSource = node.type === CanvasNodeType.Video ? canvasNodeVideoPreviewUrl(node) : node.metadata?.drawingPreviewUrl
+    const mediaSource = node.metadata?.drawingPreviewUrl
         || node.metadata?.characterCoverUrl
         || node.metadata?.folder?.themeCover
         || ((node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.ColorGrade) ? node.metadata?.content : undefined);
     const commonClass = "h-11 w-16 rounded-[var(--r-sm)] border object-cover";
     const commonStyle = { borderColor: "color-mix(in srgb, var(--foreground) 9%, transparent)", background: "color-mix(in srgb, var(--foreground) 5%, transparent)" };
+
+    if (node.type === CanvasNodeType.Video) {
+        const fallback = <span aria-hidden="true" className="grid h-11 w-16 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}><Video className="size-4" /></span>;
+        return <CanvasVideoPreviewImage node={node} alt="" width={64} height={44} loading="lazy" decoding="async" className={commonClass} style={commonStyle} fallback={fallback} />;
+    }
 
     if (mediaSource && !failed) {
         return <img src={mediaSource} alt="" width={64} height={44} loading="lazy" decoding="async" className={commonClass} style={commonStyle} onError={() => setFailed(true)} />;

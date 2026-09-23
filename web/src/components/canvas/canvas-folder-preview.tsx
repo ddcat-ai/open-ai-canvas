@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Dropdown } from "antd";
 import { FileAudio, FileText, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 
+import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { CANVAS_FOLDER_THEME_OPTIONS, resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import type { CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData } from "@/types/canvas";
 import { CanvasNodeType } from "@/types/canvas";
 
@@ -190,14 +190,10 @@ function FolderNodeMedia({ node }: { node?: CanvasNodeData }) {
     if (node?.type === CanvasNodeType.Image && node.metadata?.content) {
         return <img src={node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
-    const videoPreview = node ? canvasNodeVideoPreviewUrl(node) : "";
-    if (videoPreview) {
-        return <img src={videoPreview} alt="" loading="lazy" decoding="async" draggable={false} />;
-    }
+    if (node?.type === CanvasNodeType.Video) return <CanvasVideoPreviewImage node={node} alt="" loading="lazy" decoding="async" draggable={false} fallback={<Video className="canvas-folder-file-icon" />} />;
     if (node?.type === CanvasNodeType.Drawing && (node.metadata?.drawingPreviewUrl || node.metadata?.content)) {
         return <img src={node.metadata.drawingPreviewUrl || node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
-    if (node?.type === CanvasNodeType.Video) return <Video className="canvas-folder-file-icon" />;
     if (node?.type === CanvasNodeType.Audio) return <FileAudio className="canvas-folder-file-icon" />;
     if (node?.type === CanvasNodeType.Skill) return <Sparkles className="canvas-folder-file-icon" />;
     if (node?.type === CanvasNodeType.Config) return <SlidersHorizontal className="canvas-folder-file-icon" />;

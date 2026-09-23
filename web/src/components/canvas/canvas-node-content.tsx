@@ -8,13 +8,12 @@ import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { canvasTextFontSize } from "@/lib/canvas/canvas-text-scale";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { canvasNodeVideoPreviewReference } from "@/lib/canvas/canvas-media-preview";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
-import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
 import { scheduleResourceBlobCache } from "@/services/resource-blob-cache";
 import { resolveMediaUrl } from "@/services/file-storage";
@@ -27,6 +26,7 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
+import { CanvasVideoPreviewImage } from "./canvas-video-preview-image";
 import { CanvasFileUploadContent } from "./canvas-file-upload-content";
 import { MarkdownNodeContent } from "./nodes/markdown-node";
 import { ChartNodeContent } from "./nodes/chart-node";
@@ -459,7 +459,7 @@ function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest
         };
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
-    if (!node.metadata?.content) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
+    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
     if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} onPlay={() => onMediaPlayRequest?.(node.id)} />;
     if (!url) return <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />;
 
@@ -498,10 +498,17 @@ function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
 function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentProps, "node" | "theme"> & { onPlay: () => void }) {
     const previewRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(previewRef);
-    const previewUrl = canvasNodeVideoPreviewUrl(node);
+    const persistedPreview = canvasNodeVideoPreviewReference(node);
+    const persistedPreviewSource = persistedPreview?.src || "";
+    const persistedPreviewStorageKey = persistedPreview?.storageKey || "";
+    const hasPersistedPreview = Boolean(persistedPreviewSource || persistedPreviewStorageKey);
     const { updateMetadata } = useCanvasNodeActions();
     const updateMetadataRef = useRef(updateMetadata);
     const [hydrating, setHydrating] = useState(false);
+    const [localPreviewUrl, setLocalPreviewUrl] = useState("");
+    const localPreviewUrlRef = useRef("");
+    const [passiveVideoUrl, setPassiveVideoUrl] = useState("");
+    const [passiveVideoReady, setPassiveVideoReady] = useState(false);
 
     useEffect(() => {
         const element = previewRef.current;
@@ -515,27 +522,129 @@ function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentPro
         updateMetadataRef.current = updateMetadata;
     }, [updateMetadata]);
 
+    useEffect(() => () => {
+        if (localPreviewUrlRef.current) URL.revokeObjectURL(localPreviewUrlRef.current);
+    }, []);
+
     useEffect(() => {
-        if (previewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current) {
+        if (hasPersistedPreview || localPreviewUrl || !nearViewport || (!node.metadata?.content && !node.metadata?.storageKey)) {
+            setPassiveVideoUrl("");
+            setPassiveVideoReady(false);
+            return;
+        }
+        let cancelled = false;
+        const content = node.metadata?.content || "";
+        const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(content) : content;
+        setPassiveVideoUrl("");
+        setPassiveVideoReady(false);
+        // This is a real <video> fallback rather than canvas extraction. It can
+        // paint the first decoded frame even when OSS allows media playback but
+        // does not expose the CORS headers required by drawImage/toBlob.
+        void resolveMediaUrl(node.metadata?.storageKey, fallback)
+            .then((url) => {
+                if (!cancelled) setPassiveVideoUrl(url);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [hasPersistedPreview, localPreviewUrl, nearViewport, node.metadata?.content, node.metadata?.storageKey, node.metadata?.importSource?.provider]);
+
+    useEffect(() => {
+        if (hasPersistedPreview || !nearViewport || (!node.metadata?.content && !node.metadata?.storageKey) || !updateMetadataRef.current) {
+            if (hasPersistedPreview && localPreviewUrlRef.current) {
+                URL.revokeObjectURL(localPreviewUrlRef.current);
+                localPreviewUrlRef.current = "";
+                setLocalPreviewUrl("");
+            }
             setHydrating(false);
             return;
+        }
+        if (localPreviewUrlRef.current) {
+            URL.revokeObjectURL(localPreviewUrlRef.current);
+            localPreviewUrlRef.current = "";
+            setLocalPreviewUrl("");
         }
         const controller = new AbortController();
         setHydrating(true);
         void hydrateCanvasVideoPreview(node, controller.signal)
-            .then((videoPreview) => {
-                if (!controller.signal.aborted && videoPreview) updateMetadataRef.current?.(node.id, { videoPreview });
+            .then((hydrated) => {
+                if (!hydrated || controller.signal.aborted) {
+                    if (hydrated?.localUrl) URL.revokeObjectURL(hydrated.localUrl);
+                    return;
+                }
+                if (localPreviewUrlRef.current) URL.revokeObjectURL(localPreviewUrlRef.current);
+                localPreviewUrlRef.current = hydrated.localUrl;
+                setLocalPreviewUrl(hydrated.localUrl);
+                void hydrated.persisted.then((videoPreview) => {
+                    if (!controller.signal.aborted && videoPreview) updateMetadataRef.current?.(node.id, { videoPreview });
+                });
             })
             .catch(() => undefined)
             .finally(() => {
                 if (!controller.signal.aborted) setHydrating(false);
             });
-        return () => controller.abort();
-    }, [nearViewport, node.id, node.metadata?.content, node.metadata?.storageKey, previewUrl]);
+        return () => {
+            controller.abort();
+        };
+    }, [hasPersistedPreview, nearViewport, node.id, node.metadata?.content, node.metadata?.storageKey, persistedPreviewSource, persistedPreviewStorageKey]);
 
-    if (previewUrl) {
+    if (hasPersistedPreview || localPreviewUrl || passiveVideoUrl) {
         return <div ref={previewRef} className="group/video-preview relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black">
-            <img src={previewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
+            {hasPersistedPreview ? (
+                <CanvasVideoPreviewImage
+                    node={node}
+                    alt={`${node.title || "视频"} 静态预览`}
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                    className="pointer-events-none size-full select-none object-contain"
+                    loadingFallback={<LoaderCircle className="size-5 animate-spin text-white/55" />}
+                    fallback={<Video className="size-7 text-white/40" />}
+                />
+            ) : localPreviewUrl ? (
+                <img src={localPreviewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
+            ) : (
+                <>
+                    <video
+                        src={passiveVideoUrl}
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        muted
+                        playsInline
+                        preload="auto"
+                        draggable={false}
+                        className={`pointer-events-none size-full select-none object-contain transition-opacity ${passiveVideoReady ? "opacity-100" : "opacity-0"}`}
+                        onLoadedMetadata={(event) => {
+                            const video = event.currentTarget;
+                            if (video.readyState >= 2) {
+                                setPassiveVideoReady(true);
+                                return;
+                            }
+                            // Some browsers stop at metadata when the element is muted and
+                            // offscreen. A tiny seek forces an actual frame decode without
+                            // starting playback or requiring canvas/CORS access.
+                            if (Number.isFinite(video.duration) && video.duration > 0) {
+                                try {
+                                    video.currentTime = Math.min(0.001, video.duration / 2);
+                                } catch {
+                                    // loadeddata/canplay will still reveal the frame if seeking is unavailable.
+                                }
+                            }
+                        }}
+                        onLoadedData={() => setPassiveVideoReady(true)}
+                        onCanPlay={() => setPassiveVideoReady(true)}
+                        onSeeked={(event) => {
+                            if (event.currentTarget.readyState >= 2) setPassiveVideoReady(true);
+                        }}
+                        onError={() => {
+                            setPassiveVideoReady(false);
+                            setPassiveVideoUrl("");
+                        }}
+                    />
+                    {!passiveVideoReady ? <div className="absolute inset-0"><InactiveMediaCard icon={<Video className="size-7" />} title={node.title || "视频"} hint={hydrating ? "正在生成首帧" : "正在读取首帧"} theme={theme} /></div> : null}
+                </>
+            )}
             <VideoPreviewPlayButton title={node.title || "视频"} onPlay={onPlay} />
         </div>;
     }
@@ -651,17 +760,13 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
         ? content
         : node.metadata?.previewContent
             || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
-    const resourceId = resourceIdFromStorageKey(storageKey);
-    const isRemoteResource = Boolean(resourceId);
-    // 远程资源展示统一走稳定的云端资源文件地址。Blob 缓存只服务于导出、抽帧和
-    // 供应商输入等字节处理，不再把缓存生成的 blob: URL 写入媒体展示链路。
-    const remoteUrl = isRemoteResource ? resourceFileUrl(resourceId) : "";
+    const isRemoteResource = storageKey.startsWith("resource:");
     // Inline data URLs are already local, but decoding thousands of them is
     // still expensive. Images must wait for the same viewport gate as remote
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
-    const initialUrl = eager && isRemoteResource ? remoteUrl : (eager && isLazyVisual && isHttpUrl ? fallback : (isRemoteResource || isLazyVisual ? "" : fallback));
+    const initialUrl = eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : (isRemoteResource || isLazyVisual ? "" : fallback);
     const [url, setUrl] = useState(() => initialUrl);
     const [loading, setLoading] = useState(() => !initialUrl && isRemoteResource && eager);
 
@@ -671,9 +776,28 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
             setLoading(false);
             return;
         }
-        setUrl(eager ? remoteUrl : "");
-        setLoading(false);
-    }, [eager, fallback, isLazyVisual, isRemoteResource, remoteUrl]);
+        if (!eager) {
+            setUrl("");
+            setLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setUrl("");
+        setLoading(true);
+        void resolveMediaUrl(storageKey, fallback)
+            .then((resolved) => {
+                if (!cancelled) setUrl(resolved);
+            })
+            .catch(() => {
+                if (!cancelled) setUrl(fallback);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [eager, fallback, isLazyVisual, isRemoteResource, storageKey]);
 
     return { url, loading };
 }

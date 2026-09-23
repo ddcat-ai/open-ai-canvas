@@ -5,7 +5,7 @@ import { Eye, FileText, Image as ImageIcon, RotateCcw, Video } from "lucide-reac
 
 import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
-import { generationTaskStatusLabel } from "@/lib/generation-task-display";
+import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { isTaskFailed, statusDotClassName, taskAttentionReason, TaskDate } from "./task-shared";
 import { TaskVideoThumbnail } from "./task-video-thumbnail";
@@ -17,6 +17,8 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
     const isVideo = task.previewKind === "video";
     const thumbnailUrl = isVideo ? task.previewPosterUrl : task.previewUrl;
     const fallbackVideo = task.type.includes("video");
+    const stageLabel = generationTaskStageLabel(task);
+    const showsProgress = generationTaskShowsProgress(task);
     const Icon = fallbackVideo ? Video : task.type.includes("image") ? ImageIcon : FileText;
     return (
         <article className={`product-collection-card task-grid-card${isFailed ? " is-attention" : ""}`}>
@@ -60,9 +62,9 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
                         <TaskDate value={task.createdAt} />
                     </span>
                 </div>
-                {isActive && task.mediaStage ? <p>{task.stage || "作品已生成，正在保存"}</p> : isActive ? (
-                    <div className="task-grid-progress" role="progressbar" aria-label={task.stage || "任务生成进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
-                        <span>{task.stage || "正在生成"}</span>
+                {isActive && !showsProgress ? <p>{stageLabel}</p> : isActive ? (
+                    <div className="task-grid-progress" role="progressbar" aria-label={stageLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress || 0}>
+                        <span>{stageLabel}</span>
                         <strong>{task.progress || 0}%</strong>
                         <i><b style={{ width: `${task.progress || 0}%` }} /></i>
                     </div>

@@ -31,6 +31,7 @@ const (
 type AccessOptions struct {
 	Purpose      AccessPurpose   `json:"purpose"`
 	Variant      ResourceVariant `json:"variant"`
+	DownloadName string          `json:"downloadName,omitempty"`
 	ExpiresAt    time.Time       `json:"-"`
 	DescribeOnly bool            `json:"-"`
 }
@@ -81,6 +82,9 @@ func NormalizeAccessOptions(options AccessOptions, allowProvider bool) (AccessOp
 	if options.Purpose == PurposeCopy || options.Purpose == PurposeDownload || options.Purpose == PurposeProvider {
 		options.Variant = VariantOriginal
 	}
+	if options.Purpose != PurposeDownload {
+		options.DownloadName = ""
+	}
 	return options, nil
 }
 
@@ -120,6 +124,16 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	}
 	if resource.Provider == "local" {
 		access.Delivery = DeliveryLocal
+	} else if options.Purpose == PurposeDownload {
+		// Cross-origin `a[download]` is only advisory. A real browser download must
+		// therefore be enforced by the object store response itself. Downloads use
+		// a signed origin URL carrying Content-Disposition=attachment; media bytes
+		// never pass through the application server or a Blob relay.
+		if !storage.PublicOrigin(setting) {
+			return nil, AccessError(503, "resource_origin_private", "对象存储源站不可由浏览器直连，无法在不占用服务器带宽的前提下下载")
+		}
+		access.URL, err = storage.SignedOriginObjectDownloadURL(setting, resource.ObjectKey, expires, options.DownloadName)
+		access.Delivery = DeliveryOrigin
 	} else if storage.CDNEnabled(setting) {
 		access.URL, err = storage.SignCDNURL(setting, resource.ObjectKey, expires)
 		access.Delivery = DeliveryCDN
@@ -134,11 +148,14 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		if setting.CDNBaseURL != "" {
 			access.FallbackReason = "cdn_auth_unconfigured"
 		}
-	} else if setting.Delivery.AllowPrivateProxy {
+	} else if options.Purpose == PurposeProvider && setting.Delivery.AllowPrivateProxy {
+		// Only the server-side provider-input path may opt into a private-origin
+		// proxy. Browser display/copy/process/download traffic for OSS resources
+		// must never relay media bytes through the application server.
 		access.Delivery = DeliveryProxy
 		access.FallbackReason = "private_origin"
 	} else {
-		return nil, AccessError(503, "resource_origin_private", "资源源站不可公网访问，请配置 CDN 或明确启用私网源站代理")
+		return nil, AccessError(503, "resource_origin_private", "对象存储源站不可由浏览器直连，请配置公网 OSS 源站或 CDN")
 	}
 	if err != nil {
 		failure := AccessError(503, "resource_signing_failed", "资源访问地址签发失败，请检查存储分发设置")

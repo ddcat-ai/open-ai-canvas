@@ -86,7 +86,7 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
     // A conclusive container probe wins over stale persisted metadata in
     // either direction. Browser runtime probes remain conservative when they
     // cannot expose an audio-track list.
-    const effectiveHasAudio = detectedHasAudio === false ? false : hasAudio === true || detectedHasAudio === true ? true : hasAudio === false ? false : undefined;
+    const effectiveHasAudio = detectedHasAudio === false ? false : hasAudio === true || detectedHasAudio === true ? true : undefined;
     const noAudio = effectiveHasAudio === false;
     const layoutIcons = useMemo(() => {
         if (!noAudio) return defaultLayoutIcons;
@@ -127,7 +127,6 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
     }, [noAudio]);
 
     const probeRemoteAudioTrack = () => {
-        if (hasAudio === false) return;
         const generation = audioProbeGenerationRef.current;
         void detectVideoAudioTrackFromUrl(src).then((detected) => {
             if (generation === audioProbeGenerationRef.current && detected !== undefined) setDetectedHasAudio(detected);

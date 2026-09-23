@@ -1,4 +1,4 @@
-import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey } from "@/services/api/resources";
 
 export type CanvasAudioSource = {
     nodeId: string;
@@ -256,7 +256,7 @@ function sameSource(left: CanvasAudioSource, right: CanvasAudioSource) {
 async function resolveAudioSource(source: CanvasAudioSource) {
     if (source.storageKey) {
         const resourceId = resourceIdFromStorageKey(source.storageKey);
-        if (resourceId) return resourceFileUrl(resourceId);
+        if (resourceId) return resolveResourceAccessURL((await getResourceAccess(source.storageKey, "display", "playback")).url);
     }
     return source.content;
 }

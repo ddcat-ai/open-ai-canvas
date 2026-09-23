@@ -8,7 +8,27 @@ export const statusLabel: Record<TaskStatus, string> = {
     cancelled: "已取消",
 };
 
-type GenerationTaskDisplayTarget = Pick<GenerationTask, "status" | "stage" | "mediaStage">;
+type GenerationTaskDisplayTarget = Pick<GenerationTask, "status" | "stage" | "mediaStage" | "progress" | "providerRequestId" | "providerCancelStatus">;
+
+const cancellablePreSubmissionStages = new Set(["queued", "等待队列调度", "后端接管任务", "正在准备创作"]);
+
+/**
+ * 只有在第三方请求尚未提交时允许取消。
+ *
+ * 一旦拿到 providerRequestId、进入取消协调状态，或提交结果不确定，
+ * 任务可能已经产生上游费用；所有画布入口必须共用这条规则，避免
+ * 活动面板、详情弹窗和任务列表出现不一致。
+ */
+export function canCancelGenerationTask(task: GenerationTaskDisplayTarget) {
+    if (task.status !== "queued" && task.status !== "running") return false;
+    if (task.providerRequestId || task.providerCancelStatus || task.mediaStage) return false;
+    const stage = (task.stage || "").trim().toLowerCase();
+    // Unknown running stages are treated as already submitted. A provider may
+    // return a custom stage name, and showing a cancel button in that state is
+    // more dangerous than conservatively hiding it after billing may begin.
+    if (!stage) return task.status === "queued";
+    return cancellablePreSubmissionStages.has(stage);
+}
 
 export function mediaDeliverySummary(status: TaskStatus | undefined, stage: GenerationTask["mediaStage"]) {
     if (!stage) return "";
@@ -31,9 +51,24 @@ export function generationTaskStatusLabel(task: GenerationTaskDisplayTarget) {
 
 export function generationTaskStageLabel(task: GenerationTaskDisplayTarget) {
     if (isGenerationTaskSubmissionUncertain(task)) return "为避免重复扣费，未自动重试";
-    if (task.stage === "generating") return "生成中";
-    if (task.stage === "queued") return "排队中";
-    return task.stage || generationTaskStatusLabel(task);
+    switch (task.stage) {
+        case "queued":
+        case "等待队列调度":
+        case "后端接管任务":
+            return "正在准备创作";
+        case "generating":
+        case "调用生成模型":
+        case "正在准备参考素材":
+        case "正在连接上游":
+        case "作品创作中":
+        case "上游生成中":
+        case "后台仍在生成":
+            return "作品创作中";
+        case "等待上游任务同步":
+            return "正在同步创作进度";
+        default:
+            return task.stage || generationTaskStatusLabel(task);
+    }
 }
 
 export function generationTaskShowsProgress(task: GenerationTaskDisplayTarget) {
@@ -41,8 +76,8 @@ export function generationTaskShowsProgress(task: GenerationTaskDisplayTarget) {
     if (isGenerationTaskSubmissionUncertain(task)) return false;
     // 排队、后端接管和连接供应商都没有真实百分比。只有上游状态响应
     // 已经写回任务后才显示进度，避免所有图片/视频长期停在同一个假数值。
-    if (["等待队列调度", "后端接管任务", "正在连接上游", "调用生成模型"].includes(task.stage || "")) return false;
-    return true;
+    if (["queued", "等待队列调度", "后端接管任务", "正在准备参考素材", "正在连接上游", "调用生成模型", "作品创作中", "submitting", "submitted"].includes(task.stage || "")) return false;
+    return typeof task.progress === "number" && task.progress > 0;
 }
 
 export const operationOptions = [

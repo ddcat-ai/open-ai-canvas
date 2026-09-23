@@ -130,6 +130,12 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 	// 先从账单和请求日志补齐上游 ID，再做条件更新。取消与 worker 完成之间
 	// 以数据库终态为准，避免“用户已取消但迟到结果又把任务写成成功”。
 	s.hydrateTaskProviderRequestID(task)
+	// 用户一旦看到任务进入上游提交/生成阶段，即使 request ID 尚未来得及写回，
+	// 也必须按“可能已经产生上游费用”处理。父任务失败和 worker context 属于
+	// 内部协调，仍需继续走下面的上游取消/对账流程，不能被这条 UI 规则截断。
+	if intent.Source == model.TaskCancellationUserRequest && (strings.TrimSpace(task.ProviderRequestID) != "" || task.MediaStage != "" || !taskStageAllowsUserCancellation(task.Status, task.Stage)) {
+		return nil, BadAuthRequest("第三方请求已提交，任务不可取消")
+	}
 	originalStatus := task.Status
 	now := time.Now()
 	if intent.RequestedAt.IsZero() {
@@ -202,4 +208,17 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 	}
 
 	return taskForOutput(*task), nil
+}
+
+func taskStageAllowsUserCancellation(status model.TaskStatus, stage string) bool {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "":
+		return status == model.TaskStatusQueued
+	case "queued", "等待队列调度":
+		return true
+	case "后端接管任务", "正在准备创作":
+		return status == model.TaskStatusRunning || status == model.TaskStatusQueued
+	default:
+		return false
+	}
 }

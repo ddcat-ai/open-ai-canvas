@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Image as ImageIcon, Music2, Play, UserRound } from "lucide-react";
 
-import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { isStoryboardPreviewAsset } from "@/lib/canvas/canvas-storyboard-materializer";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { CanvasNodeType, type CanvasNodeData, type StoryboardAssetBinding } from "@/types/canvas";
@@ -58,17 +58,16 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
 }
 
 function AssetThumbnail({ node }: { node: CanvasNodeData }) {
-    const videoPreview = canvasNodeVideoPreviewUrl(node);
     const source = useNodeMediaSource(node.type === CanvasNodeType.Video ? null : node);
     if (node.type === CanvasNodeType.Audio) return <Music2 className="size-4" />;
     if (node.metadata?.workflowKind === "character" && !source) return <UserRound className="size-4" />;
     if (node.type === CanvasNodeType.Video) {
-        return videoPreview ? (
+        return (
             <>
-                <img src={videoPreview} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-cover" />
+                <CanvasVideoPreviewImage node={node} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-cover" fallback={<Play className="size-4" />} />
                 <span className="absolute inset-0 grid place-items-center bg-black/15"><Play className="size-3.5 fill-white text-white" /></span>
             </>
-        ) : <Play className="size-4" />;
+        );
     }
     return source ? <img src={source} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-cover" /> : <ImageIcon className="size-4" />;
 }

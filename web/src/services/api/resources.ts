@@ -291,17 +291,17 @@ export function refreshResource(id: string): Promise<RemoteResource> {
         });
 }
 
-export async function getResourceAccess(storageKey: string | undefined, purpose: ResourceAccessPurpose = "display", variant: ResourceAccessVariant = "original") {
+export async function getResourceAccess(storageKey: string | undefined, purpose: ResourceAccessPurpose = "display", variant: ResourceAccessVariant = "original", downloadName = "") {
     const id = resourceIdFromStorageKey(storageKey);
     if (!id) throw new Error("当前媒体尚未上传到后端资源存储");
-    const key = `${resourceCacheKey(id)}:${purpose}:${variant}`;
+    const key = `${resourceCacheKey(id)}:${purpose}:${variant}:${downloadName}`;
     const cached = accessCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     const pending = accessRequests.get(key);
     if (pending) return pending;
     const request = (async () => {
         try {
-            const data = await http.post<{ items: Array<{ resourceId: string; access?: ResourceAccess; error?: { msg?: string } }> }>("/resources/access", [{ resourceId: id, purpose, variant }]);
+            const data = await http.post<{ items: Array<{ resourceId: string; access?: ResourceAccess; error?: { msg?: string } }> }>("/resources/access", [{ resourceId: id, purpose, variant, ...(downloadName ? { downloadName } : {}) }]);
             const item = data.items?.[0];
             if (!item?.access?.url) throw new Error(item?.error?.msg || "后端未返回资源访问地址");
             const value = item.access;

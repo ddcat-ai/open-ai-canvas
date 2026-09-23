@@ -524,7 +524,7 @@ func TestPrepareResourceDeliverySignsPrivateQiniuCDNURL(t *testing.T) {
 	}
 }
 
-func TestPrepareResourceDeliveryAllowsExplicitPrivateOriginProxy(t *testing.T) {
+func TestResourceAccessBatchRejectsPrivateOriginForBrowserAccess(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
@@ -547,8 +547,8 @@ func TestPrepareResourceDeliveryAllowsExplicitPrivateOriginProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || results[0].Access == nil || results[0].Access.Delivery != assets.DeliveryProxy {
-		t.Fatalf("ResourceAccessBatch() = %#v, want backend proxy delivery", results)
+	if len(results) != 1 || results[0].Access != nil || results[0].Error == nil || results[0].Error.Reason != "resource_origin_private" {
+		t.Fatalf("ResourceAccessBatch() = %#v, want resource_origin_private", results)
 	}
 }
 

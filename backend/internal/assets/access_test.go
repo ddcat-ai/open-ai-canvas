@@ -1,6 +1,7 @@
 package assets
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -66,10 +67,17 @@ func TestResolveAccessPolicyMatrix(t *testing.T) {
 			wantErr:  "resource_cdn_unconfigured",
 		},
 		{
-			name:     "private origin requires explicit proxy",
+			name:     "browser access never proxies a private OSS origin",
 			resource: testReadyResource("aliyun"),
 			setting:  storage.Settings{Provider: "aliyun", Endpoint: "http://storage.internal", Delivery: storage.DeliverySettings{AllowPrivateProxy: true}},
 			options:  AccessOptions{Purpose: PurposeDisplay},
+			wantErr:  "resource_origin_private",
+		},
+		{
+			name:     "provider input may use an explicitly enabled private proxy",
+			resource: testReadyResource("aliyun"),
+			setting:  storage.Settings{Provider: "aliyun", Endpoint: "http://storage.internal", Delivery: storage.DeliverySettings{AllowPrivateProxy: true}},
+			options:  AccessOptions{Purpose: PurposeProvider},
 			wantMode: DeliveryProxy, wantReason: "private_origin",
 		},
 	}
@@ -121,6 +129,42 @@ func TestResolveAccessVariantAndExpiryContract(t *testing.T) {
 	}
 	if provider.ExpiresAt == nil || !provider.ExpiresAt.Equal(now.Add(4*time.Hour)) {
 		t.Fatalf("provider access expiry = %v, want %v", provider.ExpiresAt, now.Add(4*time.Hour))
+	}
+}
+
+func TestResolveDownloadUsesObjectOriginAttachmentInsteadOfCDNOrProxy(t *testing.T) {
+	now := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	resource := testReadyResource("aliyun")
+	setting := storage.Settings{
+		// A public IP keeps the test deterministic: PublicOrigin intentionally
+		// resolves hostnames to reject private DNS answers, so a made-up OSS host
+		// would depend on the machine's DNS configuration.
+		Provider: "aliyun", Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value", CDNBaseURL: "https://media.example.com",
+		Delivery: storage.DeliverySettings{CDNAuthMode: "public"},
+	}
+	access, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDownload, DownloadName: "画布_镜头01.mp4"}, now, testPlatformURL(&[]ResourceVariant{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(access.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disposition := parsed.Query().Get("response-content-disposition")
+	if access.Delivery != DeliveryOrigin || parsed.Host != "1.1.1.1" || !strings.HasPrefix(disposition, "attachment") || !strings.Contains(strings.ToLower(disposition), "utf-8''") {
+		t.Fatalf("download access = %#v, disposition=%q", access, disposition)
+	}
+}
+
+func TestResolveDownloadRejectsPrivateOriginInsteadOfProxyingMediaBytes(t *testing.T) {
+	setting := storage.Settings{
+		Provider: "aliyun", Endpoint: "http://storage.internal", Bucket: "private-bucket",
+		Delivery: storage.DeliverySettings{AllowPrivateProxy: true},
+	}
+	_, err := ResolveAccess(testReadyResource("aliyun"), setting, AccessOptions{Purpose: PurposeDownload}, time.Now(), testPlatformURL(&[]ResourceVariant{}))
+	if err == nil || errorReason(err) != "resource_origin_private" {
+		t.Fatalf("ResolveAccess() error = %v, want resource_origin_private", err)
 	}
 }
 

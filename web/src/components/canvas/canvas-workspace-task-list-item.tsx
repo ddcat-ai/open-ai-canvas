@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, Clock3, Coins, LoaderCircle, More
 import { Dropdown, type MenuProps } from "antd";
 
 import { formatCredits } from "@/constant/credits";
-import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
+import { canCancelGenerationTask, formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -28,7 +28,7 @@ export const TaskListItem = memo(function TaskListItem({ task, onCancelTask }: {
     const isActive = task.status === "queued" || task.status === "running";
     const statusColor = task.status === "running" ? "var(--primary)" : task.status === "succeeded" ? "var(--success, #16a34a)" : task.status === "failed" ? "var(--danger, #dc2626)" : "color-mix(in srgb, var(--foreground) 40%, transparent)";
 
-    const menuItems: MenuProps["items"] = [...(isActive && onCancelTask ? [{ key: "cancel", danger: true, icon: <XCircle className="size-3.5" />, label: "取消任务", onClick: () => onCancelTask(task) }] : [])];
+    const menuItems: MenuProps["items"] = [...(onCancelTask && canCancelGenerationTask(task) ? [{ key: "cancel", danger: true, icon: <XCircle className="size-3.5" />, label: "取消任务", onClick: () => onCancelTask(task) }] : [])];
 
     return (
         <div

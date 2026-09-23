@@ -16,9 +16,11 @@ import (
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/outbound"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -177,7 +179,57 @@ func SignedOriginObjectURL(setting Settings, objectKey string, expiresAt time.Ti
 	return SignedAliyunOSSObjectURL(setting, objectKey, expiresAt)
 }
 
+// SignedOriginObjectDownloadURL signs a browser-facing object-store URL whose
+// response is forced to download by Content-Disposition. This is intentionally
+// an origin URL: a generic CDN URL cannot guarantee that response header
+// overrides are forwarded and signed correctly.
+func SignedOriginObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, fileName string) (string, error) {
+	disposition := objectDownloadContentDisposition(fileName, objectKey)
+	setting = NormalizeSettings(setting)
+	if setting.Provider == s3Provider {
+		return SignedS3ObjectDownloadURL(setting, objectKey, expiresAt, disposition)
+	}
+	if setting.Provider == qiniuKodoProvider {
+		return SignedQiniuS3ObjectDownloadURL(setting, objectKey, expiresAt, disposition)
+	}
+	if setting.Provider == tencentCOSProvider {
+		return SignedCOSObjectDownloadURL(setting, objectKey, expiresAt, disposition)
+	}
+	return SignedAliyunOSSObjectDownloadURL(setting, objectKey, expiresAt, disposition)
+}
+
+func objectDownloadContentDisposition(fileName string, objectKey string) string {
+	name := strings.TrimSpace(fileName)
+	name = strings.ReplaceAll(name, "\\", "_")
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.Map(func(char rune) rune {
+		if char < 0x20 || char == 0x7f {
+			return -1
+		}
+		return char
+	}, name)
+	if name == "" || name == "." {
+		name = path.Base(strings.TrimSpace(objectKey))
+	}
+	if name == "" || name == "." || name == "/" {
+		name = "download"
+	}
+	value := mime.FormatMediaType("attachment", map[string]string{"filename": name})
+	if value == "" {
+		return `attachment; filename="download"`
+	}
+	return value
+}
+
 func SignedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
+	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt, "")
+}
+
+func SignedAliyunOSSObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt, disposition)
+}
+
+func signedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
 	baseURL, err := OssBucketBaseURL(setting)
 	if err != nil {
 		return "", err
@@ -191,10 +243,15 @@ func SignedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + strings.TrimLeft(objectKey, "/")
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
-	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, "/" + setting.Bucket + "/" + objectKey}, "\n")
+	canonicalResource := "/" + setting.Bucket + "/" + objectKey
+	query := baseURL.Query()
+	if disposition != "" {
+		query.Set("response-content-disposition", disposition)
+		canonicalResource += "?response-content-disposition=" + disposition
+	}
+	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, canonicalResource}, "\n")
 	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
 	_, _ = mac.Write([]byte(stringToSign))
-	query := baseURL.Query()
 	query.Set("OSSAccessKeyId", setting.AccessKeyID)
 	query.Set("Expires", expires)
 	query.Set("Signature", base64.StdEncoding.EncodeToString(mac.Sum(nil)))
@@ -284,6 +341,14 @@ func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string)
 }
 
 func SignedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
+	return signedCOSObjectURL(setting, objectKey, expiresAt, "")
+}
+
+func SignedCOSObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+	return signedCOSObjectURL(setting, objectKey, expiresAt, disposition)
+}
+
+func signedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
 	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
 		return "", errors.New("COS 访问密钥不可用")
 	}
@@ -299,7 +364,11 @@ func SignedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time)
 	if err != nil {
 		return "", err
 	}
-	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil)
+	var options interface{}
+	if disposition != "" {
+		options = &cos.ObjectGetOptions{ResponseContentDisposition: disposition}
+	}
+	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, options)
 	if err != nil {
 		return "", err
 	}
@@ -328,6 +397,14 @@ func SignedQiniuObjectURL(setting Settings, objectKey string, expiresAt time.Tim
 // SignedQiniuS3ObjectURL 用七牛兼容 S3 的 AWS Signature V4 访问私有空间。
 // 没有绑定域名时，浏览器不直接访问该地址，而是由后端代理读取并返回文件。
 func SignedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
+	return signedQiniuS3ObjectURL(setting, objectKey, expiresAt, "")
+}
+
+func SignedQiniuS3ObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+	return signedQiniuS3ObjectURL(setting, objectKey, expiresAt, disposition)
+}
+
+func signedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
 	region := QiniuS3Region(setting)
 	if region == "" {
 		return "", errors.New("七牛云 Kodo S3 Region 不可用")
@@ -335,6 +412,11 @@ func SignedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.T
 	baseURL := &url.URL{Scheme: "https", Host: setting.Bucket + ".s3." + region + ".qiniucs.com"}
 	// 保留对象键的原始路径，让 url.URL 和 AWS signer 只做一次 RFC 3986 转义。
 	baseURL.Path = "/" + objectKey
+	if disposition != "" {
+		query := baseURL.Query()
+		query.Set("response-content-disposition", disposition)
+		baseURL.RawQuery = query.Encode()
+	}
 	req, err := http.NewRequest(http.MethodGet, baseURL.String(), nil)
 	if err != nil {
 		return "", err

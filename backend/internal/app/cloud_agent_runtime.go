@@ -36,6 +36,32 @@ type cloudAgentCall struct {
 		Arguments string `json:"arguments"`
 	} `json:"function"`
 }
+
+type cloudAgentCachedToolResult struct {
+	Result        json.RawMessage `json:"result,omitempty"`
+	Error         string          `json:"error,omitempty"`
+	ArgumentError bool            `json:"argumentError,omitempty"`
+	// ReplayCount 记录同一只读结果被模型重复请求的次数。达到护栏后不再
+	// 把缓存结果继续喂回模型，避免模型在同一结果上无限循环。
+	ReplayCount int `json:"replayCount,omitempty"`
+}
+
+type cloudAgentReadLoopError struct {
+	ToolName string
+	Count    int
+	Budget   bool
+}
+
+func (e *cloudAgentReadLoopError) Error() string {
+	if e == nil {
+		return "Agent 重复读取护栏已触发"
+	}
+	if e.Budget {
+		return fmt.Sprintf("Agent 本轮只读工具调用已达到安全上限（%d 次），本轮已停止以避免继续消耗模型调用；请使用已有结果继续，不要继续读取画布", e.Count)
+	}
+	return fmt.Sprintf("Agent 连续重复读取同一份%s结果，本轮已停止以避免继续消耗模型调用；请让 Agent 使用已有结果继续，不要再次读取", e.ToolName)
+}
+
 type cloudAgentApproval struct {
 	Prepared  *cloudAgentPreparedMedia  `json:"prepared,omitempty"`
 	ModelName string                    `json:"modelName,omitempty"`
@@ -58,6 +84,8 @@ type cloudAgentRuntime struct {
 	SkillReads             map[string]bool                         `json:"skillReads,omitempty"`
 	Profile                cloudAgentProfileSnapshot               `json:"profile"`
 	ProfileReads           map[string]bool                         `json:"profileReads,omitempty"`
+	ToolReadResults        map[string]cloudAgentCachedToolResult   `json:"toolReadResults,omitempty"`
+	ToolReadReplays        map[string]int                          `json:"toolReadReplays,omitempty"`
 	Canonical              canonicalAgentRequest                   `json:"canonical"`
 	ActiveTaskID           string                                  `json:"activeTaskId"`
 	ActiveTextDraft        string                                  `json:"activeTextDraft,omitempty"`
@@ -96,6 +124,15 @@ type cloudAgentRuntime struct {
 	StepLimits cloudAgentStepLimits `json:"-"`
 	// ImageInspectCounts 记录本轮内每张图被查看的次数，用于"同一张图不要反复看"的护栏。
 	ImageInspectCounts map[string]int `json:"imageInspectCounts,omitempty"`
+	// ImageInspectionReads 以“节点 + 资源 + 画布 revision”为 key，避免同一张图在
+	// 同一版本的画布里反复触发视觉输入。画布内容变化后 key 自然变化，允许重新识别。
+	ImageInspectionReads map[string]int `json:"imageInspectionReads,omitempty"`
+	// ImageInspectCalls 记录本轮所有图片识别工具调用次数（包括只回执文字的重复调用）。
+	// 它与 ImageInspectCounts 一起进检查点，防止模型通过 refresh 或切换节点绕过总预算。
+	ImageInspectCalls int `json:"imageInspectCalls,omitempty"`
+	// ReadToolCalls 记录本轮会读取运行时只读快照的工具调用次数。除了同参缓存护栏，
+	// 还需要一个跨参数的总上限，防止模型通过不断变化 offset/nodeIds 绕过重复读取保护。
+	ReadToolCalls int `json:"readToolCalls,omitempty"`
 	// PendingImageInspections 暂存"本批还有工具结果没入历史"的看图结果，等整批 tool
 	// 结果都入历史后合并成一条 user 图片消息（见 cloudAgentFlushPendingImages）。
 	//
@@ -252,6 +289,27 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	}
 	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 {
 		return errors.New("Agent runtime budget or step is invalid")
+	}
+	if state.ImageInspectCalls < 0 {
+		return errors.New("Agent runtime image inspection budget is invalid")
+	}
+	if state.ReadToolCalls < 0 {
+		return errors.New("Agent runtime read tool budget is invalid")
+	}
+	for nodeID, count := range state.ImageInspectCounts {
+		if strings.TrimSpace(nodeID) == "" || count < 0 {
+			return errors.New("Agent runtime image inspection counts are invalid")
+		}
+	}
+	for key, count := range state.ImageInspectionReads {
+		if strings.TrimSpace(key) == "" || count < 0 {
+			return errors.New("Agent runtime image inspection read history is invalid")
+		}
+	}
+	for key, count := range state.ToolReadReplays {
+		if strings.TrimSpace(key) == "" || count < 0 {
+			return errors.New("Agent runtime read replay history is invalid")
+		}
 	}
 	if (state.Request.Budget.MaxGenerationTasks > 0 && state.Generations > state.Request.Budget.MaxGenerationTasks) || (state.Request.Budget.MaxVideoSeconds > 0 && state.VideoSeconds > state.Request.Budget.MaxVideoSeconds) {
 		return errors.New("Agent runtime generation budget is invalid")
@@ -954,6 +1012,10 @@ func cloudAgentSafeToolError(err error) string {
 	if err == nil {
 		return ""
 	}
+	var readLoopErr *cloudAgentReadLoopError
+	if errors.As(err, &readLoopErr) {
+		return readLoopErr.Error()
+	}
 	var appErr *AppError
 	if errors.As(err, &appErr) && appErr != nil {
 		message := strings.TrimSpace(appErr.Message)
@@ -1296,6 +1358,9 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	var inspectionErr error
 	if allowed && call.Function.Name == "canvas_inspect_image" && state.Request.VisionEnabled {
 		inspectionResult, inspectionErr = s.prepareCloudAgentImageInspection(run.UserID, state.Request.CanvasID, state, call)
+		if errors.Is(inspectionErr, errCloudAgentImageInspectionBudget) {
+			return s.failCloudAgent(run, state, cloudAgentImageInspectionBudgetMessage)
+		}
 	}
 	// Skill reads use the domain repository and filesystem, not the checkpoint
 	// transaction's connection. Read first to avoid nesting DB reads on SQLite.
@@ -1333,13 +1398,37 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {
 				if inspection, ok := inspectionResult.(cloudAgentImageInspection); ok {
-					state.markCanvasImageAttached(stringValue(inspection.Receipt["nodeId"]))
+					state.markCanvasImageInspection(stringValue(inspection.Receipt["nodeId"]), strings.TrimSpace(inspection.ImageURL) != "")
+					if inspection.CacheKey != "" {
+						if state.ImageInspectionReads == nil {
+							state.ImageInspectionReads = map[string]int{}
+						}
+						state.ImageInspectionReads[inspection.CacheKey]++
+					}
 				}
 			}
 		case call.Function.Name == "skill_read_file", call.Function.Name == "image_annotation_render":
 			result, toolErr = skillResult, skillErr
 		default:
-			result, toolErr = cloudAgentReadTool(repo, run.UserID, state, call)
+			result, toolErr = cloudAgentReadToolCached(repo, run.UserID, state, call)
+		}
+		if toolErr == nil && cloudAgentWrite(call.Function.Name) {
+			// A successful canvas mutation changes the read model. Do not replay a
+			// pre-mutation canvas snapshot later in the same Agent run.
+			state.ToolReadResults = nil
+			state.ToolReadReplays = nil
+		}
+		var readLoopErr *cloudAgentReadLoopError
+		if errors.As(toolErr, &readLoopErr) {
+			cloudAgentRecordToolResult(current, state, call, result, toolErr)
+			current.Status = "failed"
+			current.FailureMessage = truncateRunes(readLoopErr.Error(), 1000)
+			cloudAgentDropInterjections(run.ID, "本轮已结束："+truncateRunes(current.FailureMessage, 120), state)
+			state.event(run.ID, "run_failed", map[string]any{
+				"text": current.FailureMessage, "reason": "repeated_read_guard",
+				"toolName": call.Function.Name, "repeatCount": readLoopErr.Count,
+			})
+			return cloudAgentSave(current, state)
 		}
 		if call.Function.Name == "plan_update" && toolErr == nil {
 			state.event(run.ID, "plan_updated", map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan)})
