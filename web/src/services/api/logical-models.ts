@@ -40,6 +40,9 @@ export type PublicLogicalModel = {
     capability: CapabilitySpec["capability"];
     sortOrder: number;
     pricePolicy: "channel" | "unified";
+    pricingMode?: string;
+    displayPrice?: number;
+    priceLabel?: string;
     billingMode: "fixed_request" | "per_second" | "token";
     unitPriceMicrocredits: number;
     inputPriceMicrocredits: number;
@@ -204,6 +207,18 @@ export type ModelCatalogResponse = {
 // 创作目录直接读取系统渠道模型，不使用逻辑模型及其功能开关。
 export function getModelCatalog() {
     return http.get<ModelCatalogResponse>("/model-catalog");
+}
+
+/**
+ * Returns the logical model projection exposed to the signed-in workspace.
+ * The developer API page uses the same underlying projection as `/api/v1/models`,
+ * while keeping pricing and capability metadata available for local documentation
+ * and model selection.
+ */
+export function listLogicalModels() {
+    return http.get<{ models?: PublicLogicalModel[] }>("/models").then((result) => ({
+        models: Array.isArray(result?.models) ? result.models.filter(Boolean) : [],
+    }));
 }
 
 export function quoteLogicalModel(id: string, intent: ModelRequestIntent, signal?: AbortSignal) {
