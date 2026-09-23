@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,32 @@ func TestDashscopeWan3VideoCreateAndLifecycle(t *testing.T) {
 	unknown, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: created.TaskID}, []byte(`{"output":{"task_id":"wan3-task-1","task_status":"UNKNOWN"}}`))
 	if err != nil || unknown.Status != StatusFailed {
 		t.Fatalf("unknown = %#v err=%v", unknown, err)
+	}
+}
+
+func TestDashscopeWan3VideoSurfacesNestedOutputFailure(t *testing.T) {
+	adapter := officialPackageAdapter(t, "dashscope-wan3-video.yingce-plugin", "dashscope-wan3-video")
+	payload := []byte(`{"output":{"code":"InvalidParameter","message":"Input should be '1080P', '720P' or '480P': parameters.resolution","task_id":"e0d8c86d-4939-4f2e-93f7-e2cd10a07d58","task_status":"FAILED"},"request_id":"c3c98e67-830d-9f1d-8a62-fff019ffa522"}`)
+
+	created, err := adapter.ParseCreate(context.Background(), payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != StatusFailed {
+		t.Fatalf("create status = %q, want %q", created.Status, StatusFailed)
+	}
+	if created.Message == "" || !strings.Contains(created.Message, "parameters.resolution") {
+		t.Fatalf("create message = %q, want nested output.message", created.Message)
+	}
+
+	failed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "e0d8c86d-4939-4f2e-93f7-e2cd10a07d58"}, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != StatusFailed {
+		t.Fatalf("poll status = %q, want %q", failed.Status, StatusFailed)
+	}
+	if failed.Message == "" || !strings.Contains(failed.Message, "parameters.resolution") {
+		t.Fatalf("poll message = %q, want nested output.message", failed.Message)
 	}
 }
