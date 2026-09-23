@@ -476,7 +476,7 @@ func (s *Service) publicGenerationResult(userID, raw string) (*PublicGenerationR
 					return err
 				}
 				media := PublicGenerationMedia{ResourceID: resourceID, URL: access.URL, MimeType: stringValue(typed["mimeType"]), Width: intValue(typed["width"]), Height: intValue(typed["height"]), DurationMs: int64ValuePublic(typed["durationMs"])}
-				if strings.HasPrefix(media.MimeType, "video/") || typed["durationMs"] != nil {
+				if publicGenerationMediaIsVideo(typed) {
 					result.Videos = append(result.Videos, media)
 				} else {
 					result.Images = append(result.Images, media)
@@ -498,6 +498,13 @@ func (s *Service) publicGenerationResult(userID, raw string) (*PublicGenerationR
 		return nil, publicGenerationResultUnavailable(errors.New("生成结果未包含可用资源"))
 	}
 	return result, nil
+}
+
+func publicGenerationMediaIsVideo(value map[string]any) bool {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(stringValue(value["mimeType"]))), "video/") {
+		return true
+	}
+	return int64ValuePublic(value["durationMs"]) > 0
 }
 
 func publicGenerationResultUnavailable(cause error) error {

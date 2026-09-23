@@ -89,3 +89,15 @@ func TestPublicGenerationResultRejectsMalformedJSON(t *testing.T) {
 		t.Fatalf("malformed result error = %v", err)
 	}
 }
+
+func TestPublicGenerationMediaKindTreatsZeroDurationImageAsImage(t *testing.T) {
+	if publicGenerationMediaIsVideo(map[string]any{"mimeType": "image/jpeg", "durationMs": float64(0)}) {
+		t.Fatal("an image with zero duration must not be classified as video")
+	}
+	if !publicGenerationMediaIsVideo(map[string]any{"mimeType": "video/mp4", "durationMs": float64(0)}) {
+		t.Fatal("video MIME type must be classified as video")
+	}
+	if !publicGenerationMediaIsVideo(map[string]any{"mimeType": "application/octet-stream", "durationMs": float64(1200)}) {
+		t.Fatal("positive duration must be classified as video")
+	}
+}
