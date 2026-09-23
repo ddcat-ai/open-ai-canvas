@@ -8,6 +8,7 @@ import {
     customCanvasAppearanceFromTheme,
     enterCustomCanvasAppearance,
     normalizeHexColor,
+    resolveCanvasConnectionAppearance,
     type CanvasAppearance,
     type CanvasCustomAppearance,
 } from "@/lib/canvas/canvas-appearance";
@@ -56,9 +57,17 @@ export function CanvasAppearanceControls({
         setDraft(next);
         onAppearanceChange(next);
     };
+    const updateConnection = (patch: Partial<ReturnType<typeof resolveCanvasConnectionAppearance>>) => {
+        const next: CanvasAppearance = {
+            ...draft,
+            connection: { ...resolveCanvasConnectionAppearance(draft), ...patch },
+        };
+        setDraft(next);
+        onAppearanceChange(next);
+    };
     const resetCustom = () => {
         const baseTheme = draft.custom?.baseTheme || colorTheme;
-        const next = customCanvasAppearanceFromTheme(baseTheme);
+        const next = { ...customCanvasAppearanceFromTheme(baseTheme), ...(draft.connection ? { connection: draft.connection } : {}) };
         setDraft(next);
         onAppearanceChange(next);
     };
@@ -107,6 +116,13 @@ export function CanvasAppearanceControls({
                     <Button block size="small" type="primary" icon={<Save className="size-3.5" />} onClick={saveAsDefault}>保存为默认</Button>
                 </div>
             ) : null}
+
+            <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">连接线</div>
+            <div className="mt-1 space-y-2 rounded-[var(--dock-item-radius-labeled)] border p-2.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                <SliderField label="粗细" value={resolveCanvasConnectionAppearance(draft).width} min={1} max={8} suffix="px" onChange={(width) => updateConnection({ width })} />
+                <SliderField label="透明度" value={resolveCanvasConnectionAppearance(draft).opacity} min={0} max={100} suffix="%" onChange={(opacity) => updateConnection({ opacity })} />
+                <div className="text-[var(--fs-micro)] opacity-50">选中单个节点后，相关连线会高亮并流转。</div>
+            </div>
 
             <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">空间网格</div>
             <Segmented

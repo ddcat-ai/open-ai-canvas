@@ -11,9 +11,15 @@ export type CanvasCustomAppearance = {
     gridOpacity: number;
 };
 
+export type CanvasConnectionStyle = {
+    width: number;
+    opacity: number;
+};
+
 export type CanvasAppearance = {
     mode: CanvasAppearanceMode;
     custom?: CanvasCustomAppearance;
+    connection?: CanvasConnectionStyle;
 };
 
 export type CanvasAppearanceDefault = {
@@ -28,6 +34,7 @@ export type ResolvedCanvasAppearance = {
 };
 
 export const DEFAULT_CANVAS_BACKGROUND_MODE: CanvasBackgroundMode = "dots";
+export const DEFAULT_CANVAS_CONNECTION_STYLE: CanvasConnectionStyle = { width: 2, opacity: 80 };
 
 const CANVAS_APPEARANCE_DEFAULT_KEY = "infinite-canvas:canvas-appearance-default";
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -35,7 +42,12 @@ const CUSTOM_GRID_COLOR: Record<CanvasColorTheme, string> = { light: "#000000", 
 const CUSTOM_GRID_OPACITY: Record<CanvasColorTheme, number> = { light: 80, dark: 100 };
 
 export function canvasAppearanceForTheme(theme: CanvasColorTheme, previous?: CanvasAppearance): CanvasAppearance {
-    return previous?.custom?.baseTheme === theme ? { mode: theme, custom: previous.custom } : { mode: theme };
+    const connection = normalizeCanvasConnectionStyle(previous?.connection);
+    return {
+        mode: theme,
+        ...(previous?.custom?.baseTheme === theme ? { custom: previous.custom } : {}),
+        ...(connection ? { connection } : {}),
+    };
 }
 
 export function customCanvasAppearanceFromTheme(theme: CanvasColorTheme): CanvasAppearance {
@@ -68,8 +80,18 @@ export function normalizeCanvasAppearance(value: unknown, fallback: CanvasColorT
     const candidate = value as Partial<CanvasAppearance>;
     const mode = candidate.mode === "light" || candidate.mode === "dark" || candidate.mode === "custom" ? candidate.mode : fallback;
     const custom = normalizeCustomAppearance(candidate.custom);
-    if (mode === "custom" && !custom) return customCanvasAppearanceFromTheme(fallback);
-    return custom ? { mode, custom } : { mode };
+    const connection = normalizeCanvasConnectionStyle(candidate.connection);
+    const normalizedCustom = mode === "custom" && !custom ? customCanvasAppearanceFromTheme(fallback).custom : custom;
+    return {
+        mode,
+        ...(normalizedCustom ? { custom: normalizedCustom } : {}),
+        ...(connection ? { connection } : {}),
+    };
+}
+
+export function resolveCanvasConnectionAppearance(appearance: CanvasAppearance | undefined): CanvasConnectionStyle {
+    const connection = normalizeCanvasConnectionStyle(appearance?.connection);
+    return connection || DEFAULT_CANVAS_CONNECTION_STYLE;
 }
 
 export function resolveCanvasAppearance(appearance: CanvasAppearance | undefined, fallback: CanvasColorTheme): ResolvedCanvasAppearance {
@@ -144,6 +166,16 @@ function normalizeCustomAppearance(value: unknown): CanvasCustomAppearance | und
         backgroundBrightness: clampNumber(candidate.backgroundBrightness, -30, 30, 0),
         gridColor,
         gridOpacity: clampNumber(candidate.gridOpacity, 0, 100, CUSTOM_GRID_OPACITY[candidate.baseTheme]),
+    };
+}
+
+function normalizeCanvasConnectionStyle(value: unknown): CanvasConnectionStyle | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const candidate = value as Partial<CanvasConnectionStyle>;
+    if (typeof candidate.width !== "number" && typeof candidate.opacity !== "number") return undefined;
+    return {
+        width: clampNumber(candidate.width, 1, 8, DEFAULT_CANVAS_CONNECTION_STYLE.width),
+        opacity: clampNumber(candidate.opacity, 0, 100, DEFAULT_CANVAS_CONNECTION_STYLE.opacity),
     };
 }
 

@@ -4,6 +4,7 @@ import { Link2 } from "lucide-react";
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import type { CanvasConnectionStyle } from "@/lib/canvas/canvas-appearance";
 import type { CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
@@ -19,6 +20,7 @@ type CanvasProjectWorldLayersProps = {
     viewportScale: number;
     connectionLayerBounds: { left: number; top: number; width: number; height: number };
     displayConnections: CanvasDisplayConnection[];
+    connectionStyle: CanvasConnectionStyle;
     selectedConnectionId: string | null;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
@@ -122,6 +124,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         fromScrollTop={props.scriptScrollTopById[from.id] || 0}
                         toScrollTop={props.scriptScrollTopById[to.id] || 0}
                         active={props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
+                        connectionStyle={props.connectionStyle}
                         visualMode="hover-only"
                         // 拖动预览由 Leafer 图形层逐帧同步；隐藏这层静态 SVG 描边，避免两套位置叠出残影。
                         hideVisual={props.isNodeDragging}
