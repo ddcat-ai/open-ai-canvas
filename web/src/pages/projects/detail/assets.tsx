@@ -47,6 +47,7 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData } from "@/types/canvas";
 
 import { ProjectCharacterCard } from "./project-character-card";
+import { projectCharacterCover } from "./project-character-cover";
 import { linkSelectedProjectAssets } from "./project-asset-linking";
 import { generateCharacterTurnaround } from "./project-character-media";
 import { categoryLabels, categoryLabel, mediaLabel, StatusPill, formatTime, textValue, type ProjectDetailViewProps } from "./shared";
@@ -380,7 +381,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
                 await downloadBrowserMedia({ storageKey: personal.data.storageKey, url, fileName: `${asset.title || "asset"}.${extension}` });
                 return;
             }
-            const cover = asset.character?.representations.find((item) => item.role === "turnaround_sheet") || asset.character?.representations.find((item) => item.role === "primary") || asset.character?.representations[0];
+            const cover = projectCharacterCover(asset.character?.representations);
             if (cover) {
                 await downloadBrowserMedia({ storageKey: resourceStorageKey(cover.resourceId), fileName: `${asset.title || "character"}.png` });
                 return;
@@ -602,7 +603,7 @@ function ProjectAssetFolderCard({ folder, folders, assets, folderCounts, persona
 
 function projectAssetCanvasPreviewNode(asset: ProjectAsset, personalAsset: Asset | undefined, index: number): CanvasNodeData {
     const type = asset.mediaType === "image" || asset.category === "character" ? CanvasNodeType.Image : asset.mediaType === "video" ? CanvasNodeType.Video : asset.mediaType === "audio" ? CanvasNodeType.Audio : CanvasNodeType.Text;
-    const characterCover = asset.character?.representations.find((item) => item.role === "turnaround_sheet") || asset.character?.representations.find((item) => item.role === "primary") || asset.character?.representations[0];
+    const characterCover = projectCharacterCover(asset.character?.representations);
     const content = characterCover
         ? resourceFileUrl(characterCover.resourceId)
         : personalAsset?.kind === "image"
@@ -712,7 +713,7 @@ function ProjectAssetMedia({ asset, personalAsset }: { asset: ProjectAsset; pers
 }
 
 function ProjectAssetPreviewModal({ asset, personalAsset, onClose, onDownload, onReplaceImage }: { asset: ProjectAsset | null; personalAsset?: Asset; onClose: () => void; onDownload: () => void; onReplaceImage: () => void }) {
-    const characterCover = asset?.character?.representations.find((item) => item.role === "turnaround_sheet") || asset?.character?.representations.find((item) => item.role === "primary") || asset?.character?.representations[0];
+    const characterCover = projectCharacterCover(asset?.character?.representations);
     const remoteUrl = asset ? projectAssetRemoteUrl(asset) : "";
     const canDownload = Boolean(personalAsset && ["image", "video", "audio", "model"].includes(personalAsset.kind)) || Boolean(characterCover) || Boolean(remoteUrl);
     const previewKind = personalAsset?.kind || asset?.mediaType;
