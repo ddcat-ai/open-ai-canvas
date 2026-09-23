@@ -124,11 +124,11 @@ func verifyOSSConnection(value ossSettingValue, testKey string) error {
 }
 
 func verifyOSSConnectionRead(stream *ossObjectStream, payload []byte) error {
-	if stream == nil || stream.body == nil {
+	if stream == nil || stream.Body == nil {
 		return fmt.Errorf("%w：响应为空", errOSSConnectionReadMismatch)
 	}
-	data, readErr := io.ReadAll(io.LimitReader(stream.body, int64(len(payload)+1)))
-	closeErr := stream.body.Close()
+	data, readErr := io.ReadAll(io.LimitReader(stream.Body, int64(len(payload)+1)))
+	closeErr := stream.Body.Close()
 	if readErr != nil {
 		return fmt.Errorf("对象存储响应读取失败：%w", readErr)
 	}
@@ -138,7 +138,7 @@ func verifyOSSConnectionRead(stream *ossObjectStream, payload []byte) error {
 
 	// HTTP 允许服务端忽略 Range 并返回 200 + 完整对象。应用的资源代理也会
 	// 原样透传这种响应，因此连接测试应同时接受完整读取与标准的 206 分段读取。
-	switch stream.statusCode {
+	switch stream.StatusCode {
 	case http.StatusPartialContent:
 		if len(payload) >= 4 && bytes.Equal(data, payload[:4]) {
 			return nil
@@ -148,7 +148,7 @@ func verifyOSSConnectionRead(stream *ossObjectStream, payload []byte) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%w（HTTP %d，读取 %d 字节）", errOSSConnectionReadMismatch, stream.statusCode, len(data))
+	return fmt.Errorf("%w（HTTP %d，读取 %d 字节）", errOSSConnectionReadMismatch, stream.StatusCode, len(data))
 }
 
 func storageConnectionTestError(provider string, operation string, cause error) error {

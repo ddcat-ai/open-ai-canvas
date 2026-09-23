@@ -16,6 +16,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -315,6 +316,31 @@ func (s *Service) OpenAppearanceAsset(slot string, rangeHeader string) (*Resourc
 		return nil, err
 	}
 	return s.openResourceRange(resource.UserID, resource, rangeHeader)
+}
+
+func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	_, value, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	resourceID := appearanceResourceID(value, slot)
+	if resourceID == "" {
+		return nil, NotFound("未配置该外观资源")
+	}
+	resource, err := s.repo.Resource(resourceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("外观资源不存在")
+		}
+		return nil, err
+	}
+	if err := validateAppearanceResourceType(slot, resource); err != nil {
+		return nil, err
+	}
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
 }
 
 func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string][]AdminResourceReferenceView {

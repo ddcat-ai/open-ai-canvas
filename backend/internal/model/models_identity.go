@@ -3,16 +3,19 @@ package model
 import "time"
 
 type User struct {
-	ID           string     `json:"id" gorm:"primaryKey;size:36"`
-	Username     string     `json:"username" gorm:"uniqueIndex;size:80"`
-	Email        string     `json:"email,omitempty" gorm:"size:160"`
-	DisplayName  string     `json:"displayName" gorm:"size:80"`
-	Role         UserRole   `json:"role" gorm:"index;size:24"`
-	Status       UserStatus `json:"status" gorm:"index;size:24"`
-	PasswordHash string     `json:"-"`
-	LastLoginAt  *time.Time `json:"lastLoginAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	ID              string     `json:"id" gorm:"primaryKey;size:36"`
+	Username        string     `json:"username" gorm:"uniqueIndex;size:80"`
+	Email           string     `json:"email,omitempty" gorm:"size:160"`
+	Phone           string     `json:"phone,omitempty" gorm:"size:24"`
+	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
+	PhoneVerifiedAt *time.Time `json:"phoneVerifiedAt,omitempty"`
+	DisplayName     string     `json:"displayName" gorm:"size:80"`
+	Role            UserRole   `json:"role" gorm:"index;size:24"`
+	Status          UserStatus `json:"status" gorm:"index;size:24"`
+	PasswordHash    string     `json:"-"`
+	LastLoginAt     *time.Time `json:"lastLoginAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 type AuthSession struct {
@@ -48,6 +51,7 @@ type OAuthState struct {
 }
 
 type EmailVerificationCode struct {
+	Attempts  int        `json:"-"`
 	ID        string     `json:"id" gorm:"primaryKey;size:36"`
 	Email     string     `json:"email" gorm:"index;size:160"`
 	CodeHash  string     `json:"-" gorm:"size:64"`

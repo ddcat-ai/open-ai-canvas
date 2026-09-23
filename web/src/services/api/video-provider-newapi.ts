@@ -1,6 +1,6 @@
 import { modelCapabilityConfigFor, videoResolutionRequest } from "@/lib/model-capabilities";
 import { boolConfig } from "@/lib/seedance-video";
-import { getResourceOSSUrl } from "@/services/api/resources";
+import { getResourceInputURL } from "@/services/api/resources";
 import { modelOptionName } from "@/stores/use-config-store";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import type { ReferenceImage } from "@/types/image";
@@ -63,7 +63,7 @@ function newAPIVideoResolutionRequest(profile: NonNullable<ReturnType<typeof mod
 }
 
 async function resolveVideoGenerationsUrl(value: string | undefined, storageKey?: string) {
-    if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
+    if (storageKey?.startsWith("resource:")) return getResourceInputURL(storageKey);
     if (isPublicMediaUrl(value || "")) return String(value);
     throw new Error("NewAPI Video Generations 的参考素材需要公网 URL；请先把素材保存到对象存储");
 }

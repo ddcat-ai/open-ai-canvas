@@ -80,9 +80,9 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
 	payload := []byte("yingce-storage-test")
 	stream := &ossObjectStream{
-		body:          io.NopCloser(strings.NewReader(string(payload))),
-		statusCode:    http.StatusOK,
-		contentLength: int64(len(payload)),
+		Body:          io.NopCloser(strings.NewReader(string(payload))),
+		StatusCode:    http.StatusOK,
+		ContentLength: int64(len(payload)),
 	}
 	if err := verifyOSSConnectionRead(stream, payload); err != nil {
 		t.Fatal(err)
@@ -92,9 +92,9 @@ func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
 func TestOSSConnectionReadRejectsUnexpectedContent(t *testing.T) {
 	payload := []byte("yingce-storage-test")
 	stream := &ossObjectStream{
-		body:          io.NopCloser(strings.NewReader("error page")),
-		statusCode:    http.StatusOK,
-		contentLength: 10,
+		Body:          io.NopCloser(strings.NewReader("error page")),
+		StatusCode:    http.StatusOK,
+		ContentLength: 10,
 	}
 	err := verifyOSSConnectionRead(stream, payload)
 	if err == nil {

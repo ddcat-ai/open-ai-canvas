@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -18,5 +19,9 @@ func (s *Service) ResourceForUser(actor *model.User, id string) (*model.Resource
 // providerResourceURL 只能接收已经完成用户归属和 ready 状态校验的资源，
 // 并为上游签发短时地址；它不是绕过权限校验的通用资源 URL 生成器。
 func (s *Service) providerResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
-	return s.directResourceURL(resource, expiresAt)
+	access, err := s.resolveResourceAccess(resource, ResourceAccessOptions{Purpose: assets.PurposeProvider, ExpiresAt: expiresAt})
+	if err != nil {
+		return "", err
+	}
+	return access.URL, nil
 }

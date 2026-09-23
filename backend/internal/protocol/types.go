@@ -287,6 +287,7 @@ type ManifestField struct {
 }
 
 type ManifestContributions struct {
+	SMSProviders     []ManifestSMSProvider     `json:"smsProviders,omitempty"`
 	Providers        []ManifestProvider        `json:"providers,omitempty"`
 	PaymentProviders []ManifestPaymentProvider `json:"paymentProviders,omitempty"`
 	Workflows        []ManifestWorkflow        `json:"workflows,omitempty"`
@@ -298,6 +299,11 @@ type ManifestContributions struct {
 	AICapabilities   []string                  `json:"aiCapabilities,omitempty"`
 	Agents           []string                  `json:"agents,omitempty"`
 	ImportExport     []string                  `json:"importExport,omitempty"`
+}
+
+type ManifestSMSProvider struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type ManifestPaymentProvider struct {

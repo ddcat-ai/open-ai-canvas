@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -326,21 +327,15 @@ func (s *Service) OpenAdminAPICallLogMediaRange(actor *model.User, logID string,
 	return s.openResourceRange(userID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID string, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	userID, resource, err := s.adminAPICallLogMediaResource(actor, logID)
 	if err != nil {
 		return nil, err
 	}
-	delivery, err := s.prepareResourceDelivery(userID, resource, ResourceDeliveryOptions{})
-	if err != nil || delivery.RedirectURL != "" {
-		return delivery, err
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
 	}
-	stream, err := s.openResourceRange(userID, resource, rangeHeader)
-	if err != nil {
-		return nil, err
-	}
-	delivery.Stream = stream
-	return delivery, nil
+	return s.prepareResourceDelivery(userID, resource, options, rangeHeader)
 }
 
 func (s *Service) adminAPICallLogMediaResource(actor *model.User, logID string) (string, *model.Resource, error) {

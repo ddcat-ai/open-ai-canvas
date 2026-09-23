@@ -11,7 +11,7 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
 import { createCanvasGenerationLiveProjectAdapter, registerCanvasGenerationLiveProject } from "@/services/canvas-generation-consumer";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
 import { uploadImage } from "@/services/image-storage";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
@@ -188,6 +188,11 @@ async function copyImageToSystemClipboard(source: string, storageKey?: string) {
         let sourceBlob: Blob | null = null;
         if (storageKey) {
             sourceBlob = await getCachedResourceBlob(storageKey).catch(() => null);
+            // A resource-backed image must be read through the resource access
+            // contract. Do not fall back to fetch(source) here: local/proxy
+            // deliveries may require the session cookie and a separate API
+            // origin, while CDN deliveries must omit that cookie.
+            if (!sourceBlob) throw new Error("图片资源读取失败");
         }
         if (!sourceBlob) {
             const response = await fetch(source);
@@ -1742,16 +1747,22 @@ function InfiniteCanvasPage() {
             if (copyingNodeContentRef.current) return;
             copyingNodeContentRef.current = true;
             releaseCopiedNodesPastePriority();
-            const content = node?.metadata?.content?.trim();
-            const resourceId = resourceIdFromStorageKey(node?.metadata?.storageKey);
-            const copySource = content || (node?.type === CanvasNodeType.Image && resourceId ? resourceFileUrl(resourceId) : "");
-            if (!node || !copySource) {
+            if (!node) {
                 copyingNodeContentRef.current = false;
                 message.warning("没有可复制的内容");
                 return;
             }
 
             try {
+                const content = node.metadata?.content?.trim();
+                const resourceId = resourceIdFromStorageKey(node.metadata?.storageKey);
+                // Resource-backed media must use the central access contract. This keeps
+                // copy operations on the configured CDN/OSS URL instead of copying the
+                // platform file endpoint or a stale URL persisted in canvas metadata.
+                const copySource = resourceId
+                    ? resolveResourceAccessURL((await getResourceAccess(`resource:${resourceId}`, "copy")).url)
+                    : content || "";
+                if (!copySource) throw new Error("没有可复制的内容");
                 if (node.type === CanvasNodeType.Image) {
                     try {
                         await copyImageToSystemClipboard(copySource, node.metadata?.storageKey);
@@ -1791,8 +1802,10 @@ function InfiniteCanvasPage() {
                 const storageKey = node?.metadata?.storageKey;
                 const content = node?.metadata?.content?.trim();
                 const resourceId = resourceIdFromStorageKey(storageKey);
-                const mediaPath = content && !content.startsWith("data:") && !content.startsWith("blob:") ? content : resourceId ? resourceFileUrl(resourceId) : "";
-                const mediaURL = mediaPath ? new URL(mediaPath, window.location.href).toString() : "";
+                const mediaPath = content && !content.startsWith("data:") && !content.startsWith("blob:") ? content : "";
+                const mediaURL = resourceId
+                    ? resolveResourceAccessURL((await getResourceAccess(`resource:${resourceId}`, "copy")).url)
+                    : mediaPath ? new URL(mediaPath, window.location.href).toString() : "";
                 if (!mediaURL) throw new Error("当前媒体只有本地内容，没有可复制的地址");
                 if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(mediaURL);
                 else if (!(await copyToClipboard(mediaURL))) throw new Error("当前浏览器不支持写入剪贴板");

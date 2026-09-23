@@ -1042,6 +1042,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /resources/access:
+    post:
+      tags: [resources]
+      summary: 批量签发当前用户资源访问描述
+      description: 统一处理展示、下载、复制、浏览器字节处理和模型输入；客户端不能通过查询参数选择 direct/proxy。每项独立成功或失败。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                type: object
+                required: [resourceId]
+                properties:
+                  resourceId: {type: string}
+                  purpose: {type: string, enum: [display, copy, download, browser-process, provider-input], default: display}
+                  variant: {type: string, enum: [original, playback], default: original}
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
   /resources/{id}/file:
     get:
       tags: [resources]
@@ -1051,6 +1078,16 @@ paths:
           name: id
           required: true
           schema: { type: string }
+        - in: query
+          name: access
+          schema: { type: string, enum: ["1"] }
+          description: 仅返回统一访问描述，不返回文件正文。
+        - in: query
+          name: variant
+          schema: { type: string, enum: [original, playback], default: original }
+        - in: query
+          name: purpose
+          schema: { type: string, enum: [display, download, browser-process], default: display }
       responses:
         "200":
           description: 文件流

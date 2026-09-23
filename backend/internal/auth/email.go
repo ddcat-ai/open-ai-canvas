@@ -143,6 +143,13 @@ func (s *Service) EmailEnabled() (bool, error) {
 }
 
 func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
+	p, err := s.verificationPolicy()
+	if err != nil {
+		return err
+	}
+	if !p.allows("register", "email") {
+		return kernel.Forbidden("邮箱单独验证注册未开启")
+	}
 	email := NormalizeEmail(rawEmail)
 	if err := ValidateEmail(email); err != nil {
 		return err
@@ -215,6 +222,13 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 }
 
 func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*model.EmailVerificationCode, error) {
+	p, err := s.verificationPolicy()
+	if err != nil {
+		return nil, err
+	}
+	if !p.allows("register", "email") {
+		return nil, kernel.Forbidden("邮箱单独验证注册未开启")
+	}
 	emailEnabled, err := s.EmailEnabled()
 	if err != nil {
 		return nil, err
@@ -235,6 +249,9 @@ func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*mo
 	}
 	if time.Now().After(record.ExpiresAt) {
 		return nil, kernel.BadAuthRequest("邮箱验证码已过期，请重新获取")
+	}
+	if err := s.repo.AttemptLegacyEmailVerification(record.ID); err != nil {
+		return nil, invalidVerification()
 	}
 	hash, err := s.emailVerificationCodeHash(registrationEmailPurpose, email, code)
 	if err != nil {

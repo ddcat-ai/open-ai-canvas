@@ -29,6 +29,10 @@ func Models() []any {
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},
+		&model.AuthVerification{},
+		&model.NotificationQuota{},
+		&model.SMSChannel{},
+		&model.SMSRecord{},
 		&model.ModelChannel{},
 		&model.ChannelModel{},
 		&model.ChannelModelPriceTier{},
@@ -157,6 +161,9 @@ func migrateSchemaV1(db *gorm.DB) error {
 		return err
 	}
 	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_logical_model_source_active ON logical_models(source_channel_model_id) WHERE source_channel_model_id <> '' AND archived_at IS NULL").Error; err != nil {
+		return err
+	}
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_nonempty ON users(phone) WHERE phone <> ''").Error; err != nil {
 		return err
 	}
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error

@@ -35,6 +35,7 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 // 配置了 OSS（enabled=1、endpoint 不可达）时上传应回退本地存储成功，
 // 而不是把上传标记为失败——本地媒体导入不应因外部存储故障整体失败。
 func TestStoreResourceDegradesToLocalWhenOSSUnavailable(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	service, db := newResourceFallbackTestService(t)
 	seedOSSEnabled(t, db, "user-1", "http://127.0.0.1:1")
 

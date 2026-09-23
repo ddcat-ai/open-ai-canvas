@@ -13,6 +13,18 @@ description: 信封、错误码与 OpenAPI
 
 模型 HTTP 失败及经过 Provider 错误转换的业务失败，在通用提示后追加经过过滤的 `；上游：具体原因`，供任务错误和画布卡片展示内容安全、提示词、尺寸等可操作信息。只读取上游 `error` / `message` / `msg` / `detail` 消息字段，不回传整个 JSON；消息中的 HTTP(S) URL 隐藏，包含余额、账务、凭据、请求诊断或 HTML 的消息不追加原文，保留通用分类提示。后台响应拦截规则仍对最终用户文案生效；不会修改历史任务错误或改变重试、退款策略。
 
+## 资源访问与 OSS/CDN 分发
+
+资源展示、播放、下载、复制地址和模型输入统一消费资源访问合同，不在客户端通过 `direct=1`、`proxy=1` 或存储厂商规则选择出口。
+
+- `POST /api/resources/access` 要求登录，请求体为 1–100 项 `{ resourceId, purpose?, variant? }`。`purpose` 支持 `display`、`copy`、`download`、`browser-process`、`provider-input`；`variant` 支持 `original`、`playback`。每项独立返回 `access` 或结构化 `error`。
+- `access.delivery` 为 `cdn`、`origin`、`platform-local` 或 `platform-proxy`。配置了可用 CDN 时返回 CDN 地址；OSS 源站签名是源站直连，不等于 CDN。`requireCDN` 开启且 CDN 鉴权不完整时失败，不静默回源；私有源站只有 `allowPrivateProxy` 显式开启才允许平台承载正文。
+- `expiresAt` / `refreshAt` 只描述当前授权有效期。`provider-input` 默认 4 小时，其余签名访问默认 5 分钟；公开 CDN 可没有 `expiresAt`。签名地址不写入画布或服务端持久化内容。
+- `GET /api/resources/:id/file` 仍是稳定平台入口，负责本地/平台代理字节流，云资源只返回 307 到 CDN 或对象存储；`?access=1` 只返回访问描述，不打开正文。`Range` 只影响字节流路径。
+- 公共资源、画布分享、外观、公告、管理员资源和日志媒体复用同一个 HTTP 执行器。公共签名链接受自身到期时间和变体绑定限制，但已签发的外部 URL 不承诺立即撤销。
+
+当前自动签名能力：公开 CDN、七牛私有下载签名和对象存储源站签名。阿里云/腾讯云私有 CDN 签名尚未自动支持，不能仅填写 CDN 域名就宣称已命中 CDN。真实 CORS、Range、CDN 命中率及账单收益必须在实际云环境通过浏览器网络记录和服务端流量观测验收。
+
 ## 生成成功后的重试保存
 
 `POST /tasks/:id/recover-media` 无需请求体。当前用户只能恢复自己有保存恢复记录的失败任务；重入队仍返回原任务 ID，不请求重新生成、不新建计费订单。已排队、运行或完成时幂等返回当前任务。取消任务、已退款订单、任务/账单归属不一致、项目已删除或归档时拒绝恢复。

@@ -23,6 +23,7 @@ const (
 	PluginKindProtocol    = "protocol"
 	PluginKindApplication = "application"
 	PluginKindPayment     = "payment"
+	PluginKindSMS         = "sms"
 
 	PluginScopeSystem = "system"
 	PluginScopeUser   = "user"
@@ -112,6 +113,9 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 	if policy, ok := systemPaymentPolicies[strings.TrimSpace(pluginID)]; ok {
 		return policy
 	}
+	if policy, ok := systemSMSPolicies[strings.TrimSpace(pluginID)]; ok {
+		return policy
+	}
 	return PluginManagementView{
 		Origin: PluginOriginOfficial, Kind: PluginKindProtocol,
 		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
@@ -144,6 +148,10 @@ func knownPluginIDs(items []PluginView) []string {
 		if _, exists := seen[id]; exists {
 			continue
 		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for id := range systemSMSPolicies {
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
@@ -338,6 +346,9 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 }
 
 func isKnownRuntimeOptionalPlugin(pluginID string) bool {
+	if isSystemSMSPluginID(pluginID) {
+		return true
+	}
 	if _, known := officialApplicationPolicies[pluginID]; known {
 		return true
 	}

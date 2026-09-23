@@ -2,9 +2,7 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
-	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -32,21 +30,14 @@ import (
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	awsv4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
-	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
-	cos "github.com/tencentyun/cos-go-sdk-v5"
 	"gorm.io/gorm"
 )
 
 const providerResourceURLTTL = 4 * time.Hour
-const directResourceURLTTL = 5 * time.Minute
 
 var errInvalidGeneratedDataURL = errors.New("生成内容 data URL 无效")
 
 type ResourceStream = assets.ResourceStream
-type ResourceDeliveryOptions = assets.ResourceDeliveryOptions
 type ResourceDelivery = assets.ResourceDelivery
 
 func (s *Service) Resources(userID string, limit int) ([]model.Resource, error) {
@@ -63,141 +54,6 @@ func (s *Service) Resource(userID string, id string) (*model.Resource, error) {
 		resource.PublicURL = ""
 	}
 	return resource, err
-}
-
-// DirectResourceURL 先校验资源归属，再按实际存储位置签发短时下载地址。
-func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
-	if err != nil {
-		return "", err
-	}
-	return s.directResourceURL(resource, time.Now().Add(directResourceURLTTL))
-}
-
-func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
-	if resource == nil {
-		return "", errors.New("资源不存在")
-	}
-	if resource.Status != model.ResourceStatusReady {
-		return "", BadAuthRequest("资源尚未上传完成")
-	}
-	if resource.Provider == "local" {
-		return s.signedPublicResourceURL(resource, expiresAt)
-	}
-	setting, err := s.ossSettingForResource(resource.UserID, resource)
-	if err != nil {
-		return "", err
-	}
-	setting.Provider = firstNonEmpty(resource.Provider, setting.Provider)
-	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
-	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
-	if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
-		return s.signedHTTPSPublicResourceURL(resource, expiresAt)
-	}
-	return signedOSSObjectURL(setting, resource.ObjectKey, expiresAt)
-}
-
-// PrepareResourceDelivery 统一决定浏览器资源出口：配置 CDN 时默认直连 CDN，显式代理仅用于需要同源 Blob 的内部读取。
-func (s *Service) PrepareResourceDelivery(userID string, id string, options ResourceDeliveryOptions) (*ResourceDelivery, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, NotFound("资源不存在")
-		}
-		return nil, err
-	}
-	return s.prepareResourceDelivery(userID, resource, options)
-}
-
-func (s *Service) prepareResourceDelivery(userID string, resource *model.Resource, options ResourceDeliveryOptions) (*ResourceDelivery, error) {
-	if resource == nil {
-		return nil, errors.New("资源不存在")
-	}
-	if resource.Status != model.ResourceStatusReady {
-		return nil, BadAuthRequest("资源尚未上传完成")
-	}
-	if resource.Provider != "local" && !options.ForceProxy {
-		setting, err := s.ossSettingForResource(userID, resource)
-		if err != nil {
-			return nil, err
-		}
-		// S3 兼容 Endpoint 可能是私网服务；浏览器默认始终使用同源代理。
-		// 只有明确的服务端上游需求才签发可公开访问的短时地址。
-		if setting.Provider == s3Provider && !options.ForceDirect {
-			return &ResourceDelivery{Resource: resource}, nil
-		}
-		if setting.Provider == qiniuKodoProvider && setting.CDNBaseURL != "" {
-			// 七牛私有空间即使配置了绑定域名，也不能匿名访问；必须使用
-			// Kodo 私有下载签名，否则浏览器会收到 NotSupportAnonymous。
-			redirectURL, err := signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(directResourceURLTTL))
-			if err != nil {
-				return nil, err
-			}
-			return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
-		}
-		if setting.CDNBaseURL != "" {
-			redirectURL, err := ossCDNObjectURL(setting.CDNBaseURL, resource.ObjectKey)
-			if err != nil {
-				return nil, err
-			}
-			return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
-		}
-		if options.ForceDirect {
-			if setting.Provider == s3Provider && !publicHTTPSStorageEndpoint(setting.Endpoint) {
-				redirectURL, err := s.signedHTTPSPublicResourceURL(resource, time.Now().Add(directResourceURLTTL))
-				if err != nil {
-					return nil, err
-				}
-				return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
-			}
-			redirectURL, err := signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(directResourceURLTTL))
-			if err != nil {
-				return nil, err
-			}
-			return &ResourceDelivery{Resource: resource, RedirectURL: redirectURL}, nil
-		}
-	}
-	return &ResourceDelivery{Resource: resource}, nil
-}
-
-func (s *Service) signedPublicResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
-	if resource == nil {
-		return "", errors.New("资源不存在")
-	}
-	baseURL, err := s.publicResourceBaseURL()
-	if err != nil {
-		return "", err
-	}
-	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
-	signature, err := s.signPublicResource(resource.ID, expires)
-	if err != nil {
-		return "", err
-	}
-	ext := resourceFileExtension(resource.ObjectKey, resource.MimeType, resource.Kind)
-	filename := resource.ID
-	if ext != "" {
-		if !strings.HasPrefix(ext, ".") {
-			ext = "." + ext
-		}
-		filename += ext
-	}
-	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/api/public/resources/" + url.PathEscape(resource.ID) + "/file/" + url.PathEscape(filename)
-	query := baseURL.Query()
-	query.Set("expires", expires)
-	query.Set("signature", signature)
-	baseURL.RawQuery = query.Encode()
-	return baseURL.String(), nil
-}
-
-func (s *Service) signedHTTPSPublicResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
-	baseURL, err := s.publicResourceBaseURL()
-	if err != nil {
-		return "", err
-	}
-	if baseURL.Scheme != "https" {
-		return "", BadAuthRequest("私网或 HTTP S3 用于上游资源时，服务器公开访问地址必须使用 HTTPS")
-	}
-	return s.signedPublicResourceURL(resource, expiresAt)
 }
 
 func (s *Service) verifyPublicResourceSignature(resourceID string, expires string, signature string) error {
@@ -448,20 +304,6 @@ func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string
 	return s.openResourceRange(userID, resource, rangeHeader)
 }
 
-func (s *Service) OpenPublicResourceRange(id string, expires string, signature string, rangeHeader string) (*ResourceStream, error) {
-	resource, err := s.repo.Resource(id)
-	if err != nil {
-		return nil, Forbidden("匿名下载链接无效")
-	}
-	if resource.Provider != "local" && resource.Provider != s3Provider {
-		return nil, Forbidden("匿名下载链接无效")
-	}
-	if err := s.verifyPublicResourceSignature(resource.ID, expires, signature); err != nil {
-		return nil, err
-	}
-	return s.openResourceRange(resource.UserID, resource, rangeHeader)
-}
-
 func (s *Service) openResourceRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
 	if resource.Status != model.ResourceStatusReady {
 		return nil, BadAuthRequest("资源尚未上传完成")
@@ -483,11 +325,11 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 	setting.Provider = firstNonEmpty(resource.Provider, setting.Provider)
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
-	stream, err := getOSSObjectRange(setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
+	stream, err := getOriginOSSObjectRange(setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
 	if err != nil {
 		return nil, err
 	}
-	return &ResourceStream{Resource: resource, Body: stream.body, StatusCode: stream.statusCode, ContentLength: stream.contentLength, ContentRange: stream.contentRange, AcceptRanges: stream.acceptRanges}, nil
+	return &ResourceStream{Resource: resource, Body: stream.Body, StatusCode: stream.StatusCode, ContentLength: stream.ContentLength, ContentRange: stream.ContentRange, AcceptRanges: stream.AcceptRanges}, nil
 }
 
 func (s *Service) storeResource(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool) (*model.Resource, bool, error) {
@@ -590,9 +432,10 @@ func writeLocalResourceObject(filePath string, body io.Reader) error {
 	return closeErr
 }
 
-// storeResourceObject 写入资源物理对象。对象存储不可用（配置错误、密钥失效、网络
-// 故障、设置被删）时自动降级为本地存储并同步改写资源记录，保证上传写路径不因外部
-// 存储故障整体失败。对象存储失败后 body 会被重新读取，须支持 Seek。
+// A cloud write is successful only after the configured origin accepts it.
+// storeResourceObject writes to the configured origin and degrades to local storage
+// when the external origin is unavailable. The resource binding is rewritten before
+// the caller persists the ready state, so later reads follow the actual object location.
 func (s *Service) storeResourceObject(resource *model.Resource, fileName string, body io.Reader) (string, error) {
 	if resource == nil {
 		return "", errors.New("资源不存在")
@@ -1015,6 +858,10 @@ func (s *Service) ossSettingForResource(userID string, resource *model.Resource)
 			// 密钥固定在资源绑定的历史版本；只有存储位置完全一致时，才允许沿用当前 CDN。
 			if resourceStorageMatches(current, resource) {
 				setting.CDNBaseURL = current.CDNBaseURL
+				// CDN 的鉴权方式和回退策略属于分发配置，而不是资源创建时的
+				// 凭据。存储位置未变时沿用当前策略，避免历史资源因管理员
+				// 刚补齐 CDN 鉴权配置而继续回源。
+				setting.Delivery = current.Delivery
 			}
 		}
 	} else {
@@ -1129,89 +976,6 @@ func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName 
 	return strings.Trim(strings.Join(nonEmptySegments(parts), "/"), "/")
 }
 
-func putOSSObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	setting = normalizeOSSSetting(setting)
-	if setting.Provider == tencentCOSProvider {
-		return putCOSObject(setting, objectKey, mimeType, size, body)
-	}
-	if setting.Provider == qiniuKodoProvider {
-		return putQiniuObject(setting, objectKey, mimeType, size, body)
-	}
-	if setting.Provider == s3Provider {
-		return putS3Object(setting, objectKey, mimeType, size, body)
-	}
-	return putAliyunOSSObject(setting, objectKey, mimeType, size, body)
-}
-
-// 阿里云 OSS 继续沿用原有 V1 签名和请求路径，避免已有部署行为发生变化。
-func putAliyunOSSObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	req, err := newOSSRequest(http.MethodPut, setting, objectKey, mimeType, body)
-	if err != nil {
-		return "", err
-	}
-	if size > 0 {
-		req.ContentLength = size
-	}
-	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("OSS 上传失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
-	}
-	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
-}
-
-type ossObjectStream struct {
-	body          io.ReadCloser
-	statusCode    int
-	contentLength int64
-	contentRange  string
-	acceptRanges  string
-}
-
-func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	setting = normalizeOSSSetting(setting)
-	if setting.Provider == s3Provider {
-		return getS3ObjectRange(setting, objectKey, rangeHeader)
-	}
-	if setting.CDNBaseURL != "" {
-		return getOSSObjectRangeViaCDN(setting, objectKey, rangeHeader)
-	}
-	if setting.Provider == tencentCOSProvider {
-		return getCOSObjectRange(setting, objectKey, rangeHeader)
-	}
-	if setting.Provider == qiniuKodoProvider {
-		return getQiniuObjectRange(setting, objectKey, rangeHeader)
-	}
-	return getAliyunOSSObjectRange(setting, objectKey, rangeHeader)
-}
-
-func getAliyunOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	req, err := newOSSRequest(http.MethodGet, setting, objectKey, "", nil)
-	if err != nil {
-		return nil, err
-	}
-	if rangeHeader != "" {
-		req.Header.Set("Range", rangeHeader)
-	}
-	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("OSS 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
-	}
-	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
-}
-
 func normalizeSingleByteRange(value string) string {
 	value = strings.TrimSpace(value)
 	if len(value) > 128 || !strings.HasPrefix(value, "bytes=") || strings.Contains(value, ",") {
@@ -1231,396 +995,6 @@ func decimalDigits(value string) bool {
 		}
 	}
 	return true
-}
-
-func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	setting = normalizeOSSSetting(setting)
-	if setting.Provider == s3Provider {
-		return signedS3ObjectURL(setting, objectKey, expiresAt)
-	}
-	if setting.Provider == qiniuKodoProvider {
-		return signedQiniuObjectURL(setting, objectKey, expiresAt)
-	}
-	if setting.CDNBaseURL != "" {
-		return ossCDNObjectURL(setting.CDNBaseURL, objectKey)
-	}
-	if setting.Provider == tencentCOSProvider {
-		return signedCOSObjectURL(setting, objectKey, expiresAt)
-	}
-	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt)
-}
-
-func signedAliyunOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	baseURL, err := ossBucketBaseURL(setting)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
-		return "", errors.New("OSS 访问密钥不可用")
-	}
-	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
-	if objectKey == "" {
-		return "", errors.New("OSS 对象路径为空")
-	}
-	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
-	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
-	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, "/" + setting.Bucket + "/" + objectKey}, "\n")
-	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
-	_, _ = mac.Write([]byte(stringToSign))
-	query := baseURL.Query()
-	query.Set("OSSAccessKeyId", setting.AccessKeyID)
-	query.Set("Expires", expires)
-	query.Set("Signature", base64.StdEncoding.EncodeToString(mac.Sum(nil)))
-	baseURL.RawQuery = query.Encode()
-	return baseURL.String(), nil
-}
-
-func putCOSObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	client, err := newCOSClient(setting, 2*time.Minute)
-	if err != nil {
-		return "", err
-	}
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	options := &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: mimeType, ContentLength: size}}
-	resp, err := client.Object.Put(context.Background(), objectKey, body, options)
-	if err != nil {
-		return "", fmt.Errorf("COS 上传失败：%w", err)
-	}
-	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
-}
-
-func putQiniuObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
-		return "", errors.New("七牛云 Kodo 访问密钥不可用")
-	}
-	if setting.Bucket == "" || objectKey == "" {
-		return "", errors.New("七牛云 Kodo Bucket 或对象路径为空")
-	}
-	config := qiniuStorage.NewConfig()
-	config.Region = qiniuRegion(setting.Region)
-	config.UpHost = strings.TrimRight(setting.Endpoint, "/")
-	uploader := qiniuStorage.NewFormUploader(config)
-	policy := qiniuStorage.PutPolicy{Scope: setting.Bucket + ":" + strings.TrimLeft(objectKey, "/"), Expires: 3600}
-	token := policy.UploadToken(qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret))
-	ret := qiniuStorage.PutRet{}
-	extra := &qiniuStorage.PutExtra{MimeType: mimeType}
-	if size < 0 {
-		size = 0
-	}
-	if err := uploader.Put(context.Background(), &ret, token, strings.TrimLeft(objectKey, "/"), body, size, extra); err != nil {
-		return "", fmt.Errorf("七牛云 Kodo 上传失败：%w", err)
-	}
-	return ret.Hash, nil
-}
-
-func getCOSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	client, err := newCOSClient(setting, 2*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-	options := &cos.ObjectGetOptions{Range: rangeHeader}
-	resp, err := client.Object.Get(context.Background(), objectKey, options)
-	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
-			return &ossObjectStream{body: io.NopCloser(bytes.NewReader(nil)), statusCode: resp.StatusCode, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
-		}
-		return nil, fmt.Errorf("COS 读取失败：%w", err)
-	}
-	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
-}
-
-func getQiniuObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	signedURL, err := signedQiniuObjectURL(setting, objectKey, time.Now().Add(directResourceURLTTL))
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	if rangeHeader != "" {
-		req.Header.Set("Range", rangeHeader)
-	}
-	ApplyDefaultOutboundHeaders(req)
-	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%w", err)
-	}
-	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
-	}
-	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
-}
-
-func getOSSObjectRangeViaCDN(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	signedURL, err := signedOSSObjectURL(setting, objectKey, time.Now().Add(directResourceURLTTL))
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	if rangeHeader != "" {
-		req.Header.Set("Range", rangeHeader)
-	}
-	ApplyDefaultOutboundHeaders(req)
-	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("对象存储 CDN 读取失败：%w", err)
-	}
-	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("对象存储 CDN 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
-	}
-	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
-}
-
-func signedCOSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
-		return "", errors.New("COS 访问密钥不可用")
-	}
-	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
-	if objectKey == "" {
-		return "", errors.New("COS 对象路径为空")
-	}
-	expires := time.Until(expiresAt)
-	if expires <= 0 {
-		return "", errors.New("COS 签名有效期必须晚于当前时间")
-	}
-	client, err := newCOSClient(setting, 2*time.Minute)
-	if err != nil {
-		return "", err
-	}
-	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil)
-	if err != nil {
-		return "", err
-	}
-	return signedURL.String(), nil
-}
-
-func signedQiniuObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
-		return "", errors.New("七牛云 Kodo 访问密钥不可用")
-	}
-	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
-	if objectKey == "" {
-		return "", errors.New("七牛云 Kodo 对象路径为空")
-	}
-	deadline := expiresAt.Unix()
-	if deadline <= time.Now().Unix() {
-		return "", errors.New("七牛云 Kodo 签名有效期必须晚于当前时间")
-	}
-	if setting.CDNBaseURL == "" {
-		return signedQiniuS3ObjectURL(setting, objectKey, expiresAt)
-	}
-	mac := qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret)
-	return qiniuStorage.MakePrivateURLv2(mac, strings.TrimRight(setting.CDNBaseURL, "/"), objectKey, deadline), nil
-}
-
-// signedQiniuS3ObjectURL 用七牛兼容 S3 的 AWS Signature V4 访问私有空间。
-// 没有绑定域名时，浏览器不直接访问该地址，而是由后端代理读取并返回文件。
-func signedQiniuS3ObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	region := qiniuS3Region(setting)
-	if region == "" {
-		return "", errors.New("七牛云 Kodo S3 Region 不可用")
-	}
-	baseURL := &url.URL{Scheme: "https", Host: setting.Bucket + ".s3." + region + ".qiniucs.com"}
-	// 保留对象键的原始路径，让 url.URL 和 AWS signer 只做一次 RFC 3986 转义。
-	baseURL.Path = "/" + objectKey
-	req, err := http.NewRequest(http.MethodGet, baseURL.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	credentialsValue := credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, "")
-	signer := awsv4.NewSigner(credentialsValue)
-	if _, err := signer.Presign(req, nil, "s3", region, time.Until(expiresAt), time.Now().UTC()); err != nil {
-		return "", fmt.Errorf("七牛云 Kodo S3 签名失败：%w", err)
-	}
-	return req.URL.String(), nil
-}
-
-func qiniuS3Region(setting ossSettingValue) string {
-	region := strings.ToLower(strings.TrimSpace(setting.Region))
-	if region == "" {
-		endpoint := strings.ToLower(setting.Endpoint)
-		for _, candidate := range []string{"z0", "z1", "z2", "na0", "as0", "cn-east-1", "cn-north-1", "cn-south-1", "us-north-1", "ap-southeast-1", "cn-east-2"} {
-			if strings.Contains(endpoint, candidate) {
-				region = candidate
-				break
-			}
-		}
-	}
-	switch region {
-	case "", "z0", "cn-east-1":
-		return "cn-east-1"
-	case "z1", "cn-north-1":
-		return "cn-north-1"
-	case "z2", "cn-south-1":
-		return "cn-south-1"
-	case "na0", "us-north-1":
-		return "us-north-1"
-	case "as0", "ap-southeast-1":
-		return "ap-southeast-1"
-	case "cn-east-2", "zhejiang2":
-		return "cn-east-2"
-	default:
-		return ""
-	}
-}
-
-func qiniuRegion(region string) *qiniuStorage.Region {
-	switch strings.ToLower(strings.TrimSpace(region)) {
-	case "z1", "cn-north-1":
-		return &qiniuStorage.ZoneHuabei
-	case "z2", "cn-south-1":
-		return &qiniuStorage.ZoneHuanan
-	case "na0", "us-north-1":
-		return &qiniuStorage.ZoneBeimei
-	case "as0", "ap-southeast-1":
-		return &qiniuStorage.ZoneXinjiapo
-	case "cn-east-2", "zhejiang2":
-		return &qiniuStorage.ZoneHuadongZheJiang2
-	default:
-		return &qiniuStorage.ZoneHuadong
-	}
-}
-
-func newCOSClient(setting ossSettingValue, timeout time.Duration) (*cos.Client, error) {
-	bucketURL, err := cosBucketBaseURL(setting)
-	if err != nil {
-		return nil, err
-	}
-	httpClient := OutboundHTTPClient(timeout)
-	httpClient.Transport = &cos.AuthorizationTransport{SecretID: setting.AccessKeyID, SecretKey: setting.AccessKeySecret, Transport: httpClient.Transport}
-	return cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, httpClient), nil
-}
-
-func cosBucketBaseURL(setting ossSettingValue) (*url.URL, error) {
-	setting = normalizeOSSSetting(setting)
-	endpoint := strings.TrimRight(setting.Endpoint, "/")
-	if endpoint == "" {
-		return nil, errors.New("COS Endpoint 为空")
-	}
-	if !strings.Contains(endpoint, "://") {
-		endpoint = "https://" + endpoint
-	}
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
-	if parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Trim(parsed.Path, "/") != "" {
-		return nil, errors.New("COS Endpoint 格式不正确")
-	}
-	if setting.Bucket == "" {
-		return nil, errors.New("COS Bucket 为空")
-	}
-	host := strings.ToLower(parsed.Hostname())
-	if strings.HasSuffix(host, ".myqcloud.com") || strings.HasSuffix(host, ".tencentcos.cn") {
-		if strings.HasPrefix(host, "cos.") || strings.HasPrefix(host, "cos-internal.") || strings.HasPrefix(host, "cos-website.") {
-			parsed.Host = setting.Bucket + "." + parsed.Host
-		} else if !strings.HasPrefix(host, strings.ToLower(setting.Bucket)+".") {
-			return nil, errors.New("COS Endpoint 中的 Bucket 与配置不一致")
-		}
-	}
-	return parsed, nil
-}
-
-func ossCDNBaseURL(raw string) (*url.URL, error) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Hostname() == "" {
-		return nil, errors.New("对象存储 CDN 加速域名格式不正确")
-	}
-	if parsed.Scheme != "https" && parsed.Scheme != "http" {
-		return nil, errors.New("对象存储 CDN 加速域名只支持 http/https")
-	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Trim(parsed.Path, "/") != "" {
-		return nil, errors.New("对象存储 CDN 加速域名不能包含认证信息、路径、查询参数或片段")
-	}
-	parsed.Path = ""
-	return parsed, nil
-}
-
-func ossCDNObjectURL(raw string, objectKey string) (string, error) {
-	baseURL, err := ossCDNBaseURL(raw)
-	if err != nil {
-		return "", err
-	}
-	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
-	if objectKey == "" {
-		return "", errors.New("对象存储对象路径为空")
-	}
-	// CDN 使用自己的访问鉴权与私有桶回源鉴权，不能携带 OSS/COS 的预签名参数。
-	// url.URL.String 会负责转义 Path；这里保留未转义值，避免把 %20 再编码为 %2520。
-	baseURL.Path = "/" + objectKey
-	return baseURL.String(), nil
-}
-
-func newOSSRequest(method string, setting ossSettingValue, objectKey string, contentType string, body io.Reader) (*http.Request, error) {
-	baseURL, err := ossBucketBaseURL(setting)
-	if err != nil {
-		return nil, err
-	}
-	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
-	// 请求体必须用 no-op close 包装：服务端提前返回（如 OSS 签名 403）时
-	// http.Transport 会关闭未发完的 Request.Body，若直接传入 *os.File 等
-	// 调用方持有的文件，后续“降级本地存储”的 Seek 重读将因 file already
-	// closed 失败。NopCloser 让 Transport 的关闭成为空操作，底层文件保持可用。
-	// GET/HEAD/DELETE 等无请求体的调用传入 nil body；NopCloser(nil) 会产生非 nil 的
-	// Body 包装 nil reader，Go 1.26 发送前 body 探测会直接 nil 解引用崩溃。
-	var reqBody io.Reader
-	if body != nil {
-		reqBody = io.NopCloser(body)
-	}
-	req, err := http.NewRequest(method, baseURL.String(), reqBody)
-	if err != nil {
-		return nil, err
-	}
-	date := time.Now().UTC().Format(http.TimeFormat)
-	req.Header.Set("Date", date)
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	stringToSign := strings.Join([]string{method, "", contentType, date, "/" + setting.Bucket + "/" + objectKey}, "\n")
-	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
-	_, _ = mac.Write([]byte(stringToSign))
-	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req.Header.Set("Authorization", "OSS "+setting.AccessKeyID+":"+signature)
-	return req, nil
-}
-
-func ossBucketBaseURL(setting ossSettingValue) (*url.URL, error) {
-	endpoint := strings.TrimRight(setting.Endpoint, "/")
-	if endpoint == "" {
-		return nil, errors.New("OSS Endpoint 为空")
-	}
-	if !strings.Contains(endpoint, "://") {
-		endpoint = "https://" + endpoint
-	}
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
-	if parsed.Host == "" {
-		return nil, errors.New("OSS Endpoint 格式不正确")
-	}
-	if !strings.HasPrefix(parsed.Host, setting.Bucket+".") {
-		parsed.Host = setting.Bucket + "." + parsed.Host
-	}
-	return parsed, nil
-}
-
-func escapeObjectKey(key string) string {
-	parts := strings.Split(key, "/")
-	for i, part := range parts {
-		parts[i] = url.PathEscape(part)
-	}
-	return strings.Join(parts, "/")
 }
 
 func safeObjectSegment(value string) string {

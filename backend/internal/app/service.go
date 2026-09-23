@@ -19,6 +19,7 @@ import (
 	"infinite-canvas/backend/internal/prompts"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/skills"
+	"infinite-canvas/backend/internal/sms"
 	"infinite-canvas/backend/internal/tools"
 )
 
@@ -71,6 +72,7 @@ type Service struct {
 	tools                    *tools.Service
 	prompts                  *prompts.Service
 	auth                     *auth.Service
+	sms                      *sms.Service
 	canvas                   *canvas.Service
 }
 
@@ -121,6 +123,8 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.tools = tools.New(service.repo)
 	service.prompts = prompts.New(service.repo, promptAdminGate{svc: service})
 	service.auth = auth.New(service.repo, authHost{svc: service}, nil)
+	service.sms = service.newSMSDomain()
+	service.auth.SetSMSDelivery(service.sms)
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})
 	service.platform = platform.New(service.repo, coordinator, platformHost{svc: service})
 	return service

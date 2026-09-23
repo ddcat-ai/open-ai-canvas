@@ -805,7 +805,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	}
 	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
 	if useObjectURL {
-		signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
+		signedURL, err := s.providerResourceURL(resource, time.Now().Add(providerResourceURLTTL))
 		if err != nil {
 			return fmt.Errorf("生成参考素材地址失败：%w", err)
 		}

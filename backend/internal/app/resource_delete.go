@@ -1,11 +1,8 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,8 +13,6 @@ import (
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
-	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
-	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
 	"gorm.io/gorm"
 )
 
@@ -362,59 +357,6 @@ func (s *Service) deleteLocalResourceObject(objectKey string) error {
 	}
 	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("删除服务器本地文件失败：%w", err)
-	}
-	return nil
-}
-
-func deleteAliyunOSSObject(setting ossSettingValue, objectKey string) error {
-	req, err := newOSSRequest(http.MethodDelete, setting, objectKey, "", nil)
-	if err != nil {
-		return err
-	}
-	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
-	if err != nil {
-		return fmt.Errorf("删除阿里云 OSS 对象失败：%w", err)
-	}
-	defer resp.Body.Close()
-	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusNotFound {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("删除阿里云 OSS 对象失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
-	}
-	return nil
-}
-
-func deleteTencentCOSObject(setting ossSettingValue, objectKey string) error {
-	client, err := newCOSClient(setting, 2*time.Minute)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Object.Delete(context.Background(), objectKey)
-	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
-	}
-	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			return nil
-		}
-		return fmt.Errorf("删除腾讯云 COS 对象失败：%w", err)
-	}
-	return nil
-}
-
-func deleteQiniuObject(setting ossSettingValue, objectKey string) error {
-	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
-		return errors.New("七牛云 Kodo 访问密钥不可用")
-	}
-	if setting.Bucket == "" || strings.TrimSpace(objectKey) == "" {
-		return errors.New("七牛云 Kodo Bucket 或对象路径为空")
-	}
-	mac := qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret)
-	manager := qiniuStorage.NewBucketManager(mac, &qiniuStorage.Config{Region: qiniuRegion(setting.Region), UseHTTPS: true})
-	if err := manager.Delete(setting.Bucket, strings.TrimLeft(objectKey, "/")); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "no such") || strings.Contains(strings.ToLower(err.Error()), "not found") {
-			return nil
-		}
-		return fmt.Errorf("删除七牛云 Kodo 对象失败：%w", err)
 	}
 	return nil
 }
