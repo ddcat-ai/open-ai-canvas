@@ -362,6 +362,14 @@ func TestCloudAgentAdmissionAcceptsTokenPricingWithQuotedChargeLimit(t *testing.
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	// 预授权额度按「编译后系统提示词的估算 token 数 × token 单价」得出（见 estimateTaskTokens：
+	// estimatedTokens = (rune 数 + 3) / 4，输出侧再按 maxOutputTokens 计 4096）。
+	// 系统提示词随产线引导增长后，夹具默认的 10000 microcredits 已不足以覆盖估算值，
+	// 这里显式补足余额，使本用例继续聚焦「token 计价 + 报价硬上限」本身。
+	if err := db.Model(&model.CreditAccount{}).Where("user_id = ?", "user").
+		Update("available_microcredits", int64(1_000_000)).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
 	if err != nil {
