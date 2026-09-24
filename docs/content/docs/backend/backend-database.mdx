@@ -15,7 +15,7 @@ description: 影策后端核心持久化表与状态边界
 
 ## 结构迁移与版本
 
-当前结构版本为 34。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 34，回退需恢复匹配的数据库备份。
+当前结构版本为 35。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 35，回退需恢复匹配的数据库备份。关闭自动迁移的生产环境必须运行正式的 v35 migration；仅在数据库中手工补表不能更新 `schema_migrations` 的版本与校验和记录。
 
 ### 生成成功后的作品保存恢复
 
@@ -31,7 +31,7 @@ description: 影策后端核心持久化表与状态边界
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
 | `schema_migrations` | 保存已成功应用的结构版本、名称、校验和与时间 | 已应用版本的校验和发生变化时拒绝启动；数据库版本高于当前二进制支持版本时拒绝旧程序连接 |
-| `cloud_agent_executions` | 保存 Agent 每轮的持久化执行状态、修订号和运行状态 | `(id, user_id)` 归属受服务端校验；状态通过 revision CAS 更新；`state_json` 包含技能快照、工具调用、审批、活动子任务和事件，不保存浏览器密钥 |
+| `cloud_agent_executions` | 保存 Agent 每轮的持久化执行状态、修订号和运行状态 | `(id, user_id)` 归属受服务端校验；状态通过 revision CAS 更新；`state_json` 包含技能快照、工具调用、审批、活动子任务、事件、最近一次语义压缩检查点与"正在压缩"的压缩态，不保存浏览器密钥 |
 | `agent_profiles` | 保存用户、项目和画布层的 Agent 常驻偏好、哈希和独立 revision | `(user_id, scope, project_id, canvas_id)` 唯一；归属由 service 校验，写入使用 revision CAS；正文不能授权新能力 |
 | `agent_lessons` | 用户私有的 Agent 记忆。Agent 写入待审，用户自己批准后才会注入该用户的会话 | 按 `author_user_id` 隔离；写入机械脱敏；`steps_json` 存路线；`hits` 是主动查阅、`injected` 是自动注入；管理员可按用户查看和删除，不能代批 |
 | `agent_memory_settings` | 用户私有的记忆压缩周期、文本模型和最近一次压缩任务状态 | 主键 `user_id`；压缩结果只在 `compact_task_id` 匹配时应用到该用户已批准记忆 |

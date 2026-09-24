@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -195,7 +197,14 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		run, err := svc.CloudAgentRun(user.ID, c.Param("id"))
+		// 运行详情只返回一页事件，分页参数越界或非法一律拒绝：静默夹取会让客户端
+		// 以为拿到的是它请求的那一页，从而把缺口当成"没有更多记录"。
+		options, err := agentRunViewOptions(c)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		run, err := svc.CloudAgentRun(user.ID, c.Param("id"), options)
 		if err != nil {
 			failService(c, err)
 			return
@@ -297,14 +306,17 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		run, err := svc.CloudAgentRun(user.ID, c.Param("id"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
+		// 游标就是事件 seq：先解析它，才能只把 after 之后的增量交给视图，
+		// 断线重连不必重新载入前面已经发过的事件。
 		after, err := taskTextEventCursor(c)
 		if err != nil {
 			fail(c, 400, err)
+			return
+		}
+		options := service.CloudAgentRunViewOptions{SinceSeq: int(after)}
+		run, err := svc.CloudAgentRun(user.ID, c.Param("id"), options)
+		if err != nil {
+			failService(c, err)
 			return
 		}
 		c.Header("Content-Type", "text/event-stream")
@@ -345,7 +357,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			case <-c.Request.Context().Done():
 				return
 			case <-ticker.C:
-				run, err = svc.CloudAgentRunIfChanged(user.ID, c.Param("id"), revision)
+				run, err = svc.CloudAgentRunIfChanged(user.ID, c.Param("id"), revision, options)
 			}
 		}
 	})
@@ -361,4 +373,32 @@ func writeAgentSSE(c *gin.Context, event string, id int64, value any) {
 	}
 	_, _ = fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, data)
 	c.Writer.Flush()
+}
+
+// agentRunEventQueryLimit 是 eventLimit 允许的最大值，与 app 侧的增量上限一致：
+// 请求更大的页没有意义（单次响应体积），直接拒绝比静默截断更容易被发现。
+const agentRunEventQueryLimit = 500
+
+func agentRunViewOptions(c *gin.Context) (service.CloudAgentRunViewOptions, error) {
+	options := service.CloudAgentRunViewOptions{}
+	for _, item := range []struct {
+		name  string
+		value *int
+		min   int
+		max   int
+	}{
+		{name: "sinceSeq", value: &options.SinceSeq, min: 0, max: math.MaxInt32},
+		{name: "eventLimit", value: &options.EventLimit, min: 1, max: agentRunEventQueryLimit},
+	} {
+		raw := strings.TrimSpace(c.Query(item.name))
+		if raw == "" {
+			continue
+		}
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < item.min || parsed > item.max {
+			return options, fmt.Errorf("%s 必须是 %d–%d 之间的整数", item.name, item.min, item.max)
+		}
+		*item.value = parsed
+	}
+	return options, nil
 }

@@ -169,6 +169,23 @@ func migrateSchemaV1(db *gorm.DB) error {
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error
 }
 
+// migrateSchemaV35 installs the authentication notification tables and fields
+// added after the v34 deployment line. They cannot be added to the baseline
+// model registry alone because existing databases never rerun migration v1.
+func migrateSchemaV35(db *gorm.DB) error {
+	if err := db.AutoMigrate(
+		&model.User{},
+		&model.EmailVerificationCode{},
+		&model.AuthVerification{},
+		&model.NotificationQuota{},
+		&model.SMSChannel{},
+		&model.SMSRecord{},
+	); err != nil {
+		return err
+	}
+	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_nonempty ON users(phone) WHERE phone <> ''").Error
+}
+
 func backfillProjectUnitWordCounts(db *gorm.DB) error {
 	var units []model.ProjectUnit
 	if err := db.Select("id", "source_text").Where("word_count = 0 AND source_text <> ''").Find(&units).Error; err != nil {

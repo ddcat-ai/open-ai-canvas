@@ -22,15 +22,22 @@ type cloudAgentContextBudget struct {
 	InputBudgetTokens   int
 	CompactAtTokens     int
 	Source              string
+	// Configured 说明这份预算里的窗口是不是"模型自己声明的值"：false 表示没有解析到
+	// 可用窗口、上面几个数都来自兜底默认值。压力读数据此决定要不要给出窗口占用率——
+	// 拿默认窗口冒充真实能力（例如给未声明窗口的模型算一个"占满 80%"）会误导排查。
+	Configured bool
 }
 
 func defaultCloudAgentContextBudget() cloudAgentContextBudget {
-	return cloudAgentContextBudgetFor(defaultCloudAgentContextWindowTokens, defaultCloudAgentMaxOutputTokens, "default")
+	budget := cloudAgentContextBudgetFor(defaultCloudAgentContextWindowTokens, defaultCloudAgentMaxOutputTokens, "default")
+	budget.Configured = false
+	return budget
 }
 
 func cloudAgentContextBudgetFor(contextWindow, maxOutput int, source string) cloudAgentContextBudget {
+	configured := true
 	if contextWindow < minCloudAgentContextWindowTokens || contextWindow > maxCloudAgentContextWindowTokens {
-		contextWindow = defaultCloudAgentContextWindowTokens
+		contextWindow, configured = defaultCloudAgentContextWindowTokens, false
 	}
 	if maxOutput < 256 || maxOutput >= contextWindow {
 		maxOutput = min(defaultCloudAgentMaxOutputTokens, contextWindow/4)
@@ -50,6 +57,7 @@ func cloudAgentContextBudgetFor(contextWindow, maxOutput int, source string) clo
 		InputBudgetTokens:   inputBudget,
 		CompactAtTokens:     max(1_024, inputBudget*85/100),
 		Source:              source,
+		Configured:          configured,
 	}
 }
 
@@ -88,13 +96,29 @@ func (s *Service) cloudAgentContextBudgetForRequest(req CloudAgentRequest) cloud
 		return defaultCloudAgentContextBudget()
 	}
 	if req.ChannelID != "" && req.ChannelModelKey != "" {
-		if channelModel, err := s.repo.ChannelModelByKey(req.ChannelID, req.ChannelModelKey); err == nil {
-			if capability, err := normalizedChannelModelCapability(channelModel); err == nil && capability != nil && capability.Text != nil {
-				return cloudAgentContextBudgetFor(capability.Text.ContextWindowTokens, capability.Text.MaxOutputTokens, "channel-model")
-			}
+		if capability := s.cloudAgentChannelTextCapability(req); capability != nil {
+			return cloudAgentContextBudgetFor(capability.ContextWindowTokens, capability.MaxOutputTokens, "channel-model")
 		}
 	}
 	return defaultCloudAgentContextBudget()
+}
+
+// cloudAgentChannelTextCapability resolves the text capability of the channel
+// model this turn will actually run on. Logical models have no single channel
+// model, so they return nil and keep the route-intersection path.
+func (s *Service) cloudAgentChannelTextCapability(req CloudAgentRequest) *TextCapabilityConfig {
+	if s == nil || s.repo == nil || req.ChannelID == "" || req.ChannelModelKey == "" {
+		return nil
+	}
+	channelModel, err := s.repo.ChannelModelByKey(req.ChannelID, req.ChannelModelKey)
+	if err != nil {
+		return nil
+	}
+	capability, err := normalizedChannelModelCapability(channelModel)
+	if err != nil || capability == nil || capability.Text == nil {
+		return nil
+	}
+	return capability.Text
 }
 
 // cloudAgentEstimatedTokens is deliberately conservative for non-ASCII text.

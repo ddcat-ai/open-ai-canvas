@@ -88,6 +88,21 @@ type CloudAgentRun struct {
 	SpentCredits   float64             `json:"spentCredits"`
 	Step           int                 `json:"step"`
 	ActiveMessage  map[string]string   `json:"activeMessage,omitempty"`
+	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
+	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
+	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
+	// 增量读取的 sinceSeq，EventsTruncated 表示还有更早的记录没随本次返回。
+	EventSeqBase    int  `json:"eventSeqBase"`
+	EventCount      int  `json:"eventCount"`
+	LatestSeq       int  `json:"latestSeq"`
+	EventsTruncated bool `json:"eventsTruncated"`
+}
+
+// CloudAgentRunViewOptions 是运行详情的读取选项：SinceSeq 只取该序号之后的增量，
+// EventLimit 覆盖默认页大小。零值即默认视图（尾部一窗）。
+type CloudAgentRunViewOptions struct {
+	SinceSeq   int
+	EventLimit int
 }
 
 func validateCloudAgentRequest(req *CloudAgentRequest) error {
@@ -267,7 +282,7 @@ func cloudAgentRunTerminal(status string) bool {
 	return status == "completed" || status == "failed" || status == "cancelled" || status == "rejected"
 }
 
-func (s *Service) CloudAgentRun(userID, id string) (*CloudAgentRun, error) {
+func (s *Service) CloudAgentRun(userID, id string, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	task, state, err := s.cloudAgentTask(userID, id)
 	if err != nil {
 		return nil, err
@@ -284,13 +299,13 @@ func (s *Service) CloudAgentRun(userID, id string) (*CloudAgentRun, error) {
 	} else if lookupErr != nil {
 		return nil, lookupErr
 	}
-	return s.cloudAgentExecutionOutput(task, state)
+	return s.cloudAgentExecutionOutput(task, state, options...)
 }
 
 // CloudAgentRunIfChanged keeps idle event streams on a small indexed read.
 // The persisted revision, not a process-local notification, is authoritative
 // across instances and after missed/disconnected notifications.
-func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64) (*CloudAgentRun, error) {
+func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	current, err := s.repo.CloudAgentRevision(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, kernel.NotFound("Agent 运行不存在")
@@ -301,7 +316,7 @@ func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64) (*Cl
 	if current == revision {
 		return nil, nil
 	}
-	return s.CloudAgentRun(userID, id)
+	return s.CloudAgentRun(userID, id, options...)
 }
 
 // CreateCloudAgentRun validates every capability before admission. The task PK
@@ -364,7 +379,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
 			return nil, err
 		}
-		parentRun, err := s.CloudAgentRun(userID, parentID)
+		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
+		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
+		parentRun, err := s.CloudAgentRun(userID, parentID, CloudAgentRunViewOptions{EventLimit: cloudAgentContinuationEventLimit})
 		if err != nil {
 			return nil, err
 		}
@@ -393,15 +410,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, err
 		}
-		// The user's goal survives a failed first model call too. Tool facts are
-		// context, not authorization to replay a write or charge a second time.
-		history = append(history, providerTextMessage{Role: "user", Content: parent.Prompt})
-		for _, message := range parentState.Canonical.Messages {
-			if stringField(message, cloudAgentContextSourceKey) == "user_interjection" {
-				history = append(history, providerTextMessage{Role: "user", Content: stringField(message, "content")})
-			}
-		}
-		history = append(history, providerTextMessage{Role: "assistant", Content: text})
+		// 压缩时 TextHistory 与 Canonical 长度相同；压缩后本轮仍可能继续回答或收到插话。
+		// 只补压缩边界之后的内容，不能重复原始要求，也不能丢掉最终回复。
+		history = cloudAgentContinuationHistory(history, parentState, parent.Prompt, text)
+		// 事实交接帧不能因为压缩而缺席：长会话恰恰最需要它，而且"别重复提交收费任务"的
+		// 依据只在这份帧里（它带的是上一轮真实的工具结果与画布改动）。
 		if strings.TrimSpace(context) != "" {
 			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
@@ -443,6 +456,10 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, Skills: skillSnapshots, Profile: profile, Policy: policy}
 	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
 	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
+	// 必须登记进 state.Policy（值拷贝）：state 才是随任务持久化、被运行期读取的那份，
+	// 在这里改局部 policy 不会生效。登记之后压力读数的"系统提示分段"才能把 memory 摊开，
+	// 并与 system 桶合计对齐。
+	cloudAgentRecordMemorySegment(&state.Policy, canonical.SystemPrompt)
 	canonical.PromptCacheKey = cloudAgentPromptCacheKey(req.CanvasID, canonical.SystemPrompt)
 	attachCloudAgentPlan(&canonical, inheritedPlan)
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
@@ -493,6 +510,40 @@ func cloudAgentLegacyHistory(messages []map[string]interface{}, currentPrompt st
 			message.AgentContextSource = source
 		}
 		history = append(history, message)
+	}
+	return history
+}
+
+func cloudAgentContinuationHistory(history []providerTextMessage, state cloudAgentRuntime, prompt, reply string) []providerTextMessage {
+	if !state.HistoryIncludesCurrent {
+		// The user's goal survives a failed first model call too. Tool facts are
+		// context, not authorization to replay a write or charge a second time.
+		history = append(history, providerTextMessage{Role: "user", Content: prompt})
+		for _, message := range state.Canonical.Messages {
+			if stringField(message, cloudAgentContextSourceKey) == "user_interjection" {
+				history = append(history, providerTextMessage{Role: "user", Content: stringField(message, "content")})
+			}
+		}
+		return append(history, providerTextMessage{Role: "assistant", Content: reply})
+	}
+	// TextHistory 是压缩瞬间的 canonical 快照；之后只有 canonical 会追加模型回复。
+	// 终态取消/失败可能没有新回复，不能拿压缩前的最后一条 assistant 伪装成新回复。
+	after := state.Canonical.Messages[len(state.TextHistory):]
+	for _, message := range after {
+		if stringField(message, cloudAgentContextSourceKey) == "user_interjection" {
+			history = append(history, providerTextMessage{Role: "user", Content: stringField(message, "content")})
+		}
+	}
+	if strings.TrimSpace(reply) != "" {
+		for i := len(after) - 1; i >= 0; i-- {
+			message := after[i]
+			if stringField(message, "role") == "assistant" && stringField(message, "content") == reply {
+				if _, hasCalls := message["tool_calls"]; !hasCalls {
+					history = append(history, providerTextMessage{Role: "assistant", Content: reply})
+				}
+				break
+			}
+		}
 	}
 	return history
 }

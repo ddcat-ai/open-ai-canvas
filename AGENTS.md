@@ -41,7 +41,7 @@
 
 - `backend/internal/handler/`：HTTP 入参、鉴权上下文、调用 service、返回统一响应；不放业务判断和数据库查询。
 - `backend/internal/service/`：稳定导入面。只再导出 `internal/app` 的类型、常量和包级函数（`aliases_*.go`）。handler/cmd 继续 import 本包。
-- `backend/internal/app/`：HTTP 组合根和尚未拆出的业务实现。校验、权限、跨域编排从这里进入。画布生成调度仍主要在 `provider.go`；文本 / 图片 / 视频遗留 / 音频 / HTTP / 声明式协议分别在 `provider_text.go`、`provider_image.go`、`provider_video.go`、`provider_audio.go`、`provider_http_client.go`、`provider_protocol.go`。技能库在 `internal/skills`，提示词与风格在 `internal/prompts`，登录注册在 `internal/auth`，画布分享在 `internal/canvas`，资源引用解析在 `internal/assets`，运行时策略/限流/worker 在 `internal/platform`，错误码与通用工具在 `internal/kernel`，出站 SSRF 在 `internal/outbound`。域包不得 import `internal/service` 或 `internal/app`。
+- `backend/internal/app/`：HTTP 组合根和尚未拆出的业务实现。校验、权限、跨域编排从这里进入。画布生成调度仍主要在 `provider.go`；文本 / 图片 / 视频遗留 / 音频 / HTTP / 声明式协议分别在 `provider_text.go`、`provider_image.go`、`provider_video.go`、`provider_audio.go`、`provider_http_client.go`、`provider_protocol.go`。技能库在 `internal/skills`，提示词与风格在 `internal/prompts`，登录注册在 `internal/auth`，画布分享在 `internal/canvas`，资源引用解析在 `internal/assets`，运行时策略/限流/worker 在 `internal/platform`，错误码与通用工具在 `internal/kernel`，出站 SSRF 在 `internal/outbound`，Agent 上下文检查点契约在 `internal/agentcontext`。域包不得 import `internal/service` 或 `internal/app`。
 - `backend/internal/repository/`：GORM 查询和持久化；不承载业务策略。
 - `backend/internal/model/`：结构、枚举和简单模型方法；不调用外部服务。
 - `backend/internal/provider/`：模型供应商能力和协议实现。

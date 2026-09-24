@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 34
+const CurrentSchemaVersion int64 = 35
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -22,6 +22,7 @@ const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const creationRuntimeChecksum = "sha256:creation-runtime-v10-20260909"
+const authNotificationsChecksum = "sha256:auth-notifications-v35-20260924"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -117,6 +118,7 @@ var schemaMigrations = []migration{
 		}
 		return nil
 	}},
+	{version: 35, name: "auth_notifications", checksum: authNotificationsChecksum, apply: migrateSchemaV35},
 }
 
 func migrateChannelModelTags(tx *gorm.DB) error {

@@ -17,6 +17,10 @@ const (
 	// cloudAgentContinuationFrameBytes 是交接帧的硬上限：超了就按"最近的改动优先"裁剪，
 	// 并把裁掉的组数记进 omittedCanvasChanges，绝不把整份历史顶过硬闸。
 	cloudAgentContinuationFrameBytes = 8 << 10
+	// cloudAgentContinuationEventLimit 是续轮读取上一轮事件的上限。运行详情默认只返回尾部
+	// 一窗，而收束要覆盖上一轮**全部**真实改动（画布改动、已提交任务、助手原话），
+	// 被窗口截断就会表现为"新一轮忘了上一轮做过什么"。
+	cloudAgentContinuationEventLimit = 1000
 )
 
 type cloudAgentContinuationChange struct {
