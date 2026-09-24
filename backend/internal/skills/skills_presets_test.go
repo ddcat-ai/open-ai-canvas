@@ -102,7 +102,9 @@ func TestSkillPresetsRejectOverBudgetAndTelemetrySource(t *testing.T) {
 		t.Fatalf("应拒绝超 8 技能预设，实际: %v", err)
 	}
 	// v1 只允许手工策展：遥测驱动的预设要等 #590 有数据后才放开。
-	builtinSkillPresetsJSON = []byte(`{"version":1,"presets":[{"presetId":"tele","name":"遥测预设","scene":"drama","skillIds":["16000000000099"],"rationale":"数据驱动","source":"telemetry","evidence":"E4","upgrade":""}]}`)
+	// 引用位必须落在种子市场在架技能上，否则会先撞上「未上架技能」校验，
+	// 掩盖本用例真正要断言的 source 规则（门房 16000000000107 恒在架）。
+	builtinSkillPresetsJSON = []byte(`{"version":1,"presets":[{"presetId":"tele","name":"遥测预设","scene":"drama","skillIds":["16000000000107"],"rationale":"数据驱动","source":"telemetry","evidence":"E4","upgrade":""}]}`)
 	if _, err := svc.SkillPresets(); err == nil || !strings.Contains(err.Error(), "hand-curated") {
 		t.Fatalf("应拒绝非手工策展来源，实际: %v", err)
 	}

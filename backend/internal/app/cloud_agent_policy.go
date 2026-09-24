@@ -187,6 +187,12 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "description": cloudAgentSkillManifestDescription(skill.Description), "version": skill.Version, "hash": skill.Hash, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
 	}
 	context["skills"] = manifests
+
+	scenarioResult := resolveScenarioPreRouting(req.Prompt, skills)
+	if scenarioResult != nil {
+		context["scenarioRouting"] = scenarioResult
+	}
+
 	layers := make([]map[string]any, 0, len(profile.Layers))
 	for _, layer := range profile.Layers {
 		layers = append(layers, map[string]any{"scope": layer.Scope, "revision": layer.Revision, "hash": layer.Hash, "characters": utf8.RuneCountInString(layer.Content)})
@@ -199,7 +205,13 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 	b.WriteString("\n\n本轮执行上下文：\n")
 	b.Write(encoded)
 	recorder.mark(&b, "execution", "本轮执行上下文（事实快照）")
-	snapshot.SystemSegments = recorder.segments
+
+	if guide := formatScenarioRoutingGuide(scenarioResult); guide != "" {
+		b.WriteString("\n")
+		b.WriteString(guide)
+		recorder.mark(&b, "scenarioRouting", "短剧场景预路由指南")
+	}
+
 	text := strings.TrimSpace(b.String())
 	if text == "" {
 		return "", cloudAgentPolicySnapshot{}, fmt.Errorf("compiled Agent policy is empty")

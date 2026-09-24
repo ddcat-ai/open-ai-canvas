@@ -35,7 +35,7 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 	if err := json.Unmarshal(builtinSkillsJSON, &definitions); err != nil {
 		t.Fatal(err)
 	}
-	const communitySkillID = "16000000000081"
+	const communitySkillID = "16000000000107"
 	communitySkillName := ""
 	community := 0
 	for _, def := range definitions {
@@ -54,8 +54,8 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 			communitySkillName = def.SkillName
 		}
 	}
-	if community != 35 {
-		t.Fatalf("community skills = %d, want 35", community)
+	if community != 14 {
+		t.Fatalf("community skills = %d, want 14", community)
 	}
 	if communitySkillName == "" {
 		t.Fatalf("community seed skill %s is missing", communitySkillID)
