@@ -5,6 +5,7 @@ import { applyCreativeAnswers, creativeScenarioPrompt, normalizeCreativeQuestion
 import { assertCreativeBriefSpecifications, creativeNodeId, creativeProposalOps, initialCreativeState, mergeCreativeBrief, normalizeCreativeProposal, readCreativeState, type CreativeAgentState, type CreativeMediaState } from "@/lib/creation/creative-agent-state";
 import { CREATIVE_AGENT_SYSTEM_PROMPT, CREATIVE_AGENT_TOOLS, parseCreativeToolArguments } from "@/lib/creation/creative-agent-tools";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { submittedProducedModel } from "@/lib/canvas/produced-model";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { logicalModelIDForConfig, modelDisplayName, resolveModelRequestConfig, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 import { creationRuns, type CreationGuard, type CreationRun, type CreationRunDetail, type CreationStatus, type CreationSubmission } from "./api/creation-runs";
@@ -460,7 +461,9 @@ export class CreativeAgentController {
             const adapter = this.options.canvas();
             const node = adapter?.read().nodes.find((node) => node.id === media.nodeId);
             if (!node) throw new Error("目标节点已删除，产物仍保留在任务中心和素材库");
-            const metadata = { content: resourceFileUrl(resourceIdFromStorageKey(output.storageKey)!), storageKey: output.storageKey, status: "success" as const, naturalWidth: output.width, naturalHeight: output.height, bytes: output.bytes, mimeType: output.mimeType, ...(result.video ? { durationMs: result.video.durationMs } : {}), generationTaskId: task.id };
+            const generationItem = this.state.proposal?.generationItems.find((item) => item.ref === media.ref);
+            const producedModel = submittedProducedModel(task.model) || submittedProducedModel(generationItem?.model);
+            const metadata = { content: resourceFileUrl(resourceIdFromStorageKey(output.storageKey)!), storageKey: output.storageKey, status: "success" as const, naturalWidth: output.width, naturalHeight: output.height, bytes: output.bytes, mimeType: output.mimeType, ...(result.video ? { durationMs: result.video.durationMs } : {}), generationTaskId: task.id, producedModel, producedModelCandidate: undefined };
             const asset = await this.getAsset()({ canvasId: this.run!.canvasId!, node: { ...node, metadata: { ...node.metadata, ...metadata } }, source: "canvas-generation", taskId: task.id, signal: this.abort.signal });
             this.guard();
             await this.commitOps([{ type: "update_node", id: media.nodeId, metadata: { ...metadata, assetId: asset.assetId } }]);

@@ -7,6 +7,7 @@ import { Button, Grid } from "antd";
 import { Home, PanelLeftClose, PanelLeftOpen, Layers, Images, ListChecks, History, X } from "lucide-react";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
+import { useEffectiveConfig } from "@/stores/use-config-store";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -47,6 +48,7 @@ export function CanvasWorkspacePanel({
     const [query, setQuery] = useState("");
     const history = tab === "history";
     const deferredQuery = useDeferredValue(query);
+    const config = useEffectiveConfig();
     const screens = Grid.useBreakpoint();
     const tasks = useCanvasWorkspaceTasks(projectId, open && (tab === "tasks" || history));
     const content = (
@@ -58,7 +60,7 @@ export function CanvasWorkspacePanel({
                 </button>
             </header>
             {tab === "nodes" && (
-                <CanvasWorkspaceNodeListPanel nodes={nodes} results={searchCanvasNodes(nodes, deferredQuery, nodes.length)} query={query} deferredQuery={deferredQuery} selectedNodeIds={selectedNodeIds} onQueryChange={setQuery} onFocus={onFocus} />
+                <CanvasWorkspaceNodeListPanel nodes={nodes} config={config} results={searchCanvasNodes(nodes, deferredQuery, nodes.length, config)} query={query} deferredQuery={deferredQuery} selectedNodeIds={selectedNodeIds} onQueryChange={setQuery} onFocus={onFocus} />
             )}
             {tab === "assets" && <CanvasWorkspaceAssetPanel onInsert={onInsertAssets} onManage={onAssets} onProjectAssets={onProjectAssets} />}
             {(tab === "tasks" || history) && (

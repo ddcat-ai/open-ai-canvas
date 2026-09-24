@@ -20,7 +20,7 @@ export function clampAgentPanelLayout(layout: AgentPanelLayout, viewport: AgentP
 }
 
 export function restoreAgentPanelLayout(raw: string | null, viewport: AgentPanelViewport): AgentPanelLayout {
-    const fallback = { width: 448, height: 720, left: viewport.width - 464, top: viewport.height - 732 };
+    const fallback = defaultAgentPanelLayout(viewport);
     if (!raw) return clampAgentPanelLayout(fallback, viewport);
     try {
         const parsed: unknown = JSON.parse(raw);
@@ -31,6 +31,12 @@ export function restoreAgentPanelLayout(raw: string | null, viewport: AgentPanel
         // UI 偏好损坏不影响对话或服务端数据，恢复可见的默认窗口。
     }
     return clampAgentPanelLayout(fallback, viewport);
+}
+
+export function defaultAgentPanelLayout(viewport: AgentPanelViewport): AgentPanelLayout {
+    const width = 420;
+    const height = 640;
+    return clampAgentPanelLayout({ width, height, left: viewport.width - width - MARGIN, top: viewport.height - height - MARGIN }, viewport);
 }
 
 export function changeAgentPanelLayout(start: AgentPanelLayout, gesture: AgentPanelGesture, dx: number, dy: number, viewport: AgentPanelViewport): AgentPanelLayout {

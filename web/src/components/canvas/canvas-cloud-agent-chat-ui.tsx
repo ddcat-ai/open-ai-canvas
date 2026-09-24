@@ -4,7 +4,7 @@ import { Tooltip } from "@/components/ui/base/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, AtSign, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, ImagePlus, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Square, X, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowUp, AtSign, Bookmark, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Clapperboard, Eye, HelpCircle, ImagePlus, Layers3, ListChecks, LoaderCircle, Palette, Pencil, Plus, RotateCcw, Shapes, Share2, ShoppingBag, Sparkles, Square, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -595,13 +595,13 @@ export type AgentSceneBucket = {
 };
 
 /** 场景分类：与 presets.json 的 scene 字段、技能的 tag 字段共用同一套 key。 */
-export const AGENT_SCENE_DEFS: Array<{ key: string; label: string }> = [
-    { key: "frequent", label: "我的常用" },
-    { key: "drama", label: "短剧故事" },
-    { key: "ecommerce", label: "广告电商" },
-    { key: "creative", label: "视觉创意" },
-    { key: "social", label: "传播社媒" },
-    { key: "others", label: "其他" },
+export const AGENT_SCENE_DEFS: Array<{ key: string; label: string; icon: typeof Sparkles }> = [
+    { key: "frequent", label: "我的常用", icon: Bookmark },
+    { key: "drama", label: "短剧故事", icon: Clapperboard },
+    { key: "ecommerce", label: "广告电商", icon: ShoppingBag },
+    { key: "creative", label: "视觉创意", icon: Palette },
+    { key: "social", label: "传播社媒", icon: Share2 },
+    { key: "others", label: "其他", icon: Shapes },
 ];
 
 export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = false, onPick, onPickSkill }: {
@@ -614,7 +614,7 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
 }) {
     // 始终只占一排：默认显示场景分类，点某个场景后在同一排内就地切换内容。
     const [activeKey, setActiveKey] = useState<string | null>(null);
-    const capsuleClass = "agent-scene-capsule shrink-0 rounded-lg px-3 py-1.5 text-left text-xs focus-visible:outline focus-visible:outline-2";
+    const capsuleClass = "agent-scene-capsule shrink-0";
     const stop = {
         onMouseDown: (event: { stopPropagation(): void }) => event.stopPropagation(),
         onPointerDown: (event: { stopPropagation(): void }) => event.stopPropagation(),
@@ -623,12 +623,12 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
     const active = activeKey ? visible.find((bucket) => bucket.key === activeKey) || null : null;
     if (!visible.length) return null;
     return (
-        <div className="agent-scene-capsules mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
-            <div className="flex items-start gap-2 px-3 pt-2.5">
-                <Sparkles className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
-                <span className="min-w-0 flex-1 text-xs font-semibold leading-5">{active ? active.label : "技能组合推荐"}</span>
+        <div className="agent-scene-capsules mx-3 mb-2 min-w-0" style={{ color: theme.node.text }}>
+            <div className="agent-scene-capsules-heading">
+                <Sparkles aria-hidden="true" />
+                <span>{active ? active.label : "技能组合推荐"}</span>
             </div>
-            <div className="agent-scene-capsules-scroll thin-scrollbar flex gap-2 overflow-x-auto px-3 pb-1 pt-2">
+            <div className="agent-scene-capsules-scroll thin-scrollbar flex gap-2 overflow-x-auto px-1 py-2">
                 {active ? (
                     <>
                         <button
@@ -636,14 +636,15 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
                             disabled={disabled}
                             title="返回全部场景"
                             className={capsuleClass}
+                            data-scene="back"
                             {...stop}
                             onClick={(event) => {
                                 event.stopPropagation();
                                 setActiveKey(null);
                             }}
                         >
-                            <span className="block whitespace-nowrap font-medium">← 全部场景</span>
-                            <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">返回</span>
+                            <ArrowLeft aria-hidden="true" />
+                            <span>全部场景</span>
                         </button>
                         {active.presets.map((preset) => {
                             const missing = preset.skillIds.filter((id) => !installedIds.has(id)).length;
@@ -654,16 +655,16 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
                                     disabled={disabled}
                                     title={preset.rationale}
                                     className={capsuleClass}
+                                    data-scene={active.key}
                                     {...stop}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         onPick(preset);
                                     }}
                                 >
-                                    <span className="block whitespace-nowrap font-medium">{preset.name}</span>
-                                    <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">
-                                        {missing > 0 ? `${preset.skillIds.length} 个技能 · ${missing} 个待装` : `${preset.skillIds.length} 个技能`}
-                                    </span>
+                                    <Layers3 aria-hidden="true" />
+                                    <span className="agent-scene-capsule-label">{preset.name}</span>
+                                    <span className="agent-scene-capsule-meta">{missing > 0 ? `${preset.skillIds.length} 技能 · ${missing} 待装` : `${preset.skillIds.length} 技能`}</span>
                                 </button>
                             );
                         })}
@@ -676,14 +677,16 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
                                     disabled={disabled}
                                     title={skill.description}
                                     className={capsuleClass}
+                                    data-scene={active.key}
                                     {...stop}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         onPickSkill(skill);
                                     }}
                                 >
-                                    <span className="block max-w-[10rem] truncate font-medium">{skill.skillName}</span>
-                                    <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">{owned}</span>
+                                    <Sparkles aria-hidden="true" />
+                                    <span className="agent-scene-capsule-label">{skill.skillName}</span>
+                                    <span className="agent-scene-capsule-meta">{owned}</span>
                                 </button>
                             );
                         })}
@@ -691,6 +694,7 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
                 ) : (
                     visible.map((bucket) => {
                         const count = bucket.presets.length + bucket.skills.length;
+                        const Icon = AGENT_SCENE_DEFS.find((definition) => definition.key === bucket.key)?.icon || Shapes;
                         return (
                             <button
                                 key={bucket.key}
@@ -698,20 +702,22 @@ export function AgentSceneCapsules({ buckets, installedIds, theme, disabled = fa
                                 disabled={disabled}
                                 title={`查看「${bucket.label}」下的技能组合`}
                                 className={capsuleClass}
+                                data-scene={bucket.key}
                                 {...stop}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setActiveKey(bucket.key);
                                 }}
                             >
-                                <span className="block whitespace-nowrap font-medium">{bucket.label}</span>
-                                <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-4 opacity-60">{count} 项</span>
+                                <Icon aria-hidden="true" />
+                                <span className="agent-scene-capsule-label">{bucket.label}</span>
+                                <span className="agent-scene-capsule-meta">{count} 项</span>
                             </button>
                         );
                     })
                 )}
             </div>
-            <div className="px-3 pb-2 text-[10px] opacity-50">选择只对当前会话生效；未装的技能会添加到我的技能库。具体用哪张卡由 Agent 按任务检索。</div>
+            <p className="agent-scene-capsules-note">仅本会话生效 · 缺失技能将加入技能库 · Agent 按任务调用</p>
         </div>
     );
 }

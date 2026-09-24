@@ -30,8 +30,8 @@
 }
 
 .agent-panel-header {
-    min-height: 80px;
-    padding: var(--space-4) var(--space-5) var(--space-3) var(--space-6);
+    min-height: 68px;
+    padding: var(--space-3) var(--space-4) var(--space-2) var(--space-5);
 }
 
 .agent-panel-title {
@@ -55,8 +55,8 @@
 }
 
 .agent-conversation {
-    padding: var(--space-4) var(--space-6) var(--space-6);
-    scroll-padding-block: var(--space-6);
+    padding: var(--space-3) var(--space-5) var(--space-5);
+    scroll-padding-block: var(--space-5);
 }
 
 .agent-conversation-messages > * + * {
@@ -193,11 +193,11 @@
 }
 
 .agent-composer-wrap {
-    padding: var(--space-2) var(--space-4) var(--space-4);
+    padding: var(--space-2) var(--space-3) var(--space-3);
 }
 
 .agent-composer-surface {
-    padding: var(--space-4) var(--space-4) var(--space-3);
+    padding: var(--space-3) var(--space-3) var(--space-2-half);
     border-radius: var(--agent-radius-surface, var(--radius-xl));
     background: var(--agent-surface-raised, var(--background));
 }
@@ -216,32 +216,97 @@
     background: var(--agent-surface-raised, var(--background));
 }
 
-/* 场景起步胶囊：选择作用于会话，未安装的技能会加入用户技能库。 */
-.agent-scene-capsules {
-    border: 0;
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
+/* 场景起步标签：透明底、彩色细描边，不叠加卡片表面。 */
+.agent-scene-capsules-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+    color: var(--agent-ink);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+}
+
+.agent-scene-capsules-heading svg {
+    width: var(--space-4);
+    height: var(--space-4);
+    color: var(--palette-node-skill);
 }
 
 .agent-scene-capsule {
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    background: var(--agent-surface-raised, var(--background));
+    --scene-color: var(--palette-node-config);
+    display: inline-flex;
+    min-height: 36px;
+    max-width: 100%;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1-half) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--scene-color) 58%, var(--agent-ink));
+    border-radius: var(--r-full);
+    background: transparent;
+    color: color-mix(in srgb, var(--scene-color) 45%, var(--agent-ink));
+    font-size: var(--fs-caption);
+    line-height: 1.2;
+    white-space: nowrap;
     cursor: pointer;
-    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    transition: border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
-.agent-scene-capsule:hover:not(:disabled),
+.agent-scene-capsule[data-scene="frequent"] { --scene-color: var(--palette-node-skill); }
+.agent-scene-capsule[data-scene="drama"] { --scene-color: var(--palette-node-script); }
+.agent-scene-capsule[data-scene="ecommerce"] { --scene-color: var(--palette-node-image); }
+.agent-scene-capsule[data-scene="creative"] { --scene-color: var(--palette-node-frame); }
+.agent-scene-capsule[data-scene="social"] { --scene-color: var(--palette-node-audio); }
+.agent-scene-capsule[data-scene="back"] { --scene-color: var(--agent-ink); }
+
+.agent-scene-capsule svg {
+    width: var(--space-4);
+    height: var(--space-4);
+    flex: 0 0 auto;
+    stroke-width: 1.8;
+    color: color-mix(in srgb, var(--scene-color) 75%, var(--agent-ink));
+}
+
+.agent-scene-capsule-label {
+    min-width: 0;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+.agent-scene-capsule-meta {
+    flex: 0 0 auto;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-scene-capsule:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--scene-color) 82%, var(--agent-ink));
+    color: color-mix(in srgb, var(--scene-color) 70%, var(--agent-ink));
+}
+
 .agent-scene-capsule:focus-visible {
-    border-color: color-mix(in srgb, var(--agent-accent, var(--foreground)) 45%, transparent);
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 6%, transparent));
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
 }
 
 .agent-scene-capsule:active:not(:disabled) {
-    transform: translateY(1px);
+    opacity: 0.65;
 }
 
 .agent-scene-capsule:disabled {
     cursor: not-allowed;
     opacity: 0.55;
+}
+
+.agent-scene-capsules-note {
+    margin: 0;
+    padding-inline: var(--space-1);
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.5;
 }
 
 .agent-scene-capsules-scroll {
@@ -260,9 +325,6 @@
 @media (prefers-reduced-motion: reduce) {
     .agent-scene-capsule {
         transition: none;
-    }
-    .agent-scene-capsule:active:not(:disabled) {
-        transform: none;
     }
 }
 

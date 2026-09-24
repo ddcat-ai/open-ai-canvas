@@ -12,6 +12,9 @@ import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { canvasTextFontSize } from "@/lib/canvas/canvas-text-scale";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { canvasNodeVideoPreviewReference } from "@/lib/canvas/canvas-media-preview";
+import { producedModelLabel } from "@/lib/canvas/produced-model";
+import { useConfigStore } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -998,6 +1001,15 @@ export function CanvasNodeImageInfo({ node }: { node: CanvasNodeData }) {
             {size ? ` · ${size}` : ""}
         </span>
     );
+}
+
+export function CanvasNodeProducedModel({ stored }: { stored: string }) {
+    // Keep catalog subscriptions off the CanvasNode shell and avoid normalizing config per node.
+    const channels = useConfigStore((state) => state.config.channels);
+    const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
+    const visibleChannels = useMemo(() => customChannelsEnabled ? channels : channels.filter((channel) => channel.scope === "system"), [channels, customChannelsEnabled]);
+    const label = producedModelLabel({ channels: visibleChannels }, stored);
+    return <span className="max-w-full min-w-0 truncate rounded-[var(--r-sm)] bg-black/55 px-2 py-1 text-[var(--fs-label)] font-medium leading-none text-white backdrop-blur-sm">{label}</span>;
 }
 
 function BatchPreviewImage({ node }: { node: CanvasNodeData }) {

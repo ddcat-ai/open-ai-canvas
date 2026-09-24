@@ -6,6 +6,7 @@ import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { nextCanvasVersionLabel } from "@/lib/canvas/canvas-layout";
 import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationReferenceUrls, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
+import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
@@ -58,6 +59,7 @@ export async function executeVideoGeneration({
             resourceReloadAvailable: undefined,
             failedPromptFingerprint: undefined,
             model: generationConfig.model,
+            producedModelCandidate: producedModelCandidateForGeneration(generationConfig),
             size: generationConfig.size,
             seconds: generationConfig.videoSeconds,
             vquality: generationConfig.vquality,

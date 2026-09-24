@@ -4,12 +4,14 @@ import { AudioLines, Clock3, FileText, Image, Layers, Pencil, Search, X } from "
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes } from "@/lib/canvas/canvas-node-search";
+import type { AiConfig } from "@/stores/use-config-store";
 import { getNodeListLabel } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { Video as CanvasVideoIcon } from "lucide-react";
 
 export function CanvasWorkspaceNodeListPanel({
     nodes,
+    config,
     results,
     query,
     deferredQuery,
@@ -18,6 +20,7 @@ export function CanvasWorkspaceNodeListPanel({
     onFocus,
 }: {
     nodes: CanvasNodeData[];
+    config: AiConfig;
     results: CanvasNodeData[];
     query: string;
     deferredQuery: string;
@@ -52,7 +55,7 @@ export function CanvasWorkspaceNodeListPanel({
             </div>
             <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain py-1" role="listbox" aria-label="画布节点列表">
                 {results.length ? (
-                    results.map((node) => <CanvasNodeListItem key={node.id} node={node} active={selectedNodeIds.has(node.id)} onSelect={() => onFocus(node.id)} />)
+                    results.map((node) => <CanvasNodeListItem key={node.id} node={node} config={config} active={selectedNodeIds.has(node.id)} onSelect={() => onFocus(node.id)} />)
                 ) : (
                     <WorkspaceState icon="canvas" compact title="没有匹配节点" description="换一个关键词继续搜索。" />
                 )}
@@ -61,9 +64,9 @@ export function CanvasWorkspaceNodeListPanel({
     );
 }
 
-const CanvasNodeListItem = memo(function CanvasNodeListItem({ node, active, onSelect }: { node: CanvasNodeData; active: boolean; onSelect: () => void }) {
+const CanvasNodeListItem = memo(function CanvasNodeListItem({ node, config, active, onSelect }: { node: CanvasNodeData; config: AiConfig; active: boolean; onSelect: () => void }) {
     const times = canvasNodeSearchTimes(node);
-    const materialSummary = canvasNodeMaterialSummary(node);
+    const materialSummary = canvasNodeMaterialSummary(node, config);
     const context = canvasNodeSearchContext(node);
     return (
         <button

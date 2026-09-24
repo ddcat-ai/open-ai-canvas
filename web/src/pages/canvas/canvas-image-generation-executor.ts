@@ -8,6 +8,7 @@ import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { canvasImageReferenceLimitError, buildImageGenerationMetadata, getGenerationCount, isGenerationCanceled, resetGenerationTaskMetadata, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { imageGenerationReferenceConnections } from "@/lib/canvas/canvas-resource-references";
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
+import { commitProducedModel } from "@/lib/canvas/produced-model";
 import { CONTENT_MODERATION_ERROR_CODE, generationFailureMetadata, type GenerationFailureMetadata } from "@/lib/generation-error";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -227,18 +228,21 @@ export async function executeImageGeneration({
                                 ? {
                                       ...node,
                                       ...geometry,
-                                      metadata: {
-                                          ...node.metadata,
-                                          content: child.metadata?.content,
-                                          storageKey: child.metadata?.storageKey,
-                                          mimeType: child.metadata?.mimeType,
-                                          bytes: child.metadata?.bytes,
-                                          naturalWidth: child.metadata?.naturalWidth,
-                                          naturalHeight: child.metadata?.naturalHeight,
-                                          assetId: child.metadata?.assetId,
-                                          primaryImageId: targetId,
-                                          status: NODE_STATUS_SUCCESS,
-                                      },
+                                      metadata: commitProducedModel(
+                                          {
+                                              ...node.metadata,
+                                              content: child.metadata?.content,
+                                              storageKey: child.metadata?.storageKey,
+                                              mimeType: child.metadata?.mimeType,
+                                              bytes: child.metadata?.bytes,
+                                              naturalWidth: child.metadata?.naturalWidth,
+                                              naturalHeight: child.metadata?.naturalHeight,
+                                              assetId: child.metadata?.assetId,
+                                              primaryImageId: targetId,
+                                              status: NODE_STATUS_SUCCESS,
+                                          },
+                                          child.metadata?.producedModel,
+                                      ),
                                   }
                                 : node,
                         );

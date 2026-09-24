@@ -249,7 +249,7 @@
     --canvas-inset-x: 16px;             /* 浮层水平安全区（dock inset、顶栏 px）*/
     --canvas-inset-y: 16px;             /* 浮层垂直安全区（dock 底部）*/
     --canvas-topbar-h: 64px;            /* 顶部栏高度 */
-    --canvas-topbar-offset: 72px;       /* 顶栏下方浮层顶部偏移（topbar-h + 8px 间距）*/
+    --canvas-topbar-offset: calc(var(--canvas-topbar-h) + 8px); /* 顶栏下方浮层顶部偏移 */
     --canvas-dock-popover-offset: 50px; /* dock 弹出面板底部偏移 */
 
     /* --- 7. 动效（对应 #99 动效 token）--- */
@@ -1691,9 +1691,9 @@
         --workspace-accent-soft: rgba(17, 17, 17, 0.06);
         --workspace-nav-active-bg: rgba(17, 17, 17, 0.075);
         --workspace-nav-active-hover-bg: rgba(17, 17, 17, 0.11);
-        --workspace-sidebar-width: 312px;
-        --workspace-sidebar-nav-width: 312px;
-        --workspace-sidebar-collapsed-width: 86px;
+        --workspace-sidebar-width: 200px;
+        --workspace-sidebar-nav-width: 200px;
+        --workspace-sidebar-collapsed-width: 64px;
         --workspace-shell-gutter: 0px;
         --workspace-card-gap: 0px;
         --workspace-topbar-height: 56px;
@@ -1719,10 +1719,10 @@
 
     /* 画布编辑器保持独立的全屏工作区，但沿用用户端的安全区和控件密度。 */
     .app-user-workspace.app-spatial-workspace {
-        --canvas-topbar-h: 64px;
-        --canvas-inset-x: 16px;
-        --canvas-inset-y: 16px;
-        --canvas-dock-popover-offset: 50px;
+        --canvas-topbar-h: 56px;
+        --canvas-inset-x: 12px;
+        --canvas-inset-y: 12px;
+        --canvas-dock-popover-offset: 46px;
     }
 
     /* 画布编辑器和管理后台不继承用户端的圆角卡片外壳。 */
@@ -15180,12 +15180,12 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 /* ===== 2026-09 user workspace alignment =====
    这一组规则只作用于真实用户端壳层和首页，后台与画布编辑器保持原有职责和交互。
-   几何基准：侧栏 216px、顶部 64px、导航行 44px、首页内容最大宽度 1180px。 */
+   几何基准：侧栏 200px、顶部 56px、导航行 40px、首页内容最大宽度 1180px。 */
 .app-user-workspace {
-    --workspace-reference-sidebar: 216px;
-    --workspace-reference-collapsed: 70px;
-    --workspace-reference-topbar: 64px;
-    --workspace-reference-row: 44px;
+    --workspace-reference-sidebar: 200px;
+    --workspace-reference-collapsed: 64px;
+    --workspace-reference-topbar: 56px;
+    --workspace-reference-row: 40px;
     --workspace-reference-page-bg: #ffffff;
     background: var(--workspace-reference-page-bg);
 }
@@ -17844,8 +17844,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .app-workspace-sidebar-scroll-area { padding: 22px 12px 12px !important; gap: 24px !important; }
 .app-user-workspace .app-workspace-sidebar-footer { padding: 12px 12px 14px !important; border-top: 0 !important; }
 .app-user-workspace .app-workspace-nav-link {
-    min-height: 44px !important;
-    padding: 4px 10px !important;
+    min-height: var(--workspace-reference-row) !important;
+    padding: 3px 10px !important;
     border-radius: 13px !important;
     color: var(--user-ink-muted) !important;
     font-size: 13px !important;
@@ -17860,13 +17860,13 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) { background: var(--user-surface-hover) !important; color: var(--user-ink) !important; }
 .app-user-workspace .app-workspace-nav-group-toggle { color: var(--user-ink-soft) !important; }
 .app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-sidebar-scroll-area { padding-inline: 8px !important; }
-.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-link { width: 54px !important; }
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-link { width: 48px !important; }
 
 .app-user-workspace .app-workspace-topbar {
-    min-height: 64px !important;
-    height: 64px !important;
+    min-height: var(--workspace-reference-topbar) !important;
+    height: var(--workspace-reference-topbar) !important;
     overflow: visible;
-    padding-inline: 24px !important;
+    padding-inline: 20px !important;
     border-bottom: 0 !important;
     background: color-mix(in srgb, var(--user-page-bg) 92%, transparent) !important;
     color: var(--user-ink) !important;
