@@ -128,8 +128,7 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             const container = containerRef.current;
             if (container) container.dataset.canvasViewportInteracting = "true";
             nextViewportRef.current = next;
-            if (frameRef.current) return;
-            frameRef.current = requestAnimationFrame((now) => {
+            if (!frameRef.current) frameRef.current = requestAnimationFrame((now) => {
                 frameRef.current = null;
                 const pending = nextViewportRef.current;
                 if (!pending) return;

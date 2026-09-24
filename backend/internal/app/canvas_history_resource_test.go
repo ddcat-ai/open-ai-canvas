@@ -67,7 +67,7 @@ func TestCanvasHistoryProtectsMediaAndDeletionWorker(t *testing.T) {
 	}
 }
 
-func TestArchivedAssetDeletionRemovesCanvasHistoryReference(t *testing.T) {
+func TestArchivedAssetDeletionPreservesCanvasHistoryReference(t *testing.T) {
 	svc, db, _ := newResourceDeletionTestService(t)
 	resource := model.Resource{
 		ID: "archived-history-resource", UserID: "user-1", Provider: "unsupported-test-provider",
@@ -88,18 +88,18 @@ func TestArchivedAssetDeletionRemovesCanvasHistoryReference(t *testing.T) {
 		}
 	}
 
-	if err := svc.DeleteUserAsset("user-1", asset.ID); err != nil {
-		t.Fatalf("archived asset deletion failed: %v", err)
+	if err := svc.DeleteUserAsset("user-1", asset.ID); err == nil || !strings.Contains(err.Error(), "画布历史版本") {
+		t.Fatalf("archived asset bypassed history protection: %v", err)
 	}
 	for _, check := range []struct {
 		model any
 		want  int64
 	}{
-		{&model.Asset{}, 0},
-		{&model.Resource{}, 0},
-		{&model.CanvasSnapshotResource{}, 0},
+		{&model.Asset{}, 1},
+		{&model.Resource{}, 1},
+		{&model.CanvasSnapshotResource{}, 1},
 		{&model.CanvasSnapshot{}, 1},
-		{&model.ResourceDeletionJob{}, 1},
+		{&model.ResourceDeletionJob{}, 0},
 	} {
 		var count int64
 		if err := db.Model(check.model).Count(&count).Error; err != nil {

@@ -25,6 +25,20 @@ description: 信封、错误码与 OpenAPI
 
 当前自动签名能力：公开 CDN、七牛私有下载签名和对象存储源站签名。阿里云/腾讯云私有 CDN 签名尚未自动支持，不能仅填写 CDN 域名就宣称已命中 CDN。真实 CORS、Range、CDN 命中率及账单收益必须在实际云环境通过浏览器网络记录和服务端流量观测验收。
 
+## 画布资源完整性与 409
+
+画布写入在保存历史快照前校验当前文档中的资源引用；引用须属于当前用户且处于 `ready`。引用收集器递归遍历受支持的资源字段，因此 `nodes[节点 ID].metadata.videoPreview.storageKey` 等嵌套派生封面也会参与检查。历史快照保存会一并校验新版本引用；若资源在保存期间缺失或状态变化，事务回滚，画布 revision 不递增。
+
+HTTP 409 不能一概解释为 revision 冲突：普通版本冲突使用 `reason: conflict`；资源完整性失败使用 `reason: canvas_history_resources_missing`，并在 `details` 中返回 `resourceIds` 和 `missingResources`（含资源 ID、JSON 路径、节点 ID、引用类型及 `source`）。客户端应按 `reason` 分流，不解析 `msg` 猜测原因。显式资源修复写入仅允许历史 preimage 存在缺失资源，不允许新画布仍引用缺失资源，也不绕过 revision CAS。
+
+运维扫描/修复仅处理当前画布中可安全清除的失效 `videoPreview`；不删除主媒体、不扫描并改写所有历史快照，也不替代备份。使用目标数据库对应的新版本二进制，先在维护窗口备份并执行只读扫描：
+
+```sh
+CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-resources
+```
+
+复核 JSON 报告后，只有 `repairable` 项可由明确授权的操作员再次运行 `repair-canvas-resources --apply`。命令要求显式配置 `CANVAS_BACKEND_DATA_DIR` 或 `DATABASE_URL`，逐画布按版本 CAS 保存并保留原始历史；有未解决主媒体/素材绑定问题时以非零退出，不会自动恢复或重传。发生并发编辑时停止并重新扫描，不能用强制覆盖代替恢复有效历史或重新上传。
+
 ## 生成成功后的重试保存
 
 `POST /tasks/:id/recover-media` 无需请求体。当前用户只能恢复自己有保存恢复记录的失败任务；重入队仍返回原任务 ID，不请求重新生成、不新建计费订单。已排队、运行或完成时幂等返回当前任务。取消任务、已退款订单、任务/账单归属不一致、项目已删除或归档时拒绝恢复。

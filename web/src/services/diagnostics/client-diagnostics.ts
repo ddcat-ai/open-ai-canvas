@@ -111,8 +111,9 @@ export function initializeClientDiagnostics() {
 export function setDiagnosticUserScope(userId: string) {
     const next = userId.trim();
     if (next === scopedUserId) return;
+    const preserveStartupEvents = !scopedUserId && Boolean(next);
     scopedUserId = next;
-    events.length = 0;
+    if (!preserveStartupEvents) events.length = 0;
     activeTraceId = createDiagnosticId("trace");
 }
 
@@ -153,6 +154,7 @@ export function getDiagnosticRuntime() {
     return {
         appVersion: String(import.meta.env.VITE_APP_VERSION || "dev"),
         buildCommit: String(import.meta.env.VITE_BUILD_COMMIT || "unknown"),
+        buildTime: String(import.meta.env.VITE_BUILD_TIME || "unknown"),
         browser: typeof navigator !== "undefined" ? navigator.userAgent : "",
         os: typeof navigator !== "undefined" ? navigator.platform : "",
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",

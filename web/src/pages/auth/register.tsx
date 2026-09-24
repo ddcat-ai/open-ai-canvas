@@ -104,7 +104,7 @@ export default function RegisterPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="用户名">
-                    <Input size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="3-32 位字符" autoComplete="username" required disabled={disabled} />
+                    <Input size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="3-32 位字符" autoComplete="username" required disabled={disabled} />
                 </AuthField>
                 <AuthField label="显示名称">
                     <Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="不填则使用用户名" disabled={disabled} />
@@ -114,7 +114,7 @@ export default function RegisterPage() {
             {settings?.firstUser ? <AuthField label="邮箱（可选）">
                 <Input
                     size="large"
-                    prefix={<Mail className="size-4 text-white/35" />}
+                    prefix={<Mail className="auth-scene-icon size-4" />}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="用于登录与安全验证"
@@ -131,7 +131,7 @@ export default function RegisterPage() {
                 <AuthField label="密码">
                     <Input.Password
                         size="large"
-                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder="至少 8 位"
@@ -143,7 +143,7 @@ export default function RegisterPage() {
                 <AuthField label="确认密码">
                     <Input.Password
                         size="large"
-                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
                         placeholder="再次输入密码"
@@ -154,11 +154,11 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
-            <div className="flex items-start gap-2 text-xs leading-5 text-white/55">
+            <div className="auth-scene-muted flex items-start gap-2 text-xs leading-5">
                 <Checkbox checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)}>
-                    <span className="text-xs leading-5 text-white/55">我已阅读并同意</span>
+                    <span className="auth-scene-muted text-xs leading-5">我已阅读并同意</span>
                 </Checkbox>
-                <button type="button" className="-ml-1 text-xs leading-5 text-blue-300/85 transition hover:text-blue-200" onClick={() => setAgreementOpen(true)}>
+                <button type="button" className="auth-scene-link -ml-1 text-xs leading-5 transition" onClick={() => setAgreementOpen(true)}>
                     《影策服务协议》
                 </button>
             </div>
@@ -168,7 +168,7 @@ export default function RegisterPage() {
             </Button>
             {settings?.linuxdoEnabled && !settings.smsAndEmailRegistration ? (
                 <>
-                    <Divider plain className="!border-white/10 !text-white/30">
+                    <Divider plain className="auth-scene-divider">
                         或
                     </Divider>
                     <Button size="large" block disabled={!agreementAccepted} icon={<LinuxDOIcon />} href={agreementAccepted ? linuxDOLoginURL(next, true) : undefined}>
@@ -194,7 +194,7 @@ export default function RegisterPage() {
 function AuthField({ label, children }: { label: string; children: ReactNode }) {
     return (
         <label className="block space-y-2">
-            <span className="text-xs font-medium text-white/62">{label}</span>
+            <span className="auth-scene-label text-xs font-medium">{label}</span>
             {children}
         </label>
     );
@@ -202,7 +202,7 @@ function AuthField({ label, children }: { label: string; children: ReactNode }) 
 
 function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amber"; children: ReactNode }) {
     return (
-        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tone === "blue" ? "border-blue-300/15 bg-blue-300/[0.06] text-blue-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}>
+        <div data-tone={tone} className="auth-scene-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5">
             <span className="mt-0.5 shrink-0">{icon}</span>
             {children}
         </div>

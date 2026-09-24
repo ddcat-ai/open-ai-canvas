@@ -19,7 +19,7 @@ export function useWorkspaceLogout() {
         setLoggingOut(true);
         try {
             await logout();
-            await applyUserSession({ user: null, logicalModels: [] });
+            await applyUserSession({ user: null });
             message.success("已退出登录");
             navigate("/login", { replace: true });
         } catch (error) {

@@ -264,13 +264,19 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧 Compose 配置：%w", err))
 		return
 	}
+	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
+		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧部署环境：%w", err))
+		return
+	}
 
 	m.setPhase(PhasePulling, "拉取目标版本镜像")
-	if err := m.compose(nextCompose, targetVersion, m.config.StepTimeout, nil, "pull", "backend", "web"); err != nil {
+	targetImages := immutableImageRefs(m.config.Repository, targetVersion)
+	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "pull", "backend", "web"); err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
-	if err := m.verifyImages(targetVersion); err != nil {
+	targetImages, err = m.verifyImages(targetVersion)
+	if err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
@@ -282,13 +288,13 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 	}
 
 	m.setPhase(PhaseMigrating, "执行目标版本数据库迁移")
-	if err := m.compose(nextCompose, targetVersion, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
+	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
 
 	m.setPhase(PhaseSwitching, "切换 Compose 配置与镜像版本")
-	if err := setEnvValue(m.envPath(), "CANVAS_IMAGE_TAG", strings.TrimPrefix(targetVersion, "v")); err != nil {
+	if err := setDeploymentImages(m.envPath(), targetVersion, targetImages); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
@@ -297,7 +303,7 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
-	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
+	if err := m.composeWithImages(m.composePath(), targetVersion, targetImages, m.config.StepTimeout, nil, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
@@ -368,10 +374,12 @@ func (m *Manager) runRollback(targetVersion string, backup Backup, automatic boo
 			failures = append(failures, fmt.Errorf("恢复旧 Compose 配置：%w", err))
 		}
 	}
-	if err := m.restoreDatabase(backup); err != nil {
-		failures = append(failures, err)
+	if _, err := os.Stat(m.previousEnvPath()); err == nil {
+		if err := replaceFile(m.previousEnvPath(), m.envPath(), 0o600); err != nil {
+			failures = append(failures, fmt.Errorf("恢复旧部署环境：%w", err))
+		}
 	}
-	if err := setEnvValue(m.envPath(), "CANVAS_IMAGE_TAG", strings.TrimPrefix(targetVersion, "v")); err != nil {
+	if err := m.restoreDatabase(backup); err != nil {
 		failures = append(failures, err)
 	}
 	started := true
@@ -512,6 +520,9 @@ func (m *Manager) composePath() string {
 func (m *Manager) envPath() string { return filepath.Join(m.config.InstallDir, m.config.EnvFile) }
 func (m *Manager) previousComposePath() string {
 	return filepath.Join(m.config.StateDir, "previous-compose.yml")
+}
+func (m *Manager) previousEnvPath() string {
+	return filepath.Join(m.config.StateDir, "previous.env")
 }
 
 func randomID() string {

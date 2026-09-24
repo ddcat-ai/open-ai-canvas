@@ -254,12 +254,12 @@ export function useCanvasProjectLifecycle({
     useEffect(() => {
         if (!projectLoaded || historyPausedRef.current) return;
         const snapshot = { nodes, connections, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };
-        if (!observedContentRef.current || JSON.stringify(observedContentRef.current) === JSON.stringify(snapshot)) return;
+        if (!observedContentRef.current || sameCanvasHistorySnapshot(observedContentRef.current, snapshot)) return;
         observedContentRef.current = snapshot;
         const patch = { nodes, connections, chatSessions, activeChatId, appearance: canvasAppearance, backgroundMode, showImageInfo };
         const stored = useCanvasStore.getState().projects.find((project) => project.id === projectId);
         // 远端结果投影到编辑器不是一次本地编辑，避免改写时间戳并触发反向保存。
-        if (stored && Object.entries(patch).every(([key, value]) => JSON.stringify(stored[key as keyof CanvasProject]) === JSON.stringify(value))) return;
+        if (stored && sameCanvasPatch(stored, patch)) return;
         updateProject(projectId, patch);
     }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connections, historyPausedRef, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
 
@@ -317,7 +317,7 @@ export function useCanvasProjectLifecycle({
 
     const persistLocalEdits = useCallback(async () => {
         const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };
-        if (observedContentRef.current && JSON.stringify(observedContentRef.current) !== JSON.stringify(snapshot)) {
+        if (observedContentRef.current && !sameCanvasHistorySnapshot(observedContentRef.current, snapshot)) {
             updateProject(projectId, {
                 nodes: nodesRef.current,
                 connections: connectionsRef.current,
@@ -406,6 +406,26 @@ export function useCanvasProjectLifecycle({
     };
 }
 
+
+function sameCanvasHistorySnapshot(left: CanvasHistorySnapshot, right: CanvasHistorySnapshot) {
+    return left.nodes === right.nodes
+        && left.connections === right.connections
+        && left.chatSessions === right.chatSessions
+        && left.activeChatId === right.activeChatId
+        && left.canvasAppearance === right.canvasAppearance
+        && left.backgroundMode === right.backgroundMode
+        && left.showImageInfo === right.showImageInfo;
+}
+
+function sameCanvasPatch(project: CanvasProject, patch: Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo"> & { appearance: CanvasProject["appearance"] }) {
+    return project.nodes === patch.nodes
+        && project.connections === patch.connections
+        && project.chatSessions === patch.chatSessions
+        && project.activeChatId === patch.activeChatId
+        && project.appearance === patch.appearance
+        && project.backgroundMode === patch.backgroundMode
+        && project.showImageInfo === patch.showImageInfo;
+}
 
 function mergeHydratedSessions(currentSessions: CanvasAssistantSession[], hydratedSessions: CanvasAssistantSession[]) {
     const hydratedById = new Map(hydratedSessions.map((session) => [session.id, session]));

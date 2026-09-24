@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
@@ -7,7 +7,8 @@ import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CO
 import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
-import { selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
+import { canvasOverviewMode, resolveCanvasNodeLOD, type CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
+import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
 import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
 import type { DirectorScene } from "@/types/director";
@@ -176,7 +177,8 @@ export function useCanvasRenderModel({
         return index;
     }, [nodes]);
     const renderedNodeIdsRef = useRef<Set<string>>(new Set());
-    const visibleNodes = useMemo(() => {
+    const forcedRenderNodeIds = useMemo(() => new Set([...selectedNodeIds, ...(dragPreview?.nodeIds || [])]), [dragPreview, selectedNodeIds]);
+    const candidateNodes = useMemo(() => {
         const frames: CanvasNodeData[] = [];
         const regular: CanvasNodeData[] = [];
         selectCanvasVisibleNodes({
@@ -185,13 +187,74 @@ export function useCanvasRenderModel({
             ...renderBounds,
             hiddenIds: renderHiddenNodeIds,
             retainedIds: renderedNodeIdsRef.current,
-            forcedIds: new Set([...selectedNodeIds, ...(dragPreview?.nodeIds || [])]),
+            forcedIds: forcedRenderNodeIds,
             budget: canvasNodeRenderBudget(viewport.k),
         }).forEach((node) => {
             (isFrameNode(node) ? frames : regular).push(node);
         });
         return [...frames, ...regular];
-    }, [dragPreview, nodeById, nodeSpatialIndex, renderBounds, renderHiddenNodeIds, selectedNodeIds, viewport.k]);
+    }, [forcedRenderNodeIds, nodeById, nodeSpatialIndex, renderBounds, renderHiddenNodeIds, viewport.k]);
+    const immediateRenderNodeIds = useMemo(() => {
+        const ids = new Set(forcedRenderNodeIds);
+        candidateNodes.forEach((node) => {
+            if (ids.has(node.id) || intersectsCanvasBounds(canvasNodeBounds(node), renderBounds.view)) ids.add(node.id);
+        });
+        return ids;
+    }, [candidateNodes, forcedRenderNodeIds, renderBounds.view]);
+    const [mountedNodeIds, setMountedNodeIds] = useState<Set<string>>(() => new Set());
+    useEffect(() => {
+        const candidateIds = new Set(candidateNodes.map((node) => node.id));
+        setMountedNodeIds((current) => {
+            const next = new Set<string>();
+            current.forEach((id) => {
+                if (candidateIds.has(id)) next.add(id);
+            });
+            immediateRenderNodeIds.forEach((id) => next.add(id));
+            return next.size === current.size && [...next].every((id) => current.has(id)) ? current : next;
+        });
+        const queue = candidateNodes
+            .filter((node) => !immediateRenderNodeIds.has(node.id))
+            .sort((left, right) => {
+                const leftDistance = distanceToBounds(canvasNodeBounds(left), renderBounds.view);
+                const rightDistance = distanceToBounds(canvasNodeBounds(right), renderBounds.view);
+                return leftDistance - rightDistance;
+            });
+        let cursor = 0;
+        let frameId = 0;
+        const schedule = () => {
+            frameId = requestAnimationFrame(() => {
+                const startedAt = performance.now();
+                const additions: string[] = [];
+                while (cursor < queue.length && additions.length < 12 && performance.now() - startedAt < 4) additions.push(queue[cursor++].id);
+                if (additions.length) {
+                    setMountedNodeIds((current) => {
+                        if (additions.every((id) => current.has(id))) return current;
+                        const next = new Set(current);
+                        additions.forEach((id) => next.add(id));
+                        return next;
+                    });
+                }
+                if (cursor < queue.length) schedule();
+            });
+        };
+        if (queue.length && typeof window !== "undefined") schedule();
+        return () => cancelAnimationFrame(frameId);
+    }, [candidateNodes, immediateRenderNodeIds, renderBounds.view]);
+    const visibleNodes = useMemo(() => candidateNodes.filter((node) => immediateRenderNodeIds.has(node.id) || mountedNodeIds.has(node.id)), [candidateNodes, immediateRenderNodeIds, mountedNodeIds]);
+    const overviewRef = useRef(false);
+    const overview = canvasOverviewMode(viewport.k, overviewRef.current);
+    useEffect(() => { overviewRef.current = overview; }, [overview]);
+    const nodeRenderLODById = useMemo(() => {
+        const result = new Map<string, CanvasNodeRenderLOD>();
+        for (const node of visibleNodes) {
+            // Selection/drag keeps every node visible, not every editor mounted.
+            const editing = selectedNodeIds.size === 1 && selectedNodeIds.has(node.id);
+            const inView = intersectsCanvasBounds(canvasNodeBounds(node), renderBounds.view);
+            const inEntry = intersectsCanvasBounds(canvasNodeBounds(node), renderBounds.enter);
+            result.set(node.id, resolveCanvasNodeLOD(overview, inView, inEntry, editing));
+        }
+        return result;
+    }, [overview, selectedNodeIds, renderBounds.enter, renderBounds.view, visibleNodes]);
     useEffect(() => {
         renderedNodeIdsRef.current = new Set(visibleNodes.map((node) => node.id));
     }, [visibleNodes]);
@@ -397,6 +460,7 @@ export function useCanvasRenderModel({
         imageEditNode,
         mentionReferencesByNodeId,
         nodeById,
+        nodeRenderLODById,
         previewNode,
         reduceMediaEffects,
         relatedHighlight,
@@ -412,4 +476,10 @@ export function useCanvasRenderModel({
         versionCompareNodes,
         visibleNodes,
     };
+}
+
+function distanceToBounds(node: { left: number; top: number; right: number; bottom: number }, bounds: { left: number; top: number; right: number; bottom: number }) {
+    const dx = node.right < bounds.left ? bounds.left - node.right : node.left > bounds.right ? node.left - bounds.right : 0;
+    const dy = node.bottom < bounds.top ? bounds.top - node.bottom : node.top > bounds.bottom ? node.top - bounds.bottom : 0;
+    return Math.hypot(dx, dy);
 }

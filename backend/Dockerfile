@@ -40,6 +40,11 @@ RUN apk add --no-cache build-base
 
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
+# go.mod 含本地 replace（github.com/casdoor/go-sms-sender => ./third_party/go-sms-sender）。
+# go mod download 解析依赖时就需要读到该目录的 go.mod，而这行执行时完整源码尚未复制，
+# 缺了它会报 "reading third_party/go-sms-sender/go.mod: no such file or directory"。
+# 后面 COPY backend ./ 会覆盖为完整源码，这里只为让依赖解析通过。
+COPY backend/third_party ./third_party
 # 模块保留在普通镜像层中，供后续编译及跨 Runner 的 GHA 层缓存复用。
 RUN go mod download
 COPY backend ./

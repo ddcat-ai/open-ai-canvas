@@ -188,6 +188,18 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 	if err != nil {
 		return nil, err
 	}
+	channelIDs := make([]string, 0, len(channels))
+	for _, channel := range channels {
+		channelIDs = append(channelIDs, channel.ID)
+	}
+	channelModels, err := s.repo.ChannelModelReferences(channelIDs)
+	if err != nil {
+		return nil, err
+	}
+	modelsByChannel := make(map[string][]model.ChannelModel, len(channels))
+	for _, item := range channelModels {
+		modelsByChannel[item.ChannelID] = append(modelsByChannel[item.ChannelID], item)
+	}
 	result := &AdminReferenceData{
 		Users:    make([]AdminUserReference, 0, len(users)),
 		Channels: make([]AdminChannelReference, 0, len(channels)),
@@ -196,10 +208,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName})
 	}
 	for _, channel := range channels {
-		items, itemErr := s.repo.ChannelModels(channel.ID, true)
-		if itemErr != nil {
-			return nil, itemErr
-		}
+		items := modelsByChannel[channel.ID]
 		models := make([]string, 0, len(items))
 		displayNames := make([]string, 0, len(items))
 		for _, item := range items {

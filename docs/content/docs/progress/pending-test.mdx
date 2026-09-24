@@ -5,6 +5,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 画布资源断链、前端发布兼容与画布热点
+
+- 已实现：统一递归识别持久资源字段（含嵌套 `videoPreview`）；保存前和历史快照保存时校验当前资源归属/ready 状态，资源缺失返回带路径和 ID 的结构化 409。显式修复保留坏版本历史但要求新版本完整且 revision CAS 成功。后台 `repair-canvas-resources` 默认只读，仅可清除确认缺失的派生视频预览；主媒体问题报告为 unresolved。
+- 已实现：哈希 chunk 采用长缓存，缺失资源不缓存；HTML 显式 `no-cache, must-revalidate`。静态容器发布保留当前与上一发布 chunk，并在保留窗口内清理更旧资源；Vite preload 失败只自动恢复一次，之后交由路由错误页，用户手动重试仍可用。已有数据卷不会凭空恢复首次部署前已删的 chunk。
+- 已实现：同步显式 repair/force 请求不会被正在运行的普通同步吞掉；素材元数据请求按账号 scope/generation 隔离迟到响应。画布内容 hash 对 viewport/revision-only 副本复用；视口更新走轻量路径；loading 节点共享画布级 ticker，页面隐藏时暂停该 ticker。
+- [ ] 先备份隔离/测试数据库，验证 `repair-canvas-resources` dry-run、`--apply`、重复运行幂等、并发 revision 冲突、只清派生 preview、不改主媒体；检查 unresolved 后人工恢复历史或重传。未扫描或改写生产数据库。
+- [ ] 使用发布测试卷连续发布三版以上：旧 tab 延迟触发旧 chunk 后仍可加载；验证 HTML 与哈希资源 Cache-Control、旧 chunk 404 不被 SPA fallback 改写，以及浏览器一次性恢复不循环。当前没有 CDN/Ingress 线上响应证据，Firefox MIME 具体响应类型未确认。
+- [ ] Firefox/Chrome/Safari 实际页面走关键 lazy route；检查离线草稿、登录切换和错误重试行为。尚未做真实浏览器/CDN 验收。
+- [ ] 使用 React Profiler 与长时间运行的大画布记录任务更新、节点数/可见数、主线程长任务和页面隐藏行为。当前只做结构性降热点，不推断整画布必然全量重渲染或已达到某个帧率。
+
 ## 原任务 ID 媒体保存恢复
 
 - [x] 故障注入：下载 503 后服务实例重建继续原任务、OSS 上传失败保留暂存文件及资源 ID、素材登记异常使任务成功事务回滚，登记恢复无需再次下载。

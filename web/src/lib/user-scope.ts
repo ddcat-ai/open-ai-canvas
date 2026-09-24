@@ -1,5 +1,19 @@
 const ACTIVE_USER_SCOPE_KEY = "infinite-canvas:active-user-scope";
 const GUEST_SCOPE = "guest";
+let userScopedPersistenceSuppressionDepth = 0;
+
+export function withUserScopedPersistenceSuppressed<T>(operation: () => T) {
+    userScopedPersistenceSuppressionDepth += 1;
+    try {
+        return operation();
+    } finally {
+        userScopedPersistenceSuppressionDepth -= 1;
+    }
+}
+
+export function isUserScopedPersistenceSuppressed() {
+    return userScopedPersistenceSuppressionDepth > 0;
+}
 
 export function getActiveUserScope() {
     if (typeof window === "undefined") return GUEST_SCOPE;
@@ -22,10 +36,12 @@ export const scopedLocalStorage = {
     },
     setItem: (name: string, value: string) => {
         if (typeof window === "undefined") return;
+        if (isUserScopedPersistenceSuppressed()) return;
         window.localStorage.setItem(scopedStorageKey(name), value);
     },
     removeItem: (name: string) => {
         if (typeof window === "undefined") return;
+        if (isUserScopedPersistenceSuppressed()) return;
         window.localStorage.removeItem(scopedStorageKey(name));
     },
 };

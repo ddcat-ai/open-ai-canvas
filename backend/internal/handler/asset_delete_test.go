@@ -107,7 +107,7 @@ func TestAssetBatchDeleteHTTP(t *testing.T) {
 	}
 	assertAssets(1)
 
-	// The existing DELETE endpoint uses the same purge policy for non-archived assets.
+	// The DELETE endpoint protects referenced assets just like batch deletion.
 	resource := model.Resource{ID: "single-resource", UserID: "batch-user", Provider: "unsupported-test-provider", ObjectKey: "single.png"}
 	payload := `{"url":"/api/resources/single-resource/file"}`
 	for _, record := range []any{
@@ -119,8 +119,8 @@ func TestAssetBatchDeleteHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if w := call(http.MethodDelete, "/api/assets/single", "", true); w.Code != http.StatusOK {
+	if w := call(http.MethodDelete, "/api/assets/single", "", true); w.Code != http.StatusBadRequest {
 		t.Fatalf("single referenced delete: %d %s", w.Code, w.Body.String())
 	}
-	assertAssets(1)
+	assertAssets(2)
 }

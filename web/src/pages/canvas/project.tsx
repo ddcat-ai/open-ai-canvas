@@ -1409,6 +1409,7 @@ function InfiniteCanvasPage() {
         imageEditNode,
         mentionReferencesByNodeId,
         nodeById,
+        nodeRenderLODById,
         previewNode,
         reduceMediaEffects,
         relatedHighlight,
@@ -2692,6 +2693,7 @@ function InfiniteCanvasPage() {
                                                 connectionTargetNodeId={connectionTargetNodeId}
                                                 nodeById={nodeById}
                                                 visibleNodes={visibleNodes}
+                                                nodeRenderLODById={nodeRenderLODById}
                                                 nodeStackOrder={nodeStackOrder}
                                                 frameChildrenById={frameChildrenById}
                                                 linkedFolderPreviewNodesById={linkedFolderPreviewNodesById}

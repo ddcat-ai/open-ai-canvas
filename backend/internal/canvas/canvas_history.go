@@ -25,15 +25,17 @@ func SaveDocumentWithHistory(repo *repository.Repository, before *model.CanvasPr
 	if err != nil {
 		return err
 	}
-	var restoredIDs []string
-	if reason == "before_restore" {
-		refs := map[string]struct{}{}
-		if err := assets.CollectOwnedDocumentReferences(after.PayloadJSON, refs); err != nil {
-			return err
-		}
-		restoredIDs = assets.SortedIDs(refs)
+	refs := map[string]struct{}{}
+	if err := assets.CollectOwnedDocumentReferences(after.PayloadJSON, refs); err != nil {
+		return err
 	}
-	return repo.SaveCanvasWithSnapshot(after, snapshot, resourceIDs, restoredIDs, after.UpdatedAt.Add(-canvasHistoryInterval), canvasHistoryLimit, reason == "before_restore")
+	return repo.SaveCanvasWithSnapshot(after, snapshot, resourceIDs, assets.SortedIDs(refs), after.UpdatedAt.Add(-canvasHistoryInterval), canvasHistoryLimit, reason == "before_restore" || reason == "before_resource_repair")
+}
+
+// Explicit repair keeps the damaged preimage for audit/undo, but only protects
+// resources that still exist. The incoming document remains strictly validated.
+func (s *Service) RepairUserCanvasProject(userID string, raw json.RawMessage) (UserDataSummary, error) {
+	return s.upsertUserCanvasProjectWithHistory(userID, raw, "before_resource_repair")
 }
 
 func canvasRevisionConflict() error {

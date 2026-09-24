@@ -6,8 +6,10 @@ REPOSITORY_REF="${REPOSITORY_REF:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/open-ai-canvas}"
 CANVAS_HTTP_PORT="${CANVAS_HTTP_PORT:-3000}"
 REQUESTED_IMAGE_TAG="${CANVAS_IMAGE_TAG:-}"
-CANVAS_IMAGE_TAG="${REQUESTED_IMAGE_TAG:-latest}"
-CANVAS_IMAGE_TAG="${CANVAS_IMAGE_TAG#v}"
+CANVAS_IMAGE_TAG="${REQUESTED_IMAGE_TAG#v}"
+IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ghcr.io/ddcat-ai/open-ai-canvas}"
+CANVAS_BACKEND_IMAGE=""
+CANVAS_WEB_IMAGE=""
 COMPOSE_FILE="docker-compose.deploy.yml"
 COMPOSE_URL="${COMPOSE_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/${COMPOSE_FILE}}"
 UPDATER_INSTALL_URL="${UPDATER_INSTALL_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/scripts/install-host-updater.sh}"
@@ -28,7 +30,10 @@ require_root() {
     [[ "$(uname -s)" == "Linux" ]] || fail "一键部署脚本仅支持 Linux 服务器"
     [[ "$CANVAS_HTTP_PORT" =~ ^[0-9]+$ ]] || fail "CANVAS_HTTP_PORT 必须是 1 到 65535 的数字"
     ((CANVAS_HTTP_PORT >= 1 && CANVAS_HTTP_PORT <= 65535)) || fail "CANVAS_HTTP_PORT 必须是 1 到 65535 的数字"
-    [[ "$CANVAS_IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || fail "CANVAS_IMAGE_TAG 不是有效的 Docker 镜像标签"
+    if [[ -n "$CANVAS_IMAGE_TAG" ]]; then
+        [[ "$CANVAS_IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || fail "CANVAS_IMAGE_TAG 不是有效的 Docker 镜像标签"
+        [[ "$CANVAS_IMAGE_TAG" != "latest" ]] || fail "生产部署必须固定到具体 Release，不能使用 latest"
+    fi
 }
 
 install_packages() {
@@ -106,11 +111,21 @@ prepare_environment() {
             chmod --reference=.env "$temporary_env"
             mv "$temporary_env" .env
         elif [[ -n "$configured_image_tag" ]]; then
-            [[ "$configured_image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || fail ".env 中的 CANVAS_IMAGE_TAG 无效"
+            [[ "$configured_image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ && "$configured_image_tag" != "latest" ]] || fail ".env 中的 CANVAS_IMAGE_TAG 必须固定为具体 Release"
             CANVAS_IMAGE_TAG="${configured_image_tag#v}"
+        else
+            fail "请通过 CANVAS_IMAGE_TAG 指定具体 Release，例如 v1.5.7.1"
         fi
+        CANVAS_BACKEND_IMAGE="${IMAGE_REPOSITORY}-backend:${CANVAS_IMAGE_TAG}"
+        CANVAS_WEB_IMAGE="${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}"
+        set_env_value .env CANVAS_IMAGE_TAG "$CANVAS_IMAGE_TAG"
+        set_env_value .env CANVAS_BACKEND_IMAGE "$CANVAS_BACKEND_IMAGE"
+        set_env_value .env CANVAS_WEB_IMAGE "$CANVAS_WEB_IMAGE"
         return
     fi
+
+    [[ -n "$CANVAS_IMAGE_TAG" ]] || fail "首次安装必须通过 CANVAS_IMAGE_TAG 指定具体 Release，例如 v1.5.7.1"
+    [[ "$CANVAS_IMAGE_TAG" != "latest" ]] || fail "生产部署必须固定到具体 Release，不能使用 latest"
 
     step "生成 PostgreSQL 随机密码和部署配置"
     local database_password
@@ -123,11 +138,29 @@ POSTGRES_PASSWORD=${database_password}
 DATABASE_URL=postgresql://open_ai_canvas:${database_password}@postgres:5432/open_ai_canvas?sslmode=disable
 CANVAS_HTTP_PORT=${CANVAS_HTTP_PORT}
 CANVAS_IMAGE_TAG=${CANVAS_IMAGE_TAG}
+CANVAS_BACKEND_IMAGE=${IMAGE_REPOSITORY}-backend:${CANVAS_IMAGE_TAG}
+CANVAS_WEB_IMAGE=${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}
 CANVAS_REGISTRATION_ENABLED=false
 CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
 CANVAS_CORS_ORIGINS=
 EOF
+}
+
+set_env_value() {
+    local path="$1"
+    local key="$2"
+    local value="$3"
+    local temporary
+    temporary="$(mktemp "${path}.XXXXXX")"
+    awk -v key="$key" -v value="$value" '
+        BEGIN { updated=0 }
+        $0 ~ "^" key "=" { print key "=" value; updated=1; next }
+        { print }
+        END { if (!updated) print key "=" value }
+    ' "$path" > "$temporary"
+    chmod --reference="$path" "$temporary"
+    mv "$temporary" "$path"
 }
 
 download_compose() {
@@ -139,10 +172,6 @@ download_compose() {
 }
 
 install_host_updater() {
-    if [[ "$CANVAS_IMAGE_TAG" == "latest" ]]; then
-        printf '\n提示：CANVAS_IMAGE_TAG=latest，已跳过在线更新器安装。固定到具体发布版本后可再次运行本脚本。\n'
-        return
-    fi
     step "安装宿主机在线更新服务"
     local installer
     installer="$(mktemp)"
@@ -156,6 +185,13 @@ start_services() {
     if ! docker compose --env-file .env -f "$COMPOSE_FILE" pull; then
         fail "GHCR 镜像拉取失败；如果容器包尚未公开，请通过 GHCR_USERNAME 和 GHCR_TOKEN 登录后重试"
     fi
+    local backend_digest web_digest
+    backend_digest="$(docker image inspect "$CANVAS_BACKEND_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-backend" '$0 ~ "^" repository "@sha256:" { print; exit }')"
+    web_digest="$(docker image inspect "$CANVAS_WEB_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-web" '$0 ~ "^" repository "@sha256:" { print; exit }')"
+    [[ "$backend_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-backend@sha256:[a-f0-9]{64}$ ]] || fail "后端镜像未返回可验证的仓库 digest"
+    [[ "$web_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-web@sha256:[a-f0-9]{64}$ ]] || fail "Web 镜像未返回可验证的仓库 digest"
+    set_env_value .env CANVAS_BACKEND_IMAGE "$backend_digest"
+    set_env_value .env CANVAS_WEB_IMAGE "$web_digest"
     docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600
 }
 
@@ -179,8 +215,8 @@ main() {
     login_ghcr
     prepare_environment
     download_compose
-    install_host_updater
     start_services
+    install_host_updater
     print_result
 }
 

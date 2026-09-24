@@ -2,9 +2,11 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -13,6 +15,19 @@ import (
 
 var ErrCanvasHistoryResourceMissing = errors.New("canvas history resource missing")
 var ErrCanvasHistoryResourceReferenced = errors.New("resource referenced by canvas history")
+
+type CanvasHistoryResourceMissingError struct {
+	ResourceIDs []string
+	References  []assets.DocumentResourceReference
+}
+
+func (e *CanvasHistoryResourceMissingError) Error() string {
+	return fmt.Sprintf("canvas history resources missing: %v", e.ResourceIDs)
+}
+
+func (e *CanvasHistoryResourceMissingError) Unwrap() error {
+	return ErrCanvasHistoryResourceMissing
+}
 
 const canvasSnapshotSummaryColumns = "id, canvas_id, user_id, revision, title, node_count, connection_count, payload_bytes, reason, content_updated_at, created_at"
 
@@ -37,22 +52,22 @@ func (r *Repository) CanvasSnapshot(userID, canvasID, id string) (*model.CanvasS
 
 // The successful CAS takes the canvas row lock before inspecting the history.
 // Snapshot creation, reference protection and retention commit with the content.
-func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, restoredResourceIDs []string, cutoff time.Time, limit int, force bool) error {
+func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, currentResourceIDs []string, cutoff time.Time, limit int, force bool) error {
 	next := *project
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		if err := New(tx).UpsertCanvasProject(&next); err != nil {
 			return err
 		}
-		if snapshot == nil {
-			return nil
+		capture := false
+		if snapshot != nil {
+			var last model.CanvasSnapshot
+			err := tx.Select("id", "revision", "created_at").Where("canvas_id = ?", project.ID).Order("revision DESC").First(&last).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			capture = err != nil || (last.Revision != snapshot.Revision && (force || !last.CreatedAt.After(cutoff)))
 		}
-		var last model.CanvasSnapshot
-		err := tx.Select("id", "revision", "created_at").Where("canvas_id = ?", project.ID).Order("revision DESC").First(&last).Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-		capture := err != nil || (last.Revision != snapshot.Revision && (force || !last.CreatedAt.After(cutoff)))
-		requiredIDs := append([]string{}, restoredResourceIDs...)
+		requiredIDs := append([]string{}, currentResourceIDs...)
 		if capture {
 			requiredIDs = append(requiredIDs, resourceIDs...)
 		}
@@ -60,15 +75,61 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 		requiredIDs = slices.Compact(requiredIDs)
 		if len(requiredIDs) > 0 {
 			var resources []model.Resource
-			query := tx.Select("id").Where("id IN ? AND status = ?", requiredIDs, model.ResourceStatusReady).Order("id")
+			query := tx.Select("id").Where("id IN ? AND user_id = ? AND status = ?", requiredIDs, project.UserID, model.ResourceStatusReady).Order("id")
 			if r.Dialect() == "postgres" {
 				query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 			}
 			if err := query.Find(&resources).Error; err != nil {
 				return err
 			}
-			if len(resources) != len(requiredIDs) {
-				return ErrCanvasHistoryResourceMissing
+			found := make(map[string]struct{}, len(resources))
+			for _, resource := range resources {
+				found[resource.ID] = struct{}{}
+			}
+			missingIDs := make([]string, 0)
+			allowDamagedPreimage := snapshot != nil && (snapshot.Reason == "before_resource_repair" || snapshot.Reason == "before_restore")
+			for _, id := range requiredIDs {
+				if _, exists := found[id]; !exists {
+					if allowDamagedPreimage && !slices.Contains(currentResourceIDs, id) {
+						continue
+					}
+					missingIDs = append(missingIDs, id)
+				}
+			}
+			if len(missingIDs) > 0 {
+				missingSet := make(map[string]struct{}, len(missingIDs))
+				for _, id := range missingIDs {
+					missingSet[id] = struct{}{}
+				}
+				missingRefs := make([]assets.DocumentResourceReference, 0)
+				documents := map[string]string{"current": project.PayloadJSON}
+				if capture {
+					documents["history"] = snapshot.PayloadJSON
+				}
+				for _, source := range []string{"current", "history"} {
+					refs, collectErr := assets.CollectDocumentResourceReferences(documents[source])
+					if collectErr != nil {
+						return collectErr
+					}
+					for _, ref := range refs {
+						if _, missing := missingSet[ref.ResourceID]; missing {
+							ref.Source = source
+							missingRefs = append(missingRefs, ref)
+						}
+					}
+				}
+				for _, id := range missingIDs {
+					if !containsResourceReference(missingRefs, id) {
+						missingRefs = append(missingRefs, assets.DocumentResourceReference{ResourceID: id, Path: "history", ReferenceType: "snapshot"})
+					}
+				}
+				return &CanvasHistoryResourceMissingError{ResourceIDs: missingIDs, References: missingRefs}
+			}
+			if allowDamagedPreimage {
+				resourceIDs = slices.DeleteFunc(slices.Clone(resourceIDs), func(id string) bool {
+					_, exists := found[id]
+					return !exists
+				})
 			}
 		}
 		if !capture {
@@ -105,6 +166,15 @@ func (r *Repository) CanvasHistoryReferencesObject(resource *model.Resource) (bo
 		Where("resource_id = ? OR resource_id IN (?)", resource.ID, aliases).
 		Count(&count).Error
 	return count > 0, err
+}
+
+func containsResourceReference(references []assets.DocumentResourceReference, resourceID string) bool {
+	for _, reference := range references {
+		if reference.ResourceID == resourceID {
+			return true
+		}
+	}
+	return false
 }
 
 func deleteCanvasSnapshots(tx *gorm.DB, ids []string) error {

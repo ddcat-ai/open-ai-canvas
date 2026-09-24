@@ -15,7 +15,7 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
-import { repairMissingCanvasAssets, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
+import { repairMissingCanvasAssets, repairMissingCanvasVideoPreviews, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { applyAgentCanvasPatch, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
 
@@ -412,6 +412,9 @@ export function scheduleRemoteUserDataSync() {
 
 export function formatLocalSavedRemotePending(localAction: string, error: unknown): string {
     const detail = error instanceof Error && error.message.trim() ? error.message.trim() : "未知错误";
+    if (error instanceof ApiError && error.reason === "canvas_history_resources_missing") {
+        return `${localAction}，云端同步已暂停：${detail}。请修复缺失素材或从有效历史版本恢复。`;
+    }
     if (error instanceof ApiError && (error.status === 409 || error.status === 428)) {
         return `${localAction}，云端同步已暂停：${detail}。请保留草稿并加载最新版本。`;
     }
@@ -583,9 +586,9 @@ export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
     });
 }
 
-export async function saveRemoteUserDataNow(input?: string | readonly string[] | { force?: boolean }) {
+export async function saveRemoteUserDataNow(input?: string | readonly string[] | { force?: boolean; repairMissingResources?: boolean }) {
     const projectId = typeof input === "string" || Array.isArray(input) ? input as string | readonly string[] : undefined;
-    const options = input && typeof input === "object" && !Array.isArray(input) ? input as { force?: boolean } : {};
+    const options = input && typeof input === "object" && !Array.isArray(input) ? input as { force?: boolean; repairMissingResources?: boolean } : {};
     const epoch = sessionEpoch;
     if (!activeRemoteUserId) throw new Error("尚未建立云端同步会话，本地内容尚未保存到云端");
     requireRemoteUserDataBaseline();
@@ -602,6 +605,11 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
         syncQueued = true;
         await syncPromise;
         assertNoConflict();
+        // The in-flight drain may have started before this explicit repair/force
+        // request. Re-enter after it settles so the user's intent is not lost.
+        if (options.force || options.repairMissingResources) {
+            return saveRemoteUserDataNow(input);
+        }
         return;
     }
     syncPromise = withRemoteUserDataSyncExclusive(async () => {
@@ -630,6 +638,8 @@ export async function forceOverwriteRemoteCanvasSync(): Promise<CanvasAssetRebin
     const rebind = await withRemoteUserDataSyncExclusive(async () => {
         if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止修复保存");
         requireRemoteUserDataBaseline();
+        await repairMissingCanvasVideoPreviews();
+        if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止修复保存");
         const projects = useCanvasStore.getState().projects;
         // 服务端素材记录是 guard 实际校验的事实；本地缓存可能落后，须先取回再判定绑定一致性。
         const claimedIds = [...collectCanvasMediaAssetIds(projects)];
@@ -638,17 +648,18 @@ export async function forceOverwriteRemoteCanvasSync(): Promise<CanvasAssetRebin
             const { assets } = await getRemoteAssetsByIds(claimedIds.slice(offset, offset + 100));
             remoteAssets.push(...assets);
         }
+        if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止修复保存");
         const remoteById = new Map(remoteAssets.map((asset) => [asset.id, asset]));
         const merged = [...remoteAssets, ...useAssetStore.getState().assets.filter((asset) => !remoteById.has(asset.id))];
         const result = rebindInconsistentCanvasAssets(parseAssetRecordList(merged));
         await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
         return result;
     });
-    await saveRemoteUserDataNow({ force: true });
+    await saveRemoteUserDataNow({ force: true, repairMissingResources: true });
     return rebind;
 }
 
-async function drainRemoteUserDataChanges(options: { force?: boolean } = {}) {
+async function drainRemoteUserDataChanges(options: { force?: boolean; repairMissingResources?: boolean } = {}) {
     const uploaded = new Map<string, string>();
     do {
         syncQueued = false;
@@ -656,7 +667,7 @@ async function drainRemoteUserDataChanges(options: { force?: boolean } = {}) {
     } while (syncQueued);
 }
 
-async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: { force?: boolean } = {}) {
+async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: { force?: boolean; repairMissingResources?: boolean } = {}) {
     // 中央兜底：任何调用方只要把持久媒体写进画布，提交前都会先补齐素材记录与 assetId。
     // 页面级入口仍主动入库，以便立即反馈；这里负责阻止遗漏入口形成远端幽灵资源。
     const changedProjectIds = new Set(useCanvasStore.getState().projects.filter((project) => !sameCanvasContent(acknowledgedProjects.get(project.id), project)).map((project) => project.id));
@@ -719,7 +730,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                     message: "正在保存画布结构",
                 });
             }
-            const { project: saved } = await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
+            const { project: saved } = await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload), { repairMissingResources: options.repairMissingResources === true });
             if (!Number.isSafeInteger(saved.revision) || saved.revision !== source.revision! + 1) {
                 throw new ApiError("服务端未返回有效画布版本，请加载云端最新版本", { status: 409 });
             }
@@ -739,7 +750,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             useSyncProgressStore.getState().setProjectProgress(source.id, { phase: pending ? "pending" : "done", message: pending ? "有新修改等待保存" : "已保存到云端" });
             if (pending) syncQueued = true;
         } catch (error) {
-            const conflict = error instanceof ApiError && (error.status === 409 || error.status === 428);
+            const conflict = error instanceof ApiError && error.reason !== "canvas_history_resources_missing" && (error.status === 409 || error.status === 428);
             useSyncProgressStore.getState().setProjectProgress(source.id, {
                 phase: conflict ? "conflict" : "error",
                 message: error instanceof Error ? error.message : "云端同步失败，等待重试",

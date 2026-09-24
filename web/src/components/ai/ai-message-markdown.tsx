@@ -7,6 +7,7 @@ import "streamdown/styles.css";
 type AIMessageMarkdownProps = {
     children: string;
     isStreaming?: boolean;
+    streamingAnimation?: "word" | "char" | "none";
     className?: string;
 };
 
@@ -36,7 +37,7 @@ function buildComponents(isStreaming: boolean): Components {
 const staticComponents = buildComponents(false);
 const streamingComponents = buildComponents(true);
 
-export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isStreaming = false, className = "" }: AIMessageMarkdownProps) {
+export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isStreaming = false, streamingAnimation = "word", className = "" }: AIMessageMarkdownProps) {
     if (!children.trim()) return null;
     return (
         <Streamdown
@@ -44,7 +45,7 @@ export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isS
             mode="streaming"
             dir="auto"
             isAnimating={isStreaming}
-            animated={isStreaming ? { animation: "fadeIn", duration: 140, sep: "word", stagger: 8 } : false}
+            animated={isStreaming && streamingAnimation !== "none" ? { animation: "fadeIn", duration: streamingAnimation === "char" ? 120 : 140, sep: streamingAnimation, stagger: streamingAnimation === "char" ? 16 : 8 } : false}
             parseIncompleteMarkdown
             skipHtml
             lineNumbers={false}

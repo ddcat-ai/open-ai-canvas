@@ -218,6 +218,10 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	return s.canvasDomain().UpsertUserCanvasProject(userID, raw)
 }
 
+func (s *Service) RepairUserCanvasProject(userID string, raw json.RawMessage) (UserDataSummary, error) {
+	return s.canvasDomain().RepairUserCanvasProject(userID, raw)
+}
+
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
 	return s.canvasDomain().DeleteUserCanvasProject(userID, id)
 }

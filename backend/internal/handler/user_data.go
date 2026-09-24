@@ -606,7 +606,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
 		var req struct {
-			Project json.RawMessage `json:"project"`
+			Project                json.RawMessage `json:"project"`
+			RepairMissingResources bool            `json:"repairMissingResources"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -629,7 +630,12 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if audit.Revision != nil {
 			baseRevision = *audit.Revision
 		}
-		project, err := svc.UpsertUserCanvasProject(user.ID, req.Project)
+		var project service.UserDataSummary
+		if req.RepairMissingResources {
+			project, err = svc.RepairUserCanvasProject(user.ID, req.Project)
+		} else {
+			project, err = svc.UpsertUserCanvasProject(user.ID, req.Project)
+		}
 		defer func() {
 			nodesBefore, nodesAfter := -1, len(audit.Nodes)
 			if project.SaveAudit != nil {

@@ -151,10 +151,11 @@ sudo docker compose --env-file .env \
 不需要源码时，可使用镜像部署脚本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh \
+  | sudo env CANVAS_IMAGE_TAG=v1.5.7.1 bash
 ```
 
-生产环境请在 `/opt/open-ai-canvas/.env` 中将 `CANVAS_IMAGE_TAG` 固定为具体 Release，不要使用 `latest`。更新流程、数据库迁移、备份和回退说明见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
+脚本会先按指定 Release 拉取镜像，再解析并写入 `CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 的 GHCR digest；生产 Compose 不接受缺失 digest 的默认镜像或 `latest`。更新流程、数据库迁移、备份和回退说明见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
 
 ## 安全边界
 

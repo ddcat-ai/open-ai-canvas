@@ -835,6 +835,17 @@ func (r *Repository) SystemSetting(key string) (*model.SystemSetting, error) {
 	return &setting, nil
 }
 
+func (r *Repository) SystemSettingOptional(key string) (*model.SystemSetting, error) {
+	var setting model.SystemSetting
+	if err := r.db.Where("key = ?", key).Limit(1).Find(&setting).Error; err != nil {
+		return nil, err
+	}
+	if setting.Key == "" {
+		return nil, nil
+	}
+	return &setting, nil
+}
+
 func (r *Repository) SaveSystemSetting(setting *model.SystemSetting) error {
 	return r.db.Save(setting).Error
 }

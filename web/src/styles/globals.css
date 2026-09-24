@@ -295,12 +295,12 @@
     --glass-alpha-strong: 0.97;
     --glass-border-alpha: 0.78;
 
-    /* 站点皮肤对登录页的组件级入口；经典皮肤保持原始值。 */
-    --auth-page-bg: #08090c;
-    --auth-panel-bg: #0b0c10;
-    --auth-card-bg: rgba(18, 19, 24, 0.94);
-    --auth-accent: rgba(147, 197, 253, 0.8);
-    --auth-muted: rgba(255, 255, 255, 0.45);
+    /* 登录表单跟随全局明暗主题；品牌影片保留独立深色舞台。 */
+    --auth-page-bg: #ffffff;
+    --auth-panel-bg: #f7f7f7;
+    --auth-card-bg: #ffffff;
+    --auth-accent: #2563eb;
+    --auth-muted: #737373;
 
     /* 可配置皮肤的组件入口。经典主题保持这些项目原始值；自定义主题在
        React 启动前由公开外观配置覆盖，页面和组件只消费这些语义变量。 */
@@ -359,6 +359,45 @@
 
 .auth-scene {
     background: var(--auth-page-bg);
+    color: var(--foreground);
+}
+
+.auth-scene-hero {
+    background: var(--auth-panel-bg);
+    color: var(--foreground);
+}
+
+.auth-scene-hero-overlay {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--auth-panel-bg) 40%, transparent),
+        transparent 42%,
+        color-mix(in srgb, var(--auth-panel-bg) 76%, transparent)
+    );
+    pointer-events: none;
+}
+
+.auth-scene-brand,
+.auth-scene-brand:hover {
+    color: inherit;
+}
+
+.auth-scene-hero-control {
+    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+    background: color-mix(in srgb, var(--auth-panel-bg) 78%, transparent);
+    color: color-mix(in srgb, var(--foreground) 82%, transparent);
+}
+
+.auth-scene-hero-control:hover {
+    background: color-mix(in srgb, var(--auth-panel-bg) 92%, transparent);
+}
+
+.auth-scene-hero-muted {
+    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+}
+
+.auth-scene-hero-title {
+    color: var(--foreground);
 }
 
 .auth-scene-form-pane {
@@ -371,7 +410,7 @@
 
 .auth-scene-card {
     background: var(--auth-card-bg);
-    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+    box-shadow: var(--elevation-card-hover);
 }
 
 .auth-scene-eyebrow {
@@ -382,16 +421,57 @@
     color: var(--auth-muted);
 }
 
+.auth-scene-label {
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+.auth-scene-icon {
+    color: var(--auth-muted);
+}
+
+.auth-scene-link {
+    color: var(--auth-accent);
+}
+
+.auth-scene-link:hover {
+    color: var(--foreground);
+}
+
+.auth-scene-link:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 3px;
+}
+
+.auth-scene-divider.ant-divider {
+    border-color: var(--border);
+    color: var(--auth-muted);
+}
+
+.auth-scene-notice {
+    --auth-notice-color: var(--palette-status-warning);
+    border-color: color-mix(in srgb, var(--auth-notice-color) 24%, transparent);
+    background: color-mix(in srgb, var(--auth-notice-color) 6%, transparent);
+    color: var(--foreground);
+}
+
+.auth-scene-notice[data-tone="blue"] {
+    --auth-notice-color: var(--palette-status-loading);
+}
+
+.auth-scene-notice > span:first-child {
+    color: var(--auth-notice-color);
+}
+
 .auth-scene-return {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(255, 255, 255, 0.58);
+    border: var(--control-border-width) solid var(--border);
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: var(--auth-muted);
 }
 
 .auth-scene-return:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    border-color: var(--input);
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--foreground);
 }
 
 .site-compliance-footer {
@@ -433,15 +513,15 @@
 
 .site-compliance-footer.is-auth {
     min-height: 54px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: var(--control-border-width) solid var(--border);
     background: color-mix(in srgb, var(--auth-panel-bg) 88%, transparent);
-    color: rgba(255, 255, 255, 0.48);
+    color: var(--auth-muted);
     backdrop-filter: blur(14px);
 }
 
 .site-compliance-footer.is-auth a:hover,
 .site-compliance-footer.is-auth a:focus-visible {
-    color: rgba(255, 255, 255, 0.86);
+    color: var(--foreground);
 }
 
 @media (max-width: 640px) {
@@ -714,6 +794,11 @@
 
 .dark {
     --background: #0f0f0f;
+    --auth-page-bg: #08090c;
+    --auth-panel-bg: #0b0c10;
+    --auth-card-bg: #121318;
+    --auth-accent: #93c5fd;
+    --auth-muted: #8a8b91;
     --foreground: #ffffff;
     --border: #222222;
     --ring: oklch(0.556 0 0);
@@ -6841,13 +6926,13 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
         justify-content: center;
         margin: 0 !important;
         padding: 8px 0 12px !important;
-        color: rgba(255, 255, 255, 0.38);
+        color: var(--auth-muted);
         font-weight: 500;
         transition: color var(--motion-instant) ease-out;
     }
 
     .auth-card-tabs .ant-tabs-tab:hover {
-        color: rgba(255, 255, 255, 0.68);
+        color: var(--foreground);
     }
 
     .auth-card-tabs .ant-tabs-tab-active::after {
@@ -6857,19 +6942,19 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
         width: 20px;
         height: 2px;
         border-radius: 1px;
-        background: rgba(255, 255, 255, 0.82);
+        background: var(--foreground);
         content: "";
         transform: translateX(-50%);
     }
 
     .auth-card-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-        color: rgba(255, 255, 255, 0.94) !important;
+        color: var(--foreground) !important;
         text-shadow: none;
     }
 
     .auth-card-tabs .ant-tabs-tab-btn:focus-visible {
         border-radius: 3px;
-        outline: 1px solid rgba(255, 255, 255, 0.48);
+        outline: var(--focus-ring-width) solid var(--ring);
         outline-offset: 3px;
     }
 
@@ -6877,39 +6962,39 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
         display: none;
     }
 
-    .auth-card-dark :where(.ant-input, .ant-input-affix-wrapper) {
+    .auth-scene-card :where(.ant-input, .ant-input-affix-wrapper) {
         border-color: transparent !important;
-        background: rgba(255, 255, 255, 0.055) !important;
+        background: color-mix(in srgb, var(--foreground) 5.5%, transparent) !important;
         box-shadow: none !important;
         transition: border-color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out !important;
     }
 
-    .auth-card-dark .ant-input-affix-wrapper > .ant-input {
+    .auth-scene-card .ant-input-affix-wrapper > .ant-input {
         background: transparent !important;
     }
 
-    .auth-card-dark :where(.ant-input:hover, .ant-input-affix-wrapper:hover) {
-        border-color: rgba(255, 255, 255, 0.08) !important;
-        background: rgba(255, 255, 255, 0.07) !important;
+    .auth-scene-card :where(.ant-input:hover, .ant-input-affix-wrapper:hover) {
+        border-color: var(--border) !important;
+        background: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
     }
 
-    .auth-card-dark :where(.ant-input:focus, .ant-input-focused, .ant-input-affix-wrapper-focused) {
-        border-color: transparent !important;
-        background: rgba(255, 255, 255, 0.085) !important;
+    .auth-scene-card :where(.ant-input:focus, .ant-input-focused, .ant-input-affix-wrapper-focused) {
+        border-color: var(--ring) !important;
+        background: color-mix(in srgb, var(--foreground) 8.5%, transparent) !important;
         outline: none !important;
-        box-shadow: none !important;
+        box-shadow: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--ring) 18%, transparent) !important;
     }
 
-    .auth-card-dark .ant-input-affix-wrapper-focused .ant-input-prefix svg {
-        color: rgba(255, 255, 255, 0.62) !important;
+    .auth-scene-card .ant-input-affix-wrapper-focused .ant-input-prefix svg {
+        color: var(--foreground) !important;
     }
 
-    .auth-card-dark input:-webkit-autofill,
-    .auth-card-dark input:-webkit-autofill:hover,
-    .auth-card-dark input:-webkit-autofill:focus {
-        box-shadow: 0 0 0 1000px #17181c inset !important;
-        -webkit-text-fill-color: #f5f5f5 !important;
-        caret-color: #f5f5f5;
+    .auth-scene-card input:-webkit-autofill,
+    .auth-scene-card input:-webkit-autofill:hover,
+    .auth-scene-card input:-webkit-autofill:focus {
+        box-shadow: 0 0 0 1000px var(--auth-card-bg) inset !important;
+        -webkit-text-fill-color: var(--foreground) !important;
+        caret-color: var(--foreground);
     }
 
 :where(.ant-modal, .ant-drawer, .ant-select-dropdown, .ant-dropdown, .ant-popover) {

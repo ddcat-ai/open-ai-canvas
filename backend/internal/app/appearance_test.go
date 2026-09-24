@@ -50,6 +50,27 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	}
 }
 
+func TestBuiltInAppearanceSkinAuthPalettesFollowMode(t *testing.T) {
+	for _, skin := range defaultAppearanceSkinThemes() {
+		if skin.Tokens.Light.AuthBackground == skin.Tokens.Dark.AuthBackground || skin.Tokens.Light.AuthCard == skin.Tokens.Dark.AuthCard {
+			t.Errorf("skin %s reuses dark auth surfaces in light mode", skin.ID)
+		}
+		for _, mode := range []struct {
+			name   string
+			tokens AppearanceSkinModeTokens
+		}{
+			{name: "light", tokens: skin.Tokens.Light},
+			{name: "dark", tokens: skin.Tokens.Dark},
+		} {
+			for label, foreground := range map[string]string{"text": mode.tokens.Text, "muted": mode.tokens.AuthMuted, "accent": mode.tokens.AuthAccent} {
+				if ratio := appearanceColorContrastRatio(t, foreground, mode.tokens.AuthCard); ratio < 4.5 {
+					t.Errorf("skin %s %s auth %s contrast = %.2f, want at least 4.5", skin.ID, mode.name, label, ratio)
+				}
+			}
+		}
+	}
+}
+
 func TestBuiltInAppearanceSkinTooltipPairsMeetContrast(t *testing.T) {
 	for _, skin := range defaultAppearanceSkinThemes() {
 		modes := []struct {

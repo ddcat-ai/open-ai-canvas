@@ -36,11 +36,7 @@ func (s *Service) ResourceAccessBatch(userID string, requests []ResourceAccessRe
 	results := make([]ResourceAccessResult, 0, len(requests))
 	for _, request := range requests {
 		item := ResourceAccessResult{ResourceID: request.ResourceID}
-		// The caller has already been authenticated and each item is resolved through
-		// ResourceForUser below. Provider input is therefore safe to expose here and
-		// keeps browser-side model adapters on the same access contract as every
-		// other resource consumer.
-		options, err := assets.NormalizeAccessOptions(request.AccessOptions, true)
+		options, err := assets.NormalizeAccessOptions(request.AccessOptions, false)
 		if err == nil {
 			var resource *model.Resource
 			resource, err = s.repo.ResourceForUser(userID, request.ResourceID)

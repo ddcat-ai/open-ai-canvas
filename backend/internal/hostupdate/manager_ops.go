@@ -133,7 +133,7 @@ func (m *Manager) preflight(composePath, targetVersion string) error {
 	if err := checkBackupDiskSpace(m.config.BackupDir); err != nil {
 		return err
 	}
-	if err := m.compose(composePath, targetVersion, 2*time.Minute, nil, "config", "--quiet"); err != nil {
+	if err := m.composeWithImages(composePath, targetVersion, immutableImageRefs(m.config.Repository, targetVersion), 2*time.Minute, nil, "config", "--quiet"); err != nil {
 		return fmt.Errorf("目标 Compose 校验失败：%w", err)
 	}
 	current, err := m.currentVersion()
@@ -243,7 +243,25 @@ func (m *Manager) restartSelf() {
 	_ = m.runner.Run(ctx, "systemctl", []string{"restart", m.config.ServiceName}, nil, io.Discard, io.Discard)
 }
 
+type deploymentImages struct {
+	backend string
+	web     string
+}
+
+func immutableImageRefs(repository, version string) deploymentImages {
+	owner := strings.SplitN(repository, "/", 2)[0]
+	tag := strings.TrimPrefix(version, "v")
+	return deploymentImages{
+		backend: "ghcr.io/" + owner + "/open-ai-canvas-backend:" + tag,
+		web:     "ghcr.io/" + owner + "/open-ai-canvas-web:" + tag,
+	}
+}
+
 func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, stdout io.Writer, arguments ...string) error {
+	return m.composeWithImages(composePath, imageTag, deploymentImages{}, timeout, stdout, arguments...)
+}
+
+func (m *Manager) composeWithImages(composePath, imageTag string, images deploymentImages, timeout time.Duration, stdout io.Writer, arguments ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	args := []string{"compose", "--env-file", m.envPath(), "-f", composePath}
@@ -252,7 +270,11 @@ func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, s
 	if stdout == nil {
 		stdout = io.Discard
 	}
-	err := m.runner.Run(ctx, "docker", args, []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}, stdout, &stderr)
+	environment := []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}
+	if images.backend != "" {
+		environment = append(environment, "CANVAS_BACKEND_IMAGE="+images.backend, "CANVAS_WEB_IMAGE="+images.web)
+	}
+	err := m.runner.Run(ctx, "docker", args, environment, stdout, &stderr)
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
 		if len(message) > 1000 {
@@ -266,22 +288,47 @@ func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, s
 	return nil
 }
 
-func (m *Manager) verifyImages(targetVersion string) error {
-	owner := strings.SplitN(m.config.Repository, "/", 2)[0]
-	for _, image := range []string{"ghcr.io/" + owner + "/open-ai-canvas-backend:", "ghcr.io/" + owner + "/open-ai-canvas-web:"} {
+func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
+	images := immutableImageRefs(m.config.Repository, targetVersion)
+	refs := []string{images.backend, images.web}
+	digests := make([]string, 0, len(refs))
+	for _, image := range refs {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		var output bytes.Buffer
 		var stderr bytes.Buffer
-		err := m.runner.Run(ctx, "docker", []string{"image", "inspect", image + strings.TrimPrefix(targetVersion, "v"), "--format", "{{json .RepoDigests}}"}, nil, &output, &stderr)
+		err := m.runner.Run(ctx, "docker", []string{"image", "inspect", image, "--format", "{{json .RepoDigests}}"}, nil, &output, &stderr)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("校验目标镜像摘要失败：%s", strings.TrimSpace(stderr.String()))
+			return deploymentImages{}, fmt.Errorf("校验目标镜像摘要失败：%s", strings.TrimSpace(stderr.String()))
 		}
-		if !strings.Contains(output.String(), "@sha256:") {
-			return fmt.Errorf("目标镜像 %s 未包含仓库摘要", image+targetVersion)
+		var repositoryDigests []string
+		if err := json.Unmarshal(output.Bytes(), &repositoryDigests); err != nil {
+			return deploymentImages{}, fmt.Errorf("解析目标镜像摘要失败：%w", err)
 		}
+		repository := strings.Split(image, ":")[0]
+		var digest string
+		for _, candidate := range repositoryDigests {
+			if strings.HasPrefix(candidate, repository+"@sha256:") {
+				digest = candidate
+				break
+			}
+		}
+		if digest == "" {
+			return deploymentImages{}, fmt.Errorf("目标镜像 %s 未包含仓库摘要", image)
+		}
+		digests = append(digests, digest)
 	}
-	return nil
+	return deploymentImages{backend: digests[0], web: digests[1]}, nil
+}
+
+func setDeploymentImages(path, version string, images deploymentImages) error {
+	if err := setEnvValue(path, "CANVAS_IMAGE_TAG", strings.TrimPrefix(version, "v")); err != nil {
+		return err
+	}
+	if err := setEnvValue(path, "CANVAS_BACKEND_IMAGE", images.backend); err != nil {
+		return err
+	}
+	return setEnvValue(path, "CANVAS_WEB_IMAGE", images.web)
 }
 
 func (m *Manager) createBackup(version string) (Backup, error) {
