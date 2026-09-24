@@ -152,6 +152,11 @@ type cloudAgentRuntime struct {
 	// HistoryIncludesCurrent 说明 TextHistory 是压缩瞬间的 canonical 快照：
 	// 续轮只补快照之后的新插话与最终回复，不能重复已压缩的用户要求。
 	HistoryIncludesCurrent bool `json:"historyIncludesCurrent,omitempty"`
+	// EventSeqBase 是本次载入的事件窗口之前已入库的条数，不变量是
+	// events[i].Seq == EventSeqBase + i + 1。事件全量在 cloud_agent_event_records，
+	// 内存只保留最近一窗（repository.CloudAgentJournalWindow），因此它是"窗口在整条
+	// 日志里的偏移"，而不是累计条数。只在内存里有效，不进检查点（检查点里的事件为空）。
+	EventSeqBase int `json:"-"`
 }
 
 type cloudAgentTransientReference struct {
@@ -196,7 +201,8 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	return s.repo.EnsureCloudAgent(run)
 }
 func (state *cloudAgentRuntime) event(id, kind string, payload map[string]any) {
-	seq := len(state.Events) + 1
+	// 序号接在"已载入窗口 + 窗口之前已入库条数"之后，与 EventSeqBase 的不变量一致。
+	seq := state.EventSeqBase + len(state.Events) + 1
 	state.Events = append(state.Events, CloudAgentEvent{EventID: fmt.Sprintf("%s:%d", id, seq), RunID: id, Seq: seq, Type: kind, Payload: payload, CreatedAt: time.Now()})
 }
 func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error) {
@@ -209,13 +215,25 @@ func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error)
 	}
 	state.RuntimeRunID = run.ID
 	if run.CheckpointVersion >= 2 {
-		if len(run.Journal) != run.EventCount || len(run.Transcript) != run.MessageCount {
+		if len(run.Transcript) != run.MessageCount {
+			return state, errors.New("Agent execution transcript is incomplete")
+		}
+		// 事件只载入最近一窗（repository.CloudAgentJournalWindow），所以这里校验的是
+		// "窗口与水位自洽"而不是全量条数：
+		//   - 窗口必须正好结束在水位上（最后一条 seq == EventCount），否则说明有行没读到；
+		//   - 窗口为空时水位只能是 0，否则同样说明行缺失（不能把"一行都没有"当成空日志）；
+		//   - EventSeqBase = 水位 - 窗口条数，即窗口之前已入库的条数。
+		if len(run.Journal) == 0 && run.EventCount != 0 {
 			return state, errors.New("Agent execution journal is incomplete")
+		}
+		state.EventSeqBase = run.EventCount - len(run.Journal)
+		if state.EventSeqBase < 0 {
+			return state, errors.New("Agent execution journal watermark is invalid")
 		}
 		state.Events = make([]CloudAgentEvent, 0, len(run.Journal))
 		state.Canonical.Messages, state.TextHistory = nil, nil
 		for _, record := range run.Journal {
-			expected := len(state.Events) + 1
+			expected := state.EventSeqBase + len(state.Events) + 1
 			if record.Sequence != expected {
 				return state, errors.New("Agent event sequence is incomplete")
 			}
@@ -227,6 +245,9 @@ func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error)
 				return state, errors.New("Agent event identity is invalid")
 			}
 			state.Events = append(state.Events, event)
+		}
+		if len(state.Events) > 0 && state.Events[len(state.Events)-1].Seq != run.EventCount {
+			return state, errors.New("Agent execution journal is incomplete")
 		}
 		for _, record := range run.Transcript {
 			switch record.Kind {
@@ -372,8 +393,16 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	if state.Decisions == nil || state.Events == nil {
 		return errors.New("Agent runtime maps are missing")
 	}
+	if state.EventSeqBase < 0 {
+		return errors.New("Agent runtime event watermark is invalid")
+	}
+	// 内存里只有"最近一窗 + 本次转移新产生的部分"，超过健全上限说明窗口没有按
+	// CloudAgentJournalWindow 载入（或序号基准算错），此时不能继续推进。
+	if len(state.Events) > cloudAgentEventWindowSanityLimit {
+		return errors.New("Agent runtime event window is too large")
+	}
 	for index, event := range state.Events {
-		if event.RunID != run.ID || event.Seq != index+1 || event.EventID == "" || event.Type == "" || event.Payload == nil || event.CreatedAt.IsZero() {
+		if event.RunID != run.ID || event.Seq != state.EventSeqBase+index+1 || event.EventID == "" || event.Type == "" || event.Payload == nil || event.CreatedAt.IsZero() {
 			return errors.New("Agent runtime event history is invalid")
 		}
 		if err := validateCloudAgentID(event.EventID, "事件 ID", 240); err != nil {
@@ -519,7 +548,7 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 			return fmt.Errorf("%w: %v", errCloudAgentCheckpoint, err)
 		}
 		for index, event := range state.Events {
-			sequence := index + 1
+			sequence := state.EventSeqBase + index + 1
 			if event.Seq != sequence || event.RunID != run.ID || event.EventID != fmt.Sprintf("%s:%d", run.ID, sequence) {
 				return fmt.Errorf("%w: Agent event sequence or identity is invalid", errCloudAgentCheckpoint)
 			}
@@ -541,6 +570,9 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 	if run.Title == "" {
 		run.Title = truncateRunes(state.Request.Prompt, 80)
 	}
+	// 事件按"窗口 + 水位"落库：run.Journal 只是内存窗口的映射（窗口之外的历史仍在
+	// 事件表里），写入侧（repository.MutateCloudAgent）只追加 seq > 旧水位的行，
+	// 因此窗口左移不会丢历史。
 	run.Journal = make([]model.CloudAgentEventRecord, 0, len(state.Events))
 	for _, event := range state.Events {
 		body, err := json.Marshal(event)
@@ -564,11 +596,13 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 		}
 		run.Transcript = append(run.Transcript, model.CloudAgentMessageRecord{RunID: run.ID, UserID: run.UserID, Kind: "history", Sequence: index + 1, MessageJSON: string(body)})
 	}
-	run.CheckpointVersion, run.EventCount, run.MessageCount = 2, len(run.Journal), len(run.Transcript)
+	// 水位 = 窗口之前已入库的条数 + 本次载入/新增的窗口条数，必须与事件表里的
+	// 最大 seq 一致，否则下一次载入的窗口与水位会对不上。
+	run.CheckpointVersion, run.EventCount, run.MessageCount = 2, state.EventSeqBase+len(state.Events), len(run.Transcript)
 	run.StateJSON = string(raw)
 	return nil
 }
-func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgentState) (*CloudAgentRun, error) {
+func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgentState, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	run, err := s.repo.CloudAgent(task.UserID, task.ID)
 	if err != nil {
 		return nil, err
@@ -584,7 +618,27 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 	out.Status = run.Status
 	out.Revision, out.CleanupPending, out.FailureMessage = run.Revision, run.CleanupPending, run.FailureMessage
 	out.UpdatedAt = run.UpdatedAt
-	out.Events = state.Events
+	view := CloudAgentRunViewOptions{}
+	if len(options) > 0 {
+		view = options[0]
+	}
+	// 事件已全量落库，运行详情只返回一页：默认是尾部窗口，sinceSeq 只取增量。
+	// 四个位置字段与 events 一起返回，客户端据此判断"是否还有更早的记录"。
+	out.Events = s.cloudAgentRunEventsForView(task.UserID, run, &state, view.SinceSeq, view.EventLimit)
+	// EventSeqBase 必须与真正返回的这一页对齐（eventLimit 把它收窄时也一样），
+	// 不变量 events[i].seq == eventSeqBase + i + 1 才成立。页为空时退回窗口水位：
+	// 那时没有"首条事件"，但仍然要能说明窗口在整条日志里的位置。
+	out.EventSeqBase = state.EventSeqBase
+	if len(out.Events) > 0 {
+		out.EventSeqBase = out.Events[0].Seq - 1
+	}
+	out.EventCount = s.cloudAgentRunEventCount(task.UserID, run, &state)
+	if len(out.Events) > 0 {
+		out.LatestSeq = out.Events[len(out.Events)-1].Seq
+	}
+	if view.SinceSeq == 0 && len(out.Events) < out.EventCount {
+		out.EventsTruncated = true
+	}
 	out.Approval = state.Approval
 	if cloudAgentRunTerminal(run.Status) {
 		out.Approval = nil

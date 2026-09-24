@@ -679,9 +679,23 @@ paths:
     get:
       tags: [agent]
       summary: 读取当前用户的 Agent 轮次
+      description: data.run 只返回一页事件（默认最新 40 条）并带上 eventSeqBase、eventCount、latestSeq、eventsTruncated：eventSeqBase 是本次首条事件之前已入库的条数（不变量 events[i].seq == eventSeqBase + i + 1），latestSeq 可直接作为下次 sinceSeq，eventsTruncated 表示还有更早的记录未随本次返回。读取走 (run_id, sequence) 的 keyset 分页，不使用 offset；升级前把事件放在 state_json 里的轮次在事件表中没有行，读取回退到内存窗口。
+      parameters:
+        - in: query
+          name: sinceSeq
+          required: false
+          description: 只返回该事件序号之后的事件（非负整数，单次最多 500 条）；追平或越界时返回空 events
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: eventLimit
+          required: false
+          description: 单次返回的事件条数上限，1–500，默认为尾部窗口大小
+          schema: { type: integer, minimum: 1, maximum: 500 }
       responses:
         "200":
-          description: 信封 data.run
+          description: 信封 data.run（含 events 与 eventSeqBase / eventCount / latestSeq / eventsTruncated）
+        "400":
+          description: sinceSeq 或 eventLimit 不是整数或超出范围
         "404":
           description: 轮次不存在或不属于当前用户
   /agent/runs/{id}/messages:

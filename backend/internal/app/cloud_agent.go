@@ -88,6 +88,21 @@ type CloudAgentRun struct {
 	SpentCredits   float64             `json:"spentCredits"`
 	Step           int                 `json:"step"`
 	ActiveMessage  map[string]string   `json:"activeMessage,omitempty"`
+	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
+	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
+	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
+	// 增量读取的 sinceSeq，EventsTruncated 表示还有更早的记录没随本次返回。
+	EventSeqBase    int  `json:"eventSeqBase"`
+	EventCount      int  `json:"eventCount"`
+	LatestSeq       int  `json:"latestSeq"`
+	EventsTruncated bool `json:"eventsTruncated"`
+}
+
+// CloudAgentRunViewOptions 是运行详情的读取选项：SinceSeq 只取该序号之后的增量，
+// EventLimit 覆盖默认页大小。零值即默认视图（尾部一窗）。
+type CloudAgentRunViewOptions struct {
+	SinceSeq   int
+	EventLimit int
 }
 
 func validateCloudAgentRequest(req *CloudAgentRequest) error {
@@ -267,7 +282,7 @@ func cloudAgentRunTerminal(status string) bool {
 	return status == "completed" || status == "failed" || status == "cancelled" || status == "rejected"
 }
 
-func (s *Service) CloudAgentRun(userID, id string) (*CloudAgentRun, error) {
+func (s *Service) CloudAgentRun(userID, id string, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	task, state, err := s.cloudAgentTask(userID, id)
 	if err != nil {
 		return nil, err
@@ -284,13 +299,13 @@ func (s *Service) CloudAgentRun(userID, id string) (*CloudAgentRun, error) {
 	} else if lookupErr != nil {
 		return nil, lookupErr
 	}
-	return s.cloudAgentExecutionOutput(task, state)
+	return s.cloudAgentExecutionOutput(task, state, options...)
 }
 
 // CloudAgentRunIfChanged keeps idle event streams on a small indexed read.
 // The persisted revision, not a process-local notification, is authoritative
 // across instances and after missed/disconnected notifications.
-func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64) (*CloudAgentRun, error) {
+func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	current, err := s.repo.CloudAgentRevision(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, kernel.NotFound("Agent 运行不存在")
@@ -301,7 +316,7 @@ func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64) (*Cl
 	if current == revision {
 		return nil, nil
 	}
-	return s.CloudAgentRun(userID, id)
+	return s.CloudAgentRun(userID, id, options...)
 }
 
 // CreateCloudAgentRun validates every capability before admission. The task PK
@@ -364,7 +379,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
 			return nil, err
 		}
-		parentRun, err := s.CloudAgentRun(userID, parentID)
+		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
+		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
+		parentRun, err := s.CloudAgentRun(userID, parentID, CloudAgentRunViewOptions{EventLimit: cloudAgentContinuationEventLimit})
 		if err != nil {
 			return nil, err
 		}
