@@ -438,6 +438,9 @@ func (s *Service) storeResourceObject(resource *model.Resource, fileName string,
 	if resource == nil {
 		return "", errors.New("资源不存在")
 	}
+	if err := s.rebindClosedPersonalStorage(resource, fileName); err != nil {
+		return "", err
+	}
 	if resource.Provider == "local" {
 		return "", writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)), body)
 	}
@@ -450,6 +453,55 @@ func (s *Service) storeResourceObject(resource *model.Resource, fileName string,
 		return "", err
 	}
 	return etag, nil
+}
+
+// rebindClosedPersonalStorage 只用于写入：个人存储关闭后，仍绑定个人存储且尚未写入成功的资源
+// （失败重试）改按当前策略选择位置，与新上传一致。历史对象的读取和删除不经过这里。
+func (s *Service) rebindClosedPersonalStorage(resource *model.Resource, fileName string) error {
+	if resource.Provider == "local" {
+		return nil
+	}
+	_, platform, err := s.readOSSSetting()
+	if err != nil || !platform.UserStorageDisabled {
+		return err
+	}
+	personal := false
+	if resource.StorageSettingID != "" {
+		location, lookupErr := s.repo.StorageLocation(resource.StorageSettingID)
+		switch {
+		case lookupErr == nil:
+			personal = location.Scope == "user"
+		case errors.Is(lookupErr, gorm.ErrRecordNotFound):
+			_, lookupErr = s.repo.UserOSSSettingForUser(resource.UserID, resource.StorageSettingID)
+			if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return lookupErr
+			}
+			personal = lookupErr == nil
+		default:
+			return lookupErr
+		}
+	} else {
+		_, lookupErr := s.userOSSSettingForResource(resource.UserID, resource)
+		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return lookupErr
+		}
+		personal = lookupErr == nil
+	}
+	if !personal {
+		return nil
+	}
+	setting, settingID, useOSS, err := s.activeResourceOSSSetting(resource.UserID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	resource.Provider, resource.Endpoint, resource.Bucket, resource.StorageSettingID = "local", "", "", ""
+	resource.ObjectKey = localObjectKey(resource.UserID, resource.Kind, fileName, resource.MimeType, now)
+	if useOSS {
+		resource.Provider, resource.Endpoint, resource.Bucket, resource.StorageSettingID = setting.Provider, setting.Endpoint, setting.Bucket, settingID
+		resource.ObjectKey = ossObjectKey(setting, resource.UserID, resource.Kind, fileName, resource.MimeType, now)
+	}
+	return nil
 }
 
 func (s *Service) retryStoredResource(userID string, resource *model.Resource, kind string, mimeType string, size int64, body io.Reader) (*model.Resource, error) {
@@ -807,7 +859,7 @@ func (s *Service) activeResourceOSSSetting(userID string) (ossSettingValue, stri
 	if err != nil {
 		return ossSettingValue{}, "", false, err
 	}
-	userAllowed := value.Provider != s3Provider || systemValue.AllowUserS3
+	userAllowed := !systemValue.UserStorageDisabled && (value.Provider != s3Provider || systemValue.AllowUserS3)
 	if userSetting != nil && value.Enabled && userAllowed {
 		value, err = validateActiveOSSSetting(value, "用户 OSS 尚未启用", "你的 OSS 配置不完整")
 		return value, firstNonEmpty(value.StorageLocationID, userSetting.ID), true, err
