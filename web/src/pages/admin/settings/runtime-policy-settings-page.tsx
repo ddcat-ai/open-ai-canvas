@@ -8,6 +8,7 @@ import { getAdminRuntimePolicySetting, getAdminSelfUseRuntimePolicy, resetAdminR
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatTile, AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import OutboundPolicyPanel from "../components/outbound-policy-panel";
 
 type PolicyGroup = "resource" | "task" | "request";
 type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
@@ -489,6 +490,10 @@ export default function RuntimePolicySettingsPage() {
                     ))}
                 </div>
             </Form>
+            {/* 模型服务地址单独保存，不随资源与策略的「恢复系统默认」重置；页面是纵向 flex，需禁止收缩。 */}
+            <div className="shrink-0">
+                <OutboundPolicyPanel />
+            </div>
         </AdminPageFrame>
     );
 }

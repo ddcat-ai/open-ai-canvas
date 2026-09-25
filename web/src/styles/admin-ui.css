@@ -3293,6 +3293,17 @@
     }
 }
 
+/* 资源与策略页的模型服务地址：表单同样是裸的 Form.Item，内边距与区块头、页脚对齐。 */
+.admin-outbound-policy-section > .admin-settings-section-content > .ant-form {
+    padding: 14px 16px 8px;
+}
+
+@media (min-width: 1024px) {
+    .admin-outbound-policy-section > .admin-settings-section-content > .ant-form {
+        padding: 18px 20px 10px;
+    }
+}
+
 /* 协议名称是短文本，占满 1400px 宽的卡片视觉重心失衡；限宽到表单常用档位。 */
 .admin-access-agreement-title-field {
     max-width: 480px;
