@@ -2,14 +2,17 @@ import { ArrowRight, BookOpenText, CheckCircle2, CircleAlert, Clapperboard, Cloc
 import { Link } from "react-router";
 
 import { WorkspaceState } from "@/components/layout/workspace-state";
+import { EDITOR_SHELL_PLUGIN_ID } from "@/lib/plugins/builtin/editor/editor-shell";
 import type { ProjectStageCell, ProjectWorkbenchAction } from "@/lib/project-workbench";
 import type { ProjectOverview, ProjectOverviewMetrics } from "@/services/api/projects";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 import { formatTime, type ProjectDetailViewProps } from "./shared";
 
 export default function ProjectOverviewView({ detail, overview }: ProjectDetailViewProps & { overview: ProjectOverview }) {
     const { project } = detail;
     const metrics = overview.metrics;
+    const editorEnabled = usePluginStore((state) => state.pluginStates[EDITOR_SHELL_PLUGIN_ID]?.effectiveEnabled === true);
     const completedUnits = metrics.completedUnitCount;
     const attentionCount = metrics.pendingCandidateCount + metrics.staleArtifactCount;
     const completion = metrics.unitCount ? Math.round((completedUnits / metrics.unitCount) * 100) : 0;
@@ -34,7 +37,7 @@ export default function ProjectOverviewView({ detail, overview }: ProjectDetailV
         { id: "video", icon: Film, label: "镜头视频", description: "逐镜生成、筛选版本并锁定成片", metric: `${metrics.readyVideoCount}/${metrics.shotCount || 0} 镜`, href: workflowHref("video"), complete: metrics.shotCount > 0 && metrics.readyVideoCount === metrics.shotCount },
         { id: "editor", icon: Scissors, label: "剪辑成片", description: "在时间线中编排镜头、添加字幕并输出成片", metric: metrics.renderSucceededCount > 0 ? `已输出 ${metrics.renderSucceededCount} 个成片` : metrics.shotCount > 0 && metrics.readyVideoCount === metrics.shotCount ? "可以开始剪辑" : `还差 ${Math.max(0, metrics.shotCount - metrics.readyVideoCount)} 镜`, href: `/projects/${project.id}/editor`, complete: metrics.renderSucceededCount > 0 },
         { id: "delivery", icon: PackageCheck, label: "交付与打包", description: "检查缺失镜头并整理最终产物", metric: metrics.readyVideoCount && metrics.readyVideoCount === metrics.shotCount ? "可以交付" : `还差 ${Math.max(0, metrics.shotCount - metrics.readyVideoCount)} 镜`, href: workflowHref("delivery"), complete: metrics.shotCount > 0 && metrics.readyVideoCount === metrics.shotCount },
-    ];
+    ].filter((step) => step.id !== "editor" || editorEnabled);
     const gaps = [
         metrics.unitCount === 0 ? "还没有剧情章节" : metrics.unitsWithoutText ? `${metrics.unitsWithoutText} 章还没有正文` : "章节正文已就绪",
         metrics.pendingCandidateCount ? `${metrics.pendingCandidateCount} 项资产等待确认` : metrics.assetCount ? "项目资产已建立" : "还没有角色与资产",
