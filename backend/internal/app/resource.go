@@ -143,6 +143,9 @@ func (s *Service) uploadResource(userID string, header *multipart.FileHeader, ki
 
 	mimeType := strings.TrimSpace(header.Header.Get("Content-Type"))
 	mimeType = detectUploadedMimeType(file, header.Filename, mimeType)
+	if err := s.requireBrowserPlayableVideo(kind, mimeType, file); err != nil {
+		return nil, err
+	}
 	if existing != nil {
 		return s.retryStoredResource(userID, existing, kind, mimeType, header.Size, file)
 	}
@@ -180,6 +183,10 @@ func (s *Service) UploadResourceFile(userID string, fileName string, size int64,
 		return nil, resourceUploadInProgress()
 	}
 	mimeType := detectUploadedMimeType(file, fileName, "")
+	readerAt, _ := file.(io.ReaderAt)
+	if err := s.requireBrowserPlayableVideo(kind, mimeType, readerAt); err != nil {
+		return nil, err
+	}
 	if existing != nil {
 		return s.retryStoredResource(userID, existing, kind, mimeType, size, file)
 	}
@@ -243,6 +250,9 @@ func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, w
 		}
 	}
 	size := int64(len(payload.data))
+	if err := s.requireBrowserPlayableVideo(kind, payload.mimeType, bytes.NewReader(payload.data)); err != nil {
+		return nil, err
+	}
 	if existing != nil {
 		return s.retryStoredResource(userID, existing, kind, payload.mimeType, size, bytes.NewReader(payload.data))
 	}
