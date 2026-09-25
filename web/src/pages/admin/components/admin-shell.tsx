@@ -30,6 +30,7 @@ import {
     Rows3,
     Sparkles,
     Settings2,
+    Share2,
     ShieldAlert,
     ShieldCheck,
     Sun,
@@ -90,6 +91,8 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
             { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
             { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
             { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
+            { path: "/admin/promotion", label: "推广中心", description: "返佣策略与提现审核", icon: <Share2 className="size-4" /> },
+            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },
     {

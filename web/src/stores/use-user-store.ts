@@ -33,6 +33,7 @@ export type FeatureAvailability = {
     frontendModelsEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
+    promotionEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -47,6 +48,8 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     frontendModelsEnabled: false,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
+    // 推广中心涉及资金分配，默认关闭，由管理员在功能开放中显式开启。
+    promotionEnabled: false,
 };
 
 type UserStore = {

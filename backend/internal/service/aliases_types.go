@@ -341,6 +341,14 @@ type (
 	VideoDurationConfig                    = app.VideoDurationConfig
 	VideoReferenceConfig                   = app.VideoReferenceConfig
 	VoiceProfileSummary                    = app.VoiceProfileSummary
+	PromotionOverview                      = app.PromotionOverview
+	PromotionInvitationItem                = app.PromotionInvitationItem
+	PromotionInvitationPageResult          = app.PromotionInvitationPageResult
+	PromotionCommissionPageResult          = app.PromotionCommissionPageResult
+	PromotionWithdrawalPageResult          = app.PromotionWithdrawalPageResult
+	PromotionWithdrawalRequest             = app.PromotionWithdrawalRequest
+	PromotionTransferRequest               = app.PromotionTransferRequest
+	PromotionPolicy                        = app.PromotionPolicy
 	WalletSummary                          = app.WalletSummary
 	WorkflowField                          = app.WorkflowField
 )

@@ -120,6 +120,8 @@ const (
 	CreditLedgerSignupBonus  CreditLedgerType = "signup_bonus"
 	CreditLedgerCheckinBonus CreditLedgerType = "checkin_bonus"
 	CreditLedgerPaymentTopup CreditLedgerType = "payment_topup"
+	// CreditLedgerPromotionCommission 是推广返佣转入账户积分，与充值、签到等入账区分开。
+	CreditLedgerPromotionCommission CreditLedgerType = "promotion_commission"
 
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"

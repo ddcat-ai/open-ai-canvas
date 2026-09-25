@@ -35,6 +35,8 @@ type FeatureAvailability struct {
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
+	// PromotionEnabled 控制推广中心：关闭时前台不展示入口、邀请绑定与返佣结算全部停止。
+	PromotionEnabled bool `json:"promotionEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -56,6 +58,8 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		PluginCenterEnabled:          true,
 		SystemPluginsVisibleToUsers:  true,
 		TimelineTranscriptionEnabled: true,
+		// 推广中心涉及资金分配，必须由管理员显式开启后才生效。
+		PromotionEnabled: false,
 	}
 }
 
