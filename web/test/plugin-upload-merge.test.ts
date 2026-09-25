@@ -8,6 +8,18 @@ test("plugin upload caller preserves the installation promise", async () => {
     expect(page).not.toContain("onUpload={(file) => void upload(file)}");
 });
 
+test("online plugin installation follows the feature switch", async () => {
+    const page = await Bun.file(new URL("../src/pages/admin/plugins/plugins-page.tsx", import.meta.url)).text();
+    const panel = await Bun.file(new URL("../src/pages/admin/components/feature-availability-panel.tsx", import.meta.url)).text();
+    const store = await Bun.file(new URL("../src/stores/use-user-store.ts", import.meta.url)).text();
+    expect(page).toContain("useUserStore((state) => state.features.pluginUploadEnabled)");
+    expect(page).toContain("disabled={!pluginUploadEnabled}");
+    expect(panel).toContain('key: "pluginUploadEnabled"');
+    expect(panel).toContain("pluginUploadEnabled: features.pluginUploadEnabled");
+    expect(panel).toContain("<FeatureSettingRow row={pluginFeatureRows[2]}");
+    expect(store).toContain("pluginUploadEnabled: true,");
+});
+
 test("plugin upload guards concurrent events and exposes installation failures", async () => {
     const modal = await Bun.file(new URL("../src/pages/plugins/plugin-documentation-modals.tsx", import.meta.url)).text();
     expect(modal).toContain("if (uploadInFlight.current) return;");
