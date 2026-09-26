@@ -97,7 +97,8 @@ func TestResumableVideoDeadlineUsesResolvedSystemChannelProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}); err != nil {
+	// 解析系统渠道时会读取出站策略。
+	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	channel := model.ModelChannel{
