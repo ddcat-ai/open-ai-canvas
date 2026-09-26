@@ -47,6 +47,9 @@ func (s *Service) TestUserOSSSetting(actor *model.User, req OSSSettingRequest) (
 	if err != nil {
 		return nil, err
 	}
+	if platform.UserStorageDisabled {
+		return nil, Forbidden("平台管理员已关闭个人存储")
+	}
 	if strings.EqualFold(strings.TrimSpace(req.Provider), s3Provider) && !platform.AllowUserS3 {
 		return nil, Forbidden("平台管理员尚未允许个人 S3 兼容存储")
 	}

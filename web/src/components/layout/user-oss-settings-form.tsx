@@ -125,14 +125,16 @@ export function UserOSSSettingsForm() {
     };
 
     return (
-        <Form form={form} layout="vertical" requiredMark={false} disabled={loading} onValuesChange={(changed) => changesRequireOSSRetest(changed) && setTestStale(true)}>
+        <Form form={form} layout="vertical" requiredMark={false} disabled={loading || setting?.allowUserStorage === false} onValuesChange={(changed) => changesRequireOSSRetest(changed) && setTestStale(true)}>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                         <Cloud className="size-4" />
                         我的对象存储
                     </div>
-                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。</p>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">
+                        {setting?.allowUserStorage === false ? "平台已关闭个人存储：新上传和新生成的媒体使用平台存储，已写入你存储桶的文件仍可读取和删除。" : "启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。"}
+                    </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                     <StatusBadge tone={setting?.enabled ? "success" : "neutral"} label={setting?.enabled ? "已启用" : "未启用"} />
