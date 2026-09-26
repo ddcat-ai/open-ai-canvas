@@ -10,6 +10,7 @@ import {
     normalizeHexColor,
     readCanvasAppearanceDefault,
     resolveCanvasAppearance,
+    resolveCanvasConnectionAppearance,
     resolveCanvasGridColor,
     writeCanvasAppearanceDefault,
 } from "../src/lib/canvas/canvas-appearance";
@@ -41,6 +42,11 @@ describe("canvas custom appearance", () => {
     test("uses point grid as the default for new canvases", () => {
         expect(DEFAULT_CANVAS_BACKGROUND_MODE).toBe("dots");
         expect(DEFAULT_CANVAS_COLOR_THEME).toBe("dark");
+    });
+
+    test("normalizes connection width and opacity while preserving legacy defaults", () => {
+        expect(resolveCanvasConnectionAppearance(canvasAppearanceForTheme("dark"))).toEqual({ width: 2, opacity: 80 });
+        expect(resolveCanvasConnectionAppearance(normalizeCanvasAppearance({ mode: "dark", connection: { width: 12, opacity: -5 } }, "light"))).toEqual({ width: 8, opacity: 0 });
     });
 
     test("resolves the black preset to a black background and fully opaque black grid", () => {
@@ -177,6 +183,8 @@ describe("canvas custom appearance", () => {
         expect(controlsSource).not.toContain('label="背景透明度"');
         expect(controlsSource).toContain('aria-label="界面样式"');
         expect(controlsSource).toContain('label="网格强度"');
+        expect(controlsSource).toContain('label="透明度"');
+        expect(controlsSource).toContain('label="粗细"');
     });
 
     test("stores defaults locally with the active account scope", () => {
