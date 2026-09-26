@@ -51,9 +51,9 @@ func (r *Repository) SkillFiles(versionID string) ([]model.SkillFile, error) {
 	return files, err
 }
 
-func (r *Repository) SkillsForPackageEnsure(userSource int) ([]model.Skill, error) {
+func (r *Repository) SkillsForPackageEnsure() ([]model.Skill, error) {
 	var skills []model.Skill
-	err := r.db.Where("status = ? AND (current_version_id = '' OR source <> ?)", 1, userSource).Find(&skills).Error
+	err := r.db.Where("status = ?", 1).Find(&skills).Error
 	return skills, err
 }
 

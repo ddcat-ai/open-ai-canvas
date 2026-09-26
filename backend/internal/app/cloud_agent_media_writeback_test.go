@@ -13,7 +13,7 @@ func TestCloudAgentMediaCleanupUsesPersistedTaskTarget(t *testing.T) {
 	for _, missingTarget := range []bool{false, true} {
 		t.Run(map[bool]string{false: "known target", true: "unknown target"}[missingTarget], func(t *testing.T) {
 			s, db, args := agentMediaFixture(t)
-			run, _ := agentMediaRun(t, s, args, "auto")
+			run, _ := agentMediaRun(t, s, args, "request_approval")
 			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -81,7 +81,7 @@ func TestCloudAgentMediaCompletionKeepsGenerationAndWritebackFailures(t *testing
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s, db, args := agentMediaFixture(t)
-			run, _ := agentMediaRun(t, s, args, "auto")
+			run, _ := agentMediaRun(t, s, args, "request_approval")
 			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 				t.Fatal(err)
 			}

@@ -1,12 +1,29 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentOperationFeed, type CloudAgentChatMessage } from "@/components/canvas/canvas-cloud-agent-chat-ui";
+import { AgentOperationFeed, AgentReasoningFeed, type CloudAgentChatMessage } from "@/components/canvas/canvas-cloud-agent-chat-ui";
+import { buildAgentFeedSegments } from "@/lib/canvas/agent-operation-feed";
 import { canvasThemes } from "@/lib/canvas-theme";
 
 const step = (id: string, title: string, text: string, detail: unknown = { eventType: "tool_completed" }): CloudAgentChatMessage => ({ id, role: "tool", title, text, detail });
 
 const steps: CloudAgentChatMessage[] = [step("t1", "canvas_get_state", "工具执行成功"), step("t2", "model_list", "工具执行成功")];
 const viewed = (id: string, title: string): CloudAgentChatMessage => step(id, "canvas_inspect_image", "工具执行成功", { eventType: "tool_completed", result: { nodeId: id, title } });
+
+test("consecutive reasoning messages share one collapsed entry", () => {
+    const messages: CloudAgentChatMessage[] = [
+        { id: "r1", role: "assistant", text: "先检查画布", reasoning: true },
+        { id: "r2", role: "assistant", text: "再选择模型", reasoning: true },
+        { id: "a1", role: "assistant", text: "我开始处理。" },
+    ];
+    const segments = buildAgentFeedSegments(messages);
+    expect(segments.map((segment) => segment.kind)).toEqual(["reasoning", "message"]);
+    expect(segments[0]?.kind === "reasoning" ? segments[0].items : []).toHaveLength(2);
+
+    const html = renderToStaticMarkup(<AgentReasoningFeed items={messages.slice(0, 2)} theme={canvasThemes.light} />);
+    expect(html).toContain("2 段 · 点击查看");
+    expect(html).toContain('class="agent-reasoning-card"');
+    expect(html).not.toContain(" open");
+});
 
 test("operations fold into one line that reports only the latest action", () => {
     for (const theme of [canvasThemes.light, canvasThemes.dark]) {
@@ -74,7 +91,7 @@ test("style contract: no per-step status ticks, vision tint and shimmer stay tok
     expect(css).toContain("--agent-tool-accent: var(--agent-accent, var(--foreground));");
 });
 
-test("style contract: 正文 / 工具调用 / 模型思考 三档靠公共轴与明度分层", async () => {
+test("style contract: 正文 / 工具调用 / 模型思考三档不再制造左侧公共竖轨", async () => {
     const css = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent.css", import.meta.url)).text();
     // 同一选择器可能在容器查询里被覆盖，这里把所有命中块拼起来看整体契约。
     const block = (selector: string) => [...css.matchAll(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`, "g"))].map((match) => match[1]).join("\n");
@@ -84,27 +101,23 @@ test("style contract: 正文 / 工具调用 / 模型思考 三档靠公共轴与
     expect(icon).toContain("background: transparent");
     expect(icon).not.toContain("border-radius: 50%");
 
-    // ② 公共轴：正文就从这条线开始（列表左内边距 = 轴）
+    // ② 对话正文从容器边缘开始，不为过程内容预留一条空的公共轴沟槽。
     const axis = block(".agent-conversation-messages");
-    expect(axis).toContain("--agent-axis: 22px");
-    expect(axis).toContain("padding-left: var(--agent-axis)");
+    expect(axis).not.toContain("--agent-axis");
+    expect(axis).not.toContain("padding-left: var(--agent-axis)");
 
-    // ③ 过程标记挂在轴上：星标向左挂半格 + 摘要内边距，中心正好落在轴
+    // ③ 思维摘要与正文同一左边缘，不再用负 margin 把星标挂进沟槽。
     const reasoning = block(".agent-reasoning");
-    expect(reasoning).toContain("margin-left: calc(-1 * (var(--agent-thought-icon, 16px) / 2 + var(--agent-summary-inset, 4px)))");
+    expect(reasoning).not.toContain("margin-left");
     expect(reasoning).not.toContain("border-left");
-    expect(block(".agent-reasoning-summary")).toContain("padding: 6px var(--agent-summary-inset");
+    expect(block(".agent-reasoning-summary")).toContain("padding: 6px 0");
 
-    // ④ 工具左轨也压在轴上（1px 线居中），内容落在轨右侧
+    // ④ 操作流是轻量文本收据，不再绘制竖线或额外左缩进。
     const feed = block(".agent-operation-feed");
-    expect(feed).toContain("margin-left: -0.5px");
-    expect(feed).toContain("border-left: 1px solid");
-    expect(feed).toContain("padding-left: var(--agent-activity-inset");
+    expect(feed).not.toContain("border-left");
+    expect(feed).not.toContain("padding-left");
 
-    // ⑤ 时间线标记同样挂半格，中心与星标/左轨同轴
-    expect(block(".agent-timeline-marker")).toContain("width: var(--agent-timeline-marker, 24px)");
-    expect(block(".agent-conversation-messages .agent-timeline-marker")).toContain("margin-left: calc(-1 * (var(--agent-timeline-marker, 24px) / 2))");
-
-    // ⑥ 窄面板只把轴收细，不让三处错位
-    expect(css).toContain("--agent-axis: 16px");
+    // ⑤ 时间线标记只占自己的窄图标列，不再把状态正文推得过远。
+    expect(block(".agent-timeline-marker")).toContain("width: 20px");
+    expect(block(".agent-conversation-messages .agent-timeline-marker")).not.toContain("margin-left");
 });

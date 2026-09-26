@@ -388,23 +388,20 @@
     scroll-padding-block: var(--space-5);
 }
 
-/*
- * 过程内容的公共轴：正文的左边缘就是这条线，过程标记（星标、工具左轨、时间线标记）
- * 一律挂在轴上居中。轴由星标几何推导，不是拍出来的数：星标中心 = 思考缩进 + 摘要内边距
- * + 图标半宽；工具左轨用 -0.5px 让 1px 的线居中在轴上。改任一项，三处会一起跟着走。
- */
 .agent-conversation-messages {
-    --agent-axis: 22px;
     --agent-thought-icon: 16px;
     --agent-thought-gap: 9px;
     --agent-summary-inset: 4px;
-    --agent-timeline-marker: 24px;
-    --agent-activity-inset: 8px;
-    padding-left: var(--agent-axis);
+    min-width: 0;
 }
 
 .agent-conversation-messages > * + * {
     margin-top: var(--space-4);
+}
+
+/* 状态行的图标只是语义标记，不应把正文向右推成另一条内容轴。 */
+.agent-status-message {
+    min-width: 0;
 }
 
 .agent-message-user {
@@ -684,11 +681,6 @@
     .agent-context-panel-foot { display: grid; }
 
     .agent-welcome-actions button { padding-inline: var(--space-2); }
-    /* 窄面板把公共轴收细，星标与左轨仍压在同一条线上，不吃正文宽度。 */
-    .agent-conversation-messages {
-        --agent-axis: 16px;
-        --agent-activity-inset: var(--space-1);
-    }
 }
 
 @media (max-width: 639px) {
@@ -803,7 +795,7 @@
     border: 0;
     border-radius: 8px;
     background: transparent;
-    padding: 5px 2px;
+    padding: 5px 0;
     transition: transform 160ms ease;
 }
 
@@ -843,7 +835,7 @@
     border-color: transparent;
     border-radius: 9px;
     background: transparent;
-    padding: 3px 2px;
+    padding: 3px 0;
 }
 
 .agent-tool-row--read {
@@ -871,7 +863,7 @@
     min-width: 0;
     align-items: center;
     flex-wrap: wrap;
-    gap: 7px;
+    gap: 6px;
     line-height: 18px;
 }
 
@@ -889,6 +881,14 @@
     font-weight: 700;
     letter-spacing: 0.01em;
     line-height: 15px;
+}
+
+.agent-tool-label {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 15px;
+    white-space: nowrap;
 }
 
 .agent-tool-summary {
@@ -968,11 +968,8 @@
  */
 .agent-operation-feed {
     --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
-    /* 层级第二档：左轨与正文左边缘同轴（见 .agent-conversation-messages 的公共轴），
-       轨道把"一连串动作"拢成一条活动流，内容落在轨的右侧。 */
-    margin-left: -0.5px;
-    border-left: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
-    padding-left: var(--agent-activity-inset, 8px);
+    /* 操作流与正文共用同一左对齐轴。不要用竖线把每条工具记录切成
+       独立的日志栏：用户首先要看到的是 Agent 的输出和当前动作。 */
     min-width: 0;
 }
 
@@ -986,11 +983,11 @@
     min-width: 0;
     max-width: 100%;
     align-items: center;
-    gap: var(--space-2);
+    gap: 6px;
     border: 0;
     border-radius: 9px;
     background: transparent;
-    padding: 4px var(--space-2) 4px var(--space-1);
+    padding: 5px 0;
     color: color-mix(in srgb, var(--agent-ink, currentColor) 72%, transparent);
     font-size: var(--fs-caption);
     line-height: 18px;
@@ -999,6 +996,20 @@
     transition:
         background-color 140ms ease,
         color 140ms ease;
+}
+
+/* The folded receipt is a single sentence, not another pill-shaped card. */
+.agent-operation-list .agent-tool-category {
+    background: transparent;
+    padding-inline: 0;
+}
+
+.agent-operation-kind {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--agent-tool-accent) 86%, var(--foreground));
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .agent-operation-toggle:hover {
@@ -1052,9 +1063,7 @@
 
 .agent-operation-count {
     flex: 0 0 auto;
-    border-radius: 999px;
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 6%, transparent));
-    padding: 1px var(--space-2);
+    padding: 0 2px;
     color: color-mix(in srgb, var(--agent-ink, currentColor) 62%, transparent);
     font-size: var(--fs-tiny);
     line-height: 16px;
@@ -1320,35 +1329,19 @@
  * 比工具日志更安静、比正文更有层次。使用当前画布主题的 accent，避免
  * 固定紫色的 AI 默认样式，同时把实时状态、摘要内容和展开动作分开。
  */
-/*
- * 信息层级：正文 / 工具调用 / 模型思考 三段只靠「位置 + 字号 + 对比度」分层，
- * 不靠圆底图标或品牌 glyph。
- *
- *   正文（结论）   从公共轴开始、14px、满对比 —— 主角
- *   工具调用       左轨压在公共轴上（活动流），内容在轨右侧，12px、次对比
- *   模型思考       星标居中在公共轴上，12px/11px、最淡 —— 过程里的旁白
- */
+/* 信息层级：正文 / 工具调用 / 模型思考三段只靠位置、字号和对比度分层。 */
 .agent-reasoning {
     min-width: 0;
-    /* 星标挂进旁注沟槽：中心落在公共轴上（正文左边缘）。 */
-    margin-left: calc(-1 * (var(--agent-thought-icon, 16px) / 2 + var(--agent-summary-inset, 4px)));
     color: color-mix(in srgb, var(--foreground) 58%, transparent);
 }
 
-/*
- * 时间线标记列（系统行 / 错误行 / 审批卡 / 上下文整理）：宽度与挂点都走公共轴 token。
- */
+/* 系统行、错误行和审批卡保留一个窄图标列，但不再向左挂出一条公共竖轨。 */
 .agent-timeline-marker {
     display: flex;
-    width: var(--agent-timeline-marker, 24px);
-    flex: 0 0 var(--agent-timeline-marker, 24px);
+    width: 20px;
+    flex: 0 0 20px;
     align-self: stretch;
     justify-content: center;
-}
-
-/* 只有对话流里的标记向左挂半格：中心与星标、工具左轨共用同一条公共轴。 */
-.agent-conversation-messages .agent-timeline-marker {
-    margin-left: calc(-1 * (var(--agent-timeline-marker, 24px) / 2));
 }
 
 .agent-reasoning-card {
@@ -1369,11 +1362,10 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: var(--agent-thought-gap, 9px);
+    gap: 0;
     cursor: pointer;
     list-style: none;
-    /* 内边距参与公共轴推导：改它，左轨会跟着一起挪（见 .agent-conversation-messages）。 */
-    padding: 6px var(--agent-summary-inset, 4px);
+    padding: 6px 0;
     color: color-mix(in srgb, var(--foreground) 66%, transparent);
     user-select: none;
 }
@@ -1478,12 +1470,11 @@
 .agent-reasoning-content {
     position: relative;
     display: flex;
-    max-height: min(232px, 30vh);
+    max-height: min(180px, 24vh);
     gap: 0;
     overflow: auto;
     border-top: 0;
-    /* 与摘要的标题左对齐：摘要内边距 + 星标列 + 摘要 gap。 */
-    padding: 4px 10px 10px calc(var(--agent-summary-inset, 4px) + var(--agent-thought-icon, 16px) + var(--agent-thought-gap, 9px));
+    padding: 4px 0 10px;
     scrollbar-gutter: stable;
 }
 

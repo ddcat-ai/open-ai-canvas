@@ -135,7 +135,9 @@ function field(value: unknown, key: string): unknown {
 
 export function agentToolStatus(title: string, text: string, detail?: unknown): ToolStatus {
     const event = field(detail, "eventType");
-    if (event === "tool_failed" && agentToolRetry(detail)?.status === "retrying") return "retrying";
+    const retry = agentToolRetry(detail);
+    if (retry?.status === "retrying") return "retrying";
+    if (retry?.status === "recovered") return "completed";
     if (event === "tool_completed" || event === "generation_task_created" || event === "canvas_updated") return "completed";
     if (event === "tool_failed") return "failed";
     const raw = `${title} ${text} ${field(detail, "error") || ""}`;
@@ -149,8 +151,14 @@ export function agentToolStatus(title: string, text: string, detail?: unknown): 
 export function friendlyAgentToolSummary(toolName: string, text: string, detail?: unknown, pending = false) {
     const status = agentToolStatus(toolName, text, detail);
     const failed = status === "failed" || status === "rejected";
-    if (toolName === "generate_media" && failed && field(field(detail, "result"), "phase") === "admission") return "生成请求未提交";
-    if (toolName === "generate_media" && failed && field(field(detail, "result"), "status") === "succeeded") return "生成成功，画布回写未完成";
+    const mediaTool = toolName === "generate_media" || toolName === "image_layer_split";
+    const result = record(field(detail, "result"));
+    const phase = result.phase;
+    if (mediaTool && failed && phase === "admission") return "参数未通过校验，未提交生成任务";
+    if (mediaTool && failed && phase === "completion" && result.taskSubmitted === true) {
+        if (result.writebackReason || result.status === "succeeded") return "生成成功，画布回写未完成";
+        return "任务已提交，但生成结果未完成";
+    }
     if (toolName === "skills_load") {
         const count = /(?:加载|启用)\s*(\d+)\s*个/u.exec(text)?.[1];
         return failed ? "Skills 技能加载失败" : count ? `已加载 ${count} 个 Skills 技能` : "已加载 Skills 技能";

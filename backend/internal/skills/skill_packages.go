@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -104,6 +105,14 @@ type skillPackageArchive struct {
 	TotalBytes  int64
 }
 
+type skillPackageSnapshot struct {
+	skill    *model.Skill
+	version  *model.SkillVersion
+	files    []model.SkillFile
+	legacy   bool
+	contents map[string][]byte
+}
+
 type githubSkillSpec struct {
 	Owner  string
 	Repo   string
@@ -112,27 +121,54 @@ type githubSkillSpec struct {
 }
 
 func (s *Service) EnsureSkillPackages() error {
-	skills, err := s.repo.SkillsForPackageEnsure(skillSourceUser)
+	skills, err := s.repo.SkillsForPackageEnsure()
 	if err != nil {
 		return err
 	}
 	for index := range skills {
 		skill := &skills[index]
-		// Legacy fields are only fallbacks for package metadata. Bound them at
-		// this migration boundary without rewriting source fields or relaxing uploads.
-		archive, err := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
-		if err != nil {
-			return fmt.Errorf("迁移技能 %s 文件包失败: %w", skill.ID, err)
-		}
-		if skill.CurrentVersionID != "" && skill.ContentHash == archive.ContentHash {
+		version, files, healthErr := s.skillPackageHealth(skill)
+		if healthErr == nil {
+			if err := s.syncSkillPackageMetadata(skill, version, files); err != nil {
+				return fmt.Errorf("同步技能 %s 文件包元数据失败: %w", skill.ID, err)
+			}
+			// User-installed ZIP/GitHub skills are authoritative in skill_files and
+			// must never be replaced by the legacy instruction column at startup.
+			if skill.Source == skillSourceUser {
+				continue
+			}
+			if strings.TrimSpace(skill.Instruction) == "" {
+				continue
+			}
+			archive, archiveErr := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
+			if archiveErr != nil {
+				log.Printf("技能 %s 的内置正文无法刷新文件包：%v", skill.ID, archiveErr)
+				continue
+			}
+			if version.ContentHash == archive.ContentHash {
+				continue
+			}
+			if err := s.addSkillArchiveVersion(skill, archive, skillSourceTypeForRepair(skill), skill.SourceURL, skill.SourceRef, skill.SourceSubdir, skill.SourceCommit, skill.AutoUpdate); err != nil {
+				return fmt.Errorf("刷新技能 %s 文件包失败: %w", skill.ID, err)
+			}
 			continue
 		}
-		sourceType := "builtin"
-		if skill.Source == skillSourceUser {
-			sourceType = "markdown"
+
+		// A legacy row may contain only skills.instruction. Rebuild that single
+		// entry when package metadata, files, or the archive is missing. If no
+		// source body exists, keep the service available and leave a diagnostic
+		// instead of failing every user request during boot.
+		if strings.TrimSpace(skill.Instruction) == "" {
+			log.Printf("技能 %s 文件包不完整且没有 legacy instruction，跳过自动修复：%v", skill.ID, healthErr)
+			continue
 		}
-		if err := s.addSkillArchiveVersion(skill, archive, sourceType, "", "", "", "", false); err != nil {
-			return fmt.Errorf("保存技能 %s 文件包失败: %w", skill.ID, err)
+		archive, archiveErr := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
+		if archiveErr != nil {
+			log.Printf("技能 %s 文件包损坏且 legacy instruction 无法重建：%v", skill.ID, archiveErr)
+			continue
+		}
+		if err := s.addSkillArchiveVersion(skill, archive, skillSourceTypeForRepair(skill), skill.SourceURL, skill.SourceRef, skill.SourceSubdir, skill.SourceCommit, skill.AutoUpdate); err != nil {
+			return fmt.Errorf("修复技能 %s 文件包失败: %w", skill.ID, err)
 		}
 	}
 	return nil
@@ -422,25 +458,19 @@ func (s *Service) persistSkillArchive(skillID string, versionID string, archive 
 }
 
 func (s *Service) SkillPackageFiles(userID string, skillID string) ([]SkillPackageFileItem, error) {
-	skill, err := s.visibleSkill(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
-	files, err := s.repo.SkillFiles(skill.CurrentVersionID)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]SkillPackageFileItem, 0, len(files))
-	for _, file := range files {
+	items := make([]SkillPackageFileItem, 0, len(snapshot.files))
+	for _, file := range snapshot.files {
 		items = append(items, skillFileItem(file))
 	}
 	return items, nil
 }
 
 func (s *Service) SkillPackageFile(userID string, skillID string, filePath string) (*SkillPackageFileContent, error) {
-	skill, version, file, content, err := s.readSkillPackageFile(userID, skillID, filePath)
-	_ = skill
-	_ = version
+	_, file, content, err := s.readSkillPackageSnapshotFile(userID, skillID, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +485,7 @@ func (s *Service) SkillPackageFile(userID string, skillID string, filePath strin
 }
 
 func (s *Service) SkillPackageRawFile(userID string, skillID string, filePath string) ([]byte, string, string, error) {
-	_, _, file, content, err := s.readSkillPackageFile(userID, skillID, filePath)
+	_, file, content, err := s.readSkillPackageSnapshotFile(userID, skillID, filePath)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -463,21 +493,13 @@ func (s *Service) SkillPackageRawFile(userID string, skillID string, filePath st
 }
 
 func (s *Service) SkillPackageBundle(userID string, skillID string) (*SkillPackageBundle, error) {
-	skill, err := s.visibleSkill(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
-	version, err := s.repo.SkillVersion(skill.CurrentVersionID)
-	if err != nil {
-		return nil, err
-	}
-	files, err := s.repo.SkillFiles(version.ID)
-	if err != nil {
-		return nil, err
-	}
-	bundle := &SkillPackageBundle{SkillID: skill.ID, Name: skill.Name, Description: skill.Description, VersionID: version.ID, Version: version.VersionLabel, ContentHash: version.ContentHash, Files: make([]SkillPackageBundleFile, 0, len(files))}
-	for _, file := range files {
-		content, err := s.readSkillArchiveEntry(version, file.Path)
+	bundle := &SkillPackageBundle{SkillID: snapshot.skill.ID, Name: snapshot.skill.Name, Description: snapshot.skill.Description, VersionID: snapshot.version.ID, Version: snapshot.version.VersionLabel, ContentHash: snapshot.version.ContentHash, Files: make([]SkillPackageBundleFile, 0, len(snapshot.files))}
+	for _, file := range snapshot.files {
+		content, err := s.readSkillPackageSnapshotEntry(snapshot, file.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -487,7 +509,7 @@ func (s *Service) SkillPackageBundle(userID string, skillID string) (*SkillPacka
 }
 
 func (s *Service) SearchSkillPackage(userID string, skillID string, query string) ([]SkillFileSearchResult, error) {
-	skill, err := s.visibleSkill(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
@@ -495,21 +517,13 @@ func (s *Service) SearchSkillPackage(userID string, skillID string, query string
 	if query == "" || utf8.RuneCountInString(query) > 120 {
 		return nil, kernel.BadAuthRequest("搜索关键词必须为 1-120 个字符")
 	}
-	version, err := s.repo.SkillVersion(skill.CurrentVersionID)
-	if err != nil {
-		return nil, err
-	}
-	files, err := s.repo.SkillFiles(version.ID)
-	if err != nil {
-		return nil, err
-	}
 	needle := strings.ToLower(query)
 	results := make([]SkillFileSearchResult, 0, 20)
-	for _, file := range files {
+	for _, file := range snapshot.files {
 		if len(results) >= 50 || !isPreviewText(file.MimeType, file.Path) || file.Size > maxSkillPreviewBytes {
 			continue
 		}
-		content, err := s.readSkillArchiveEntry(version, file.Path)
+		content, err := s.readSkillPackageSnapshotEntry(snapshot, file.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -525,31 +539,230 @@ func (s *Service) SearchSkillPackage(userID string, skillID string, query string
 	return results, nil
 }
 
-func (s *Service) readSkillPackageFile(userID string, skillID string, filePath string) (*model.Skill, *model.SkillVersion, *model.SkillFile, []byte, error) {
-	skill, err := s.visibleSkill(userID, skillID)
+func (s *Service) readSkillPackageSnapshotFile(userID string, skillID string, filePath string) (*skillPackageSnapshot, *model.SkillFile, []byte, error) {
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	filePath, err = normalizeSkillPath(filePath)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
+	}
+	for index := range snapshot.files {
+		if snapshot.files[index].Path != filePath {
+			continue
+		}
+		content, err := s.readSkillPackageSnapshotEntry(snapshot, filePath)
+		return snapshot, &snapshot.files[index], content, err
+	}
+	return nil, nil, nil, kernel.BadAuthRequest("技能文件不存在")
+}
+
+func (s *Service) loadSkillPackageSnapshot(userID string, skillID string) (*skillPackageSnapshot, error) {
+	skill, err := s.visibleSkill(userID, skillID)
+	if err != nil {
+		return nil, err
 	}
 	version, err := s.repo.SkillVersion(skill.CurrentVersionID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return legacySkillPackageSnapshot(skill)
+	}
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
+	}
+	if version.SkillID != skill.ID {
+		return nil, fmt.Errorf("技能 %s 当前版本归属不一致", skill.ID)
 	}
 	files, err := s.repo.SkillFiles(version.ID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
-	for index := range files {
-		if files[index].Path != filePath {
+	if len(files) == 0 {
+		return legacySkillPackageSnapshot(skill)
+	}
+	if err := validateSkillPackageSnapshot(s, skill, version, files); err != nil {
+		return nil, err
+	}
+	return &skillPackageSnapshot{skill: skill, version: version, files: files}, nil
+}
+
+func (s *Service) readSkillPackageSnapshotEntry(snapshot *skillPackageSnapshot, filePath string) ([]byte, error) {
+	if snapshot.contents != nil {
+		content, ok := snapshot.contents[filePath]
+		if !ok {
+			return nil, kernel.BadAuthRequest("技能文件不存在")
+		}
+		return content, nil
+	}
+	return s.readSkillArchiveEntry(snapshot.version, filePath)
+}
+
+func legacySkillPackageSnapshot(skill *model.Skill) (*skillPackageSnapshot, error) {
+	if strings.TrimSpace(skill.Instruction) == "" {
+		return nil, fmt.Errorf("技能 %s 缺少当前版本、文件清单和 legacy instruction", skill.ID)
+	}
+	content := []byte(skill.Instruction)
+	files := map[string][]byte{"SKILL.md": content}
+	digest := sha256.Sum256(content)
+	hash, total := contentHashAndSize(files)
+	versionID := strings.TrimSpace(skill.CurrentVersionID)
+	versionLabel := strings.TrimSpace(skill.VersionLabel)
+	if versionLabel == "" {
+		versionLabel = "legacy"
+	}
+	version := &model.SkillVersion{ID: versionID, SkillID: skill.ID, VersionLabel: versionLabel, ContentHash: hash, EntryPath: "SKILL.md", FileCount: 1, TotalBytes: total}
+	file := model.SkillFile{SkillVersionID: versionID, Path: "SKILL.md", Kind: "markdown", MimeType: skillFileMime("SKILL.md", content), Size: int64(len(content)), SHA256: hex.EncodeToString(digest[:])}
+	return &skillPackageSnapshot{skill: skill, version: version, files: []model.SkillFile{file}, legacy: true, contents: files}, nil
+}
+
+func skillSourceTypeForRepair(skill *model.Skill) string {
+	if value := strings.TrimSpace(skill.SourceType); value != "" {
+		return value
+	}
+	if skill.Source == skillSourceUser {
+		return "markdown"
+	}
+	return "builtin"
+}
+
+func (s *Service) skillPackageHealth(skill *model.Skill) (*model.SkillVersion, []model.SkillFile, error) {
+	if strings.TrimSpace(skill.CurrentVersionID) == "" {
+		return nil, nil, gorm.ErrRecordNotFound
+	}
+	version, err := s.repo.SkillVersion(skill.CurrentVersionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if version.SkillID != skill.ID {
+		return nil, nil, fmt.Errorf("当前版本归属技能不一致")
+	}
+	files, err := s.repo.SkillFiles(version.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := validateSkillPackageSnapshot(s, skill, version, files); err != nil {
+		return nil, nil, err
+	}
+	return version, files, nil
+}
+
+func (s *Service) syncSkillPackageMetadata(skill *model.Skill, version *model.SkillVersion, files []model.SkillFile) error {
+	changed := skill.CurrentVersionID != version.ID || skill.VersionLabel != version.VersionLabel || skill.ContentHash != version.ContentHash || skill.FileCount != len(files) || skill.TotalBytes != version.TotalBytes
+	if !changed {
+		return nil
+	}
+	skill.CurrentVersionID = version.ID
+	skill.VersionLabel = version.VersionLabel
+	skill.ContentHash = version.ContentHash
+	skill.FileCount = len(files)
+	skill.TotalBytes = version.TotalBytes
+	return s.repo.SaveSkill(skill)
+}
+
+func validateSkillPackageSnapshot(s *Service, skill *model.Skill, version *model.SkillVersion, files []model.SkillFile) error {
+	if len(files) == 0 || version.FileCount != len(files) || version.TotalBytes < 0 {
+		return fmt.Errorf("技能 %s 文件元数据不完整", skill.ID)
+	}
+	if skill.ContentHash != "" && skill.ContentHash != version.ContentHash {
+		return fmt.Errorf("技能 %s 内容摘要与当前版本不一致", skill.ID)
+	}
+	if skill.FileCount != 0 && skill.FileCount != len(files) {
+		return fmt.Errorf("技能 %s 文件数量与当前版本不一致", skill.ID)
+	}
+	if skill.TotalBytes != 0 && skill.TotalBytes != version.TotalBytes {
+		return fmt.Errorf("技能 %s 文件大小与当前版本不一致", skill.ID)
+	}
+	if version.PackageKey == "" {
+		return fmt.Errorf("技能 %s 当前版本缺少 ZIP 包", skill.ID)
+	}
+	contents, err := readSkillArchiveEntries(s.dataDir, version.PackageKey)
+	if err != nil {
+		return fmt.Errorf("读取技能 %s ZIP 包失败: %w", skill.ID, err)
+	}
+	byPath := make(map[string]model.SkillFile, len(files))
+	var total int64
+	for _, file := range files {
+		if strings.TrimSpace(file.Path) == "" {
+			return fmt.Errorf("技能 %s 文件清单存在空路径", skill.ID)
+		}
+		if version.EntryPath != "" && version.EntryPath != "SKILL.md" {
+			return fmt.Errorf("技能 %s 当前入口不是 SKILL.md", skill.ID)
+		}
+		if _, exists := byPath[file.Path]; exists {
+			return fmt.Errorf("技能 %s 文件清单包含重复路径 %s", skill.ID, file.Path)
+		}
+		byPath[file.Path] = file
+		content, ok := contents[file.Path]
+		if !ok {
+			return fmt.Errorf("技能 %s ZIP 缺少数据库文件 %s", skill.ID, file.Path)
+		}
+		digest := sha256.Sum256(content)
+		if file.Size != int64(len(content)) || file.SHA256 != hex.EncodeToString(digest[:]) {
+			return fmt.Errorf("技能 %s 文件 %s 元数据与 ZIP 不一致", skill.ID, file.Path)
+		}
+		total += int64(len(content))
+	}
+	if _, ok := byPath["SKILL.md"]; !ok {
+		return fmt.Errorf("技能 %s 文件清单缺少 SKILL.md", skill.ID)
+	}
+	if len(contents) != len(files) || total != version.TotalBytes {
+		return fmt.Errorf("技能 %s ZIP 文件数量或大小与版本元数据不一致", skill.ID)
+	}
+	hash, _ := contentHashAndSize(contents)
+	if version.ContentHash == "" || hash != version.ContentHash {
+		return fmt.Errorf("技能 %s ZIP 内容摘要与版本元数据不一致", skill.ID)
+	}
+	return nil
+}
+
+func readSkillArchiveEntries(dataDir string, packageKey string) (map[string][]byte, error) {
+	absolute := filepath.Join(dataDir, "skill-packages", filepath.FromSlash(packageKey))
+	reader, err := zip.OpenReader(absolute)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	if len(reader.File) > maxSkillPackageFiles+64 {
+		return nil, kernel.BadAuthRequest("技能包文件数量异常")
+	}
+	contents := make(map[string][]byte, len(reader.File))
+	var total int64
+	for _, entry := range reader.File {
+		if entry.FileInfo().IsDir() {
 			continue
 		}
-		content, err := s.readSkillArchiveEntry(version, filePath)
-		return skill, version, &files[index], content, err
+		filePath, err := normalizeSkillPath(entry.Name)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := contents[filePath]; exists {
+			return nil, kernel.BadAuthRequest("技能包包含重复文件路径")
+		}
+		if entry.UncompressedSize64 > maxSkillFileBytes {
+			return nil, kernel.BadAuthRequest("技能包中单个文件不能超过 8MB")
+		}
+		file, err := entry.Open()
+		if err != nil {
+			return nil, err
+		}
+		content, readErr := io.ReadAll(io.LimitReader(file, maxSkillFileBytes+1))
+		closeErr := file.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if len(content) > maxSkillFileBytes {
+			return nil, kernel.BadAuthRequest("技能包中单个文件不能超过 8MB")
+		}
+		total += int64(len(content))
+		if total > maxSkillPackageBytes {
+			return nil, kernel.BadAuthRequest("技能包解压后不能超过 20MB")
+		}
+		contents[filePath] = content
 	}
-	return nil, nil, nil, nil, kernel.BadAuthRequest("技能文件不存在")
+	return contents, nil
 }
 
 func (s *Service) readSkillArchiveEntry(version *model.SkillVersion, filePath string) ([]byte, error) {
@@ -722,6 +935,20 @@ func normalizeSkillArchiveRoot(raw map[string][]byte, subdir string) (map[string
 	return files, nil
 }
 
+func contentHashAndSize(files map[string][]byte) (string, int64) {
+	hash := sha256.New()
+	var total int64
+	for _, filePath := range sortedSkillPaths(files) {
+		content := files[filePath]
+		total += int64(len(content))
+		hash.Write([]byte(filePath))
+		hash.Write([]byte{0})
+		hash.Write(content)
+		hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil)), total
+}
+
 func finalizeSkillArchive(files map[string][]byte, metadata skillPackageMetadata) (skillPackageArchive, error) {
 	if _, ok := files["SKILL.md"]; !ok {
 		return skillPackageArchive{}, kernel.BadAuthRequest("技能包入口必须是 SKILL.md")
@@ -735,17 +962,8 @@ func finalizeSkillArchive(files map[string][]byte, metadata skillPackageMetadata
 	if utf8.RuneCountInString(metadata.Name) > 80 || utf8.RuneCountInString(metadata.Description) > 500 {
 		return skillPackageArchive{}, kernel.BadAuthRequest("技能名称或简介超过长度限制")
 	}
-	hash := sha256.New()
-	var total int64
-	for _, filePath := range sortedSkillPaths(files) {
-		content := files[filePath]
-		total += int64(len(content))
-		hash.Write([]byte(filePath))
-		hash.Write([]byte{0})
-		hash.Write(content)
-		hash.Write([]byte{0})
-	}
-	return skillPackageArchive{Files: files, Metadata: metadata, ContentHash: hex.EncodeToString(hash.Sum(nil)), TotalBytes: total}, nil
+	hash, total := contentHashAndSize(files)
+	return skillPackageArchive{Files: files, Metadata: metadata, ContentHash: hash, TotalBytes: total}, nil
 }
 
 func encodeSkillArchive(files map[string][]byte) ([]byte, error) {

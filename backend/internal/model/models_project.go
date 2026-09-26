@@ -10,9 +10,20 @@ import (
 
 var projectUnitHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
+const ProjectUnitTitleMaxRunes = 240
+
 func ProjectUnitWordCount(sourceText string) int {
 	plainText := projectUnitHTMLTagPattern.ReplaceAllString(sourceText, "")
 	return utf8.RuneCountInString(strings.TrimSpace(html.UnescapeString(plainText)))
+}
+
+func NormalizeProjectUnitTitle(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func ValidProjectUnitTitle(value string) bool {
+	title := NormalizeProjectUnitTitle(value)
+	return title != "" && utf8.RuneCountInString(title) <= ProjectUnitTitleMaxRunes
 }
 
 const AssetIDMaxLength = 80

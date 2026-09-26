@@ -5,9 +5,22 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 )
+
+func cloudAgentProjectForDefaultModel(t *testing.T, db *gorm.DB, modelRef string) {
+	t.Helper()
+	project := &model.Project{ID: "agent-default-project", UserID: "user", Name: "Agent 默认模型项目", Type: "short-drama", Status: model.ProjectStatusActive, DefaultImageModel: modelRef, DefaultVideoModel: modelRef}
+	if err := db.Create(project).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.CanvasProject{}).Where("id = ? AND user_id = ?", "agent-canvas", "user").Update("project_id", project.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestCloudAgentModelSelectionRejectsBeforeCanvasRead(t *testing.T) {
 	for _, tc := range []struct{ name, args, field, issue string }{
@@ -59,6 +72,54 @@ func TestCloudAgentModelSelectionAcceptsOnlyCompleteSelections(t *testing.T) {
 		if err := validateCloudAgentModelSelection(raw, args); err != nil {
 			t.Fatalf("valid selection rejected: %v", err)
 		}
+	}
+}
+
+func TestCloudAgentProjectDefaultChannelModelFillsOnlyOmittedSelection(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	cloudAgentProjectForDefaultModel(t, db, "channel::seedance-test")
+	run := &model.CloudAgentExecution{ID: "run-default-channel", UserID: "user"}
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{CanvasID: "agent-canvas"}}
+	args := cloudAgentMediaArgs{Mode: "video"}
+	used, err := s.applyCloudAgentProjectDefaultModel(run, state, `{"mode":"video"}`, &args)
+	if err != nil || !used || args.ChannelID != "channel" || args.ChannelModelKey != "seedance-test" || args.LogicalModelID != "" {
+		t.Fatalf("default channel selection = used:%v args:%+v err:%v", used, args, err)
+	}
+
+	args = cloudAgentMediaArgs{Mode: "video"}
+	used, err = s.applyCloudAgentProjectDefaultModel(run, state, `{"mode":"video","channelId":"","channelModelKey":""}`, &args)
+	if err != nil || used {
+		t.Fatalf("explicit empty selection was silently defaulted: used:%v args:%+v err:%v", used, args, err)
+	}
+	if err := validateCloudAgentModelSelection(`{"mode":"video","channelId":"","channelModelKey":""}`, args); err == nil {
+		t.Fatal("explicit empty selection unexpectedly passed validation")
+	}
+}
+
+func TestCloudAgentProjectDefaultLogicalModelFillsWhenAvailable(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	cloudAgentProjectForDefaultModel(t, db, "logical-image")
+	s.routeCatalogTTL = time.Hour
+	imageSpec := CapabilitySpec{Version: 1, Capability: "image"}
+	s.routeCatalog = &routeCatalogSnapshot{
+		LoadedAt: time.Now(), Ordered: []string{"logical-image"}, Models: map[string]cachedLogicalModel{
+			"logical-image": {
+				Model:       model.LogicalModel{ID: "logical-image", Name: "默认逻辑图片", Capability: "image", Enabled: true, PricePolicy: "unified"},
+				ProductSpec: imageSpec,
+				Routes: []cachedLogicalRoute{{
+					Route:          model.LogicalModelRoute{ID: "logical-image-route", Enabled: true, Weight: 1},
+					CapabilitySpec: imageSpec,
+					ChannelModel:   model.ChannelModel{ID: "video-cm", ChannelID: "channel", ModelKey: "seedance-test", Capability: "image"},
+				}},
+			},
+		},
+	}
+	run := &model.CloudAgentExecution{ID: "run-default-logical", UserID: "user"}
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{CanvasID: "agent-canvas"}}
+	args := cloudAgentMediaArgs{Mode: "image"}
+	used, err := s.applyCloudAgentProjectDefaultModel(run, state, `{"mode":"image"}`, &args)
+	if err != nil || !used || args.LogicalModelID != "logical-image" || args.ChannelID != "" || args.ChannelModelKey != "" {
+		t.Fatalf("default logical selection = used:%v args:%+v err:%v", used, args, err)
 	}
 }
 

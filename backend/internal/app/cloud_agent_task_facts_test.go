@@ -83,3 +83,33 @@ func TestCloudAgentTaskDiagnosticRejectsMismatchedBillingOrderFacts(t *testing.T
 		t.Fatalf("cross-owner billing state leaked: %#v", billing)
 	}
 }
+
+func TestCloudAgentTaskDiagnosticSeparatesReservationFromActualCharge(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	task := &model.Task{
+		ID: "task-settled", UserID: "user", ProjectID: "canvas", Status: model.TaskStatusSucceeded,
+		BillingOrderID: "order-settled", InputJSON: `{}`,
+	}
+	order := &model.BillingOrder{
+		ID: "order-settled", UserID: "user", TaskID: task.ID, Status: model.BillingStatusSettled,
+		ReservedAmountMicrocredits: 100_000, ActualAmountMicrocredits: 100_000,
+	}
+	if err := db.Create(task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(order).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	facts := cloudAgentTaskDiagnostic(s.repo, task)
+	billing, ok := facts["billing"].(map[string]any)
+	if !ok {
+		t.Fatalf("billing facts = %#v", facts["billing"])
+	}
+	if billing["reservedAmountMicrocredits"] != float64(100_000) || billing["actualAmountMicrocredits"] != float64(100_000) {
+		t.Fatalf("microcredit facts = %#v", billing)
+	}
+	if billing["reservedCredits"] != 0.1 || billing["actualCredits"] != 0.1 || billing["chargeState"] != "settled" {
+		t.Fatalf("credit facts = %#v", billing)
+	}
+}

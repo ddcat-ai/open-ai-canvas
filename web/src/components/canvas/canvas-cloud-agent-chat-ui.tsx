@@ -140,33 +140,11 @@ export function AgentChatMessage({
     const displayedText = useTypewriterText(item.text, item.role === "assistant" && isStreaming);
     const color = item.role === "error" ? "#ef4444" : theme.node.text;
     if (item.reasoning) {
-        return (
-            <div className="agent-reasoning" style={{ "--agent-reasoning-accent": theme.accent.primary } as CSSProperties}>
-                <details className={`agent-reasoning-card${item.streaming ? " is-streaming" : ""}`} open={item.streaming || undefined}>
-                    <summary className="agent-reasoning-summary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/20">
-                        <span className="agent-reasoning-icon" aria-hidden="true">
-                            <Sparkles className="size-3.5" />
-                        </span>
-                        <span className="agent-reasoning-copy">
-                            <span className="agent-reasoning-title">{item.streaming ? "模型正在思考" : "模型思考"}</span>
-                            <span className="agent-reasoning-subtitle">{item.streaming ? "整理目标与下一步" : "推理摘要"}</span>
-                        </span>
-                        <span className={`agent-reasoning-status${item.streaming ? " is-live" : ""}`}>
-                            {item.streaming ? <span className="agent-reasoning-status-dot" aria-hidden="true" /> : null}
-                            {item.streaming ? "实时" : "查看"}
-                        </span>
-                        <ChevronDown className="agent-reasoning-chevron" aria-hidden="true" />
-                    </summary>
-                    <div className="agent-reasoning-content" data-canvas-wheel-scroll>
-                        <div className="agent-reasoning-text">{item.text || (item.streaming ? "正在整理思路…" : "暂无可展示的推理摘要")}</div>
-                    </div>
-                </details>
-            </div>
-        );
+        return <AgentReasoningFeed items={[item]} theme={theme} />;
     }
     if (isSystem) {
         return (
-            <div className="flex items-start gap-3 text-xs">
+            <div className="agent-status-message flex items-start gap-2 text-xs">
                 <AgentTimelineMarker theme={theme} tone="muted" icon={<Sparkles className="size-3" />} />
                 <div className="min-w-0 flex-1 py-0.5 leading-5" style={{ color: theme.node.muted }}>
                     {item.text}
@@ -185,7 +163,7 @@ export function AgentChatMessage({
     }
     if (item.role === "error") {
         return (
-            <div className="flex items-start gap-3">
+            <div className="agent-status-message flex items-start gap-2">
                 <AgentTimelineMarker theme={theme} tone="error" icon={<CircleAlert className="size-3.5" />} />
                 <div className="min-w-0 flex-1 py-0.5 text-[13px] leading-5">
                     <div className="font-medium" style={{ color }}>
@@ -229,6 +207,42 @@ export function AgentChatMessage({
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
             </div>
+        </div>
+    );
+}
+
+/**
+ * 推理是辅助信息，不应与正文和工具输出争夺主视觉。一个事件流里的连续摘要
+ * 合并成一个入口，默认收起；需要排查时再展开查看完整内容。
+ */
+export function AgentReasoningFeed({
+    items,
+    theme,
+}: {
+    items: CloudAgentChatMessage[];
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+}) {
+    const streaming = items.some((item) => item.streaming);
+    const text = items.map((item) => item.text.trim()).filter(Boolean).join("\n\n");
+    const countLabel = items.length > 1 ? `${items.length} 段 · ` : "";
+    return (
+        <div className="agent-reasoning" style={{ "--agent-reasoning-accent": theme.accent.primary } as CSSProperties}>
+            <details className={`agent-reasoning-card${streaming ? " is-streaming" : ""}`}>
+                <summary className="agent-reasoning-summary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/20">
+                    <span className="agent-reasoning-copy">
+                        <span className="agent-reasoning-title">{streaming ? "模型正在思考" : "模型思考"}</span>
+                        <span className="agent-reasoning-subtitle">{streaming ? "实时整理 · 点击查看" : `${countLabel}点击查看`}</span>
+                    </span>
+                    <span className={`agent-reasoning-status${streaming ? " is-live" : ""}`}>
+                        {streaming ? <span className="agent-reasoning-status-dot" aria-hidden="true" /> : null}
+                        {streaming ? "实时" : "查看"}
+                    </span>
+                    <ChevronDown className="agent-reasoning-chevron" aria-hidden="true" />
+                </summary>
+                <div className="agent-reasoning-content" data-canvas-wheel-scroll>
+                    <div className="agent-reasoning-text">{text || (streaming ? "正在整理思路…" : "暂无可展示的推理摘要")}</div>
+                </div>
+            </details>
         </div>
     );
 }
@@ -348,7 +362,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
     const impact = agentImpactFromDetail(detail);
     const friendlySummary = friendlyAgentToolSummary(agentToolName("", detail), summary, detail, true);
     return (
-        <div className="flex items-start gap-3">
+        <div className="agent-status-message flex items-start gap-2">
             <AgentTimelineMarker theme={theme} tone="approval" icon={<CircleAlert className="size-3.5" />} />
             <div className="agent-pending-tool min-w-0 flex-1 rounded-lg border py-2 pl-3 pr-3" style={{ borderColor: "rgba(249,115,22,.22)", background: "rgba(249,115,22,.05)", color: theme.node.text }}>
                 <div className="flex items-start gap-3">
@@ -462,7 +476,7 @@ export function AgentToolCard({
         return (
             <details data-agent-tool-retry className="min-w-0 flex-1 text-xs leading-5" style={{ color: theme.node.muted }}>
                 <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2" style={{ outlineColor: theme.node.muted }}>
-                    {label} · {retry.attempt}/{retry.maxAttempts} 次尝试未通过
+                    {retry.status === "recovered" ? `${label} · 已恢复` : `${label} · ${retry.attempt}/${retry.maxAttempts} 次尝试未通过`}
                 </summary>
                 <ol className="mt-2 space-y-1 pl-4" aria-label="自动纠正详情">
                     {(attempts as AgentToolRetryAttempt[]).map((attempt, index) => (
@@ -567,7 +581,9 @@ export function AgentOperationFeed({
     const category = agentOperationCategory(latest);
     const categoryLabel = agentToolCategoryLabel(agentToolName(latest.title || "工具执行", latest.detail), category);
     const label = agentOperationSegmentLabel(items);
-    const failed = items.some((item) => agentOperationFailed(item));
+    // 只看最新一步的状态。前面的参数错误如果已被自动纠正，不应让整段
+    // 操作流继续保持红色并默认展开，否则用户会误以为最终动作仍然失败。
+    const failed = agentOperationFailed(latest);
     const expanded = userExpanded ?? failed;
     const shimmering = live && !failed;
     return (
@@ -581,8 +597,7 @@ export function AgentOperationFeed({
                 aria-label={`${expanded ? "收起" : "展开"} ${items.length} 步${categoryLabel}记录，最新一步：${label}`}
                 onClick={() => setUserExpanded(!expanded)}
             >
-                <span className="agent-tool-category">
-                    {agentToolCategoryIcon(category)}
+                <span className="agent-operation-kind">
                     <span>{categoryLabel}</span>
                 </span>
                 {/* 换步时旧文案高模糊淡出、新文案从下方上浮（先快后慢的非线性曲线）。 */}
@@ -1237,7 +1252,7 @@ function AgentTimelineMarker({ theme, tone, icon }: { theme: (typeof canvasTheme
     const color = tone === "error" ? "#ef4444" : tone === "approval" ? "#f97316" : tone === "agent" ? theme.accent.primary : theme.node.muted;
     return (
         <span className="agent-timeline-marker relative" aria-hidden="true">
-            <span className="relative grid size-6 place-items-center rounded-full" style={{ background: tone === "agent" ? theme.accent.primarySoft : theme.node.fill, color }}>
+            <span className="relative grid size-5 place-items-center rounded-full" style={{ background: tone === "agent" ? theme.accent.primarySoft : theme.node.fill, color }}>
                 {icon}
             </span>
         </span>

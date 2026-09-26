@@ -1,4 +1,5 @@
 import { getActiveUserScope } from "@/lib/user-scope";
+import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { http, apiBaseURL, ApiError } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 
@@ -117,8 +118,59 @@ export type ResourceAccess = {
     fallbackReason?: string;
 };
 
-const accessCache = new Map<string, { value: ResourceAccess; expiresAt: number }>();
+type ResourceAccessBatchItem = { resourceId: string; access?: ResourceAccess; error?: { msg?: string } };
+type CachedResourceAccess = { value: ResourceAccess; expiresAt: number };
+const accessCache = new Map<string, CachedResourceAccess>();
 const accessRequests = new Map<string, Promise<ResourceAccess>>();
+const PERSISTED_DISPLAY_ACCESS_PREFIX = "resource-access-v1:";
+
+function persistedDisplayAccessKey(resourceId: string, variant: ResourceAccessVariant) {
+    return `${PERSISTED_DISPLAY_ACCESS_PREFIX}${resourceId}:${variant}`;
+}
+
+function shouldPersistDisplayAccess(value: ResourceAccess) {
+    // 只跨页面缓存 OSS/CDN 直连地址；平台本地/代理地址仍只在内存中保留，避免把平台签名凭据落到持久存储。
+    return value.delivery === "cdn" || value.delivery === "origin";
+}
+
+function resourceAccessCacheExpiry(value: ResourceAccess, now = Date.now()) {
+    const expiresAt = value.expiresAt ? new Date(value.expiresAt).getTime() : Number.NaN;
+    if (Number.isFinite(expiresAt) && expiresAt <= now + 1_000) return now;
+    const refreshAt = value.refreshAt ? new Date(value.refreshAt).getTime() : Number.NaN;
+    const candidates = [
+        Number.isFinite(refreshAt) && refreshAt > now ? refreshAt : Number.POSITIVE_INFINITY,
+        Number.isFinite(expiresAt) && expiresAt > now ? expiresAt - 15_000 : Number.POSITIVE_INFINITY,
+    ].filter(Number.isFinite);
+    if (candidates.length) return Math.max(now, Math.min(...candidates));
+    return now + 5 * 60_000;
+}
+
+async function readPersistedDisplayAccess(scope: string, resourceId: string, variant: ResourceAccessVariant): Promise<CachedResourceAccess | undefined> {
+    try {
+        const raw = await localForageStorageForScope(scope).getItem(persistedDisplayAccessKey(resourceId, variant));
+        if (!raw) return undefined;
+        const parsed = JSON.parse(raw) as Partial<CachedResourceAccess>;
+        if (!parsed.value?.url || !shouldPersistDisplayAccess(parsed.value) || typeof parsed.expiresAt !== "number") return undefined;
+        const actualExpiresAt = parsed.value.expiresAt ? new Date(parsed.value.expiresAt).getTime() : Number.NaN;
+        if (parsed.expiresAt <= Date.now() || (Number.isFinite(actualExpiresAt) && actualExpiresAt <= Date.now() + 1_000)) {
+            await localForageStorageForScope(scope).removeItem(persistedDisplayAccessKey(resourceId, variant));
+            return undefined;
+        }
+        return parsed as CachedResourceAccess;
+    } catch {
+        // 签名地址缓存只是性能优化，存储不可用或数据损坏时继续走后端签发。
+        return undefined;
+    }
+}
+
+async function persistDisplayAccess(scope: string, resourceId: string, variant: ResourceAccessVariant, entry: CachedResourceAccess) {
+    if (!shouldPersistDisplayAccess(entry.value) || entry.expiresAt <= Date.now()) return;
+    try {
+        await localForageStorageForScope(scope).setItem(persistedDisplayAccessKey(resourceId, variant), JSON.stringify(entry));
+    } catch {
+        // 不把本地缓存失败升级为资源访问失败。
+    }
+}
 let accessGeneration = 0;
 
 /**
@@ -335,15 +387,27 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
     let request!: Promise<ResourceAccess>;
     request = (async () => {
         try {
-            const data = await http.post<{ items: Array<{ resourceId: string; access?: ResourceAccess; error?: { msg?: string } }> }>("/resources/access", [{ resourceId: id, purpose, variant, ...(downloadName ? { downloadName } : {}) }]);
+            // 只跨页面复用普通展示地址。下载和模型输入地址可能包含更敏感的权限/文件名，仍只保留内存缓存。
+            if (purpose === "display") {
+                const persisted = await readPersistedDisplayAccess(scope, id, variant);
+                assertResourceRequestCurrent(generation, scope);
+                if (persisted) {
+                    accessCache.set(key, persisted);
+                    return persisted.value;
+                }
+            }
+            const data = await http.post<{ items: ResourceAccessBatchItem[] }>("/resources/access", [{ resourceId: id, purpose, variant, ...(downloadName ? { downloadName } : {}) }]);
             if (generation !== accessGeneration || scope !== getActiveUserScope()) {
                 throw new DOMException("资源访问请求已因账号切换失效", "AbortError");
             }
             const item = data.items?.[0];
             if (!item?.access?.url) throw new Error(item?.error?.msg || "后端未返回资源访问地址");
             const value = item.access;
-            const ttl = value.expiresAt ? Math.max(10_000, new Date(value.expiresAt).getTime() - Date.now() - 15_000) : 5 * 60_000;
-            accessCache.set(key, { value, expiresAt: Date.now() + ttl });
+            const entry = { value, expiresAt: resourceAccessCacheExpiry(value) } satisfies CachedResourceAccess;
+            if (entry.expiresAt > Date.now()) {
+                accessCache.set(key, entry);
+                if (purpose === "display") await persistDisplayAccess(scope, id, variant, entry);
+            }
             return value;
         } catch (error) {
             if (error instanceof ApiError) throw new Error(error.message || "获取对象存储地址失败");

@@ -10,11 +10,20 @@ func TestLoadAgentPoliciesUsesDocumentMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.ID != "cloud-agent-system" || system.Version != 10 || media.ID != "cloud-agent-media" || media.Version != 3 {
+	if system.ID != "cloud-agent-system" || system.Version != 10 || media.ID != "cloud-agent-media" || media.Version != 4 {
 		t.Fatalf("unexpected policy metadata: system=%+v media=%+v", system, media)
 	}
 	if strings.Contains(system.Text, "id: cloud-agent-system") || !strings.HasPrefix(system.Text, "# 影策 Cloud Agent") {
 		t.Fatalf("metadata leaked into compiled policy body: %q", system.Text)
+	}
+	for _, phrase := range []string{
+		"auto 会由服务端完成模型、能力、价格、预算和资源准入后直接提交",
+		"request_approval 必须等待界面独立审批",
+		"authorizedChargeMicrocredits / chargeLimitMicrocredits 是预授权或上限，不是实际消费",
+	} {
+		if !strings.Contains(media.Text, phrase) {
+			t.Fatalf("media policy lost required contract phrase %q", phrase)
+		}
 	}
 }
 

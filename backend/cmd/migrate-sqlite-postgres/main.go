@@ -1,19 +1,24 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 type tableMigration struct {
@@ -50,17 +55,17 @@ func main() {
 
 	// PostgreSQL 的 DDL 参与事务；任一表复制或核对失败都会回滚整个新库结构。
 	if err := target.Transaction(func(tx *gorm.DB) error {
-		tableCount, err := publicTableCount(tx)
+		tableNames, err := publicTableNames(tx)
 		if err != nil {
 			return err
 		}
-		copyRows := tableCount == 0
+		copyRows := len(tableNames) == 0
 		if copyRows {
 			if err := database.MigrateSchema(tx); err != nil {
 				return fmt.Errorf("创建目标表结构：%w", err)
 			}
-		} else if tableCount != int64(len(migrations())) {
-			return fmt.Errorf("PostgreSQL public schema 已有 %d 张表，拒绝覆盖或补写", tableCount)
+		} else if err := validateTargetTableNames(tableNames); err != nil {
+			return err
 		}
 
 		total := 0
@@ -76,6 +81,9 @@ func main() {
 			log.Printf("全量迁移核对完成：%d 张表，%d 行", len(migrations()), total)
 		} else {
 			log.Printf("目标库已有完整迁移结果，未重复写入：%d 张表，%d 行", len(migrations()), total)
+		}
+		if err := database.ReconcilePrefixedIDSequences(tx); err != nil {
+			return fmt.Errorf("校准可读 ID 序列：%w", err)
 		}
 		return nil
 	}); err != nil {
@@ -94,10 +102,52 @@ func verifySQLite(db *gorm.DB) error {
 	return nil
 }
 
-func publicTableCount(db *gorm.DB) (int64, error) {
-	var count int64
-	err := db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'").Scan(&count).Error
-	return count, err
+func publicTableNames(db *gorm.DB) ([]string, error) {
+	var names []string
+	err := db.Raw(`
+		SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+		ORDER BY table_name
+	`).Scan(&names).Error
+	return names, err
+}
+
+// validateTargetTableNames compares the existing PostgreSQL schema against the
+// same business-table list used by Models() and migrations().
+// schema_migrations is created by database.MigrateSchema and is intentionally
+// not part of the row-copy list, so it is allowed as the only system table.
+func validateTargetTableNames(actual []string) error {
+	expected := make(map[string]struct{}, len(migrations()))
+	for _, migration := range migrations() {
+		expected[migration.name] = struct{}{}
+	}
+
+	actualSet := make(map[string]struct{}, len(actual))
+	for _, name := range actual {
+		actualSet[name] = struct{}{}
+	}
+	missing := make([]string, 0)
+	for name := range expected {
+		if _, ok := actualSet[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	extra := make([]string, 0)
+	for name := range actualSet {
+		if name == "schema_migrations" {
+			continue
+		}
+		if _, ok := expected[name]; !ok {
+			extra = append(extra, name)
+		}
+	}
+	sort.Strings(missing)
+	sort.Strings(extra)
+	if len(missing) > 0 || len(extra) > 0 {
+		return fmt.Errorf("PostgreSQL public schema 与当前模型清单不一致，缺少表：%s，额外表：%s；拒绝覆盖或补写", strings.Join(missing, ", "), strings.Join(extra, ", "))
+	}
+	return nil
 }
 
 func migrateTable[T any](name string) tableMigration {
@@ -110,6 +160,9 @@ func migrateTable[T any](name string) tableMigration {
 			}
 			var sourceRows []T
 			if err := source.Order(primaryKey).Find(&sourceRows).Error; err != nil {
+				return 0, err
+			}
+			if err := validateExplicitStringLengths(source, name, sourceRows); err != nil {
 				return 0, err
 			}
 			if copyRows && len(sourceRows) > 0 {
@@ -128,6 +181,102 @@ func migrateTable[T any](name string) tableMigration {
 			return len(sourceRows), nil
 		},
 	}
+}
+
+// validateExplicitStringLengths catches values that SQLite accepts but
+// PostgreSQL would reject for a GORM size:N column. SQLite does not enforce
+// VARCHAR(N), so this check must happen before the first target insert.
+func validateExplicitStringLengths[T any](db *gorm.DB, tableName string, rows []T) error {
+	statement := &gorm.Statement{DB: db}
+	if err := statement.Parse(new(T)); err != nil {
+		return err
+	}
+	if statement.Schema == nil {
+		return fmt.Errorf("表 %s 缺少 GORM schema", tableName)
+	}
+
+	for rowIndex := range rows {
+		rowValue := reflect.ValueOf(rows[rowIndex])
+		key := primaryKeyValue(statement.Schema.PrimaryFields, rowValue)
+		for _, field := range statement.Schema.Fields {
+			limit, ok := explicitStringSize(field)
+			if !ok || field.Serializer != nil || !field.Creatable || !field.Readable {
+				continue
+			}
+			value, zero := field.ValueOf(context.Background(), rowValue)
+			if zero {
+				continue
+			}
+			text, ok := stringValue(value)
+			if !ok {
+				continue
+			}
+			actual := utf8.RuneCountInString(text)
+			if actual <= limit {
+				continue
+			}
+			return fmt.Errorf("表 %s 第 %d 行（主键 %s）列 %s 长度 %d，超过 size:%d", tableName, rowIndex+1, key, field.DBName, actual, limit)
+		}
+	}
+	return nil
+}
+
+func explicitStringSize(field *schema.Field) (int, bool) {
+	// This adapter keeps the validation logic independent from GORM's inferred
+	// default size (often 255). Only an explicit size:N tag is a PostgreSQL
+	// contract we can prove from the model.
+	sizeText, ok := field.TagSettings["SIZE"]
+	if !ok || strings.TrimSpace(sizeText) == "" {
+		return 0, false
+	}
+	if strings.EqualFold(strings.TrimSpace(field.TagSettings["TYPE"]), "text") {
+		return 0, false
+	}
+	if field.IndirectFieldType.Kind() != reflect.String {
+		return 0, false
+	}
+	limit, err := strconv.Atoi(sizeText)
+	if err != nil || limit < 0 {
+		return 0, false
+	}
+	return limit, true
+}
+
+func stringValue(value any) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	rv := reflect.ValueOf(value)
+	for rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return "", false
+		}
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.String {
+		return "", false
+	}
+	return rv.String(), true
+}
+
+func primaryKeyValue(fields []*schema.Field, rowValue reflect.Value) string {
+	if len(fields) == 0 {
+		return "<无主键>"
+	}
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		value, zero := field.ValueOf(context.Background(), rowValue)
+		if zero || value == nil {
+			parts = append(parts, field.DBName+"=<空>")
+			continue
+		}
+		if text, ok := stringValue(value); ok {
+			parts = append(parts, field.DBName+"="+text)
+			continue
+		}
+		parts = append(parts, field.DBName+"="+fmt.Sprint(value))
+	}
+	return strings.Join(parts, ",")
 }
 
 func primaryKeyColumn[T any](db *gorm.DB) (string, error) {

@@ -67,7 +67,7 @@ export function uninsertedCanvasAssetHandoffPayloads(nodes: Iterable<{ metadata?
     return payloads.filter((payload) => !payload.assetId || !insertedAssetIds.has(payload.assetId));
 }
 
-export function creationResultAssetIds(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[] }) {
+export function creationResultAssetIds(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[]; resultStorageKeys?: string[] }) {
     const taskOrder = new Map(input.taskIds.map((taskId, index) => [taskId, index]));
     const candidates = assets
         .filter((asset) => asset.kind === "image" || asset.kind === "video")
@@ -82,13 +82,24 @@ export function creationResultAssetIds(assets: Asset[], input: { messageId: stri
             return leftResult - rightResult;
         });
     const unused = new Set(candidates.map((asset) => asset.id));
-    const allowOrderedFallback = candidates.length === input.resultUrls.length;
-    return input.resultUrls.flatMap((url) => {
-        const exact = candidates.find((asset) => unused.has(asset.id) && (asset.coverUrl === url || (asset.kind === "image" ? asset.data.dataUrl === url : asset.data.url === url)));
+    const stableKeys = input.resultStorageKeys || [];
+    const allowOrderedFallback = candidates.length === Math.max(input.resultUrls.length, stableKeys.length);
+    return Array.from({ length: Math.max(input.resultUrls.length, stableKeys.length) }, (_, index) => {
+        const storageKey = stableKeys[index];
+        const url = input.resultUrls[index] || "";
+        const exact = candidates.find((asset) => unused.has(asset.id) && Boolean(storageKey) && asset.data.storageKey === storageKey)
+            || candidates.find((asset) => unused.has(asset.id) && (asset.coverUrl === url || (asset.kind === "image" ? asset.data.dataUrl === url : asset.data.url === url)));
         const fallback = exact || (allowOrderedFallback ? candidates.find((asset) => unused.has(asset.id)) : undefined);
-        if (!fallback) return [];
+        if (!fallback) return undefined;
         unused.delete(fallback.id);
-        return [fallback.id];
+        return fallback.id;
+    }).filter((id): id is string => Boolean(id));
+}
+
+export function creationResultStorageKeys(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[]; resultStorageKeys?: string[] }) {
+    return creationResultAssetIds(assets, input).flatMap((assetId) => {
+        const asset = assets.find((candidate) => candidate.id === assetId);
+        return asset && (asset.kind === "image" || asset.kind === "video") && asset.data.storageKey ? [asset.data.storageKey] : [];
     });
 }
 

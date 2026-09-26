@@ -15,12 +15,16 @@ export type AgentFeedRecord = {
     role: string;
     title?: string;
     text: string;
+    reasoning?: boolean;
     detail?: unknown;
     planItems?: readonly unknown[];
     question?: unknown;
 };
 
-export type AgentFeedSegment<T> = { kind: "operations"; key: string; items: T[] } | { kind: "message"; key: string; item: T };
+export type AgentFeedSegment<T> =
+    | { kind: "operations"; key: string; items: T[] }
+    | { kind: "reasoning"; key: string; items: T[] }
+    | { kind: "message"; key: string; item: T };
 
 function record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -39,6 +43,11 @@ export function isAgentCarrierRecord(item: AgentFeedRecord): boolean {
 /** 等用户确认的工具调用（审批卡）必须留在消息流里，不能被折进"操作记录"里藏起来。 */
 export function isAgentOperationRecord(item: AgentFeedRecord): boolean {
     return item.role === "tool" && !isAgentCarrierRecord(item) && record(item.detail).status !== "pending";
+}
+
+/** 连续推理事件共用一条可展开记录，避免每个 SSE chunk/摘要都变成一行。 */
+export function isAgentReasoningRecord(item: AgentFeedRecord): boolean {
+    return item.role === "assistant" && item.reasoning === true;
 }
 
 /** 折叠行上报的那一步：最新一条操作记录的友好摘要（等待执行时用"准备…"口径）。 */
@@ -103,6 +112,12 @@ export function buildAgentFeedSegments<T extends AgentFeedRecord>(messages: read
     const segments: AgentFeedSegment<T>[] = [];
     for (const item of messages) {
         if (isAgentCarrierRecord(item)) continue;
+        if (isAgentReasoningRecord(item)) {
+            const last = segments[segments.length - 1];
+            if (last?.kind === "reasoning") last.items.push(item);
+            else segments.push({ kind: "reasoning", key: item.id, items: [item] });
+            continue;
+        }
         if (isAgentOperationRecord(item)) {
             const last = segments[segments.length - 1];
             if (last?.kind === "operations") last.items.push(item);

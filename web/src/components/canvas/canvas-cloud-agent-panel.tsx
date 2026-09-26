@@ -13,7 +13,6 @@ import { nanoid } from "nanoid";
 import { ModelPicker } from "@/components/model-picker";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { cn } from "@/lib/utils";
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { agentErrorPresentation, agentSubmissionErrorTitle } from "@/lib/canvas/agent-error-presentation";
@@ -33,7 +32,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
-import { AGENT_SCENE_DEFS, AgentChatComposer, AgentChatMessage, AgentOperationFeed, AgentPlanBar, AgentQuestionBar, AgentSceneCapsules, AgentWorkingMessage, type AgentSceneBucket, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
+import { AGENT_SCENE_DEFS, AgentChatComposer, AgentChatMessage, AgentOperationFeed, AgentPlanBar, AgentQuestionBar, AgentReasoningFeed, AgentSceneCapsules, AgentWorkingMessage, type AgentSceneBucket, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
@@ -128,8 +127,6 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         const preferred = config.textModel || config.model || "";
         return textModels.includes(preferred) ? preferred : (textModels[0] || "");
     }, [config]);
-    const reasoningSupported = Boolean(modelCapabilityConfigFor(config, selectedModel).text?.thinking);
-    useEffect(() => { if (!reasoningSupported && reasoningMode !== "off") setReasoningMode("off"); }, [reasoningSupported, reasoningMode]);
     const installedSkills = useMemo(() => skills.filter((skill) => skill.isAdded), [skills]);
     const enabledSkills = useMemo(() => installedSkills.filter((skill) => selectedSkillIds.includes(skill.skillId)), [installedSkills, selectedSkillIds]);
     const installedSkillIds = useMemo(() => new Set(installedSkills.map((skill) => skill.skillId)), [installedSkills]);
@@ -541,7 +538,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 const requestConfig = resolveModelRequestConfig(agentConfig, selectedModel);
                 const logicalModelId = logicalModelIDForConfig(agentConfig);
                 const input = {
-                    canvasId, prompt: value, reasoningMode: reasoningSupported ? reasoningMode : "off", profileRevision: profileView.revision,
+                    canvasId, prompt: value, reasoningMode, profileRevision: profileView.revision,
                     model: modelOptionName(selectedModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(selectedModel) || undefined } : {}),
                     skillIds: [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])],
@@ -910,9 +907,6 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                         submitAccessory={<AgentContextRing view={presentAgentContextUsage(contextUsage)} />}
                                         left={
                                             <ComposerControls
-                                                reasoningMode={reasoningSupported ? reasoningMode : "off"}
-                                                reasoningSupported={reasoningSupported}
-                                                onReasoningModeChange={(value) => { if (reasoningSupported) setReasoningMode(value); }}
                                                 config={config}
                                                 selectedModel={selectedModel}
                                                 permissionMode={permissionMode}
@@ -1279,6 +1273,8 @@ function AgentConversation({
                     segment.kind === "operations" ? (
                         // 只有"对话末尾那一段 + 还在跑"才流光：历史段落留在静态态，任务完成即停。
                         <AgentOperationFeed key={segment.key} items={segment.items} theme={theme} references={references} onFocusNode={onFocusNode} live={busy && index === segments.length - 1} />
+                    ) : segment.kind === "reasoning" ? (
+                        <AgentReasoningFeed key={segment.key} items={segment.items} theme={theme} />
                     ) : (
                         <AgentChatMessage key={segment.key} item={segment.item} theme={theme} references={references} onFocusNode={onFocusNode} isStreaming={busy && !approval && segment.item.streaming === true && segment.item === lastMessage} />
                     ),
@@ -1293,9 +1289,6 @@ function AgentConversation({
 }
 
 function ComposerControls({
-    reasoningMode,
-    reasoningSupported,
-    onReasoningModeChange,
     config,
     selectedModel,
     permissionMode,
@@ -1306,9 +1299,6 @@ function ComposerControls({
     onSkillsOpenChange,
     selectedSkillCount,
 }: {
-    reasoningMode: AgentReasoningMode;
-    reasoningSupported: boolean;
-    onReasoningModeChange: (value: AgentReasoningMode) => void;
     config: ReturnType<typeof useEffectiveConfig>;
     selectedModel: string;
     permissionMode: AgentPermissionMode;
@@ -1336,11 +1326,6 @@ function ComposerControls({
                 showOptionPrices
                 placeholder="选择文本模型"
             />
-            {reasoningSupported ? <Dropdown trigger={["click"]} placement="topLeft" menu={{ items: reasoningMenuItems(reasoningMode, onReasoningModeChange) }}>
-                <button type="button" aria-label="选择 Agent 推理模式" title="推理模式：只用于规划和工具选择" className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25" style={{ color: reasoningMode === "off" ? theme.node.muted : theme.accent.primary, background: reasoningMode === "off" ? "transparent" : theme.node.fill }}>
-                    <Sparkles className="size-3.5" />{reasoningModeLabel(reasoningMode)}
-                </button>
-            </Dropdown> : null}
             <Dropdown trigger={["click"]} placement="topLeft" menu={{ items: agentPermissionMenuItems(permissionMode, onPermissionChange) }}>
                 <button
                     type="button"
@@ -1367,19 +1352,6 @@ function ComposerControls({
             </button>
         </div>
     );
-}
-
-const reasoningLabels: Record<AgentReasoningMode, string> = { off: "直达", auto: "自动推理", deep: "深入推理" };
-
-function reasoningModeLabel(mode: AgentReasoningMode) { return reasoningLabels[mode]; }
-
-function reasoningMenuItems(mode: AgentReasoningMode, onChange: (value: AgentReasoningMode) => void) {
-    return (Object.keys(reasoningLabels) as AgentReasoningMode[]).map((value) => ({
-        key: value,
-        label: reasoningLabels[value],
-        icon: value === mode ? <Check className="size-3.5" /> : undefined,
-        onClick: () => onChange(value),
-    }));
 }
 
 function ApprovalCard({ approval, theme, submitting, onFocusNode, onReasonChange, onApprove, onReject }: { approval: ApprovalState; theme: CanvasTheme; submitting: boolean; onFocusNode?: (nodeId: string) => void; onReasonChange: (value: string) => void; onApprove: (settings?: AgentMediaSettings) => void; onReject: () => void }) {
