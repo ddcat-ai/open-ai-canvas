@@ -22,6 +22,7 @@ import (
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/platform"
+	"infinite-canvas/backend/internal/protocol"
 )
 
 func postGeminiJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {
@@ -392,6 +393,21 @@ func providerPollingDeadline(ctx context.Context) time.Time {
 	return time.Now().Add(videoPollTimeout)
 }
 
+func protocolBusinessFailure(ctx context.Context, metadata providerAnalyticsContext, body []byte) (string, string, bool) {
+	id := strings.TrimSpace(metadata.InterfaceType)
+	if id == "" {
+		return "", "", false
+	}
+	var adapter protocol.Adapter
+	if metadata.Service != nil {
+		adapter, _ = metadata.Service.protocolRegistry().Resolve(id)
+	}
+	if adapter == nil {
+		adapter, _ = protocolAdapterForContext(ctx, id)
+	}
+	return protocol.BusinessFailure(adapter, body)
+}
+
 func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode int, responseBody []byte, requestErr error) {
 	metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext)
 	if !ok || metadata.Service == nil {
@@ -404,6 +420,10 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		status = model.ApiCallStatusFailed
 		errorCode, errorText = providerRequestErrorDetails(requestErr)
 	} else if businessCode, businessMessage, failed := providerResponseBusinessFailure(responseBody); failed {
+		status = model.ApiCallStatusFailed
+		errorCode = businessCode
+		errorText = businessMessage
+	} else if businessCode, businessMessage, failed := protocolBusinessFailure(req.Context(), metadata, responseBody); failed {
 		status = model.ApiCallStatusFailed
 		errorCode = businessCode
 		errorText = businessMessage

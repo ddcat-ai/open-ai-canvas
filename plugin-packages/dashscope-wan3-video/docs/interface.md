@@ -71,14 +71,15 @@
 | --- | --- |
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.output.task_id"},{"$ref":"response.task_id"},{"$ref":"taskId"}]}` |
 | `response.status` | `{"$if":{"condition":{"$eq":[{"$lower":{"$ref":"response.output.task_status"}},"unknown"]},"then":"failed","else":{"$coalesce":[{"$ref":"response.output.task_status"},{"$ref":"response.status"},"pending"]}}}` |
-| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
+| `response.message` | `{"$coalesce":[{"$ref":"response.output.message"},{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
 | `response.videos` | `{"$ref":"response.output.video_url"}` |
 | `response.errorPaths[0]` | `"code"` |
 | `response.errorPaths[1]` | `"output.code"` |
 | `response.resultEphemeral` | `true` |
 | `response.usage` | `{"$ref":"response.usage"}` |
-| `response.messagePaths[0]` | `"message"` |
-| `response.messagePaths[1]` | `"output.message"` |
+| `response.messagePaths[0]` | `"output.message"` |
+| `response.messagePaths[1]` | `"message"` |
+| `response.messagePaths[2]` | `"error.message"` |
 
 ## 响应与错误
 
@@ -98,7 +99,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-wan3-video",
   "name": "DashScope Wan 3.0 Video",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "Alibaba Cloud / 影策",
   "description": "DashScope Wan 3.0 Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -481,6 +482,9 @@
           "message": {
             "$coalesce": [
               {
+                "$ref": "response.output.message"
+              },
+              {
                 "$ref": "response.error.message"
               },
               {
@@ -503,8 +507,9 @@
             "$ref": "response.usage"
           },
           "messagePaths": [
+            "output.message",
             "message",
-            "output.message"
+            "error.message"
           ]
         }
       }

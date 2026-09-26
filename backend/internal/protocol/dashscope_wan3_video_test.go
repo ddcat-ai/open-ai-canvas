@@ -73,4 +73,9 @@ func TestDashscopeWan3VideoCreateAndLifecycle(t *testing.T) {
 	if err != nil || unknown.Status != StatusFailed {
 		t.Fatalf("unknown = %#v err=%v", unknown, err)
 	}
+
+	failed, err := adapter.ParseCreate(context.Background(), []byte(`{"output":{"code":"InvalidParameter","message":"bad resolution","task_status":"FAILED"}}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "bad resolution" {
+		t.Fatalf("nested output failure = %#v err=%v", failed, err)
+	}
 }
