@@ -276,6 +276,81 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 	case model.ChannelInterfaceAgnesVideo:
 		video = applyModelSpecificVideoCapability(video, protocol, modelName)
+	case "autodl-comfyui", "autodl-comfyui-video":
+		video.Duration = VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 5}
+		video.Ratios = []string{"9:16", "16:9", "1:1"}
+		video.DefaultRatio = "9:16"
+		if strings.HasPrefix(modelName, "minimax_h3_z090") {
+			video.Resolutions = []string{
+				"480p竖(480*864)", "480p横(864*480)", "768p竖(768*1376)", "768p横(1376*768)", "1088p竖(1088*1920)", "1088p横(1920*1088)", "1440p竖(1440*2560)", "1440p横(2560*1440)",
+			}
+			video.DefaultResolution = "768p竖(768*1376)"
+			if modelName == "minimax_h3_z0901" {
+				video.Resolutions = []string{
+					"480p竖(480*864)", "480p横(864*480)", "768p竖(768*1344)", "768p横(1344*768)", "1088p竖(1088*1920)", "1088p横(1920*1088)", "1440p竖(1440*2560)", "1440p横(2560*1440)",
+				}
+				video.DefaultResolution = "768p竖(768*1344)"
+			}
+		} else if strings.HasPrefix(modelName, "minimax_h3_b99_") {
+			video.Resolutions = []string{"736p竖", "736p横", "736p(1:1)"}
+			video.DefaultResolution = "736p竖"
+		} else {
+			video.Resolutions = []string{"480p竖", "768p竖", "1080p竖", "480p横", "768p横", "1080p横", "480p(1:1)", "768p(1:1)"}
+			video.DefaultResolution = "768p竖"
+		}
+		if strings.Contains(modelName, "_12s") {
+			video.Duration.Max = 12
+		} else if strings.Contains(modelName, "_v2") && !strings.Contains(modelName, "15s") {
+			video.Duration.Max = 10
+		}
+		switch modelName {
+		case "minimax_h3_lightx2v_no_pic", "minimax_h3_b99_001", "minimax_h3_z0901":
+			video.References.MaxImages = 0
+			video.References.MaxAudios = 0
+			video.Operations = []string{"text_to_video"}
+			video.DefaultOperation = "text_to_video"
+		case "minimax_h3_lightx2v", "minimax_h3_b99_002":
+			video.References.MaxImages = 2
+			video.References.MinImages = 1
+			video.References.MaxAudios = 0
+			video.Operations = []string{"image_to_video"}
+			video.DefaultOperation = "image_to_video"
+		case "minimax_h3_z0902":
+			video.References.MaxImages = 6
+			video.References.MinImages = 1
+			video.References.MaxAudios = 0
+			video.Operations = []string{"image_to_video", "reference_to_video"}
+			video.DefaultOperation = "image_to_video"
+		case "minimax_h3_z0903":
+			video.References.MaxImages = 6
+			video.References.MinImages = 1
+			video.References.MaxAudios = 3
+			video.Operations = []string{"image_to_video", "reference_to_video", "audio_to_video"}
+			video.DefaultOperation = "image_to_video"
+		case "minimax_h3_image_audio_to_video":
+			video.References.MaxImages = 1
+			video.References.MinImages = 1
+			video.References.MaxAudios = 1
+			video.Operations = []string{"image_to_video", "audio_to_video", "reference_to_video"}
+			video.DefaultOperation = "image_to_video"
+		case "minimax_h3_lightx2v_v5", "minimax_h3_lightx2v_v5_15s", "minimax_h3_b99_003_12s":
+			video.References.MaxImages = 9
+			video.References.MinImages = 1
+			video.References.MaxAudios = 0
+			video.Operations = []string{"image_to_video", "reference_to_video"}
+			video.DefaultOperation = "image_to_video"
+		case "minimax_h3_zm_u24", "minimax_h3_zm_u08":
+			video.References.MaxImages = 9
+			video.References.MinImages = 1
+			video.References.MaxAudios = 3
+			video.Operations = []string{"image_to_video", "reference_to_video", "audio_to_video"}
+			video.DefaultOperation = "image_to_video"
+		default:
+			video.References.MaxImages = 9
+			video.References.MaxAudios = 3
+			video.Operations = []string{"text_to_video", "image_to_video", "reference_to_video", "audio_to_video"}
+			video.DefaultOperation = "image_to_video"
+		}
 	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }

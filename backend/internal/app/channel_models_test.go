@@ -243,3 +243,50 @@ func TestImageTestDefaultsUseModelCapability(t *testing.T) {
 		})
 	}
 }
+
+func TestAutoDLPresetChannelCatalogAndModelSync(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+
+	items, err := svc.FetchChannelModelCatalog(t.Context(), admin, ChannelModelsRequest{
+		BaseURL: "https://autodl.art",
+		APIKey:  "test-key",
+	})
+	if err != nil {
+		t.Fatalf("FetchChannelModelCatalog() error = %v", err)
+	}
+	if len(items) != len(autoDLPresetModels) {
+		t.Fatalf("expected %d AutoDL models, got %d", len(autoDLPresetModels), len(items))
+	}
+
+	channel := model.ModelChannel{ID: "autodl-test", Scope: model.ChannelScopeSystem, Enabled: true, Name: "AutoDL", BaseURL: "https://autodl.art"}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.syncInitialChannelModels(&channel, autoDLPresetModels); err != nil {
+		t.Fatalf("syncInitialChannelModels() error = %v", err)
+	}
+
+	models, err := svc.repo.ChannelModels(channel.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != len(autoDLPresetModels) {
+		t.Fatalf("expected %d saved models, got %d", len(autoDLPresetModels), len(models))
+	}
+	var z0901, audioModel *model.ChannelModel
+	for i := range models {
+		if models[i].ModelKey == "minimax_h3_z0901" {
+			z0901 = &models[i]
+		}
+		if models[i].ModelKey == "indextts2-v1" {
+			audioModel = &models[i]
+		}
+	}
+	if z0901 == nil || z0901.Capability != "video" || z0901.Protocol != "autodl-comfyui" || z0901.DisplayName != "H3 文生视频 (高质量直出)" {
+		t.Fatalf("z0901 invalid: %#v", z0901)
+	}
+	if audioModel == nil || audioModel.Capability != "audio" || audioModel.Protocol != "autodl-comfyui-audio" {
+		t.Fatalf("audioModel invalid: %#v", audioModel)
+	}
+}

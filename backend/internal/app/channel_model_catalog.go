@@ -113,6 +113,23 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 	if apiKey == "" {
 		return nil, BadAuthRequest("请填写 API Key")
 	}
+
+	if isAutoDLChannelURL(baseURL) || strings.EqualFold(input.APIFormat, "autodl") {
+		catalog := make([]ChannelModelCatalogItem, 0, len(autoDLPresetModels))
+		for _, name := range autoDLPresetModels {
+			modelType := "video"
+			if name == "indextts2-v1" {
+				modelType = "audio"
+			}
+			catalog = append(catalog, ChannelModelCatalogItem{
+				ID:          name,
+				DisplayName: autoDLWorkflowDisplayName(name),
+				ModelType:   modelType,
+			})
+		}
+		return catalog, nil
+	}
+
 	apiFormat := strings.ToLower(strings.TrimSpace(input.APIFormat))
 	if apiFormat == "" {
 		apiFormat = "openai"
@@ -260,4 +277,62 @@ func channelModelsUpstreamError(err error) error {
 	default:
 		return WrapAppError(http.StatusBadGateway, httpErr.Error(), err)
 	}
+}
+
+var autoDLPresetModels = []string{
+	"minimax_h3_z0901",
+	"minimax_h3_z0902",
+	"minimax_h3_z0903",
+	"minimax_h3_zm_u24",
+	"minimax_h3_zm_u08",
+	"minimax_h3_b99_002",
+	"minimax_h3_b99_001",
+	"minimax_h3_b99_003_12s",
+	"minimax_h3_image_audio_to_video_v2_15s",
+	"minimax_h3_lightx2v_v5_15s",
+	"minimax_h3_image_audio_to_video_v2",
+	"minimax_h3_image_audio_to_video",
+	"minimax_h3_lightx2v_v5",
+	"minimax_h3_lightx2v_no_pic",
+	"minimax_h3_lightx2v",
+	"indextts2-v1",
+}
+
+func isAutoDLChannelURL(rawURL string) bool {
+	u := strings.ToLower(strings.TrimSpace(rawURL))
+	return strings.Contains(u, "autodl.art") || strings.Contains(u, "autodl")
+}
+
+func isAutoDLChannel(channel *model.ModelChannel) bool {
+	if channel == nil {
+		return false
+	}
+	url := strings.ToLower(channel.BaseURL)
+	name := strings.ToLower(channel.Name)
+	return strings.Contains(url, "autodl.art") || strings.Contains(name, "autodl")
+}
+
+func autoDLWorkflowDisplayName(workflow string) string {
+	names := map[string]string{
+		"minimax_h3_z0901":                     "H3 文生视频 (高质量直出)",
+		"minimax_h3_z0902":                     "H3 六图生视频 (多图一致性创作)",
+		"minimax_h3_z0903":                     "H3 六图三音频生视频 (高质量音画融合)",
+		"minimax_h3_zm_u24":                    "H3 多图多音频生视频 (升级版)",
+		"minimax_h3_zm_u08":                    "H3 多图多音频生视频 (高速版)",
+		"minimax_h3_b99_002":                    "H3 首尾帧生成视频 (b99_002)",
+		"minimax_h3_b99_001":                    "H3 文生视频 (b99_001)",
+		"minimax_h3_b99_003_12s":                "H3 多图生视频 12 秒",
+		"minimax_h3_image_audio_to_video_v2_15s": "H3 多图多音频生视频 15 秒",
+		"minimax_h3_lightx2v_v5_15s":            "H3 多图生视频 15 秒",
+		"minimax_h3_image_audio_to_video_v2":    "H3 多图多音频生视频",
+		"minimax_h3_image_audio_to_video":       "H3 图生视频音频同步",
+		"minimax_h3_lightx2v_v5":                "H3 多图参考生视频",
+		"minimax_h3_lightx2v_no_pic":            "H3 文生视频",
+		"minimax_h3_lightx2v":                   "H3 首尾帧生成视频",
+		"indextts2-v1":                          "IndexTTS2 语音",
+	}
+	if name := names[workflow]; name != "" {
+		return name
+	}
+	return workflow
 }
