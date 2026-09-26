@@ -87,8 +87,9 @@ export function creationResultAssetIds(assets: Asset[], input: { messageId: stri
     return Array.from({ length: Math.max(input.resultUrls.length, stableKeys.length) }, (_, index) => {
         const storageKey = stableKeys[index];
         const url = input.resultUrls[index] || "";
-        const exact = candidates.find((asset) => unused.has(asset.id) && Boolean(storageKey) && asset.data.storageKey === storageKey)
-            || candidates.find((asset) => unused.has(asset.id) && (asset.coverUrl === url || (asset.kind === "image" ? asset.data.dataUrl === url : asset.data.url === url)));
+        const exact =
+            candidates.find((asset) => unused.has(asset.id) && Boolean(storageKey) && asset.data.storageKey === storageKey) ||
+            candidates.find((asset) => unused.has(asset.id) && (asset.coverUrl === url || (asset.kind === "image" ? asset.data.dataUrl === url : asset.data.url === url)));
         const fallback = exact || (allowOrderedFallback ? candidates.find((asset) => unused.has(asset.id)) : undefined);
         if (!fallback) return undefined;
         unused.delete(fallback.id);

@@ -21,10 +21,7 @@ export type AgentFeedRecord = {
     question?: unknown;
 };
 
-export type AgentFeedSegment<T> =
-    | { kind: "operations"; key: string; items: T[] }
-    | { kind: "reasoning"; key: string; items: T[] }
-    | { kind: "message"; key: string; item: T };
+export type AgentFeedSegment<T> = { kind: "operations"; key: string; items: T[] } | { kind: "reasoning"; key: string; items: T[] } | { kind: "message"; key: string; item: T };
 
 function record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};

@@ -137,10 +137,7 @@ function resourceAccessCacheExpiry(value: ResourceAccess, now = Date.now()) {
     const expiresAt = value.expiresAt ? new Date(value.expiresAt).getTime() : Number.NaN;
     if (Number.isFinite(expiresAt) && expiresAt <= now + 1_000) return now;
     const refreshAt = value.refreshAt ? new Date(value.refreshAt).getTime() : Number.NaN;
-    const candidates = [
-        Number.isFinite(refreshAt) && refreshAt > now ? refreshAt : Number.POSITIVE_INFINITY,
-        Number.isFinite(expiresAt) && expiresAt > now ? expiresAt - 15_000 : Number.POSITIVE_INFINITY,
-    ].filter(Number.isFinite);
+    const candidates = [Number.isFinite(refreshAt) && refreshAt > now ? refreshAt : Number.POSITIVE_INFINITY, Number.isFinite(expiresAt) && expiresAt > now ? expiresAt - 15_000 : Number.POSITIVE_INFINITY].filter(Number.isFinite);
     if (candidates.length) return Math.max(now, Math.min(...candidates));
     return now + 5 * 60_000;
 }
