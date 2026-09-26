@@ -21,6 +21,10 @@ const renderFfmpegEnv = "CANVAS_FFMPEG_PATH"
 // 渲染是本地重编码，不经模型路由与计费；失败一律落明确终态。
 func (w *taskWorkerCoordinator) processTimelineRender(task *model.Task, ctx context.Context) error {
 	s := w.service
+	// 排队期间剪辑工作台可能已被停用，读取媒体和启动 ffmpeg 前重新检查。
+	if err := s.RequirePluginForUser(task.UserID, PluginEditorShell); err != nil {
+		return w.failTimelineTask(task, "渲染失败", err.Error())
+	}
 	ffmpegBin, err := renderFfmpegBinary()
 	if err != nil {
 		return w.failTimelineTask(task, "渲染失败", err.Error())
