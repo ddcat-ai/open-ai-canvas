@@ -40,6 +40,7 @@ const (
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels
 	FeaturePluginCenter                = app.FeaturePluginCenter
+	FeaturePluginUpload                = app.FeaturePluginUpload
 	FeatureShortDrama                  = app.FeatureShortDrama
 	FeatureSystemPlugins               = app.FeatureSystemPlugins
 	FeatureTaskCenter                  = app.FeatureTaskCenter

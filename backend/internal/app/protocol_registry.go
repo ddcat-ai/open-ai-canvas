@@ -188,6 +188,10 @@ func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName
 	if err := s.RequireAdmin(actor); err != nil {
 		return PluginView{}, err
 	}
+	// raw 与 multipart 上传都经过这里；关闭后只拒绝新安装，不影响已安装插件。
+	if err := s.RequireFeature(FeaturePluginUpload); err != nil {
+		return PluginView{}, err
+	}
 	parsed, err := protocol.ParsePluginPackage(data)
 	if err != nil {
 		return PluginView{}, err
