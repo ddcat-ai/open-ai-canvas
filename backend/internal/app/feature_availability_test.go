@@ -47,6 +47,34 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	}
 }
 
+// 在线安装插件开关默认开启，旧配置缺少该字段时也保持原有的可安装行为。
+func TestFeatureAvailabilityKeepsPluginUploadEnabledByDefault(t *testing.T) {
+	svc, db := newFeatureAvailabilityTestService(t)
+	setting, err := svc.FeatureAvailability()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !setting.PluginUploadEnabled {
+		t.Fatal("plugin upload should be enabled by default")
+	}
+	legacy := &model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: `{"pluginCenterEnabled":true}`}
+	if err := db.Create(legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequireFeature(FeaturePluginUpload); err != nil {
+		t.Fatalf("legacy setting without pluginUploadEnabled rejected upload: %v", err)
+	}
+	actor := &model.User{ID: "admin-upload", Role: model.UserRoleAdmin}
+	value := platform.DefaultFeatureAvailability()
+	value.PluginUploadEnabled = false
+	if _, err := svc.UpdateFeatureAvailability(actor, value); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequireFeature(FeaturePluginUpload); err == nil || err.Error() != "在线安装插件已关闭" {
+		t.Fatalf("disabled plugin upload error = %v", err)
+	}
+}
+
 func TestWelcomeAvailabilityCanBeDisabledAndReenabled(t *testing.T) {
 	svc, _ := newFeatureAvailabilityTestService(t)
 	actor := &model.User{ID: "admin-welcome", Role: model.UserRoleAdmin}

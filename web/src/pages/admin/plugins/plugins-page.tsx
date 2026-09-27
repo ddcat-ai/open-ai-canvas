@@ -15,6 +15,7 @@ import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import type { PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import { fetchAdminPlugins, setPluginPlatformAvailability, uninstallPlugin, uploadPlugin, type AdminPluginState, type BackendPlugin, type PluginManagement } from "@/services/api/plugins";
 import { UploadPluginModal } from "@/pages/plugins/plugin-documentation-modals";
+import { useUserStore } from "@/stores/use-user-store";
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
@@ -30,6 +31,7 @@ type AdminPluginItem = {
 
 export default function AdminPluginsPage() {
     const { message, modal } = App.useApp();
+    const pluginUploadEnabled = useUserStore((state) => state.features.pluginUploadEnabled);
     const [plugins, setPlugins] = useState<BackendPlugin[]>([]);
     const [states, setStates] = useState<Record<string, AdminPluginState>>({});
     const [loading, setLoading] = useState(true);
@@ -238,7 +240,7 @@ export default function AdminPluginsPage() {
                     <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
                         刷新
                     </Button>
-                    <Button type="primary" icon={<CloudUpload className="size-4" />} onClick={() => setUploadOpen(true)}>
+                    <Button type="primary" icon={<CloudUpload className="size-4" />} disabled={!pluginUploadEnabled} title={pluginUploadEnabled ? undefined : "在线安装插件已关闭，可在功能开放中开启"} onClick={() => setUploadOpen(true)}>
                         上传插件
                     </Button>
                 </>

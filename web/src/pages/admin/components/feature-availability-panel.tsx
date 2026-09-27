@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, Clapperboard, CloudUpload, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "pluginUploadEnabled";
 type FeatureRow = {
     key: FeatureKey;
     title: string;
@@ -17,7 +17,7 @@ type FeatureRow = {
     dependsOn?: FeatureKey;
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers", "pluginUploadEnabled"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -59,6 +59,12 @@ const pluginFeatureRows: FeatureRow[] = [
         description: "向普通用户展示系统协议插件和管理员上传插件。",
         icon: <ShieldCheck className="size-4" aria-hidden="true" />,
         dependsOn: "pluginCenterEnabled",
+    },
+    {
+        key: "pluginUploadEnabled",
+        title: "在线安装插件",
+        description: "允许管理员在插件管理页上传安装插件包。关闭后不影响已安装插件。",
+        icon: <CloudUpload className="size-4" aria-hidden="true" />,
     },
 ];
 
@@ -254,12 +260,13 @@ export default function FeatureAvailabilityPanel() {
 
                 <FeatureDomainPanel
                     title="2. 插件开放范围"
-                    description="先开放插件中心，再决定系统插件是否可见"
+                    description="先开放插件中心，再决定系统插件是否可见；在线安装插件单独控制"
                     icon={<PlugZap className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/2 生效`} tone={enabledPluginFeatures === 2 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/${pluginFeatureRows.length} 生效`} tone={enabledPluginFeatures === pluginFeatureRows.length ? "success" : "neutral"} />}
                 >
                     <FeatureSettingRow row={pluginFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={1} />
                     {draftFeatures.pluginCenterEnabled ? <FeatureSettingRow row={pluginFeatureRows[1]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={2} /> : null}
+                    <FeatureSettingRow row={pluginFeatureRows[2]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
                 </FeatureDomainPanel>
 
                 <FeatureDomainPanel
@@ -354,6 +361,7 @@ function toEditablePayload(features: FeatureAvailability) {
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
+        pluginUploadEnabled: features.pluginUploadEnabled,
     };
 }
 
@@ -376,6 +384,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
+        pluginUploadEnabled: record.pluginUploadEnabled as boolean,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,
         updatedBy: typeof record.updatedBy === "string" ? record.updatedBy : undefined,
         updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,
