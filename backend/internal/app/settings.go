@@ -49,6 +49,7 @@ type OSSSettingRequest struct {
 	PathStyle         bool   `json:"pathStyle"`
 	SessionToken      string `json:"sessionToken"`
 	AllowUserS3       bool   `json:"allowUserS3"`
+	AllowUserStorage  *bool  `json:"allowUserStorage"`
 	CDNAuthMode       string `json:"cdnAuthMode"`
 	RequireCDN        bool   `json:"requireCDN"`
 	AllowPrivateProxy bool   `json:"allowPrivateProxy"`
@@ -74,6 +75,7 @@ type PublicOSSSetting struct {
 	HistoryCount            int64      `json:"historyCount"`
 	ReferencedResourceCount int64      `json:"referencedResourceCount"`
 	AllowUserS3             bool       `json:"allowUserS3"`
+	AllowUserStorage        bool       `json:"allowUserStorage"`
 	CDNAuthMode             string     `json:"cdnAuthMode"`
 	RequireCDN              bool       `json:"requireCDN"`
 	AllowPrivateProxy       bool       `json:"allowPrivateProxy"`
@@ -174,7 +176,7 @@ func (s *Service) UserOSSSetting(actor *model.User) (*PublicOSSSetting, error) {
 	if err != nil {
 		return nil, err
 	}
-	public, err := s.publicUserOSSSetting(setting, value, actor.ID, platform.AllowUserS3)
+	public, err := s.publicUserOSSSetting(setting, value, actor.ID, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +198,10 @@ func (s *Service) UpdateUserOSSSetting(actor *model.User, req OSSSettingRequest)
 	_, platform, err := s.readOSSSetting()
 	if err != nil {
 		return nil, err
+	}
+	// 总开关只拦截个人配置的保存；历史个人文件的读取和删除不经过这里。
+	if platform.UserStorageDisabled {
+		return nil, Forbidden("平台管理员已关闭个人存储")
 	}
 	if next.Enabled && next.Provider == s3Provider && !platform.AllowUserS3 {
 		return nil, Forbidden("平台管理员尚未允许个人 S3 兼容存储")
@@ -231,7 +237,7 @@ func (s *Service) UpdateUserOSSSetting(actor *model.User, req OSSSettingRequest)
 			return nil, err
 		}
 	}
-	public, err := s.publicUserOSSSetting(&setting, next, actor.ID, platform.AllowUserS3)
+	public, err := s.publicUserOSSSetting(&setting, next, actor.ID, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -547,6 +553,11 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		AllowUserS3:     req.AllowUserS3,
 		Delivery:        storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy},
 	})
+	// 未携带该字段的旧客户端保留当前值，避免保存其他存储项时误关个人存储。
+	next.UserStorageDisabled = current.UserStorageDisabled
+	if req.AllowUserStorage != nil {
+		next.UserStorageDisabled = !*req.AllowUserStorage
+	}
 	if next.Delivery.CDNAuthMode != "" && next.Delivery.CDNAuthMode != "public" && next.Delivery.CDNAuthMode != "qiniu" {
 		return next, BadAuthRequest("CDN 鉴权方式无效，仅支持 public 或 qiniu")
 	}
@@ -647,6 +658,7 @@ func (s *Service) publicOSSSetting(setting *model.SystemSetting, value ossSettin
 		HasSessionToken:    value.SessionToken != "",
 		StorageLocationID:  value.StorageLocationID,
 		AllowUserS3:        value.AllowUserS3,
+		AllowUserStorage:   !value.UserStorageDisabled,
 		CDNAuthMode:        value.Delivery.CDNAuthMode,
 		RequireCDN:         value.Delivery.RequireCDN,
 		AllowPrivateProxy:  value.Delivery.AllowPrivateProxy,
@@ -662,7 +674,8 @@ func (s *Service) publicOSSSetting(setting *model.SystemSetting, value ossSettin
 	return result, nil
 }
 
-func (s *Service) publicUserOSSSetting(setting *model.UserOSSSetting, value ossSettingValue, ownerID string, allowUserS3 bool) (PublicOSSSetting, error) {
+func (s *Service) publicUserOSSSetting(setting *model.UserOSSSetting, value ossSettingValue, ownerID string, platform ossSettingValue) (PublicOSSSetting, error) {
+	allowUserS3 := platform.AllowUserS3
 	result := PublicOSSSetting{
 		Enabled:            value.Enabled,
 		Provider:           value.Provider,
@@ -679,11 +692,12 @@ func (s *Service) publicUserOSSSetting(setting *model.UserOSSSetting, value ossS
 		HasSessionToken:    value.SessionToken != "",
 		StorageLocationID:  value.StorageLocationID,
 		AllowUserS3:        allowUserS3,
+		AllowUserStorage:   !platform.UserStorageDisabled,
 		CDNAuthMode:        value.Delivery.CDNAuthMode,
 		RequireCDN:         value.Delivery.RequireCDN,
 		AllowPrivateProxy:  value.Delivery.AllowPrivateProxy,
 	}
-	if value.Provider == s3Provider && !allowUserS3 {
+	if platform.UserStorageDisabled || (value.Provider == s3Provider && !allowUserS3) {
 		result.Enabled = false
 	}
 	if setting != nil {

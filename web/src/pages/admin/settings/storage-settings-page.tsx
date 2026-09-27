@@ -30,6 +30,7 @@ type OSSFormValues = {
     s3Preset: S3Preset;
     pathStyle: boolean;
     allowUserS3: boolean;
+    allowUserStorage: boolean;
 };
 
 type StoragePayload = Pick<
@@ -51,6 +52,7 @@ type StoragePayload = Pick<
     | "s3Preset"
     | "pathStyle"
     | "allowUserS3"
+    | "allowUserStorage"
 >;
 
 const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; description: string }> = [
@@ -621,7 +623,10 @@ export default function StorageSettingsPage() {
                                 </>
                             )}
                             <div className="admin-storage-form-section">
-                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="允许用户配置个人 S3 兼容存储；个人配置停用时仍回退到平台存储。" />
+                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="允许用户配置个人对象存储；个人配置停用时仍回退到平台存储。" />
+                                <Form.Item name="allowUserStorage" label="允许个人存储" valuePropName="checked" extra="关闭后所有服务商的个人存储都不再接收新文件，新文件改存平台存储；已有个人文件仍可读取和删除。">
+                                    <Switch checkedChildren="允许" unCheckedChildren="不允许" />
+                                </Form.Item>
                                 <Form.Item name="allowUserS3" label="允许个人 S3 兼容存储" valuePropName="checked">
                                     <Switch checkedChildren="允许" unCheckedChildren="不允许" />
                                 </Form.Item>
@@ -664,6 +669,7 @@ function formValues(setting: AdminOSSSetting): OSSFormValues {
         s3Preset: setting.s3Preset || "custom",
         pathStyle: setting.pathStyle === true,
         allowUserS3: setting.allowUserS3 === true,
+        allowUserStorage: setting.allowUserStorage !== false,
     };
 }
 
@@ -726,6 +732,7 @@ function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminO
         s3Preset: values.s3Preset || "custom",
         pathStyle: values.pathStyle === true,
         allowUserS3: values.allowUserS3 === true,
+        allowUserStorage: values.allowUserStorage ?? setting.allowUserStorage !== false,
     };
 }
 
@@ -766,7 +773,7 @@ function validatePublicBaseURL(value: string) {
 
 function storageResponseMatches(setting: AdminOSSSetting, expected: StoragePayload) {
     const actual = normalizeStoragePayload(formValues(setting), setting);
-    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "cdnAuthMode", "requireCDN", "allowPrivateProxy", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3"];
+    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "cdnAuthMode", "requireCDN", "allowPrivateProxy", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3", "allowUserStorage"];
     if (expected.accessKeySecret && !setting.hasAccessKeySecret) return false;
     if (expected.sessionToken && !setting.hasSessionToken) return false;
     return fields.every((key) => actual[key] === expected[key]);
@@ -791,6 +798,7 @@ function isAdminOSSSetting(value: unknown): value is AdminOSSSetting {
         typeof setting.hasSessionToken === "boolean" &&
         typeof setting.pathStyle === "boolean" &&
         typeof setting.allowUserS3 === "boolean" &&
+        typeof setting.allowUserStorage === "boolean" &&
         typeof setting.publicBaseUrl === "string" &&
         typeof setting.pathPrefix === "string"
     );
