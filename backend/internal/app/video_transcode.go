@@ -45,7 +45,11 @@ func probeVideoCodec(path string) string {
 		return ""
 	}
 	defer f.Close()
+	return probeVideoCodecAt(f)
+}
 
+// probeVideoCodecAt 与 probeVideoCodec 相同，供上传校验直接读取尚未落盘的内容。
+func probeVideoCodecAt(f io.ReaderAt) string {
 	// 顶层 box 遍历（跳过 mdat 数据体），定位 moov。
 	var moovSize int64
 	var moovData []byte
@@ -174,9 +178,9 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 	if resource.PlaybackStatus != "" && resource.PlaybackStatus != model.PlaybackStatusNone {
 		return
 	}
-	// 不可转码场景（无 ffmpeg）落 none：状态为空会被前端当成 processing 无限轮询，
-	// 也会让启动回填每次重试探测。none 表示"无需转码"，按原生播放处理。
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
+	// 不可转码场景（无 ffmpeg 或管理员关闭播放转码）落 none：状态为空会被前端当成
+	// processing 无限轮询，也会让启动回填每次重试探测。none 表示"无需转码"，按原生播放处理。
+	if _, err := exec.LookPath("ffmpeg"); err != nil || !s.playbackTranscodingEnabled() {
 		markPlaybackNone(s, resource)
 		return
 	}
@@ -200,6 +204,32 @@ func (s *Service) maybeStartPlaybackTranscode(resource *model.Resource) {
 		// 避免重复探测与前端无限轮询。
 		markPlaybackNone(s, resource)
 	}
+}
+
+// playbackTranscodingEnabled 读取失败时按关闭处理，不在无法确认开关时启动 ffmpeg。
+func (s *Service) playbackTranscodingEnabled() bool {
+	enabled, err := s.FeatureEnabled(FeaturePlaybackTranscoding)
+	return err == nil && enabled
+}
+
+// requireBrowserPlayableVideo 在播放转码关闭时拒绝只能靠转码播放的新视频。
+// 判定与 maybeStartPlaybackTranscode 一致：H.265、MPEG-4 Part 2 需要转码，其余视频照常接收。
+func (s *Service) requireBrowserPlayableVideo(kind string, mimeType string, body io.ReaderAt) error {
+	if normalizeResourceKind(kind, mimeType) != "video" {
+		return nil
+	}
+	enabled, err := s.FeatureEnabled(FeaturePlaybackTranscoding)
+	if err != nil || enabled {
+		return err
+	}
+	if body == nil {
+		return BadAuthRequest("播放转码已关闭，无法检查视频编码")
+	}
+	switch probeVideoCodecAt(body) {
+	case videoCodecH265, videoCodecMPEG4:
+		return BadAuthRequest("播放转码已关闭，请上传浏览器可直接播放的视频（如 H.264、VP9 或 AV1 编码的 MP4）")
+	}
+	return nil
 }
 
 // markPlaybackNone 将资源标记为无需播放副本（幂等）。写失败必须可见：空状态会被前端当成 processing 轮询。

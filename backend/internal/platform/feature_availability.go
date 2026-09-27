@@ -23,6 +23,7 @@ const (
 	FeaturePluginCenter          = "pluginCenter"
 	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
 	FeatureTimelineTranscription = "timelineTranscription"
+	FeaturePlaybackTranscoding   = "playbackTranscoding"
 )
 
 type FeatureAvailability struct {
@@ -35,6 +36,7 @@ type FeatureAvailability struct {
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
+	PlaybackTranscodingEnabled   bool `json:"playbackTranscodingEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -56,6 +58,7 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		PluginCenterEnabled:          true,
 		SystemPluginsVisibleToUsers:  true,
 		TimelineTranscriptionEnabled: true,
+		PlaybackTranscodingEnabled:   true,
 	}
 }
 
@@ -121,6 +124,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.SystemPluginsVisibleToUsers, nil
 	case FeatureTimelineTranscription:
 		return value.TimelineTranscriptionEnabled, nil
+	case FeaturePlaybackTranscoding:
+		return value.PlaybackTranscodingEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -151,6 +156,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("系统插件暂未向普通用户展示")
 	case FeatureTimelineTranscription:
 		return kernel.Forbidden("字幕转写暂未开放")
+	case FeaturePlaybackTranscoding:
+		return kernel.Forbidden("播放转码已关闭")
 	default:
 		return kernel.Forbidden("该功能暂未开放")
 	}

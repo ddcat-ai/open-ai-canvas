@@ -75,6 +75,10 @@ func TestProbeVideoCodecReadsRealFile(t *testing.T) {
 // H.264 保持 none（幂等），MPEG-4 触发转码并最终落到 failed/ready 终态。
 func TestBackfillRejudgesLegacyNoneVideos(t *testing.T) {
 	service, db := newProjectAssetLinkTestService(t)
+	// 播放转码开关存放在功能开放配置里，回填前需要能读取默认值。
+	if err := db.AutoMigrate(&model.SystemSetting{}); err != nil {
+		t.Fatal(err)
+	}
 	dataDir := t.TempDir()
 	service.dataDir = dataDir
 
